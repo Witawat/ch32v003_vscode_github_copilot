@@ -1,0 +1,24 @@
+{
+  "configurations": [
+    {
+      "name": "MounRiver Studio Build",
+      "includePath": [
+        "${workspaceFolder}/Debug",
+        "${workspaceFolder}/Core",
+        "${workspaceFolder}/User",
+        "${workspaceFolder}/Peripheral/inc",
+        "${workspaceFolder}/User/SimpleHAL"
+      ],
+      "defines": [
+        "_DEBUG",
+        "UNICODE",
+        "_UNICODE"
+      ],
+      "intelliSenseMode": "linux-gcc-arm",
+      "compilerPath": "C:/MounRiver/MounRiver_Studio2/resources/app/resources/win32/components/WCH/Toolchain/RISC-V Embedded GCC/bin/riscv-none-embed-gcc.exe",
+      "cStandard": "gnu99",
+      "cppStandard": "gnu++11"
+    }
+  ],
+  "version": 4
+}

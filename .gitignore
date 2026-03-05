@@ -9,7 +9,7 @@ obj/
 *.siz
 
 # IDE files
-.vscode/
+
 .project
 .cproject
 .metadata/

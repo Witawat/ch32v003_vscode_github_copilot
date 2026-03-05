@@ -1,0 +1,77 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build CH32V003 (MounRiver)",
+      "type": "shell",
+      "command": "cmd",
+      "args": [
+        "/c",
+        "${workspaceFolder}\\build.bat"
+      ],
+      "problemMatcher": {
+        "owner": "cpp",
+        "fileLocation": ["relative", "${workspaceFolder}"],
+        "pattern": {
+          "regexp": "^(.*):(\\d+):(\\d+): (warning|error): (.*)$",
+          "file": 1,
+          "line": 2,
+          "column": 3,
+          "severity": 4,
+          "message": 5
+        }
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "panel": "new"
+      }
+    },
+    {
+      "label": "Clean CH32V003",
+      "type": "shell",
+      "command": "cmd",
+      "args": [
+        "/c",
+        "${workspaceFolder}\\clean.bat"
+      ],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "panel": "same"
+      }
+    },
+    {
+      "label": "Rebuild CH32V003",
+      "type": "shell",
+      "command": "cmd",
+      "args": [
+        "/c",
+        "${workspaceFolder}\\rebuild.bat"
+      ],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "panel": "same"
+      }
+    },
+    {
+      "label": "Upload CH32V003 (WCH-Link)",
+      "type": "shell",
+      "command": "cmd",
+      "args": [
+        "/c",
+        "${workspaceFolder}\\upload.bat"
+      ],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "panel": "new"
+      }
+    }
+  ]
+}
