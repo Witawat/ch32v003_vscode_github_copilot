@@ -1,0 +1,32 @@
+# Build artifacts
+obj/
+*.o
+*.d
+*.elf
+*.hex
+*.map
+*.lst
+*.siz
+
+# IDE files
+.vscode/
+.project
+.cproject
+.metadata/
+.settings/
+.classpath
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Temp files
+*.bak
+*.swp
+*.swo
+*~

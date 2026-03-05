@@ -1,0 +1,36 @@
+################################################################################
+# MRS Version: 2.3.0
+# Automatically-generated file. Do not edit!
+################################################################################
+
+# Build Variables
+QUOTE := '
+
+# Configure Toolchain Path - Using MounRiver_Studio2 Standard Installation
+MRS_TOOLCHAIN_PATH := C:/MounRiver/MounRiver_Studio2/resources/app/resources/win32/components/WCH/Toolchain/RISC-V\ Embedded\ GCC
+
+# Toolchain Configuration - Set PATH to include toolchain
+PATH := $(MRS_TOOLCHAIN_PATH)/bin;$(PATH)
+
+# Tool commands
+cross_cc := riscv-none-embed-gcc.exe
+cross_cpp := riscv-none-embed-g++.exe
+cross_ar := riscv-none-embed-ar.exe
+cross_objcopy := riscv-none-embed-objcopy.exe
+cross_objdump := riscv-none-embed-objdump.exe
+cross_size := riscv-none-embed-size.exe
+cross_nm := riscv-none-embed-nm.exe
+cross_make := make.exe
+cross_rm := rm.exe
+
+# Environment variables
+os_type := win
+PATH_SEP := ;
+VERBOSE := 0
+
+# Shell configuration for Windows
+ifeq ($(OS),Windows_NT)
+    SHELL=cmd.exe
+else
+    SHELL=/bin/sh
+endif
