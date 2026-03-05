@@ -9,7 +9,6 @@ obj/
 *.siz
 
 # IDE files
-
 .project
 .cproject
 .metadata/
