@@ -4,6 +4,8 @@
  * Version            : V1.0.0
  * Date               : 2022/08/08
  * Description        : This file provides all the SPI firmware functions.
+ *                      ไฟล์นี้มีฟังก์ชันเฟิร์มแวร์ SPI ทั้งหมด
+ *                      ใช้สำหรับการสื่อสารแบบ SPI (Serial Peripheral Interface)
  *********************************************************************************
  * Copyright (c) 2021 Nanjing Qinheng Microelectronics Co., Ltd.
  * Attention: This software (modified or not) and binary are used for 
@@ -13,21 +15,26 @@
 #include <ch32v00x_spi.h>
 
 /* SPI SPE mask */
+/* มาสก์เปิดใช้งาน SPI */
 #define CTLR1_SPE_Set         ((uint16_t)0x0040)
 #define CTLR1_SPE_Reset       ((uint16_t)0xFFBF)
 
 /* SPI CRCNext mask */
+/* มาสก์ส่ง CRC ถัดไป */
 #define CTLR1_CRCNext_Set     ((uint16_t)0x1000)
 
 /* SPI CRCEN mask */
+/* มาสก์เปิดใช้งาน CRC */
 #define CTLR1_CRCEN_Set       ((uint16_t)0x2000)
 #define CTLR1_CRCEN_Reset     ((uint16_t)0xDFFF)
 
 /* SPI SSOE mask */
+/* มาสก์เปิดใช้งาน Slave Select Output */
 #define CTLR2_SSOE_Set        ((uint16_t)0x0004)
 #define CTLR2_SSOE_Reset      ((uint16_t)0xFFFB)
 
 /* SPI registers Masks */
+/* มาสก์เรจิสเตอร์ SPI */
 #define CTLR1_CLEAR_Mask      ((uint16_t)0x3040)
 #define I2SCFGR_CLEAR_Mask    ((uint16_t)0xF040)
 
@@ -37,7 +44,9 @@
  *
  * @brief   Deinitializes the SPIx peripheral registers to their default
  *        reset values.
+ *        รีเซ็ตเรจิสเตอร์ของ SPI กลับสู่ค่าเริ่มต้น
  * @param   SPIx - where x can be 1 to select the SPI peripheral.
+ *                  เลือก SPI (มีเพียง SPI1)
  *
  * @return  none
  */
@@ -56,10 +65,14 @@ void SPI_I2S_DeInit(SPI_TypeDef *SPIx)
  * @brief   Initializes the SPIx peripheral according to the specified
  *          parameters in the SPI_InitStruct.
  *          When using SPI slave mode to send data, the CPOL bit should be set to 1.
+ *          ตั้งค่า SPI ตามพารามิเตอร์ที่กำหนด
+ *          เมื่อใช้โหมด Slave เพื่อส่งข้อมูล ต้องตั้งค่าบิต CPOL เป็น 1
  *
  * @param   SPIx - where x can be 1 to select the SPI peripheral.
+ *                  เลือก SPI
  *          SPI_InitStruct - pointer to a SPI_InitTypeDef structure that
  *        contains the configuration information for the specified SPI peripheral.
+ *        โครงสร้างที่มีข้อมูลการตั้งค่า SPI
  *
  * @return  none
  */
@@ -82,9 +95,11 @@ void SPI_Init(SPI_TypeDef *SPIx, SPI_InitTypeDef *SPI_InitStruct)
  * @fn      SPI_StructInit
  *
  * @brief   Fills each SPI_InitStruct member with its default value.
+ *          ตั้งค่าสมาชิกของ SPI_InitStruct เป็นค่าเริ่มต้น
  *
  * @param   SPI_InitStruct - pointer to a SPI_InitTypeDef structure which
  *        will be initialized.
+ *        โครงสร้างที่จะถูกตั้งค่า
  *
  * @return  none
  */
@@ -105,9 +120,12 @@ void SPI_StructInit(SPI_InitTypeDef *SPI_InitStruct)
  * @fn      SPI_Cmd
  *
  * @brief   Enables or disables the specified SPI peripheral.
+ *          เปิดหรือปิด SPI
  *
  * @param   SPIx - where x can be 1 to select the SPI peripheral.
+ *                  เลือก SPI
  *          NewState - ENABLE or DISABLE.
+ *                  เปิดหรือปิด
  *
  * @return  none
  */
@@ -127,6 +145,7 @@ void SPI_Cmd(SPI_TypeDef *SPIx, FunctionalState NewState)
  * @fn      SPI_I2S_ITConfig
  *
  * @brief   Enables or disables the specified SPI interrupts.
+ *          เปิดหรือปิดการส่งอินเทอร์รัปต์ของ SPI
  *
  * @param   SPIx - where x can be
  *            - 1 in SPI mode.
@@ -159,6 +178,7 @@ void SPI_I2S_ITConfig(SPI_TypeDef *SPIx, uint8_t SPI_I2S_IT, FunctionalState New
  * @fn      SPI_I2S_DMACmd
  *
  * @brief   Enables or disables the SPIx DMA interface.
+ *          เปิดหรือปิดการใช้งาน DMA ของ SPI
  *
  * @param   SPIx - where x can be
  *            - 1 in SPI mode.
@@ -186,10 +206,12 @@ void SPI_I2S_DMACmd(SPI_TypeDef *SPIx, uint16_t SPI_I2S_DMAReq, FunctionalState 
  * @fn      SPI_I2S_SendData
  *
  * @brief   Transmits a Data through the SPIx peripheral.
+ *          ส่งข้อมูลผ่าน SPI
  *
  * @param   SPIx - where x can be
  *            - 1 in SPI mode.
  *          Data - Data to be transmitted.
+ *                  ข้อมูลที่จะส่ง
  *
  * @return  none
  */
@@ -202,6 +224,7 @@ void SPI_I2S_SendData(SPI_TypeDef *SPIx, uint16_t Data)
  * @fn      SPI_I2S_ReceiveData
  *
  * @brief   Returns the most recent received data by the SPIx peripheral.
+ *          คืนค่าข้อมูลที่ได้รับล่าสุดจาก SPI
  *
  * @param   SPIx - where x can be
  *            - 1 in SPI mode.
@@ -218,8 +241,10 @@ uint16_t SPI_I2S_ReceiveData(SPI_TypeDef *SPIx)
  * @fn      SPI_NSSInternalSoftwareConfig
  *
  * @brief   Configures internally by software the NSS pin for the selected SPI.
+ *          ตั้งค่า NSS ด้วยซอฟต์แวร์
  *
  * @param   SPIx - where x can be 1 to select the SPI peripheral.
+ *                  เลือก SPI
  *          SPI_NSSInternalSoft -
  *            SPI_NSSInternalSoft_Set - Set NSS pin internally.
  *            SPI_NSSInternalSoft_Reset - Reset NSS pin internally.
@@ -242,8 +267,10 @@ void SPI_NSSInternalSoftwareConfig(SPI_TypeDef *SPIx, uint16_t SPI_NSSInternalSo
  * @fn      SPI_SSOutputCmd
  *
  * @brief   Enables or disables the SS output for the selected SPI.
+ *          เปิดหรือปิดการส่ง SS ของ SPI
  *
  * @param   SPIx - where x can be 1 to select the SPI peripheral.
+ *                  เลือก SPI
  *          NewState - new state of the SPIx SS output.
  *
  * @return  none
@@ -264,8 +291,10 @@ void SPI_SSOutputCmd(SPI_TypeDef *SPIx, FunctionalState NewState)
  * @fn      SPI_DataSizeConfig
  *
  * @brief   Configures the data size for the selected SPI.
+ *          ตั้งค่าขนาดข้อมูลของ SPI
  *
  * @param   SPIx - where x can be 1 to select the SPI peripheral.
+ *                  เลือก SPI
  *          SPI_DataSize - specifies the SPI data size.
  *            SPI_DataSize_16b - Set data frame format to 16bit.
  *            SPI_DataSize_8b - Set data frame format to 8bit.
@@ -282,8 +311,10 @@ void SPI_DataSizeConfig(SPI_TypeDef *SPIx, uint16_t SPI_DataSize)
  * @fn      SPI_TransmitCRC
  *
  * @brief   Transmit the SPIx CRC value.
+ *          ส่งค่า CRC ของ SPI
  *
  * @param   SPIx - where x can be 1 to select the SPI peripheral.
+ *                  เลือก SPI
  *
  * @return  none
  */
@@ -296,8 +327,10 @@ void SPI_TransmitCRC(SPI_TypeDef *SPIx)
  * @fn      SPI_CalculateCRC
  *
  * @brief   Enables or disables the CRC value calculation of the transferred bytes.
+ *          เปิดหรือปิดการคำนวณ CRC ของไบต์ที่ถูกส่ง
  *
  * @param   SPIx - where x can be 1 to select the SPI peripheral.
+ *                  เลือก SPI
  *          NewState - new state of the SPIx CRC value calculation.
  *
  * @return  none
@@ -318,8 +351,10 @@ void SPI_CalculateCRC(SPI_TypeDef *SPIx, FunctionalState NewState)
  * @fn      SPI_GetCRC
  *
  * @brief   Returns the transmit or the receive CRC register value for the specified SPI.
+ *          คืนค่าของ CRC ที่ถูกส่งหรือรับจาก SPI
  *
  * @param   SPIx - where x can be 1 to select the SPI peripheral.
+ *                  เลือก SPI
  *          SPI_CRC - specifies the CRC register to be read.
  *            SPI_CRC_Tx - Selects Tx CRC register.
  *            SPI_CRC_Rx - Selects Rx CRC register.
@@ -346,8 +381,10 @@ uint16_t SPI_GetCRC(SPI_TypeDef *SPIx, uint8_t SPI_CRC)
  * @fn      SPI_GetCRCPolynomial
  *
  * @brief   Returns the CRC Polynomial register value for the specified SPI.
+ *          คืนค่าของ CRC Polynomial จาก SPI
  *
  * @param   SPIx - where x can be 1 to select the SPI peripheral.
+ *                  เลือก SPI
  *
  * @return  SPIx->CRCR - The CRC Polynomial register value.
  */
@@ -361,8 +398,10 @@ uint16_t SPI_GetCRCPolynomial(SPI_TypeDef *SPIx)
  *
  * @brief   Selects the data transfer direction in bi-directional mode
  *      for the specified SPI.
+ *          เลือกทิศทางการส่งข้อมูลในโหมด双向สำหรับ SPI
  *
  * @param   SPIx - where x can be 1 to select the SPI peripheral.
+ *                  เลือก SPI
  *          SPI_Direction - specifies the data transfer direction in
  *        bi-directional mode.
  *            SPI_Direction_Tx - Selects Tx transmission direction.
@@ -386,6 +425,7 @@ void SPI_BiDirectionalLineConfig(SPI_TypeDef *SPIx, uint16_t SPI_Direction)
  * @fn      SPI_I2S_GetFlagStatus
  *
  * @brief   Checks whether the specified SPI flag is set or not.
+ *          ตรวจสอบว่า flag ของ SPI ถูกตั้งหรือไม่
  *
  * @param   SPIx - where x can be
  *            - 1 in SPI mode.
@@ -421,6 +461,7 @@ FlagStatus SPI_I2S_GetFlagStatus(SPI_TypeDef *SPIx, uint16_t SPI_I2S_FLAG)
  * @fn      SPI_I2S_ClearFlag
  *
  * @brief   Clears the SPIx CRC Error (CRCERR) flag.
+ *          ล้าง flag CRC Error ของ SPI
  *
  * @param   SPIx - where x can be
  *            - 1 in SPI mode.
@@ -446,6 +487,7 @@ void SPI_I2S_ClearFlag(SPI_TypeDef *SPIx, uint16_t SPI_I2S_FLAG)
  * @fn      SPI_I2S_GetITStatus
  *
  * @brief   Checks whether the specified SPI interrupt has occurred or not.
+ *          ตรวจสอบว่าอินเทอร์รัปต์ของ SPI ถูกเรียกหรือไม่
  *
  * @param   SPIx - where x can be
  *            - 1 in SPI mode.
@@ -485,6 +527,7 @@ ITStatus SPI_I2S_GetITStatus(SPI_TypeDef *SPIx, uint8_t SPI_I2S_IT)
  * @fn      SPI_I2S_ClearITPendingBit
  *
  * @brief   Clears the SPIx CRC Error (CRCERR) interrupt pending bit.
+ *          ล้าง bit อินเทอร์รัปต์ CRC Error ของ SPI
  *
  * @param   SPIx - where x can be
  *            - 1 in SPI mode.

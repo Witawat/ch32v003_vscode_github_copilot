@@ -125,7 +125,7 @@ echo --- Firmware Size ---
 echo.
 echo --- Memory Usage (CH32V003: Flash=16K  RAM=2K) ---
 %SIZE% --format=berkeley "%OUT_DIR%\CH32V003.elf" > "%OBJ_DIR%\size.tmp"
-for /f "skip=1 tokens=1,2,3" %%a in (%OBJ_DIR%\size.tmp) do (
+for /f "usebackq skip=1 tokens=1,2,3" %%a in ("%OBJ_DIR%\size.tmp") do (
     set /a TEXT=%%a
     set /a DATA=%%b
     set /a BSS=%%c

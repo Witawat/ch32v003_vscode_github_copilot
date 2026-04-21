@@ -4,6 +4,8 @@
  * Version            : V1.0.0
  * Date               : 2022/08/08
  * Description        : This file provides all the WWDG firmware functions.
+ *                      ไฟล์นี้มีฟังก์ชันเฟิร์มแวร์ WWDG ทั้งหมด
+ *                      Window Watchdog - วอทช์ด็อกแบบหน้าต่าง ต้องรีเซ็ตในช่วงเวลาที่กำหนด
  *********************************************************************************
  * Copyright (c) 2021 Nanjing Qinheng Microelectronics Co., Ltd.
  * Attention: This software (modified or not) and binary are used for 
@@ -13,17 +15,20 @@
 #include <ch32v00x_wwdg.h>
 
 /* CTLR register bit mask */
-#define CTLR_WDGA_Set      ((uint32_t)0x00000080)
+/* มาสก์บิตเรจิสเตอร์ควบคุม */
+#define CTLR_WDGA_Set      ((uint32_t)0x00000080)  /* บิตเปิดใช้งาน WWDG */
 
 /* CFGR register bit mask */
-#define CFGR_WDGTB_Mask    ((uint32_t)0xFFFFFE7F)
-#define CFGR_W_Mask        ((uint32_t)0xFFFFFF80)
-#define BIT_Mask           ((uint8_t)0x7F)
+/* มาสก์บิตเรจิสเตอร์การกำหนดค่า */
+#define CFGR_WDGTB_Mask    ((uint32_t)0xFFFFFE7F)  /* มาสก์ตัวหารนาฬิกา */
+#define CFGR_W_Mask        ((uint32_t)0xFFFFFF80)  /* มาสก์ค่าหน้าต่าง */
+#define BIT_Mask           ((uint8_t)0x7F)         /* มาสก์ 7 บิต */
 
 /*********************************************************************
  * @fn      WWDG_DeInit
  *
  * @brief   Deinitializes the WWDG peripheral registers to their default reset values
+ *          รีเซ็ตเรจิสเตอร์ของ WWDG กลับสู่ค่าเริ่มต้น
  *
  * @return  none
  */
@@ -37,12 +42,13 @@ void WWDG_DeInit(void)
  * @fn      WWDG_SetPrescaler
  *
  * @brief   Sets the WWDG Prescaler
+ *          ตั้งค่าตัวหารนาฬิกาของ WWDG
  *
  * @param   WWDG_Prescaler - specifies the WWDG Prescaler
- *            WWDG_Prescaler_1 - WWDG counter clock = (PCLK1/4096)/1
- *            WWDG_Prescaler_2 - WWDG counter clock = (PCLK1/4096)/2
- *            WWDG_Prescaler_4 - WWDG counter clock = (PCLK1/4096)/4
- *            WWDG_Prescaler_8 - WWDG counter clock = (PCLK1/4096)/8
+ *            WWDG_Prescaler_1 - WWDG counter clock = (PCLK1/4096)/1 - หารด้วย 1
+ *            WWDG_Prescaler_2 - WWDG counter clock = (PCLK1/4096)/2 - หารด้วย 2
+ *            WWDG_Prescaler_4 - WWDG counter clock = (PCLK1/4096)/4 - หารด้วย 4
+ *            WWDG_Prescaler_8 - WWDG counter clock = (PCLK1/4096)/8 - หารด้วย 8
  *
  * @return  none
  */

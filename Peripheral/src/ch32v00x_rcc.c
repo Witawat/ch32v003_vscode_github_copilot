@@ -4,6 +4,8 @@
  * Version            : V1.0.0
  * Date               : 2024/03/18
  * Description        : This file provides all the RCC firmware functions.
+ *                      ไฟล์นี้มีฟังก์ชันเฟิร์มแวร์ RCC ทั้งหมด
+ *                      ใช้สำหรับควบคุมและจัดการระบบนาฬิกาของไมโครคอนโทรลเลอร์
  *********************************************************************************
  * Copyright (c) 2021 Nanjing Qinheng Microelectronics Co., Ltd.
  * Attention: This software (modified or not) and binary are used for 
@@ -12,14 +14,18 @@
 #include <ch32v00x_rcc.h>
 
 /* RCC registers bit address in the alias region */
+/* ที่อยู่บิตของเรจิสเตอร์ RCC ในพื้นที่ alias */
 #define RCC_OFFSET                 (RCC_BASE - PERIPH_BASE)
 
 /* BDCTLR Register */
+/* เรจิสเตอร์ควบคุมการดีบัก */
 #define BDCTLR_OFFSET              (RCC_OFFSET + 0x20)
 
 /* RCC registers bit mask */
+/* มาสก์บิตของเรจิสเตอร์ RCC */
 
 /* CTLR register bit mask */
+/* มาสก์บิตเรจิสเตอร์ควบคุม */
 #define CTLR_HSEBYP_Reset          ((uint32_t)0xFFFBFFFF)
 #define CTLR_HSEBYP_Set            ((uint32_t)0x00040000)
 #define CTLR_HSEON_Reset           ((uint32_t)0xFFFEFFFF)
@@ -42,21 +48,27 @@
 #define CFGR0_ADCPRE_Set_Mask      ((uint32_t)0x0000F800)
 
 /* RSTSCKR register bit mask */
+/* มาสก์บิตเรจิสเตอร์สถานะและการรีเซ็ต */
 #define RSTSCKR_RMVF_Set           ((uint32_t)0x01000000)
 
 /* RCC Flag Mask */
+/* มาสก์แฟล็ก RCC */
 #define FLAG_Mask                  ((uint8_t)0x1F)
 
 /* INTR register byte 2 (Bits[15:8]) base address */
+/* ที่อยู่ฐานไบต์ที่ 2 ของเรจิสเตอร์การขัดจังหวะ */
 #define INTR_BYTE2_ADDRESS         ((uint32_t)0x40021009)
 
 /* INTR register byte 3 (Bits[23:16]) base address */
+/* ที่อยู่ฐานไบต์ที่ 3 ของเรจิสเตอร์การขัดจังหวะ */
 #define INTR_BYTE3_ADDRESS         ((uint32_t)0x4002100A)
 
 /* CFGR0 register byte 4 (Bits[31:24]) base address */
+/* ที่อยู่ฐานไบต์ที่ 4 ของเรจิสเตอร์การกำหนดค่านาฬิกา */
 #define CFGR0_BYTE4_ADDRESS        ((uint32_t)0x40021007)
 
 /* BDCTLR register base address */
+/* ที่อยู่ฐานเรจิสเตอร์ควบคุมการดีบัก */
 #define BDCTLR_ADDRESS             (PERIPH_BASE + BDCTLR_OFFSET)
 
 static __I uint8_t APBAHBPrescTable[16] = {1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8};
@@ -66,6 +78,7 @@ static __I uint8_t ADCPrescTable[20] = {2, 4, 6, 8, 4, 8, 12, 16, 8, 16, 24, 32,
  * @fn      RCC_DeInit
  *
  * @brief   Resets the RCC clock configuration to the default reset state.
+ *          รีเซ็ตการกำหนดค่านาฬิกา RCC กลับสู่ค่าเริ่มต้น
  *
  * @return  none
  */
@@ -85,13 +98,15 @@ void RCC_DeInit(void)
  * @fn      RCC_HSEConfig
  *
  * @brief   Configures the External High Speed oscillator (HSE).
+ *          กำหนดค่าออสซิลเลเตอร์ความเร็วสูงภายนอก (HSE)
  *
  * @param   RCC_HSE -
- *            RCC_HSE_OFF - HSE oscillator OFF.
- *            RCC_HSE_ON - HSE oscillator ON.
- *            RCC_HSE_Bypass - HSE oscillator bypassed with external clock.
+ *            RCC_HSE_OFF - HSE oscillator OFF - ปิดออสซิลเลเตอร์ HSE
+ *            RCC_HSE_ON - HSE oscillator ON - เปิดออสซิลเลเตอร์ HSE
+ *            RCC_HSE_Bypass - HSE oscillator bypassed with external clock - ข้าม HSE ใช้สัญญาณภายนอก
  *            Note-
  *            HSE can not be stopped if it is used directly or through the PLL as system clock.
+ *            ไม่สามารถหยุด HSE ได้หากกำลังใช้งานเป็นนาฬิการะบบ
  * @return  none
  */
 void RCC_HSEConfig(uint32_t RCC_HSE)
@@ -118,9 +133,10 @@ void RCC_HSEConfig(uint32_t RCC_HSE)
  * @fn      RCC_WaitForHSEStartUp
  *
  * @brief   Waits for HSE start-up.
+ *          รอจนกว่า HSE จะเริ่มทำงานเสถียร
  *
- * @return  READY - HSE oscillator is stable and ready to use.
- *          NoREADY - HSE oscillator not yet ready.
+ * @return  READY - HSE oscillator is stable and ready to use - HSE เสถียรพร้อมใช้งาน
+ *          NoREADY - HSE oscillator not yet ready - HSE ยังไม่พร้อม
  */
 ErrorStatus RCC_WaitForHSEStartUp(void)
 {
@@ -151,9 +167,11 @@ ErrorStatus RCC_WaitForHSEStartUp(void)
  * @fn      RCC_AdjustHSICalibrationValue
  *
  * @brief   Adjusts the Internal High Speed oscillator (HSI) calibration value.
+ *          ปรับค่าปรับแต่งออสซิลเลเตอร์ความเร็วสูงภายใน (HSI)
  *
  * @param   HSICalibrationValue - specifies the calibration trimming value.
  *                    This parameter must be a number between 0 and 0x1F.
+ *                    ค่าปรับแต่งนี้ต้องเป็นตัวเลขระหว่าง 0 และ 0x1F
  *
  * @return  none
  */
@@ -171,6 +189,7 @@ void RCC_AdjustHSICalibrationValue(uint8_t HSICalibrationValue)
  * @fn      RCC_HSICmd
  *
  * @brief   Enables or disables the Internal High Speed oscillator (HSI).
+ *          เปิดหรือปิดออสซิลเลเตอร์ความเร็วสูงภายใน (HSI)
  *
  * @param   NewState - ENABLE or DISABLE.
  *
@@ -192,6 +211,7 @@ void RCC_HSICmd(FunctionalState NewState)
  * @fn      RCC_PLLConfig
  *
  * @brief   Configures the PLL clock source and multiplication factor.
+ *          กำหนดค่าแหล่งกำลังและปัจจัยการคูณของ PLL
  *
  * @param   RCC_PLLSource - specifies the PLL entry clock source.
  *          RCC_PLLSource_HSI_MUL2 - HSI oscillator clock*2
@@ -216,7 +236,8 @@ void RCC_PLLConfig(uint32_t RCC_PLLSource)
  *
  * @brief   Enables or disables the PLL.
  *          Note-The PLL can not be disabled if it is used as system clock.
- *          
+ *          เปิดหรือปิด PLL
+ *          หมายเหตุ-ไม่สามารถปิด PLL ได้หากใช้เป็นนาฬิการะบบ
  *
  * @param   NewState - ENABLE or DISABLE.
  *
@@ -238,6 +259,7 @@ void RCC_PLLCmd(FunctionalState NewState)
  * @fn      RCC_SYSCLKConfig
  *
  * @brief   Configures the system clock (SYSCLK).
+ *          กำหนดค่านาฬิกาของระบบ (SYSCLK)
  *
  * @param   RCC_SYSCLKSource - specifies the clock source used as system clock.
  *            RCC_SYSCLKSource_HSI - HSI selected as system clock.
@@ -275,6 +297,7 @@ void RCC_SYSCLKConfig(uint32_t RCC_SYSCLKSource)
  * @fn      RCC_GetSYSCLKSource
  *
  * @brief   Returns the clock source used as system clock.
+ *          คืนค่าแหล่งกำลังที่ใช้เป็นนาฬิกาของระบบ
  *
  * @return  0x00 - HSI used as system clock.
  *          0x04 - HSE used as system clock.
@@ -289,6 +312,7 @@ uint8_t RCC_GetSYSCLKSource(void)
  * @fn      RCC_HCLKConfig
  *
  * @brief   Configures the AHB clock (HCLK).
+ *          กำหนดค่านาฬิกา AHB (HCLK)
  *
  * @param   RCC_SYSCLK - defines the AHB clock divider. This clock is derived from
  *        the system clock (SYSCLK).
@@ -322,6 +346,7 @@ void RCC_HCLKConfig(uint32_t RCC_SYSCLK)
  * @fn      RCC_ITConfig
  *
  * @brief   Enables or disables the specified RCC interrupts.
+ *          เปิดหรือปิดการขัดจังหวะ RCC ที่ระบุ
  *
  * @param   RCC_IT - specifies the RCC interrupt sources to be enabled or disabled.
  *            RCC_IT_LSIRDY - LSI ready interrupt.
@@ -348,6 +373,7 @@ void RCC_ITConfig(uint8_t RCC_IT, FunctionalState NewState)
  * @fn      RCC_ADCCLKConfig
  *
  * @brief   Configures the ADC clock (ADCCLK).
+ *          กำหนดค่านาฬิกา ADC (ADCCLK)
  *
  * @param   RCC_PCLK2 - defines the ADC clock divider. This clock is derived from
  *        the APB2 clock (PCLK2).
@@ -382,6 +408,8 @@ void RCC_ADCCLKConfig(uint32_t RCC_PCLK2)
  * @brief   Enables or disables the Internal Low Speed oscillator (LSI).
  *          Note-
  *          LSI can not be disabled if the IWDG is running.
+ *          เปิดหรือปิดออสซิลเลเตอร์ความเร็วต่ำภายใน (LSI)
+ *          หมายเหตุ-ไม่สามารถปิด LSI ได้หากกำลังทำงาน IWDG
  *
  * @param   NewState - ENABLE or DISABLE.
  *
@@ -404,6 +432,7 @@ void RCC_LSICmd(FunctionalState NewState)
  *
  * @brief   The result of this function could be not correct when using
  *        fractional value for HSE crystal.
+ *          ผลของฟังก์ชันนี้อาจไม่ถูกต้องเมื่อใช้ค่าส่วนของ HSE crystal
  *
  * @param   RCC_Clocks - pointer to a RCC_ClocksTypeDef structure which will hold
  *        the clocks frequencies.
@@ -480,6 +509,7 @@ void RCC_GetClocksFreq(RCC_ClocksTypeDef *RCC_Clocks)
  * @fn      RCC_AHBPeriphClockCmd
  *
  * @brief   Enables or disables the AHB peripheral clock.
+ *          เปิดหรือปิดนาฬิกาของวงจรปริมณฑุล AHB
  *
  * @param   RCC_AHBPeriph - specifies the AHB peripheral to gates its clock.
  *            RCC_AHBPeriph_DMA1.
@@ -506,6 +536,7 @@ void RCC_AHBPeriphClockCmd(uint32_t RCC_AHBPeriph, FunctionalState NewState)
  * @fn      RCC_APB2PeriphClockCmd
  *
  * @brief   Enables or disables the High Speed APB (APB2) peripheral clock.
+ *          เปิดหรือปิดนาฬิกาของวงจรปริมณฑุล APB2
  *
  * @param   RCC_APB2Periph - specifies the APB2 peripheral to gates its clock.
  *            RCC_APB2Periph_AFIO.
@@ -536,6 +567,7 @@ void RCC_APB2PeriphClockCmd(uint32_t RCC_APB2Periph, FunctionalState NewState)
  * @fn      RCC_APB1PeriphClockCmd
  *
  * @brief   Enables or disables the Low Speed APB (APB1) peripheral clock.
+ *          เปิดหรือปิดนาฬิกาของวงจรปริมณฑุล APB1
  *
  * @param   RCC_APB1Periph - specifies the APB1 peripheral to gates its clock.
  *            RCC_APB1Periph_TIM2.
@@ -562,6 +594,7 @@ void RCC_APB1PeriphClockCmd(uint32_t RCC_APB1Periph, FunctionalState NewState)
  * @fn      RCC_APB2PeriphResetCmd
  *
  * @brief   Forces or releases High Speed APB (APB2) peripheral reset.
+ *          บังคับหรือปล่อยการรีเซ็ตของวงจรปริมณฑุล APB2
  *
  * @param   RCC_APB2Periph - specifies the APB2 peripheral to reset.
  *            RCC_APB2Periph_AFIO.
@@ -592,6 +625,7 @@ void RCC_APB2PeriphResetCmd(uint32_t RCC_APB2Periph, FunctionalState NewState)
  * @fn      RCC_APB1PeriphResetCmd
  *
  * @brief   Forces or releases Low Speed APB (APB1) peripheral reset.
+ *          บังคับหรือปล่อยการรีเซ็ตของวงจรปริมณฑุล APB1
  *
  * @param   RCC_APB1Periph - specifies the APB1 peripheral to reset.
  *            RCC_APB1Periph_TIM2.
@@ -618,6 +652,7 @@ void RCC_APB1PeriphResetCmd(uint32_t RCC_APB1Periph, FunctionalState NewState)
  * @fn      RCC_ClockSecuritySystemCmd
  *
  * @brief   Enables or disables the Clock Security System.
+ *          เปิดหรือปิดระบบความปลอดภัยของนาฬิกา
  *
  * @param   NewState - ENABLE or DISABLE.
  *
@@ -639,6 +674,7 @@ void RCC_ClockSecuritySystemCmd(FunctionalState NewState)
  * @fn      RCC_MCOConfig
  *
  * @brief   Selects the clock source to output on MCO pin.
+ *          เลือกแหล่งกำลังที่จะส่งออกผ่านปิน MCO
  *
  * @param   RCC_MCO - specifies the clock source to output.
  *            RCC_MCO_NoClock - No clock selected.
@@ -658,6 +694,7 @@ void RCC_MCOConfig(uint8_t RCC_MCO)
  * @fn      RCC_GetFlagStatus
  *
  * @brief   Checks whether the specified RCC flag is set or not.
+ *          ตรวจสอบว่าแฟล็ก RCC ที่ระบุถูกตั้งหรือไม่
  *
  * @param   RCC_FLAG - specifies the flag to check.
  *            RCC_FLAG_HSIRDY - HSI oscillator clock ready.
@@ -708,6 +745,7 @@ FlagStatus RCC_GetFlagStatus(uint8_t RCC_FLAG)
  * @fn      RCC_ClearFlag
  *
  * @brief   Clears the RCC reset flags.
+ *          ล้างแฟล็กการรีเซ็ตของ RCC
  *          Note-   
  *          The reset flags are: RCC_FLAG_PINRST, RCC_FLAG_PORRST, RCC_FLAG_SFTRST,
  *          RCC_FLAG_IWDGRST, RCC_FLAG_WWDGRST, RCC_FLAG_LPWRRST
@@ -722,6 +760,7 @@ void RCC_ClearFlag(void)
  * @fn      RCC_GetITStatus
  *
  * @brief   Checks whether the specified RCC interrupt has occurred or not.
+ *          ตรวจสอบว่าการขัดจังหวะ RCC ที่ระบุเกิดขึ้นหรือไม่
  *
  * @param   RCC_IT - specifies the RCC interrupt source to check.
  *            RCC_IT_LSIRDY - LSI ready interrupt.
@@ -752,6 +791,7 @@ ITStatus RCC_GetITStatus(uint8_t RCC_IT)
  * @fn      RCC_ClearITPendingBit
  *
  * @brief   Clears the RCC's interrupt pending bits.
+ *          ล้างบิตการขัดจังหวะที่รอดำเนินการของ RCC
  *
  * @param   RCC_IT - specifies the interrupt pending bit to clear.
  *            RCC_IT_LSIRDY - LSI ready interrupt.

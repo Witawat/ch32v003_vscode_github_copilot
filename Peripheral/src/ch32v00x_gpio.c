@@ -4,6 +4,8 @@
  * Version            : V1.0.0
  * Date               : 2024/01/09
  * Description        : This file provides all the GPIO firmware functions.
+ *                      ไฟล์นี้มีฟังก์ชันเฟิร์มแวร์ GPIO ทั้งหมด
+ *                      ใช้สำหรับควบคุมขาอินพุต/เอาต์พุตอเนกประสงค์
  *********************************************************************************
  * Copyright (c) 2021 Nanjing Qinheng Microelectronics Co., Ltd.
  * Attention: This software (modified or not) and binary are used for 
@@ -13,6 +15,7 @@
 #include <ch32v00x_rcc.h>
 
 /* MASK */
+/* มาสก์สำหรับจัดการบิต */
 #define LSB_MASK                  ((uint16_t)0xFFFF)
 #define DBGAFR_POSITION_MASK      ((uint32_t)0x000F0000)
 #define DBGAFR_SDI_MASK           ((uint32_t)0xF8FFFFFF)
@@ -24,8 +27,10 @@
  *
  * @brief   Deinitializes the GPIOx peripheral registers to their default
  *        reset values.
+ *        รีเซ็ตเรจิสเตอร์ของพอร์ต GPIO กลับสู่ค่าเริ่มต้น
  *
  * @param   GPIOx - where x can be (A..D) to select the GPIO peripheral.
+ *                  พอร์ต GPIO ที่ต้องการรีเซ็ต (A, C หรือ D)
  *
  * @return  none
  */
@@ -53,6 +58,7 @@ void GPIO_DeInit(GPIO_TypeDef *GPIOx)
  *
  * @brief   Deinitializes the Alternate Functions (remap, event control
  *        and EXTI configuration) registers to their default reset values.
+ *        รีเซ็ตเรจิสเตอร์ฟังก์ชันสำรองกลับสู่ค่าเริ่มต้น
  *
  * @return  none
  */
@@ -65,10 +71,15 @@ void GPIO_AFIODeInit(void)
 /*********************************************************************
  * @fn      GPIO_Init
  *
- * @brief   GPIOx - where x can be (A..D) to select the GPIO peripheral.
+ * @brief   Initializes the GPIOx peripheral according to the specified
+ *        parameters in the GPIO_InitStruct.
+ *        ตั้งค่าพอร์ต GPIO ตามพารามิเตอร์ที่กำหนด
  *
+ * @param   GPIOx - where x can be (A..D) to select the GPIO peripheral.
+ *                  พอร์ต GPIO ที่ต้องการตั้งค่า
  * @param   GPIO_InitStruct - pointer to a GPIO_InitTypeDef structure that
  *        contains the configuration information for the specified GPIO peripheral.
+ *        โครงสร้างที่มีข้อมูลการตั้งค่า GPIO
  *
  * @return  none
  */
@@ -121,9 +132,12 @@ void GPIO_Init(GPIO_TypeDef *GPIOx, GPIO_InitTypeDef *GPIO_InitStruct)
  * @fn      GPIO_StructInit
  *
  * @brief   Fills each GPIO_InitStruct member with its default
+ *        value.
+ *        กำหนดค่าเริ่มต้นให้กับแต่ละสมาชิกของ GPIO_InitStruct
  *
  * @param   GPIO_InitStruct - pointer to a GPIO_InitTypeDef structure
  *      which will be initialized.
+ *      โครงสร้างที่จะถูกกำหนดค่าเริ่มต้น
  *
  * @return  none
  */
@@ -137,12 +151,17 @@ void GPIO_StructInit(GPIO_InitTypeDef *GPIO_InitStruct)
 /*********************************************************************
  * @fn      GPIO_ReadInputDataBit
  *
- * @brief   GPIOx - where x can be (A..D) to select the GPIO peripheral.
+ * @brief   Reads the specified input port pin.
+ *        อ่านค่าของขาอินพุตที่ระบุ
  *
+ * @param   GPIOx - where x can be (A..D) to select the GPIO peripheral.
+ *                  พอร์ต GPIO ที่ต้องการอ่าน
  * @param    GPIO_Pin - specifies the port bit to read.
  *             This parameter can be GPIO_Pin_x where x can be (0..7).
+ *             ขาที่ต้องการอ่าน (0 ถึง 7)
  *
  * @return  The input port pin value.
+ *          ค่าของขาอินพุตที่อ่านได้
  */
 uint8_t GPIO_ReadInputDataBit(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin)
 {
@@ -164,10 +183,13 @@ uint8_t GPIO_ReadInputDataBit(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin)
  * @fn      GPIO_ReadInputData
  *
  * @brief   Reads the specified GPIO input data port.
+ *        อ่านค่าของพอร์ตอินพุตที่ระบุ
  *
  * @param   GPIOx: where x can be (A..D) to select the GPIO peripheral.
+ *                  พอร์ต GPIO ที่ต้องการอ่าน
  *
  * @return  The input port pin value.
+ *          ค่าของพอร์ตอินพุตที่อ่านได้
  */
 uint16_t GPIO_ReadInputData(GPIO_TypeDef *GPIOx)
 {
@@ -178,10 +200,12 @@ uint16_t GPIO_ReadInputData(GPIO_TypeDef *GPIOx)
  * @fn      GPIO_ReadOutputDataBit
  *
  * @brief   Reads the specified output data port bit.
+ *        อ่านค่าของขาเอาต์พุตที่ระบุ
  *
  * @param   GPIOx - where x can be (A..D) to select the GPIO peripheral.
  *          GPIO_Pin - specifies the port bit to read.
  *            This parameter can be GPIO_Pin_x where x can be (0..7).
+ *            ขาที่ต้องการอ่าน (0 ถึง 7)
  *
  * @return  none
  */
@@ -205,10 +229,13 @@ uint8_t GPIO_ReadOutputDataBit(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin)
  * @fn      GPIO_ReadOutputData
  *
  * @brief   Reads the specified GPIO output data port.
+ *        อ่านค่าของพอร์ตเอาต์พุตที่ระบุ
  *
  * @param   GPIOx - where x can be (A..D) to select the GPIO peripheral.
+ *                  พอร์ต GPIO ที่ต้องการอ่าน
  *
  * @return  GPIO output port pin value.
+ *          ค่าของพอร์ตเอาต์พุตที่อ่านได้
  */
 uint16_t GPIO_ReadOutputData(GPIO_TypeDef *GPIOx)
 {
@@ -219,10 +246,12 @@ uint16_t GPIO_ReadOutputData(GPIO_TypeDef *GPIOx)
  * @fn      GPIO_SetBits
  *
  * @brief   Sets the selected data port bits.
+ *        ตั้งค่าบิตที่เลือกของพอร์ต
  *
  * @param   GPIOx - where x can be (A..D) to select the GPIO peripheral.
  *          GPIO_Pin - specifies the port bits to be written.
  *            This parameter can be any combination of GPIO_Pin_x where x can be (0..7).
+ *            บิตที่ต้องการตั้งค่า (0 ถึง 7)
  *
  * @return  none
  */
@@ -235,10 +264,12 @@ void GPIO_SetBits(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin)
  * @fn      GPIO_ResetBits
  *
  * @brief   Clears the selected data port bits.
+ *        ล้างค่าบิตที่เลือกของพอร์ต
  *
  * @param   GPIOx - where x can be (A..D) to select the GPIO peripheral.
  *          GPIO_Pin - specifies the port bits to be written.
  *            This parameter can be any combination of GPIO_Pin_x where x can be (0..7).
+ *            บิตที่ต้องการล้างค่า (0 ถึง 7)
  *
  * @return  none
  */
@@ -251,12 +282,15 @@ void GPIO_ResetBits(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin)
  * @fn      GPIO_WriteBit
  *
  * @brief   Sets or clears the selected data port bit.
+ *        ตั้งค่าหรือล้างค่าบิตที่เลือกของพอร์ต
  *
  * @param   GPIO_Pin - specifies the port bit to be written.
  *            This parameter can be one of GPIO_Pin_x where x can be (0..7).
+ *            ขาที่ต้องการตั้งค่าหรือล้างค่า (0 ถึง 7)
  *          BitVal - specifies the value to be written to the selected bit.
  *            Bit_RESET - to clear the port pin.
  *            Bit_SET - to set the port pin.
+ *            ค่าที่ต้องการตั้งค่าหรือล้างค่า
  *
  * @return  none
  */
@@ -276,9 +310,11 @@ void GPIO_WriteBit(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin, BitAction BitVal)
  * @fn      GPIO_Write
  *
  * @brief   Writes data to the specified GPIO data port.
+ *        เขียนค่าลงในพอร์ต GPIO
  *
  * @param   GPIOx - where x can be (A..D) to select the GPIO peripheral.
  *          PortVal - specifies the value to be written to the port output data register.
+ *          ค่าที่ต้องการเขียนลงในพอร์ต
  *
  * @return  none
  */
@@ -291,10 +327,12 @@ void GPIO_Write(GPIO_TypeDef *GPIOx, uint16_t PortVal)
  * @fn      GPIO_PinLockConfig
  *
  * @brief   Locks GPIO Pins configuration registers.
+ *        ล็อกการตั้งค่าของขา GPIO
  *
  * @param   GPIOx - where x can be (A..D) to select the GPIO peripheral.
  *          GPIO_Pin - specifies the port bit to be written.
  *            This parameter can be any combination of GPIO_Pin_x where x can be (0..7).
+ *            ขาที่ต้องการล็อก (0 ถึง 7)
  *
  * @return  none
  */
@@ -314,6 +352,7 @@ void GPIO_PinLockConfig(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin)
  * @fn      GPIO_PinRemapConfig
  *
  * @brief   Changes the mapping of the specified pin.
+ *        เปลี่ยนการแมปปิ้งของขาที่ระบุ
  *
  * @param   GPIO_Remap - selects the pin to remap.
  *            GPIO_Remap_SPI1 - SPI1 Alternate Function mapping
@@ -334,6 +373,7 @@ void GPIO_PinLockConfig(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin)
  *            GPIO_Remap_LSI_CAL - LSI calibration Alternate Function mapping
  *            GPIO_Remap_SDI_Disable - SDI Disabled
  *          NewState - ENABLE or DISABLE.
+ *          สถานะการเปิด/ปิด
  *
  * @return  none
  */
@@ -406,11 +446,14 @@ void GPIO_PinRemapConfig(uint32_t GPIO_Remap, FunctionalState NewState)
  * @fn      GPIO_EXTILineConfig
  *
  * @brief   Selects the GPIO pin used as EXTI Line.
+ *        เลือกขา GPIO ที่ใช้เป็นเส้น EXTI
  *
  * @param   GPIO_PortSource - selects the GPIO port to be used as source for EXTI lines.
  *            This parameter can be GPIO_PortSourceGPIOx where x can be (A..D).
+ *            พอร์ต GPIO ที่จะใช้เป็นแหล่งของเส้น EXTI
  *          GPIO_PinSource - specifies the EXTI line to be configured.
  *            This parameter can be GPIO_PinSourcex where x can be (0..7).
+ *            เส้น EXTI ที่ต้องการตั้งค่า (0 ถึง 7)
  *
  * @return  none
  */
@@ -427,6 +470,7 @@ void GPIO_EXTILineConfig(uint8_t GPIO_PortSource, uint8_t GPIO_PinSource)
  * @fn      GPIO_IPD_Unused
  *
  * @brief   Configure unused GPIO as input pull-up.
+ *        กำหนดขา GPIO ที่ไม่ได้ใช้เป็นอินพุตดึงขึ้น
  *
  * @param   none
  *

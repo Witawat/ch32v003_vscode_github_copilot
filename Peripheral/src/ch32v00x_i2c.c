@@ -4,6 +4,8 @@
  * Version            : V1.0.0
  * Date               : 2022/08/08
  * Description        : This file provides all the I2C firmware functions.
+ *                      ไฟล์นี้มีฟังก์ชันเฟิร์มแวร์ I2C ทั้งหมด
+ *                      ใช้สำหรับการสื่อสารแบบ I2C (Inter-Integrated Circuit)
  *********************************************************************************
  * Copyright (c) 2021 Nanjing Qinheng Microelectronics Co., Ltd.
  * Attention: This software (modified or not) and binary are used for 
@@ -13,80 +15,101 @@
 #include <ch32v00x_rcc.h>
 
 /* I2C SPE mask */
+/* มาสก์เปิดใช้งาน I2C */
 #define CTLR1_PE_Set             ((uint16_t)0x0001)
 #define CTLR1_PE_Reset           ((uint16_t)0xFFFE)
 
 /* I2C START mask */
+/* มาสก์บิตเริ่มต้น */
 #define CTLR1_START_Set          ((uint16_t)0x0100)
 #define CTLR1_START_Reset        ((uint16_t)0xFEFF)
 
 /* I2C STOP mask */
+/* มาสก์บิตหยุด */
 #define CTLR1_STOP_Set           ((uint16_t)0x0200)
 #define CTLR1_STOP_Reset         ((uint16_t)0xFDFF)
 
 /* I2C ACK mask */
+/* มาสก์การตอบรับ */
 #define CTLR1_ACK_Set            ((uint16_t)0x0400)
 #define CTLR1_ACK_Reset          ((uint16_t)0xFBFF)
 
 /* I2C ENGC mask */
+/* มาสก์เปิดใช้งาน General Call */
 #define CTLR1_ENGC_Set           ((uint16_t)0x0040)
 #define CTLR1_ENGC_Reset         ((uint16_t)0xFFBF)
 
 /* I2C SWRST mask */
+/* มาสก์รีเซ็ตซอฟต์แวร์ */
 #define CTLR1_SWRST_Set          ((uint16_t)0x8000)
 #define CTLR1_SWRST_Reset        ((uint16_t)0x7FFF)
 
 /* I2C PEC mask */
+/* มาสก์ Packet Error Checking */
 #define CTLR1_PEC_Set            ((uint16_t)0x1000)
 #define CTLR1_PEC_Reset          ((uint16_t)0xEFFF)
 
 /* I2C ENPEC mask */
+/* มาสก์เปิดใช้งาน PEC */
 #define CTLR1_ENPEC_Set          ((uint16_t)0x0020)
 #define CTLR1_ENPEC_Reset        ((uint16_t)0xFFDF)
 
 /* I2C ENARP mask */
+/* มาสก์เปิดใช้งาน ARP */
 #define CTLR1_ENARP_Set          ((uint16_t)0x0010)
 #define CTLR1_ENARP_Reset        ((uint16_t)0xFFEF)
 
 /* I2C NOSTRETCH mask */
+/* มาสก์ปิดการใช้งาน Clock Stretching */
 #define CTLR1_NOSTRETCH_Set      ((uint16_t)0x0080)
 #define CTLR1_NOSTRETCH_Reset    ((uint16_t)0xFF7F)
 
 /* I2C registers Masks */
+/* มาสก์เรจิสเตอร์ I2C */
 #define CTLR1_CLEAR_Mask         ((uint16_t)0xFBF5)
 
 /* I2C DMAEN mask */
+/* มาสก์เปิดใช้งาน DMA */
 #define CTLR2_DMAEN_Set          ((uint16_t)0x0800)
 #define CTLR2_DMAEN_Reset        ((uint16_t)0xF7FF)
 
 /* I2C LAST mask */
+/* มาสก์บิตสุดท้ายของ DMA */
 #define CTLR2_LAST_Set           ((uint16_t)0x1000)
 #define CTLR2_LAST_Reset         ((uint16_t)0xEFFF)
 
 /* I2C FREQ mask */
+/* มาสก์ความถี่นาฬิกา */
 #define CTLR2_FREQ_Reset         ((uint16_t)0xFFC0)
 
 /* I2C ADD0 mask */
+/* มาสก์บิตที่ 0 ของที่อยู่ */
 #define OADDR1_ADD0_Set          ((uint16_t)0x0001)
 #define OADDR1_ADD0_Reset        ((uint16_t)0xFFFE)
 
 /* I2C ENDUAL mask */
+/* มาสก์เปิดใช้งานที่อยู่คู่ */
 #define OADDR2_ENDUAL_Set        ((uint16_t)0x0001)
 #define OADDR2_ENDUAL_Reset      ((uint16_t)0xFFFE)
 
 /* I2C ADD2 mask */
+/* มาสก์ที่อยู่ thứ 2 */
 #define OADDR2_ADD2_Reset        ((uint16_t)0xFF01)
 
 /* I2C F/S mask */
+/* มาสก์โหมดเร็ว/มาตรฐาน */
 #define CKCFGR_FS_Set            ((uint16_t)0x8000)
 
 /* I2C CCR mask */
+/* มาสก์ค่าความถี่ */
 #define CKCFGR_CCR_Set           ((uint16_t)0x0FFF)
 
 /* I2C FLAG mask */
+/* มาสก์บิตสถานะ */
 #define FLAG_Mask                ((uint32_t)0x00FFFFFF)
 
 /* I2C Interrupt Enable mask */
+/* มาสก์การเปิดใช้งานการส่งสัญญาณรบกวน */
 #define ITEN_Mask                ((uint32_t)0x07000000)
 
 /*********************************************************************

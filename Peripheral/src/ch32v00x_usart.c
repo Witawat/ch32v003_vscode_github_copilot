@@ -4,6 +4,8 @@
  * Version            : V1.0.0
  * Date               : 2022/08/08
  * Description        : This file provides all the USART firmware functions.
+ *                      ไฟล์นี้มีฟังก์ชันเฟิร์มแวร์ USART ทั้งหมด
+ *                      ใช้สำหรับการสื่อสารอนุกรมแบบซิงโครนัสและอะซิงโครนัส
  *********************************************************************************
  * Copyright (c) 2021 Nanjing Qinheng Microelectronics Co., Ltd.
  * Attention: This software (modified or not) and binary are used for 
@@ -13,57 +15,62 @@
 #include <ch32v00x_usart.h>
 
 /* USART_Private_Defines */
-#define CTLR1_UE_Set              ((uint16_t)0x2000) /* USART Enable Mask */
-#define CTLR1_UE_Reset            ((uint16_t)0xDFFF) /* USART Disable Mask */
+/* ค่าคงที่ส่วนตัวของ USART */
+#define CTLR1_UE_Set              ((uint16_t)0x2000) /* USART Enable Mask - มาสก์เปิดใช้งาน USART */
+#define CTLR1_UE_Reset            ((uint16_t)0xDFFF) /* USART Disable Mask - มาสก์ปิดใช้งาน USART */
 
-#define CTLR1_WAKE_Mask           ((uint16_t)0xF7FF) /* USART WakeUp Method Mask */
+#define CTLR1_WAKE_Mask           ((uint16_t)0xF7FF) /* USART WakeUp Method Mask - มาสก์วิธีการปลุก */
 
-#define CTLR1_RWU_Set             ((uint16_t)0x0002) /* USART mute mode Enable Mask */
-#define CTLR1_RWU_Reset           ((uint16_t)0xFFFD) /* USART mute mode Enable Mask */
-#define CTLR1_SBK_Set             ((uint16_t)0x0001) /* USART Break Character send Mask */
-#define CTLR1_CLEAR_Mask          ((uint16_t)0xE9F3) /* USART CTLR1 Mask */
-#define CTLR2_Address_Mask        ((uint16_t)0xFFF0) /* USART address Mask */
+#define CTLR1_RWU_Set             ((uint16_t)0x0002) /* USART mute mode Enable Mask - มาสก์เปิดโหมดเงียบ */
+#define CTLR1_RWU_Reset           ((uint16_t)0xFFFD) /* USART mute mode Enable Mask - มาสก์ปิดโหมดเงียบ */
+#define CTLR1_SBK_Set             ((uint16_t)0x0001) /* USART Break Character send Mask - มาสก์ส่งอักขระ Break */
+#define CTLR1_CLEAR_Mask          ((uint16_t)0xE9F3) /* USART CTLR1 Mask - มาสก์เรจิสเตอร์ควบคุม 1 */
+#define CTLR2_Address_Mask        ((uint16_t)0xFFF0) /* USART address Mask - มาสก์ที่อยู่ */
 
-#define CTLR2_LINEN_Set           ((uint16_t)0x4000) /* USART LIN Enable Mask */
-#define CTLR2_LINEN_Reset         ((uint16_t)0xBFFF) /* USART LIN Disable Mask */
+#define CTLR2_LINEN_Set           ((uint16_t)0x4000) /* USART LIN Enable Mask - มาสก์เปิดใช้งาน LIN */
+#define CTLR2_LINEN_Reset         ((uint16_t)0xBFFF) /* USART LIN Disable Mask - มาสก์ปิดใช้งาน LIN */
 
-#define CTLR2_LBDL_Mask           ((uint16_t)0xFFDF) /* USART LIN Break detection Mask */
-#define CTLR2_STOP_CLEAR_Mask     ((uint16_t)0xCFFF) /* USART CTLR2 STOP Bits Mask */
-#define CTLR2_CLOCK_CLEAR_Mask    ((uint16_t)0xF0FF) /* USART CTLR2 Clock Mask */
+#define CTLR2_LBDL_Mask           ((uint16_t)0xFFDF) /* USART LIN Break detection Mask - มาสก์ตรวจจับ LIN Break */
+#define CTLR2_STOP_CLEAR_Mask     ((uint16_t)0xCFFF) /* USART CTLR2 STOP Bits Mask - มาสก์บิตหยุด */
+#define CTLR2_CLOCK_CLEAR_Mask    ((uint16_t)0xF0FF) /* USART CTLR2 Clock Mask - มาสก์นาฬิกา */
 
-#define CTLR3_SCEN_Set            ((uint16_t)0x0020) /* USART SC Enable Mask */
-#define CTLR3_SCEN_Reset          ((uint16_t)0xFFDF) /* USART SC Disable Mask */
+#define CTLR3_SCEN_Set            ((uint16_t)0x0020) /* USART SC Enable Mask - มาสก์เปิด Smart Card */
+#define CTLR3_SCEN_Reset          ((uint16_t)0xFFDF) /* USART SC Disable Mask - มาสก์ปิด Smart Card */
 
-#define CTLR3_NACK_Set            ((uint16_t)0x0010) /* USART SC NACK Enable Mask */
-#define CTLR3_NACK_Reset          ((uint16_t)0xFFEF) /* USART SC NACK Disable Mask */
+#define CTLR3_NACK_Set            ((uint16_t)0x0010) /* USART SC NACK Enable Mask - มาสก์เปิด NACK */
+#define CTLR3_NACK_Reset          ((uint16_t)0xFFEF) /* USART SC NACK Disable Mask - มาสก์ปิด NACK */
 
-#define CTLR3_HDSEL_Set           ((uint16_t)0x0008) /* USART Half-Duplex Enable Mask */
-#define CTLR3_HDSEL_Reset         ((uint16_t)0xFFF7) /* USART Half-Duplex Disable Mask */
+#define CTLR3_HDSEL_Set           ((uint16_t)0x0008) /* USART Half-Duplex Enable Mask - มาสก์เปิดครึ่งดูเพล็กซ์ */
+#define CTLR3_HDSEL_Reset         ((uint16_t)0xFFF7) /* USART Half-Duplex Disable Mask - มาสก์ปิดครึ่งดูเพล็กซ์ */
 
-#define CTLR3_IRLP_Mask           ((uint16_t)0xFFFB) /* USART IrDA LowPower mode Mask */
-#define CTLR3_CLEAR_Mask          ((uint16_t)0xFCFF) /* USART CTLR3 Mask */
+#define CTLR3_IRLP_Mask           ((uint16_t)0xFFFB) /* USART IrDA LowPower mode Mask - มาสก์โหมดพลังงานต่ำ IrDA */
+#define CTLR3_CLEAR_Mask          ((uint16_t)0xFCFF) /* USART CTLR3 Mask - มาสก์เรจิสเตอร์ควบคุม 3 */
 
-#define CTLR3_IREN_Set            ((uint16_t)0x0002) /* USART IrDA Enable Mask */
-#define CTLR3_IREN_Reset          ((uint16_t)0xFFFD) /* USART IrDA Disable Mask */
-#define GPR_LSB_Mask              ((uint16_t)0x00FF) /* Guard Time Register LSB Mask */
-#define GPR_MSB_Mask              ((uint16_t)0xFF00) /* Guard Time Register MSB Mask */
-#define IT_Mask                   ((uint16_t)0x001F) /* USART Interrupt Mask */
+#define CTLR3_IREN_Set            ((uint16_t)0x0002) /* USART IrDA Enable Mask - มาสก์เปิด IrDA */
+#define CTLR3_IREN_Reset          ((uint16_t)0xFFFD) /* USART IrDA Disable Mask - มาสก์ปิด IrDA */
+#define GPR_LSB_Mask              ((uint16_t)0x00FF) /* Guard Time Register LSB Mask - มาสก์ไบต์ล่างเวลาการ์ด */
+#define GPR_MSB_Mask              ((uint16_t)0xFF00) /* Guard Time Register MSB Mask - มาสก์ไบต์บนเวลาการ์ด */
+#define IT_Mask                   ((uint16_t)0x001F) /* USART Interrupt Mask - มาสก์การขัดจังหวะ */
 
 /* USART OverSampling-8 Mask */
-#define CTLR1_OVER8_Set           ((uint16_t)0x8000) /* USART OVER8 mode Enable Mask */
-#define CTLR1_OVER8_Reset         ((uint16_t)0x7FFF) /* USART OVER8 mode Disable Mask */
+/* มาสก์การสุ่มตัวอย่างเกิน 8 เท่า */
+#define CTLR1_OVER8_Set           ((uint16_t)0x8000) /* USART OVER8 mode Enable Mask - มาสก์เปิดโหมด OVER8 */
+#define CTLR1_OVER8_Reset         ((uint16_t)0x7FFF) /* USART OVER8 mode Disable Mask - มาสก์ปิดโหมด OVER8 */
 
 /* USART One Bit Sampling Mask */
-#define CTLR3_ONEBITE_Set         ((uint16_t)0x0800) /* USART ONEBITE mode Enable Mask */
-#define CTLR3_ONEBITE_Reset       ((uint16_t)0xF7FF) /* USART ONEBITE mode Disable Mask */
+/* มาสก์การสุ่มตัวอย่างหนึ่งบิต */
+#define CTLR3_ONEBITE_Set         ((uint16_t)0x0800) /* USART ONEBITE mode Enable Mask - มาสก์เปิดโหมด ONEBITE */
+#define CTLR3_ONEBITE_Reset       ((uint16_t)0xF7FF) /* USART ONEBITE mode Disable Mask - มาสก์ปิดโหมด ONEBITE */
 
 /*********************************************************************
  * @fn      USART_DeInit
  *
  * @brief   Deinitializes the USARTx peripheral registers to their default
  *        reset values.
+ *        รีเซ็ตเรจิสเตอร์ของ USART กลับสู่ค่าเริ่มต้น
  *
  * @param   USARTx - where x can be 1 to select the UART peripheral.
+ *                  เลือก USART (มีเพียง USART1)
  *
  * @return  none
  */
@@ -81,11 +88,14 @@ void USART_DeInit(USART_TypeDef *USARTx)
  *
  * @brief   Initializes the USARTx peripheral according to the specified
  *        parameters in the USART_InitStruct.
+ *        ตั้งค่า USART ตามพารามิเตอร์ที่กำหนดในโครงสร้าง
  *
  * @param   USARTx - where x can be 1 to select the UART peripheral.
+ *                  เลือก USART
  *          USART_InitStruct - pointer to a USART_InitTypeDef structure
  *        that contains the configuration information for the specified
  *        USART peripheral.
+ *        โครงสร้างที่มีข้อมูลการตั้งค่า USART
  *
  * @return  none
  */
@@ -99,6 +109,7 @@ void USART_Init(USART_TypeDef *USARTx, USART_InitTypeDef *USART_InitStruct)
 
     if(USART_InitStruct->USART_HardwareFlowControl != USART_HardwareFlowControl_None)
     {
+
     }
 
     usartxbase = (uint32_t)USARTx;
@@ -157,9 +168,11 @@ void USART_Init(USART_TypeDef *USARTx, USART_InitTypeDef *USART_InitStruct)
  * @fn      USART_StructInit
  *
  * @brief   Fills each USART_InitStruct member with its default value.
+ *          กำหนดค่าเริ่มต้นให้กับสมาชิกของ USART_InitStruct
  *
  * @param   USART_InitStruct: pointer to a USART_InitTypeDef structure
  *       which will be initialized.
+ *       โครงสร้างที่จะถูกกำหนดค่าเริ่มต้น
  *
  * @return  none
  */
@@ -178,11 +191,14 @@ void USART_StructInit(USART_InitTypeDef *USART_InitStruct)
  *
  * @brief   Initializes the USARTx peripheral Clock according to the
  *        specified parameters in the USART_ClockInitStruct .
+ *        ตั้งค่านาฬิกา USART ตามพารามิเตอร์ที่กำหนดใน USART_ClockInitStruct
  *
  * @param   USARTx - where x can be 1 to select the USART peripheral.
+ *                  เลือก USART
  *          USART_ClockInitStruct - pointer to a USART_ClockInitTypeDef
  *        structure that contains the configuration information for the specified
  *        USART peripheral.
+ *        โครงสร้างที่มีข้อมูลการตั้งค่าUSART
  *
  * @return  none
  */
@@ -201,9 +217,11 @@ void USART_ClockInit(USART_TypeDef *USARTx, USART_ClockInitTypeDef *USART_ClockI
  * @fn      USART_ClockStructInit
  *
  * @brief   Fills each USART_ClockStructInit member with its default value.
+ *          กำหนดค่าเริ่มต้นให้กับสมาชิกของ USART_ClockStructInit
  *
  * @param   USART_ClockInitStruct: pointer to a USART_ClockInitTypeDef
  *        structure which will be initialized.
+ *        โครงสร้างที่จะถูกกำหนดค่าเริ่มต้น
  *
  * @return  none
  */

@@ -5,6 +5,9 @@
  * Date               : 2022/08/08
  * Description        : This file contains all the functions prototypes for the WWDG
  *                      firmware library.
+ *                      ไฟล์นี้มีต้นแบบฟังก์ชันทั้งหมดสำหรับไลบรารีเฟิร์มแวร์ WWDG
+ *                      WWDG = Window Watchdog - วอทช์ด็อกแบบหน้าต่าง (ต้องรีเซ็ตในช่วงเวลาที่กำหนด)
+ *                      ใช้สำหรับตรวจสอบว่าโปรแกรมทำงานอยู่ในช่วงเวลาที่เหมาะสม
  *********************************************************************************
  * Copyright (c) 2021 Nanjing Qinheng Microelectronics Co., Ltd.
  * Attention: This software (modified or not) and binary are used for 
@@ -20,10 +23,11 @@ extern "C" {
 #include <ch32v00x.h>
 
 /* WWDG_Prescaler */
-#define WWDG_Prescaler_1    ((uint32_t)0x00000000)
-#define WWDG_Prescaler_2    ((uint32_t)0x00000080)
-#define WWDG_Prescaler_4    ((uint32_t)0x00000100)
-#define WWDG_Prescaler_8    ((uint32_t)0x00000180)
+/* ตัวหารนาฬิกา WWDG */
+#define WWDG_Prescaler_1    ((uint32_t)0x00000000)  /* หารด้วย 1 */
+#define WWDG_Prescaler_2    ((uint32_t)0x00000080)  /* หารด้วย 2 */
+#define WWDG_Prescaler_4    ((uint32_t)0x00000100)  /* หารด้วย 4 */
+#define WWDG_Prescaler_8    ((uint32_t)0x00000180)  /* หารด้วย 8 */
 
 void       WWDG_DeInit(void);
 void       WWDG_SetPrescaler(uint32_t WWDG_Prescaler);

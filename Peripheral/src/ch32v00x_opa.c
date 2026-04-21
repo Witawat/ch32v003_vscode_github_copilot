@@ -4,6 +4,8 @@
  * Version            : V1.0.0
  * Date               : 2022/08/08
  * Description        : This file provides all the OPA firmware functions.
+ *                      ไฟล์นี้มีฟังก์ชันเฟิร์มแวร์ OPA ทั้งหมด
+ *                      Operational Amplifier - ออปแอมป์ภายในสำหรับขยายสัญญาณอนาล็อก
  *********************************************************************************
  * Copyright (c) 2021 Nanjing Qinheng Microelectronics Co., Ltd.
  * Attention: This software (modified or not) and binary are used for 
@@ -17,6 +19,7 @@
  *
  * @brief   Deinitializes the OPA peripheral registers to their default
  *        reset values.
+ *        รีเซ็ตเรจิสเตอร์ของ OPA กลับสู่ค่าเริ่มต้น
  *
  * @return  none
  */
@@ -30,8 +33,10 @@ void OPA_DeInit(void)
  *
  * @brief   Initializes the OPA peripheral according to the specified
  *        parameters in the OPA_InitStruct.
+ *        ตั้งค่า OPA ตามพารามิเตอร์ที่กำหนด
  *
  * @param   OPA_InitStruct - pointer to a OPA_InitTypeDef structure
+ *                           โครงสร้างที่มีข้อมูลการตั้งค่า OPA
  *
  * @return  none
  */

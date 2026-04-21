@@ -4,6 +4,8 @@
  * Version            : V1.0.1
  * Date               : 2025/01/29
  * Description        : This file provides all the TIM firmware functions.
+ *                      ไฟล์นี้มีฟังก์ชันเฟิร์มแวร์ Timer ทั้งหมด
+ *                      ใช้สำหรับการจับเวลา สร้าง PWM และควบคุมมอเตอร์
  *********************************************************************************
  * Copyright (c) 2021 Nanjing Qinheng Microelectronics Co., Ltd.
  * Attention: This software (modified or not) and binary are used for 
@@ -13,6 +15,7 @@
 #include <ch32v00x_tim.h>
 
 /* TIM registers bit mask */
+/* มาสก์บิตของเรจิสเตอร์ Timer */
 #define SMCFGR_ETR_Mask    ((uint16_t)0x00FF)
 #define CHCTLR_Offset      ((uint16_t)0x0018)
 #define CCER_CCE_Set       ((uint16_t)0x0001)
@@ -32,8 +35,10 @@ static void TI4_Config(TIM_TypeDef *TIMx, uint16_t TIM_ICPolarity, uint16_t TIM_
  *
  * @brief   Deinitializes the TIMx peripheral registers to their default
  *        reset values.
+ *        รีเซ็ตเรจิสเตอร์ของ Timer กลับสู่ค่าเริ่มต้น
  *
  * @param   TIMx - where x can be 1 to 2 to select the TIM peripheral.
+ *                  เลือก Timer (1 หรือ 2)
  *
  * @return  none
  */
@@ -56,10 +61,13 @@ void TIM_DeInit(TIM_TypeDef *TIMx)
  *
  * @brief   Initializes the TIMx Time Base Unit peripheral according to
  *        the specified parameters in the TIM_TimeBaseInitStruct.
+ *        ตั้งค่าฐานเวลาของ Timer ตามพารามิเตอร์ที่กำหนด
  *
  * @param   TIMx - where x can be 1 to 2 to select the TIM peripheral.
+ *                  เลือก Timer
  *          TIM_TimeBaseInitStruct - pointer to a TIM_TimeBaseInitTypeDef
  *        structure.
+ *        โครงสร้างที่มีข้อมูลการตั้งค่าฐานเวลา
  *
  * @return  none
  */

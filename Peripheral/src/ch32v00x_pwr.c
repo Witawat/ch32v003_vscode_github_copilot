@@ -4,6 +4,8 @@
  * Version            : V1.0.0
  * Date               : 2022/08/08
  * Description        : This file provides all the PWR firmware functions.
+ *                      ไฟล์นี้มีฟังก์ชันเฟิร์มแวร์ PWR ทั้งหมด
+ *                      Power Management - การจัดการพลังงานและโหมดประหยัดไฟ
  *********************************************************************************
  * Copyright (c) 2021 Nanjing Qinheng Microelectronics Co., Ltd.
  * Attention: This software (modified or not) and binary are used for 
@@ -13,17 +15,20 @@
 #include <ch32v00x_rcc.h>
 
 /* PWR registers bit mask */
+/* มาสก์บิตเรจิสเตอร์ PWR */
 /* CTLR register bit mask */
-#define CTLR_DS_MASK     ((uint32_t)0xFFFFFFFD)
-#define CTLR_PLS_MASK    ((uint32_t)0xFFFFFF1F)
-#define AWUPSC_MASK      ((uint32_t)0xFFFFFFF0)
-#define AWUWR_MASK       ((uint32_t)0xFFFFFFC0)
+/* มาสก์เรจิสเตอร์ควบคุม */
+#define CTLR_DS_MASK     ((uint32_t)0xFFFFFFFD)  /* มาสก์โหมด Deep Sleep */
+#define CTLR_PLS_MASK    ((uint32_t)0xFFFFFF1F)  /* มาสก์ระดับ PVD */
+#define AWUPSC_MASK      ((uint32_t)0xFFFFFFF0)  /* มาสก์ตัวหารนาฬิกาปลุกอัตโนมัติ */
+#define AWUWR_MASK       ((uint32_t)0xFFFFFFC0)  /* มาสก์หน้าต่างเวลาปลุกอัตโนมัติ */
 
 /*********************************************************************
  * @fn      PWR_DeInit
  *
  * @brief   Deinitializes the PWR peripheral registers to their default
  *        reset values.
+ *        รีเซ็ตเรจิสเตอร์ของ PWR กลับสู่ค่าเริ่มต้น
  *
  * @return  none
  */
@@ -37,8 +42,10 @@ void PWR_DeInit(void)
  * @fn      PWR_PVDCmd
  *
  * @brief   Enables or disables the Power Voltage Detector(PVD).
+ *          เปิดหรือปิดใช้งานตัวตรวจจับแรงดันไฟฟ้า (PVD)
  *
  * @param   NewState - new state of the PVD(ENABLE or DISABLE).
+ *                     สถานะใหม่ของ PVD (เปิดหรือปิด)
  *
  * @return  none
  */
@@ -85,9 +92,11 @@ void PWR_PVDLevelConfig(uint32_t PWR_PVDLevel)
  * @fn      PWR_AutoWakeUpCmd
  *
  * @brief   Enables or disables the Auto WakeUp functionality.
+ *          เปิดหรือปิดใช้งานฟังก์ชันปลุกอัตโนมัติ
  *
  * @param   NewState - new state of the Auto WakeUp functionality
  *        (ENABLE or DISABLE).
+ *                     สถานะใหม่ของฟังก์ชันปลุกอัตโนมัติ (เปิดหรือปิด)
  *
  * @return  none
  */
@@ -107,6 +116,7 @@ void PWR_AutoWakeUpCmd(FunctionalState NewState)
  * @fn      PWR_AWU_SetPrescaler
  *
  * @brief   Sets the Auto Wake up Prescaler
+ *          ตั้งค่าตัวหารนาฬิกาปลุกอัตโนมัติ
  *
  * @param   AWU_Prescaler - specifies the Auto Wake up Prescaler
  *            PWR_AWU_Prescaler_1 - AWU counter clock = LSI/1
@@ -139,9 +149,12 @@ void PWR_AWU_SetPrescaler(uint32_t AWU_Prescaler)
  * @fn      PWR_AWU_SetWindowValue
  *
  * @brief   Sets the WWDG window value
+ *          ตั้งค่าหน้าต่างเวลาปลุกอัตโนมัติ
  *
  * @param   WindowValue - specifies the window value to be compared to the
  *        downcounter,which must be lower than 0x3F
+ *                     ค่าหน้าต่างที่จะเปรียบเทียบกับนับถอยหลัง
+ *                     ต้องน้อยกว่า 0x3F
  *
  * @return  none
  */
@@ -160,6 +173,7 @@ void PWR_AWU_SetWindowValue(uint8_t WindowValue)
  * @fn      PWR_EnterSTANDBYMode
  *
  * @brief   Enters STANDBY mode.
+ *          เข้าโหมด STANDBY
  *
  * @param   PWR_STANDBYEntry - specifies if STANDBY mode in entered with WFI or WFE instruction.
  *            PWR_STANDBYEntry_WFI - enter STANDBY mode with WFI instruction
@@ -190,6 +204,7 @@ void PWR_EnterSTANDBYMode(uint8_t PWR_STANDBYEntry)
  * @fn      PWR_GetFlagStatus
  *
  * @brief   Checks whether the specified PWR flag is set or not.
+ *          ตรวจสอบว่า flag ของ PWR ถูกตั้งหรือไม่
  *
  * @param   PWR_FLAG - specifies the flag to check.
  *            PWR_FLAG_PVDO - PVD Output

@@ -4,6 +4,8 @@
  * Version            : V1.0.0
  * Date               : 2022/08/08
  * Description        : This file provides all the EXTI firmware functions.
+ *                      ไฟล์นี้มีฟังก์ชันเฟิร์มแวร์ EXTI ทั้งหมด
+ *                      ใช้สำหรับการจัดการการขัดจังหวะและเหตุการณ์ภายนอก
  *********************************************************************************
  * Copyright (c) 2021 Nanjing Qinheng Microelectronics Co., Ltd.
  * Attention: This software (modified or not) and binary are used for 
@@ -12,6 +14,7 @@
 #include <ch32v00x_exti.h>
 
 /* No interrupt selected */
+/* ไม่มีเส้นขัดจังหวะที่เลือก */
 #define EXTI_LINENONE    ((uint32_t)0x00000)
 
 /*********************************************************************
@@ -19,6 +22,7 @@
  *
  * @brief   Deinitializes the EXTI peripheral registers to their default
  *        reset values.
+ *        รีเซ็ตเรจิสเตอร์ของ EXTI กลับสู่ค่าเริ่มต้น
  *
  * @return  none.
  */
@@ -36,8 +40,10 @@ void EXTI_DeInit(void)
  *
  * @brief   Initializes the EXTI peripheral according to the specified
  *        parameters in the EXTI_InitStruct.
+ *        ตั้งค่า EXTI ตามพารามิเตอร์ที่กำหนด
  *
  * @param   EXTI_InitStruct: pointer to a EXTI_InitTypeDef structure
+ *                           โครงสร้างที่มีข้อมูลการตั้งค่า EXTI
  *
  * @return  none.
  */

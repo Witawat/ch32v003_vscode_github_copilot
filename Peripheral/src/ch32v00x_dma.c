@@ -4,6 +4,8 @@
  * Version            : V1.0.0
  * Date               : 2022/08/08
  * Description        : This file provides all the DMA firmware functions.
+ *                      ไฟล์นี้มีฟังก์ชันเฟิร์มแวร์ DMA ทั้งหมด
+ *                      ใช้สำหรับการถ่ายโอนข้อมูลโดยตรงโดยไม่ต้องใช้ CPU
  *********************************************************************************
  * Copyright (c) 2021 Nanjing Qinheng Microelectronics Co., Ltd.
  * Attention: This software (modified or not) and binary are used for 
@@ -13,6 +15,7 @@
 #include <ch32v00x_rcc.h>
 
 /* DMA1 Channelx interrupt pending bit masks */
+/* มาสก์บิตการขัดจังหวะที่รอดำเนินการของช่อง DMA1 */
 #define DMA1_Channel1_IT_Mask    ((uint32_t)(DMA_GIF1 | DMA_TCIF1 | DMA_HTIF1 | DMA_TEIF1))
 #define DMA1_Channel2_IT_Mask    ((uint32_t)(DMA_GIF2 | DMA_TCIF2 | DMA_HTIF2 | DMA_TEIF2))
 #define DMA1_Channel3_IT_Mask    ((uint32_t)(DMA_GIF3 | DMA_TCIF3 | DMA_HTIF3 | DMA_TEIF3))
@@ -22,9 +25,11 @@
 #define DMA1_Channel7_IT_Mask    ((uint32_t)(DMA_GIF7 | DMA_TCIF7 | DMA_HTIF7 | DMA_TEIF7))
 
 /* DMA2 FLAG mask */
+/* มาสก์แฟล็ก DMA2 */
 #define FLAG_Mask                ((uint32_t)0x10000000)
 
 /* DMA registers Masks */
+/* มาสก์เรจิสเตอร์ DMA */
 #define CFGR_CLEAR_Mask          ((uint32_t)0xFFFF800F)
 
 /*********************************************************************
@@ -32,9 +37,11 @@
  *
  * @brief   Deinitializes the DMAy Channelx registers to their default
  *        reset values.
+ *        รีเซ็ตเรจิสเตอร์ของช่อง DMA กลับสู่ค่าเริ่มต้น
  *
  * @param   DMAy_Channelx - here y can be 1 to select the DMA and x can be
  *        1 to 7 for DMA1 to select the DMA Channel.
+ *        เลือกช่อง DMA (y=1, x=1 ถึง 7)
  *
  * @return  none
  */
@@ -80,11 +87,13 @@ void DMA_DeInit(DMA_Channel_TypeDef *DMAy_Channelx)
  *
  * @brief   Initializes the DMAy Channelx according to the specified
  *        parameters in the DMA_InitStruct.
+ *        กำหนดค่าเริ่มต้นของช่อง DMA ตามค่าที่กำหนดใน DMA_InitStruct
  *
  * @param   DMAy_Channelx - here y can be 1 to select the DMA and x can be
  *        1 to 7 for DMA1 to select the DMA Channel.
  *          DMA_InitStruct - pointer to a DMA_InitTypeDef structure that contains
  *        contains the configuration information for the specified DMA Channel.
+ *          ชี้ไปยังโครงสร้าง DMA_InitTypeDef ที่มีข้อมูลการกำหนดค่าของช่อง DMA
  *
  * @return  none
  */
@@ -109,11 +118,13 @@ void DMA_Init(DMA_Channel_TypeDef *DMAy_Channelx, DMA_InitTypeDef *DMA_InitStruc
  * @fn      DMA_StructInit
  *
  * @brief   Fills each DMA_InitStruct member with its default value.
+ *        กำหนดค่าเริ่มต้นให้กับสมาชิกของ DMA_InitStruct
  *
  * @param   DMAy_Channelx - here y can be 1 to select the DMA and x can be
  *        1 to 7 for DMA1 to select the DMA Channel.
  *          DMA_InitStruct - pointer to a DMA_InitTypeDef structure that contains
  *        contains the configuration information for the specified DMA Channel.
+ *          ชี้ไปยังโครงสร้าง DMA_InitTypeDef ที่มีข้อมูลการกำหนดค่าของช่อง DMA
  *
  * @return  none
  */
@@ -136,10 +147,12 @@ void DMA_StructInit(DMA_InitTypeDef *DMA_InitStruct)
  * @fn      DMA_Cmd
  *
  * @brief   Enables or disables the specified DMAy Channelx.
+ *        เปิดหรือปิดช่อง DMA ที่ระบุ
  *
  * @param   DMAy_Channelx - here y can be 1 to select the DMA and x can be
  *        1 to 7 for DMA1 to select the DMA Channel.
  *          NewState - new state of the DMAy Channelx(ENABLE or DISABLE).
+ *          สถานะใหม่ของช่อง DMA (ENABLE หรือ DISABLE)
  *
  * @return  none
  */
@@ -159,6 +172,7 @@ void DMA_Cmd(DMA_Channel_TypeDef *DMAy_Channelx, FunctionalState NewState)
  * @fn      DMA_ITConfig
  *
  * @brief   Enables or disables the specified DMAy Channelx interrupts.
+ *        เปิดหรือปิดการขัดจังหวะของช่อง DMA ที่ระบุ
  *
  * @param   DMAy_Channelx - here y can be 1 to select the DMA and x can be
  *        1 to 7 for DMA1 to select the DMA Channel.
@@ -168,6 +182,7 @@ void DMA_Cmd(DMA_Channel_TypeDef *DMAy_Channelx, FunctionalState NewState)
  *           DMA_IT_HT - Half transfer interrupt mask
  *           DMA_IT_TE -  Transfer error interrupt mask
  *          NewState - new state of the DMAy Channelx(ENABLE or DISABLE).
+ *          สถานะใหม่ของช่อง DMA (ENABLE หรือ DISABLE)
  *
  * @return  none
  */
@@ -187,11 +202,13 @@ void DMA_ITConfig(DMA_Channel_TypeDef *DMAy_Channelx, uint32_t DMA_IT, Functiona
  * @fn      DMA_SetCurrDataCounter
  *
  * @brief   Sets the number of data units in the current DMAy Channelx transfer.
+ *        กำหนดจำนวนหน่วยข้อมูลในรอบการถ่ายโอนของช่อง DMA ที่ระบุ
  *
  * @param   DMAy_Channelx - here y can be 1 to select the DMA and x can be
  *        1 to 7 for DMA1 to select the DMA Channel.
  *          DataNumber - The number of data units in the current DMAy Channelx
  *        transfer.
+ *          จำนวนหน่วยข้อมูลในรอบการถ่ายโอนของช่อง DMA ที่ระบุ
  *
  * @return  none
  */
@@ -205,6 +222,7 @@ void DMA_SetCurrDataCounter(DMA_Channel_TypeDef *DMAy_Channelx, uint16_t DataNum
  *
  * @brief   Returns the number of remaining data units in the current
  *        DMAy Channelx transfer.
+ *        คืนค่าจำนวนหน่วยข้อมูลที่เหลือในรอบการถ่ายโอนของช่อง DMA ที่ระบุ
  *
  * @param   DMAy_Channelx - here y can be 1 to select the DMA and x can be
  *        1 to 7 for DMA1 to select the DMA Channel.
@@ -221,6 +239,7 @@ uint16_t DMA_GetCurrDataCounter(DMA_Channel_TypeDef *DMAy_Channelx)
  * @fn      DMA_GetFlagStatus
  *
  * @brief   Checks whether the specified DMAy Channelx flag is set or not.
+ *        ตรวจสอบว่าแฟล็กของช่อง DMA ที่ระบุถูกตั้งหรือไม่
  *
  * @param   DMAy_FLAG - specifies the flag to check.
  *            DMA1_FLAG_GL1 - DMA1 Channel1 global flag.
@@ -277,6 +296,7 @@ FlagStatus DMA_GetFlagStatus(uint32_t DMAy_FLAG)
  * @fn      DMA_ClearFlag
  *
  * @brief   Clears the DMAy Channelx's pending flags.
+ *        ล้างแฟล็กที่รอดำเนินการของช่อง DMA ที่ระบุ
  *
  * @param   DMAy_FLAG - specifies the flag to check.
  *            DMA1_FLAG_GL1 - DMA1 Channel1 global flag.
@@ -322,6 +342,7 @@ void DMA_ClearFlag(uint32_t DMAy_FLAG)
  *
  * @brief   Checks whether the specified DMAy Channelx interrupt has
  *        occurred or not.
+ *        ตรวจสอบว่าการขัดจังหวะของช่อง DMA ที่ระบุเกิดขึ้นหรือไม่
  *
  * @param   DMAy_IT - specifies the DMAy interrupt source to check.
  *            DMA1_IT_GL1 - DMA1 Channel1 global flag.
@@ -377,6 +398,7 @@ ITStatus DMA_GetITStatus(uint32_t DMAy_IT)
  * @fn      DMA_ClearITPendingBit
  *
  * @brief   Clears the DMAy Channelx's interrupt pending bits.
+ *        ล้างบิตการขัดจังหวะที่รอดำเนินการของช่อง DMA ที่ระบุ
  *
  * @param   DMAy_IT - specifies the DMAy interrupt source to check.
  *            DMA1_IT_GL1 - DMA1 Channel1 global flag.

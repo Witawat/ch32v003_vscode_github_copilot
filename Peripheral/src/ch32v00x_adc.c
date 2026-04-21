@@ -4,6 +4,8 @@
  * Version            : V1.0.0
  * Date               : 2022/08/08
  * Description        : This file provides all the ADC firmware functions.
+ *                      ไฟล์นี้มีฟังก์ชันเฟิร์มแวร์ ADC ทั้งหมด
+ *                      ใช้สำหรับการแปลงสัญญาณอนาล็อกเป็นดิจิทัล
  *********************************************************************************
  * Copyright (c) 2021 Nanjing Qinheng Microelectronics Co., Ltd.
  * Attention: This software (modified or not) and binary are used for 
@@ -13,95 +15,121 @@
 #include <ch32v00x_rcc.h>
 
 /* ADC DISCNUM mask */
+/* มาสก์จำนวนช่องแบบไม่ต่อเนื่อง */
 #define CTLR1_DISCNUM_Reset              ((uint32_t)0xFFFF1FFF)
 
 /* ADC DISCEN mask */
+/* มาสก์เปิดใช้งานโหมดไม่ต่อเนื่อง */
 #define CTLR1_DISCEN_Set                 ((uint32_t)0x00000800)
 #define CTLR1_DISCEN_Reset               ((uint32_t)0xFFFFF7FF)
 
 /* ADC JAUTO mask */
+/* มาสก์การแปลง Injected อัตโนมัติ */
 #define CTLR1_JAUTO_Set                  ((uint32_t)0x00000400)
 #define CTLR1_JAUTO_Reset                ((uint32_t)0xFFFFFBFF)
 
 /* ADC JDISCEN mask */
+/* มาสก์เปิดใช้งาน Injected แบบไม่ต่อเนื่อง */
 #define CTLR1_JDISCEN_Set                ((uint32_t)0x00001000)
 #define CTLR1_JDISCEN_Reset              ((uint32_t)0xFFFFEFFF)
 
 /* ADC AWDCH mask */
+/* มาสก์ช่อง Watchdog อนาล็อก */
 #define CTLR1_AWDCH_Reset                ((uint32_t)0xFFFFFFE0)
 
 /* ADC Analog watchdog enable mode mask */
+/* มาสก์โหมดเปิดใช้งาน Watchdog อนาล็อก */
 #define CTLR1_AWDMode_Reset              ((uint32_t)0xFF3FFDFF)
 
 /* CTLR1 register Mask */
+/* มาสก์เรจิสเตอร์ควบคุม 1 */
 #define CTLR1_CLEAR_Mask                 ((uint32_t)0xFFF0FEFF)
 
 /* ADC ADON mask */
+/* มาสก์เปิดใช้งาน ADC */
 #define CTLR2_ADON_Set                   ((uint32_t)0x00000001)
 #define CTLR2_ADON_Reset                 ((uint32_t)0xFFFFFFFE)
 
 /* ADC DMA mask */
+/* มาสก์ DMA */
 #define CTLR2_DMA_Set                    ((uint32_t)0x00000100)
 #define CTLR2_DMA_Reset                  ((uint32_t)0xFFFFFEFF)
 
 /* ADC RSTCAL mask */
+/* มาสก์รีเซ็ตการสอบเทียบ */
 #define CTLR2_RSTCAL_Set                 ((uint32_t)0x00000008)
 
 /* ADC CAL mask */
+/* มาสก์การสอบเทียบ */
 #define CTLR2_CAL_Set                    ((uint32_t)0x00000004)
 
 /* ADC SWSTART mask */
+/* มาสก์เริ่มการทำงานด้วยซอฟต์แวร์ */
 #define CTLR2_SWSTART_Set                ((uint32_t)0x00400000)
 
 /* ADC EXTTRIG mask */
+/* มาสก์ทริกเกอร์ภายนอก */
 #define CTLR2_EXTTRIG_Set                ((uint32_t)0x00100000)
 #define CTLR2_EXTTRIG_Reset              ((uint32_t)0xFFEFFFFF)
 
 /* ADC Software start mask */
+/* มาสก์เริ่มด้วยซอฟต์แวร์ */
 #define CTLR2_EXTTRIG_SWSTART_Set        ((uint32_t)0x00500000)
 #define CTLR2_EXTTRIG_SWSTART_Reset      ((uint32_t)0xFFAFFFFF)
 
 /* ADC JEXTSEL mask */
+/* มาสก์เลือกทริกเกอร์ภายนอก Injected */
 #define CTLR2_JEXTSEL_Reset              ((uint32_t)0xFFFF8FFF)
 
 /* ADC JEXTTRIG mask */
+/* มาสก์ทริกเกอร์ภายนอก Injected */
 #define CTLR2_JEXTTRIG_Set               ((uint32_t)0x00008000)
 #define CTLR2_JEXTTRIG_Reset             ((uint32_t)0xFFFF7FFF)
 
 /* ADC JSWSTART mask */
+/* มาสก์เริ่ม Injected ด้วยซอฟต์แวร์ */
 #define CTLR2_JSWSTART_Set               ((uint32_t)0x00200000)
 
 /* ADC injected software start mask */
+/* มาสก์เริ่ม Injected ด้วยซอฟต์แวร์ */
 #define CTLR2_JEXTTRIG_JSWSTART_Set      ((uint32_t)0x00208000)
 #define CTLR2_JEXTTRIG_JSWSTART_Reset    ((uint32_t)0xFFDF7FFF)
 
 /* ADC TSPD mask */
+/* มาสก์เซ็นเซอร์อุณหภูมิและแรงดันอ้างอิง */
 #define CTLR2_TSVREFE_Set                ((uint32_t)0x00800000)
 #define CTLR2_TSVREFE_Reset              ((uint32_t)0xFF7FFFFF)
 
 /* CTLR2 register Mask */
+/* มาสก์เรจิสเตอร์ควบคุม 2 */
 #define CTLR2_CLEAR_Mask                 ((uint32_t)0xFFF1F7FD)
 
 /* ADC SQx mask */
+/* มาสก์ลำดับช่อง */
 #define RSQR3_SQ_Set                     ((uint32_t)0x0000001F)
 #define RSQR2_SQ_Set                     ((uint32_t)0x0000001F)
 #define RSQR1_SQ_Set                     ((uint32_t)0x0000001F)
 
 /* RSQR1 register Mask */
+/* มาสก์เรจิสเตอร์ลำดับช่อง 1 */
 #define RSQR1_CLEAR_Mask                 ((uint32_t)0xFF0FFFFF)
 
 /* ADC JSQx mask */
+/* มาสก์ลำดับช่อง Injected */
 #define ISQR_JSQ_Set                     ((uint32_t)0x0000001F)
 
 /* ADC JL mask */
+/* มาสก์จำนวนช่อง Injected */
 #define ISQR_JL_Set                      ((uint32_t)0x00300000)
 #define ISQR_JL_Reset                    ((uint32_t)0xFFCFFFFF)
 
 /* ADC SMPx mask */
+/* มาสก์เวลาตัวอย่าง */
 #define SAMPTR1_SMP_Set                  ((uint32_t)0x00000007)
 #define SAMPTR2_SMP_Set                  ((uint32_t)0x00000007)
 
 /* ADC IDATARx registers offset */
+/* ช่องที่มีการแปลง Injected */
 #define IDATAR_Offset                    ((uint8_t)0x28)
 
 /*********************************************************************

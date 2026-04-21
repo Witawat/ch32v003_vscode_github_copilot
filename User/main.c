@@ -9,6 +9,7 @@
  */
 
 #include <main.h>
+#include "SimpleHAL/SimpleHAL.h"
 #include "debug.h"
 
 /* Global typedef */
@@ -19,7 +20,7 @@
 
 int main (void) {
     NVIC_PriorityGroupConfig (NVIC_PriorityGroup_1);
-    SystemCoreClockUpdate();
+    SystemCoreClockUpdate();    
 
 #if (SDI_PRINT == SDI_PR_OPEN && DISABLE_PRINTF == PRINTF_ON)
     SDI_Printf_Enable();
@@ -30,7 +31,7 @@ int main (void) {
     printf ("SystemClk:%d\r\n", SystemCoreClock);
     printf ("ChipID:%08x\r\n", DBGMCU_GetCHIPID());
     printf ("CH32V003 MAIN CODE..\r\n");
-
+    
     while (1) {
       
     }

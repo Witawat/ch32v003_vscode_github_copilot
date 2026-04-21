@@ -4,6 +4,8 @@
  * Version            : V1.0.0
  * Date               : 2024/03/15
  * Description        : This file provides all the FLASH firmware functions.
+ *                      ไฟล์นี้มีฟังก์ชันเฟิร์มแวร์ FLASH ทั้งหมด
+ *                      ใช้สำหรับการอ่าน/เขียน/ลบข้อมูลในหน่วยความจำ Flash
  *********************************************************************************
  * Copyright (c) 2021 Nanjing Qinheng Microelectronics Co., Ltd.
  * Attention: This software (modified or not) and binary are used for 
@@ -12,33 +14,37 @@
 #include <ch32v00x_flash.h>
 
 /* Flash Access Control Register bits */
+/* บิตเรจิสเตอร์ควบคุมการเข้าถึง Flash */
 #define ACR_LATENCY_Mask           ((uint32_t)0xFFFFFFFC)
 
 /* Flash Control Register bits */
-#define CR_PG_Set                  ((uint32_t)0x00000001)
-#define CR_PG_Reset                ((uint32_t)0xFFFFFFFE)
-#define CR_PER_Set                 ((uint32_t)0x00000002)
-#define CR_PER_Reset               ((uint32_t)0xFFFFFFFD)
-#define CR_MER_Set                 ((uint32_t)0x00000004)
-#define CR_MER_Reset               ((uint32_t)0xFFFFFFFB)
-#define CR_OPTPG_Set               ((uint32_t)0x00000010)
-#define CR_OPTPG_Reset             ((uint32_t)0xFFFFFFEF)
-#define CR_OPTER_Set               ((uint32_t)0x00000020)
-#define CR_OPTER_Reset             ((uint32_t)0xFFFFFFDF)
-#define CR_STRT_Set                ((uint32_t)0x00000040)
-#define CR_LOCK_Set                ((uint32_t)0x00000080)
-#define CR_FLOCK_Set               ((uint32_t)0x00008000)
-#define CR_PAGE_PG                 ((uint32_t)0x00010000)
-#define CR_PAGE_ER                 ((uint32_t)0x00020000)
-#define CR_BUF_LOAD                ((uint32_t)0x00040000)
-#define CR_BUF_RST                 ((uint32_t)0x00080000)
+/* บิตเรจิสเตอร์ควบคุม Flash */
+#define CR_PG_Set                  ((uint32_t)0x00000001)  /* ตั้งค่าบิตโปรแกรม */
+#define CR_PG_Reset                ((uint32_t)0xFFFFFFFE)  /* รีเซ็ตบิตโปรแกรม */
+#define CR_PER_Set                 ((uint32_t)0x00000002)  /* ตั้งค่าบิตลบหน้า */
+#define CR_PER_Reset               ((uint32_t)0xFFFFFFFD)  /* รีเซ็ตบิตลบหน้า */
+#define CR_MER_Set                 ((uint32_t)0x00000004)  /* ตั้งค่าบิตลบมวล */
+#define CR_MER_Reset               ((uint32_t)0xFFFFFFFB)  /* รีเซ็ตบิตลบมวล */
+#define CR_OPTPG_Set               ((uint32_t)0x00000010)  /* ตั้งค่าบิตโปรแกรม Option Bytes */
+#define CR_OPTPG_Reset             ((uint32_t)0xFFFFFFEF)  /* รีเซ็ตบิตโปรแกรม Option Bytes */
+#define CR_OPTER_Set               ((uint32_t)0x00000020)  /* ตั้งค่าบิตลบ Option Bytes */
+#define CR_OPTER_Reset             ((uint32_t)0xFFFFFFDF)  /* รีเซ็ตบิตลบ Option Bytes */
+#define CR_STRT_Set                ((uint32_t)0x00000040)  /* ตั้งค่าบิตเริ่ม */
+#define CR_LOCK_Set                ((uint32_t)0x00000080)  /* ตั้งค่าบิตล็อก */
+#define CR_FLOCK_Set               ((uint32_t)0x00008000)  /* ตั้งค่าบิตล็อก Fast Program */
+#define CR_PAGE_PG                 ((uint32_t)0x00010000)  /* บิตโปรแกรมหน้า */
+#define CR_PAGE_ER                 ((uint32_t)0x00020000)  /* บิตลบหน้า */
+#define CR_BUF_LOAD                ((uint32_t)0x00040000)  /* บิตโหลดบัฟเฟอร์ */
+#define CR_BUF_RST                 ((uint32_t)0x00080000)  /* บิตรีเซ็ตบัฟเฟอร์ */
 
 /* FLASH Status Register bits */
-#define SR_BSY                     ((uint32_t)0x00000001)
-#define SR_WRPRTERR                ((uint32_t)0x00000010)
-#define SR_EOP                     ((uint32_t)0x00000020)
+/* บิตเรจิสเตอร์สถานะ FLASH */
+#define SR_BSY                     ((uint32_t)0x00000001)  /* บัสกำลังทำงาน */
+#define SR_WRPRTERR                ((uint32_t)0x00000010)  /* ข้อผิดพลาดการป้องกันเขียน */
+#define SR_EOP                     ((uint32_t)0x00000020)  /* ดำเนินการเสร็จสิ้น */
 
 /* FLASH Mask */
+/* มาสก์ FLASH */
 #define RDPRT_Mask                 ((uint32_t)0x00000002)
 #define WRP0_Mask                  ((uint32_t)0x000000FF)
 #define WRP1_Mask                  ((uint32_t)0x0000FF00)
@@ -46,22 +52,27 @@
 #define WRP3_Mask                  ((uint32_t)0xFF000000)
 
 /* FLASH Keys */
+/* คีย์ FLASH สำหรับปลดล็อก */
 #define RDP_Key                    ((uint16_t)0x00A5)
 #define FLASH_KEY1                 ((uint32_t)0x45670123)
 #define FLASH_KEY2                 ((uint32_t)0xCDEF89AB)
 
 /* FLASH BANK address */
+/* ที่อยู่ BANK ของ FLASH */
 #define FLASH_BANK1_END_ADDRESS    ((uint32_t)0x807FFFF)
 
 /* Delay definition */
-#define EraseTimeout               ((uint32_t)0x000B0000)
-#define ProgramTimeout             ((uint32_t)0x00002000)
+/* นิยามเวลาหน่วง */
+#define EraseTimeout               ((uint32_t)0x000B0000)  /* เวลาหมดหายของการลบ */
+#define ProgramTimeout             ((uint32_t)0x00002000)  /* เวลาหมดหายของการโปรแกรม */
 
 /* Flash Program Valid Address */
+/* ที่อยู่_valid_สำหรับการโปรแกรม Flash */
 #define ValidAddrStart             (FLASH_BASE)
 #define ValidAddrEnd               (FLASH_BASE + 0x4000)
 
 /* FLASH Size */
+/* ขนาดของ FLASH */
 #define Size_64B                   0x40
 #define Size_1KB                   0x400
 

@@ -5,6 +5,8 @@
  * Date               : 2022/08/08
  * Description        : This file contains all the functions prototypes for the
  *                      DMA firmware library.
+ *                      ไฟล์นี้มีต้นแบบฟังก์ชันทั้งหมดสำหรับไลบรารีเฟิร์มแวร์ DMA
+ *                      DMA = Direct Memory Access - การเข้าถึงหน่วยความจำโดยตรง (ไม่ต้องใช้ CPU)
  *********************************************************************************
  * Copyright (c) 2021 Nanjing Qinheng Microelectronics Co., Ltd.
  * Attention: This software (modified or not) and binary are used for 
@@ -20,83 +22,104 @@ extern "C" {
 #include <ch32v00x.h>
 
 /* DMA Init structure definition */
+/* โครงสร้างสำหรับการตั้งค่า DMA */
 typedef struct
 {
-    uint32_t DMA_PeripheralBaseAddr; /* Specifies the peripheral base address for DMAy Channelx. */
+    uint32_t DMA_PeripheralBaseAddr; /* Specifies the peripheral base address for DMAy Channelx. 
+                                        ระบุที่อยู่ฐานของอุปกรณ์ต่อพ่วง */
 
-    uint32_t DMA_MemoryBaseAddr; /* Specifies the memory base address for DMAy Channelx. */
+    uint32_t DMA_MemoryBaseAddr; /* Specifies the memory base address for DMAy Channelx. 
+                                    ระบุที่อยู่ฐานของหน่วยความจำ */
 
     uint32_t DMA_DIR; /* Specifies if the peripheral is the source or destination.
-                         This parameter can be a value of @ref DMA_data_transfer_direction */
+                         This parameter can be a value of @ref DMA_data_transfer_direction 
+                         ระบุว่าอุปกรณ์เป็นแหล่งที่มาหรือปลายทาง */
 
     uint32_t DMA_BufferSize; /* Specifies the buffer size, in data unit, of the specified Channel.
                                 The data unit is equal to the configuration set in DMA_PeripheralDataSize
-                                or DMA_MemoryDataSize members depending in the transfer direction. */
+                                or DMA_MemoryDataSize members depending in the transfer direction. 
+                                ระบุขนาดบัฟเฟอร์ */
 
     uint32_t DMA_PeripheralInc; /* Specifies whether the Peripheral address register is incremented or not.
-                                   This parameter can be a value of @ref DMA_peripheral_incremented_mode */
+                                   This parameter can be a value of @ref DMA_peripheral_incremented_mode 
+                                   ระบุว่าเพิ่มที่อยู่ของอุปกรณ์อัตโนมัติหรือไม่ */
 
     uint32_t DMA_MemoryInc; /* Specifies whether the memory address register is incremented or not.
-                               This parameter can be a value of @ref DMA_memory_incremented_mode */
+                               This parameter can be a value of @ref DMA_memory_incremented_mode 
+                               ระบุว่าเพิ่มที่อยู่หน่วยความจำอัตโนมัติหรือไม่ */
 
     uint32_t DMA_PeripheralDataSize; /* Specifies the Peripheral data width.
-                                        This parameter can be a value of @ref DMA_peripheral_data_size */
+                                        This parameter can be a value of @ref DMA_peripheral_data_size 
+                                        ระบุความกว้างข้อมูลของอุปกรณ์ */
 
     uint32_t DMA_MemoryDataSize; /* Specifies the Memory data width.
-                                    This parameter can be a value of @ref DMA_memory_data_size */
+                                    This parameter can be a value of @ref DMA_memory_data_size 
+                                    ระบุความกว้างข้อมูลของหน่วยความจำ */
 
     uint32_t DMA_Mode; /* Specifies the operation mode of the DMAy Channelx.
                           This parameter can be a value of @ref DMA_circular_normal_mode.
                           @note: The circular buffer mode cannot be used if the memory-to-memory
-                                data transfer is configured on the selected Channel */
+                                data transfer is configured on the selected Channel 
+                          ระบุโหมดการทำงาน (ปกติหรือวนซ้ำ) */
 
     uint32_t DMA_Priority; /* Specifies the software priority for the DMAy Channelx.
-                              This parameter can be a value of @ref DMA_priority_level */
+                              This parameter can be a value of @ref DMA_priority_level 
+                              ระบุลำดับความสำคัญ */
 
     uint32_t DMA_M2M; /* Specifies if the DMAy Channelx will be used in memory-to-memory transfer.
-                         This parameter can be a value of @ref DMA_memory_to_memory */
+                         This parameter can be a value of @ref DMA_memory_to_memory 
+                         ระบุว่าใช้สำหรับการถ่ายโอนหน่วยความจำสู่หน่วยความจำหรือไม่ */
 } DMA_InitTypeDef;
 
 /* DMA_data_transfer_direction */
-#define DMA_DIR_PeripheralDST              ((uint32_t)0x00000010)
-#define DMA_DIR_PeripheralSRC              ((uint32_t)0x00000000)
+/* ทิศทางการถ่ายโอนข้อมูล DMA */
+#define DMA_DIR_PeripheralDST              ((uint32_t)0x00000010)  /* อุปกรณ์เป็นปลายทาง (ส่งไปยังอุปกรณ์) */
+#define DMA_DIR_PeripheralSRC              ((uint32_t)0x00000000)  /* อุปกรณ์เป็นแหล่งที่มา (รับจากอุปกรณ์) */
 
 /* DMA_peripheral_incremented_mode */
-#define DMA_PeripheralInc_Enable           ((uint32_t)0x00000040)
-#define DMA_PeripheralInc_Disable          ((uint32_t)0x00000000)
+/* โหมดการเพิ่มที่อยู่ของอุปกรณ์ */
+#define DMA_PeripheralInc_Enable           ((uint32_t)0x00000040)  /* เปิดใช้งาน */
+#define DMA_PeripheralInc_Disable          ((uint32_t)0x00000000)  /* ปิดใช้งาน */
 
 /* DMA_memory_incremented_mode */
-#define DMA_MemoryInc_Enable               ((uint32_t)0x00000080)
-#define DMA_MemoryInc_Disable              ((uint32_t)0x00000000)
+/* โหมดการเพิ่มที่อยู่หน่วยความจำ */
+#define DMA_MemoryInc_Enable               ((uint32_t)0x00000080)  /* เปิดใช้งาน */
+#define DMA_MemoryInc_Disable              ((uint32_t)0x00000000)  /* ปิดใช้งาน */
 
 /* DMA_peripheral_data_size */
-#define DMA_PeripheralDataSize_Byte        ((uint32_t)0x00000000)
-#define DMA_PeripheralDataSize_HalfWord    ((uint32_t)0x00000100)
-#define DMA_PeripheralDataSize_Word        ((uint32_t)0x00000200)
+/* ความกว้างข้อมูลของอุปกรณ์ */
+#define DMA_PeripheralDataSize_Byte        ((uint32_t)0x00000000)  /* 1 ไบต์ */
+#define DMA_PeripheralDataSize_HalfWord    ((uint32_t)0x00000100)  /* 2 ไบต์ (Half Word) */
+#define DMA_PeripheralDataSize_Word        ((uint32_t)0x00000200)  /* 4 ไบต์ (Word) */
 
 /* DMA_memory_data_size */
-#define DMA_MemoryDataSize_Byte            ((uint32_t)0x00000000)
-#define DMA_MemoryDataSize_HalfWord        ((uint32_t)0x00000400)
-#define DMA_MemoryDataSize_Word            ((uint32_t)0x00000800)
+/* ความกว้างข้อมูลของหน่วยความจำ */
+#define DMA_MemoryDataSize_Byte            ((uint32_t)0x00000000)  /* 1 ไบต์ */
+#define DMA_MemoryDataSize_HalfWord        ((uint32_t)0x00000400)  /* 2 ไบต์ (Half Word) */
+#define DMA_MemoryDataSize_Word            ((uint32_t)0x00000800)  /* 4 ไบต์ (Word) */
 
 /* DMA_circular_normal_mode */
-#define DMA_Mode_Circular                  ((uint32_t)0x00000020)
-#define DMA_Mode_Normal                    ((uint32_t)0x00000000)
+/* โหมดการทำงาน */
+#define DMA_Mode_Circular                  ((uint32_t)0x00000020)  /* โหมดวนซ้ำ (Circular) */
+#define DMA_Mode_Normal                    ((uint32_t)0x00000000)  /* โหมดปกติ */
 
 /* DMA_priority_level */
-#define DMA_Priority_VeryHigh              ((uint32_t)0x00003000)
-#define DMA_Priority_High                  ((uint32_t)0x00002000)
-#define DMA_Priority_Medium                ((uint32_t)0x00001000)
-#define DMA_Priority_Low                   ((uint32_t)0x00000000)
+/* ระดับความสำคัญ */
+#define DMA_Priority_VeryHigh              ((uint32_t)0x00003000)  /* สูงมาก */
+#define DMA_Priority_High                  ((uint32_t)0x00002000)  /* สูง */
+#define DMA_Priority_Medium                ((uint32_t)0x00001000)  /* ปานกลาง */
+#define DMA_Priority_Low                   ((uint32_t)0x00000000)  /* ต่ำ */
 
 /* DMA_memory_to_memory */
-#define DMA_M2M_Enable                     ((uint32_t)0x00004000)
-#define DMA_M2M_Disable                    ((uint32_t)0x00000000)
+/* การถ่ายโอนหน่วยความจำสู่หน่วยความจำ */
+#define DMA_M2M_Enable                     ((uint32_t)0x00004000)  /* เปิดใช้งาน */
+#define DMA_M2M_Disable                    ((uint32_t)0x00000000)  /* ปิดใช้งาน */
 
 /* DMA_interrupts_definition */
-#define DMA_IT_TC                          ((uint32_t)0x00000002)
-#define DMA_IT_HT                          ((uint32_t)0x00000004)
-#define DMA_IT_TE                          ((uint32_t)0x00000008)
+/* การขัดจังหวะ DMA */
+#define DMA_IT_TC                          ((uint32_t)0x00000002)  /* Transfer Complete - ถ่ายโอนเสร็จสมบูรณ์ */
+#define DMA_IT_HT                          ((uint32_t)0x00000004)  /* Half Transfer - ถ่ายโอนครึ่งหนึ่ง */
+#define DMA_IT_TE                          ((uint32_t)0x00000008)  /* Transfer Error - ข้อผิดพลาดในการถ่ายโอน */
 
 #define DMA1_IT_GL1                        ((uint32_t)0x00000001)
 #define DMA1_IT_TC1                        ((uint32_t)0x00000002)

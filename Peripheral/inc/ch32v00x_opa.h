@@ -5,6 +5,9 @@
  * Date               : 2022/08/08
  * Description        : This file contains all the functions prototypes for the
  *                      OPA firmware library.
+ *                      ไฟล์นี้มีต้นแบบฟังก์ชันทั้งหมดสำหรับไลบรารีเฟิร์มแวร์ OPA
+ *                      OPA = Operational Amplifier - ออปแอมป์ภายในชิป
+ *                      ใช้สำหรับขยายสัญญาณอนาล็อก
  *********************************************************************************
  * Copyright (c) 2021 Nanjing Qinheng Microelectronics Co., Ltd.
  * Attention: This software (modified or not) and binary are used for 
@@ -20,25 +23,28 @@ extern "C" {
 #include "ch32v00x.h"
 
 /* OPA PSEL enumeration */
+/* ขาอินพุตบวกของ OPA */
 typedef enum
 {
-    CHP0 = 0,
-    CHP1
+    CHP0 = 0,  /* ขาบวกช่อง 0 */
+    CHP1       /* ขาบวกช่อง 1 */
 } OPA_PSEL_TypeDef;
 
 /* OPA NSEL enumeration */
+/* ขาอินพุตลบของ OPA */
 typedef enum
 {
-    CHN0 = 0,
-    CHN1
+    CHN0 = 0,  /* ขาลบช่อง 0 */
+    CHN1       /* ขาลบช่อง 1 */
 } OPA_NSEL_TypeDef;
 
 
 /* OPA Init Structure definition */
+/* โครงสร้างสำหรับการตั้งค่า OPA */
 typedef struct
 {
-    OPA_PSEL_TypeDef PSEL;    /* Specifies the positive channel of OPA */
-    OPA_NSEL_TypeDef NSEL;    /* Specifies the negative channel of OPA */
+    OPA_PSEL_TypeDef PSEL;    /* Specifies the positive channel of OPA - เลือกขาอินพุตบวก */
+    OPA_NSEL_TypeDef NSEL;    /* Specifies the negative channel of OPA - เลือกขาอินพุตลบ */
 } OPA_InitTypeDef;
 
 void OPA_DeInit(void);

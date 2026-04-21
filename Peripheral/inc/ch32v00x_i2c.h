@@ -5,6 +5,8 @@
  * Date               : 2022/08/08
  * Description        : This file contains all the functions prototypes for the
  *                      I2C firmware library.
+ *                      ไฟล์นี้มีต้นแบบฟังก์ชันทั้งหมดสำหรับไลบรารีเฟิร์มแวร์ I2C
+ *                      I2C = Inter-Integrated Circuit - โปรโตคอลสื่อสารอนุกรมแบบสองสาย
  *********************************************************************************
  * Copyright (c) 2021 Nanjing Qinheng Microelectronics Co., Ltd.
  * Attention: This software (modified or not) and binary are used for 
@@ -20,103 +22,122 @@ extern "C" {
 #include <ch32v00x.h>
 
 /* I2C Init structure definition  */
+/* โครงสร้างสำหรับการตั้งค่า I2C */
 typedef struct
 {
     uint32_t I2C_ClockSpeed; /* Specifies the clock frequency.
-                                This parameter must be set to a value lower than 400kHz */
+                                This parameter must be set to a value lower than 400kHz 
+                                กำหนดความถี่นาฬิกา (ต้องต่ำกว่า 400kHz) */
 
     uint16_t I2C_Mode; /* Specifies the I2C mode.
-                          This parameter can be a value of @ref I2C_mode */
+                          This parameter can be a value of @ref I2C_mode 
+                          ระบุโหมด I2C */
 
     uint16_t I2C_DutyCycle; /* Specifies the I2C fast mode duty cycle.
-                               This parameter can be a value of @ref I2C_duty_cycle_in_fast_mode */
+                               This parameter can be a value of @ref I2C_duty_cycle_in_fast_mode 
+                               ระบุ Duty Cycle ในโหมดเร็ว */
 
     uint16_t I2C_OwnAddress1; /* Specifies the first device own address.
-                                 This parameter can be a 7-bit or 10-bit address. */
+                                 This parameter can be a 7-bit or 10-bit address. 
+                                 ระบุที่อยู่ของอุปกรณ์ตัวเอง (7 หรือ 10 บิต) */
 
     uint16_t I2C_Ack; /* Enables or disables the acknowledgement.
-                         This parameter can be a value of @ref I2C_acknowledgement */
+                         This parameter can be a value of @ref I2C_acknowledgement 
+                         เปิดหรือปิดการตอบรับ */
 
     uint16_t I2C_AcknowledgedAddress; /* Specifies if 7-bit or 10-bit address is acknowledged.
-                                         This parameter can be a value of @ref I2C_acknowledged_address */
+                                         This parameter can be a value of @ref I2C_acknowledged_address 
+                                         ระบุว่าตอบรับที่อยู่ 7 หรือ 10 บิต */
 } I2C_InitTypeDef;
 
 /* I2C_mode */
-#define I2C_Mode_I2C                                         ((uint16_t)0x0000)
+/* โหมด I2C */
+#define I2C_Mode_I2C                                         ((uint16_t)0x0000)  /* โหมด I2C ปกติ */
 
 /* I2C_duty_cycle_in_fast_mode */
-#define I2C_DutyCycle_16_9                                   ((uint16_t)0x4000) /* I2C fast mode Tlow/Thigh = 16/9 */
-#define I2C_DutyCycle_2                                      ((uint16_t)0xBFFF) /* I2C fast mode Tlow/Thigh = 2 */
+/* Duty Cycle ในโหมดเร็ว */
+#define I2C_DutyCycle_16_9                                   ((uint16_t)0x4000) /* I2C fast mode Tlow/Thigh = 16/9 - อัตราส่วน 16:9 */
+#define I2C_DutyCycle_2                                      ((uint16_t)0xBFFF) /* I2C fast mode Tlow/Thigh = 2 - อัตราส่วน 2:1 */
 
 /* I2C_acknowledgement */
-#define I2C_Ack_Enable                                       ((uint16_t)0x0400)
-#define I2C_Ack_Disable                                      ((uint16_t)0x0000)
+/* การตอบรับ */
+#define I2C_Ack_Enable                                       ((uint16_t)0x0400)  /* เปิดการตอบรับ */
+#define I2C_Ack_Disable                                      ((uint16_t)0x0000)  /* ปิดการตอบรับ */
 
 /* I2C_transfer_direction */
-#define I2C_Direction_Transmitter                            ((uint8_t)0x00)
-#define I2C_Direction_Receiver                               ((uint8_t)0x01)
+/* ทิศทางการส่งข้อมูล */
+#define I2C_Direction_Transmitter                            ((uint8_t)0x00)  /* ส่งข้อมูล (Master เป็นตัวส่ง) */
+#define I2C_Direction_Receiver                               ((uint8_t)0x01)  /* รับข้อมูล (Master เป็นตัวรับ) */
 
 /* I2C_acknowledged_address */
-#define I2C_AcknowledgedAddress_7bit                         ((uint16_t)0x4000)
-#define I2C_AcknowledgedAddress_10bit                        ((uint16_t)0xC000)
+/* ขนาดที่อยู่ที่ตอบรับ */
+#define I2C_AcknowledgedAddress_7bit                         ((uint16_t)0x4000)  /* ที่อยู่ 7 บิต */
+#define I2C_AcknowledgedAddress_10bit                        ((uint16_t)0xC000)  /* ที่อยู่ 10 บิต */
 
 /* I2C_registers */
-#define I2C_Register_CTLR1                                   ((uint8_t)0x00)
-#define I2C_Register_CTLR2                                   ((uint8_t)0x04)
-#define I2C_Register_OADDR1                                  ((uint8_t)0x08)
-#define I2C_Register_OADDR2                                  ((uint8_t)0x0C)
-#define I2C_Register_DATAR                                   ((uint8_t)0x10)
-#define I2C_Register_STAR1                                   ((uint8_t)0x14)
-#define I2C_Register_STAR2                                   ((uint8_t)0x18)
-#define I2C_Register_CKCFGR                                  ((uint8_t)0x1C)
+/* เรจิสเตอร์ I2C */
+#define I2C_Register_CTLR1                                   ((uint8_t)0x00)  /* Control Register 1 */
+#define I2C_Register_CTLR2                                   ((uint8_t)0x04)  /* Control Register 2 */
+#define I2C_Register_OADDR1                                  ((uint8_t)0x08)  /* Own Address Register 1 */
+#define I2C_Register_OADDR2                                  ((uint8_t)0x0C)  /* Own Address Register 2 */
+#define I2C_Register_DATAR                                   ((uint8_t)0x10)  /* Data Register */
+#define I2C_Register_STAR1                                   ((uint8_t)0x14)  /* Status Register 1 */
+#define I2C_Register_STAR2                                   ((uint8_t)0x18)  /* Status Register 2 */
+#define I2C_Register_CKCFGR                                  ((uint8_t)0x1C)  /* Clock Control Register */
 
 /* I2C_PEC_position */
-#define I2C_PECPosition_Next                                 ((uint16_t)0x0800)
-#define I2C_PECPosition_Current                              ((uint16_t)0xF7FF)
+/* ตำแหน่ง PEC (Packet Error Checking) */
+#define I2C_PECPosition_Next                                 ((uint16_t)0x0800)  /* ตำแหน่งถัดไป */
+#define I2C_PECPosition_Current                              ((uint16_t)0xF7FF)  /* ตำแหน่งปัจจุบัน */
 
 /* I2C_NACK_position */
-#define I2C_NACKPosition_Next                                ((uint16_t)0x0800)
-#define I2C_NACKPosition_Current                             ((uint16_t)0xF7FF)
+/* ตำแหน่ง NACK (Not Acknowledge) */
+#define I2C_NACKPosition_Next                                ((uint16_t)0x0800)  /* ตำแหน่งถัดไป */
+#define I2C_NACKPosition_Current                             ((uint16_t)0xF7FF)  /* ตำแหน่งปัจจุบัน */
 
 /* I2C_interrupts_definition */
-#define I2C_IT_BUF                                           ((uint16_t)0x0400)
-#define I2C_IT_EVT                                           ((uint16_t)0x0200)
-#define I2C_IT_ERR                                           ((uint16_t)0x0100)
+/* การขัดจังหวะ I2C */
+#define I2C_IT_BUF                                           ((uint16_t)0x0400)  /* Buffer interrupt - อินเทอร์รัพต์บัฟเฟอร์ */
+#define I2C_IT_EVT                                           ((uint16_t)0x0200)  /* Event interrupt - อินเทอร์รัพต์เหตุการณ์ */
+#define I2C_IT_ERR                                           ((uint16_t)0x0100)  /* Error interrupt - อินเทอร์รัพต์ข้อผิดพลาด */
 
 /* I2C_interrupts_definition */
-#define I2C_IT_PECERR                                        ((uint32_t)0x01001000)
-#define I2C_IT_OVR                                           ((uint32_t)0x01000800)
-#define I2C_IT_AF                                            ((uint32_t)0x01000400)
-#define I2C_IT_ARLO                                          ((uint32_t)0x01000200)
-#define I2C_IT_BERR                                          ((uint32_t)0x01000100)
-#define I2C_IT_TXE                                           ((uint32_t)0x06000080)
-#define I2C_IT_RXNE                                          ((uint32_t)0x06000040)
-#define I2C_IT_STOPF                                         ((uint32_t)0x02000010)
-#define I2C_IT_ADD10                                         ((uint32_t)0x02000008)
-#define I2C_IT_BTF                                           ((uint32_t)0x02000004)
-#define I2C_IT_ADDR                                          ((uint32_t)0x02000002)
-#define I2C_IT_SB                                            ((uint32_t)0x02000001)
+/* ประเภทการขัดจังหวะ */
+#define I2C_IT_PECERR                                        ((uint32_t)0x01001000)  /* ข้อผิดพลาด PEC */
+#define I2C_IT_OVR                                           ((uint32_t)0x01000800)  /* Overrun/Underrun */
+#define I2C_IT_AF                                            ((uint32_t)0x01000400)  /* Acknowledge Failure - ล้มเหลวในการตอบรับ */
+#define I2C_IT_ARLO                                          ((uint32_t)0x01000200)  /* Arbitration Lost - เสียสิทธิ์ bus */
+#define I2C_IT_BERR                                          ((uint32_t)0x01000100)  /* Bus Error - ข้อผิดพลาดบัส */
+#define I2C_IT_TXE                                           ((uint32_t)0x06000080)  /* Transmit Data Register Empty */
+#define I2C_IT_RXNE                                          ((uint32_t)0x06000040)  /* Receive Data Register Not Empty */
+#define I2C_IT_STOPF                                         ((uint32_t)0x02000010)  /* Stop Detection - ตรวจพบ Stop */
+#define I2C_IT_ADD10                                         ((uint32_t)0x02000008)  /* 10-bit Header Sent */
+#define I2C_IT_BTF                                           ((uint32_t)0x02000004)  /* Byte Transfer Finished */
+#define I2C_IT_ADDR                                          ((uint32_t)0x02000002)  /* Address Sent/Matched */
+#define I2C_IT_SB                                            ((uint32_t)0x02000001)  /* Start Bit - บิตเริ่มต้น */
 
 /* SR2 register flags  */
-#define I2C_FLAG_DUALF                                       ((uint32_t)0x00800000)
-#define I2C_FLAG_GENCALL                                     ((uint32_t)0x00100000)
-#define I2C_FLAG_TRA                                         ((uint32_t)0x00040000)
-#define I2C_FLAG_BUSY                                        ((uint32_t)0x00020000)
-#define I2C_FLAG_MSL                                         ((uint32_t)0x00010000)
+/* แฟล็กในเรจิสเตอร์สถานะ 2 */
+#define I2C_FLAG_DUALF                                       ((uint32_t)0x00800000)  /* Dual Flag - ธงคู่ */
+#define I2C_FLAG_GENCALL                                     ((uint32_t)0x00100000)  /* General Call - เรียกทั่วไป */
+#define I2C_FLAG_TRA                                         ((uint32_t)0x00040000)  /* Transmitter/Receiver */
+#define I2C_FLAG_BUSY                                        ((uint32_t)0x00020000)  /* บัสไม่ว่าง */
+#define I2C_FLAG_MSL                                         ((uint32_t)0x00010000)  /* Master/Slave */
 
 /* SR1 register flags */
-#define I2C_FLAG_PECERR                                      ((uint32_t)0x10001000)
-#define I2C_FLAG_OVR                                         ((uint32_t)0x10000800)
-#define I2C_FLAG_AF                                          ((uint32_t)0x10000400)
-#define I2C_FLAG_ARLO                                        ((uint32_t)0x10000200)
-#define I2C_FLAG_BERR                                        ((uint32_t)0x10000100)
-#define I2C_FLAG_TXE                                         ((uint32_t)0x10000080)
-#define I2C_FLAG_RXNE                                        ((uint32_t)0x10000040)
-#define I2C_FLAG_STOPF                                       ((uint32_t)0x10000010)
-#define I2C_FLAG_ADD10                                       ((uint32_t)0x10000008)
-#define I2C_FLAG_BTF                                         ((uint32_t)0x10000004)
-#define I2C_FLAG_ADDR                                        ((uint32_t)0x10000002)
-#define I2C_FLAG_SB                                          ((uint32_t)0x10000001)
+/* แฟล็กในเรจิสเตอร์สถานะ 1 */
+#define I2C_FLAG_PECERR                                      ((uint32_t)0x10001000)  /* PEC Error */
+#define I2C_FLAG_OVR                                         ((uint32_t)0x10000800)  /* Overrun/Underrun */
+#define I2C_FLAG_AF                                          ((uint32_t)0x10000400)  /* Acknowledge Failure */
+#define I2C_FLAG_ARLO                                        ((uint32_t)0x10000200)  /* Arbitration Lost */
+#define I2C_FLAG_BERR                                        ((uint32_t)0x10000100)  /* Bus Error */
+#define I2C_FLAG_TXE                                         ((uint32_t)0x10000080)  /* Transmit Data Register Empty */
+#define I2C_FLAG_RXNE                                        ((uint32_t)0x10000040)  /* Receive Data Register Not Empty */
+#define I2C_FLAG_STOPF                                       ((uint32_t)0x10000010)  /* Stop Detection */
+#define I2C_FLAG_ADD10                                       ((uint32_t)0x10000008)  /* 10-bit Header Sent */
+#define I2C_FLAG_BTF                                         ((uint32_t)0x10000004)  /* Byte Transfer Finished */
+#define I2C_FLAG_ADDR                                        ((uint32_t)0x10000002)  /* Address Sent/Matched */
+#define I2C_FLAG_SB                                          ((uint32_t)0x10000001)  /* Start Bit */
 
 /****************I2C Master Events (Events grouped in order of communication)********************/
 

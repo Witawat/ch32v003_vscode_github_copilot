@@ -5,6 +5,8 @@
  * Date               : 2023/12/25
  * Description        : This file contains all the functions prototypes for the FLASH
  *                      firmware library.
+ *                      ไฟล์นี้มีต้นแบบฟังก์ชันทั้งหมดสำหรับไลบรารีเฟิร์มแวร์ FLASH
+ *                      ใช้สำหรับการอ่าน/เขียนโปรแกรมและข้อมูลในหน่วยความจำ Flash
  *********************************************************************************
  * Copyright (c) 2021 Nanjing Qinheng Microelectronics Co., Ltd.
  * Attention: This software (modified or not) and binary are used for 
@@ -20,64 +22,72 @@ extern "C" {
 #include <ch32v00x.h>
 
 /* FLASH Status */
+/* สถานะการทำงานของ FLASH */
 typedef enum
 {
-    FLASH_BUSY = 1,
-    FLASH_ERROR_PG,
-    FLASH_ERROR_WRP,
-    FLASH_COMPLETE,
-    FLASH_TIMEOUT,
-    FLASH_OP_RANGE_ERROR = 0xFD,
-    FLASH_ALIGN_ERROR = 0xFE,
-    FLASH_ADR_RANGE_ERROR = 0xFF,
+    FLASH_BUSY = 1,              /* กำลังทำงาน */
+    FLASH_ERROR_PG,              /* ข้อผิดพลาดในการโปรแกรม */
+    FLASH_ERROR_WRP,             /* ข้อผิดพลาดการป้องกันเขียน */
+    FLASH_COMPLETE,              /* เสร็จสมบูรณ์ */
+    FLASH_TIMEOUT,               /* หมดเวลา */
+    FLASH_OP_RANGE_ERROR = 0xFD, /* ข้อผิดพลาดช่วงการทำงาน */
+    FLASH_ALIGN_ERROR = 0xFE,    /* ข้อผิดพลาดการจัดตำแหน่ง */
+    FLASH_ADR_RANGE_ERROR = 0xFF,/* ข้อผิดพลาดช่วงที่อยู่ */
 } FLASH_Status;
 
 /* Flash_Latency */
-#define FLASH_Latency_0                  ((uint32_t)0x00000000) /* FLASH Zero Latency cycle */
-#define FLASH_Latency_1                  ((uint32_t)0x00000001) /* FLASH One Latency cycle */
-#define FLASH_Latency_2                  ((uint32_t)0x00000002) /* FLASH Two Latency cycles */
+/* ค่าความล่าช้าของ Flash (รอบนาฬิกา) */
+#define FLASH_Latency_0                  ((uint32_t)0x00000000) /* ไม่มีความล่าช้า */
+#define FLASH_Latency_1                  ((uint32_t)0x00000001) /* ล่าช้า 1 รอบ */
+#define FLASH_Latency_2                  ((uint32_t)0x00000002) /* ล่าช้า 2 รอบ */
 
 /* Values to be used with CH32V00x devices (1page = 64Byte) */
-#define FLASH_WRProt_Pages0to15          ((uint32_t)0x00000001) /* CH32 Low and Medium density devices: Write protection of page 0 to 15 */
-#define FLASH_WRProt_Pages16to31         ((uint32_t)0x00000002) /* CH32 Low and Medium density devices: Write protection of page 16 to 31 */
-#define FLASH_WRProt_Pages32to47         ((uint32_t)0x00000004) /* CH32 Low and Medium density devices: Write protection of page 32 to 47 */
-#define FLASH_WRProt_Pages48to63         ((uint32_t)0x00000008) /* CH32 Low and Medium density devices: Write protection of page 48 to 63 */
-#define FLASH_WRProt_Pages64to79         ((uint32_t)0x00000010) /* CH32 Low and Medium density devices: Write protection of page 64 to 79 */
-#define FLASH_WRProt_Pages80to95         ((uint32_t)0x00000020) /* CH32 Low and Medium density devices: Write protection of page 80 to 95 */
-#define FLASH_WRProt_Pages96to111        ((uint32_t)0x00000040) /* CH32 Low and Medium density devices: Write protection of page 96 to 111 */
-#define FLASH_WRProt_Pages112to127       ((uint32_t)0x00000080) /* CH32 Low and Medium density devices: Write protection of page 112 to 127 */
-#define FLASH_WRProt_Pages128to143       ((uint32_t)0x00000100) /* CH32 Medium-density devices: Write protection of page 128 to 143 */
-#define FLASH_WRProt_Pages144to159       ((uint32_t)0x00000200) /* CH32 Medium-density devices: Write protection of page 144 to 159 */
-#define FLASH_WRProt_Pages160to175       ((uint32_t)0x00000400) /* CH32 Medium-density devices: Write protection of page 160 to 175 */
-#define FLASH_WRProt_Pages176to191       ((uint32_t)0x00000800) /* CH32 Medium-density devices: Write protection of page 176 to 191 */
-#define FLASH_WRProt_Pages192to207       ((uint32_t)0x00001000) /* CH32 Medium-density devices: Write protection of page 192 to 207 */
-#define FLASH_WRProt_Pages208to223       ((uint32_t)0x00002000) /* CH32 Medium-density devices: Write protection of page 208 to 223 */
-#define FLASH_WRProt_Pages224to239       ((uint32_t)0x00004000) /* CH32 Medium-density devices: Write protection of page 224 to 239 */
-#define FLASH_WRProt_Pages240to255       ((uint32_t)0x00008000) /* CH32 Medium-density devices: Write protection of page 240 to 255 */
+/* การป้องกันเขียน Flash (1 หน้า = 64 ไบต์) */
+#define FLASH_WRProt_Pages0to15          ((uint32_t)0x00000001) /* ป้องกันการเขียนหน้า 0-15 */
+#define FLASH_WRProt_Pages16to31         ((uint32_t)0x00000002) /* ป้องกันการเขียนหน้า 16-31 */
+#define FLASH_WRProt_Pages32to47         ((uint32_t)0x00000004) /* ป้องกันการเขียนหน้า 32-47 */
+#define FLASH_WRProt_Pages48to63         ((uint32_t)0x00000008) /* ป้องกันการเขียนหน้า 48-63 */
+#define FLASH_WRProt_Pages64to79         ((uint32_t)0x00000010) /* ป้องกันการเขียนหน้า 64-79 */
+#define FLASH_WRProt_Pages80to95         ((uint32_t)0x00000020) /* ป้องกันการเขียนหน้า 80-95 */
+#define FLASH_WRProt_Pages96to111        ((uint32_t)0x00000040) /* ป้องกันการเขียนหน้า 96-111 */
+#define FLASH_WRProt_Pages112to127       ((uint32_t)0x00000080) /* ป้องกันการเขียนหน้า 112-127 */
+#define FLASH_WRProt_Pages128to143       ((uint32_t)0x00000100) /* ป้องกันการเขียนหน้า 128-143 */
+#define FLASH_WRProt_Pages144to159       ((uint32_t)0x00000200) /* ป้องกันการเขียนหน้า 144-159 */
+#define FLASH_WRProt_Pages160to175       ((uint32_t)0x00000400) /* ป้องกันการเขียนหน้า 160-175 */
+#define FLASH_WRProt_Pages176to191       ((uint32_t)0x00000800) /* ป้องกันการเขียนหน้า 176-191 */
+#define FLASH_WRProt_Pages192to207       ((uint32_t)0x00001000) /* ป้องกันการเขียนหน้า 192-207 */
+#define FLASH_WRProt_Pages208to223       ((uint32_t)0x00002000) /* ป้องกันการเขียนหน้า 208-223 */
+#define FLASH_WRProt_Pages224to239       ((uint32_t)0x00004000) /* ป้องกันการเขียนหน้า 224-239 */
+#define FLASH_WRProt_Pages240to255       ((uint32_t)0x00008000) /* ป้องกันการเขียนหน้า 240-255 */
 
-#define FLASH_WRProt_AllPages            ((uint32_t)0x0000FFFF) /* Write protection of all Pages */
+#define FLASH_WRProt_AllPages            ((uint32_t)0x0000FFFF) /* ป้องกันการเขียนทุกหน้า */
 
 /* Option_Bytes_IWatchdog */
-#define OB_IWDG_SW                       ((uint16_t)0x0001) /* Software IWDG selected */
-#define OB_IWDG_HW                       ((uint16_t)0x0000) /* Hardware IWDG selected */
+/* ตัวเลือก Independent Watchdog */
+#define OB_IWDG_SW                       ((uint16_t)0x0001) /* ใช้ซอฟต์แวร์ IWDG */
+#define OB_IWDG_HW                       ((uint16_t)0x0000) /* ใช้ฮาร์ดแวร์ IWDG */
 
 /* Option_Bytes_nRST_STOP */
-#define OB_STOP_NoRST                    ((uint16_t)0x0002) /* No reset generated when entering in STOP */
-#define OB_STOP_RST                      ((uint16_t)0x0000) /* Reset generated when entering in STOP */
+/* ตัวเลือกการรีเซ็ตในโหมด STOP */
+#define OB_STOP_NoRST                    ((uint16_t)0x0002) /* ไม่รีเซ็ตเมื่อเข้าโหมด STOP */
+#define OB_STOP_RST                      ((uint16_t)0x0000) /* รีเซ็ตเมื่อเข้าโหมด STOP */
 
 /* Option_Bytes_nRST_STDBY */
-#define OB_STDBY_NoRST                   ((uint16_t)0x0004) /* No reset generated when entering in STANDBY */
-#define OB_STDBY_RST                     ((uint16_t)0x0000) /* Reset generated when entering in STANDBY */
+/* ตัวเลือกการรีเซ็ตในโหมด STANDBY */
+#define OB_STDBY_NoRST                   ((uint16_t)0x0004) /* ไม่รีเซ็ตเมื่อเข้าโหมด STANDBY */
+#define OB_STDBY_RST                     ((uint16_t)0x0000) /* รีเซ็ตเมื่อเข้าโหมด STANDBY */
 
 /* Option_Bytes_RST_ENandDT */
-#define OB_RST_NoEN                      ((uint16_t)0x0018) /* Reset IO disable (PD7)*/
-#define OB_RST_EN_DT12ms                 ((uint16_t)0x0010) /* Reset IO enable (PD7) and  Ignore delay time 12ms */
-#define OB_RST_EN_DT1ms                  ((uint16_t)0x0008) /* Reset IO enable (PD7) and  Ignore delay time 1ms */
-#define OB_RST_EN_DT128us                ((uint16_t)0x0000) /* Reset IO enable (PD7) and  Ignore delay time 128us */
+/* ตัวเลือกการเปิดใช้งานขา RESET และเวลาล่าช้า */
+#define OB_RST_NoEN                      ((uint16_t)0x0018) /* ปิดใช้งานขา RESET (PD7) */
+#define OB_RST_EN_DT12ms                 ((uint16_t)0x0010) /* เปิดใช้งานขา RESET ล่าช้า 12ms */
+#define OB_RST_EN_DT1ms                  ((uint16_t)0x0008) /* เปิดใช้งานขา RESET ล่าช้า 1ms */
+#define OB_RST_EN_DT128us                ((uint16_t)0x0000) /* เปิดใช้งานขา RESET ล่าช้า 128us */
 
 /* Option_Bytes_Power_ON_Start_Mode */
-#define OB_PowerON_Start_Mode_BOOT       ((uint16_t)0x0020) /* from Boot after power on */
-#define OB_PowerON_Start_Mode_USER       ((uint16_t)0x0000) /* from User after power on */
+/* โหมดเริ่มต้นหลังจากเปิด電源 */
+#define OB_PowerON_Start_Mode_BOOT       ((uint16_t)0x0020) /* เริ่มจาก Bootloader */
+#define OB_PowerON_Start_Mode_USER       ((uint16_t)0x0000) /* เริ่มจากโปรแกรมผู้ใช้ */
 
 /* FLASH_Interrupts */
 #define FLASH_IT_ERROR                   ((uint32_t)0x00000400) /* FPEC error interrupt source */

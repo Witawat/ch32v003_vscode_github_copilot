@@ -5,6 +5,8 @@
  * Date               : 2022/08/08
  * Description        : This file contains all the functions prototypes for the
  *                      TIM firmware library.
+ *                      ไฟล์นี้มีต้นแบบฟังก์ชันทั้งหมดสำหรับไลบรารีเฟิร์มแวร์ Timer
+ *                      ใช้สำหรับการจับเวลา สร้าง PWM และควบคุมมอเตอร์
  *********************************************************************************
  * Copyright (c) 2021 Nanjing Qinheng Microelectronics Co., Ltd.
  * Attention: This software (modified or not) and binary are used for 
@@ -20,20 +22,25 @@ extern "C" {
 #include <ch32v00x.h>
 
 /* TIM Time Base Init structure definition */
+/* โครงสร้างพื้นฐานสำหรับการตั้งค่า Timer */
 typedef struct
 {
     uint16_t TIM_Prescaler; /* Specifies the prescaler value used to divide the TIM clock.
-                               This parameter can be a number between 0x0000 and 0xFFFF */
+                               This parameter can be a number between 0x0000 and 0xFFFF 
+                               กำหนดค่าตัวหารนาฬิกาของ Timer */
 
     uint16_t TIM_CounterMode; /* Specifies the counter mode.
-                                 This parameter can be a value of @ref TIM_Counter_Mode */
+                                 This parameter can be a value of @ref TIM_Counter_Mode 
+                                 ระบุโหมดการนับ */
 
     uint16_t TIM_Period; /* Specifies the period value to be loaded into the active
                             Auto-Reload Register at the next update event.
-                            This parameter must be a number between 0x0000 and 0xFFFF.  */
+                            This parameter must be a number between 0x0000 and 0xFFFF.  
+                            ระบุคาบเวลาที่จะโหลดเข้าสู่เรจิสเตอร์ Auto-Reload */
 
     uint16_t TIM_ClockDivision; /* Specifies the clock division.
-                                  This parameter can be a value of @ref TIM_Clock_Division_CKD */
+                                  This parameter can be a value of @ref TIM_Clock_Division_CKD 
+                                  ระบุการหารนาฬิกา */
 
     uint8_t TIM_RepetitionCounter; /* Specifies the repetition counter value. Each time the RCR downcounter
                                       reaches zero, an update event is generated and counting restarts
@@ -42,180 +49,225 @@ typedef struct
                                          - the number of PWM periods in edge-aligned mode
                                          - the number of half PWM period in center-aligned mode
                                       This parameter must be a number between 0x00 and 0xFF.
-                                      @note This parameter is valid only for TIM1. */
+                                      @note This parameter is valid only for TIM1. 
+                                      ระบุค่าตัวนับการทำซ้ำ (ใช้ได้เฉพาะ TIM1) */
 } TIM_TimeBaseInitTypeDef;
 
 /* TIM Output Compare Init structure definition */
+/* โครงสร้างสำหรับการตั้งค่า Output Compare ของ Timer */
 typedef struct
 {
     uint16_t TIM_OCMode; /* Specifies the TIM mode.
-                            This parameter can be a value of @ref TIM_Output_Compare_and_PWM_modes */
+                            This parameter can be a value of @ref TIM_Output_Compare_and_PWM_modes 
+                            ระบุโหมดการทำงานของ Timer */
 
     uint16_t TIM_OutputState; /* Specifies the TIM Output Compare state.
-                                 This parameter can be a value of @ref TIM_Output_Compare_state */
+                                 This parameter can be a value of @ref TIM_Output_Compare_state 
+                                 ระบุสถานะ Output Compare */
 
     uint16_t TIM_OutputNState; /* Specifies the TIM complementary Output Compare state.
                                   This parameter can be a value of @ref TIM_Output_Compare_N_state
-                                  @note This parameter is valid only for TIM1. */
+                                  @note This parameter is valid only for TIM1. 
+                                  ระบุสถานะ Output Compare แบบคู่เสริม (ใช้ได้เฉพาะ TIM1) */
 
     uint16_t TIM_Pulse; /* Specifies the pulse value to be loaded into the Capture Compare Register.
-                           This parameter can be a number between 0x0000 and 0xFFFF */
+                           This parameter can be a number between 0x0000 and 0xFFFF 
+                           ระบุค่าพัลส์ที่จะโหลดเข้าสู่เรจิสเตอร์ Capture Compare */
 
     uint16_t TIM_OCPolarity; /* Specifies the output polarity.
-                                This parameter can be a value of @ref TIM_Output_Compare_Polarity */
+                                This parameter can be a value of @ref TIM_Output_Compare_Polarity 
+                                ระบุขั้วของเอาต์พุต */
 
     uint16_t TIM_OCNPolarity; /* Specifies the complementary output polarity.
                                  This parameter can be a value of @ref TIM_Output_Compare_N_Polarity
-                                 @note This parameter is valid only for TIM1. */
+                                 @note This parameter is valid only for TIM1. 
+                                 ระบุขั้วของเอาต์พุตคู่เสริม (ใช้ได้เฉพาะ TIM1) */
 
     uint16_t TIM_OCIdleState; /* Specifies the TIM Output Compare pin state during Idle state.
                                  This parameter can be a value of @ref TIM_Output_Compare_Idle_State
-                                 @note This parameter is valid only for TIM1. */
+                                 @note This parameter is valid only for TIM1. 
+                                 ระบุสถานะขา Output Compare ในโหมด Idle (ใช้ได้เฉพาะ TIM1) */
 
     uint16_t TIM_OCNIdleState; /* Specifies the TIM Output Compare pin state during Idle state.
                                   This parameter can be a value of @ref TIM_Output_Compare_N_Idle_State
-                                  @note This parameter is valid only for TIM1. */
+                                  @note This parameter is valid only for TIM1. 
+                                  ระบุสถานะขา Output Compare คู่เสริมในโหมด Idle (ใช้ได้เฉพาะ TIM1) */
 } TIM_OCInitTypeDef;
 
 /* TIM Input Capture Init structure definition */
+/* โครงสร้างสำหรับการตั้งค่า Input Capture ของ Timer */
 typedef struct
 {
     uint16_t TIM_Channel; /* Specifies the TIM channel.
-                             This parameter can be a value of @ref TIM_Channel */
+                             This parameter can be a value of @ref TIM_Channel 
+                             ระบุช่องสัญญาณ Timer */
 
     uint16_t TIM_ICPolarity; /* Specifies the active edge of the input signal.
-                                This parameter can be a value of @ref TIM_Input_Capture_Polarity */
+                                This parameter can be a value of @ref TIM_Input_Capture_Polarity 
+                                ระบุขอบสัญญาณที่ใช้ในการจับ */
 
     uint16_t TIM_ICSelection; /* Specifies the input.
-                                 This parameter can be a value of @ref TIM_Input_Capture_Selection */
+                                 This parameter can be a value of @ref TIM_Input_Capture_Selection 
+                                 ระบุแหล่งที่มาของอินพุต */
 
     uint16_t TIM_ICPrescaler; /* Specifies the Input Capture Prescaler.
-                                 This parameter can be a value of @ref TIM_Input_Capture_Prescaler */
+                                 This parameter can be a value of @ref TIM_Input_Capture_Prescaler 
+                                 ระบุตัวหารของ Input Capture */
 
     uint16_t TIM_ICFilter; /* Specifies the input capture filter.
-                              This parameter can be a number between 0x0 and 0xF */
+                              This parameter can be a number between 0x0 and 0xF 
+                              ระบุตัวกรองอินพุต */
 } TIM_ICInitTypeDef;
 
 /* BDTR structure definition */
+/* โครงสร้าง Break and Dead-Time Register (สำหรับควบคุมมอเตอร์) */
 typedef struct
 {
     uint16_t TIM_OSSRState; /* Specifies the Off-State selection used in Run mode.
-                               This parameter can be a value of @ref OSSR_Off_State_Selection_for_Run_mode_state */
+                               This parameter can be a value of @ref OSSR_Off_State_Selection_for_Run_mode_state 
+                               ระบุสถานะ Off-State ในโหมดทำงาน */
 
     uint16_t TIM_OSSIState; /* Specifies the Off-State used in Idle state.
-                               This parameter can be a value of @ref OSSI_Off_State_Selection_for_Idle_mode_state */
+                               This parameter can be a value of @ref OSSI_Off_State_Selection_for_Idle_mode_state 
+                               ระบุสถานะ Off-State ในโหมด Idle */
 
     uint16_t TIM_LOCKLevel; /* Specifies the LOCK level parameters.
-                               This parameter can be a value of @ref Lock_level */
+                               This parameter can be a value of @ref Lock_level 
+                               ระบุระดับการล็อก */
 
     uint16_t TIM_DeadTime; /* Specifies the delay time between the switching-off and the
                               switching-on of the outputs.
-                              This parameter can be a number between 0x00 and 0xFF  */
+                              This parameter can be a number between 0x00 and 0xFF  
+                              ระบุเวลา Dead-Time ระหว่างการปิดและเปิดเอาต์พุต */
 
     uint16_t TIM_Break; /* Specifies whether the TIM Break input is enabled or not.
-                           This parameter can be a value of @ref Break_Input_enable_disable */
+                           This parameter can be a value of @ref Break_Input_enable_disable 
+                           ระบุว่าเปิดใช้งานอินพุต Break หรือไม่ */
 
     uint16_t TIM_BreakPolarity; /* Specifies the TIM Break Input pin polarity.
-                                   This parameter can be a value of @ref Break_Polarity */
+                                   This parameter can be a value of @ref Break_Polarity 
+                                   ระบุขั้วของขา Break Input */
 
     uint16_t TIM_AutomaticOutput; /* Specifies whether the TIM Automatic Output feature is enabled or not.
-                                     This parameter can be a value of @ref TIM_AOE_Bit_Set_Reset */
+                                     This parameter can be a value of @ref TIM_AOE_Bit_Set_Reset 
+                                     ระบุว่าเปิดใช้งานฟีเจอร์ Automatic Output หรือไม่ */
 } TIM_BDTRInitTypeDef;
 
 /* TIM_Output_Compare_and_PWM_modes */
-#define TIM_OCMode_Timing                  ((uint16_t)0x0000)
-#define TIM_OCMode_Active                  ((uint16_t)0x0010)
-#define TIM_OCMode_Inactive                ((uint16_t)0x0020)
-#define TIM_OCMode_Toggle                  ((uint16_t)0x0030)
-#define TIM_OCMode_PWM1                    ((uint16_t)0x0060)
-#define TIM_OCMode_PWM2                    ((uint16_t)0x0070)
+/* โหมด Output Compare และ PWM */
+#define TIM_OCMode_Timing                  ((uint16_t)0x0000)  /* โหมดจับเวลา */
+#define TIM_OCMode_Active                  ((uint16_t)0x0010)  /* โหมดแอคทีฟ */
+#define TIM_OCMode_Inactive                ((uint16_t)0x0020)  /* โหมดไม่แอคทีฟ */
+#define TIM_OCMode_Toggle                  ((uint16_t)0x0030)  /* โหมด สลับสถานะ */
+#define TIM_OCMode_PWM1                    ((uint16_t)0x0060)  /* โหมด PWM แบบที่ 1 */
+#define TIM_OCMode_PWM2                    ((uint16_t)0x0070)  /* โหมด PWM แบบที่ 2 */
 
 /* TIM_One_Pulse_Mode */
-#define TIM_OPMode_Single                  ((uint16_t)0x0008)
-#define TIM_OPMode_Repetitive              ((uint16_t)0x0000)
+/* โหมด One Pulse */
+#define TIM_OPMode_Single                  ((uint16_t)0x0008)  /* โหมดพัลส์เดี่ยว */
+#define TIM_OPMode_Repetitive              ((uint16_t)0x0000)  /* โหมดพัลส์ซ้ำ */
 
 /* TIM_Channel */
-#define TIM_Channel_1                      ((uint16_t)0x0000)
-#define TIM_Channel_2                      ((uint16_t)0x0004)
-#define TIM_Channel_3                      ((uint16_t)0x0008)
-#define TIM_Channel_4                      ((uint16_t)0x000C)
+/* ช่องสัญญาณ Timer */
+#define TIM_Channel_1                      ((uint16_t)0x0000)  /* ช่องที่ 1 */
+#define TIM_Channel_2                      ((uint16_t)0x0004)  /* ช่องที่ 2 */
+#define TIM_Channel_3                      ((uint16_t)0x0008)  /* ช่องที่ 3 */
+#define TIM_Channel_4                      ((uint16_t)0x000C)  /* ช่องที่ 4 */
 
 /* TIM_Clock_Division_CKD */
-#define TIM_CKD_DIV1                       ((uint16_t)0x0000)
-#define TIM_CKD_DIV2                       ((uint16_t)0x0100)
-#define TIM_CKD_DIV4                       ((uint16_t)0x0200)
+/* การหารนาฬิกา Timer */
+#define TIM_CKD_DIV1                       ((uint16_t)0x0000)  /* หารด้วย 1 */
+#define TIM_CKD_DIV2                       ((uint16_t)0x0100)  /* หารด้วย 2 */
+#define TIM_CKD_DIV4                       ((uint16_t)0x0200)  /* หารด้วย 4 */
 
 /* TIM_Counter_Mode */
-#define TIM_CounterMode_Up                 ((uint16_t)0x0000)
-#define TIM_CounterMode_Down               ((uint16_t)0x0010)
-#define TIM_CounterMode_CenterAligned1     ((uint16_t)0x0020)
-#define TIM_CounterMode_CenterAligned2     ((uint16_t)0x0040)
-#define TIM_CounterMode_CenterAligned3     ((uint16_t)0x0060)
+/* โหมดการนับ */
+#define TIM_CounterMode_Up                 ((uint16_t)0x0000)  /* นับขึ้น */
+#define TIM_CounterMode_Down               ((uint16_t)0x0010)  /* นับลง */
+#define TIM_CounterMode_CenterAligned1     ((uint16_t)0x0020)  /* นับตรงกลางแบบที่ 1 */
+#define TIM_CounterMode_CenterAligned2     ((uint16_t)0x0040)  /* นับตรงกลางแบบที่ 2 */
+#define TIM_CounterMode_CenterAligned3     ((uint16_t)0x0060)  /* นับตรงกลางแบบที่ 3 */
 
 /* TIM_Output_Compare_Polarity */
-#define TIM_OCPolarity_High                ((uint16_t)0x0000)
-#define TIM_OCPolarity_Low                 ((uint16_t)0x0002)
+/* ขั้วของเอาต์พุต */
+#define TIM_OCPolarity_High                ((uint16_t)0x0000)  /* ขั้วสูง */
+#define TIM_OCPolarity_Low                 ((uint16_t)0x0002)  /* ขั้วน้อย */
 
 /* TIM_Output_Compare_N_Polarity */
-#define TIM_OCNPolarity_High               ((uint16_t)0x0000)
-#define TIM_OCNPolarity_Low                ((uint16_t)0x0008)
+/* ขั้วของเอาต์พุตคู่เสริม */
+#define TIM_OCNPolarity_High               ((uint16_t)0x0000)  /* ขั้วสูง */
+#define TIM_OCNPolarity_Low                ((uint16_t)0x0008)  /* ขั้วน้อย */
 
 /* TIM_Output_Compare_state */
-#define TIM_OutputState_Disable            ((uint16_t)0x0000)
-#define TIM_OutputState_Enable             ((uint16_t)0x0001)
+/* สถานะ Output Compare */
+#define TIM_OutputState_Disable            ((uint16_t)0x0000)  /* ปิด */
+#define TIM_OutputState_Enable             ((uint16_t)0x0001)  /* เปิด */
 
 /* TIM_Output_Compare_N_state */
-#define TIM_OutputNState_Disable           ((uint16_t)0x0000)
-#define TIM_OutputNState_Enable            ((uint16_t)0x0004)
+/* สถานะ Output Compare คู่เสริม */
+#define TIM_OutputNState_Disable           ((uint16_t)0x0000)  /* ปิด */
+#define TIM_OutputNState_Enable            ((uint16_t)0x0004)  /* เปิด */
 
 /* TIM_Capture_Compare_state */
-#define TIM_CCx_Enable                     ((uint16_t)0x0001)
-#define TIM_CCx_Disable                    ((uint16_t)0x0000)
+/* สถานะ Capture Compare */
+#define TIM_CCx_Enable                     ((uint16_t)0x0001)  /* เปิด */
+#define TIM_CCx_Disable                    ((uint16_t)0x0000)  /* ปิด */
 
 /* TIM_Capture_Compare_N_state */
-#define TIM_CCxN_Enable                    ((uint16_t)0x0004)
-#define TIM_CCxN_Disable                   ((uint16_t)0x0000)
+/* สถานะ Capture Compare คู่เสริม */
+#define TIM_CCxN_Enable                    ((uint16_t)0x0004)  /* เปิด */
+#define TIM_CCxN_Disable                   ((uint16_t)0x0000)  /* ปิด */
 
 /* Break_Input_enable_disable */
-#define TIM_Break_Enable                   ((uint16_t)0x1000)
-#define TIM_Break_Disable                  ((uint16_t)0x0000)
+/* เปิด/ปิดอินพุต Break */
+#define TIM_Break_Enable                   ((uint16_t)0x1000)  /* เปิด */
+#define TIM_Break_Disable                  ((uint16_t)0x0000)  /* ปิด */
 
 /* Break_Polarity */
-#define TIM_BreakPolarity_Low              ((uint16_t)0x0000)
-#define TIM_BreakPolarity_High             ((uint16_t)0x2000)
+/* ขั้วของขา Break Input */
+#define TIM_BreakPolarity_Low              ((uint16_t)0x0000)  /* ขั้วน้อย */
+#define TIM_BreakPolarity_High             ((uint16_t)0x2000)  /* ขั้วสูง */
 
 /* TIM_AOE_Bit_Set_Reset */
-#define TIM_AutomaticOutput_Enable         ((uint16_t)0x4000)
-#define TIM_AutomaticOutput_Disable        ((uint16_t)0x0000)
+/* เปิด/ปิดฟีเจอร์ Automatic Output */
+#define TIM_AutomaticOutput_Enable         ((uint16_t)0x4000)  /* เปิด */
+#define TIM_AutomaticOutput_Disable        ((uint16_t)0x0000)  /* ปิด */
 
 /* Lock_level */
-#define TIM_LOCKLevel_OFF                  ((uint16_t)0x0000)
-#define TIM_LOCKLevel_1                    ((uint16_t)0x0100)
-#define TIM_LOCKLevel_2                    ((uint16_t)0x0200)
-#define TIM_LOCKLevel_3                    ((uint16_t)0x0300)
+/* ระดับการล็อก */
+#define TIM_LOCKLevel_OFF                  ((uint16_t)0x0000)  /* ไม่ล็อก */
+#define TIM_LOCKLevel_1                    ((uint16_t)0x0100)  /* ระดับ 1 */
+#define TIM_LOCKLevel_2                    ((uint16_t)0x0200)  /* ระดับ 2 */
+#define TIM_LOCKLevel_3                    ((uint16_t)0x0300)  /* ระดับ 3 */
 
 /* OSSI_Off_State_Selection_for_Idle_mode_state */
-#define TIM_OSSIState_Enable               ((uint16_t)0x0400)
-#define TIM_OSSIState_Disable              ((uint16_t)0x0000)
+/* สถานะ Off-State ในโหมด Idle */
+#define TIM_OSSIState_Enable               ((uint16_t)0x0400)  /* เปิด */
+#define TIM_OSSIState_Disable              ((uint16_t)0x0000)  /* ปิด */
 
 /* OSSR_Off_State_Selection_for_Run_mode_state */
-#define TIM_OSSRState_Enable               ((uint16_t)0x0800)
-#define TIM_OSSRState_Disable              ((uint16_t)0x0000)
+/* สถานะ Off-State ในโหมดทำงาน */
+#define TIM_OSSRState_Enable               ((uint16_t)0x0800)  /* เปิด */
+#define TIM_OSSRState_Disable              ((uint16_t)0x0000)  /* ปิด */
 
 /* TIM_Output_Compare_Idle_State */
-#define TIM_OCIdleState_Set                ((uint16_t)0x0100)
-#define TIM_OCIdleState_Reset              ((uint16_t)0x0000)
+/* สถานะขา Output Compare ในโหมด Idle */
+#define TIM_OCIdleState_Set                ((uint16_t)0x0100)  /* ตั้งค่า */
+#define TIM_OCIdleState_Reset              ((uint16_t)0x0000)  /* รีเซ็ต */
 
 /* TIM_Output_Compare_N_Idle_State */
-#define TIM_OCNIdleState_Set               ((uint16_t)0x0200)
-#define TIM_OCNIdleState_Reset             ((uint16_t)0x0000)
+/* สถานะขา Output Compare คู่เสริมในโหมด Idle */
+#define TIM_OCNIdleState_Set               ((uint16_t)0x0200)  /* ตั้งค่า */
+#define TIM_OCNIdleState_Reset             ((uint16_t)0x0000)  /* รีเซ็ต */
 
 /* TIM_Input_Capture_Polarity */
-#define TIM_ICPolarity_Rising              ((uint16_t)0x0000)
-#define TIM_ICPolarity_Falling             ((uint16_t)0x0002)
-#define TIM_ICPolarity_BothEdge            ((uint16_t)0x000A)
+/* ขอบสัญญาณที่ใช้ในการจับ */
+#define TIM_ICPolarity_Rising              ((uint16_t)0x0000)  /* ขอบขึ้น */
+#define TIM_ICPolarity_Falling             ((uint16_t)0x0002)  /* ขอบลง */
+#define TIM_ICPolarity_BothEdge            ((uint16_t)0x000A)  /* ขอบขึ้นและลง */
 
 /* TIM_Input_Capture_Selection */
+/* แหล่งที่มาของอินพุต */
 #define TIM_ICSelection_DirectTI           ((uint16_t)0x0001) /* TIM Input 1, 2, 3 or 4 is selected to be \
                                                                  connected to IC1, IC2, IC3 or IC4, respectively */
 #define TIM_ICSelection_IndirectTI         ((uint16_t)0x0002) /* TIM Input 1, 2, 3 or 4 is selected to be \
@@ -223,12 +275,14 @@ typedef struct
 #define TIM_ICSelection_TRC                ((uint16_t)0x0003) /* TIM Input 1, 2, 3 or 4 is selected to be connected to TRC. */
 
 /* TIM_Input_Capture_Prescaler */
+/* ตัวหารของ Input Capture */
 #define TIM_ICPSC_DIV1                     ((uint16_t)0x0000) /* Capture performed each time an edge is detected on the capture input. */
 #define TIM_ICPSC_DIV2                     ((uint16_t)0x0004) /* Capture performed once every 2 events. */
 #define TIM_ICPSC_DIV4                     ((uint16_t)0x0008) /* Capture performed once every 4 events. */
 #define TIM_ICPSC_DIV8                     ((uint16_t)0x000C) /* Capture performed once every 8 events. */
 
 /* TIM_interrupt_sources */
+/* แหล่งการส่งอินเทอร์รัปต์ */
 #define TIM_IT_Update                      ((uint16_t)0x0001)
 #define TIM_IT_CC1                         ((uint16_t)0x0002)
 #define TIM_IT_CC2                         ((uint16_t)0x0004)
@@ -239,6 +293,7 @@ typedef struct
 #define TIM_IT_Break                       ((uint16_t)0x0080)
 
 /* TIM_DMA_Base_address */
+/* ที่อยู่ฐานของ DMA */
 #define TIM_DMABase_CR1                    ((uint16_t)0x0000)
 #define TIM_DMABase_CR2                    ((uint16_t)0x0001)
 #define TIM_DMABase_SMCR                   ((uint16_t)0x0002)
@@ -260,6 +315,7 @@ typedef struct
 #define TIM_DMABase_DCR                    ((uint16_t)0x0012)
 
 /* TIM_DMA_Burst_Length */
+/* ความยาวของการส่งข้อมูลแบบ Burst */
 #define TIM_DMABurstLength_1Transfer       ((uint16_t)0x0000)
 #define TIM_DMABurstLength_2Transfers      ((uint16_t)0x0100)
 #define TIM_DMABurstLength_3Transfers      ((uint16_t)0x0200)
@@ -280,6 +336,7 @@ typedef struct
 #define TIM_DMABurstLength_18Transfers     ((uint16_t)0x1100)
 
 /* TIM_DMA_sources */
+/* แหล่งการส่งข้อมูลแบบ DMA */
 #define TIM_DMA_Update                     ((uint16_t)0x0100)
 #define TIM_DMA_CC1                        ((uint16_t)0x0200)
 #define TIM_DMA_CC2                        ((uint16_t)0x0400)
@@ -289,12 +346,14 @@ typedef struct
 #define TIM_DMA_Trigger                    ((uint16_t)0x4000)
 
 /* TIM_External_Trigger_Prescaler */
+/* ตัวหารของ Trigger ภายนอก */
 #define TIM_ExtTRGPSC_OFF                  ((uint16_t)0x0000)
 #define TIM_ExtTRGPSC_DIV2                 ((uint16_t)0x1000)
 #define TIM_ExtTRGPSC_DIV4                 ((uint16_t)0x2000)
 #define TIM_ExtTRGPSC_DIV8                 ((uint16_t)0x3000)
 
 /* TIM_Internal_Trigger_Selection */
+/* การเลือก Trigger ภายใน */
 #define TIM_TS_ITR0                        ((uint16_t)0x0000)
 #define TIM_TS_ITR1                        ((uint16_t)0x0010)
 #define TIM_TS_ITR2                        ((uint16_t)0x0020)
@@ -305,28 +364,34 @@ typedef struct
 #define TIM_TS_ETRF                        ((uint16_t)0x0070)
 
 /* TIM_TIx_External_Clock_Source */
+/* แหล่งของ Clock ภายนอก */
 #define TIM_TIxExternalCLK1Source_TI1      ((uint16_t)0x0050)
 #define TIM_TIxExternalCLK1Source_TI2      ((uint16_t)0x0060)
 #define TIM_TIxExternalCLK1Source_TI1ED    ((uint16_t)0x0040)
 
 /* TIM_External_Trigger_Polarity */
+/* ขั้วของ Trigger ภายนอก */
 #define TIM_ExtTRGPolarity_Inverted        ((uint16_t)0x8000)
 #define TIM_ExtTRGPolarity_NonInverted     ((uint16_t)0x0000)
 
 /* TIM_Prescaler_Reload_Mode */
+/* โหมดการโหลดค่าตัวหาร */
 #define TIM_PSCReloadMode_Update           ((uint16_t)0x0000)
 #define TIM_PSCReloadMode_Immediate        ((uint16_t)0x0001)
 
 /* TIM_Forced_Action */
+/* กระทำที่บังคับ */
 #define TIM_ForcedAction_Active            ((uint16_t)0x0050)
 #define TIM_ForcedAction_InActive          ((uint16_t)0x0040)
 
 /* TIM_Encoder_Mode */
+/* โหมด Encoder */
 #define TIM_EncoderMode_TI1                ((uint16_t)0x0001)
 #define TIM_EncoderMode_TI2                ((uint16_t)0x0002)
 #define TIM_EncoderMode_TI12               ((uint16_t)0x0003)
 
 /* TIM_Event_Source */
+/* แหล่งเหตุการณ์ */
 #define TIM_EventSource_Update             ((uint16_t)0x0001)
 #define TIM_EventSource_CC1                ((uint16_t)0x0002)
 #define TIM_EventSource_CC2                ((uint16_t)0x0004)
@@ -337,24 +402,29 @@ typedef struct
 #define TIM_EventSource_Break              ((uint16_t)0x0080)
 
 /* TIM_Update_Source */
+/* แหล่งการอัปเดต */
 #define TIM_UpdateSource_Global            ((uint16_t)0x0000) /* Source of update is the counter overflow/underflow \
                                                                  or the setting of UG bit, or an update generation  \
                                                                  through the slave mode controller. */
 #define TIM_UpdateSource_Regular           ((uint16_t)0x0001) /* Source of update is counter overflow/underflow. */
 
 /* TIM_Output_Compare_Preload_State */
+/* สถานะการโหลดล่วงหน้าของ Output Compare */
 #define TIM_OCPreload_Enable               ((uint16_t)0x0008)
 #define TIM_OCPreload_Disable              ((uint16_t)0x0000)
 
 /* TIM_Output_Compare_Fast_State */
+/* สถานะการเร่งของ Output Compare */
 #define TIM_OCFast_Enable                  ((uint16_t)0x0004)
 #define TIM_OCFast_Disable                 ((uint16_t)0x0000)
 
 /* TIM_Output_Compare_Clear_State */
+/* สถานะการเคลียร์ของ Output Compare */
 #define TIM_OCClear_Enable                 ((uint16_t)0x0080)
 #define TIM_OCClear_Disable                ((uint16_t)0x0000)
 
 /* TIM_Trigger_Output_Source */
+/* แหล่งของ Trigger Output */
 #define TIM_TRGOSource_Reset               ((uint16_t)0x0000)
 #define TIM_TRGOSource_Enable              ((uint16_t)0x0010)
 #define TIM_TRGOSource_Update              ((uint16_t)0x0020)
@@ -365,16 +435,19 @@ typedef struct
 #define TIM_TRGOSource_OC4Ref              ((uint16_t)0x0070)
 
 /* TIM_Slave_Mode */
+/* โหมดสัปปอร์ต */
 #define TIM_SlaveMode_Reset                ((uint16_t)0x0004)
 #define TIM_SlaveMode_Gated                ((uint16_t)0x0005)
 #define TIM_SlaveMode_Trigger              ((uint16_t)0x0006)
 #define TIM_SlaveMode_External1            ((uint16_t)0x0007)
 
 /* TIM_Master_Slave_Mode */
+/* โหมด Master/Slave */
 #define TIM_MasterSlaveMode_Enable         ((uint16_t)0x0080)
 #define TIM_MasterSlaveMode_Disable        ((uint16_t)0x0000)
 
 /* TIM_Flags */
+/* ป้ายกำกับ */
 #define TIM_FLAG_Update                    ((uint16_t)0x0001)
 #define TIM_FLAG_CC1                       ((uint16_t)0x0002)
 #define TIM_FLAG_CC2                       ((uint16_t)0x0004)
@@ -389,6 +462,7 @@ typedef struct
 #define TIM_FLAG_CC4OF                     ((uint16_t)0x1000)
 
 /* TIM_Legacy */
+/* สำรอง */
 #define TIM_DMABurstLength_1Byte           TIM_DMABurstLength_1Transfer
 #define TIM_DMABurstLength_2Bytes          TIM_DMABurstLength_2Transfers
 #define TIM_DMABurstLength_3Bytes          TIM_DMABurstLength_3Transfers

@@ -4,6 +4,8 @@
  * Version            : V1.0.0
  * Date               : 2022/08/08
  * Description        : This file provides all the DBGMCU firmware functions.
+ *                      ไฟล์นี้มีฟังก์ชันเฟิร์มแวร์ DBGMCU ทั้งหมด
+ *                      Debug MCU - การดีบักและระบุตัวตนของไมโครคอนโทรลเลอร์
  *********************************************************************************
  * Copyright (c) 2021 Nanjing Qinheng Microelectronics Co., Ltd.
  * Attention: This software (modified or not) and binary are used for 
@@ -12,14 +14,15 @@
 #include <ch32v00x_dbgmcu.h>
 
 
-#define IDCODE_DEVID_MASK    ((uint32_t)0x0000FFFF)
+#define IDCODE_DEVID_MASK    ((uint32_t)0x0000FFFF)  /* มาสก์รหัสอุปกรณ์ */
 
 /*********************************************************************
  * @fn      DBGMCU_GetREVID
  *
  * @brief   Returns the device revision identifier.
+ *          ส่งคืนรหัสรุ่นของอุปกรณ์
  *
- * @return  Revision identifier.
+ * @return  Revision identifier - รหัสรุ่น
  */
 uint32_t DBGMCU_GetREVID(void)
 {
@@ -30,8 +33,9 @@ uint32_t DBGMCU_GetREVID(void)
  * @fn      DBGMCU_GetDEVID
  *
  * @brief   Returns the device identifier.
+ *          ส่งคืนรหัสของอุปกรณ์
  *
- * @return  Device identifier.
+ * @return  Device identifier - รหัสอุปกรณ์
  */
 uint32_t DBGMCU_GetDEVID(void)
 {
@@ -42,8 +46,9 @@ uint32_t DBGMCU_GetDEVID(void)
  * @fn      __get_DEBUG_CR
  *
  * @brief   Return the DEBUGE Control Register
+ *          ส่งคืนค่าเรจิสเตอร์ควบคุมการดีบัก
  *
- * @return  DEBUGE Control value
+ * @return  DEBUGE Control value - ค่าควบคุมการดีบัก
  */
 uint32_t __get_DEBUG_CR(void)
 {
@@ -57,8 +62,10 @@ uint32_t __get_DEBUG_CR(void)
  * @fn      __set_DEBUG_CR
  *
  * @brief   Set the DEBUGE Control Register
+ *          ตั้งค่าเรจิสเตอร์ควบคุมการดีบัก
  *
  * @param   value  - set DEBUGE Control value
+ *          ตั้งค่าค่าควบคุมการดีบัก
  *
  * @return  none
  */
@@ -73,6 +80,8 @@ void __set_DEBUG_CR(uint32_t value)
  *
  * @brief   Configures the specified peripheral and low power mode behavior
  *        when the MCU under Debug mode.
+ *          กำหนดพฤติกรรมของปริภัณฑ์และโหมดการประหยัดพลังงาน
+ *          เมื่อมีการดีบัก
  *
  * @param   DBGMCU_Periph - specifies the peripheral and low power mode.
  *            DBGMCU_IWDG_STOP - Debug IWDG stopped when Core is halted
@@ -102,6 +111,7 @@ void DBGMCU_Config(uint32_t DBGMCU_Periph, FunctionalState NewState)
  * @fn      DBGMCU_GetCHIPID
  *
  * @brief   Returns the CHIP identifier.
+ *          ส่งคืนรหัสของชิป
  *
  * @return Device identifier.
  *          ChipID List-

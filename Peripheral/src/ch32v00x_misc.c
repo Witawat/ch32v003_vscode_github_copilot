@@ -3,7 +3,9 @@
  * Author             : WCH
  * Version            : V1.0.0
  * Date               : 2023/12/25
- * Description        : This file provides all the miscellaneous firmware functions .
+ * Description        : This file provides all the miscellaneous firmware functions.
+ *                      ไฟล์นี้มีฟังก์ชันเฟิร์มแวร์เบ็ดเตล็ดต่างๆ
+ *                      รวมถึงการตั้งค่า NVIC (Nested Vectored Interrupt Controller)
  *********************************************************************************
  * Copyright (c) 2021 Nanjing Qinheng Microelectronics Co., Ltd.
  * Attention: This software (modified or not) and binary are used for 
@@ -11,18 +13,19 @@
  *******************************************************************************/
 #include <ch32v00x_misc.h>
 
-__IO uint32_t NVIC_Priority_Group = 0;
+__IO uint32_t NVIC_Priority_Group = 0;  /* กลุ่มลำดับความสำคัญ NVIC */
 
 /*********************************************************************
  * @fn      NVIC_PriorityGroupConfig
  *
  * @brief   Configures the priority grouping - pre-emption priority and subpriority.
+ *          กำหนดค่ากลุ่มลำดับความสำคัญ - ลำดับความสำคัญก่อนและรอง
  *
  * @param   NVIC_PriorityGroup - specifies the priority grouping bits length.
- *            NVIC_PriorityGroup_0 - 0 bits for pre-emption priority
- *                                   2 bits for subpriority
- *            NVIC_PriorityGroup_1 - 1 bits for pre-emption priority
- *                                   1 bits for subpriority
+ *            NVIC_PriorityGroup_0 - 0 bits for pre-emption priority (0 บิตสำหรับลำดับความสำคัญก่อน)
+ *                                   2 bits for subpriority (2 บิตสำหรับลำดับความสำคัญรอง)
+ *            NVIC_PriorityGroup_1 - 1 bits for pre-emption priority (1 บิตสำหรับลำดับความสำคัญก่อน)
+ *                                   1 bits for subpriority (1 บิตสำหรับลำดับความสำคัญรอง)
  *
  * @return  none
  */
@@ -36,16 +39,18 @@ void NVIC_PriorityGroupConfig(uint32_t NVIC_PriorityGroup)
  *
  * @brief   Initializes the NVIC peripheral according to the specified parameters in
  *        the NVIC_InitStruct.
+ *        ตั้งค่า NVIC ตามพารามิเตอร์ที่กำหนด
  *
  * @param   NVIC_InitStruct - pointer to a NVIC_InitTypeDef structure that contains the
  *        configuration information for the specified NVIC peripheral.
- *              interrupt nesting enable(CSR-0x804 bit1 = 1)
- *            NVIC_IRQChannelPreemptionPriority - range from 0 to 1.
- *            NVIC_IRQChannelSubPriority - range from 0 to 1.
+ *        โครงสร้างที่มีข้อมูลการตั้งค่า NVIC
+ *              interrupt nesting enable(CSR-0x804 bit1 = 1) - เปิดใช้งานการซ้อนทับ
+ *            NVIC_IRQChannelPreemptionPriority - range from 0 to 1 (ช่วง 0 ถึง 1)
+ *            NVIC_IRQChannelSubPriority - range from 0 to 1 (ช่วง 0 ถึง 1)
  *
- *              interrupt nesting disable(CSR-0x804 bit1 = 0)
- *            NVIC_IRQChannelPreemptionPriority - range is 0.
- *            NVIC_IRQChannelSubPriority - range from 0 to 3.
+ *              interrupt nesting disable(CSR-0x804 bit1 = 0) - ปิดใช้งานการซ้อนทับ
+ *            NVIC_IRQChannelPreemptionPriority - range is 0 (ค่าเป็น 0)
+ *            NVIC_IRQChannelSubPriority - range from 0 to 3 (ช่วง 0 ถึง 3)
  *
  * @return  none
  */
