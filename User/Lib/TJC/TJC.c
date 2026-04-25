@@ -14,6 +14,10 @@
 
 static TJC_RxBuffer_t rx_buffer = {0};
 
+/* Response parser state (file-scope เพื่อให้ TJC_ResetResponse() เข้าถึงได้) */
+static uint8_t  response_buffer[TJC_PACKET_MAX_SIZE];
+static uint16_t response_len = 0;
+
 // Callback function pointers
 static TJC_ErrorCallback_t error_callback = NULL;
 static TJC_TouchEventCallback_t touch_event_callback = NULL;
@@ -158,8 +162,11 @@ static void TJC_ProcessTouchCoord(uint8_t *data) {
  */
 static void TJC_ProcessNumericData(uint8_t *data) {
   if (numeric_callback != NULL) {
-    uint32_t value =
-        (data[1] << 24) | (data[2] << 16) | (data[3] << 8) | data[4];
+    /* TJC ส่ง numeric data แบบ little-endian: [v0=LSB][v1][v2][v3=MSB] */
+    uint32_t value = (uint32_t)data[1]
+                   | ((uint32_t)data[2] << 8)
+                   | ((uint32_t)data[3] << 16)
+                   | ((uint32_t)data[4] << 24);
     numeric_callback(value);
   }
 }
@@ -270,8 +277,8 @@ void TJC_Init(uint32_t baudrate, TJC_PinConfig pin_config) {
   USART_InitTypeDef USART_InitStructure = {0};
   NVIC_InitTypeDef NVIC_InitStructure = {0};
 
-  // 1. เปิด Clock
-  RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOD | RCC_APB2Periph_USART1, ENABLE);
+  // 1. เปิด Clock (รวม AFIO สำหรับ pin remapping)
+  RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO | RCC_APB2Periph_GPIOD | RCC_APB2Periph_USART1, ENABLE);
 
   // 2. ตั้งค่า Pin Remapping และ GPIO
   switch (pin_config) {
@@ -375,98 +382,150 @@ void TJC_SendCommandParams(const char *cmd, const char **params,
 }
 
 /**
+ * @brief คืนค่าความยาว packet ที่คาดหวัง สำหรับ packet type ที่รู้จัก
+ * @return จำนวน bytes รวม terminator, หรือ -1 ถ้าความยาวไม่แน่นอน (เช่น string)
+ */
+static int16_t _GetExpectedPacketLen(uint8_t cmd_type) {
+  switch (cmd_type) {
+    /* Error / status codes — [code][0xFF][0xFF][0xFF] = 4 bytes */
+    case TJC_ERR_INVALID_CMD:
+    case TJC_ERR_SUCCESS:
+    case TJC_ERR_INVALID_COMPONENT:
+    case TJC_ERR_INVALID_PAGE:
+    case TJC_ERR_INVALID_PICTURE:
+    case TJC_ERR_INVALID_FONT:
+    case TJC_ERR_FILE_OPERATION:
+    case TJC_ERR_CRC_FAILED:
+    case TJC_ERR_INVALID_BAUDRATE:
+    case TJC_ERR_INVALID_CURVE:
+    case TJC_ERR_INVALID_VARIABLE:
+    case TJC_ERR_INVALID_OPERATION:
+    case TJC_ERR_ASSIGNMENT_FAILED:
+    case TJC_ERR_EEPROM_FAILED:
+    case TJC_ERR_INVALID_PARAM_COUNT:
+    case TJC_ERR_IO_FAILED:
+    case TJC_ERR_ESCAPE_CHAR:
+    case TJC_ERR_VARIABLE_NAME_LONG:
+    case TJC_RET_BUFFER_OVERFLOW:
+      return 4;
+
+    case TJC_RET_TOUCH_EVENT: return 7; /* [0x65][page][comp][ev][0xFF×3] */
+    case TJC_RET_PAGE_ID:     return 5; /* [0x66][page][0xFF×3] */
+    case TJC_RET_TOUCH_COORD: return 9; /* [0x67][xh][xl][yh][yl][ev][0xFF×3] */
+    case TJC_RET_SLEEP_TOUCH: return 9; /* [0x68][xh][xl][yh][yl][ev][0xFF×3] */
+    case TJC_RET_NUMERIC_DATA: return 8; /* [0x71][v0][v1][v2][v3][0xFF×3] */
+
+    /* System events — [code][0xFF×3] = 4 bytes */
+    case TJC_RET_AUTO_SLEEP:
+    case TJC_RET_AUTO_WAKE:
+    case TJC_RET_STARTUP:
+    case TJC_RET_SD_UPGRADE:
+    case TJC_RET_TRANSPARENT_DONE:
+    case TJC_RET_TRANSPARENT_READY:
+      return 4;
+
+    /* ความยาวไม่แน่นอน */
+    case TJC_RET_STRING_DATA:
+    default:
+      return -1;
+  }
+}
+
+/**
  * @brief ประมวลผลข้อมูลที่รับจาก TJC
  */
 void TJC_ProcessResponse(void) {
-  static uint8_t response_buffer[TJC_RX_BUFFER_SIZE];
-  static uint16_t response_len = 0;
-
-  // อ่านข้อมูลจาก buffer
   while (TJC_Available() > 0) {
     uint8_t data = TJC_BufferGet();
 
-    // เก็บข้อมูลใน response buffer
-    if (response_len < TJC_RX_BUFFER_SIZE) {
-      response_buffer[response_len++] = data;
-    }
-
-    // ตรวจสอบว่ามี terminator หรือไม่
-    if (TJC_CheckTerminator(response_buffer, response_len)) {
-      // ได้รับ response ครบแล้ว ประมวลผล
-      uint8_t cmd_type = response_buffer[0];
-
-      // ตรวจสอบประเภทของ response
-      switch (cmd_type) {
-      // Error codes (bkcmd非0时的通知格式)
-      case TJC_ERR_INVALID_CMD:
-      case TJC_ERR_SUCCESS:
-      case TJC_ERR_INVALID_COMPONENT:
-      case TJC_ERR_INVALID_PAGE:
-      case TJC_ERR_INVALID_PICTURE:
-      case TJC_ERR_INVALID_FONT:
-      case TJC_ERR_FILE_OPERATION:
-      case TJC_ERR_CRC_FAILED:
-      case TJC_ERR_INVALID_BAUDRATE:
-      case TJC_ERR_INVALID_CURVE:
-      case TJC_ERR_INVALID_VARIABLE:
-      case TJC_ERR_INVALID_OPERATION:
-      case TJC_ERR_ASSIGNMENT_FAILED:
-      case TJC_ERR_EEPROM_FAILED:
-      case TJC_ERR_INVALID_PARAM_COUNT:
-      case TJC_ERR_IO_FAILED:
-      case TJC_ERR_ESCAPE_CHAR:
-      case TJC_ERR_VARIABLE_NAME_LONG:
-        TJC_ProcessError(cmd_type);
-        break;
-
-      // Return data types (其他数据返回格式)
-      case TJC_RET_BUFFER_OVERFLOW:
-        TJC_ProcessError(cmd_type);
-        break;
-
-      case TJC_RET_TOUCH_EVENT:
-        TJC_ProcessTouchEvent(response_buffer);
-        break;
-
-      case TJC_RET_PAGE_ID:
-        // Page ID = response_buffer[1]
-        break;
-
-      case TJC_RET_TOUCH_COORD:
-        TJC_ProcessTouchCoord(response_buffer);
-        break;
-
-      case TJC_RET_SLEEP_TOUCH:
-      case TJC_RET_AUTO_SLEEP:
-      case TJC_RET_AUTO_WAKE:
-      case TJC_RET_STARTUP:
-      case TJC_RET_SD_UPGRADE:
-      case TJC_RET_TRANSPARENT_DONE:
-      case TJC_RET_TRANSPARENT_READY:
-        TJC_ProcessSystemEvent(cmd_type);
-        break;
-
-      case TJC_RET_STRING_DATA:
-        TJC_ProcessStringData(response_buffer, response_len);
-        break;
-
-      case TJC_RET_NUMERIC_DATA:
-        TJC_ProcessNumericData(response_buffer);
-        break;
-
-      default:
-        // Unknown response - อาจเป็นคำสั่งที่ส่งมา
-        // ตรวจสอบว่าเป็น ASCII text หรือไม่
-        if (response_buffer[0] >= 0x20 && response_buffer[0] <= 0x7E) {
-          // น่าจะเป็นคำสั่ง text
-          TJC_ProcessCommand(response_buffer, response_len);
-        }
-        break;
-      }
-
-      // รีเซ็ต response buffer
+    /* ป้องกัน buffer overflow — ถ้าเกิน TJC_PACKET_MAX_SIZE
+       แสดงว่า packet เสีย/ขาดตกหาย ให้ reset แล้วเริ่มใหม่ */
+    if (response_len >= TJC_PACKET_MAX_SIZE) {
       response_len = 0;
     }
+
+    response_buffer[response_len++] = data;
+
+    /* ยังไม่พบ terminator — รอข้อมูลเพิ่ม */
+    if (!TJC_CheckTerminator(response_buffer, response_len)) {
+      continue;
+    }
+
+    /* ได้รับ packet ครบ — ตรวจสอบความยาวก่อนประมวลผล */
+    uint8_t cmd_type = response_buffer[0];
+    int16_t expected = _GetExpectedPacketLen(cmd_type);
+
+    if (expected > 0 && response_len != (uint16_t)expected) {
+      /* ความยาวไม่ตรง — packet เสียหรือ noise ทิ้งไป */
+      response_len = 0;
+      continue;
+    }
+
+    /* ประมวลผลตามประเภท */
+    switch (cmd_type) {
+    /* Error codes */
+    case TJC_ERR_INVALID_CMD:
+    case TJC_ERR_SUCCESS:
+    case TJC_ERR_INVALID_COMPONENT:
+    case TJC_ERR_INVALID_PAGE:
+    case TJC_ERR_INVALID_PICTURE:
+    case TJC_ERR_INVALID_FONT:
+    case TJC_ERR_FILE_OPERATION:
+    case TJC_ERR_CRC_FAILED:
+    case TJC_ERR_INVALID_BAUDRATE:
+    case TJC_ERR_INVALID_CURVE:
+    case TJC_ERR_INVALID_VARIABLE:
+    case TJC_ERR_INVALID_OPERATION:
+    case TJC_ERR_ASSIGNMENT_FAILED:
+    case TJC_ERR_EEPROM_FAILED:
+    case TJC_ERR_INVALID_PARAM_COUNT:
+    case TJC_ERR_IO_FAILED:
+    case TJC_ERR_ESCAPE_CHAR:
+    case TJC_ERR_VARIABLE_NAME_LONG:
+    case TJC_RET_BUFFER_OVERFLOW:
+      TJC_ProcessError(cmd_type);
+      break;
+
+    case TJC_RET_TOUCH_EVENT:
+      TJC_ProcessTouchEvent(response_buffer);
+      break;
+
+    case TJC_RET_PAGE_ID:
+      /* Page ID = response_buffer[1] */
+      break;
+
+    case TJC_RET_TOUCH_COORD:
+    case TJC_RET_SLEEP_TOUCH:
+      TJC_ProcessTouchCoord(response_buffer);
+      break;
+
+    case TJC_RET_AUTO_SLEEP:
+    case TJC_RET_AUTO_WAKE:
+    case TJC_RET_STARTUP:
+    case TJC_RET_SD_UPGRADE:
+    case TJC_RET_TRANSPARENT_DONE:
+    case TJC_RET_TRANSPARENT_READY:
+      TJC_ProcessSystemEvent(cmd_type);
+      break;
+
+    case TJC_RET_STRING_DATA:
+      TJC_ProcessStringData(response_buffer, response_len);
+      break;
+
+    case TJC_RET_NUMERIC_DATA:
+      TJC_ProcessNumericData(response_buffer);
+      break;
+
+    default:
+      /* ตรวจสอบว่าเป็น ASCII text command หรือไม่ */
+      if (response_buffer[0] >= 0x20 && response_buffer[0] <= 0x7E) {
+        TJC_ProcessCommand(response_buffer, response_len);
+      }
+      break;
+    }
+
+    /* รีเซ็ต parser พร้อมรับ packet ถัดไป */
+    response_len = 0;
   }
 }
 
@@ -528,6 +587,13 @@ uint16_t TJC_Available(void) {
 void TJC_FlushRxBuffer(void) {
   rx_buffer.head = 0;
   rx_buffer.tail = 0;
+}
+
+/**
+ * @brief รีเซ็ต response parser state
+ */
+void TJC_ResetResponse(void) {
+  response_len = 0;
 }
 
 /**

@@ -24,10 +24,13 @@ extern "C" {
 
 /* ========== Configuration ========== */
 
-#define TJC_RX_BUFFER_SIZE 256 // ขนาด receive buffer (รองรับข้อความ 10-60 ตัวอักษร)
-#define TJC_MAX_STRING_LENGTH 128 // ความยาวสูงสุดของ string ที่รับได้
-#define TJC_MAX_PARAMS 10         // จำนวน parameters สูงสุดที่รองรับ
-#define TJC_TERMINATOR_SIZE 3     // ขนาดของ terminator (0xFF 0xFF 0xFF)
+#define TJC_RX_BUFFER_SIZE 256    // ขนาด receive buffer (รองรับข้อความ 10-60 ตัวอักษร)
+#define TJC_MAX_STRING_LENGTH 128  // ความยาวสูงสุดของ string ที่รับได้
+#define TJC_MAX_PARAMS 10          // จำนวน parameters สูงสุดที่รองรับ
+#define TJC_TERMINATOR_SIZE 3      // ขนาดของ terminator (0xFF 0xFF 0xFF)
+
+/** @brief ขนาด packet สูงสุดที่ยอมรับได้ก่อน reset buffer (string + header + terminator) */
+#define TJC_PACKET_MAX_SIZE  (TJC_MAX_STRING_LENGTH + 4)
 
 /* ========== Enumerations ========== */
 
@@ -226,6 +229,17 @@ uint16_t TJC_Available(void);
  * @brief ล้างข้อมูลใน receive buffer
  */
 void TJC_FlushRxBuffer(void);
+
+/**
+ * @brief รีเซ็ต response parser state
+ * @details ใช้เมื่อ packet ค้างหรือต้องการ re-sync เช่น หลัง timeout หรือ bus error
+ * @note ฟังก์ชันนี้ไม่ล้าง RX buffer แค่ reset ตัว parser
+ *
+ * @example
+ * // ถ้าไม่ได้รับ response ใน 1 วินาที ให้ reset
+ * TJC_ResetResponse();
+ */
+void TJC_ResetResponse(void);
 
 /**
  * @brief เปิดใช้งาน UART interrupt สำหรับรับข้อมูล
