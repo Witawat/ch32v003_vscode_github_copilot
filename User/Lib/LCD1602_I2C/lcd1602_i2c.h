@@ -18,11 +18,16 @@
  * 
  * @example
  * // ตัวอย่างการใช้งานพื้นฐาน
- * #include "lcd1602_i2c.h"
+ * #include "main.h"
+ * #include "Lib/LCD1602_I2C/lcd1602_i2c.h"
  * 
  * LCD1602_Handle lcd;
  * 
  * int main(void) {
+ *     // ตั้งค่าระบบ
+ *     SystemCoreClockUpdate();
+ *     NVIC_PriorityGroupConfig(NVIC_PriorityGroup_1);
+ *     
  *     // เริ่มต้น I2C และ Timer
  *     I2C_SimpleInit(I2C_100KHZ, I2C_PINS_DEFAULT);
  *     Timer_Init();
@@ -34,12 +39,17 @@
  *     LCD_Print(&lcd, "Hello World!");
  *     LCD_SetCursor(&lcd, 0, 1);
  *     LCD_Print(&lcd, "CH32V003");
+ *     
+ *     while(1) {
+ *         // วนลูปการทำงาน
+ *     }
  * }
  * 
  * @note 
+ * - ต้องเรียก SystemCoreClockUpdate() เป็นอย่างแรก
  * - ต้องเรียก I2C_SimpleInit() ก่อนใช้งาน LCD
  * - ต้องเรียก Timer_Init() เพื่อใช้ delay functions
- * - ต้องต่อ pull-up resistor (4.7kΩ) ที่ SDA และ SCL
+ * - ต้องต่อ pull-up resistor (4.7kΩ) ที่ SDA (PC1) และ SCL (PC2)
  */
 
 #ifndef __LCD1602_I2C_H
@@ -53,6 +63,7 @@ extern "C" {
 #include "../../SimpleHAL/SimpleDelay.h"
 #include <stdint.h>
 #include <string.h>
+#include <stdarg.h>
 
 /* ========== LCD Commands ========== */
 
@@ -361,6 +372,44 @@ void LCD_PrintFloat(LCD1602_Handle* lcd, float num, uint8_t decimals);
  * LCD_PrintAt(&lcd, 0, 1, "Line 2");
  */
 void LCD_PrintAt(LCD1602_Handle* lcd, uint8_t col, uint8_t row, const char* str);
+
+/**
+ * @brief แสดงผลแบบ formatted string (เหมือน printf)
+ * @param lcd ตัวชี้ไปยัง LCD handle
+ * @param format รูปแบบข้อความ
+ * @param ... พารามิเตอร์ต่างๆ
+ * 
+ * @example
+ * LCD_Printf(&lcd, "Temp: %d C", temp);
+ */
+void LCD_Printf(LCD1602_Handle* lcd, const char* format, ...);
+
+/**
+ * @brief ล้างข้อความเฉพาะบรรทัด
+ * @param lcd ตัวชี้ไปยัง LCD handle
+ * @param row แถวที่ต้องการล้าง (0-1 หรือ 0-3)
+ * 
+ * @example
+ * LCD_ClearLine(&lcd, 1);
+ */
+void LCD_ClearLine(LCD1602_Handle* lcd, uint8_t row);
+
+/**
+ * @brief แสดงข้อความกึ่งกลางบรรทัด
+ * @param lcd ตัวชี้ไปยัง LCD handle
+ * @param row แถวที่ต้องการแสดง
+ * @param str ข้อความ
+ * 
+ * @example
+ * LCD_CenterPrint(&lcd, 0, "Welcome");
+ */
+void LCD_CenterPrint(LCD1602_Handle* lcd, uint8_t row, const char* str);
+
+/**
+ * @brief สลับสถานะ Backlight (เปิด <-> ปิด)
+ * @param lcd ตัวชี้ไปยัง LCD handle
+ */
+void LCD_ToggleBacklight(LCD1602_Handle* lcd);
 
 #ifdef __cplusplus
 }

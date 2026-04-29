@@ -304,3 +304,53 @@ void LCD_PrintAt(LCD1602_Handle* lcd, uint8_t col, uint8_t row, const char* str)
     LCD_SetCursor(lcd, col, row);
     LCD_Print(lcd, str);
 }
+
+/**
+ * @brief แสดงผลแบบ formatted string (เหมือน printf)
+ */
+void LCD_Printf(LCD1602_Handle* lcd, const char* format, ...) {
+    char buffer[32]; // ขนาดบัฟเฟอร์ที่เหมาะสมสำหรับ LCD 16x2 หรือ 20x4
+    va_list args;
+    va_start(args, format);
+    vsnprintf(buffer, sizeof(buffer), format, args);
+    va_end(args);
+    LCD_Print(lcd, buffer);
+}
+
+/**
+ * @brief ล้างข้อความเฉพาะบรรทัด
+ */
+void LCD_ClearLine(LCD1602_Handle* lcd, uint8_t row) {
+    LCD_SetCursor(lcd, 0, row);
+    for (int i = 0; i < lcd->cols; i++) {
+        LCD_SendData(lcd, ' ');
+    }
+    LCD_SetCursor(lcd, 0, row);
+}
+
+/**
+ * @brief แสดงข้อความกึ่งกลางบรรทัด
+ */
+void LCD_CenterPrint(LCD1602_Handle* lcd, uint8_t row, const char* str) {
+    uint8_t len = strlen(str);
+    if (len >= lcd->cols) {
+        LCD_SetCursor(lcd, 0, row);
+        LCD_Print(lcd, str);
+    } else {
+        uint8_t pos = (lcd->cols - len) / 2;
+        LCD_ClearLine(lcd, row);
+        LCD_SetCursor(lcd, pos, row);
+        LCD_Print(lcd, str);
+    }
+}
+
+/**
+ * @brief สลับสถานะ Backlight
+ */
+void LCD_ToggleBacklight(LCD1602_Handle* lcd) {
+    if (lcd->backlight == LCD_BL) {
+        LCD_Backlight(lcd, 0);
+    } else {
+        LCD_Backlight(lcd, 1);
+    }
+}
