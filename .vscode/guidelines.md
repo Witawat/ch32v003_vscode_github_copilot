@@ -933,6 +933,20 @@ Code ต้องเป็น complete example ที่ compile และรั
 | **MQGas** | ✅ เสร็จ | ADC | MQ2/3/4/5/6/7/9/135, Auto-calibrate Ro, PPM, Alarm threshold |
 | **nRF24L01** | ✅ เสร็จ | SPI | 2.4GHz TX/RX, Auto-ACK, 126ch, 250k/1M/2Mbps, PowerDown |
 
+### Phase 4 — เสร็จแล้ว ✅
+
+| Library | สถานะ | Protocol | RAM | รายละเอียด |
+|---------|-------|---------|-----|-----------|
+| **BH1750** | ✅ เสร็จ | I2C | ~20B | Light sensor (Lux), Continuous/One-time mode, 0.5-4 lux res |
+| **SHT3x** | ✅ เสร็จ | I2C | ~30B | Temp ±0.1°C + Humidity, CRC-8, High/Med/Low repeatability |
+| **INA219** | ✅ เสร็จ | I2C | ~40B | Current/Voltage/Power monitor, calibration register |
+| **MCP4725** | ✅ เสร็จ | I2C | ~20B | 12-bit DAC output, SetVoltage, EEPROM save |
+| **ADS1115** | ✅ เสร็จ | I2C | ~40B | 16-bit ADC 4ch, PGA ±256mV-±6.144V, 8-860SPS |
+| **PCA9685** | ✅ เสร็จ | I2C | ~30B | 16ch PWM expander, SetServoAngle, SetDuty, SetPulse |
+| **W25Qxx** | ✅ เสร็จ | SPI | ~64B | NOR Flash 2-16MB, Read/Write/EraseSector/EraseChip, JEDEC ID |
+| **VL53L0X** | ✅ เสร็จ | I2C | ~50B | ToF distance 30-2000mm, Single/Continuous, multi-sensor XSHUT |
+| **HC05** | ✅ เสร็จ | USART | ~70B | Bluetooth HC-05, Data mode + AT command, ReadLine |
+
 ---
 
-*SimpleHAL Version: 1.9.0 | Target: CH32V003 | Toolchain: GCC12 riscv-wch-elf*
+*SimpleHAL Version: 1.9.0 | Target: CH32V003/CH32V006 | Toolchain: GCC12 riscv-wch-elf*
