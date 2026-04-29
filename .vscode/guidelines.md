@@ -1,6 +1,27 @@
-# CH32V003 Project — Programming Guidelines
+# CH32V003 Project — Programming & README Guidelines
 
-> เขียนสำหรับใช้เป็น reference ก่อนเริ่มพัฒนา feature ใหม่
+> อ่านไฟล์นี้ก่อนทุกครั้งก่อนเริ่มพัฒนา feature ใหม่หรือเขียน Lib ใหม่  
+> อัพเดตล่าสุด: 2026-04-29
+
+---
+
+## สารบัญ
+
+1. [Hardware Overview](#1-hardware-overview)
+2. [โครงสร้างไฟล์](#2-โครงสร้างไฟล์)
+3. [SimpleHAL Library](#3-simplehal-library)
+4. [Lib Directory](#4-lib-directory)
+5. [โครงสร้าง main.c มาตรฐาน](#5-mainct--โครงสร้างมาตรฐาน)
+6. [Interrupt Handlers](#6-interrupt-handlers--ch32v00x_itc)
+7. [printf และ Debug Output](#7-printf-และ-debug-output)
+8. [Build System](#8-build-system)
+9. [Memory Budget](#9-memory-budget)
+10. [กฎการเขียนโค้ด](#10-กฎการเขียนโค้ด)
+11. [Resource Conflicts](#11-resource-conflicts)
+12. [Quick Reference](#12-quick-reference)
+13. **[แนวทางการเขียน Lib ใหม่](#13-แนวทางการเขียน-lib-ใหม่)**
+14. **[แนวทางการเขียน README ของ Lib](#14-แนวทางการเขียน-readme-ของ-lib)**
+15. **[Lib ที่มีอยู่แล้วและสถานะ](#15-lib-ที่มีอยู่แล้วและสถานะ)**
 
 ---
 
@@ -501,6 +522,416 @@ DS18B20_Init(PC5);
 float temp = DS18B20_ReadTemp();
 printf("Temp: %.1f C\r\n", temp);
 ```
+
+---
+
+*SimpleHAL Version: 1.9.0 | Target: CH32V003 | Toolchain: GCC12 riscv-wch-elf*
+
+---
+
+## 13. แนวทางการเขียน Lib ใหม่
+
+Lib ทุกตัวต้องสอดคล้องกับ pattern ที่มีอยู่แล้วใน `User/Lib/` ทุกประการ
+
+### 13.1 โครงสร้างไฟล์
+
+```
+User/Lib/<LibName>/
+├── <LibName>.h      ← Header: types, config, function prototypes
+├── <LibName>.c      ← Implementation
+└── README.md        ← วิธีการใช้งานภาษาไทยครบถ้วน
+```
+
+- ชื่อ folder และไฟล์ใช้ **PascalCase** (เช่น `DHT`, `HCSR04`, `Servo`, `Button`)
+- ยกเว้น `lcd1602_i2c` ที่ใช้ snake_case เพราะ legacy — Lib ใหม่ให้ใช้ PascalCase เสมอ
+
+### 13.2 รูปแบบ Header File (.h)
+
+```c
+/**
+ * @file <LibName>.h
+ * @brief <คำอธิบายสั้นๆ> Library สำหรับ CH32V003
+ * @version 1.0
+ * @date YYYY-MM-DD
+ *
+ * @details
+ * Library นี้ ...
+ *
+ * **คุณสมบัติ:**
+ * - ...
+ *
+ * **Hardware Connection:**
+ * ```
+ *   วาด ASCII diagram วงจร
+ * ```
+ *
+ * @example
+ * // ตัวอย่างการใช้งานพื้นฐาน 10-20 บรรทัด
+ * #include "SimpleHAL.h"
+ * #include "<LibName>.h"
+ *
+ * int main(void) { ... }
+ *
+ * @author CH32V003 Library Team
+ * @copyright MIT License
+ */
+
+#ifndef __<LIBNAME>_H
+#define __<LIBNAME>_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#include "../../SimpleHAL/SimpleHAL.h"
+#include <stdint.h>
+#include <stdbool.h>
+
+/* ========== Configuration ========== */
+/* ========== Type Definitions ========== */
+/* ========== Function Prototypes ========== */
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* __<LIBNAME>_H */
+```
+
+**กฎ header:**
+- Include path: `"../../SimpleHAL/SimpleHAL.h"` (relative จาก `User/Lib/<Name>/`)
+- หากใช้เฉพาะ module: `"../../SimpleHAL/SimpleGPIO.h"` ฯลฯ
+- Guard: `#ifndef __<LIBNAME>_H` (UPPERCASE ทั้งหมด + double underscore)
+- Section dividers: `/* ========== Section Name ========== */`
+- ทุก function prototype ต้องมี JSDoc comment (TH) อธิบาย param, return, example
+
+### 13.3 รูปแบบ Source File (.c)
+
+```c
+/**
+ * @file <LibName>.c
+ * @brief <LibName> Library Implementation
+ * @version 1.0
+ * @date YYYY-MM-DD
+ */
+
+#include "<LibName>.h"
+#include <string.h>  // ถ้าใช้ memset/memcpy
+
+/* ========== Private Variables ========== */
+
+static <Type> instance_pool[MAX_INSTANCES];
+static uint8_t instance_count = 0;
+
+/* ========== Private Function Prototypes ========== */
+
+static <RetType> LibName_PrivFunc(<params>);
+
+/* ========== Private Functions ========== */
+
+/* ========== Public Functions ========== */
+```
+
+**กฎ source:**
+- ตัวแปร internal ทั้งหมดต้องเป็น `static` เพื่อป้องกัน namespace collision
+- ใช้ `static` pool array + count สำหรับ multi-instance (ดูตัวอย่างใน `PIR.c`, `DS18B20.c`)
+- ต้องมี null check: `if (instance == NULL) return;` หรือ `return <default_value>;`
+- ต้องมี initialized check: `if (!instance->initialized) return;`
+- Private functions ต้อง `static` เสมอ
+
+### 13.4 รูปแบบ Struct Instance
+
+```c
+typedef struct {
+    /* Pin Configuration */
+    uint8_t     pin;            /**< GPIO pin */
+
+    /* Configuration */
+    uint16_t    config_value;   /**< คำอธิบาย */
+
+    /* State (internal — ห้าม access ตรงจากภายนอก) */
+    uint8_t     current_state;
+    uint32_t    last_time;      /**< timestamp (ms) */
+
+    /* Callbacks */
+    void (*on_event)(void);     /**< Callback เมื่อเกิด event */
+
+    uint8_t     initialized;    /**< flag บอกว่า Init แล้ว */
+} LibName_Instance;
+```
+
+- ประกาศ comment `/**< ... */` ทุก field
+- `initialized` ต้องมีทุก struct
+- Callback field วางก่อน `initialized` เสมอ
+- ใช้ `volatile` กับ field ที่ถูกแก้ไขจาก ISR
+
+### 13.5 รูปแบบ Enum
+
+```c
+typedef enum {
+    LIBNAME_STATE_IDLE = 0,     /**< อธิบายภาษาไทย */
+    LIBNAME_STATE_ACTIVE,       /**< อธิบาย */
+    LIBNAME_STATE_ERROR         /**< อธิบาย */
+} LibName_State;
+```
+
+- Prefix ด้วยชื่อ Lib: `LIBNAME_`
+- ค่า default/safe = 0 เสมอ
+- ทุก value มี comment TH
+
+### 13.6 Pattern การใช้งาน Timing
+
+```c
+// ใช้ Get_CurrentMs() จาก SimpleDelay สำหรับ ms timing
+uint32_t now = Get_CurrentMs();
+if ((now - instance->last_time) >= INTERVAL_MS) { ... }
+
+// ใช้ Get_CurrentUs() สำหรับ µs timing (ใช้ใน DHT, HC-SR04)
+uint32_t t = Get_CurrentUs();
+while (cond) {
+    if ((Get_CurrentUs() - t) >= TIMEOUT_US) return false;
+}
+
+// ใช้ Delay_Ms / Delay_Us สำหรับ blocking delay
+Delay_Ms(20);
+Delay_Us(40);
+```
+
+### 13.7 Pattern การ Disable/Enable Interrupt
+
+ใช้สำหรับ bit-banging protocol ที่ต้องการ timing แม่นยำ (DHT, 1-Wire):
+```c
+__disable_irq();
+// ... timing-critical section ...
+__enable_irq();
+```
+
+### 13.8 กฎ Resource Conflict
+
+| Protocol / Peripheral | SimpleHAL ที่ต้องใช้ | ข้อควรระวัง |
+|-----------------------|---------------------|------------|
+| GPIO only | `SimpleGPIO.h` | ไม่มี conflict |
+| ADC | `SimpleADC.h` หรือ `analogRead()` | เฉพาะ pin PD2-PD7, PA1, PA2, PC4 |
+| PWM 50Hz (Servo) | `SimplePWM.h` | ห้ามใช้ TIM เดียวกับ SimpleTIM |
+| I2C | `SimpleI2C.h` | ต้อง pull-up 4.7kΩ บน SDA/SCL |
+| SPI | `SimpleSPI.h` | CS pin ต้อง control เอง |
+| USART | `SimpleUSART.h` | ห้าม printf ซ้อน |
+| 1-Wire timing | `Simple1Wire.h` หรือ bit-bang | ต้อง disable IRQ |
+| Timer interrupt | `SimpleTIM.h` | conflict กับ PWM บน TIM เดียวกัน |
+
+### 13.9 Config Macros ที่ Override ได้
+
+ทุก config ที่ผู้ใช้อาจต้องการเปลี่ยนต้องใช้ `#ifndef`:
+```c
+#ifndef LIBNAME_MAX_INSTANCES
+#define LIBNAME_MAX_INSTANCES    4
+#endif
+
+#ifndef LIBNAME_TIMEOUT_MS
+#define LIBNAME_TIMEOUT_MS       100
+#endif
+```
+
+### 13.10 Error Return Values
+
+- ฟังก์ชันที่คืน pointer: คืน `NULL` เมื่อ error
+- ฟังก์ชันที่คืน float: คืน constant เช่น `LIBNAME_ERROR_VALUE` (-1.0f)
+- ฟังก์ชันที่คืน status: ใช้ enum `LIBNAME_OK = 0`, error code อื่นๆ > 0
+- ฟังก์ชัน void: ตรวจ null+init แล้ว return เงียบ
+
+---
+
+## 14. แนวทางการเขียน README ของ Lib
+
+README ทุกอันต้องเขียนเป็น **ภาษาไทยเป็นหลัก** พร้อม code examples ภาษาอังกฤษ  
+ดูตัวอย่างจาก `User/Lib/DS18B20/README.md` และ `User/Lib/Button/README.md`
+
+### 14.1 โครงสร้าง README มาตรฐาน
+
+```markdown
+# <ชื่อ Library>
+
+> **Library สำหรับ ... บน CH32V003**
+
+## 📋 สารบัญ
+1. [ภาพรวม](#ภาพรวม)
+2. [คุณสมบัติ](#คุณสมบัติ)
+3. [Hardware Setup](#hardware-setup)
+4. [หลักการทำงาน](#หลักการทำงาน)   ← มีถ้า protocol ซับซ้อน
+5. [การใช้งานพื้นฐาน](#การใช้งานพื้นฐาน)
+6. [การใช้งานขั้นสูง](#การใช้งานขั้นสูง)
+7. [Troubleshooting](#troubleshooting)
+8. [API Reference](#api-reference)
+```
+
+### 14.2 ส่วน ภาพรวม
+
+- อธิบาย hardware/component ที่ library ใช้งาน
+- บอก use case หลัก
+- ถ้ามี variant หลายรุ่น (เช่น DHT11/DHT22) ให้มีตาราง comparison
+
+### 14.3 ส่วน คุณสมบัติ
+
+ใช้ checkmark list:
+```markdown
+- ✅ คุณสมบัติ 1
+- ✅ คุณสมบัติ 2
+- ✅ เอกสารภาษาไทยครบถ้วน   ← บรรทัดสุดท้ายเสมอ
+```
+
+### 14.4 ส่วน Hardware Setup
+
+**บังคับมี ASCII diagram วงจร:**
+```markdown
+```
+CH32V003 Pin        Component
+  TRIG (PC3) -----> PIN_A
+  ECHO (PC4) <----- PIN_B
+  GND        -----> GND
+  3.3V       -----> VCC
+```
+```
+
+- ระบุ voltage level (3.3V หรือ 5V)
+- ระบุ pull-up/pull-down ที่ต้องต่อ
+- ถ้าต้องมี voltage divider ให้ระบุค่า resistor
+- บอก GPIO pins ที่ใช้ได้ทั้งหมดของ CH32V003
+
+### 14.5 ส่วน หลักการทำงาน
+
+มีเมื่อ protocol มีความซับซ้อน (DHT, 1-Wire, ultrasonic):
+- ใช้ ASCII timing diagram
+- อธิบายสูตรคำนวณ (เช่น `distance = echo_µs / 58.0`)
+- ถ้ามีตาราง lookup แสดงตัวอย่างค่า
+
+### 14.6 ส่วน การใช้งานพื้นฐาน
+
+**บังคับมี 3 ส่วน:**
+
+1. **ขั้นตอนที่ 1: Include และประกาศตัวแปร**
+2. **ขั้นตอนที่ 2: Init ใน main()**
+3. **ขั้นตอนที่ 3: main loop**
+
+Code ต้องเป็น complete example ที่ compile และรันได้ทันที
+
+### 14.7 ส่วน การใช้งานขั้นสูง
+
+ให้มีหัวข้อย่อยตามฟีเจอร์ของ lib เช่น:
+- Multi-sensor
+- Callback system
+- Non-blocking mode
+- Integration กับ lib อื่น (เช่น ใช้ OLED แสดงผล)
+
+แต่ละหัวข้อมี code snippet ที่ครบถ้วน ไม่ใช่แค่ function call เดียว
+
+### 14.8 ส่วน Troubleshooting
+
+ใช้ตาราง 2 คอลัมน์ "สาเหตุ | วิธีแก้":
+```markdown
+| สาเหตุ | วิธีแก้ |
+|--------|---------|
+| ... | ... |
+```
+
+จัดกลุ่มตาม error symptom (เช่น "ปัญหา: ได้ -1 ตลอด")
+
+### 14.9 ส่วน API Reference
+
+**ทุก public function ต้องมี:**
+- ชื่อ function พร้อม parameters และ return type ใน heading
+- ตาราง parameters ถ้ามี > 2 parameter
+- ตาราง return values ถ้าเป็น enum
+- ใช้ `---` คั่นระหว่างแต่ละ function
+
+ตัวอย่าง:
+```markdown
+### `LibName_Init(instance, pin, config)` 
+เริ่มต้น instance พร้อมตั้งค่า GPIO
+
+| Parameter | Type | คำอธิบาย |
+|-----------|------|----------|
+| `instance` | `LibName_Instance*` | ตัวแปร instance |
+| `pin` | `uint8_t` | GPIO pin เช่น `PC4` |
+```
+
+### 14.10 ข้อกำหนดทั่วไป
+
+- ทุก code block ต้องระบุ language: ` ```c ` ไม่ใช่ ` ``` ` เฉยๆ
+- ตัวแปรและชื่อ function ใน inline text ใช้ backtick: `` `DHT_Read()` ``
+- ใช้ `>` blockquote สำหรับ warning/note สำคัญ  
+  เช่น `> ⚠️ **สำคัญ**: ต้องต่อ pull-up 10kΩ เสมอ`
+- หน่วยวัดใช้ทั้ง metric และ หน่วยที่เกี่ยวข้องกับ MCU (µs, ms, Hz, kHz)
+- Emoji ที่ใช้บ่อย: ✅ ⚠️ 📋 สำหรับ checklist / warning / section header
+- จบ README ด้วย constants table (ถ้ามี configurable values)
+
+---
+
+## 15. Lib ที่มีอยู่แล้วและสถานะ
+
+### SimpleHAL (User/SimpleHAL/)
+
+| Module | สถานะ | หมายเหตุ |
+|--------|--------|---------|
+| SimpleGPIO | ✅ เสร็จ | pinMode, digitalWrite, digitalRead, attachInterrupt, analogRead, analogWrite |
+| SimpleTIM | ✅ เสร็จ | TIM1, TIM2 interrupt callbacks |
+| SimpleTIM_Ext | ✅ เสร็จ | Input capture, output compare |
+| SimplePWM | ✅ เสร็จ | PWM1_CH1-4, PWM2_CH1-4 |
+| SimpleUSART | ✅ เสร็จ | USART1, 3 pin configs |
+| SimpleI2C | ✅ เสร็จ | Hardware I2C, 2 pin configs |
+| SimpleI2C_Soft | ✅ เสร็จ | Software I2C (bit-bang) |
+| SimpleSPI | ✅ เสร็จ | Hardware SPI |
+| SimpleADC | ✅ เสร็จ | 10-bit ADC, 8 channels |
+| SimpleDelay | ✅ เสร็จ | Delay_Ms/Us, Get_CurrentMs/Us, Timer_t |
+| SimpleFlash | ✅ เสร็จ | Flash read/write |
+| SimpleIWDG | ✅ เสร็จ | Independent Watchdog |
+| SimpleWWDG | ✅ เสร็จ | Window Watchdog |
+| SimpleDMA | ✅ เสร็จ | DMA transfers |
+| Simple1Wire | ✅ เสร็จ | 1-Wire protocol |
+| SimpleOPAMP | ✅ เสร็จ | OPAMP peripheral |
+| SimplePWR | ✅ เสร็จ | Sleep, Standby, PVD, AWU |
+
+### Device Libraries (User/Lib/)
+
+| Library | สถานะ | Protocol | หมายเหตุ |
+|---------|--------|---------|---------|
+| Buzzer | ✅ เสร็จ | PWM | Tone, melody, volume |
+| DS18B20 | ✅ เสร็จ | 1-Wire | Multi-sensor, CRC |
+| I2CScan | ✅ เสร็จ | I2C | Scan หา device address |
+| IR | ✅ เสร็จ | GPIO/Timer | NEC, RC5, SIRC |
+| LCD1602_I2C | ✅ เสร็จ | I2C | PCF8574, 16x2/20x4 |
+| MAX7219 | ✅ เสร็จ | SPI | LED Matrix 8x8, cascaded |
+| NeoPixel | ✅ เสร็จ | Bit-bang | WS2812/WS2812B |
+| NTC10K | ✅ เสร็จ | ADC | Steinhart-Hart equation |
+| OLED | ✅ เสร็จ | I2C | SSD1306, 128x64/32 |
+| PIR | ✅ เสร็จ | GPIO | NS312, RCWL-0516 |
+| RotaryEncoder | ✅ เสร็จ | GPIO/EXTI | KY-040, quadrature |
+| TJC | ✅ เสร็จ | USART | TJC/Nextion HMI |
+| TM1637 | ✅ เสร็จ | Custom 2-wire | 4/6-digit 7-seg |
+| WS2815Matrix | ✅ เสร็จ | Bit-bang | 8x8 matrix, Thai font |
+| **DHT** | ✅ เสร็จ | Bit-bang | DHT11/DHT22, CRC |
+| **HCSR04** | ✅ เสร็จ | GPIO | Echo timing, average |
+| **Servo** | ✅ เสร็จ | PWM 50Hz | 0-180°, SweepTo |
+| **Button** | ✅ เสร็จ | GPIO | Debounce, LongPress, DoubleClick |
+
+### Phase 2 — เสร็จแล้ว
+
+| Library | Protocol | หมายเหตุ |
+|---------|---------|---------|
+| **StepperMotor** | ✅ เสร็จ | GPIO | ULN2003 (28BYJ-48), A4988 (NEMA17), Full/Half step |
+| **ShiftReg595** | ✅ เสร็จ | GPIO | 74HC595, cascade 1-4 ICs, shadow buffer |
+| **AT24Cxx** | ✅ เสร็จ | I2C | AT24C01-AT24C512, page write, ACK polling |
+| **DS3231** | ✅ เสร็จ | I2C | RTC+TCXO, Alarm1/2, temperature |
+| **HX711** | ✅ เสร็จ | GPIO | 24-bit ADC, Tare, Calibration, Gain 128/64/32 |
+
+### Phase 3 — เสร็จแล้ว ✅
+
+| Library | สถานะ | Protocol | รายละเอียด |
+|---------|-------|---------|-----------|
+| **MPU6050** | ✅ เสร็จ | I2C | Accel ±2G-16G, Gyro ±250-2000DPS, Temp, CalibrateGyro, DLPF |
+| **BMP280** | ✅ เสร็จ | I2C | Pressure/Temp, Altitude, Bosch compensation formula, Forced/Normal mode |
+| **KeyMatrix** | ✅ เสร็จ | GPIO | 4x4/4x3, Debounce, LongPress, Custom keymap, WaitKey |
+| **MQGas** | ✅ เสร็จ | ADC | MQ2/3/4/5/6/7/9/135, Auto-calibrate Ro, PPM, Alarm threshold |
+| **nRF24L01** | ✅ เสร็จ | SPI | 2.4GHz TX/RX, Auto-ACK, 126ch, 250k/1M/2Mbps, PowerDown |
 
 ---
 
