@@ -31,13 +31,8 @@
 #include <ch32v00x_opa.h>
 
 
-// เปิดการใช้งาน printf
-#define PRINTF_ON      1
-#define PRINTF_OFF     0
-#define DISABLE_PRINTF PRINTF_ON                        // ถ้าใช้งานจริงให้ comment บรรทัดนี้
-// #define DISABLE_PRINTF PRINTF_OFF
-
-#if DISABLE_PRINTF == 0
+// เปิด/ปิด printf → ตั้งค่าใน main.c (#define ENABLE_PRINTF 1 หรือ 0)
+#if !defined(ENABLE_PRINTF) || (ENABLE_PRINTF == 0)
     #define printf(...)
 #endif
 

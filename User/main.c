@@ -8,6 +8,13 @@
  *
  */
 
+/* ============================================================
+ *  ตั้งค่าที่นี่จุดเดียว:
+ *    1 = เปิด printf  (Development / Debug)
+ *    0 = ปิด printf   (Production / ประหยัด Flash)
+ * ============================================================ */
+#define ENABLE_PRINTF  0
+
 #include <main.h>
 #include "SimpleHAL/SimpleHAL.h"
 #include "debug.h"
@@ -22,7 +29,7 @@ int main (void) {
     NVIC_PriorityGroupConfig (NVIC_PriorityGroup_1);
     SystemCoreClockUpdate();    
 
-#if (SDI_PRINT == SDI_PR_OPEN && DISABLE_PRINTF == PRINTF_ON)
+#if ENABLE_PRINTF
     SDI_Printf_Enable();
 #endif
 
