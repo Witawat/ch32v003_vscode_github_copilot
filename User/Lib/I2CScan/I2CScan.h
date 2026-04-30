@@ -82,12 +82,14 @@ extern "C" {
 
 #if (I2C_SCAN_OUTPUT == I2C_SCAN_OUTPUT_USART)
 #  include "../../SimpleHAL/SimpleUSART.h"
-#  define I2C_SCAN_PRINT(s)      USART_Print(s)
-#  define I2C_SCAN_PRINT_NUM(n)  USART_PrintNum((int32_t)(n))
+#  define I2C_SCAN_PRINT(s)       USART_Print(s)
+#  define I2C_SCAN_PRINT_NUM(n)   USART_PrintNum((int32_t)(n))
+#  define I2C_SCAN_PRINTCHAR(c)   USART_WriteByte((uint8_t)(c))
 #else
 #  include <stdio.h>
-#  define I2C_SCAN_PRINT(s)      printf("%s", (s))
-#  define I2C_SCAN_PRINT_NUM(n)  printf("%d", (int)(n))
+#  define I2C_SCAN_PRINT(s)       printf("%s", (s))
+#  define I2C_SCAN_PRINT_NUM(n)   printf("%d", (int)(n))
+#  define I2C_SCAN_PRINTCHAR(c)   printf("%c", (int)(c))
 #endif
 
 /* ========== Function Prototypes ========== */

@@ -88,12 +88,8 @@ uint8_t I2C_Probe(uint8_t addr) {
 
 /** ส่งตัวเลข hex 2 หลัก (lowercase) */
 static void _PrintHex2(uint8_t val) {
-    const char hex[] = "0123456789abcdef";
-    char buf[3];
-    buf[0] = hex[(val >> 4) & 0x0F];
-    buf[1] = hex[val & 0x0F];
-    buf[2] = '\0';
-    I2C_SCAN_PRINT(buf);
+    I2C_SCAN_PRINTCHAR(((val >> 4) & 0x0F) < 10 ? '0' + ((val >> 4) & 0x0F) : 'a' + ((val >> 4) & 0x0F) - 10);
+    I2C_SCAN_PRINTCHAR((val & 0x0F) < 10          ? '0' + (val & 0x0F)        : 'a' + (val & 0x0F) - 10);
 }
 
 /* ========== Scan Function ========== */

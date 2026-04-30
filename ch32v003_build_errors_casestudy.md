@@ -74,9 +74,33 @@ SimpleI2C.h เพิ่มฟังก์ชัน `uint8_t I2C_Scan(uint8_t*, 
 
 ---
 
+## 6. Unused-but-set-variable — Local Buffer in _PrintHex2
+
+**ไฟล์ที่เกิด:** I2CScan.c (บรรทัด 92)
+
+**สาเหตุ:**
+`_PrintHex2` สร้าง `char buf[3]` แล้วส่งไปยัง `I2C_SCAN_PRINT(buf)` ซึ่ง expand เป็น `printf("%s", buf)`
+เมื่อ `printf` ถูก disable ด้วย `#define printf(...)` (ENABLE_PRINTF=0) ใน ch32v00x_conf.h
+ทำให้ `printf("%s", buf)` → nothing — compiler เห็นว่า `buf` ถูก assign แต่ค่าไม่ถูกอ่านเลย
+→ GCC ออก warning `-Wunused-but-set-variable`
+
+**แก้ไข:**
+เพิ่ม macro `I2C_SCAN_PRINTCHAR(c)` ใน I2CScan.h (USART → `USART_WriteByte(c)`, printf → `printf("%c", c)`)
+แล้วเขียน `_PrintHex2` ใหม่ให้ส่งทีละ character โดยไม่ใช้ local buffer เลย:
+```c
+static void _PrintHex2(uint8_t val) {
+    const char hex[] = "0123456789abcdef";
+    I2C_SCAN_PRINTCHAR(hex[(val >> 4) & 0x0F]);
+    I2C_SCAN_PRINTCHAR(hex[val & 0x0F]);
+}
+```
+
+---
+
 ## Pattern สรุป
 
 - เมื่อ SimpleHAL เปลี่ยน API signature → lib ที่ใช้งานต้องอัปเดตตาม
 - Static helper ที่ไม่ถูกเรียก → ลบออก ไม่ใช้ `__attribute__((unused))`
 - ชื่อฟังก์ชันใน lib ต้องไม่ชนกับ SimpleHAL → ใช้ prefix ของ lib เอง (เช่น `I2CScan_Run`)
 - SimpleGPIO ใช้ `GPIO_PinMode` enum เสมอ ไม่มี Arduino-style macros
+- Local buffer ที่ใช้กับ print macro → เมื่อ printf ถูก disable จะ trigger `-Wunused-but-set-variable` → แก้ด้วย single-char macro แทน string buffer

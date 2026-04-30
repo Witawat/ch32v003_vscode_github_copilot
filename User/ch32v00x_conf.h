@@ -33,7 +33,9 @@
 
 // เปิด/ปิด printf → ตั้งค่าใน main.c (#define ENABLE_PRINTF 1 หรือ 0)
 #if !defined(ENABLE_PRINTF) || (ENABLE_PRINTF == 0)
-    #define printf(...)
+    #include <stdio.h>  /* ให้ stdio.h declare int printf(...) ก่อน จากนั้นค่อย override */
+    #undef printf
+    #define printf(...) ((void)0)
 #endif
 
 // Macro สำหรับแปลง GPIO Port เป็น RCC Peripheral
