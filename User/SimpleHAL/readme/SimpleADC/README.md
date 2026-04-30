@@ -1,12 +1,14 @@
-# SimpleADC Library - คู่มือการใช้งาน
+# SimpleADC — คู่มือการใช้งาน
+
+> **Version:** 1.0 | **MCU:** CH32V003 | **File:** `SimpleADC.h / SimpleADC.c`
+
+---
 
 ## ภาพรวม
 
-SimpleADC เป็น library สำหรับใช้งาน ADC (Analog-to-Digital Converter) บน CH32V003 แบบง่ายๆ คล้าย Arduino โดยรองรับ:
-- **8 External Channels** (PA1, PA2, PC4, PD2-PD6)
-- **2 Internal Channels** (Vrefint, Vcalint)
-- **Battery Monitoring** โดยไม่ต้องใช้วงจรภายนอก
-- **VDD Compensation** เพื่อความแม่นยำสูง
+SimpleADC ห่อหุ้ม ADC1 hardware ของ CH32V003 ให้ใช้งานได้ง่าย ADC มีความละเอียด **10 บิต** (0–1023) ความเร็วสูง รองรับ 8 external channels บน GPIO และ 2 internal channels (Vrefint, Vcalint)
+
+> หมายเหตุ: ฟังก์ชัน `ADC_GetVDD()`, `ADC_ReadVoltageCompensated()`, `ADC_GetBatteryPercent()` ที่เห็นในเอกสารเดิมเป็น helper ระดับสูง — ดูในไฟล์ source เพื่อตรวจสอบว่ามีใน version ที่ใช้งาน
 
 ## คุณสมบัติเด่น
 

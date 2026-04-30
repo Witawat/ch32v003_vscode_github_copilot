@@ -84,19 +84,19 @@
 ## Git Commit Message
 
 ```
-fix(libs): fix SimpleHAL API compatibility errors and add 5 new modules
+fix(libs): แก้ไขข้อผิดพลาด SimpleHAL API และเพิ่ม 5 module ใหม่
 
-Fix build errors caused by SimpleHAL API changes:
-- BMP280, DS3231, MPU6050: replace I2C_ReadReg (3-arg) with I2C_ReadRegMulti
-- HC05: update USART_SimpleInit to 2-arg form, rename SendByte/ReadByte
-- HX711, KeyMatrix, nRF24L01, W25Qxx: replace Arduino GPIO macros with PIN_MODE_* enum
-- I2CScan: rename I2C_Scan() to I2CScan_Run() to avoid conflict with SimpleI2C.h
-- nRF24L01: remove unused static function _read_reg_multi
+แก้ไขข้อผิดพลาดจากการเปลี่ยน API ของ SimpleHAL:
+- BMP280, DS3231, MPU6050: เปลี่ยน I2C_ReadReg (3 args) เป็น I2C_ReadRegMulti
+- HC05: อัปเดต USART_SimpleInit ให้รับ 2 args และเปลี่ยนชื่อ SendByte/ReadByte
+- HX711, KeyMatrix, nRF24L01, W25Qxx: เปลี่ยน Arduino GPIO macros เป็น PIN_MODE_* enum
+- I2CScan: เปลี่ยนชื่อ I2C_Scan() เป็น I2CScan_Run() เพื่อหลีกเลี่ยงการชนกับ SimpleI2C.h
+- nRF24L01: ลบฟังก์ชัน static _read_reg_multi ที่ไม่ได้ใช้งานออก
 
-Add new library modules:
-- Relay: active high/low relay control
-- OH49E: linear hall effect sensor via ADC
-- L298N: DC motor driver with PWM speed control
-- RC522: MFRC522 RFID reader over SPI (REQA, anti-collision, select, halt)
-- PCF8574: I2C GPIO expander (8-bit quasi-bidirectional I/O)
+เพิ่ม library module ใหม่:
+- Relay: ควบคุม relay แบบ Active High / Active Low
+- OH49E: เซนเซอร์ Hall Effect แบบ linear ผ่าน ADC
+- L298N: ควบคุมมอเตอร์ DC พร้อมปรับความเร็วด้วย PWM
+- RC522: อ่าน RFID ผ่าน SPI (REQA, anti-collision, select, halt)
+- PCF8574: ขยาย GPIO ผ่าน I2C แบบ 8-bit quasi-bidirectional
 ```
