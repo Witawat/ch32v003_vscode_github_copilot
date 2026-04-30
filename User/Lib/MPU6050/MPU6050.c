@@ -18,7 +18,7 @@ static MPU6050_Status _write_reg(uint8_t addr, uint8_t reg, uint8_t val) {
 }
 
 static MPU6050_Status _read_reg(uint8_t addr, uint8_t reg, uint8_t* val) {
-    return (I2C_ReadReg(addr, reg, val) == I2C_OK) ? MPU6050_OK : MPU6050_ERROR_I2C;
+    return (I2C_ReadRegMulti(addr, reg, val, 1) == I2C_OK) ? MPU6050_OK : MPU6050_ERROR_I2C;
 }
 
 /**

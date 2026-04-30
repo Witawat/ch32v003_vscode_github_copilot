@@ -27,7 +27,7 @@ static DS3231_Status _write_reg(uint8_t reg, uint8_t value) {
 }
 
 static DS3231_Status _read_reg(uint8_t reg, uint8_t* value) {
-    I2C_Status st = I2C_ReadReg(DS3231_I2C_ADDR, reg, value);
+    I2C_Status st = I2C_ReadRegMulti(DS3231_I2C_ADDR, reg, value, 1);
     return (st == I2C_OK) ? DS3231_OK : DS3231_ERROR_I2C;
 }
 

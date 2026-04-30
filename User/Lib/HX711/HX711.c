@@ -83,8 +83,8 @@ HX711_Status HX711_Init(HX711_Instance* hx, GPIO_Pin pin_dout, GPIO_Pin pin_sck)
     hx->initialized       = 0;
 
     /* ตั้ง pin mode */
-    pinMode(pin_dout, INPUT);
-    pinMode(pin_sck,  OUTPUT);
+    pinMode(pin_dout, PIN_MODE_INPUT);
+    pinMode(pin_sck,  PIN_MODE_OUTPUT);
     digitalWrite(pin_sck, 0);  /* SCK LOW = power up */
 
     hx->initialized = 1;

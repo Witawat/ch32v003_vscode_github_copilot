@@ -49,18 +49,6 @@ static void _write_reg(nRF24_Instance* radio, uint8_t reg, uint8_t val) {
 }
 
 /**
- * @brief อ่าน register หลาย bytes (สำหรับ address)
- */
-static void _read_reg_multi(nRF24_Instance* radio, uint8_t reg, uint8_t* buf, uint8_t len) {
-    _csn_low(radio);
-    SPI_Transfer(NRF24_CMD_R_REGISTER | (reg & 0x1F));
-    for (uint8_t i = 0; i < len; i++) {
-        buf[i] = SPI_Transfer(NRF24_CMD_NOP);
-    }
-    _csn_high(radio);
-}
-
-/**
  * @brief เขียน register หลาย bytes (สำหรับ address)
  */
 static void _write_reg_multi(nRF24_Instance* radio, uint8_t reg, const uint8_t* buf, uint8_t len) {
@@ -97,8 +85,8 @@ nRF24_Status nRF24_Init(nRF24_Instance* radio, GPIO_Pin pin_csn, GPIO_Pin pin_ce
     radio->initialized  = 0;
 
     /* ตั้ง GPIO */
-    pinMode(pin_csn, OUTPUT);
-    pinMode(pin_ce,  OUTPUT);
+    pinMode(pin_csn, PIN_MODE_OUTPUT);
+    pinMode(pin_ce,  PIN_MODE_OUTPUT);
     _csn_high(radio);  /* CSN idle = HIGH */
     _ce_low(radio);    /* CE idle = LOW */
 

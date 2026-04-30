@@ -86,12 +86,12 @@ KeyMatrix_Status KeyMatrix_Init(KeyMatrix_Instance* kp,
 
     for (uint8_t r = 0; r < num_rows; r++) {
         kp->row_pins[r] = rows[r];
-        pinMode(rows[r], OUTPUT);
+        pinMode(rows[r], PIN_MODE_OUTPUT);
         digitalWrite(rows[r], 1);  /* idle HIGH */
     }
     for (uint8_t c = 0; c < num_cols; c++) {
         kp->col_pins[c] = cols[c];
-        pinMode(cols[c], INPUT_PULLUP);
+        pinMode(cols[c], PIN_MODE_INPUT_PULLUP);
     }
 
     kp->initialized = 1;

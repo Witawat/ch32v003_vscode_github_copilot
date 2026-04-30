@@ -104,9 +104,9 @@ extern "C" {
  * @note ต้องเรียก I2C_SimpleInit() และ USART_SimpleInit() ก่อนใช้งาน
  *
  * @example
- * I2C_Scan();
+ * I2CScan_Run();
  */
-void I2C_Scan(void);
+void I2CScan_Run(void);
 
 /**
  * @brief Probe I2C address เพียง address เดียว

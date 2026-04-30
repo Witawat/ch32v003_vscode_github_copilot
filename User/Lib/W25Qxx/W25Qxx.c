@@ -57,7 +57,7 @@ W25Qxx_Status W25Qxx_Init(W25Qxx_Instance* flash, GPIO_Pin pin_cs) {
     flash->capacity   = 0;
     flash->initialized = 0;
 
-    pinMode(pin_cs, OUTPUT);
+    pinMode(pin_cs, PIN_MODE_OUTPUT);
     _cs_high(flash);
     Delay_Ms(5);
 

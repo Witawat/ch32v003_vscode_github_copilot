@@ -101,7 +101,7 @@ static void _PrintHex2(uint8_t val) {
 /**
  * @brief Scan I2C bus และแสดงผลเป็นตารางผ่าน USART
  */
-void I2C_Scan(void) {
+void I2CScan_Run(void) {
     uint8_t found_count = 0;
 
     /* Header */

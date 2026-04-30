@@ -16,7 +16,7 @@ HC05_Status HC05_Init(HC05_Instance* bt, uint32_t baudrate) {
     bt->initialized = 0;
 
     /* Init USART ผ่าน SimpleUSART */
-    USART_SimpleInit(baudrate);
+    USART_SimpleInit((USART_BaudRate)baudrate, USART_PINS_DEFAULT);
 
     bt->initialized = 1;
     return HC05_OK;
@@ -24,13 +24,13 @@ HC05_Status HC05_Init(HC05_Instance* bt, uint32_t baudrate) {
 
 void HC05_SendByte(HC05_Instance* bt, uint8_t byte) {
     if (bt == NULL || !bt->initialized) return;
-    USART_SendByte(byte);
+    USART_WriteByte(byte);
 }
 
 HC05_Status HC05_Send(HC05_Instance* bt, const uint8_t* data, uint16_t len) {
     if (bt == NULL || !bt->initialized || data == NULL) return HC05_ERROR_PARAM;
     for (uint16_t i = 0; i < len; i++) {
-        USART_SendByte(data[i]);
+        USART_WriteByte(data[i]);
     }
     return HC05_OK;
 }
@@ -38,7 +38,7 @@ HC05_Status HC05_Send(HC05_Instance* bt, const uint8_t* data, uint16_t len) {
 HC05_Status HC05_SendString(HC05_Instance* bt, const char* str) {
     if (bt == NULL || !bt->initialized || str == NULL) return HC05_ERROR_PARAM;
     while (*str) {
-        USART_SendByte((uint8_t)*str++);
+        USART_WriteByte((uint8_t)*str++);
     }
     return HC05_OK;
 }
@@ -51,7 +51,7 @@ uint8_t HC05_Available(HC05_Instance* bt) {
 HC05_Status HC05_ReadByte(HC05_Instance* bt, uint8_t* byte) {
     if (bt == NULL || !bt->initialized || byte == NULL) return HC05_ERROR_PARAM;
     if (!USART_Available()) return HC05_ERROR_TIMEOUT;
-    *byte = USART_ReadByte();
+    *byte = USART_Read();
     return HC05_OK;
 }
 
@@ -72,7 +72,7 @@ HC05_Status HC05_ReadLine(HC05_Instance* bt, char* buf,
             }
         }
 
-        uint8_t c = USART_ReadByte();
+        uint8_t c = USART_Read();
         if (c == '\n') break;
         if (c == '\r') continue;  /* ตัด CR */
         buf[idx++] = (char)c;
@@ -101,6 +101,6 @@ void HC05_Flush(HC05_Instance* bt) {
     if (bt == NULL || !bt->initialized) return;
     /* อ่านทิ้งจน buffer ว่าง */
     while (USART_Available()) {
-        USART_ReadByte();
+        USART_Read();
     }
 }
