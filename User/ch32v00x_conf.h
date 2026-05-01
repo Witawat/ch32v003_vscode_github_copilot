@@ -53,11 +53,10 @@
 #define MAP(x, in_min, in_max, out_min, out_max) (((x) - (in_min)) * ((out_max) - (out_min)) / ((in_max) - (in_min)) + (out_min))
 #define ROUND(x)                                 (((x) >= 0) ? (long)((x) + 0.5f) : (long)((x)-0.5f))
 
-/* 2) RADIANS/DEGREES/SQ/ROUND: คำนวณเรเดียน/องศา, กำลังสอง, ปัดเศษ */
+/* 2) RADIANS/DEGREES/SQ: คำนวณเรเดียน/องศา, กำลังสอง */
 #define RADIANS(deg)                             ((deg) * (M_PI / 180.0f))
 #define DEGREES(rad)                             ((rad) * (180.0f / M_PI))
 #define SQ(x)                                    ((x) * (x))
-#define ROUND(x)                                 (((x) >= 0) ? (long)((x) + 0.5f) : (long)((x)-0.5f))
 
 /* 3) Bit-manipulation แบบ Arduino */
 #define _BV(bit)                                 (1UL << (bit))

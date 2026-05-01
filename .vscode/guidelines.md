@@ -1,7 +1,7 @@
 # CH32V003 Project — Programming & README Guidelines
 
 > อ่านไฟล์นี้ก่อนทุกครั้งก่อนเริ่มพัฒนา feature ใหม่หรือเขียน Lib ใหม่  
-> อัพเดตล่าสุด: 2026-04-29
+> อัพเดตล่าสุด: 2026-05-01
 
 ---
 
@@ -170,9 +170,9 @@ TIM_Start(TIM_1);
 ### 3.5 Delay / Timing
 
 ```c
-// ต้องเรียกในช่วงต้นของ main() เสมอ
+// Timer_Init() ถูกเรียกอัตโนมัติผ่าน SimpleDelay constructor — ไม่ต้องเรียกเอง
+// แต่ SystemCoreClockUpdate() ยังต้องเรียกก่อนเสมอ
 SystemCoreClockUpdate();
-Timer_Init();   // เปิด SysTick สำหรับ millis/delay
 
 // Blocking delay
 Delay_Ms(500);
@@ -278,8 +278,7 @@ int main(void) {
     SDI_Printf_Enable();
 #endif
 
-    // 2. HAL init
-    Timer_Init();                               // เปิด SysTick
+    // 2. HAL init (Timer_Init ถูกเรียกอัตโนมัติจาก SimpleDelay constructor — ไม่จำเป็นต้องเรียกเอง)
     // USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
 
     // 3. Debug print
@@ -908,45 +907,72 @@ Code ต้องเป็น complete example ที่ compile และรั
 | TJC | ✅ เสร็จ | USART | TJC/Nextion HMI |
 | TM1637 | ✅ เสร็จ | Custom 2-wire | 4/6-digit 7-seg |
 | WS2815Matrix | ✅ เสร็จ | Bit-bang | 8x8 matrix, Thai font |
-| **DHT** | ✅ เสร็จ | Bit-bang | DHT11/DHT22, CRC |
-| **HCSR04** | ✅ เสร็จ | GPIO | Echo timing, average |
-| **Servo** | ✅ เสร็จ | PWM 50Hz | 0-180°, SweepTo |
-| **Button** | ✅ เสร็จ | GPIO | Debounce, LongPress, DoubleClick |
+| DHT | ✅ เสร็จ | Bit-bang | DHT11/DHT22, CRC |
+| HCSR04 | ✅ เสร็จ | GPIO | Echo timing, average |
+| Servo | ✅ เสร็จ | PWM 50Hz | 0-180°, SweepTo |
+| Button | ✅ เสร็จ | GPIO | Debounce, LongPress, DoubleClick |
 
 ### Phase 2 — เสร็จแล้ว
 
 | Library | Protocol | หมายเหตุ |
 |---------|---------|---------|
-| **StepperMotor** | ✅ เสร็จ | GPIO | ULN2003 (28BYJ-48), A4988 (NEMA17), Full/Half step |
-| **ShiftReg595** | ✅ เสร็จ | GPIO | 74HC595, cascade 1-4 ICs, shadow buffer |
-| **AT24Cxx** | ✅ เสร็จ | I2C | AT24C01-AT24C512, page write, ACK polling |
-| **DS3231** | ✅ เสร็จ | I2C | RTC+TCXO, Alarm1/2, temperature |
-| **HX711** | ✅ เสร็จ | GPIO | 24-bit ADC, Tare, Calibration, Gain 128/64/32 |
+| StepperMotor | ✅ เสร็จ | GPIO | ULN2003 (28BYJ-48), A4988 (NEMA17), Full/Half step |
+| ShiftReg595 | ✅ เสร็จ | GPIO | 74HC595, cascade 1-4 ICs, shadow buffer |
+| AT24Cxx | ✅ เสร็จ | I2C | AT24C01-AT24C512, page write, ACK polling |
+| DS3231 | ✅ เสร็จ | I2C | RTC+TCXO, Alarm1/2, temperature |
+| HX711 | ✅ เสร็จ | GPIO | 24-bit ADC, Tare, Calibration, Gain 128/64/32 |
 
 ### Phase 3 — เสร็จแล้ว ✅
 
 | Library | สถานะ | Protocol | รายละเอียด |
 |---------|-------|---------|-----------|
-| **MPU6050** | ✅ เสร็จ | I2C | Accel ±2G-16G, Gyro ±250-2000DPS, Temp, CalibrateGyro, DLPF |
-| **BMP280** | ✅ เสร็จ | I2C | Pressure/Temp, Altitude, Bosch compensation formula, Forced/Normal mode |
-| **KeyMatrix** | ✅ เสร็จ | GPIO | 4x4/4x3, Debounce, LongPress, Custom keymap, WaitKey |
-| **MQGas** | ✅ เสร็จ | ADC | MQ2/3/4/5/6/7/9/135, Auto-calibrate Ro, PPM, Alarm threshold |
-| **nRF24L01** | ✅ เสร็จ | SPI | 2.4GHz TX/RX, Auto-ACK, 126ch, 250k/1M/2Mbps, PowerDown |
+| MPU6050 | ✅ เสร็จ | I2C | Accel ±2G-16G, Gyro ±250-2000DPS, Temp, CalibrateGyro, DLPF |
+| BMP280 | ✅ เสร็จ | I2C | Pressure/Temp, Altitude, Bosch compensation formula, Forced/Normal mode |
+| KeyMatrix | ✅ เสร็จ | GPIO | 4x4/4x3, Debounce, LongPress, Custom keymap, WaitKey |
+| MQGas | ✅ เสร็จ | ADC | MQ2/3/4/5/6/7/9/135, Auto-calibrate Ro, PPM, Alarm threshold |
+| nRF24L01 | ✅ เสร็จ | SPI | 2.4GHz TX/RX, Auto-ACK, 126ch, 250k/1M/2Mbps, PowerDown |
 
 ### Phase 4 — เสร็จแล้ว ✅
 
 | Library | สถานะ | Protocol | RAM | รายละเอียด |
 |---------|-------|---------|-----|-----------|
-| **BH1750** | ✅ เสร็จ | I2C | ~20B | Light sensor (Lux), Continuous/One-time mode, 0.5-4 lux res |
-| **SHT3x** | ✅ เสร็จ | I2C | ~30B | Temp ±0.1°C + Humidity, CRC-8, High/Med/Low repeatability |
-| **INA219** | ✅ เสร็จ | I2C | ~40B | Current/Voltage/Power monitor, calibration register |
-| **MCP4725** | ✅ เสร็จ | I2C | ~20B | 12-bit DAC output, SetVoltage, EEPROM save |
-| **ADS1115** | ✅ เสร็จ | I2C | ~40B | 16-bit ADC 4ch, PGA ±256mV-±6.144V, 8-860SPS |
-| **PCA9685** | ✅ เสร็จ | I2C | ~30B | 16ch PWM expander, SetServoAngle, SetDuty, SetPulse |
-| **W25Qxx** | ✅ เสร็จ | SPI | ~64B | NOR Flash 2-16MB, Read/Write/EraseSector/EraseChip, JEDEC ID |
-| **VL53L0X** | ✅ เสร็จ | I2C | ~50B | ToF distance 30-2000mm, Single/Continuous, multi-sensor XSHUT |
-| **HC05** | ✅ เสร็จ | USART | ~70B | Bluetooth HC-05, Data mode + AT command, ReadLine |
+| BH1750 | ✅ เสร็จ | I2C | ~20B | Light sensor (Lux), Continuous/One-time mode, 0.5-4 lux res |
+| SHT3x | ✅ เสร็จ | I2C | ~30B | Temp ±0.1°C + Humidity, CRC-8, High/Med/Low repeatability |
+| INA219 | ✅ เสร็จ | I2C | ~40B | Current/Voltage/Power monitor, calibration register |
+| MCP4725 | ✅ เสร็จ | I2C | ~20B | 12-bit DAC output, SetVoltage, EEPROM save |
+| ADS1115 | ✅ เสร็จ | I2C | ~40B | 16-bit ADC 4ch, PGA ±256mV-±6.144V, 8-860SPS |
+| PCA9685 | ✅ เสร็จ | I2C | ~30B | 16ch PWM expander, SetServoAngle, SetDuty, SetPulse |
+| W25Qxx | ✅ เสร็จ | SPI | ~64B | NOR Flash 2-16MB, Read/Write/EraseSector/EraseChip, JEDEC ID |
+| VL53L0X | ✅ เสร็จ | I2C | ~50B | ToF distance 30-2000mm, Single/Continuous, multi-sensor XSHUT |
+| HC05 | ✅ เสร็จ | USART | ~70B | Bluetooth HC-05, Data mode + AT command, ReadLine |
+
+### Phase 5 — เสร็จแล้ว ✅
+
+| Library | สถานะ | Protocol | RAM | รายละเอียด |
+|---------|-------|---------|-----|-----------|
+| DRV8825 | ✅ เสร็จ | GPIO (STEP/DIR) | ~40B | Stepper driver 8.2-45V, Microstepping M0-M2, Full/Half/Quarter step |
+| ESC | ✅ เสร็จ | PWM 50Hz | ~32B | Brushless motor ESC, Calibrate range, SetThrottle 0-100% |
+| ESP01 | ✅ เสร็จ | USART (AT) | ~250B | ESP8266 WiFi module, TCP/UDP/HTTP, AT command, 192B RX buffer |
+| FlameSensor_KY026 | ✅ เสร็จ | ADC/GPIO | ~16B | Flame / IR detection, Analog threshold + Digital output |
+| GPS_NEO6M | ✅ เสร็จ | USART (NMEA) | ~256B | GPS NMEA 0183 parser, GGA/RMC sentences, Lat/Lon/Alt/Speed |
+| L298N | ✅ เสร็จ | GPIO/PWM | ~20B | Dual H-Bridge motor driver, Forward/Reverse/Brake, PWM speed |
+| OH49E | ✅ เสร็จ | ADC | ~48B | Linear Hall effect sensor, Magnetic field strength via ADC |
+| PCF8574 | ✅ เสร็จ | I2C | ~12B | 8-bit I/O expander, Read/Write port, Interrupt output pin |
+| PMS5003 | ✅ เสร็จ | USART | ~82B | PM1.0/PM2.5/PM10 dust sensor, Active fan, 32-byte frame |
+| PZEM004T | ✅ เสร็จ | USART (Custom) | ~50B | AC Energy meter V/A/W/Wh/Hz/PF, Custom serial protocol |
+| PZEM004Tv3 | ✅ เสร็จ | USART (Modbus) | ~50B | AC Energy meter v3, Modbus RTU, Voltage/Current/Power/Frequency |
+| RainSensor_YL83 | ✅ เสร็จ | ADC/GPIO | ~16B | Rain/water detection, Analog level + Digital threshold |
+| RC522 | ✅ เสร็จ | SPI | ~40B | RFID 13.56MHz, Read/Write MIFARE, Authenticate, UID read |
+| RCWL0516 | ✅ เสร็จ | GPIO | ~32B | Microwave Doppler radar, Motion detection, 4-28V input |
+| Relay | ✅ เสร็จ | GPIO | ~12B | Relay module control, Active High/Low configurable |
+| ServoCluster | ✅ เสร็จ | PWM/I2C | ~200B | Multi-servo via PCA9685, Easing functions, Sync move |
+| ServoTester | ✅ เสร็จ | PWM 50Hz | ~16B | Manual servo tester, Pulse 500-2500µs, Center/Scan mode |
+| SoilMoisture_YL69 | ✅ เสร็จ | ADC | ~16B | Soil moisture sensor, Analog reading + Calibration |
+| SoundSensor_KY038 | ✅ เสร็จ | ADC | ~16B | Sound level detection, Analog output + Digital threshold |
+| TMC220x | ✅ เสร็จ | GPIO (STEP/DIR) | ~52B | Silent stepper driver, StealthChop2, UART config optional |
+| TMC5160 | ✅ เสร็จ | GPIO/SPI | ~56B | High-power stepper 8-60V, StallGuard2, CoolStep, SPI config |
+| WaterFlow_YFS201 | ✅ เสร็จ | GPIO/EXTI | ~32B | Flow rate sensor, Pulse counter via EXTI, Total volume |
 
 ---
 
-*SimpleHAL Version: 1.9.0 | Target: CH32V003/CH32V006 | Toolchain: GCC12 riscv-wch-elf*
+*SimpleHAL Version: 1.9.0 | Target: CH32V003 | Toolchain: GCC12 riscv-wch-elf*

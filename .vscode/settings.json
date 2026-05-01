@@ -1,4 +1,5 @@
 {
+    "opencodego.commitLanguage": "English",
     "python.terminal.activateEnvironment": false,
     "python-envs.pythonProjects": [
         {
