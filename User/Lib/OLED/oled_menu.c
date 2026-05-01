@@ -7,6 +7,20 @@
 
 #include "oled_menu.h"
 
+static uint8_t _menu_clamp_scale(uint8_t scale) {
+    if(scale < 1) return 1;
+    if(scale > 4) return 4;
+    return scale;
+}
+
+static OLED_TextConfig _menu_text_cfg(const Menu* menu) {
+    OLED_TextConfig cfg;
+    cfg.scale = _menu_clamp_scale(menu->text_scale);
+    cfg.letter_spacing = 0;
+    cfg.thai_mode = OLED_THAI_RENDER_COMBINING;
+    return cfg;
+}
+
 /* ========== Menu Initialization ========== */
 
 void OLED_MenuInit(Menu* menu, MenuItem* items, uint8_t item_count) {
@@ -15,6 +29,7 @@ void OLED_MenuInit(Menu* menu, MenuItem* items, uint8_t item_count) {
     menu->selected = 0;
     menu->scroll_offset = 0;
     menu->style = MENU_STYLE_LIST;
+    menu->text_scale = 1;
     menu->title = NULL;
     menu->parent = NULL;
     
@@ -32,6 +47,10 @@ void OLED_MenuSetTitle(Menu* menu, const char* title) {
 
 void OLED_MenuSetStyle(Menu* menu, MenuStyle style) {
     menu->style = style;
+}
+
+void OLED_MenuSetTextScale(Menu* menu, uint8_t scale) {
+    menu->text_scale = _menu_clamp_scale(scale);
 }
 
 /* ========== Menu Navigation ========== */
@@ -164,10 +183,14 @@ void OLED_MenuDraw(OLED_Handle* oled, Menu* menu) {
 
 void OLED_MenuDrawList(OLED_Handle* oled, Menu* menu) {
     uint8_t y = 0;
+    OLED_TextConfig text_cfg = _menu_text_cfg(menu);
+    uint8_t row_h = (uint8_t)(MENU_ITEM_HEIGHT * text_cfg.scale);
     
     // Draw title if present
     if(menu->title != NULL) {
-        OLED_DrawStringAlign(oled, oled->width / 2, 0, menu->title, OLED_COLOR_WHITE, OLED_ALIGN_CENTER);
+        uint16_t title_w = OLED_MeasureStringUTF8(oled, menu->title, &text_cfg);
+        uint8_t title_x = (oled->width > title_w) ? (uint8_t)((oled->width - title_w) / 2) : 0;
+        OLED_DrawStringUTF8Ex(oled, title_x, 0, menu->title, OLED_COLOR_WHITE, &text_cfg);
         OLED_DrawHLine(oled, 0, 10, oled->width, OLED_COLOR_WHITE);
         y = 12;
     }
@@ -178,14 +201,14 @@ void OLED_MenuDrawList(OLED_Handle* oled, Menu* menu) {
     for(uint8_t i = 0; i < visible_count && (i + menu->scroll_offset) < menu->item_count; i++) {
         uint8_t item_index = i + menu->scroll_offset;
         MenuItem* item = &menu->items[item_index];
-        uint8_t item_y = y + i * MENU_ITEM_HEIGHT;
+        uint8_t item_y = y + i * row_h;
         
         // Draw selection indicator
         if(item_index == menu->selected) {
-            OLED_FillRect(oled, 0, item_y, oled->width, MENU_ITEM_HEIGHT, OLED_COLOR_WHITE);
-            OLED_DrawString(oled, 4, item_y + 2, item->text, OLED_COLOR_BLACK);
+            OLED_FillRect(oled, 0, item_y, oled->width, row_h, OLED_COLOR_WHITE);
+            OLED_DrawStringUTF8Ex(oled, 4, (uint8_t)(item_y + 2), item->text, OLED_COLOR_BLACK, &text_cfg);
         } else {
-            OLED_DrawString(oled, 4, item_y + 2, item->text, OLED_COLOR_WHITE);
+            OLED_DrawStringUTF8Ex(oled, 4, (uint8_t)(item_y + 2), item->text, OLED_COLOR_WHITE, &text_cfg);
         }
         
         // Draw value if applicable
@@ -242,6 +265,7 @@ void OLED_MenuDrawIcon(OLED_Handle* oled, Menu* menu) {
     uint8_t start_y = 16;
     
     MenuItem* item = &menu->items[menu->selected];
+    OLED_TextConfig text_cfg = _menu_text_cfg(menu);
     
     // Draw icon if present
     if(item->icon != NULL) {
@@ -251,8 +275,11 @@ void OLED_MenuDrawIcon(OLED_Handle* oled, Menu* menu) {
     }
     
     // Draw text
-    OLED_DrawStringAlign(oled, oled->width / 2, start_y + icon_size + spacing, 
-                         item->text, OLED_COLOR_WHITE, OLED_ALIGN_CENTER);
+    {
+        uint16_t text_w = OLED_MeasureStringUTF8(oled, item->text, &text_cfg);
+        uint8_t text_x = (oled->width > text_w) ? (uint8_t)((oled->width - text_w) / 2) : 0;
+        OLED_DrawStringUTF8Ex(oled, text_x, (uint8_t)(start_y + icon_size + spacing), item->text, OLED_COLOR_WHITE, &text_cfg);
+    }
     
     // Draw navigation indicators
     if(menu->selected > 0) {
@@ -265,9 +292,14 @@ void OLED_MenuDrawIcon(OLED_Handle* oled, Menu* menu) {
 
 void OLED_MenuDrawFull(OLED_Handle* oled, Menu* menu) {
     MenuItem* item = &menu->items[menu->selected];
+    OLED_TextConfig text_cfg = _menu_text_cfg(menu);
     
     // Draw title
-    OLED_DrawStringAlign(oled, oled->width / 2, 0, item->text, OLED_COLOR_WHITE, OLED_ALIGN_CENTER);
+    {
+        uint16_t title_w = OLED_MeasureStringUTF8(oled, item->text, &text_cfg);
+        uint8_t title_x = (oled->width > title_w) ? (uint8_t)((oled->width - title_w) / 2) : 0;
+        OLED_DrawStringUTF8Ex(oled, title_x, 0, item->text, OLED_COLOR_WHITE, &text_cfg);
+    }
     OLED_DrawHLine(oled, 0, 10, oled->width, OLED_COLOR_WHITE);
     
     // Draw value/content in center

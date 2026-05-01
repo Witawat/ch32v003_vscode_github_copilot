@@ -61,7 +61,9 @@ OLED I2C Library เป็น library ที่พัฒนาขึ้นสำ
 
 ### Font & Text Features
 - ✅ Built-in fonts หลายขนาด (6x8, 8x16, 12x16)
-- ✅ รองรับภาษาไทย (Thai font 16x16)
+- ✅ รองรับข้อความ UTF-8 ไทย+อังกฤษ
+- ✅ รองรับไทยแบบสระ/วรรณยุกต์ด้วย combining rendering
+- ✅ ปรับขนาดฟอนต์แบบ integer scale (1x-4x)
 - ✅ Text alignment (left, center, right)
 - ✅ Text effects (inverse, underline)
 - ✅ Scrolling text
@@ -179,6 +181,73 @@ OLED_Update(&oled);
 ---
 
 ## API Reference
+
+### Text Rendering (UTF-8 + Scale)
+
+#### OLED_SetTextScale
+```c
+void OLED_SetTextScale(OLED_Handle* oled, uint8_t scale);
+```
+ตั้งค่า scale เริ่มต้นของข้อความ (1..4)
+
+#### OLED_GetTextScale
+```c
+uint8_t OLED_GetTextScale(OLED_Handle* oled);
+```
+อ่านค่า scale ปัจจุบัน
+
+#### OLED_DrawCharScaled
+```c
+uint8_t OLED_DrawCharScaled(OLED_Handle* oled, uint8_t x, uint8_t y, char c, OLED_Color color, uint8_t scale);
+```
+วาดตัวอักษร ASCII พร้อมกำหนด scale ต่อคำสั่ง
+
+#### OLED_DrawStringScaled
+```c
+uint16_t OLED_DrawStringScaled(OLED_Handle* oled, uint8_t x, uint8_t y, const char* str, OLED_Color color, uint8_t scale);
+```
+วาดสตริง ASCII พร้อมกำหนด scale ต่อคำสั่ง
+
+#### OLED_DrawStringUTF8Ex
+```c
+uint16_t OLED_DrawStringUTF8Ex(OLED_Handle* oled, uint8_t x, uint8_t y, const char* str, OLED_Color color, const OLED_TextConfig* config);
+```
+วาดข้อความ UTF-8 (ไทย+อังกฤษ) ด้วยการตั้งค่าแบบละเอียด
+
+#### OLED_MeasureStringUTF8
+```c
+uint16_t OLED_MeasureStringUTF8(OLED_Handle* oled, const char* str, const OLED_TextConfig* config);
+```
+วัดความกว้างข้อความ UTF-8 สำหรับงานจัด layout/alignment
+
+#### OLED_TextConfig
+```c
+typedef struct {
+    uint8_t scale;
+    uint8_t letter_spacing;
+    OLED_ThaiRenderMode thai_mode;
+} OLED_TextConfig;
+```
+
+#### OLED_ThaiRenderMode
+```c
+typedef enum {
+    OLED_THAI_RENDER_OFF = 0,
+    OLED_THAI_RENDER_PLACEHOLDER = 1,
+    OLED_THAI_RENDER_COMBINING = 2
+} OLED_ThaiRenderMode;
+```
+
+ตัวอย่างใช้งาน:
+```c
+OLED_TextConfig cfg = {
+    .scale = 2,
+    .letter_spacing = 1,
+    .thai_mode = OLED_THAI_RENDER_COMBINING
+};
+
+OLED_DrawStringUTF8Ex(&oled, 0, 0, "Hello สวัสดี ๑๒๓", OLED_COLOR_WHITE, &cfg);
+```
 
 ### Core Functions
 

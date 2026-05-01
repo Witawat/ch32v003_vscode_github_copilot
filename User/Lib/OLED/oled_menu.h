@@ -106,6 +106,7 @@ typedef struct Menu {
     uint8_t selected;           /**< รายการที่เลือก */
     uint8_t scroll_offset;      /**< ตำแหน่ง scroll */
     MenuStyle style;            /**< สไตล์การแสดง */
+    uint8_t text_scale;         /**< ขนาดข้อความเมนู (1x-4x) */
     const char* title;          /**< หัวข้อเมนู */
     struct Menu* parent;        /**< ตัวชี้ไปยังเมนูหลัก */
 } Menu;
@@ -144,6 +145,13 @@ void OLED_MenuSetTitle(Menu* menu, const char* title);
  * OLED_MenuSetStyle(&menu, MENU_STYLE_ICON);
  */
 void OLED_MenuSetStyle(Menu* menu, MenuStyle style);
+
+/**
+ * @brief ตั้งค่า text scale ของเมนู
+ * @param menu ตัวชี้ไปยัง menu
+ * @param scale ค่า 1..4
+ */
+void OLED_MenuSetTextScale(Menu* menu, uint8_t scale);
 
 /* ========== Menu Navigation ========== */
 

@@ -65,6 +65,24 @@ typedef enum {
     OLED_ALIGN_RIGHT = 2
 } OLED_TextAlign;
 
+/**
+ * @brief โหมดการเรนเดอร์ภาษาไทย
+ */
+typedef enum {
+    OLED_THAI_RENDER_OFF = 0,          /**< ปิดการตีความภาษาไทย */
+    OLED_THAI_RENDER_PLACEHOLDER = 1,  /**< วาดแบบ placeholder */
+    OLED_THAI_RENDER_COMBINING = 2     /**< วาดแบบ combining marks (phase 1) */
+} OLED_ThaiRenderMode;
+
+/**
+ * @brief ตั้งค่าการวาดข้อความแบบขยาย
+ */
+typedef struct {
+    uint8_t scale;                     /**< ขยายฟอนต์ 1x, 2x, 3x... */
+    uint8_t letter_spacing;            /**< ระยะห่างตัวอักษรเพิ่ม (px) */
+    OLED_ThaiRenderMode thai_mode;     /**< โหมดภาษาไทย */
+} OLED_TextConfig;
+
 /* ========== Built-in Fonts ========== */
 
 extern const OLED_Font Font_6x8;
@@ -107,6 +125,18 @@ const OLED_Font* OLED_GetFont(OLED_Handle* oled);
 uint8_t OLED_DrawChar(OLED_Handle* oled, uint8_t x, uint8_t y, char c, OLED_Color color);
 
 /**
+ * @brief วาดตัวอักษร ASCII พร้อม scale
+ * @param oled ตัวชี้ไปยัง OLED handle
+ * @param x ตำแหน่ง x
+ * @param y ตำแหน่ง y
+ * @param c ตัวอักษร
+ * @param color สี
+ * @param scale ขนาด 1x, 2x, 3x...
+ * @return ความกว้างของตัวอักษร (pixels)
+ */
+uint8_t OLED_DrawCharScaled(OLED_Handle* oled, uint8_t x, uint8_t y, char c, OLED_Color color, uint8_t scale);
+
+/**
  * @brief วาดตัวอักษร ASCII แบบ inverse
  * @param oled ตัวชี้ไปยัง OLED handle
  * @param x ตำแหน่ง x
@@ -134,6 +164,30 @@ uint8_t OLED_DrawCharInverse(OLED_Handle* oled, uint8_t x, uint8_t y, char c);
  * OLED_DrawString(&oled, 0, 0, "Hello World", OLED_COLOR_WHITE);
  */
 uint16_t OLED_DrawString(OLED_Handle* oled, uint8_t x, uint8_t y, const char* str, OLED_Color color);
+
+/**
+ * @brief วาดข้อความ ASCII พร้อม scale
+ * @param oled ตัวชี้ไปยัง OLED handle
+ * @param x ตำแหน่ง x
+ * @param y ตำแหน่ง y
+ * @param str ข้อความ
+ * @param color สี
+ * @param scale ขนาด 1x, 2x, 3x...
+ * @return ความกว้างของข้อความ
+ */
+uint16_t OLED_DrawStringScaled(OLED_Handle* oled, uint8_t x, uint8_t y, const char* str, OLED_Color color, uint8_t scale);
+
+/**
+ * @brief วาดข้อความ UTF-8 (ไทย+อังกฤษ) ด้วย config
+ * @param oled ตัวชี้ไปยัง OLED handle
+ * @param x ตำแหน่ง x
+ * @param y ตำแหน่ง y
+ * @param str ข้อความ UTF-8
+ * @param color สี
+ * @param config ตั้งค่าการวาด (NULL = ค่าเริ่มต้น)
+ * @return ความกว้างของข้อความ
+ */
+uint16_t OLED_DrawStringUTF8Ex(OLED_Handle* oled, uint8_t x, uint8_t y, const char* str, OLED_Color color, const OLED_TextConfig* config);
 
 /**
  * @brief วาดข้อความแบบมี alignment
@@ -239,6 +293,16 @@ uint16_t OLED_DrawFloat(OLED_Handle* oled, uint8_t x, uint8_t y, float num, uint
 uint16_t OLED_GetStringWidth(OLED_Handle* oled, const char* str);
 
 /**
+ * @brief วัดความกว้างของข้อความ ASCII พร้อม scale
+ */
+uint16_t OLED_GetStringWidthScaled(OLED_Handle* oled, const char* str, uint8_t scale);
+
+/**
+ * @brief วัดความกว้างข้อความ UTF-8 ตาม config
+ */
+uint16_t OLED_MeasureStringUTF8(OLED_Handle* oled, const char* str, const OLED_TextConfig* config);
+
+/**
  * @brief วัดความสูงของ font ปัจจุบัน
  * @param oled ตัวชี้ไปยัง OLED handle
  * @return ความสูง (pixels)
@@ -247,6 +311,20 @@ uint16_t OLED_GetStringWidth(OLED_Handle* oled, const char* str);
  * uint8_t height = OLED_GetFontHeight(&oled);
  */
 uint8_t OLED_GetFontHeight(OLED_Handle* oled);
+
+/**
+ * @brief ตั้งค่า scale ข้อความเริ่มต้น (global)
+ * @param oled ตัวชี้ไปยัง OLED handle
+ * @param scale ค่า 1..4 (ค่าที่เกินจะถูก clamp)
+ */
+void OLED_SetTextScale(OLED_Handle* oled, uint8_t scale);
+
+/**
+ * @brief อ่านค่า scale ข้อความเริ่มต้น (global)
+ * @param oled ตัวชี้ไปยัง OLED handle
+ * @return scale ปัจจุบัน
+ */
+uint8_t OLED_GetTextScale(OLED_Handle* oled);
 
 /* ========== Advanced Text Features ========== */
 
