@@ -101,6 +101,23 @@ typedef struct {
 } Melody;
 
 /**
+ * @brief Beep step structure — หนึ่ง step = เปิดเสียง N ms แล้วเงียบ N ms
+ * 
+ * @note off_ms = 0 จะข้าม OFF phase ทันที (เสียงต่อเนื่องไปยัง step ถัดไป)
+ * 
+ * @example
+ * // บี๊บสั่น 50ms เว้น 20ms แล้วบี๊บยาว 150ms
+ * BeepStep pattern[] = {{50, 20}, {150, 0}};
+ * 
+ * // บี๊บ 3 ครั้งสั้นแล้วบี๊บยาว
+ * BeepStep pattern[] = {{80,80}, {80,80}, {80,80}, {400,0}};
+ */
+typedef struct {
+    uint16_t on_ms;   /**< ระยะเวลาที่ส่งเสียง (ms) */
+    uint16_t off_ms;  /**< ระยะเวลาที่เงียบ (ms), 0 = ข้ามช่วงเงียบ */
+} BeepStep;
+
+/**
  * @brief Buzzer state
  */
 typedef enum {
@@ -108,6 +125,18 @@ typedef enum {
     BUZZER_PLAYING,      /**< กำลังเล่นเสียง */
     BUZZER_PAUSED        /**< หยุดชั่วคราว */
 } BuzzerState;
+
+/**
+ * @brief Alert type สำเร็จรูปสำหรับเสียงแจ้งเตือน
+ */
+typedef enum {
+    BUZZER_ALERT_LONG    = 0,  /**< เสียงยาวต่อเนื่อง 2000ms */
+    BUZZER_ALERT_PULSE   = 1,  /**< บี๊บ-เว้น 500ms สลับกัน */
+    BUZZER_ALERT_TREMOLO = 2,  /**< เสียงสั่นถี่ 50ms on/off */
+    BUZZER_ALERT_DOUBLE  = 3,  /**< บี๊บๆ แล้วหยุด ซ้ำ */
+    BUZZER_ALERT_TRIPLE  = 4,  /**< บี๊บๆๆ แล้วหยุด ซ้ำ */
+    BUZZER_ALERT_URGENT  = 5   /**< จังหวะเร่งด่วน */
+} BuzzerAlertType;
 
 /* ========== Musical Notes Definitions ========== */
 
@@ -426,6 +455,75 @@ BuzzerState Buzzer_GetState(void);
  */
 void Buzzer_FrequencySweep(uint16_t start_freq, uint16_t end_freq, 
                            uint16_t duration_ms, uint16_t step_ms);
+
+/* ========== Beep Pattern & Alert ========== */
+
+/**
+ * @brief เล่น pattern ที่กำหนดเอง (blocking)
+ * @param steps   array ของ BeepStep (on_ms / off_ms ต่อ step)
+ * @param length  จำนวน steps
+ * @param repeat  จำนวนรอบ (0 = infinite — ใช้ Buzzer_Stop() เพื่อหยุด)
+ * 
+ * @note ฟังก์ชันนี้จะบล็อกการทำงานจนกว่าจะเล่นครบรอบ (หรือตลอดถ้า repeat=0)
+ * @note off_ms = 0 ใน step ใด → ข้ามช่วงเงียบของ step นั้นทันที
+ * 
+ * @example
+ * // บี๊บสั้น 50ms เว้น 20ms แล้วบี๊บยาว 150ms  เล่น 3 รอบ
+ * BeepStep pat[] = {{50, 20}, {150, 0}};
+ * Buzzer_PlayPattern(pat, 2, 3);
+ * 
+ * // บี๊บยาว 100ms เว้น 20ms แล้วบี๊บสั่น 30ms x3  เล่น 1 รอบ
+ * BeepStep pat[] = {{100, 20}, {30,30}, {30,30}, {30,0}};
+ * Buzzer_PlayPattern(pat, 4, 1);
+ */
+void Buzzer_PlayPattern(const BeepStep* steps, uint8_t length, uint8_t repeat);
+
+/**
+ * @brief เล่น pattern ที่กำหนดเองแบบ non-blocking
+ * @param steps   array ของ BeepStep
+ * @param length  จำนวน steps
+ * @param repeat  จำนวนรอบ (0 = infinite)
+ * 
+ * @note ต้องเรียก Buzzer_Update() ใน main loop
+ * @note เรียก Buzzer_Stop() เพื่อหยุดกลางคัน
+ * 
+ * @example
+ * BeepStep pat[] = {{80,80}, {80,80}, {80,80}, {400,0}};
+ * Buzzer_PlayPatternAsync(pat, 4, 0);  // infinite loop
+ * 
+ * while(1) {
+ *     Buzzer_Update();
+ *     // do other work
+ * }
+ */
+void Buzzer_PlayPatternAsync(const BeepStep* steps, uint8_t length, uint8_t repeat);
+
+/**
+ * @brief เล่นเสียงแจ้งเตือนสำเร็จรูป (blocking)
+ * @param type        ชนิดเสียงแจ้งเตือน (BuzzerAlertType)
+ * @param duration_ms ระยะเวลาทั้งหมดที่เล่น (ms), 0 = เล่นครบ 1 รอบ pattern
+ * 
+ * @example
+ * Buzzer_Alert(BUZZER_ALERT_TREMOLO, 2000);  // สั่นนาน 2 วิ
+ * Buzzer_Alert(BUZZER_ALERT_TRIPLE, 0);      // บี๊บๆๆ 1 รอบ
+ */
+void Buzzer_Alert(BuzzerAlertType type, uint16_t duration_ms);
+
+/**
+ * @brief เล่นเสียงแจ้งเตือนสำเร็จรูปแบบ non-blocking (infinite loop)
+ * @param type ชนิดเสียงแจ้งเตือน (BuzzerAlertType)
+ * 
+ * @note ต้องเรียก Buzzer_Update() ใน main loop
+ * @note เรียก Buzzer_Stop() เพื่อหยุด
+ * 
+ * @example
+ * Buzzer_AlertAsync(BUZZER_ALERT_URGENT);
+ * while(1) {
+ *     Buzzer_Update();
+ *     if(condition_cleared) Buzzer_Stop();
+ * }
+ */
+void Buzzer_AlertAsync(BuzzerAlertType type);
 
 /* ========== Pre-defined Patterns ========== */
 

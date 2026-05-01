@@ -1,6 +1,6 @@
 # Buzzer Library สำหรับ CH32V003
 
-> **Library สำหรับควบคุม Buzzer แบบครบวงจร** - รองรับทั้ง Active High และ Active Low พร้อมฟีเจอร์ควบคุมโทนเสียง เล่นทำนอง และสร้างจังหวะได้
+> **Library สำหรับควบคุม Buzzer แบบครบวงจร** - รองรับทั้ง Active High และ Active Low พร้อมฟีเจอร์ควบคุมโทนเสียง เล่นทำนอง สร้างจังหวะ Beep Pattern ที่กำหนดเองได้ และเสียงแจ้งเตือนสำเร็จรูป
 
 ## 📋 สารบัญ
 
@@ -14,6 +14,7 @@
 - [เทคนิคขั้นสูง](#เทคนิคขั้นสูง)
 - [Musical Notes Reference](#musical-notes-reference)
 - [Troubleshooting](#troubleshooting)
+- [Changelog](#changelog)
 
 ---
 
@@ -31,6 +32,8 @@ Buzzer Library เป็น library ที่ออกแบบมาเพื�
 - ✅ ปรับระดับเสียง (volume control)
 - ✅ ใช้ **PWM** สำหรับความแม่นยำสูง
 - ✅ Pre-defined patterns (SOS, Alarm, Success, Error)
+- ✅ **Beep Pattern** กำหนด on/off ต่อ step ได้อิสระ
+- ✅ **Alert** เสียงแจ้งเตือนสำเร็จรูป 6 แบบ (Long, Pulse, Tremolo, Double, Triple, Urgent)
 
 ### รองรับ PWM Pins
 
@@ -466,6 +469,118 @@ uint8_t Buzzer_IsBusy(void);
 
 ---
 
+### Beep Pattern & Alert
+
+#### `BeepStep` struct
+
+หนึ่ง step กำหนดได้ 2 ค่า:
+- `on_ms` — ระยะเวลาส่งเสียง (ms)
+- `off_ms` — ระยะเวลาเงียบ (ms), `0` = ข้ามช่วงเงียบ ต่อเสียงไปยัง step ถัดไปทันที
+
+```c
+typedef struct {
+    uint16_t on_ms;
+    uint16_t off_ms;
+} BeepStep;
+```
+
+---
+
+#### `BuzzerAlertType` enum
+
+| ค่า | เสียง | Pattern ภายใน |
+|-----|-------|---------------|
+| `BUZZER_ALERT_LONG`    | เสียงยาวต่อเนื่อง   | `{2000, 0}` |
+| `BUZZER_ALERT_PULSE`   | บี๊บ-เว้นสลับกัน   | `{500, 500}` |
+| `BUZZER_ALERT_TREMOLO` | เสียงสั่นถี่         | `{50, 50}` |
+| `BUZZER_ALERT_DOUBLE`  | บี๊บๆ แล้วหยุด      | `{100,100}, {100,500}` |
+| `BUZZER_ALERT_TRIPLE`  | บี๊บๆๆ แล้วหยุด     | `{100,100}, {100,100}, {100,500}` |
+| `BUZZER_ALERT_URGENT`  | จังหวะเร่งด่วน       | `{80,40}, {80,40}, {80,300}` |
+
+---
+
+#### `Buzzer_PlayPattern()`
+```c
+void Buzzer_PlayPattern(const BeepStep* steps, uint8_t length, uint8_t repeat);
+```
+
+เล่น pattern ที่กำหนดเอง (blocking)
+
+**Parameters:**
+- `steps`  — array ของ BeepStep
+- `length` — จำนวน steps
+- `repeat` — จำนวนรอบ (0 = infinite)
+
+**Example:**
+```c
+// บี๊บสั้น 50ms เว้น 20ms แล้วบี๊บยาว 150ms  เล่น 3 รอบ
+BeepStep pat[] = {{50, 20}, {150, 0}};
+Buzzer_PlayPattern(pat, 2, 3);
+
+// บี๊บยาว 100ms เว้น 20ms แล้วบี๊บสั่น 30ms x3  เล่น 1 รอบ
+BeepStep pat2[] = {{100, 20}, {30,30}, {30,30}, {30,0}};
+Buzzer_PlayPattern(pat2, 4, 1);
+```
+
+---
+
+#### `Buzzer_PlayPatternAsync()`
+```c
+void Buzzer_PlayPatternAsync(const BeepStep* steps, uint8_t length, uint8_t repeat);
+```
+
+เล่น pattern ที่กำหนดเองแบบ non-blocking
+
+**Example:**
+```c
+BeepStep pat[] = {{80,80}, {80,80}, {80,80}, {400,0}};
+Buzzer_PlayPatternAsync(pat, 4, 0);  // infinite
+
+while(1) {
+    Buzzer_Update();   // ต้องเรียกใน loop!
+    if(done) Buzzer_Stop();
+}
+```
+
+---
+
+#### `Buzzer_Alert()`
+```c
+void Buzzer_Alert(BuzzerAlertType type, uint16_t duration_ms);
+```
+
+เล่นเสียงแจ้งเตือนสำเร็จรูป (blocking)
+
+**Parameters:**
+- `type`        — ชนิดเสียง (BuzzerAlertType)
+- `duration_ms` — ระยะเวลาทั้งหมด (ms), `0` = เล่นครบ 1 รอบ
+
+**Example:**
+```c
+Buzzer_Alert(BUZZER_ALERT_TREMOLO, 2000);  // เสียงสั่น 2 วิ
+Buzzer_Alert(BUZZER_ALERT_TRIPLE, 0);      // บี๊บๆๆ 1 รอบ
+```
+
+---
+
+#### `Buzzer_AlertAsync()`
+```c
+void Buzzer_AlertAsync(BuzzerAlertType type);
+```
+
+เล่นเสียงแจ้งเตือนสำเร็จรูปแบบ non-blocking (infinite ต้อง `Buzzer_Stop()` เพื่อหยุด)
+
+**Example:**
+```c
+Buzzer_AlertAsync(BUZZER_ALERT_URGENT);
+while(1) {
+    Buzzer_Update();
+    if(alarm_cleared) Buzzer_Stop();
+}
+```
+
+---
+
 ### Pre-defined Patterns
 
 ```c
@@ -566,6 +681,48 @@ while(sensor_triggered) {
     Buzzer_PlayMelody(fire_alarm, 
                       sizeof(fire_alarm)/sizeof(Note));
 }
+```
+
+### 6. Beep Pattern — กำหนดจังหวะเอง
+
+```c
+// บี๊บสั้น 50ms เว้น 20ms แล้วบี๊บยาว 150ms  เล่น 3 รอบ
+BeepStep pat1[] = {{50, 20}, {150, 0}};
+Buzzer_PlayPattern(pat1, 2, 3);
+
+// บี๊บ 3 ครั้งสั้นแล้วบี๊บยาว 1 ครั้ง (SOS style)
+BeepStep pat2[] = {{80,80}, {80,80}, {80,80}, {400,0}};
+Buzzer_PlayPattern(pat2, 4, 1);
+
+// บี๊บยาว 100ms เว้น 20ms แล้วบี๊บสั่นๆ 30ms x3
+BeepStep pat3[] = {{100, 20}, {30,30}, {30,30}, {30,0}};
+Buzzer_PlayPattern(pat3, 4, 1);
+
+// เล่น pattern ต่อเนื่องใน background (non-blocking)
+BeepStep pat4[] = {{60, 60}, {60, 60}, {60, 300}};
+Buzzer_PlayPatternAsync(pat4, 3, 0);   // 0 = infinite
+while(1) {
+    Buzzer_Update();
+    if(condition_met) Buzzer_Stop();
+}
+```
+
+### 7. Alert สำเร็จรูป
+
+```c
+// เสียงสั่นนาน 2 วิ (blocking)
+Buzzer_Alert(BUZZER_ALERT_TREMOLO, 2000);
+
+// บี๊บๆๆ 1 รอบ แล้วกลับ
+Buzzer_Alert(BUZZER_ALERT_TRIPLE, 0);
+
+// เสียง urgent ต่อเนื่อง (non-blocking) จนกว่า sensor จะหมด
+Buzzer_AlertAsync(BUZZER_ALERT_URGENT);
+while(sensor_on) {
+    Buzzer_Update();
+    // ทำงานอื่นได้
+}
+Buzzer_Stop();
 ```
 
 ---
@@ -746,12 +903,14 @@ const Note melody[] = {C4_Q, E4_Q, C4_Q, E4_Q};
 ```c
 // ✗ Wrong
 Buzzer_PlayMelodyAsync(melody, length, 1);
+Buzzer_PlayPatternAsync(pat, pat_len, 0);
+Buzzer_AlertAsync(BUZZER_ALERT_PULSE);
 while(1) {
-    // ไม่มี Buzzer_Update()!
+    // ไม่มี Buzzer_Update()!  → เสียงหยุด
 }
 
 // ✓ Correct
-Buzzer_PlayMelodyAsync(melody, length, 1);
+Buzzer_PlayPatternAsync(pat, pat_len, 0);
 while(1) {
     Buzzer_Update();  // ต้องเรียกใน loop!
     Delay_Ms(10);
@@ -798,7 +957,7 @@ CH32V003 Library Team
 
 ## Version
 
-1.0.0 (2025-12-22)
+2.0.0 (2026-05-01)
 
 ---
 
@@ -807,6 +966,25 @@ CH32V003 Library Team
 - [Examples/](Examples/) - ตัวอย่างการใช้งานทั้งหมด
 - [SimpleHAL Documentation](../SimpleHAL/README.md)
 - [SimplePWM Documentation](../SimpleHAL/README.md#simplepwm)
+
+---
+
+---
+
+## Changelog
+
+### v2.0.0 (2026-05-01)
+- เพิ่ม `BeepStep` struct สำหรับกำหนด on/off ต่อ step อย่างอิสระ
+- เพิ่ม `BuzzerAlertType` enum พร้อม 6 แบบสำเร็จรูป
+- เพิ่ม `Buzzer_PlayPattern()` — blocking pattern player
+- เพิ่ม `Buzzer_PlayPatternAsync()` — non-blocking pattern player
+- เพิ่ม `Buzzer_Alert()` — blocking alert พร้อม duration
+- เพิ่ม `Buzzer_AlertAsync()` — non-blocking infinite alert
+- ขยาย `Buzzer_Update()` รองรับ pattern state machine
+- อัปเดต `Buzzer_Stop()` ให้ clear pattern state ด้วย
+
+### v1.0.0 (2025-12-22)
+- Initial release
 
 ---
 

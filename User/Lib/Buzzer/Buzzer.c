@@ -25,6 +25,15 @@ static struct {
     uint8_t melody_count;     // Current repeat count
     uint32_t note_start_time; // Note start time
     uint8_t initialized;      // Init flag
+
+    // Non-blocking beep pattern playback
+    const BeepStep* pattern;        // Current pattern
+    uint8_t pattern_length;         // Total steps
+    uint8_t pattern_index;          // Current step index
+    uint8_t pattern_repeat;         // Repeat count (0 = infinite)
+    uint8_t pattern_count;          // Current repeat count
+    uint8_t pattern_phase;          // 0 = ON phase, 1 = OFF phase
+    uint32_t pattern_phase_start;   // Timestamp of current phase start
 } buzzer = {0};
 
 /* ========== Private Function Prototypes ========== */
@@ -313,6 +322,60 @@ void Buzzer_Update(void) {
                 start_tone(buzzer.melody[buzzer.melody_index].frequency);
             }
         }
+        return;
+    }
+
+    // Handle beep pattern playback
+    if(buzzer.pattern != NULL && buzzer.state == BUZZER_PLAYING) {
+        uint32_t elapsed = Get_CurrentMs() - buzzer.pattern_phase_start;
+        const BeepStep* step = &buzzer.pattern[buzzer.pattern_index];
+
+        if(buzzer.pattern_phase == 0) {
+            // ON phase
+            if(elapsed >= step->on_ms) {
+                stop_tone();
+                if(step->off_ms == 0) {
+                    // No OFF phase — advance to next step immediately
+                    buzzer.pattern_index++;
+                    if(buzzer.pattern_index >= buzzer.pattern_length) {
+                        buzzer.pattern_index = 0;
+                        buzzer.pattern_count++;
+                        if(buzzer.pattern_repeat != 0 && buzzer.pattern_count >= buzzer.pattern_repeat) {
+                            Buzzer_Off();
+                            buzzer.pattern = NULL;
+                            return;
+                        }
+                    }
+                    // Start next step ON phase
+                    buzzer.pattern_phase = 0;
+                    buzzer.pattern_phase_start = Get_CurrentMs();
+                    start_tone(buzzer.current_freq);
+                } else {
+                    // Move to OFF phase
+                    buzzer.pattern_phase = 1;
+                    buzzer.pattern_phase_start = Get_CurrentMs();
+                }
+            }
+        } else {
+            // OFF phase
+            if(elapsed >= step->off_ms) {
+                // Advance to next step
+                buzzer.pattern_index++;
+                if(buzzer.pattern_index >= buzzer.pattern_length) {
+                    buzzer.pattern_index = 0;
+                    buzzer.pattern_count++;
+                    if(buzzer.pattern_repeat != 0 && buzzer.pattern_count >= buzzer.pattern_repeat) {
+                        Buzzer_Off();
+                        buzzer.pattern = NULL;
+                        return;
+                    }
+                }
+                // Start next step ON phase
+                buzzer.pattern_phase = 0;
+                buzzer.pattern_phase_start = Get_CurrentMs();
+                start_tone(buzzer.current_freq);
+            }
+        }
     }
 }
 
@@ -322,6 +385,10 @@ void Buzzer_Stop(void) {
     Buzzer_Off();
     buzzer.melody = NULL;
     buzzer.melody_length = 0;
+    buzzer.pattern = NULL;
+    buzzer.pattern_length = 0;
+    buzzer.pattern_index = 0;
+    buzzer.pattern_count = 0;
 }
 
 void Buzzer_Pause(void) {
@@ -372,6 +439,99 @@ void Buzzer_FrequencySweep(uint16_t start_freq, uint16_t end_freq,
     }
     
     Buzzer_Off();
+}
+
+/* ========== Beep Pattern & Alert ========== */
+
+/* Pre-defined alert step arrays */
+static const BeepStep _alert_long[]    = {{2000, 0}};
+static const BeepStep _alert_pulse[]   = {{500, 500}};
+static const BeepStep _alert_tremolo[] = {{50, 50}};
+static const BeepStep _alert_double[]  = {{100, 100}, {100, 500}};
+static const BeepStep _alert_triple[]  = {{100, 100}, {100, 100}, {100, 500}};
+static const BeepStep _alert_urgent[]  = {{80, 40}, {80, 40}, {80, 300}};
+
+static const uint8_t _alert_len[] = {1, 1, 1, 2, 3, 3};
+
+static const BeepStep* const _alert_steps[] = {
+    _alert_long,
+    _alert_pulse,
+    _alert_tremolo,
+    _alert_double,
+    _alert_triple,
+    _alert_urgent
+};
+
+void Buzzer_PlayPattern(const BeepStep* steps, uint8_t length, uint8_t repeat) {
+    if(!buzzer.initialized || steps == NULL || length == 0) return;
+
+    uint8_t count = 0;
+    while(repeat == 0 || count < repeat) {
+        for(uint8_t i = 0; i < length; i++) {
+            // ON phase
+            Buzzer_On();
+            Delay_Ms(steps[i].on_ms);
+            Buzzer_Off();
+            // OFF phase
+            if(steps[i].off_ms > 0) {
+                Delay_Ms(steps[i].off_ms);
+            }
+        }
+        if(repeat != 0) {
+            count++;
+        }
+    }
+}
+
+void Buzzer_PlayPatternAsync(const BeepStep* steps, uint8_t length, uint8_t repeat) {
+    if(!buzzer.initialized || steps == NULL || length == 0) return;
+
+    // Stop any melody
+    buzzer.melody = NULL;
+    buzzer.melody_length = 0;
+
+    buzzer.pattern = steps;
+    buzzer.pattern_length = length;
+    buzzer.pattern_index = 0;
+    buzzer.pattern_repeat = repeat;
+    buzzer.pattern_count = 0;
+    buzzer.pattern_phase = 0;  // ON phase first
+    buzzer.pattern_phase_start = Get_CurrentMs();
+    buzzer.state = BUZZER_PLAYING;
+
+    // Start first ON phase
+    start_tone(buzzer.current_freq);
+}
+
+void Buzzer_Alert(BuzzerAlertType type, uint16_t duration_ms) {
+    if(!buzzer.initialized || (uint8_t)type >= 6) return;
+
+    const BeepStep* steps = _alert_steps[type];
+    uint8_t length = _alert_len[type];
+
+    if(duration_ms == 0) {
+        Buzzer_PlayPattern(steps, length, 1);
+        return;
+    }
+
+    uint32_t start = Get_CurrentMs();
+    while((Get_CurrentMs() - start) < duration_ms) {
+        for(uint8_t i = 0; i < length; i++) {
+            if((Get_CurrentMs() - start) >= duration_ms) break;
+            Buzzer_On();
+            Delay_Ms(steps[i].on_ms);
+            Buzzer_Off();
+            if(steps[i].off_ms > 0 && (Get_CurrentMs() - start) < duration_ms) {
+                Delay_Ms(steps[i].off_ms);
+            }
+        }
+    }
+    Buzzer_Off();
+}
+
+void Buzzer_AlertAsync(BuzzerAlertType type) {
+    if(!buzzer.initialized || (uint8_t)type >= 6) return;
+    Buzzer_PlayPatternAsync(_alert_steps[type], _alert_len[type], 0);
 }
 
 /* ========== Pre-defined Patterns ========== */
