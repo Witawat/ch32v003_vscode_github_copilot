@@ -144,6 +144,7 @@ typedef struct {
 
     /* Configuration */
     uint32_t steps_per_rev; /**< Steps ต่อ 1 รอบ */
+    float    linear_mm_per_rev; /**< ระยะเชิงเส้นต่อ 1 รอบ (mm), 0 = ไม่ได้ตั้ง */
     uint32_t speed_rpm;     /**< ความเร็ว (RPM) */
     uint32_t step_delay_us; /**< Delay ระหว่าง step (µs, คำนวณจาก speed_rpm) */
 
@@ -191,6 +192,19 @@ void StepperMotor_InitA4988(StepperMotor_Instance* motor,
                              uint32_t steps_per_rev);
 
 /**
+ * @brief เริ่มต้นมอเตอร์ NEMA17 ผ่าน A4988 (ค่ามาตรฐาน 200 steps/rev)
+ * @param motor ตัวแปร instance
+ * @param step_pin GPIO pin สำหรับ STEP
+ * @param dir_pin  GPIO pin สำหรับ DIR
+ * @param en_pin   GPIO pin สำหรับ EN (ใส่ 0 ถ้าไม่ต้องการใช้)
+ *
+ * @example
+ * StepperMotor_InitA4988NEMA17(&motor, PC0, PC1, PC2);
+ */
+void StepperMotor_InitA4988NEMA17(StepperMotor_Instance* motor,
+                                  uint8_t step_pin, uint8_t dir_pin, uint8_t en_pin);
+
+/**
  * @brief ตั้งค่าความเร็ว (RPM)
  * @param motor ตัวแปร instance
  * @param rpm ความเร็วหน่วย RPM
@@ -234,6 +248,38 @@ void StepperMotor_MoveDegrees(StepperMotor_Instance* motor, int32_t degrees);
  * StepperMotor_MoveRevolutions(&motor, -1);  // หมุน CCW 1 รอบ
  */
 void StepperMotor_MoveRevolutions(StepperMotor_Instance* motor, int32_t revolutions);
+
+/**
+ * @brief ตั้งค่าระยะเชิงเส้นที่มอเตอร์เคลื่อนที่ต่อ 1 รอบ
+ * @param motor ตัวแปร instance
+ * @param mm_per_rev ระยะทางต่อ 1 รอบ (mm) เช่น lead screw 8.0mm/rev
+ *
+ * @note ต้องตั้งค่านี้ก่อนใช้ MoveMm/MmToSteps/StepsToMm
+ */
+void StepperMotor_SetLinearMmPerRev(StepperMotor_Instance* motor, float mm_per_rev);
+
+/**
+ * @brief แปลงระยะทาง (mm) เป็นจำนวน steps
+ * @param motor ตัวแปร instance
+ * @param distance_mm ระยะทาง (mm), บวก=CW, ลบ=CCW
+ * @return จำนวน steps ที่คำนวณได้
+ */
+int32_t StepperMotor_MmToSteps(StepperMotor_Instance* motor, float distance_mm);
+
+/**
+ * @brief แปลงจำนวน steps เป็นระยะทาง (mm)
+ * @param motor ตัวแปร instance
+ * @param steps จำนวน steps
+ * @return ระยะทาง (mm)
+ */
+float StepperMotor_StepsToMm(StepperMotor_Instance* motor, int32_t steps);
+
+/**
+ * @brief หมุนตามระยะทางเชิงเส้น (mm, blocking)
+ * @param motor ตัวแปร instance
+ * @param distance_mm ระยะทางที่ต้องการ (mm), บวก=CW, ลบ=CCW
+ */
+void StepperMotor_MoveMm(StepperMotor_Instance* motor, float distance_mm);
 
 /**
  * @brief Enable motor (เปิด coil, A4988 ดึง EN ลง LOW)

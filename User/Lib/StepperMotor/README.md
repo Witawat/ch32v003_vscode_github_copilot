@@ -33,9 +33,11 @@ Library นี้รองรับ 2 ประเภท driver:
 
 - ✅ รองรับ ULN2003 + 28BYJ-48 (4-wire unipolar)
 - ✅ รองรับ A4988 / DRV8825 / TB6600 (STEP+DIR+EN)
+- ✅ มี init แยกสำหรับ A4988 + NEMA17 โดยตรง
 - ✅ Full Step และ Half Step สำหรับ ULN2003
 - ✅ ควบคุมความเร็วด้วย RPM
 - ✅ หมุนด้วย steps, องศา (degrees), หรือรอบ (revolutions)
+- ✅ หมุนตามระยะเชิงเส้น (mm) พร้อมฟังก์ชันแปลง mm ↔ steps
 - ✅ ติดตามตำแหน่ง (position tracking)
 - ✅ Auto power-off หลังหมุนเสร็จ (ลดความร้อน)
 - ✅ เอกสารภาษาไทยครบถ้วน
@@ -175,7 +177,15 @@ int main(void) {
 }
 ```
 
-### A4988 + NEMA17
+### A4988 Driver (กำหนดเอง)
+
+```c
+// ตัวอย่างกำหนด steps_per_rev เอง (เช่นมี microstepping)
+StepperMotor_InitA4988(&motor, PC0, PC1, PC2, 1600); // 1/8 microstep ของ NEMA17
+StepperMotor_SetSpeed(&motor, 120);
+```
+
+### NEMA17 + A4988 (Preset)
 
 ```c
 #include "SimpleHAL.h"
@@ -187,8 +197,8 @@ int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
 
-    // STEP=PC0, DIR=PC1, EN=PC2, 200 steps/rev (NEMA17 1.8°)
-    StepperMotor_InitA4988(&motor, PC0, PC1, PC2, 200);
+    // STEP=PC0, DIR=PC1, EN=PC2, preset NEMA17 = 200 steps/rev
+    StepperMotor_InitA4988NEMA17(&motor, PC0, PC1, PC2);
     StepperMotor_SetSpeed(&motor, 60);   // 60 RPM
 
     StepperMotor_Enable(&motor);         // เปิด coil ก่อน move
@@ -290,6 +300,44 @@ StepperMotor_InitULN2003(&motor, PC0, PC1, PC2, PC3, STEPPER_HALF_STEP);
 // 2048 steps/rev, มุม 0.176°/step
 ```
 
+### ควบคุมระยะเป็น mm (Linear Motion)
+
+เหมาะกับระบบที่แปลงการหมุนเป็นการเลื่อนเชิงเส้น เช่น lead screw, belt, linear actuator
+
+สูตรที่ library ใช้:
+
+```text
+steps = distance_mm × steps_per_rev / mm_per_rev
+```
+
+ตัวอย่าง 1: Lead screw 8 mm/rev (T8)
+
+```c
+StepperMotor_InitA4988NEMA17(&motor, PC0, PC1, PC2);   // 200 steps/rev
+StepperMotor_SetLinearMmPerRev(&motor, 8.0f);           // 1 รอบ = 8mm
+
+StepperMotor_Enable(&motor);
+StepperMotor_MoveMm(&motor, 40.0f);   // ไปข้างหน้า 40mm
+StepperMotor_MoveMm(&motor, -5.5f);   // ถอยกลับ 5.5mm
+StepperMotor_Disable(&motor);
+```
+
+ตัวอย่าง 2: ตรวจว่า 25mm เท่ากับกี่ steps
+
+```c
+StepperMotor_SetLinearMmPerRev(&motor, 8.0f);
+int32_t s = StepperMotor_MmToSteps(&motor, 25.0f);
+printf("25mm = %ld steps\r\n", s);
+```
+
+ตัวอย่าง 3: แปลงตำแหน่งปัจจุบันเป็น mm
+
+```c
+int32_t pos_steps = StepperMotor_GetPosition(&motor);
+float pos_mm = StepperMotor_StepsToMm(&motor, pos_steps);
+printf("Position: %.2f mm\r\n", pos_mm);
+```
+
 ---
 
 ## Troubleshooting
@@ -353,6 +401,11 @@ StepperMotor_InitULN2003(&motor, PC0, PC1, PC2, PC3, STEPPER_HALF_STEP);
 
 ---
 
+### `StepperMotor_InitA4988NEMA17(motor, step_pin, dir_pin, en_pin)`
+เริ่มต้น motor แบบ NEMA17 + A4988 โดยใช้ค่า preset `200 steps/rev`
+
+---
+
 ### `StepperMotor_SetSpeed(motor, rpm)`
 ตั้งความเร็ว — ULN2003 แนะนำ 1-15 RPM, A4988 แนะนำ 1-300 RPM
 
@@ -370,6 +423,26 @@ StepperMotor_InitULN2003(&motor, PC0, PC1, PC2, PC3, STEPPER_HALF_STEP);
 
 ### `StepperMotor_MoveRevolutions(motor, revolutions)`
 หมุนตามรอบ — บวก=CW, ลบ=CCW (blocking)
+
+---
+
+### `StepperMotor_SetLinearMmPerRev(motor, mm_per_rev)`
+ตั้งค่าระยะเชิงเส้นต่อ 1 รอบ (mm/rev) เช่น lead screw T8 ใช้ `8.0`
+
+---
+
+### `StepperMotor_MmToSteps(motor, distance_mm)` → `int32_t`
+แปลงระยะทาง mm เป็น steps ที่ต้องใช้
+
+---
+
+### `StepperMotor_StepsToMm(motor, steps)` → `float`
+แปลง steps เป็นระยะทาง mm
+
+---
+
+### `StepperMotor_MoveMm(motor, distance_mm)`
+สั่งหมุนเป็นระยะทาง mm โดยตรง — บวก=CW, ลบ=CCW (blocking)
 
 ---
 

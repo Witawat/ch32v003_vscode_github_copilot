@@ -125,6 +125,7 @@ void StepperMotor_InitULN2003(StepperMotor_Instance* motor,
     motor->pin_en       = 0;
     motor->has_en       = 0;
     motor->steps_per_rev = STEPPER_28BYJ48_STEPS_PER_REV;
+    motor->linear_mm_per_rev = 0.0f;
     motor->speed_rpm    = 10;
     motor->phase        = 0;
     motor->position     = 0;
@@ -159,6 +160,7 @@ void StepperMotor_InitA4988(StepperMotor_Instance* motor,
     motor->pin_in3       = 0;
     motor->pin_in4       = 0;
     motor->steps_per_rev = (steps_per_rev > 0) ? steps_per_rev : STEPPER_NEMA17_STEPS_PER_REV;
+    motor->linear_mm_per_rev = 0.0f;
     motor->speed_rpm     = 60;
     motor->phase         = 0;
     motor->position      = 0;
@@ -177,6 +179,11 @@ void StepperMotor_InitA4988(StepperMotor_Instance* motor,
         pinMode(en_pin, PIN_MODE_OUTPUT);
         digitalWrite(en_pin, HIGH); /* HIGH = disable สำหรับ A4988 */
     }
+}
+
+void StepperMotor_InitA4988NEMA17(StepperMotor_Instance* motor,
+                                  uint8_t step_pin, uint8_t dir_pin, uint8_t en_pin) {
+    StepperMotor_InitA4988(motor, step_pin, dir_pin, en_pin, STEPPER_NEMA17_STEPS_PER_REV);
 }
 
 void StepperMotor_SetSpeed(StepperMotor_Instance* motor, uint32_t rpm) {
@@ -216,6 +223,38 @@ void StepperMotor_MoveDegrees(StepperMotor_Instance* motor, int32_t degrees) {
 void StepperMotor_MoveRevolutions(StepperMotor_Instance* motor, int32_t revolutions) {
     if (motor == NULL || !motor->initialized) return;
     int32_t steps = revolutions * (int32_t)motor->steps_per_rev;
+    StepperMotor_Move(motor, steps);
+}
+
+void StepperMotor_SetLinearMmPerRev(StepperMotor_Instance* motor, float mm_per_rev) {
+    if (motor == NULL || !motor->initialized) return;
+    if (mm_per_rev <= 0.0f) {
+        motor->linear_mm_per_rev = 0.0f;
+        return;
+    }
+    motor->linear_mm_per_rev = mm_per_rev;
+}
+
+int32_t StepperMotor_MmToSteps(StepperMotor_Instance* motor, float distance_mm) {
+    if (motor == NULL || !motor->initialized) return 0;
+    if (motor->linear_mm_per_rev <= 0.0f) return 0;
+
+    float steps_f = (distance_mm * (float)motor->steps_per_rev) / motor->linear_mm_per_rev;
+    if (steps_f >= 0.0f) {
+        return (int32_t)(steps_f + 0.5f);
+    }
+    return (int32_t)(steps_f - 0.5f);
+}
+
+float StepperMotor_StepsToMm(StepperMotor_Instance* motor, int32_t steps) {
+    if (motor == NULL || !motor->initialized) return 0.0f;
+    if (motor->linear_mm_per_rev <= 0.0f) return 0.0f;
+    return ((float)steps * motor->linear_mm_per_rev) / (float)motor->steps_per_rev;
+}
+
+void StepperMotor_MoveMm(StepperMotor_Instance* motor, float distance_mm) {
+    if (motor == NULL || !motor->initialized) return;
+    int32_t steps = StepperMotor_MmToSteps(motor, distance_mm);
     StepperMotor_Move(motor, steps);
 }
 
