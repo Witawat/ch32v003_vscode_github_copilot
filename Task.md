@@ -81,6 +81,51 @@
 
 ---
 
+### Phase 7 — Add 6 New Low-Resource Modules
+
+| # | รายการ | สถานะ |
+|---|--------|-------|
+| 7.1 | สร้าง `User/Lib/SoilMoisture_YL69/SoilMoisture.h` | ✅ Done |
+| 7.2 | สร้าง `User/Lib/SoilMoisture_YL69/SoilMoisture.c` | ✅ Done |
+| 7.3 | สร้าง `User/Lib/SoilMoisture_YL69/README.md` | ✅ Done |
+| 7.4 | สร้าง `User/Lib/FlameSensor_KY026/FlameSensor.h` | ✅ Done |
+| 7.5 | สร้าง `User/Lib/FlameSensor_KY026/FlameSensor.c` | ✅ Done |
+| 7.6 | สร้าง `User/Lib/FlameSensor_KY026/README.md` | ✅ Done |
+| 7.7 | สร้าง `User/Lib/SoundSensor_KY038/SoundSensor.h` | ✅ Done |
+| 7.8 | สร้าง `User/Lib/SoundSensor_KY038/SoundSensor.c` | ✅ Done |
+| 7.9 | สร้าง `User/Lib/SoundSensor_KY038/README.md` | ✅ Done |
+| 7.10 | สร้าง `User/Lib/RainSensor_YL83/RainSensor.h` | ✅ Done |
+| 7.11 | สร้าง `User/Lib/RainSensor_YL83/RainSensor.c` | ✅ Done |
+| 7.12 | สร้าง `User/Lib/RainSensor_YL83/README.md` | ✅ Done |
+| 7.13 | สร้าง `User/Lib/WaterFlow_YFS201/WaterFlow.h` | ✅ Done |
+| 7.14 | สร้าง `User/Lib/WaterFlow_YFS201/WaterFlow.c` | ✅ Done |
+| 7.15 | สร้าง `User/Lib/WaterFlow_YFS201/README.md` | ✅ Done |
+| 7.16 | สร้าง `User/Lib/GPS_NEO6M/GPS.h` | ✅ Done |
+| 7.17 | สร้าง `User/Lib/GPS_NEO6M/GPS.c` | ✅ Done |
+| 7.18 | สร้าง `User/Lib/GPS_NEO6M/README.md` | ✅ Done |
+
+**ฟังก์ชัน (SoilMoisture_YL69):** `SoilMoisture_Init`, `SoilMoisture_Read`, `SoilMoisture_ReadRaw`, `SoilMoisture_IsDry`, `SoilMoisture_Calibrate`
+
+**ฟังก์ชัน (FlameSensor_KY026):** `FlameSensor_Init`, `FlameSensor_ReadRaw`, `FlameSensor_ReadIntensity`, `FlameSensor_IsFlameDetected`, `FlameSensor_SetThreshold`
+
+**ฟังก์ชัน (SoundSensor_KY038):** `SoundSensor_Init`, `SoundSensor_ReadRaw`, `SoundSensor_ReadLevel`, `SoundSensor_IsClapDetected`, `SoundSensor_GetPeak`
+
+**ฟังก์ชัน (RainSensor_YL83):** `RainSensor_Init`, `RainSensor_ReadRaw`, `RainSensor_ReadLevel`, `RainSensor_IsRaining`, `RainSensor_GetIntensity`
+
+**ฟังก์ชัน (WaterFlow_YFS201):** `WaterFlow_Init`, `WaterFlow_GetPulseCount`, `WaterFlow_GetFlowRate`, `WaterFlow_GetTotalVolume`, `WaterFlow_Reset`
+
+**ฟังก์ชัน (GPS_NEO6M):** `GPS_Init`, `GPS_Update`, `GPS_IsFixValid`, `GPS_GetLatitude`, `GPS_GetLongitude`, `GPS_GetAltitude`, `GPS_GetSpeed`, `GPS_GetSatellites`, `GPS_GetDateTime`
+
+---
+
+### Phase 7B — Build Verification
+
+| # | รายการ | สถานะ |
+|---|--------|-------|
+| 7.19 | Build ผ่าน (Exit Code: 0) หลังเพิ่ม 6 modules ใหม่ | ✅ Done |
+
+---
+
 ## Git Commit Message
 
 ```
@@ -99,4 +144,24 @@ fix(libs): แก้ไขข้อผิดพลาด SimpleHAL API และ
 - L298N: ควบคุมมอเตอร์ DC พร้อมปรับความเร็วด้วย PWM
 - RC522: อ่าน RFID ผ่าน SPI (REQA, anti-collision, select, halt)
 - PCF8574: ขยาย GPIO ผ่าน I2C แบบ 8-bit quasi-bidirectional
+```
+
+---
+
+```
+feat(libs): เพิ่ม 6 module ใหม่ (Sensor + Flow + GPS) และแผนพัฒนาโปรเจกต์
+
+เพิ่ม library module ใหม่สำหรับ CH32V003/CH32V006:
+- SoilMoisture_YL69: YL-69 Soil Moisture Sensor ผ่าน ADC (0-100%, calibrate ได้)
+- FlameSensor_KY026: KY-026 Flame Sensor ผ่าน ADC + digital (dual mode)
+- SoundSensor_KY038: KY-038 Sound Sensor ผ่าน ADC (clap detection, peak tracking)
+- RainSensor_YL83: YL-83 Rain Sensor ผ่าน ADC (intensity: NONE/LIGHT/MODERATE/HEAVY)
+- WaterFlow_YFS201: YF-S201 Water Flow Sensor ผ่าน GPIO interrupt (L/min, total L)
+- GPS_NEO6M: NEO-6M GPS Module ผ่าน UART (parse $GPGGA/$GPRMC, lat/lon/alt/speed)
+
+เพิ่มไฟล์โปรเจกต์:
+- plan.md: แผนพัฒนาถาวรสำหรับ Copilot agent
+- Task.md: อัปเดต Phase 7 (18 tasks + build verify)
+
+Build: Exit Code 0, 0 warnings, Flash 10% RAM 20%
 ```
