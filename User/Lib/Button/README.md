@@ -34,7 +34,10 @@ Library นี้จัดการทั้งหมดให้อัตโน
 - ✅ Release detection (ปล่อยปุ่ม)
 - ✅ Long Press (กดค้าง, default 800ms, ปรับได้)
 - ✅ Double Click (default window 300ms, ปรับได้)
-- ✅ Callback system (4 events)
+- ✅ Multi Click (3, 4, ... ครั้งติดกัน)
+- ✅ อ่านระยะเวลากดค้างแบบ milliseconds/seconds
+- ✅ Boot Hold detection (กดค้างตั้งแต่เปิดระบบ)
+- ✅ Callback system (6 events)
 - ✅ Polling mode (ไม่ใช้ callback)
 - ✅ รองรับ Active LOW และ Active HIGH
 - ✅ Multi-button สูงสุด 8 ปุ่ม
@@ -204,6 +207,81 @@ Button_SetCallback(&btn, on_single_press, NULL, NULL, on_double_click);
 
 > 💡 **หมายเหตุ**: ถ้าต้องการตรวจจับทั้ง single และ double click พร้อมกัน  
 > single click จะถูกตรวจจับตอนปล่อยปุ่ม, double click จะตามมาถ้ากดอีกภายใน 300ms
+
+### ตรวจสอบว่ากดค้างกี่วินาที
+
+```c
+while (1) {
+    Button_Update(&btn);
+
+    // วัดเวลาค้างแบบ realtime
+    uint32_t hold_ms = Button_GetPressDurationMs(&btn);
+    if (hold_ms >= 3000) {
+        printf("กดค้างเกิน 3 วินาที\r\n");
+        // ทำ action เช่น reset setting
+    }
+
+    // หลังปล่อยปุ่ม อ่านเวลาที่กดครั้งล่าสุด
+    if (Button_GetEvent(&btn) == BUTTON_EVENT_RELEASE) {
+        uint32_t last_ms = Button_GetLastPressDurationMs(&btn);
+        printf("กดค้างล่าสุด: %lu ms\r\n", (unsigned long)last_ms);
+    }
+
+    Delay_Ms(1);
+}
+```
+
+### ตรวจจับกดติดกัน 3 ครั้ง / 4 ครั้ง
+
+```c
+void on_multi_click(uint8_t count) {
+    if (count == 3) {
+        printf("Triple click\r\n");
+        // ทำ action A
+    } else if (count == 4) {
+        printf("Quad click\r\n");
+        // ทำ action B
+    } else {
+        printf("Multi click: %u\r\n", count);
+    }
+}
+
+int main(void) {
+    Button_Init(&btn, PC4, BUTTON_ACTIVE_LOW);
+    Button_SetDoubleClickTime(&btn, 350); // window สำหรับนับคลิกต่อเนื่อง
+
+    Button_SetCallback(&btn, NULL, NULL, NULL, NULL);
+    Button_SetAdvancedCallback(&btn, on_multi_click, NULL);
+
+    while (1) {
+        Button_Update(&btn);
+        Delay_Ms(1);
+    }
+}
+```
+
+### กดค้างตั้งแต่เปิดสวิตช์ (Boot Hold)
+
+```c
+void on_boot_hold(void) {
+    printf("เข้าโหมดตั้งค่า (boot hold)\r\n");
+    // เช่น เข้า calibration mode
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    Button_Init(&btn, PC4, BUTTON_ACTIVE_LOW);
+    Button_SetBootHoldTime(&btn, 2000); // กดค้าง 2 วินาทีตั้งแต่บูต
+    Button_SetAdvancedCallback(&btn, NULL, on_boot_hold);
+
+    while (1) {
+        Button_Update(&btn);
+        Delay_Ms(1);
+    }
+}
+```
 
 ### ควบคุมหลาย ปุ่ม พร้อมกัน
 
@@ -409,6 +487,14 @@ if (ev == BUTTON_EVENT_PRESS) {
 
 ---
 
+### `Button_SetAdvancedCallback(btn, on_multi_click, on_boot_hold)`
+ตั้ง callback ขั้นสูง
+
+- `on_multi_click(count)` จะถูกเรียกเมื่อกดติดกันตั้งแต่ 3 ครั้งขึ้นไป
+- `on_boot_hold()` จะถูกเรียกเมื่อกดค้างตั้งแต่เปิดระบบเกิน `boot_hold_ms`
+
+---
+
 ### `Button_IsPressed(btn)` → `bool`
 ตรวจสอบว่ากดอยู่หรือไม่ (non-blocking, ใช้ใน loop)
 
@@ -434,6 +520,26 @@ if (ev == BUTTON_EVENT_PRESS) {
 
 ---
 
+### `Button_SetBootHoldTime(btn, ms)`
+ตั้งเวลาค้างตั้งแต่เปิดระบบเพื่อ trigger boot-hold event — default: 2000ms
+
+---
+
+### `Button_GetPressDurationMs(btn)` → `uint32_t`
+อ่านระยะเวลาที่กดค้างอยู่ในขณะนี้ (ms)
+
+---
+
+### `Button_GetLastPressDurationMs(btn)` → `uint32_t`
+อ่านระยะเวลาการกดครั้งล่าสุด (ms)
+
+---
+
+### `Button_GetLastClickCount(btn)` → `uint8_t`
+อ่านจำนวนคลิกล่าสุดที่ finalize แล้ว
+
+---
+
 ### `Button_Reset(btn)`
 ล้าง state และ event ทั้งหมด
 
@@ -453,3 +559,5 @@ if (ev == BUTTON_EVENT_PRESS) {
 | `BUTTON_EVENT_RELEASE` | ปล่อยปุ่ม (trailing edge) |
 | `BUTTON_EVENT_LONG_PRESS` | กดค้างเกิน threshold |
 | `BUTTON_EVENT_DOUBLE_CLICK` | กดสองครั้งรวดเร็ว |
+| `BUTTON_EVENT_MULTI_CLICK` | กดติดกันตั้งแต่ 3 ครั้งขึ้นไป |
+| `BUTTON_EVENT_BOOT_HOLD` | กดค้างตั้งแต่เปิดระบบ |
