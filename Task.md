@@ -126,6 +126,36 @@
 
 ---
 
+### Phase 8 — Add 3 New Servo-Related Libraries
+
+| # | รายการ | สถานะ |
+|---|--------|-------|
+| 8.1 | สร้าง `User/Lib/ServoCluster/ServoCluster.h` | ✅ Done |
+| 8.2 | สร้าง `User/Lib/ServoCluster/ServoCluster.c` | ✅ Done |
+| 8.3 | สร้าง `User/Lib/ServoCluster/README.md` | ✅ Done |
+| 8.4 | สร้าง `User/Lib/ESC/ESC.h` | ✅ Done |
+| 8.5 | สร้าง `User/Lib/ESC/ESC.c` | ✅ Done |
+| 8.6 | สร้าง `User/Lib/ESC/README.md` | ✅ Done |
+| 8.7 | สร้าง `User/Lib/ServoTester/ServoTester.h` | ✅ Done |
+| 8.8 | สร้าง `User/Lib/ServoTester/ServoTester.c` | ✅ Done |
+| 8.9 | สร้าง `User/Lib/ServoTester/README.md` | ✅ Done |
+
+**ฟังก์ชัน (ServoCluster):** `Init`, `AddServo`, `MoveTo`, `MoveAll`, `SetEasing`, `SetSpeed`, `Update`, `IsMoving`, `IsAllDone`, `Stop`, `StopAll`
+
+**ฟังก์ชัน (ESC):** `Init`, `Arm`, `SetThrottle`, `SetThrottleMicroseconds`, `Calibrate`, `Stop`, `Disarm`, `IsArmed`
+
+**ฟังก์ชัน (ServoTester):** `Init`, `Sweep`, `FindCenter`, `FindPulseRange`, `SetPulse`, `GetCurrentPulse`
+
+---
+
+### Phase 8B — Build Verification
+
+| # | รายการ | สถานะ |
+|---|--------|-------|
+| 8.10 | Build ผ่าน (Exit Code: 0) หลังเพิ่ม 3 servo modules | ✅ Done |
+
+---
+
 ## Git Commit Message
 
 ```
@@ -162,6 +192,23 @@ feat(libs): เพิ่ม 6 module ใหม่ (Sensor + Flow + GPS) แล�
 เพิ่มไฟล์โปรเจกต์:
 - plan.md: แผนพัฒนาถาวรสำหรับ Copilot agent
 - Task.md: อัปเดต Phase 7 (18 tasks + build verify)
+
+Build: Exit Code 0, 0 warnings, Flash 10% RAM 20%
+```
+
+---
+
+```
+feat(libs): เพิ่ม 3 module ด้าน Servo (Cluster + ESC + Tester)
+
+เพิ่ม library module ใหม่สำหรับ CH32V003/CH32V006:
+- ServoCluster: ควบคุม servo หลายตัวพร้อมกัน non-blocking
+  dual backend (HW-PWM 8ch / PCA9685 16ch)
+  รองรับ 10 easing curves (linear, quad, cubic, sine)
+- ESC: ควบคุม BLDC มอเตอร์ผ่าน ESC มาตรฐาน PWM 50Hz
+  arm/disarm safety, throttle 0-100%, auto-calibrate
+- ServoTester: เครื่องมือ calibrate servo
+  auto-sweep, find center, find pulse range
 
 Build: Exit Code 0, 0 warnings, Flash 10% RAM 20%
 ```

@@ -5,47 +5,41 @@
 
 ---
 
-## 🎯 Current Plan: Add 6 New Low-Resource Modules
+## 🎯 Current Plan: Add 3 New Servo-Related Libraries
 
 **สถานะ:** 🟡 In Progress
 **วันที่เริ่ม:** 2026-05-01
 
-**TL;DR:** Create 6 new libraries for commonly-used low-resource sensors/modules feasible on CH32V003/006 (2KB RAM, 16KB Flash). All follow existing lib patterns from `User/Lib/`.
+**TL;DR:** Create 3 new libraries for servo ecosystem — multi-servo cluster with easing curves (dual backend: hw-PWM/PCA9685), ESC (BLDC controller), and servo calibration tester. All feasible on CH32V003/006.
 
 ---
 
-### Phase 1 — ADC-Based Sensors (4 modules, ทำพร้อมกันได้)
+### Phase 1 — ServoCluster (Multi-Servo + Easing)
 
-| # | Folder | Model | Protocol | RAM |
-|---|--------|-------|----------|-----|
-| 1 | `SoilMoisture_YL69` | YL-69 Soil Moisture | ADC | ~16B |
-| 2 | `FlameSensor_KY026` | KY-026 Flame Sensor | ADC + GPIO | ~16B |
-| 3 | `SoundSensor_KY038` | KY-038 Sound Sensor | ADC | ~16B |
-| 4 | `RainSensor_YL83` | YL-83 Rain Sensor | ADC | ~16B |
+- **Folder:** `User/Lib/ServoCluster/`
+- **Backend:** Dual — `Servo.h` (hardware PWM, 8 ch) หรือ `PCA9685` (I2C, 16 ch)
+- **API:** Init, AddServo, MoveTo(angle, duration, easing), MoveAll, SetEasing, SetSpeed, Update, IsMoving, Stop/StopAll
+- **Easing:** 10 curves (LINEAR, QUAD_IN/OUT/IN_OUT, CUBIC_IN/OUT/IN_OUT, SINE_IN/OUT/IN_OUT)
+- **Template:** PCA9685 (multi-channel) + Servo (pulse) + PIR (state machine non-blocking)
 
-**Template:** `User/Lib/OH49E/OH49E.h` (ADC pattern), `User/Lib/PIR/PIR.h` (ADC+digital pattern)
+### Phase 2 — ESC (BLDC Motor Controller)
 
-### Phase 2 — Interrupt-Based (1 module)
+- **Folder:** `User/Lib/ESC/`
+- **Backend:** SimplePWM 50Hz (1-4 ESCs)
+- **API:** Init, Arm, SetThrottle(0-100%), SetThrottleMicroseconds(us), Calibrate, Stop, Disarm, IsArmed
+- **Template:** Servo (pulse control, calibration pattern)
 
-| # | Folder | Model | Protocol | RAM |
-|---|--------|-------|----------|-----|
-| 5 | `WaterFlow_YFS201` | YF-S201 Water Flow | GPIO Interrupt | ~32B |
+### Phase 3 — ServoTester (Calibration Tool)
 
-**Template:** `User/Lib/RotaryEncoder/RotaryEncoder.h` (interrupt counting)
-
-### Phase 3 — UART-Based (1 module, depends on Phase 1-2)
-
-| # | Folder | Model | Protocol | RAM |
-|---|--------|-------|----------|-----|
-| 6 | `GPS_NEO6M` | NEO-6M GPS | UART | ~256B |
-
-**Template:** `User/Lib/PMS5003/PMS5003.h` (UART parsing)
-**Note:** Uses USART1, same as debug output. Provide option to disable debug during GPS use.
+- **Folder:** `User/Lib/ServoTester/`
+- **Backend:** Servo.h (1 ch)
+- **API:** Init, Sweep(start_us, end_us, step, delay), FindCenter, FindPulseRange, SetPulse, GetCurrentPulse
+- **Template:** Servo (pulse) + I2CScan (diagnostic tool)
 
 ### Phase 4 — Build Verification
 
 - Build ทั้งหมด → exit code 0, no warnings
-- Check pattern compliance: initialized flag, null checks, static internals
+- Memory: +264 bytes RAM, +5.5KB Flash → feasible (free: 1628/14612)
 
 ---
 
