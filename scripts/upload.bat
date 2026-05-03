@@ -9,7 +9,8 @@ set OPENOCD_DIR=C:\MounRiver\MounRiver_Studio2\resources\app\resources\win32\com
 set OPENOCD=%OPENOCD_DIR%\openocd.exe
 set OPENOCD_CFG=%OPENOCD_DIR%\wch-riscv.cfg
 
-set WORKSPACE=%~dp0
+set WORKSPACE=%~dp0..
+for %%I in ("%WORKSPACE%") do set "WORKSPACE=%%~fI"
 set ELF_FILE=%WORKSPACE%output\CH32V003.elf
 
 echo ============================================================

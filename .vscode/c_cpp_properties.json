@@ -11,11 +11,11 @@
       ],
       "defines": [
         "_DEBUG",
-        "UNICODE",
-        "_UNICODE"
+        "CH32V00x",
+        "CH32V003"
       ],
       "intelliSenseMode": "linux-gcc-arm",
-      "compilerPath": "C:/MounRiver/MounRiver_Studio2/resources/app/resources/win32/components/WCH/Toolchain/RISC-V Embedded GCC/bin/riscv-none-embed-gcc.exe",
+      "compilerPath": "C:/MounRiver/MounRiver_Studio2/resources/app/resources/win32/components/WCH/Toolchain/RISC-V Embedded GCC12/bin/riscv-wch-elf-gcc.exe",
       "cStandard": "gnu99",
       "cppStandard": "gnu++11"
     }

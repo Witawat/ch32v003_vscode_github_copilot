@@ -61,7 +61,7 @@ echo       "type": "shell",
 echo       "command": "cmd",
 echo       "args": [
 echo         "/c",
-echo         "${workspaceFolder}\\build.bat"
+echo         "${workspaceFolder}\\scripts\\build.bat"
 echo       ],
 echo       "problemMatcher": {
 echo         "owner": "cpp",
@@ -91,7 +91,7 @@ echo       "type": "shell",
 echo       "command": "cmd",
 echo       "args": [
 echo         "/c",
-echo         "${workspaceFolder}\\clean.bat"
+echo         "${workspaceFolder}\\scripts\\clean.bat"
 echo       ],
 echo       "presentation": {
 echo         "echo": true,
@@ -105,7 +105,7 @@ echo       "type": "shell",
 echo       "command": "cmd",
 echo       "args": [
 echo         "/c",
-echo         "${workspaceFolder}\\rebuild.bat"
+echo         "${workspaceFolder}\\scripts\\rebuild.bat"
 echo       ],
 echo       "presentation": {
 echo         "echo": true,
@@ -119,7 +119,7 @@ echo       "type": "shell",
 echo       "command": "cmd",
 echo       "args": [
 echo         "/c",
-echo         "${workspaceFolder}\\upload.bat"
+echo         "${workspaceFolder}\\scripts\\upload.bat"
 echo       ],
 echo       "presentation": {
 echo         "echo": true,
@@ -189,15 +189,16 @@ echo       "includePath": [
 echo         "${workspaceFolder}/Debug",
 echo         "${workspaceFolder}/Core",
 echo         "${workspaceFolder}/User",
-echo         "${workspaceFolder}/Peripheral/inc"
+echo         "${workspaceFolder}/Peripheral/inc",
+echo         "${workspaceFolder}/User/SimpleHAL"
 echo       ],
 echo       "defines": [
 echo         "_DEBUG",
-echo         "UNICODE",
-echo         "_UNICODE"
+echo         "CH32V00x",
+echo         "CH32V003"
 echo       ],
 echo       "intelliSenseMode": "linux-gcc-arm",
-echo       "compilerPath": "%TOOLCHAIN_BIN%/riscv-none-embed-gcc.exe",
+echo       "compilerPath": "%MOUNRIVER_ROOT%/resources/app/resources/win32/components/WCH/Toolchain/RISC-V Embedded GCC12/bin/riscv-wch-elf-gcc.exe",
 echo       "cStandard": "gnu99",
 echo       "cppStandard": "gnu++11"
 echo     }

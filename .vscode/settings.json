@@ -1,11 +1,3 @@
 {
     "opencodego.commitLanguage": "English",
-    "python.terminal.activateEnvironment": false,
-    "python-envs.pythonProjects": [
-        {
-            "path": "User/Lib",
-            "envManager": "ms-python.python:venv",
-            "packageManager": "ms-python.python:pip"
-        }
-    ]
 }

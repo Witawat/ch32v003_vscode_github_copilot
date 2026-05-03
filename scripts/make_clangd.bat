@@ -10,8 +10,8 @@ title CH32V003 - Generate .clangd
 ::  Usage: .\make_clangd.bat
 :: ============================================================
 
-set "PROJECT_ROOT=%~dp0"
-set "PROJECT_ROOT=%PROJECT_ROOT:~0,-1%"
+set "PROJECT_ROOT=%~dp0.."
+for %%I in ("%PROJECT_ROOT%") do set "PROJECT_ROOT=%%~fI"
 
 echo.
 echo =============================================================

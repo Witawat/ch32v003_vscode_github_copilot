@@ -10,8 +10,8 @@ title CH32V003 - Build
 set TOOLCHAIN_CHOICE=2
 
 :: ============================================================
-set PROJECT_ROOT=%~dp0
-set PROJECT_ROOT=%PROJECT_ROOT:~0,-1%
+set PROJECT_ROOT=%~dp0..
+for %%I in ("%PROJECT_ROOT%") do set "PROJECT_ROOT=%%~fI"
 set OBJ_DIR=%PROJECT_ROOT%\obj
 set OUT_DIR=%PROJECT_ROOT%\output
 set TOOLCHAIN_BASE=C:\MounRiver\MounRiver_Studio2\resources\app\resources\win32\components\WCH\Toolchain
