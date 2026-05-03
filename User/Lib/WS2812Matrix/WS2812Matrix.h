@@ -88,6 +88,22 @@ extern "C" {
 #include <string.h>
 #include <stdlib.h>
 
+/* ==================================================================
+ *  Feature Configuration Macros (overrideable)
+ * ================================================================== */
+
+#ifndef WS2812M_ENABLE_THAI
+#define WS2812M_ENABLE_THAI     1   /**< 1=include Thai fonts, 0=ASCII only */
+#endif
+
+#ifndef WS2812M_ENABLE_EFFECTS
+#define WS2812M_ENABLE_EFFECTS  1   /**< 1=include fade/wipe effects */
+#endif
+
+#ifndef WS2812M_ENABLE_SPRITES
+#define WS2812M_ENABLE_SPRITES  1   /**< 1=include sprite/bitmap functions */
+#endif
+
 /* ========== Configuration (overrideable) ========== */
 
 #ifndef WS2812M_MAX_WIDTH
@@ -317,6 +333,286 @@ void WS2812M_FillCircle(WS2812M_Instance* inst, int16_t x0, int16_t y0,
  */
 uint16_t WS2812M_XYtoIndex(uint8_t x, uint8_t y, uint8_t width,
                            WS2812M_Wiring wiring);
+
+/* ==================================================================
+ *  Text Rendering (ต้อง include WS2812M_Fonts.h ด้วย)
+ * ================================================================== */
+
+/**
+ * @brief วาดตัวอักษร ASCII 5x7
+ * @param inst ตัวชี้ไปยัง WS2812M_Instance
+ * @param x พิกัด X
+ * @param y พิกัด Y
+ * @param c ตัวอักษร (32-126)
+ * @param r Red (0-255)
+ * @param g Green (0-255)
+ * @param b Blue (0-255)
+ * @return ความกว้างของตัวอักษร (pixels) รวม spacing
+ *
+ * @example
+ * WS2812M_DrawChar(&matrix, 0, 0, 'A', 255, 0, 0);
+ * WS2812M_Show(&matrix);
+ */
+uint8_t WS2812M_DrawChar(WS2812M_Instance* inst, int16_t x, int16_t y,
+                         char c, uint8_t r, uint8_t g, uint8_t b);
+
+/**
+ * @brief วาดตัวอักษร ASCII ด้วย 32-bit color
+ */
+uint8_t WS2812M_DrawCharColor(WS2812M_Instance* inst, int16_t x, int16_t y,
+                              char c, uint32_t color);
+
+/**
+ * @brief วาดข้อความ ASCII
+ * @param inst ตัวชี้ไปยัง WS2812M_Instance
+ * @param x พิกัด X เริ่มต้น
+ * @param y พิกัด Y
+ * @param text ข้อความ (null-terminated)
+ * @param r Red
+ * @param g Green
+ * @param b Blue
+ * @return ความกว้างรวม (pixels)
+ *
+ * @example
+ * WS2812M_DrawText(&matrix, 0, 0, "Hello!", 0, 255, 0);
+ * WS2812M_Show(&matrix);
+ */
+uint16_t WS2812M_DrawText(WS2812M_Instance* inst, int16_t x, int16_t y,
+                          const char* text, uint8_t r, uint8_t g, uint8_t b);
+
+/**
+ * @brief วาดข้อความ ASCII ด้วย 32-bit color
+ */
+uint16_t WS2812M_DrawTextColor(WS2812M_Instance* inst, int16_t x, int16_t y,
+                               const char* text, uint32_t color);
+
+#if (WS2812M_ENABLE_THAI)
+
+/**
+ * @brief วาดตัวอักษรไทย 8x8 (UTF-8 encoded)
+ * @param inst ตัวชี้ไปยัง WS2812M_Instance
+ * @param x พิกัด X
+ * @param y พิกัด Y
+ * @param thai_char ตัวอักษรไทย UTF-8 (3 bytes)
+ * @param color สี 32-bit
+ * @return ความกว้าง (8 pixels) หรือ 0 ถ้าไม่พบฟอนต์
+ *
+ * @example
+ * WS2812M_DrawCharThai(&matrix, 0, 0, "ก", COLOR_BLUE);
+ * WS2812M_Show(&matrix);
+ */
+uint8_t WS2812M_DrawCharThai(WS2812M_Instance* inst, int16_t x, int16_t y,
+                             const char* thai_char, uint32_t color);
+
+/**
+ * @brief วาดข้อความภาษาไทย (UTF-8, รองรับผสมภาษาอังกฤษ)
+ * @param inst ตัวชี้ไปยัง WS2812M_Instance
+ * @param x พิกัด X เริ่มต้น
+ * @param y พิกัด Y
+ * @param text ข้อความ UTF-8 (null-terminated)
+ * @param color สี 32-bit
+ * @return ความกว้างรวม
+ *
+ * @example
+ * WS2812M_DrawTextThai(&matrix, 0, 0, "สวัสดี", COLOR_CYAN);
+ * WS2812M_Show(&matrix);
+ */
+uint16_t WS2812M_DrawTextThai(WS2812M_Instance* inst, int16_t x, int16_t y,
+                              const char* text, uint32_t color);
+
+#endif /* WS2812M_ENABLE_THAI */
+
+/**
+ * @brief คำนวณความกว้างของข้อความ (pixels)
+ * @param text ข้อความ (ASCII หรือ UTF-8)
+ * @return ความกว้างรวม
+ *
+ * @example
+ * uint16_t w = WS2812M_GetTextWidth("Hello");
+ */
+uint16_t WS2812M_GetTextWidth(const char* text);
+
+/* ==================================================================
+ *  Scrolling Text
+ * ================================================================== */
+
+/**
+ * @brief โครงสร้างสำหรับ Scrolling Text
+ */
+typedef struct {
+    char     text[128];      /**< ข้อความที่จะเลื่อน */
+    int16_t  position;       /**< ตำแหน่งปัจจุบัน */
+    uint32_t color;          /**< สีของข้อความ */
+    uint16_t speed;          /**< ความเร็ว (ms ต่อ step) */
+    uint32_t last_update;    /**< เวลาอัพเดตล่าสุด (ms) */
+    bool     active;         /**< เปิด/ปิด scrolling */
+    bool     vertical;       /**< true=แนวตั้ง, false=แนวนอน */
+} WS2812M_ScrollText;
+
+/**
+ * @brief เริ่มต้น scrolling text
+ * @param scroll ตัวชี้ไปยัง WS2812M_ScrollText
+ * @param text ข้อความ
+ * @param color สี 32-bit
+ * @param speed ความเร็ว (ms ต่อ step)
+ * @param vertical true=แนวตั้ง, false=แนวนอน
+ *
+ * @example
+ * WS2812M_ScrollText scroll;
+ * WS2812M_ScrollTextInit(&scroll, "Hello", COLOR_RED, 100, false);
+ */
+void WS2812M_ScrollTextInit(WS2812M_ScrollText* scroll, const char* text,
+                            uint32_t color, uint16_t speed, bool vertical);
+
+/**
+ * @brief อัปเดต scrolling text (เรียกใน loop)
+ * @param inst ตัวชี้ไปยัง WS2812M_Instance
+ * @param scroll ตัวชี้ไปยัง WS2812M_ScrollText
+ * @param y แถว Y ที่แสดง (สำหรับแนวนอน)
+ * @return true=มีการอัปเดต, false=ยังไม่ถึงเวลา
+ *
+ * @example
+ * // ใน while(1):
+ * WS2812M_ScrollTextUpdate(&matrix, &scroll, 0);
+ */
+bool WS2812M_ScrollTextUpdate(WS2812M_Instance* inst,
+                              WS2812M_ScrollText* scroll, int16_t y);
+
+/**
+ * @brief หยุด scrolling text
+ * @param scroll ตัวชี้ไปยัง WS2812M_ScrollText
+ */
+void WS2812M_ScrollTextStop(WS2812M_ScrollText* scroll);
+
+/* ==================================================================
+ *  Sprite / Bitmap
+ * ================================================================== */
+
+#if (WS2812M_ENABLE_SPRITES)
+
+/**
+ * @brief โครงสร้าง Sprite
+ */
+typedef struct {
+    uint8_t         width;              /**< ความกว้าง (px) */
+    uint8_t         height;             /**< ความสูง (px) */
+    const uint32_t* data;               /**< ข้อมูลสี (array ของ 0xRRGGBB) */
+    bool            has_transparency;   /**< มี transparency หรือไม่ */
+    uint32_t        transparent_color;  /**< สีที่ถือว่าโปร่งใส */
+} WS2812M_Sprite;
+
+/**
+ * @brief วาด Sprite
+ * @param inst ตัวชี้ไปยัง WS2812M_Instance
+ * @param x พิกัด X
+ * @param y พิกัด Y
+ * @param sprite ตัวชี้ไปยัง Sprite
+ *
+ * @example
+ * const uint32_t heart[] = { 0, RED, RED, 0, RED, RED, RED, RED, ... };
+ * WS2812M_Sprite spr = { 4, 4, heart, false, 0 };
+ * WS2812M_DrawSprite(&matrix, 2, 2, &spr);
+ */
+void WS2812M_DrawSprite(WS2812M_Instance* inst, int16_t x, int16_t y,
+                        const WS2812M_Sprite* sprite);
+
+/**
+ * @brief วาด Bitmap (1-bit monochrome)
+ * @param inst ตัวชี้ไปยัง WS2812M_Instance
+ * @param x พิกัด X
+ * @param y พิกัด Y
+ * @param bitmap ข้อมูล bitmap (1 bit per pixel, MSB-first)
+ * @param w ความกว้าง
+ * @param h ความสูง
+ * @param color สี 32-bit
+ *
+ * @example
+ * const uint8_t arrow[] = { 0x08, 0x0C, 0xFE, 0x0C, 0x08 };
+ * WS2812M_DrawBitmap(&matrix, 2, 2, arrow, 8, 5, COLOR_GREEN);
+ */
+void WS2812M_DrawBitmap(WS2812M_Instance* inst, int16_t x, int16_t y,
+                        const uint8_t* bitmap, uint8_t w, uint8_t h,
+                        uint32_t color);
+
+#endif /* WS2812M_ENABLE_SPRITES */
+
+/* ==================================================================
+ *  Effects (blocking — ใช้ Delay_Ms ภายใน)
+ * ================================================================== */
+
+#if (WS2812M_ENABLE_EFFECTS)
+
+/**
+ * @brief Fade In — ค่อยๆ เพิ่มความสว่าง
+ * @param inst ตัวชี้ไปยัง WS2812M_Instance
+ * @param duration_ms ระยะเวลาทั้งหมด (ms)
+ * @param steps จำนวนขั้น
+ *
+ * @note ฟังก์ชันนี้เป็น blocking — ใช้ Delay_Ms ภายใน
+ *
+ * @example
+ * WS2812M_FadeIn(&matrix, 500, 10);
+ */
+void WS2812M_FadeIn(WS2812M_Instance* inst, uint16_t duration_ms,
+                    uint8_t steps);
+
+/**
+ * @brief Fade Out — ค่อยๆ ลดความสว่าง
+ * @param inst ตัวชี้ไปยัง WS2812M_Instance
+ * @param duration_ms ระยะเวลาทั้งหมด (ms)
+ * @param steps จำนวนขั้น
+ */
+void WS2812M_FadeOut(WS2812M_Instance* inst, uint16_t duration_ms,
+                     uint8_t steps);
+
+/**
+ * @brief Wipe Transition — ค่อยๆ เติมสีจากซ้ายไปขวา
+ * @param inst ตัวชี้ไปยัง WS2812M_Instance
+ * @param color สี 32-bit
+ * @param delay_ms หน่วงเวลาต่อคอลัมน์
+ */
+void WS2812M_WipeTransition(WS2812M_Instance* inst, uint32_t color,
+                            uint16_t delay_ms);
+
+/**
+ * @brief Slide Transition — ค่อยๆ เติมสีจากบนลงล่าง
+ * @param inst ตัวชี้ไปยัง WS2812M_Instance
+ * @param color สี 32-bit
+ * @param delay_ms หน่วงเวลาต่อแถว
+ */
+void WS2812M_SlideTransition(WS2812M_Instance* inst, uint32_t color,
+                             uint16_t delay_ms);
+
+#endif /* WS2812M_ENABLE_EFFECTS */
+
+/* ==================================================================
+ *  Buffer Utilities
+ * ================================================================== */
+
+/**
+ * @brief หมุน buffer 90° ตามเข็มนาฬิกา
+ * @param inst ตัวชี้ไปยัง WS2812M_Instance
+ * @note ใช้ได้เฉพาะ square matrix (width == height)
+ */
+void WS2812M_Rotate90CW(WS2812M_Instance* inst);
+
+/**
+ * @brief หมุน buffer 90° ทวนเข็มนาฬิกา
+ * @param inst ตัวชี้ไปยัง WS2812M_Instance
+ */
+void WS2812M_Rotate90CCW(WS2812M_Instance* inst);
+
+/**
+ * @brief สะท้อน buffer แนวนอน (ซ้าย↔ขวา)
+ * @param inst ตัวชี้ไปยัง WS2812M_Instance
+ */
+void WS2812M_FlipHorizontal(WS2812M_Instance* inst);
+
+/**
+ * @brief สะท้อน buffer แนวตั้ง (บน↔ล่าง)
+ * @param inst ตัวชี้ไปยัง WS2812M_Instance
+ */
+void WS2812M_FlipVertical(WS2812M_Instance* inst);
 
 #ifdef __cplusplus
 }
