@@ -239,6 +239,8 @@ uint8_t rx = SPI_Transfer(0xAA);
 | `OLED`        | SSD1306 OLED 128×64           | I2C        |
 | `LCD1602_I2C` | LCD 16×2 พร้อม PCF8574 I2C   | I2C        |
 | `MAX7219`     | 7-segment/LED matrix driver   | SPI        |
+| `WS2812Matrix`| WS2812 8x8 Matrix (new API)   | Bit-bang   |
+| `P10`         | P10 LED Panel Display         | GPIO       |
 | `TM1637`      | 4-digit 7-segment display     | Custom 2-wire |
 | `DS18B20`     | Digital temperature sensor    | 1-Wire     |
 | `NTC10K`      | NTC thermistor temperature    | ADC        |
@@ -907,6 +909,8 @@ Code ต้องเป็น complete example ที่ compile และรั
 | TJC | ✅ เสร็จ | USART | TJC/Nextion HMI |
 | TM1637 | ✅ เสร็จ | Custom 2-wire | 4/6-digit 7-seg |
 | WS2815Matrix | ✅ เสร็จ | Bit-bang | 8x8 matrix, Thai font |
+| WS2812Matrix | ✅ เสร็จ | Bit-bang | 8x8 matrix, new API, fonts, effects |
+| P10 | ✅ เสร็จ | GPIO | LED panel, Single/Dual/RGB, timer scan |
 | DHT | ✅ เสร็จ | Bit-bang | DHT11/DHT22, CRC |
 | HCSR04 | ✅ เสร็จ | GPIO | Echo timing, average |
 | Servo | ✅ เสร็จ | PWM 50Hz | 0-180°, SweepTo |

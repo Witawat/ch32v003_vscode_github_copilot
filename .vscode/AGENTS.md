@@ -377,7 +377,7 @@ For detailed information, refer to these files:
 As of 2026-05-01, **50+ device libraries** are available:
 
 ### Phase 1 (Basic Sensors)
-✅ DHT, HCSR04, Servo, Button, Buzzer, DS18B20, IR, LCD1602_I2C, MAX7219, NeoPixel, NTC10K, OLED, PIR, RotaryEncoder, TJC, TM1637, WS2815Matrix
+✅ DHT, HCSR04, Servo, Button, Buzzer, DS18B20, IR, LCD1602_I2C, MAX7219, NeoPixel, NTC10K, OLED, PIR, RotaryEncoder, TJC, TM1637, WS2815Matrix, WS2812Matrix, P10
 
 ### Phase 2 (Advanced Modules)
 ✅ StepperMotor, ShiftReg595, AT24Cxx, DS3231, HX711

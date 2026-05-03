@@ -156,6 +156,50 @@
 
 ---
 
+### Phase 9 — P10 LED Display Library (2026-05-03)
+
+| # | รายการ | สถานะ |
+|---|--------|-------|
+| 9.1 | สร้าง `User/Lib/P10/P10.h` | ✅ Done |
+| 9.2 | สร้าง `User/Lib/P10/P10.c` | ✅ Done |
+| 9.3 | สร้าง `User/Lib/P10/README.md` | ✅ Done |
+
+**ฟังก์ชัน:** P10 LED Matrix Panel Driver — Single/Dual/RGB color, timer ISR scan, configurable resolution
+
+---
+
+### Phase 10 — WS2812Matrix Library (2026-05-03)
+
+| # | รายการ | สถานะ |
+|---|--------|-------|
+| 10.1 | สร้าง `User/Lib/WS2812Matrix/WS2812Matrix.h` | ✅ Done |
+| 10.2 | สร้าง `User/Lib/WS2812Matrix/WS2812Matrix.c` | ✅ Done |
+| 10.3 | สร้าง `User/Lib/WS2812Matrix/WS2812M_Fonts.h` | ✅ Done |
+| 10.4 | สร้าง `User/Lib/WS2812Matrix/README.md` | ✅ Done |
+| 10.5 | เพิ่ม font rendering + text display (v1.1) | ✅ Done |
+| 10.6 | เพิ่ม sprite/bitmap + effects + buffer utils (v1.1) | ✅ Done |
+
+**ฟังก์ชัน:** WS2812 8x8 LED Matrix — Instance struct + SimpleGPIO, Zigzag/Snake, Drawing primitives, ASCII + Thai fonts, Scrolling text, Sprites, Effects, Buffer utilities
+
+---
+
+### Phase 11 — MAX7219 v1.1 Upgrade (2026-05-03)
+
+| # | รายการ | สถานะ |
+|---|--------|-------|
+| 11.1 | สร้าง `User/Lib/MAX7219/max7219_fonts_thai.h` | ✅ Done |
+| 11.2 | อัปเดต `MAX7219.h` — เพิ่ม API + config macros | ✅ Done |
+| 11.3 | อัปเดต `MAX7219.c` — เพิ่ม implementation | ✅ Done |
+| 11.4 | อัปเดต `README.md` + `MAX7219_Documentation_TH.md` | ✅ Done |
+
+**ฟังก์ชัน:** Thai UTF-8 rendering (DrawCharThai/DrawStringThai), Vertical scrolling, Wipe effects (4 dirs), Blink, Sparkle, MarqueeBorder, RainEffect, RunningLight, Buffer utilities (Shift, ScrollBuffer, ProgressBar), Config macros
+
+---
+
+### Phase 11B — Build Verification
+
+---
+
 ## Git Commit Message
 
 ```

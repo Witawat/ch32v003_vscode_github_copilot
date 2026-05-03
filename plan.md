@@ -5,29 +5,35 @@
 
 ---
 
-## 🎯 Current Plan: Add 3 New Servo-Related Libraries
+## ✅ Completed — 2026-05-03
 
-**สถานะ:** 🟡 In Progress
-**วันที่เริ่ม:** 2026-05-01
+### P10 LED Matrix Display Library
+- **Folder:** `User/Lib/P10/`
+- รองรับ Single/Dual/RGB color (compile-time config)
+- Timer interrupt scan (TIM2), configurable resolution (32×16 / 16×16)
+- Frame buffer 1-bit per pixel per color
+- API: Init, SetPixel, Clear, Fill, Deinit, ScanHandler
 
-**TL;DR:** Create 3 new libraries for servo ecosystem — multi-servo cluster with easing curves (dual backend: hw-PWM/PCA9685), ESC (BLDC controller), and servo calibration tester. All feasible on CH32V003/006.
+### WS2812 8×8 LED Matrix Library
+- **Folder:** `User/Lib/WS2812Matrix/`
+- Instance struct + SimpleGPIO pins pattern
+- 2 wiring patterns: Zigzag + Snake
+- Drawing primitives (line, rect, circle)
+- **v1.1:** Font rendering (ASCII 5x7 + Thai 8x8 + UTF-8), Scrolling text, Sprite/Bitmap, Effects (fade/wipe), Buffer utilities (rotate/flip)
+
+### MAX7219 v1.0 → v1.1 Upgrade
+- **Folder:** `User/Lib/MAX7219/`
+- Thai UTF-8 rendering (DrawCharThai, DrawStringThai) — 44 consonants + Thai digits
+- New effects: Wipe (4 dirs), Blink, Sparkle, MarqueeBorder, RainEffect, RunningLight
+- Vertical scrolling, Buffer utilities (Shift, ScrollBuffer, ProgressBar)
+- Config macros (MAX7219_ENABLE_THAI_FULL, MAX7219_ENABLE_EFFECTS)
 
 ---
 
-### Phase 1 — ServoCluster (Multi-Servo + Easing)
+## 🎯 Current Plan: None (Completed all scheduled work)
 
-- **Folder:** `User/Lib/ServoCluster/`
-- **Backend:** Dual — `Servo.h` (hardware PWM, 8 ch) หรือ `PCA9685` (I2C, 16 ch)
-- **API:** Init, AddServo, MoveTo(angle, duration, easing), MoveAll, SetEasing, SetSpeed, Update, IsMoving, Stop/StopAll
-- **Easing:** 10 curves (LINEAR, QUAD_IN/OUT/IN_OUT, CUBIC_IN/OUT/IN_OUT, SINE_IN/OUT/IN_OUT)
-- **Template:** PCA9685 (multi-channel) + Servo (pulse) + PIR (state machine non-blocking)
-
-### Phase 2 — ESC (BLDC Motor Controller)
-
-- **Folder:** `User/Lib/ESC/`
-- **Backend:** SimplePWM 50Hz (1-4 ESCs)
-- **API:** Init, Arm, SetThrottle(0-100%), SetThrottleMicroseconds(us), Calibrate, Stop, Disarm, IsArmed
-- **Template:** Servo (pulse control, calibration pattern)
+**สถานะ:** ✅ Done
+**วันที่:** 2026-05-03
 
 ### Phase 3 — ServoTester (Calibration Tool)
 

@@ -140,14 +140,16 @@ int main(void) {
 | **DS18B20** | 1-Wire Temperature Sensor |
 | **IR** | Infrared Remote Receiver (NEC Protocol) |
 | **LCD1602_I2C** | LCD 16x2 ผ่าน I2C (PCF8574) |
-| **MAX7219** | LED Matrix / 7-Segment Display Driver |
+| **MAX7219** | LED Matrix / 7-Segment Display Driver (v1.1: Thai UTF-8 + Effects) |
 | **NeoPixel** | WS2812B RGB LED Strip |
 | **NTC10K** | Thermistor Temperature Sensor (10kΩ NTC) |
 | **OLED** | SSD1306 OLED Display (I2C) พร้อม Fonts, Graphics, Menu |
+| **P10** | P10 LED Panel Driver (Single/Dual/RGB, timer scan) |
 | **PIR** | PIR Motion Sensor |
 | **RotaryEncoder** | Rotary Encoder พร้อม Button |
 | **TJC** | TJC/Nextion HMI Display |
 | **TM1637** | TM1637 4-Digit 7-Segment Display |
+| **WS2812Matrix** | WS2812 8×8 LED Matrix (Instance struct, fonts, effects) |
 | **WS2815Matrix** | WS2815 12V RGB LED Matrix |
 
 ---
