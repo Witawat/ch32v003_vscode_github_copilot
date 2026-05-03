@@ -10,9 +10,10 @@
 6. [กราฟิกขั้นสูง](#กราฟิกขั้นสูง)
 7. [Animation และ Sprite](#animation-และ-sprite)
 8. [เทคนิคขั้นสูง](#เทคนิคขั้นสูง)
-9. [API Reference](#api-reference)
-10. [การแก้ปัญหา](#การแก้ปัญหา)
-11. [ตัวอย่างโปรเจกต์](#ตัวอย่างโปรเจกต์)
+9. [🆕 ฟีเจอร์ใหม่ (v1.1)](#-ฟีเจอร์ใหม่-v11)
+10. [API Reference](#api-reference)
+11. [การแก้ปัญหา](#การแก้ปัญหา)
+12. [ตัวอย่างโปรเจกต์](#ตัวอย่างโปรเจกต์)
 
 ---
 
@@ -47,8 +48,9 @@ Library นี้ให้ฟังก์ชันครบถ้วนสำห
 
 **ข้อความ:**
 - รองรับ ASCII font (5x7 และ 8x8)
-- รองรับตัวอักษรไทย (5x7)
-- Scrolling text (horizontal)
+- รองรับตัวอักษรไทย UTF-8 (8x8, 44 พยัญชนะ + เลขไทย) **[v1.1]**
+- รองรับตัวอักษรไทย (5x7 — ดั้งเดิม)
+- Scrolling text (horizontal + vertical) **[v1.1]**
 - Multiple fonts
 
 **ขั้นสูง:**
@@ -56,7 +58,11 @@ Library นี้ให้ฟังก์ชันครบถ้วนสำห
 - Sprite system พร้อม transparency
 - Non-blocking updates
 - Cascaded displays (1-8 matrices)
-- Fade in/out effects
+- Fade in/out, Invert effects
+- Wipe effects (4 ทิศทาง) **[v1.1]**
+- Blink, Sparkle, Marquee, Rain, Running Light effects **[v1.1]**
+- Buffer utilities (Shift, Scroll, Progress Bar) **[v1.1]**
+- Config macros สำหรับประหยัด Flash **[v1.1]**
 
 ---
 
@@ -499,7 +505,102 @@ MAX7219_Update(display);
 
 ---
 
-## API Reference
+## 🆕 ฟีเจอร์ใหม่ (v1.1)
+
+### การแสดงข้อความภาษาไทยด้วย UTF-8
+
+ฟังก์ชัน `MAX7219_DrawCharThai()` และ `MAX7219_DrawStringThai()` รองรับการแสดงข้อความภาษาไทย
+โดยใช้ฟอนต์ 8x8 ที่อ่านง่ายกว่ารุ่นเดิม (5x7)
+
+**ข้อแตกต่างจากรุ่นเก่า:**
+- ของเก่า `DrawChar()` + `font_thai_5x7` — ไม่รองรับ UTF-8 จริง (Char 8-bit ไม่พอ)
+- ของใหม่ `DrawStringThai()` — รองรับ UTF-8 3-byte, ผสมไทย-อังกฤษได้
+
+```c
+#include "max7219_fonts_thai.h"  // ต้อง include
+
+// ข้อความภาษาไทย
+MAX7219_DrawStringThai(display, 0, 0, "สวัสดี", 8);
+MAX7219_Update(display);
+
+// ผสมไทย-อังกฤษ
+MAX7219_DrawStringThai(display, 0, 0, "Hello สวัสดี", 8);
+MAX7219_Update(display);
+```
+
+### Wipe Effects
+
+```c
+// เติมคอลัมน์จากซ้ายไปขวา
+MAX7219_WipeLeft(display, 30);   // 30ms ต่อคอลัมน์
+
+// เติมคอลัมน์จากขวาไปซ้าย
+MAX7219_WipeRight(display, 30);
+
+// เติมแถวจากบนลงล่าง
+MAX7219_WipeUp(display, 30);
+
+// เติมแถวจากล่างขึ้นบน
+MAX7219_WipeDown(display, 30);
+```
+
+### Other Effects
+
+```c
+// กระพริบ 3 ครั้ง
+MAX7219_Blink(display, 3, 200, 200);
+
+// Sparkle (เปิดปิด pixels สุ่ม) 2 วินาที ที่ density 10%
+MAX7219_Sparkle(display, 2000, 10);
+
+// แสงวิ่งรอบขอบ 2 รอบ
+MAX7219_MarqueeBorder(display, 50, 2);
+
+// ฝนตก 3 วินาที
+MAX7219_RainEffect(display, 3000, 100);
+
+// จุดวิ่งรอบขอบ (non-blocking, เรียกใน main loop)
+// MAX7219_RunningLight(display, 100); // infinite loop
+```
+
+### Vertical Scrolling
+
+```c
+MAX7219_StartScrollTextVertical(display, "ข้อความ", 100);
+while(MAX7219_UpdateScroll(display)) {
+    // Non-blocking — ทำอย่างอื่นได้
+}
+```
+
+### Buffer Utilities
+
+```c
+// Shift buffer ซ้าย 1 pixel
+MAX7219_ShiftLeft(display, 1);
+MAX7219_Update(display);
+
+// Progress bar 75% (แนวนอน)
+MAX7219_ProgressBar(display, 75, false);
+MAX7219_Update(display);
+
+// Progress bar แนวตั้ง
+MAX7219_ProgressBar(display, 50, true);
+MAX7219_Update(display);
+```
+
+### Config Macros (ประหยัด Flash)
+
+```c
+// ปิด Thai 8x8 font — ประหยัด ~600B Flash
+#define MAX7219_ENABLE_THAI_FULL  0
+
+// ปิด Effects — ประหยัด ~600B Flash
+#define MAX7219_ENABLE_EFFECTS    0
+
+#include "MAX7219.h"
+```
+
+---
 
 ### Initialization Functions
 
@@ -675,6 +776,108 @@ void MAX7219_FadeOut(MAX7219_Handle* handle, uint16_t duration);
 ```c
 void MAX7219_Invert(MAX7219_Handle* handle);
 ```
+
+---
+
+### 🆕 Thai Text Functions (UTF-8) **[v1.1]**
+
+#### `MAX7219_DrawCharThai()`
+```c
+uint8_t MAX7219_DrawCharThai(MAX7219_Handle* handle, int16_t x, int16_t y,
+                             const char* thai_char, uint8_t intensity);
+```
+วาดตัวอักษรไทย 1 ตัว (UTF-8, 3 bytes) ด้วย intensity 0-15
+
+#### `MAX7219_DrawStringThai()`
+```c
+uint16_t MAX7219_DrawStringThai(MAX7219_Handle* handle, int16_t x, int16_t y,
+                                const char* text, uint8_t intensity);
+```
+วาดข้อความภาษาไทย (UTF-8, รองรับผสมภาษาอังกฤษ) — ต้อง `#include "max7219_fonts_thai.h"`
+
+---
+
+### 🆕 Effects (เพิ่มจาก v1.1)
+
+#### `MAX7219_WipeLeft()` / `WipeRight()` / `WipeUp()` / `WipeDown()`
+```c
+void MAX7219_WipeLeft(MAX7219_Handle* handle, uint16_t delay_ms);
+void MAX7219_WipeRight(MAX7219_Handle* handle, uint16_t delay_ms);
+void MAX7219_WipeUp(MAX7219_Handle* handle, uint16_t delay_ms);
+void MAX7219_WipeDown(MAX7219_Handle* handle, uint16_t delay_ms);
+```
+Wipe effect — ค่อยๆ เติม pixels จากทิศทางที่กำหนด (blocking)
+
+#### `MAX7219_Blink()`
+```c
+void MAX7219_Blink(MAX7219_Handle* handle, uint16_t count,
+                   uint16_t on_ms, uint16_t off_ms);
+```
+กระพริบ display `count` ครั้ง (blocking)
+
+#### `MAX7219_Sparkle()`
+```c
+void MAX7219_Sparkle(MAX7219_Handle* handle, uint16_t duration_ms,
+                     uint8_t density);
+```
+เปิด/ปิด pixels แบบสุ่มตาม density (0-100%) (blocking)
+
+#### `MAX7219_MarqueeBorder()`
+```c
+void MAX7219_MarqueeBorder(MAX7219_Handle* handle, uint16_t speed_ms,
+                           uint8_t rounds);
+```
+จุดวิ่งรอบขอบ display `rounds` รอบ (0 = ไม่มีที่สิ้นสุด) (blocking)
+
+#### `MAX7219_RainEffect()`
+```c
+void MAX7219_RainEffect(MAX7219_Handle* handle, uint16_t duration_ms,
+                        uint16_t speed_ms);
+```
+ฝนตกจากบนลงล่าง (blocking)
+
+#### `MAX7219_RunningLight()`
+```c
+void MAX7219_RunningLight(MAX7219_Handle* handle, uint16_t speed_ms);
+```
+จุดวิ่งรอบขอบตลอด (infinite loop — ใช้ด้วยความระมัดระวัง)
+
+---
+
+### 🆕 Vertical Scrolling **[v1.1]**
+
+#### `MAX7219_StartScrollTextVertical()`
+```c
+void MAX7219_StartScrollTextVertical(MAX7219_Handle* handle, const char* text,
+                                     uint16_t scroll_delay);
+```
+เริ่มเลื่อนข้อความแนวตั้ง (ล่างขึ้นบน) — ใช้ `MAX7219_UpdateScroll()` เช่นเดียวกับ horizontal
+
+---
+
+### 🆕 Buffer Utilities **[v1.1]**
+
+#### `MAX7219_ShiftLeft()` / `ShiftRight()` / `ShiftUp()` / `ShiftDown()`
+```c
+void MAX7219_ShiftLeft(MAX7219_Handle* handle, uint8_t pixels);
+void MAX7219_ShiftRight(MAX7219_Handle* handle, uint8_t pixels);
+void MAX7219_ShiftUp(MAX7219_Handle* handle, uint8_t pixels);
+void MAX7219_ShiftDown(MAX7219_Handle* handle, uint8_t pixels);
+```
+เลื่อน buffer content ตามทิศทาง
+
+#### `MAX7219_ScrollBufferLeft()` / `ScrollBufferRight()`
+```c
+void MAX7219_ScrollBufferLeft(MAX7219_Handle* handle, uint16_t speed_ms);
+void MAX7219_ScrollBufferRight(MAX7219_Handle* handle, uint16_t speed_ms);
+```
+Auto-scroll buffer (non-blocking — เรียกใน main loop)
+
+#### `MAX7219_ProgressBar()`
+```c
+void MAX7219_ProgressBar(MAX7219_Handle* handle, uint8_t percent, bool vertical);
+```
+วาด progress bar 0-100% (แนวนอนแนวตั้ง)
 
 ---
 

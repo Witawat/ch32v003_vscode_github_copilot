@@ -1,25 +1,26 @@
 # MAX7219 LED Matrix Driver Library
 
-**เวอร์ชัน:** 1.0  
-**วันที่:** 2025-12-21  
+**เวอร์ชัน:** 1.1  
+**วันที่:** 2026-05-03  
 **License:** MIT
 
 ## ภาพรวม
 
-Library สำหรับควบคุม MAX7219 LED Matrix (8x8) บน CH32V003 พร้อมฟีเจอร์ครบถ้วนตั้งแต่ขั้นพื้นฐานถึงขั้นสูง
+Library สำหรับควบคุม MAX7219 LED Matrix (8x8) บน CH32V003/CH32V006 พร้อมฟีเจอร์ครบถ้วนตั้งแต่ขั้นพื้นฐานถึงขั้นสูง
 
 ## คุณสมบัติหลัก
 
 - ✅ **ใช้งานง่าย** - Arduino-style API
 - ✅ **Graphics Primitives** - Line, Rectangle, Circle, Triangle
-- ✅ **Text Rendering** - ASCII + Thai fonts (5x7, 8x8)
-- ✅ **Scrolling Text** - Horizontal scrolling (non-blocking)
+- ✅ **Text Rendering** - ASCII (5x7, 8x8) + Thai UTF-8 (8x8, 44 consonants + digits + UTF-8 mapping)
+- ✅ **Scrolling Text** - Horizontal + Vertical scrolling (non-blocking)
 - ✅ **Animation System** - Frame-based animation
 - ✅ **Sprite Support** - Transparency mask
 - ✅ **Cascaded Displays** - รองรับ 1-8 matrices
-- ✅ **Effects** - Fade in/out, brightness control
+- ✅ **Effects** - Fade in/out, Invert, Wipe (4 ทิศ), Blink, Sparkle, Marquee Border, Rain, Running Light
+- ✅ **Buffer Utilities** - Shift (left/right/up/down), Auto-scroll, Progress Bar
 - ✅ **14 ตัวอย่าง** - จากพื้นฐานถึงขั้นสูง
-- ✅ **เอกสารภาษาไทย** - ครบถ้วน 1000+ บรรทัด
+- ✅ **เอกสารภาษาไทย** - ครบถ้วน
 
 ## Quick Start
 
@@ -124,6 +125,103 @@ GND            -> GND
 - Matrix rain
 - Starfield
 
+## ✨ ตัวอย่างฟีเจอร์ใหม่ (v1.1)
+
+### Thai UTF-8 Text (แนะนำ)
+
+```c
+#include "MAX7219.h"
+#include "max7219_fonts_thai.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Delay_Init();
+
+    MAX7219_Handle* display = MAX7219_Init(PC5, PC6, PC4, 1);
+    MAX7219_SetIntensity(display, 8);
+
+    // แสดงข้อความภาษาไทยด้วย UTF-8
+    MAX7219_DrawStringThai(display, 0, 0, "สวัสดี", 8);
+    MAX7219_Update(display);
+
+    // แสดงผสมไทย-อังกฤษ
+    MAX7219_DrawStringThai(display, 0, 0, "Hello สวัสดี", 8);
+    MAX7219_Update(display);
+
+    while(1);
+}
+```
+
+### Wipe Effects
+
+```c
+// เติมสีจากซ้ายไปขวา
+MAX7219_WipeLeft(display, 30);
+
+// เติมสีจากขวาไปซ้าย
+MAX7219_WipeRight(display, 30);
+
+// เติมจากบนลงล่าง / ล่างขึ้นบน
+MAX7219_WipeUp(display, 30);
+MAX7219_WipeDown(display, 30);
+
+// กระพริบ 3 ครั้ง
+MAX7219_Blink(display, 3, 200, 200);
+
+// Sparkle 2 วินาที
+MAX7219_Sparkle(display, 2000, 10);
+
+// ฝนตก
+MAX7219_RainEffect(display, 3000, 100);
+
+// จุดวิ่งรอบขอบ
+MAX7219_RunningLight(display, 100);
+```
+
+### Vertical Scrolling
+
+```c
+// เลื่อนข้อความแนวตั้ง (ล่างขึ้นบน)
+MAX7219_StartScrollTextVertical(display, "Hello", 100);
+while(MAX7219_UpdateScroll(display)) {
+    // Non-blocking
+}
+```
+
+### Buffer Utilities
+
+```c
+// เลื่อน buffer ซ้าย 1 pixel
+MAX7219_ShiftLeft(display, 1);
+MAX7219_Update(display);
+
+// เลื่อน buffer ลง
+MAX7219_ShiftDown(display, 1);
+MAX7219_Update(display);
+
+// Auto-scroll (เรียกใน main loop)
+while(1) {
+    MAX7219_ScrollBufferLeft(display, 100);
+    // ไม่ต้องเรียก Update — ScrollBufferLeft เรียกให้แล้ว
+}
+
+// Progress Bar 75%
+MAX7219_ProgressBar(display, 75, false);  // แนวนอน
+MAX7219_Update(display);
+```
+
+### Config Macros (ประหยัด Flash)
+
+```c
+// ปิด Thai 8x8 font (ใช้ 5x7 แทน) — ประหยัด ~600B
+#define MAX7219_ENABLE_THAI_FULL  0
+
+// ปิด Effects — ประหยัด ~600B
+#define MAX7219_ENABLE_EFFECTS    0
+
+#include "MAX7219.h"
+```
+
 ## API Reference
 
 ### Initialization
@@ -148,29 +246,53 @@ GND            -> GND
 - `MAX7219_GetStringWidth()` - คำนวณความกว้าง
 
 ### Scrolling
-- `MAX7219_StartScrollText()` - เริ่มเลื่อนข้อความ
-- `MAX7219_UpdateScroll()` - อัพเดทการเลื่อน
+- `MAX7219_StartScrollText()` - เริ่มเลื่อนข้อความแนวนอน
+- `MAX7219_StartScrollTextVertical()` - เริ่มเลื่อนข้อความแนวตั้ง **[v1.1]**
+- `MAX7219_UpdateScroll()` - อัพเดทการเลื่อน (รองรับทั้งแนวนอนและแนวตั้ง)
 - `MAX7219_StopScroll()` - หยุดการเลื่อน
 
-### Animation
-- `MAX7219_StartAnimation()` - เริ่ม animation
-- `MAX7219_UpdateAnimation()` - อัพเดท animation
-- `MAX7219_StopAnimation()` - หยุด animation
+### Thai Text (UTF-8) **[v1.1]**
+- `MAX7219_DrawCharThai()` - วาดตัวอักษรไทย 1 ตัว (UTF-8)
+- `MAX7219_DrawStringThai()` - วาดข้อความภาษาไทย (UTF-8, ผสมอังกฤษได้)
 
-### Sprite
-- `MAX7219_DrawSprite()` - วาด sprite พร้อม transparency
-
-### Effects
+### Effects (เพิ่มจาก v1.1)
 - `MAX7219_FadeIn()` - Fade in effect
 - `MAX7219_FadeOut()` - Fade out effect
 - `MAX7219_Invert()` - สลับ on/off ทุก pixel
+- `MAX7219_WipeLeft()` / `WipeRight()` / `WipeUp()` / `WipeDown()` - Wipe effect **[v1.1]**
+- `MAX7219_Blink()` - กระพริบ display **[v1.1]**
+- `MAX7219_Sparkle()` - เปิด/ปิด pixels แบบสุ่ม **[v1.1]**
+- `MAX7219_MarqueeBorder()` - แสงวิ่งรอบขอบ **[v1.1]**
+- `MAX7219_RainEffect()` - ฝนตก **[v1.1]**
+- `MAX7219_RunningLight()` - จุดวิ่งรอบขอบ **[v1.1]**
+
+### Buffer Utilities **[v1.1]**
+- `MAX7219_ShiftLeft/Right/Up/Down()` - เลื่อน buffer
+- `MAX7219_ScrollBufferLeft/Right()` - Auto-scroll (non-blocking)
+- `MAX7219_ProgressBar()` - วาด progress bar 0-100%
 
 ## Fonts
 
-Library มี 3 fonts:
+Library มีฟอนต์ทั้งหมด:
 - **font_5x7** - ASCII 5x7 (ประหยัดพื้นที่)
 - **font_8x8** - ASCII 8x8 (ใช้พื้นที่เต็ม)
-- **font_thai_5x7** - ตัวอักษรไทย 5x7
+- **font_thai_5x7** - ตัวอักษรไทย 5x7 (เดิม)
+- **font_thai_8x8** - ตัวอักษรไทย 8x8 (44 พยัญชนะ + เลขไทย) **[v1.1]**
+- **font_thai_numbers_8x8** - เลขไทย 8x8 (๐-๙) **[v1.1]**
+
+> ต้องการ `#include "max7219_fonts_thai.h"` สำหรับ Thai 8x8 font
+
+## Config Macros **[v1.1]**
+
+```c
+// ปิด Thai 8x8 font (ใช้ 5x7 แทน — ประหยัด ~600B Flash)
+#define MAX7219_ENABLE_THAI_FULL  0
+
+// ปิด Effects (wipe/blink/sparkle/rain — ประหยัด ~600B Flash)
+#define MAX7219_ENABLE_EFFECTS    0
+
+#include "MAX7219.h"
+```
 
 ## เอกสารเพิ่มเติม
 

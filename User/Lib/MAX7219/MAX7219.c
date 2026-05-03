@@ -7,6 +7,9 @@
 
 #include "MAX7219.h"
 #include "max7219_fonts.h"
+#if (MAX7219_ENABLE_THAI_FULL)
+#include "max7219_fonts_thai.h"
+#endif
 #include <stdlib.h>
 
 /* ========== Private Variables ========== */
@@ -449,7 +452,7 @@ bool MAX7219_UpdateScroll(MAX7219_Handle* handle) {
     
     // Check if it's time to update
     if (current_time - handle->scroll.last_update < handle->scroll.scroll_delay) {
-        return true;  // Still scrolling, but not time to update yet
+        return true;
     }
     
     handle->scroll.last_update = current_time;
@@ -458,19 +461,40 @@ bool MAX7219_UpdateScroll(MAX7219_Handle* handle) {
     MAX7219_Clear(handle, false);
     
     // Draw text at current offset
-    MAX7219_DrawString(handle, handle->scroll.offset, 0, handle->scroll.text);
+    if (handle->scroll.vertical) {
+        // Vertical scroll (bottom to top)
+#if (MAX7219_ENABLE_THAI_FULL)
+        MAX7219_DrawStringThai(handle, 0, handle->scroll.offset,
+                               handle->scroll.text, 8);
+#else
+        MAX7219_DrawString(handle, 0, handle->scroll.offset, handle->scroll.text);
+#endif
+    } else {
+        // Horizontal scroll (right to left)
+        MAX7219_DrawString(handle, handle->scroll.offset, 0, handle->scroll.text);
+    }
     
     // Update display
     MAX7219_Update(handle);
     
-    // Move offset left
-    handle->scroll.offset--;
-    
-    // Check if scrolling is complete
-    int16_t text_width = MAX7219_GetStringWidth(handle, handle->scroll.text);
-    if (handle->scroll.offset < -text_width) {
-        handle->scroll.active = false;
-        return false;  // Scrolling complete
+    // Move offset
+    if (handle->scroll.vertical) {
+        handle->scroll.offset--;  // move up
+        
+        // Check if scrolling is complete
+        if (handle->scroll.offset < -8) {
+            handle->scroll.active = false;
+            return false;
+        }
+    } else {
+        handle->scroll.offset--;  // move left
+        
+        // Check if scrolling is complete
+        int16_t text_width = MAX7219_GetStringWidth(handle, handle->scroll.text);
+        if (handle->scroll.offset < -text_width) {
+            handle->scroll.active = false;
+            return false;  // Scrolling complete
+        }
     }
     
     return true;  // Still scrolling
@@ -589,6 +613,525 @@ void MAX7219_Invert(MAX7219_Handle* handle) {
     for (uint8_t dev = 0; dev < handle->num_devices; dev++) {
         for (uint8_t row = 0; row < MAX7219_MATRIX_SIZE; row++) {
             handle->buffer[dev][row] = ~handle->buffer[dev][row];
+        }
+    }
+}
+
+/* ==================================================================
+ *  Thai Text Functions (UTF-8)
+ * ================================================================== */
+
+#if (MAX7219_ENABLE_THAI_FULL)
+
+/**
+ * @brief แปลง UTF-8 3-byte → Unicode
+ */
+uint16_t m_utf8_to_unicode(const char* utf8_char) {
+    if ((utf8_char[0] & 0xE0) == 0xE0) {
+        return ((uint16_t)(utf8_char[0] & 0x0F) << 12)
+             | ((uint16_t)(utf8_char[1] & 0x3F) << 6)
+             | (uint16_t)(utf8_char[2] & 0x3F);
+    }
+    return (uint16_t)(uint8_t)utf8_char[0];
+}
+
+/**
+ * @brief ค้นหา Thai 8x8 font index จาก Unicode
+ */
+int8_t m_get_thai_idx(uint16_t unicode) {
+    uint8_t i;
+    for (i = 0; i < sizeof(thai_con_map) / sizeof(M_ThaiCharMap); i++) {
+        if (thai_con_map[i].unicode == unicode) return (int8_t)thai_con_map[i].index;
+    }
+    return -1;
+}
+
+uint8_t MAX7219_DrawCharThai(MAX7219_Handle* handle, int16_t x, int16_t y,
+                             const char* thai_char, uint8_t intensity) {
+    uint16_t unicode;
+    int8_t font_idx;
+    uint8_t col, row;
+    const uint8_t* glyph = NULL;
+
+    if (!handle || !thai_char) return 0;
+
+    unicode = m_utf8_to_unicode(thai_char);
+
+    // Thai digits
+    if (unicode >= 0x0E50 && unicode <= 0x0E59) {
+        glyph = &font_thai_numbers_8x8_data[(unicode - 0x0E50) * 8];
+    } else {
+        font_idx = m_get_thai_idx(unicode);
+        if (font_idx < 0) return 0;
+        glyph = &font_thai_8x8_data[font_idx * 8];
+    }
+
+    if (!glyph) return 0;
+
+    for (col = 0; col < 8; col++) {
+        uint8_t col_data = glyph[col];
+        for (row = 0; row < 8; row++) {
+            if (col_data & (1 << row)) {
+                MAX7219_SetPixel(handle, x + col, y + row, true);
+            }
+        }
+    }
+
+    return 9;  // 8px width + 1px spacing
+}
+
+uint16_t MAX7219_DrawStringThai(MAX7219_Handle* handle, int16_t x, int16_t y,
+                                const char* text, uint8_t intensity) {
+    int16_t cx = x;
+    uint16_t total = 0;
+
+    if (!handle || !text) return 0;
+
+    while (*text) {
+        if ((*text & 0xE0) == 0xE0) {
+            total += MAX7219_DrawCharThai(handle, cx, y, text, intensity);
+            cx += 9;
+            text += 3;
+        } else {
+            total += MAX7219_DrawChar(handle, cx, y, *text);
+            cx += handle->font ? (handle->font->width + 1) : 6;
+            text++;
+        }
+    }
+
+    return total;
+}
+
+#endif /* MAX7219_ENABLE_THAI_FULL */
+
+/* ==================================================================
+ *  Effects — Wipe
+ * ================================================================== */
+
+#if (MAX7219_ENABLE_EFFECTS)
+
+void MAX7219_WipeLeft(MAX7219_Handle* handle, uint16_t delay_ms) {
+    uint8_t x, y, dev;
+    if (!handle) return;
+
+    for (dev = 0; dev < handle->num_devices; dev++) {
+        for (x = 0; x < MAX7219_MATRIX_SIZE; x++) {
+            for (y = 0; y < MAX7219_MATRIX_SIZE; y++) {
+                handle->buffer[dev][y] |= (1 << (7 - x));
+            }
+            MAX7219_Update(handle);
+            Delay_Ms(delay_ms);
+        }
+    }
+}
+
+void MAX7219_WipeRight(MAX7219_Handle* handle, uint16_t delay_ms) {
+    uint8_t x, y, dev;
+    if (!handle) return;
+
+    for (dev = 0; dev < handle->num_devices; dev++) {
+        for (x = 0; x < MAX7219_MATRIX_SIZE; x++) {
+            for (y = 0; y < MAX7219_MATRIX_SIZE; y++) {
+                handle->buffer[dev][y] |= (1 << x);
+            }
+            MAX7219_Update(handle);
+            Delay_Ms(delay_ms);
+        }
+    }
+}
+
+void MAX7219_WipeUp(MAX7219_Handle* handle, uint16_t delay_ms) {
+    uint8_t x, y, dev;
+    if (!handle) return;
+
+    for (y = 0; y < MAX7219_MATRIX_SIZE; y++) {
+        for (dev = 0; dev < handle->num_devices; dev++) {
+            for (x = 0; x < MAX7219_MATRIX_SIZE; x++) {
+                handle->buffer[dev][y] |= (1 << (7 - x));
+            }
+        }
+        MAX7219_Update(handle);
+        Delay_Ms(delay_ms);
+    }
+}
+
+void MAX7219_WipeDown(MAX7219_Handle* handle, uint16_t delay_ms) {
+    int16_t y;
+    uint8_t x, dev;
+    if (!handle) return;
+
+    for (y = MAX7219_MATRIX_SIZE - 1; y >= 0; y--) {
+        for (dev = 0; dev < handle->num_devices; dev++) {
+            for (x = 0; x < MAX7219_MATRIX_SIZE; x++) {
+                handle->buffer[dev][(uint8_t)y] |= (1 << (7 - x));
+            }
+        }
+        MAX7219_Update(handle);
+        Delay_Ms(delay_ms);
+    }
+}
+
+void MAX7219_Blink(MAX7219_Handle* handle, uint16_t count,
+                   uint16_t on_ms, uint16_t off_ms) {
+    uint16_t i;
+    if (!handle) return;
+
+    for (i = 0; i < count; i++) {
+        MAX7219_DisplayControl(handle, true);
+        MAX7219_Update(handle);
+        Delay_Ms(on_ms);
+        MAX7219_DisplayControl(handle, false);
+        Delay_Ms(off_ms);
+    }
+    MAX7219_DisplayControl(handle, true);
+}
+
+void MAX7219_Sparkle(MAX7219_Handle* handle, uint16_t duration_ms,
+                     uint8_t density) {
+    uint32_t start, now;
+    uint8_t dev, x, y;
+    uint16_t total_pixels, num_sparkle, s;
+
+    if (!handle) return;
+    if (density > 100) density = 100;
+
+    total_pixels = (uint16_t)handle->num_devices * MAX7219_MATRIX_SIZE * MAX7219_MATRIX_SIZE;
+    num_sparkle = (total_pixels * density) / 100;
+
+    start = Get_CurrentMs();
+    do {
+        // Clear random pixels
+        for (s = 0; s < num_sparkle; s++) {
+            dev = rand() % handle->num_devices;
+            x = rand() % MAX7219_MATRIX_SIZE;
+            y = rand() % MAX7219_MATRIX_SIZE;
+            handle->buffer[dev][y] ^= (1 << (7 - x));
+        }
+        MAX7219_Update(handle);
+        Delay_Ms(30);
+
+        now = Get_CurrentMs();
+    } while ((now - start) < duration_ms);
+
+    // Restore — clear all
+    MAX7219_Clear(handle, true);
+}
+
+void MAX7219_MarqueeBorder(MAX7219_Handle* handle, uint16_t speed_ms,
+                           uint8_t rounds) {
+    int16_t total_w;
+    uint16_t step;
+    uint8_t r;
+
+    if (!handle) return;
+
+    total_w = (int16_t)handle->num_devices * MAX7219_MATRIX_SIZE;
+    // Perimeter = 2W + 2H - 4 (but for a line of modules, just top+bottom+left+right of combined)
+    // Simplified: run a single pixel around the entire composite perimeter
+    // Perimeter path: top (L→R) → right (T→B) → bottom (R→L) → left (B→T)
+    int16_t perimeter = 2 * total_w + 2 * MAX7219_MATRIX_SIZE - 4;
+    if (perimeter <= 0) return;
+
+    r = rounds;
+    while (rounds == 0 || r > 0) {
+        for (step = 0; step < (uint16_t)perimeter; step++) {
+            MAX7219_Clear(handle, false);
+
+            int16_t px, py;
+            if (step < total_w) {
+                // Top edge
+                px = step; py = 0;
+            } else if (step < total_w + MAX7219_MATRIX_SIZE - 1) {
+                // Right edge
+                px = total_w - 1; py = step - total_w + 1;
+            } else if (step < 2 * total_w + MAX7219_MATRIX_SIZE - 2) {
+                // Bottom edge
+                px = 2 * total_w + MAX7219_MATRIX_SIZE - 3 - step;
+                py = MAX7219_MATRIX_SIZE - 1;
+            } else {
+                // Left edge
+                px = 0;
+                py = perimeter - step;
+            }
+
+            if (px >= 0 && py >= 0 && py < MAX7219_MATRIX_SIZE) {
+                MAX7219_SetPixel(handle, (int16_t)px, (int16_t)py, true);
+            }
+            MAX7219_Update(handle);
+            Delay_Ms(speed_ms);
+        }
+        if (rounds > 0) r--;
+    }
+}
+
+void MAX7219_RainEffect(MAX7219_Handle* handle, uint16_t duration_ms,
+                        uint16_t speed_ms) {
+    int16_t total_w;
+    uint8_t drops[64];  // max 64 columns
+    uint8_t drop_y[64];
+    uint8_t i;
+    uint32_t start, last_update, now;
+
+    if (!handle) return;
+
+    total_w = (int16_t)handle->num_devices * MAX7219_MATRIX_SIZE;
+    if (total_w > 64) total_w = 64;
+
+    memset(drops, 0, sizeof(drops));
+    memset(drop_y, 0, sizeof(drop_y));
+
+    start = Get_CurrentMs();
+    last_update = start;
+
+    do {
+        now = Get_CurrentMs();
+        if ((now - last_update) < speed_ms) continue;
+        last_update = now;
+
+        // Shift all drops down
+        for (i = 0; i < (uint8_t)total_w; i++) {
+            if (drops[i]) {
+                // Erase old position
+                MAX7219_SetPixel(handle, (int16_t)i, (int16_t)drop_y[i], false);
+                if (drop_y[i] > 0) {
+                    // Erase trail
+                    MAX7219_SetPixel(handle, (int16_t)i, (int16_t)(drop_y[i] - 1), false);
+                }
+
+                drop_y[i]++;
+
+                if (drop_y[i] >= MAX7219_MATRIX_SIZE) {
+                    drops[i] = 0;  // Drop reached bottom
+                } else {
+                    // Draw at new position with trail
+                    MAX7219_SetPixel(handle, (int16_t)i, (int16_t)drop_y[i], true);
+                    if (drop_y[i] > 0) {
+                        MAX7219_SetPixel(handle, (int16_t)i, (int16_t)(drop_y[i] - 1), true);
+                    }
+                }
+            }
+        }
+
+        // Occasionally create new drops
+        if (rand() % 3 == 0) {
+            uint8_t col = rand() % (uint8_t)total_w;
+            if (!drops[col]) {
+                drops[col] = 1;
+                drop_y[col] = 0;
+                MAX7219_SetPixel(handle, (int16_t)col, 0, true);
+            }
+        }
+
+        MAX7219_Update(handle);
+    } while ((Get_CurrentMs() - start) < duration_ms);
+
+    MAX7219_Clear(handle, true);
+}
+
+void MAX7219_RunningLight(MAX7219_Handle* handle, uint16_t speed_ms) {
+    int16_t total_w;
+    int16_t perimeter;
+    uint16_t step;
+    uint32_t last_update, now;
+
+    if (!handle) return;
+
+    total_w = (int16_t)handle->num_devices * MAX7219_MATRIX_SIZE;
+    perimeter = 2 * total_w + 2 * MAX7219_MATRIX_SIZE - 4;
+
+    last_update = Get_CurrentMs();
+    step = 0;
+
+    while (1) {
+        now = Get_CurrentMs();
+        if ((now - last_update) < speed_ms) continue;
+        last_update = now;
+
+        MAX7219_Clear(handle, false);
+
+        int16_t px, py;
+        if (step < (uint16_t)total_w) {
+            px = (int16_t)step; py = 0;
+        } else if (step < (uint16_t)(total_w + MAX7219_MATRIX_SIZE - 1)) {
+            px = total_w - 1; py = (int16_t)(step - total_w + 1);
+        } else if (step < (uint16_t)(2 * total_w + MAX7219_MATRIX_SIZE - 2)) {
+            px = 2 * total_w + MAX7219_MATRIX_SIZE - 3 - (int16_t)step;
+            py = MAX7219_MATRIX_SIZE - 1;
+        } else {
+            px = 0;
+            py = perimeter - (int16_t)step;
+        }
+
+        if (px >= 0 && py >= 0 && py < MAX7219_MATRIX_SIZE) {
+            MAX7219_SetPixel(handle, px, py, true);
+        }
+        MAX7219_Update(handle);
+
+        step++;
+        if (step >= (uint16_t)perimeter) step = 0;
+    }
+}
+
+#endif /* MAX7219_ENABLE_EFFECTS */
+
+/* ==================================================================
+ *  Vertical Scrolling
+ * ================================================================== */
+
+void MAX7219_StartScrollTextVertical(MAX7219_Handle* handle, const char* text,
+                                     uint16_t scroll_delay) {
+    if (!handle || !text) return;
+
+    handle->scroll.text = text;
+    handle->scroll.offset = MAX7219_MATRIX_SIZE;  // Start from bottom
+    handle->scroll.scroll_delay = scroll_delay;
+    handle->scroll.last_update = Get_CurrentMs();
+    handle->scroll.active = true;
+    handle->scroll.vertical = true;
+    handle->scroll.font = handle->font;
+}
+
+/* ==================================================================
+ *  Buffer Utilities
+ * ================================================================== */
+
+void MAX7219_ShiftLeft(MAX7219_Handle* handle, uint8_t pixels) {
+    uint8_t dev, row, p;
+    if (!handle) return;
+
+    for (p = 0; p < pixels; p++) {
+        for (dev = 0; dev < handle->num_devices; dev++) {
+            for (row = 0; row < MAX7219_MATRIX_SIZE; row++) {
+                handle->buffer[dev][row] <<= 1;
+                // Carry bit from next device
+                if (dev + 1 < handle->num_devices) {
+                    if (handle->buffer[dev + 1][row] & 0x80) {
+                        handle->buffer[dev][row] |= 0x01;
+                    }
+                }
+            }
+        }
+    }
+}
+
+void MAX7219_ShiftRight(MAX7219_Handle* handle, uint8_t pixels) {
+    int16_t dev;
+    uint8_t row, p;
+    if (!handle) return;
+
+    for (p = 0; p < pixels; p++) {
+        for (dev = (int16_t)handle->num_devices - 1; dev >= 0; dev--) {
+            for (row = 0; row < MAX7219_MATRIX_SIZE; row++) {
+                handle->buffer[dev][row] >>= 1;
+                // Carry bit from previous device
+                if (dev > 0) {
+                    if (handle->buffer[dev - 1][row] & 0x01) {
+                        handle->buffer[dev][row] |= 0x80;
+                    }
+                }
+            }
+        }
+    }
+}
+
+void MAX7219_ShiftUp(MAX7219_Handle* handle, uint8_t pixels) {
+    uint8_t dev, row, p;
+    if (!handle) return;
+
+    for (p = 0; p < pixels; p++) {
+        for (dev = 0; dev < handle->num_devices; dev++) {
+            for (row = 0; row < MAX7219_MATRIX_SIZE - 1; row++) {
+                handle->buffer[dev][row] = handle->buffer[dev][row + 1];
+            }
+            handle->buffer[dev][MAX7219_MATRIX_SIZE - 1] = 0;
+        }
+    }
+}
+
+void MAX7219_ShiftDown(MAX7219_Handle* handle, uint8_t pixels) {
+    int16_t row;
+    uint8_t dev, p;
+    if (!handle) return;
+
+    for (p = 0; p < pixels; p++) {
+        for (dev = 0; dev < handle->num_devices; dev++) {
+            for (row = MAX7219_MATRIX_SIZE - 1; row > 0; row--) {
+                handle->buffer[dev][row] = handle->buffer[dev][row - 1];
+            }
+            handle->buffer[dev][0] = 0;
+        }
+    }
+}
+
+// Internal timer data for ScrollBuffer
+static uint32_t _scroll_last = 0;
+static uint8_t  _scroll_dir = 0;  // 0=left, 1=right
+
+void MAX7219_ScrollBufferLeft(MAX7219_Handle* handle, uint16_t speed_ms) {
+    uint32_t now;
+    if (!handle) return;
+
+    now = Get_CurrentMs();
+    if ((now - _scroll_last) < speed_ms) return;
+    _scroll_last = now;
+
+    _scroll_dir = 0;
+    MAX7219_ShiftLeft(handle, 1);
+    MAX7219_Update(handle);
+}
+
+void MAX7219_ScrollBufferRight(MAX7219_Handle* handle, uint16_t speed_ms) {
+    uint32_t now;
+    if (!handle) return;
+
+    now = Get_CurrentMs();
+    if ((now - _scroll_last) < speed_ms) return;
+    _scroll_last = now;
+
+    _scroll_dir = 1;
+    MAX7219_ShiftRight(handle, 1);
+    MAX7219_Update(handle);
+}
+
+void MAX7219_ProgressBar(MAX7219_Handle* handle, uint8_t percent,
+                         bool vertical) {
+    int16_t total_w;
+    uint16_t total_pixels, pixels_on, p;
+    uint8_t dev, x, y;
+
+    if (!handle) return;
+    if (percent > 100) percent = 100;
+
+    if (vertical) {
+        total_w = MAX7219_MATRIX_SIZE;
+        total_pixels = total_w;
+        pixels_on = (total_pixels * percent) / 100;
+
+        for (dev = 0; dev < handle->num_devices; dev++) {
+            for (y = 0; y < MAX7219_MATRIX_SIZE; y++) {
+                uint8_t row_val = 0;
+                if ((uint8_t)(MAX7219_MATRIX_SIZE - 1 - y) < pixels_on) {
+                    row_val = 0xFF;
+                }
+                handle->buffer[dev][y] = row_val;
+            }
+        }
+    } else {
+        total_w = (int16_t)handle->num_devices * MAX7219_MATRIX_SIZE;
+        total_pixels = (uint16_t)total_w;
+        pixels_on = (total_pixels * percent) / 100;
+
+        for (p = 0; p < total_pixels; p++) {
+            dev = p / MAX7219_MATRIX_SIZE;
+            x = p % MAX7219_MATRIX_SIZE;
+
+            for (y = 0; y < MAX7219_MATRIX_SIZE; y++) {
+                if (p < pixels_on) {
+                    handle->buffer[dev][y] |= (1 << (7 - x));
+                } else {
+                    handle->buffer[dev][y] &= ~(1 << (7 - x));
+                }
+            }
         }
     }
 }
