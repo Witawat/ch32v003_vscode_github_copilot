@@ -90,24 +90,23 @@ echo     - "%TC_DIR_FWD%/lib/gcc/%GCC_TUPLE%/%GCC_VER%/include"
 echo     - "-I"
 echo     - "%TC_DIR_FWD%/lib/gcc/%GCC_TUPLE%/%GCC_VER%/include-fixed"
 echo.
-echo     # Project include paths ^(auto-detected^)
+echo     # Project include paths ^(relative - portable^)
 ) > "%OUT%"
 
-:: เพิ่ม include paths ของ project
+:: เพิ่ม include paths ของ project (relative paths)
 call :ADD_INC "Debug"
 call :ADD_INC "Core"
 call :ADD_INC "Peripheral\inc"
 call :ADD_INC "User"
-call :ADD_INC "User\hardware"
+call :ADD_INC "User/SimpleHAL"
 
-:: สแกน User\Lib แบบ recursive (ถ้ามี)
+:: สแกน User\Lib เฉพาะระดับแรก (first-level subdirs only)
 if exist "%PROJECT_ROOT%\User\Lib" (
-    for /d /r "%PROJECT_ROOT%\User\Lib" %%D in (*) do (
-        set "D=%%~fD"
-        set "D=!D:\=/!"
-        echo     - "-I">> "%OUT%"
-        echo     - "!D!">> "%OUT%"
-        echo   [+] %%~fD
+    for /d %%D in ("%PROJECT_ROOT%\User\Lib\*") do (
+        set "D=%%~nxD"
+        if /i not "!D!"=="__pycache__" (
+            call :ADD_INC "User\Lib\!D!"
+        )
     )
     :: เพิ่ม User\Lib root ด้วย
     call :ADD_INC "User\Lib"
@@ -179,10 +178,13 @@ goto :EOF
 :ADD_INC
     set "DIR=%PROJECT_ROOT%\%~1"
     if exist "%DIR%" (
-        set "DIR_FWD=%DIR:\=/%"
+        set "REL_FWD=%~1"
+        set "REL_FWD=!REL_FWD:\=/!"
         echo     - "-I">> "%OUT%"
-        echo     - "!DIR_FWD!">> "%OUT%"
+        echo     - "!REL_FWD!">> "%OUT%"
         echo   [+] %~1
+    ) else (
+        echo   [SKIP] %~1 ^(not found^)
     )
     exit /b 0
 
