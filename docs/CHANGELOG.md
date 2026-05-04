@@ -1,3 +1,72 @@
+## [2026-05-04] - LCDMenu v1.0 — ระบบเมนูหลายระดับบน LCD1602/LCD2004 ควบคุมด้วย 4 ปุ่ม
+
+### เพิ่มเติม (Added)
+- **LCDMenu Library**: สร้าง library ใหม่ `User/Lib/LCDMenu/` สำหรับสร้างเมนูแบบต้นไม้บน LCD character display
+  - **Menu Tree**: รองรับ sub-menu ซ้อนกันหลายระดับ (UP/DOWN/ENTER/BACK)
+  - **4 Item Types**: Sub-menu (มี `>` suffix), Callback (fire ทันที), Toggle (ON/OFF พร้อม `[ON]`/`[OFF]`), Value (ปรับค่าด้วย edit mode)
+  - **Edit Mode**: สำหรับ Toggle (สลับค่าทันที) และ Value (UP/DOWN ปรับค่า, ENTER ยืนยัน, BACK ยกเลิก)
+  - **Page Scrolling**: เลื่อนหน้าจออัตโนมัติเมื่อ items เกินจำนวนแถว (16x2 = 2 items/หน้า, 20x4 = 4 items/หน้า)
+  - **Custom Cursor**: ลูกศร `>` ผ่าน CGRAM location 0
+  - **Static Memory Pool**: ใช้ static array ไม่ใช้ malloc (`LCDMENU_MAX_ITEMS` = 32, ปรับได้)
+  - **4-Button Navigation**: UP/DOWN เลื่อน + wrap-around, ENTER เลือก, BACK ย้อนกลับ
+  - **Callback System**: callback per item + callback เมื่อเข้า sub-menu
+  - **Thai Documentation**: README 400+ บรรทัด
+
+### การเปลี่ยนแปลงของแต่ละไฟล์
+
+#### `User/Lib/LCDMenu/lcdmenu.h` (NEW)
+- 400+ บรรทัด header พร้อม types, structs, 15 function prototypes
+- `LCDMenu_ItemType` enum: `SUBMENU`, `CALLBACK`, `TOGGLE`, `VALUE`
+- `LCDMenu_Item` struct: name, type, parent, children array, callback, value fields
+- `LCDMenu_Handle` struct: LCD handle, 4 button handles, menu tree, cursor/display state, edit mode
+- Config macros: `LCDMENU_MAX_ITEMS` (32), `LCDMENU_MAX_CHILDREN` (16)
+
+#### `User/Lib/LCDMenu/lcdmenu.c` (NEW)
+- ~600 บรรทัด implementation
+- Static pool allocator (`_menu_alloc`) — จองจาก `_menu_pool[32]`
+- Title rendering (`_draw_title`) — จัดกลางตามขนาด LCD
+- Item formatting (`_format_item_text`) — prefix cursor + suffix ตาม type
+- Navigation handlers: `_handle_up`, `_handle_down` (wrap-around), `_handle_enter` (type dispatch), `_handle_back`
+- Edit mode handlers: `_handle_enter_edit` (confirm), `_handle_back_edit` (cancel)
+- Main update: `LCDMenu_Update()` — อ่าน 4 ปุ่มด้วย `Button_GetEvent()` (polling), รองรับทั้ง `PRESS` และ `LONG_PRESS`
+- Display: `LCDMenu_Draw()` — clamp cursor, update offset, draw title + items
+- Utility: `LCDMenu_Reset`, `LCDMenu_IsEditing`, `LCDMenu_GetCurrentItem`
+
+#### `User/Lib/LCDMenu/README.md` (NEW)
+- เอกสารภาษาไทย 400+ บรรทัด
+- ครอบคลุม: overview, features, hardware setup (wiring diagram), state machine, display layout, basic/advanced usage, 4 item types, troubleshooting, API reference
+
+#### `.gitignore` (MODIFIED)
+- เพิ่ม `.mrs/` (MounRiver Studio temp files)
+
+### Technical Details
+
+**Dependencies:**
+- `LCD1602_I2C` — แสดงผลบน LCD (PCF8574 I2C)
+- `Button` — debounce input ปุ่ม (polling mode, `Button_GetEvent`)
+- `SimpleHAL` — `SimpleI2C`, `SimpleDelay`, `SimpleGPIO`
+
+**Menu Item Type Behavior:**
+| Type | ENTER Action | Display Suffix |
+|------|-------------|----------------|
+| SUBMENU | เข้าเมนูย่อย | `>` |
+| CALLBACK | fire callback | — |
+| TOGGLE | สลับ ON/OFF | `[ON]`/`[OFF]` |
+| VALUE | เข้า edit mode | ตัวเลข / `<val>` |
+
+**Build Verification:**
+- Flash: 1,772 / 16,384 bytes (10%)
+- RAM: 420 / 2,048 bytes (20%)
+- Build ผ่าน ไม่มี errors/warnings
+
+### สรุป
+- **รวมโค้ด**: ~1,400 บรรทัด (header 400 + implementation 600 + README 400)
+- **ไฟล์ใหม่**: 3 ไฟล์
+- **Functions**: 15 public + internal helpers
+- **Memory**: ~72 bytes/item pool allocation
+
+---
+
 ## [2025-12-22 13:47] - SimpleADC v1.1 - Battery Monitoring Enhancement
 
 ### เพิ่มเติม (Added)

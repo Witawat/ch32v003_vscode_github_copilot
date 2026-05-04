@@ -62,7 +62,7 @@ CH32V003/
 │   │   ├── SimpleIWDG.h/c, SimpleWWDG.h/c
 │   └── Lib/               # Device driver libraries (~50 libraries)
 │       ├── Servo/, DHT/, HCSR04/, Button/  (Phase 1 - complete)
-│       ├── I2CScan/, OLED/, LCD1602_I2C/, ...
+│       ├── I2CScan/, LCDMenu/, LCD1602_I2C/, OLED/, ...
 │       └── P10/, WS2812Matrix/, MAX7219/, ...
 ```
 
@@ -685,6 +685,7 @@ All handlers are declared `.weak` in startup — override by defining the functi
 | **KeyMatrix** | Keypad Matrix | GPIO |
 | **L298N** | Motor Driver | GPIO |
 | **LCD1602_I2C** | 16x2 LCD (I2C) | I2C |
+| **LCDMenu** | Menu System for LCD1602/2004 (4-btn) | I2C + GPIO |
 | **MAX7219** | LED Matrix 8x8 | SPI |
 | **MCP4725** | 12-bit DAC | I2C |
 | **MPU6050** | IMU Gyro/Accel | I2C |
@@ -760,6 +761,7 @@ USART_Printf_Init(115200);  // Init UART for printf
 
 | Date | Note |
 |------|------|
+| 2026-05-04 | LCDMenu v1.0: menu system on LCD with 4-button navigation |
 | 2026-05-03 | Initial Knowledge Base created |
 | 2025-12-22 | SimpleHAL v1.9: added SimpleDMA |
 | 2025-12-21 | SimpleHAL: SimpleTIM_Ext, SimpleFlash added |
