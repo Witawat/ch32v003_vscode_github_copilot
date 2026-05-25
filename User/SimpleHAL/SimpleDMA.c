@@ -7,6 +7,7 @@
 
 #include "SimpleDMA.h"
 #include "SimpleADC.h"
+#include "SimpleDelay.h"
 #include <string.h>
 
 /* ========== Private Variables ========== */
