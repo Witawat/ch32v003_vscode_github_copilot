@@ -44,7 +44,7 @@ typedef enum {
 } TJC_PinConfig;
 
 /**
- * @brief TJC Error Codes (ตามเอกสาร TJC - bkcmd非0时的通知格式)
+ * @brief TJC Error Codes (ตามเอกสาร TJC - bkcmd ไม่เป็น 0: รูปแบบการแจ้งเตือน)
  */
 typedef enum {
   TJC_ERR_INVALID_CMD = 0x00,         // คำสั่งไม่ถูกต้อง
@@ -68,7 +68,7 @@ typedef enum {
 } TJC_ErrorCode;
 
 /**
- * @brief TJC Return Data Types (ตามเอกสาร TJC - 其他数据返回格式)
+ * @brief TJC Return Data Types (ตามเอกสาร TJC - รูปแบบการคืนค่าข้อมูลอื่นๆ)
  */
 typedef enum {
   TJC_RET_BUFFER_OVERFLOW = 0x24,  // Serial buffer เต็ม

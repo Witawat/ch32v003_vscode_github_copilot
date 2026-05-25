@@ -1,5 +1,6 @@
 {
 	"version": "1.0",
+	"hasAllParsed": true,
 	"isNormalMRSProject": true,
 	"basic": {
 		"chipInfo": {
@@ -59,7 +60,8 @@
 					"${project}/User/Lib/RotaryEncoder/Examples",
 					"${project}/User/Lib/NTC10K/Examples",
 					"${project}/User/Lib/DS18B20/Examples",
-					"${project}/User/Lib/Buzzer/Examples"
+					"${project}/User/Lib/Buzzer/Examples",
+					"${project}/User/Examples"
 				],
 				"optimization": {
 					"level": "size",
@@ -79,6 +81,7 @@
 					"code_generation_without_hardware_floating": false,
 					"use_pipelines": false,
 					"show_caret_indicating_the_column": false,
+					"calling_convention_variant": false,
 					"other_optimization_flags": ""
 				},
 				"warnings": {
@@ -274,7 +277,8 @@
 					}
 				},
 				"archiver": {
-					"archiver_flags": "-r"
+					"archiver_flags": "-r",
+					"libOutputPrefix": "lib"
 				},
 				"createFlash": {
 					"enabled": true,
@@ -315,6 +319,7 @@
 					"extra_compressed_extension": true,
 					"bit_extension": false,
 					"multiplication_subset_of_the_M_extension": false,
+					"vector_cryptography_extensions": "",
 					"integer_ABI": "ilp32e",
 					"floating_point_ABI": "none",
 					"tuning": "default",
@@ -330,7 +335,7 @@
 		]
 	},
 	"flashConfig": {
-		"mcutype": "CH32V003",
+		"mcutype": "CH32V00x",
 		"address": "0x08000000",
 		"target_path": "obj/CH32V003.hex",
 		"clkSpeed": "High",

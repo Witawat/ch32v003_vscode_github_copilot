@@ -13,7 +13,7 @@
  * Config macros:
  * - WS2812M_ENABLE_THAI = 1 (include Thai fonts, default)
  *
- * @note แยกไฟล์จาก WS2812Matrix.h เพื่อให้用户可以เลือกไม่ include ถ้าไม่ใช้ภาษาไทย
+ * @note แยกไฟล์จาก WS2812Matrix.h เพื่อให้ผู้ใช้สามารถเลือกไม่ include ถ้าไม่ใช้ภาษาไทย
  */
 
 #ifndef __WS2812M_FONTS_H

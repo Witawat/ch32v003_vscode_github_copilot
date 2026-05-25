@@ -398,7 +398,7 @@ uint16_t SPI_GetCRCPolynomial(SPI_TypeDef *SPIx)
  *
  * @brief   Selects the data transfer direction in bi-directional mode
  *      for the specified SPI.
- *          เลือกทิศทางการส่งข้อมูลในโหมด双向สำหรับ SPI
+ *          เลือกทิศทางการส่งข้อมูลในโหมด Bi-directional สำหรับ SPI
  *
  * @param   SPIx - where x can be 1 to select the SPI peripheral.
  *                  เลือก SPI

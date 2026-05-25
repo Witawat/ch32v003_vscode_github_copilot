@@ -85,7 +85,7 @@ typedef enum
 #define OB_RST_EN_DT128us                ((uint16_t)0x0000) /* เปิดใช้งานขา RESET ล่าช้า 128us */
 
 /* Option_Bytes_Power_ON_Start_Mode */
-/* โหมดเริ่มต้นหลังจากเปิด電源 */
+/* โหมดเริ่มต้นหลังจากเปิดไฟ (Power On) */
 #define OB_PowerON_Start_Mode_BOOT       ((uint16_t)0x0020) /* เริ่มจาก Bootloader */
 #define OB_PowerON_Start_Mode_USER       ((uint16_t)0x0000) /* เริ่มจากโปรแกรมผู้ใช้ */
 

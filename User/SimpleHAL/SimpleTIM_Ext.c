@@ -44,7 +44,8 @@ static void timer_ext_callback(void) {
             
             // Call alarm callback
             if (countdown_alarm_callback != NULL) {
-                countdown_alarm_callback();
+                void (*_cb)(void) = countdown_alarm_callback;
+                _cb();
             }
         }
     }
@@ -253,7 +254,7 @@ uint8_t Countdown_IsFinished(void) {
 
 void Countdown_SetAlarmCallback(void (*callback)(void)) {
     __disable_irq();
-    countdown_alarm_callback = callback;
+    *(void (**)(void))&countdown_alarm_callback = callback;
     __enable_irq();
 }
 

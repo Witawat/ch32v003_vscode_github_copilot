@@ -119,7 +119,7 @@ float SoundSensor_ReadLevel(SoundSensor_Instance* sound);
 uint8_t SoundSensor_IsClapDetected(SoundSensor_Instance* sound, float threshold);
 
 /**
- * @brief อ่านค่า peak ของเสียงตั้งแต่上次 reset
+ * @brief อ่านค่า peak ของเสียงตั้งแต่ reset ครั้งล่าสุด
  * @param sound pointer ไปยัง SoundSensor_Instance
  * @return ค่า peak (0.0-1.0)
  *

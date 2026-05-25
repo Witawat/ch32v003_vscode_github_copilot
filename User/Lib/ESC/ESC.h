@@ -19,7 +19,7 @@
  * **⚠️ ความปลอดภัย:**
  * - ต้อง Arm ก่อนใช้งานทุกครั้ง
  * - ถอด propeller ออกก่อน calibrate
- * - ESC บางรุ่นมี反向保护 (reverse protection)
+ * - ESC บางรุ่นมีการป้องกัน reverse (reverse protection)
  *
  * **Hardware Connection:**
  * ```

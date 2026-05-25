@@ -198,7 +198,7 @@ void TIM_AttachInterrupt(TIM_Instance timer, void (*callback)(void)) {
     
     // เก็บ callback (กัน ISR อ่านค่ากลางทาง)
     __disable_irq();
-    tim_callbacks[timer] = callback;
+    *(void (**)(void))&tim_callbacks[timer] = callback;
     __enable_irq();
     
     // เปิด update interrupt
@@ -311,7 +311,8 @@ void TIM1_UP_IRQHandler(void) {
     if (TIM_GetITStatus(TIM1, TIM_IT_Update) != RESET) {
         // เรียก callback
         if (tim_callbacks[TIM_1]) {
-            tim_callbacks[TIM_1]();
+            void (*_cb)(void) = tim_callbacks[TIM_1];
+            _cb();
         }
         
         // Clear flag
@@ -327,7 +328,8 @@ void TIM2_IRQHandler(void) {
     if (TIM_GetITStatus(TIM2, TIM_IT_Update) != RESET) {
         // เรียก callback
         if (tim_callbacks[TIM_2]) {
-            tim_callbacks[TIM_2]();
+            void (*_cb)(void) = tim_callbacks[TIM_2];
+            _cb();
         }
         
         // Clear flag
