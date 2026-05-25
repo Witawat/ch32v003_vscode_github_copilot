@@ -20,7 +20,7 @@ static volatile uint32_t countdown_ms = 0;           // เวลาที่เ
 static uint32_t countdown_initial_ms = 0;            // เวลาเริ่มต้น
 static volatile uint8_t countdown_running = 0;       // สถานะการทำงาน
 static volatile uint8_t countdown_finished = 0;      // สถานะหมดเวลา
-static volatile void (*countdown_alarm_callback)(void) = NULL; // Alarm callback
+static void (* volatile countdown_alarm_callback)(void) = NULL; // Alarm callback
 
 /* ========== Internal Helper Functions ========== */
 

@@ -11,7 +11,7 @@
 /*                              Private Variables                             */
 /******************************************************************************/
 
-static volatile void (*WWDG_Callback)(void) = 0;
+static void (* volatile WWDG_Callback)(void) = 0;
 
 /******************************************************************************/
 /*                              Basic API Functions                           */

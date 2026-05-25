@@ -36,7 +36,7 @@ static const uint8_t tim_irq[] = {
 /**
  * @brief Interrupt callback functions
  */
-static volatile void (*tim_callbacks[2])(void) = {NULL, NULL};
+static void (* volatile tim_callbacks[2])(void) = {NULL, NULL};
 
 /* ========== Internal Helper Functions ========== */
 

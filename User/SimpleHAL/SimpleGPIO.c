@@ -66,7 +66,7 @@ static const PinMap_t pin_map[] = {
  * @brief Interrupt callback functions
  * @note สูงสุด 8 EXTI lines (0-7)
  */
-static volatile void (*exti_callbacks[8])(void) = {0};
+static void (* volatile exti_callbacks[8])(void) = {0};
 
 /* ========== Analog Function State ========== */
 
