@@ -1,6 +1,6 @@
 # CH32V003 Project — Knowledge Base
 
-> **Generated:** 2026-05-03
+> **Generated:** 2026-05-25
 > **Purpose:** เอกสารสรุปโครงสร้าง project, แนวทางการเขียน code, patterns, และ API ทั้งหมด สำหรับให้ AI/Copilot ใช้อ้างอิงในการพัฒนา
 
 ---
@@ -717,6 +717,7 @@ All handlers are declared `.weak` in startup — override by defining the functi
 | **StepperMotor** | Stepper Motor | GPIO |
 | **TJC** | TJC HMI Display | USART |
 | **TM1637** | 4-digit 7-seg Display | GPIO |
+| **TM1650** | 4-digit 7-seg Display (I2C) | I2C |
 | **TMC220x** | Stepper Driver (UART) | USART |
 | **TMC5160** | Stepper Driver (SPI) | SPI |
 | **VL53L0X** | ToF Distance Sensor | I2C |
@@ -761,6 +762,7 @@ USART_Printf_Init(115200);  // Init UART for printf
 
 | Date | Note |
 |------|------|
+| 2026-05-25 | AGENT.MD created: quick reference for AI/Copilot |
 | 2026-05-04 | LCDMenu v1.0: menu system on LCD with 4-button navigation |
 | 2026-05-03 | Initial Knowledge Base created |
 | 2025-12-22 | SimpleHAL v1.9: added SimpleDMA |

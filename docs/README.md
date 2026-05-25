@@ -134,23 +134,71 @@ int main(void) {
 
 ## 📚 Device Libraries (`User/Lib/`)
 
-| Library | คำอธิบาย |
-|---------|----------|
-| **Buzzer** | Passive Buzzer พร้อม Melody, Tone, Beep |
-| **DS18B20** | 1-Wire Temperature Sensor |
-| **IR** | Infrared Remote Receiver (NEC Protocol) |
-| **LCD1602_I2C** | LCD 16x2 ผ่าน I2C (PCF8574) |
-| **MAX7219** | LED Matrix / 7-Segment Display Driver (v1.1: Thai UTF-8 + Effects) |
-| **NeoPixel** | WS2812B RGB LED Strip |
-| **NTC10K** | Thermistor Temperature Sensor (10kΩ NTC) |
-| **OLED** | SSD1306 OLED Display (I2C) พร้อม Fonts, Graphics, Menu |
-| **P10** | P10 LED Panel Driver (Single/Dual/RGB, timer scan) |
-| **PIR** | PIR Motion Sensor |
-| **RotaryEncoder** | Rotary Encoder พร้อม Button |
-| **TJC** | TJC/Nextion HMI Display |
-| **TM1637** | TM1637 4-Digit 7-Segment Display |
-| **WS2812Matrix** | WS2812 8×8 LED Matrix (Instance struct, fonts, effects) |
-| **WS2815Matrix** | WS2815 12V RGB LED Matrix |
+| Library | คำอธิบาย | Interface |
+|---------|----------|-----------|
+| **ADS1115** | 16-bit ADC | I2C |
+| **AT24Cxx** | EEPROM | I2C |
+| **BH1750** | Light Sensor | I2C |
+| **BMP280** | Pressure/Temperature | I2C |
+| **Button** | Push Button with debounce | GPIO |
+| **Buzzer** | Passive Buzzer พร้อม Melody, Tone, Beep | GPIO/PWM |
+| **DHT** | DHT11/DHT22 Temp/Humidity | GPIO |
+| **DRV8825** | Stepper Driver | GPIO |
+| **DS18B20** | 1-Wire Temperature Sensor | 1-Wire |
+| **DS3231** | RTC Module | I2C |
+| **ESC** | ESC Motor Control (BLDC) | PWM |
+| **ESP01** | ESP8266 WiFi Module | USART |
+| **FlameSensor_KY026** | Flame Sensor | ADC/GPIO |
+| **GPS_NEO6M** | GPS Module | USART |
+| **HC05** | Bluetooth Module | USART |
+| **HCSR04** | Ultrasonic Distance | GPIO |
+| **HX711** | Load Cell ADC | GPIO |
+| **I2CScan** | I2C Bus Scanner | I2C |
+| **INA219** | Current/Power Monitor | I2C |
+| **IR** | Infrared Remote Receiver (NEC Protocol) | GPIO |
+| **KeyMatrix** | Keypad Matrix | GPIO |
+| **L298N** | Motor Driver | GPIO/PWM |
+| **LCD1602_I2C** | LCD 16x2 ผ่าน I2C (PCF8574) | I2C |
+| **LCDMenu** | Menu System for LCD1602/2004 (4-btn) | I2C + GPIO |
+| **MAX7219** | LED Matrix / 7-Segment Display Driver (v1.1: Thai UTF-8 + Effects) | SPI |
+| **MCP4725** | 12-bit DAC | I2C |
+| **MPU6050** | IMU Gyro/Accel | I2C |
+| **MQGas** | MQ Gas Sensors | ADC |
+| **NeoPixel** | WS2812B RGB LED Strip | GPIO |
+| **nRF24L01** | 2.4GHz Radio | SPI |
+| **NTC10K** | Thermistor Temperature Sensor (10kΩ NTC) | ADC |
+| **OH49E** | Hall Effect Sensor | ADC |
+| **OLED** | SSD1306 OLED Display (I2C) พร้อม Fonts, Graphics, Menu | I2C |
+| **P10** | P10 LED Panel Driver (Single/Dual/RGB, timer scan) | GPIO |
+| **PCA9685** | 16-ch PWM Driver | I2C |
+| **PCF8574** | I/O Expander | I2C |
+| **PIR** | PIR Motion Sensor | GPIO |
+| **PMS5003** | PM2.5 Sensor | USART |
+| **PZEM004T** | AC Energy Meter | USART |
+| **PZEM004Tv3** | AC Energy Meter v3 | USART |
+| **RainSensor_YL83** | Rain Sensor | ADC/GPIO |
+| **RC522** | RFID Reader | SPI |
+| **RCWL0516** | Microwave Radar | GPIO |
+| **Relay** | Relay Control | GPIO |
+| **RotaryEncoder** | Rotary Encoder พร้อม Button | GPIO |
+| **Servo** | RC Servo Motor | PWM |
+| **ServoCluster** | Multi-Servo Manager | PWM |
+| **ServoTester** | Servo Test Utility | PWM |
+| **ShiftReg595** | 74HC595 Shift Register | GPIO |
+| **SHT3x** | Temp/Humidity Sensor | I2C |
+| **SoilMoisture_YL69** | Soil Moisture Sensor | ADC |
+| **SoundSensor_KY038** | Sound Sensor | ADC |
+| **StepperMotor** | Stepper Motor | GPIO |
+| **TJC** | TJC/Nextion HMI Display | USART |
+| **TM1637** | TM1637 4-Digit 7-Segment Display | GPIO |
+| **TM1650** | 4-Digit 7-Segment Display | I2C |
+| **TMC220x** | Stepper Driver (UART) | USART |
+| **TMC5160** | Stepper Driver (SPI) | SPI |
+| **VL53L0X** | ToF Distance Sensor | I2C |
+| **W25Qxx** | SPI Flash Memory | SPI |
+| **WaterFlow_YFS201** | Water Flow Sensor | GPIO |
+| **WS2812Matrix** | WS2812 8×8 LED Matrix (Instance struct, fonts, effects) | GPIO |
+| **WS2815Matrix** | WS2815 12V RGB LED Matrix | GPIO |
 
 ---
 

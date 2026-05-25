@@ -3,7 +3,7 @@
 Simple Hardware Abstraction Layer สำหรับ CH32V003 - ใช้งานง่ายแบบ Arduino
 
 > **MCU:** CH32V003 (RISC-V, 48MHz, 16KB Flash, 2KB RAM)
-> **Version:** 1.3 | **License:** MIT
+> **Version:** 1.9.0 | **License:** MIT
 
 ---
 
@@ -129,7 +129,7 @@ SimpleHAL/
 
 int main(void) {
     SystemCoreClockUpdate();
-    Timer_Init();
+    // Timer_Init() auto-called via __attribute__((constructor)) — ไม่ต้องเรียกเอง
     // เรียกใช้งาน API ได้เลย
 }
 ```
@@ -142,7 +142,6 @@ int main(void) {
 
 int main(void) {
     SystemCoreClockUpdate();
-    Timer_Init();
     
     pinMode(PC0, PIN_MODE_OUTPUT);
     digitalWrite(PC0, HIGH);
@@ -154,14 +153,13 @@ int main(void) {
 }
 ```
 
-### วิธีที่ 2: Include ทั้งหมด
+### วิธีที่ 3: Include ทั้งหมด
 
 ```c
 #include "SimpleHAL/SimpleHAL.h"
 
 int main(void) {
     SystemCoreClockUpdate();
-    Timer_Init();
     
     // ใช้งาน GPIO
     pinMode(PC0, PIN_MODE_OUTPUT);
@@ -204,7 +202,6 @@ int main(void) {
 
 int main(void) {
     SystemCoreClockUpdate();
-    Timer_Init();
 
     pinMode(PC0, PIN_MODE_OUTPUT);
     USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
@@ -231,12 +228,12 @@ int main(void) {
 ```c
 int main(void) {
     SystemCoreClockUpdate();  // ① อัปเดต system clock (ต้องเป็นบรรทัดแรก)
-    Timer_Init();              // ② เริ่ม SysTick (Delay_Ms / Get_CurrentMs)
+    // ② Timer_Init() auto-called via __attribute__((constructor))
+    // ไม่ต้องเรียก Timer_Init() เอง
 }
 ```
 
-ขาด `SystemCoreClockUpdate()` → baud rate ผิด, PWM ผิดความถี่  
-ขาด `Timer_Init()` → `Delay_Ms()` และ `Get_CurrentMs()` ไม่ทำงาน
+ขาด `SystemCoreClockUpdate()` → baud rate ผิด, PWM ผิดความถี่
 
 ---
 
