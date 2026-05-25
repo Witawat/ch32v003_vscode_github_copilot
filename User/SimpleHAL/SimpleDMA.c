@@ -14,6 +14,7 @@
 // Callback functions สำหรับแต่ละ channel
 static DMA_TransferCompleteCallback transfer_complete_callbacks[7] = {NULL};
 static DMA_ErrorCallback error_callbacks[7] = {NULL};
+static DMA_HalfTransferCallback half_transfer_callbacks[7] = {NULL};
 
 // Status tracking
 static volatile DMA_Status channel_status[7] = {DMA_STATUS_IDLE};
@@ -223,6 +224,21 @@ void DMA_SetErrorCallback(DMA_Channel channel, DMA_ErrorCallback callback) {
     // Enable TE interrupt
     DMA_Channel_TypeDef* dma_ch = get_channel_base(channel);
     DMA_ITConfig(dma_ch, DMA_IT_TE, ENABLE);
+    
+    // Enable NVIC
+    IRQn_Type irqn = get_channel_irqn(channel);
+    NVIC_EnableIRQ(irqn);
+}
+
+/**
+ * @brief ตั้งค่า callback function สำหรับ Half-Transfer
+ */
+void DMA_SetHalfTransferCallback(DMA_Channel channel, DMA_HalfTransferCallback callback) {
+    half_transfer_callbacks[channel - 1] = callback;
+    
+    // Enable HT interrupt
+    DMA_Channel_TypeDef* dma_ch = get_channel_base(channel);
+    DMA_ITConfig(dma_ch, DMA_IT_HT, ENABLE);
     
     // Enable NVIC
     IRQn_Type irqn = get_channel_irqn(channel);
@@ -502,6 +518,158 @@ void DMA_SPI_TransferBuffer(DMA_Channel tx_channel, DMA_Channel rx_channel,
     DMA_WaitComplete(rx_channel, 0);
 }
 
+/* ----- I2C Integration Functions ----- */
+
+/**
+ * @brief เริ่มต้น DMA สำหรับ I2C1 transmission
+ */
+void DMA_I2C_InitTx(DMA_Channel channel) {
+    DMA_Config_t config = {
+        .channel = channel,
+        .direction = DMA_DIR_MEM_TO_PERIPH,
+        .priority = DMA_PRIORITY_HIGH,
+        .data_size = DMA_SIZE_BYTE,
+        .mode = DMA_MODE_NORMAL,
+        .mem_increment = 1,
+        .periph_increment = 0,
+        .periph_addr = (uint32_t)&I2C1->DATAR,
+        .mem_addr = 0,  // Will be set later
+        .buffer_size = 0  // Will be set later
+    };
+    
+    DMA_SimpleInit(&config);
+}
+
+/**
+ * @brief เริ่มต้น DMA สำหรับ I2C1 reception
+ */
+void DMA_I2C_InitRx(DMA_Channel channel) {
+    DMA_Config_t config = {
+        .channel = channel,
+        .direction = DMA_DIR_PERIPH_TO_MEM,
+        .priority = DMA_PRIORITY_HIGH,
+        .data_size = DMA_SIZE_BYTE,
+        .mode = DMA_MODE_NORMAL,
+        .mem_increment = 1,
+        .periph_increment = 0,
+        .periph_addr = (uint32_t)&I2C1->DATAR,
+        .mem_addr = 0,  // Will be set later
+        .buffer_size = 0  // Will be set later
+    };
+    
+    DMA_SimpleInit(&config);
+}
+
+/**
+ * @brief ส่งและรับข้อมูลผ่าน I2C ด้วย DMA
+ */
+void DMA_I2C_Transfer(DMA_Channel tx_channel, DMA_Channel rx_channel,
+                     const uint8_t* tx_data, uint8_t* rx_data, uint16_t length) {
+    DMA_Channel_TypeDef* tx_ch = get_channel_base(tx_channel);
+    DMA_Channel_TypeDef* rx_ch = get_channel_base(rx_channel);
+    
+    // Configure TX
+    DMA_Cmd(tx_ch, DISABLE);
+    tx_ch->MADDR = (uint32_t)tx_data;
+    tx_ch->CNTR = length;
+    
+    // Configure RX
+    DMA_Cmd(rx_ch, DISABLE);
+    rx_ch->MADDR = (uint32_t)rx_data;
+    rx_ch->CNTR = length;
+    
+    // Enable I2C DMA
+    I2C_DMACmd(I2C1, ENABLE);
+    
+    // Start TX first, then RX
+    DMA_Start(tx_channel);
+    DMA_Start(rx_channel);
+    
+    // Wait for completion
+    DMA_WaitComplete(tx_channel, 0);
+    DMA_WaitComplete(rx_channel, 0);
+    
+    // Disable I2C DMA
+    I2C_DMACmd(I2C1, DISABLE);
+}
+
+/* ----- TIM Integration Functions ----- */
+
+/**
+ * @brief เริ่มต้น DMA สำหรับ TIM capture (TIM → RAM)
+ */
+void DMA_TIM_InitCapture(DMA_Channel channel, TIM_TypeDef* TIMx,
+                        uint16_t* buffer, uint16_t length,
+                        uint32_t ccx_addr) {
+    DMA_Config_t config = {
+        .channel = channel,
+        .direction = DMA_DIR_PERIPH_TO_MEM,
+        .priority = DMA_PRIORITY_HIGH,
+        .data_size = DMA_SIZE_HALFWORD,
+        .mode = DMA_MODE_NORMAL,
+        .mem_increment = 1,
+        .periph_increment = 0,
+        .periph_addr = ccx_addr,
+        .mem_addr = (uint32_t)buffer,
+        .buffer_size = length
+    };
+    
+    DMA_SimpleInit(&config);
+    
+    // Enable TIM DMA request for capture
+    // Note: User must call TIM_DMACmd(TIMx, TIM_DMA_CCx, ENABLE) after this
+}
+
+/**
+ * @brief เริ่มต้น DMA สำหรับอัปเดต PWM duty cycle (RAM → TIM CCR)
+ */
+void DMA_TIM_UpdatePWM(DMA_Channel channel, TIM_TypeDef* TIMx,
+                      uint32_t ccr_addr, const uint16_t* waveform,
+                      uint16_t length, uint8_t circular) {
+    DMA_Config_t config = {
+        .channel = channel,
+        .direction = DMA_DIR_MEM_TO_PERIPH,
+        .priority = DMA_PRIORITY_HIGH,
+        .data_size = DMA_SIZE_HALFWORD,
+        .mode = circular ? DMA_MODE_CIRCULAR : DMA_MODE_NORMAL,
+        .mem_increment = 1,
+        .periph_increment = 0,
+        .periph_addr = ccr_addr,
+        .mem_addr = (uint32_t)waveform,
+        .buffer_size = length
+    };
+    
+    DMA_SimpleInit(&config);
+    
+    // Enable TIM DMA request for update event
+    // Note: User must call TIM_DMACmd(TIMx, TIM_DMA_Update, ENABLE) after this
+}
+
+/**
+ * @brief แปลง TIM channel number เป็น CCR register address
+ */
+uint32_t DMA_TIM_GetCCRAddress(TIM_TypeDef* TIMx, uint8_t channel) {
+    uint32_t base = (uint32_t)TIMx;
+    // CH1CVR offset = 0x34, CH2CVR = 0x38, CH3CVR = 0x3C, CH4CVR = 0x40
+    return base + 0x34 + ((channel - 1) * 4);
+}
+
+/* ----- USART One-Shot Wrapper ----- */
+
+/**
+ * @brief ส่งข้อมูลผ่าน USART DMA แบบ blocking (init + transmit + wait)
+ */
+void DMA_USART_Send(DMA_Channel channel, const uint8_t* data, uint16_t length) {
+    // Init USART DMA TX if not already done
+    DMA_USART_InitTx(channel, (uint8_t*)data, length);
+    
+    // Transmit
+    DMA_USART_Transmit(channel, data, length);
+    
+    // Wait for completion
+    DMA_WaitComplete(channel, 0);
+}
+
 /* ----- Simplified analogRead DMA Functions ----- */
 
 // Private variables for analogRead DMA
@@ -681,6 +849,13 @@ static void enable_dma_clock(void) {
  */
 void DMA1_Channel1_IRQHandler(void) __attribute__((interrupt("WCH-Interrupt-fast")));
 void DMA1_Channel1_IRQHandler(void) {
+    if (DMA_GetITStatus(DMA1_IT_HT1) != RESET) {
+        DMA_ClearITPendingBit(DMA1_IT_HT1);
+        if (half_transfer_callbacks[0] != NULL) {
+            half_transfer_callbacks[0](DMA_CH1);
+        }
+    }
+    
     if (DMA_GetITStatus(DMA1_IT_TC1) != RESET) {
         DMA_ClearITPendingBit(DMA1_IT_TC1);
         channel_status[0] = DMA_STATUS_COMPLETE;
@@ -703,6 +878,13 @@ void DMA1_Channel1_IRQHandler(void) {
  */
 void DMA1_Channel2_IRQHandler(void) __attribute__((interrupt("WCH-Interrupt-fast")));
 void DMA1_Channel2_IRQHandler(void) {
+    if (DMA_GetITStatus(DMA1_IT_HT2) != RESET) {
+        DMA_ClearITPendingBit(DMA1_IT_HT2);
+        if (half_transfer_callbacks[1] != NULL) {
+            half_transfer_callbacks[1](DMA_CH2);
+        }
+    }
+    
     if (DMA_GetITStatus(DMA1_IT_TC2) != RESET) {
         DMA_ClearITPendingBit(DMA1_IT_TC2);
         channel_status[1] = DMA_STATUS_COMPLETE;
@@ -725,6 +907,13 @@ void DMA1_Channel2_IRQHandler(void) {
  */
 void DMA1_Channel3_IRQHandler(void) __attribute__((interrupt("WCH-Interrupt-fast")));
 void DMA1_Channel3_IRQHandler(void) {
+    if (DMA_GetITStatus(DMA1_IT_HT3) != RESET) {
+        DMA_ClearITPendingBit(DMA1_IT_HT3);
+        if (half_transfer_callbacks[2] != NULL) {
+            half_transfer_callbacks[2](DMA_CH3);
+        }
+    }
+    
     if (DMA_GetITStatus(DMA1_IT_TC3) != RESET) {
         DMA_ClearITPendingBit(DMA1_IT_TC3);
         channel_status[2] = DMA_STATUS_COMPLETE;
@@ -747,6 +936,13 @@ void DMA1_Channel3_IRQHandler(void) {
  */
 void DMA1_Channel4_IRQHandler(void) __attribute__((interrupt("WCH-Interrupt-fast")));
 void DMA1_Channel4_IRQHandler(void) {
+    if (DMA_GetITStatus(DMA1_IT_HT4) != RESET) {
+        DMA_ClearITPendingBit(DMA1_IT_HT4);
+        if (half_transfer_callbacks[3] != NULL) {
+            half_transfer_callbacks[3](DMA_CH4);
+        }
+    }
+    
     if (DMA_GetITStatus(DMA1_IT_TC4) != RESET) {
         DMA_ClearITPendingBit(DMA1_IT_TC4);
         channel_status[3] = DMA_STATUS_COMPLETE;
@@ -769,6 +965,13 @@ void DMA1_Channel4_IRQHandler(void) {
  */
 void DMA1_Channel5_IRQHandler(void) __attribute__((interrupt("WCH-Interrupt-fast")));
 void DMA1_Channel5_IRQHandler(void) {
+    if (DMA_GetITStatus(DMA1_IT_HT5) != RESET) {
+        DMA_ClearITPendingBit(DMA1_IT_HT5);
+        if (half_transfer_callbacks[4] != NULL) {
+            half_transfer_callbacks[4](DMA_CH5);
+        }
+    }
+    
     if (DMA_GetITStatus(DMA1_IT_TC5) != RESET) {
         DMA_ClearITPendingBit(DMA1_IT_TC5);
         channel_status[4] = DMA_STATUS_COMPLETE;
@@ -791,6 +994,13 @@ void DMA1_Channel5_IRQHandler(void) {
  */
 void DMA1_Channel6_IRQHandler(void) __attribute__((interrupt("WCH-Interrupt-fast")));
 void DMA1_Channel6_IRQHandler(void) {
+    if (DMA_GetITStatus(DMA1_IT_HT6) != RESET) {
+        DMA_ClearITPendingBit(DMA1_IT_HT6);
+        if (half_transfer_callbacks[5] != NULL) {
+            half_transfer_callbacks[5](DMA_CH6);
+        }
+    }
+    
     if (DMA_GetITStatus(DMA1_IT_TC6) != RESET) {
         DMA_ClearITPendingBit(DMA1_IT_TC6);
         channel_status[5] = DMA_STATUS_COMPLETE;
@@ -813,6 +1023,13 @@ void DMA1_Channel6_IRQHandler(void) {
  */
 void DMA1_Channel7_IRQHandler(void) __attribute__((interrupt("WCH-Interrupt-fast")));
 void DMA1_Channel7_IRQHandler(void) {
+    if (DMA_GetITStatus(DMA1_IT_HT7) != RESET) {
+        DMA_ClearITPendingBit(DMA1_IT_HT7);
+        if (half_transfer_callbacks[6] != NULL) {
+            half_transfer_callbacks[6](DMA_CH7);
+        }
+    }
+    
     if (DMA_GetITStatus(DMA1_IT_TC7) != RESET) {
         DMA_ClearITPendingBit(DMA1_IT_TC7);
         channel_status[6] = DMA_STATUS_COMPLETE;

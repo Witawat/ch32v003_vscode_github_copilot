@@ -138,6 +138,12 @@ typedef void (*DMA_TransferCompleteCallback)(DMA_Channel channel);
 typedef void (*DMA_ErrorCallback)(DMA_Channel channel);
 
 /**
+ * @brief Callback function type สำหรับ Half-Transfer (ใช้กับ ping-pong buffer)
+ * @param channel DMA channel ที่ transfer มาครึ่งทาง
+ */
+typedef void (*DMA_HalfTransferCallback)(DMA_Channel channel);
+
+/**
  * @brief DMA Configuration Structure
  */
 typedef struct {
@@ -254,6 +260,24 @@ void DMA_SetTransferCompleteCallback(DMA_Channel channel, DMA_TransferCompleteCa
  * DMA_SetErrorCallback(DMA_CH1, on_error);
  */
 void DMA_SetErrorCallback(DMA_Channel channel, DMA_ErrorCallback callback);
+
+/**
+ * @brief ตั้งค่า callback function สำหรับ Half-Transfer
+ * @param channel DMA channel
+ * @param callback pointer ไปยัง callback function
+ * 
+ * @note ใช้สำหรับ ping-pong buffer: เมื่อ transfer มาครึ่งทาง
+ *       callback จะถูกเรียก ให้สลับไปอ่าน buffer ครึ่งแรก
+ * 
+ * @example
+ * void on_half(DMA_Channel ch) {
+ *     // buffer ครึ่งแรก (0..N/2) พร้อมอ่าน
+ *     process_data(&buf[0], N/2);
+ * }
+ * 
+ * DMA_SetHalfTransferCallback(DMA_CH1, on_half);
+ */
+void DMA_SetHalfTransferCallback(DMA_Channel channel, DMA_HalfTransferCallback callback);
 
 /**
  * @brief รีเซ็ต DMA channel
@@ -434,6 +458,125 @@ void DMA_SPI_Init(DMA_Channel tx_channel, DMA_Channel rx_channel);
  */
 void DMA_SPI_TransferBuffer(DMA_Channel tx_channel, DMA_Channel rx_channel, 
                            const uint8_t* tx_data, uint8_t* rx_data, uint16_t length);
+
+/* ----- I2C Integration Functions ----- */
+
+/**
+ * @brief เริ่มต้น DMA สำหรับ I2C1 transmission
+ * @param channel DMA channel (ต้องใช้ DMA_CH4 สำหรับ I2C1_TX)
+ * 
+ * @note ต้องเรียก I2C_SimpleInit() ก่อนใช้ฟังก์ชันนี้
+ * @note CH32V003: I2C1_TX fixed-map ที่ DMA_CH4, I2C1_RX fixed-map ที่ DMA_CH5
+ * 
+ * @example
+ * DMA_I2C_InitTx(DMA_CH4);
+ */
+void DMA_I2C_InitTx(DMA_Channel channel);
+
+/**
+ * @brief เริ่มต้น DMA สำหรับ I2C1 reception
+ * @param channel DMA channel (ต้องใช้ DMA_CH5 สำหรับ I2C1_RX)
+ * 
+ * @note ต้องเรียก I2C_SimpleInit() ก่อนใช้ฟังก์ชันนี้
+ * 
+ * @example
+ * DMA_I2C_InitRx(DMA_CH5);
+ */
+void DMA_I2C_InitRx(DMA_Channel channel);
+
+/**
+ * @brief ส่งและรับข้อมูลผ่าน I2C ด้วย DMA
+ * @param tx_channel DMA channel สำหรับ TX
+ * @param rx_channel DMA channel สำหรับ RX
+ * @param tx_data pointer ไปยังข้อมูลที่ต้องการส่ง
+ * @param rx_data pointer ไปยัง buffer สำหรับรับข้อมูล
+ * @param length จำนวน bytes
+ * 
+ * @note I2C DMA ต้องใช้ร่วมกับ I2C_WriteReg/I2C_ReadReg สำหรับ
+ *       ส่ง slave address และ register address ก่อน
+ * 
+ * @example
+ * uint8_t tx_buf[32], rx_buf[32];
+ * // I2C_WriteReg(I2C1_ADDR, REG_ADDR, data);  // ตั้ง register ก่อน
+ * DMA_I2C_Transfer(DMA_CH4, DMA_CH5, tx_buf, rx_buf, 32);
+ */
+void DMA_I2C_Transfer(DMA_Channel tx_channel, DMA_Channel rx_channel,
+                     const uint8_t* tx_data, uint8_t* rx_data, uint16_t length);
+
+/* ----- TIM Integration Functions ----- */
+
+/**
+ * @brief เริ่มต้น DMA สำหรับ TIM capture (TIM → RAM)
+ * @param channel DMA channel (TIM1_CH4→DMA_CH4, TIM1_CH3→DMA_CH6, TIM2_CH2→DMA_CH7)
+ * @param TIMx pointer ไปยัง TIM_TypeDef (TIM1 หรือ TIM2)
+ * @param buffer pointer ไปยัง buffer สำหรับเก็บค่าที่จับได้
+ * @param length จำนวนค่าที่ต้องการจับ
+ * @param ccx_addr address ของ TIM capture register (เช่น &TIM1->CH4CVR)
+ * 
+ * @note ต้องตั้งค่า TIM input capture ก่อนใช้ฟังก์ชันนี้
+ * 
+ * @example
+ * // จับค่าความถี่สัญญาณจาก TIM1_CH4
+ * uint16_t cap_buf[100];
+ * DMA_TIM_InitCapture(DMA_CH4, TIM1, cap_buf, 100, (uint32_t)&TIM1->CH4CVR);
+ * TIM_ICInit(TIM1, &ic_config);  // ตั้งค่า input capture
+ * DMA_Start(DMA_CH4);
+ */
+void DMA_TIM_InitCapture(DMA_Channel channel, TIM_TypeDef* TIMx,
+                        uint16_t* buffer, uint16_t length,
+                        uint32_t ccx_addr);
+
+/**
+ * @brief เริ่มต้น DMA สำหรับอัปเดต PWM duty cycle (RAM → TIM CCR)
+ * @param channel DMA channel (TIM1_CH4→DMA_CH4, TIM1_Update→DMA_CH5, ฯลฯ)
+ * @param TIMx pointer ไปยัง TIM_TypeDef
+ * @param ccr_addr address ของ TIM CCR register (เช่น &TIM1->CH1CVR)
+ * @param waveform pointer ไปยัง lookup table ของ duty cycle
+ * @param length จำนวนค่าใน lookup table
+ * @param circular 1 = วนซ้ำ (สร้าง waveform ต่อเนื่อง), 0 = ครั้งเดียว
+ * 
+ * @note ใช้สร้าง waveform แบบ complex (sine, sawtooth, ฯลฯ)
+ *       โดย DMA จะเขียนค่า duty cycle ใหม่ทุกครั้งที่ TIM อัปเดต
+ * 
+ * @example
+ * // สร้าง sine wave 64 samples ที่ PWM output
+ * uint16_t sine_table[64] = { ... };  // คำนวณล่วงหน้า
+ * DMA_TIM_UpdatePWM(DMA_CH5, TIM1, (uint32_t)&TIM1->CH1CVR,
+ *                   sine_table, 64, 1);
+ * TIM_DMACmd(TIM1, TIM_DMA_Update, ENABLE);
+ * DMA_Start(DMA_CH5);
+ */
+void DMA_TIM_UpdatePWM(DMA_Channel channel, TIM_TypeDef* TIMx,
+                      uint32_t ccr_addr, const uint16_t* waveform,
+                      uint16_t length, uint8_t circular);
+
+/**
+ * @brief แปลง TIM channel number เป็น CCR register address
+ * @param TIMx pointer ไปยัง TIM_TypeDef
+ * @param channel TIM channel number (1-4)
+ * @return address ของ TIMx->CHxCVR
+ * 
+ * @example
+ * uint32_t ccr1_addr = DMA_TIM_GetCCRAddress(TIM1, 1);  // &TIM1->CH1CVR
+ */
+uint32_t DMA_TIM_GetCCRAddress(TIM_TypeDef* TIMx, uint8_t channel);
+
+/* ----- USART One-Shot Wrapper ----- */
+
+/**
+ * @brief ส่งข้อมูลผ่าน USART DMA แบบ blocking (init + transmit + wait)
+ * @param channel DMA channel สำหรับ TX (แนะนำ DMA_CH2 หรือ DMA_CH7)
+ * @param data pointer ไปยังข้อมูลที่ต้องการส่ง
+ * @param length จำนวน bytes
+ * 
+ * @note ฟังก์ชันนี้จะ init USART DMA TX, ส่งข้อมูล, และรอจนเสร็จ
+ *       ครบจบในฟังก์ชันเดียว
+ * 
+ * @example
+ * uint8_t msg[] = "Hello DMA!\\r\\n";
+ * DMA_USART_Send(DMA_CH2, msg, sizeof(msg)-1);
+ */
+void DMA_USART_Send(DMA_Channel channel, const uint8_t* data, uint16_t length);
 
 /* ----- Simplified analogRead DMA Functions ----- */
 
