@@ -88,8 +88,7 @@ CH32V003/
 #include "SimpleHAL/SimpleHAL.h"
 
 int main(void) {
-    SystemCoreClockUpdate();
-    Timer_Init();
+    SystemCoreClockUpdate();   // Timer_Init() auto-called by SimpleDelay
 
     // GPIO
     pinMode(PC0, PIN_MODE_OUTPUT);
@@ -122,7 +121,7 @@ int main(void) {
 | **I2C (SW)** | `SimpleI2C_Soft.h` | I2C Software (any pin) |
 | **SPI** | `SimpleSPI.h` | SPI Communication |
 | **1-Wire** | `Simple1Wire.h` | 1-Wire Protocol (DS18B20) |
-| **DMA** | `SimpleDMA.h` | DMA Transfer |
+| **DMA** | `SimpleDMA.h` | DMA Transfer (MemCopy, USART, I2C, TIM, ADC trigger) —[ตัวอย่างเต็ม](User/SimpleHAL/readme/SimpleDMA/DMA_Examples.md) |
 | **Flash** | `SimpleFlash.h` | Flash Memory Storage |
 | **OPAMP** | `SimpleOPAMP.h` | Operational Amplifier |
 | **PWR** | `SimplePWR.h` | Power Management |

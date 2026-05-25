@@ -326,6 +326,7 @@ uint8_t SPI_Transfer(uint8_t data);
 void SPI_TransferBuffer(uint8_t* tx, uint8_t* rx, uint16_t len);
 void SPI_Write(uint8_t* data, uint16_t len);
 void SPI_Read(uint8_t* data, uint16_t len, uint8_t dummy_byte);
+void SPI_SetCSPin(GPIO_TypeDef* port, uint16_t pin);  // เปลี่ยน CS pin สำหรับ multi-device
 void SPI_SetCS(uint8_t state);
 void SPI_SetBitOrder(SPI_BitOrder order);
 void SPI_SetSpeed(SPI_Speed speed);
@@ -366,6 +367,8 @@ void TIM_AdvancedInit(TIM_Instance timer, uint16_t prescaler, uint16_t period, T
 
 **⚠️ Rule:** Do NOT use SimpleTIM and SimplePWM on the same timer instance.
 
+**🔧 Bug fix (2026-05-25):** `enableTimerClock()` เคยใช้ `RCC_APB2PeriphClockCmd` สำหรับ TIM2 — แก้เป็น `RCC_APB1PeriphClockCmd` แล้ว (TIM2 อยู่บน APB1 bus)
+
 ### 4.9 SimplePWM
 
 ```c
@@ -390,8 +393,31 @@ uint16_t PWM_GetDutyCycleRaw(PWM_Channel channel);
 // Direction: DMA_DIR_PERIPH_TO_MEM, DMA_DIR_MEM_TO_PERIPH, DMA_DIR_MEM_TO_MEM
 // Mode: DMA_MODE_NORMAL, DMA_MODE_CIRCULAR
 
-void DMA_MemCopy(void* dst, void* src, uint32_t size);  // Simple memcpy via DMA
-// ... plus full DMA config, callbacks, peripheral linking
+// --- Core ---
+void DMA_Init(DMA_Channel channel, void* periph_addr, void* mem_addr,
+              uint16_t size, DMA_Direction dir, DMA_Mode mode);
+void DMA_Start(DMA_Channel channel);
+void DMA_Stop(DMA_Channel channel);
+void DMA_SetCallback(DMA_Channel channel, void (*callback)(void));
+void DMA_SetHalfTransferCallback(DMA_Channel channel, void (*callback)(void));
+void DMA_WaitComplete(DMA_Channel channel, uint32_t timeout_ms);
+void DMA_MemCopy(void* dst, void* src, uint32_t size);  // blocking copy via DMA
+
+// --- USART ---
+void DMA_USART_Send(uint8_t* data, uint16_t len);  // one-shot USART TX via DMA_CH2
+
+// --- I2C ---
+void DMA_I2C_InitTx(uint8_t* data, uint16_t len);
+void DMA_I2C_InitRx(uint8_t* data, uint16_t len);
+void DMA_I2C_Transfer(uint8_t* tx_data, uint8_t* rx_data, uint16_t len);
+
+// --- TIM ---
+void DMA_TIM_InitCapture(TIM_Instance timer, DMA_Channel ch);  // TIM -> DMA on CC event
+void DMA_TIM_UpdatePWM(TIM_Instance timer, DMA_Channel ch, uint16_t* duty_buf);
+uint16_t* DMA_TIM_GetCCRAddress(TIM_Instance timer, PWM_Ch pwm_ch);
+
+// --- ADC (existing) ---
+void DMA_SetAnalogReadChannel(ADC_Channel channel);  // set ADC ch for DMA-triggered conversion
 ```
 
 ### 4.11 SimpleFlash
@@ -630,6 +656,57 @@ __disable_irq();
 __enable_irq();
 ```
 
+### 8.7 TIM2 Clock Enable (CRITICAL)
+
+TIM2 อยู่บน **APB1** bus, **ไม่ใช่** APB2. ห้ามใช้ `RCC_APB2PeriphClockCmd()` สำหรับ TIM2:
+```c
+// ❌ ผิด:
+RCC_APB2PeriphClockCmd(RCC_APB2Periph_TIM2, ENABLE);
+
+// ✅ ถูก:
+RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, ENABLE);
+```
+
+### 8.8 `volatile` for ISR-Shared Data (CRITICAL)
+
+ตัวแปร callback pointers ที่ shared ระหว่าง main code และ ISR **ต้อง** ประกาศเป็น `volatile`:
+```c
+static void (*volatile dma_callbacks[DMA_CHANNEL_COUNT])(void);
+```
+ถ้าไม่ใส่ `volatile` compiler อาจ optimize อ่านจาก register แทน memory ทำให้ callback ล่าสุดไม่ถูกเรียก
+
+### 8.9 NVIC Priority Initialization (WARNING)
+
+ต้องเรียก `NVIC_SetPriority()` สำหรับทุก IRQ ที่เปิดใช้งาน ก่อนเข้า main loop:
+```c
+NVIC_SetPriority(DMA1_Channel1_IRQn, 1);   // DMA: priority 1
+NVIC_SetPriority(SysTick_IRQn, 3);          // SysTick: lowest priority
+```
+
+### 8.10 Callback Setter — Interrupt Tearing (WARNING)
+
+Setter functions ที่เขียน shared volatile data ต้องป้องกันด้วย `__disable_irq()`/`__enable_irq()`:
+```c
+void DMA_SetCallback(DMA_Channel channel, void (*callback)(void)) {
+    __disable_irq();
+    dma_callbacks[channel] = callback;
+    __enable_irq();
+}
+```
+
+### 8.11 DMA_WaitComplete — Timeout (WARNING)
+
+`DMA_WaitComplete()` ควรมี timeout เพื่อป้องกัน infinite loop ถ้า DMA ไม่ complete:
+```c
+void DMA_WaitComplete(DMA_Channel channel, uint32_t timeout_ms) {
+    uint32_t start = Get_CurrentMs();
+    while (DMA_GetFlagStatus(channel, DMA_FLAG_TC) == RESET) {
+        if (Get_CurrentMs() - start >= timeout_ms) break;
+    }
+    DMA_ClearFlag(channel, DMA_FLAG_TC);
+}
+```
+
 ---
 
 ## 9. Interrupt Vector Table
@@ -762,6 +839,7 @@ USART_Printf_Init(115200);  // Init UART for printf
 
 | Date | Note |
 |------|------|
+| 2026-05-25 | DMA examples doc + full code audit: fixes for TIM2 clock, volatile, IRQ safety, NVIC priority, DMA timeout |
 | 2026-05-25 | AGENT.MD created: quick reference for AI/Copilot |
 | 2026-05-04 | LCDMenu v1.0: menu system on LCD with 4-button navigation |
 | 2026-05-03 | Initial Knowledge Base created |
