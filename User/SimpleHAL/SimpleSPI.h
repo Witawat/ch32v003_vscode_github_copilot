@@ -160,6 +160,19 @@ void SPI_Write(uint8_t* data, uint16_t len);
 void SPI_Read(uint8_t* data, uint16_t len, uint8_t dummy_byte);
 
 /**
+ * @brief เปลี่ยน CS pin (รองรับหลาย SPI devices)
+ * @param port GPIO port เช่น GPIOA, GPIOC, GPIOD
+ * @param pin GPIO pin mask เช่น GPIO_Pin_0, GPIO_Pin_1
+ * 
+ * @note ใช้สำหรับเลือก CS pin ของ SPI device แต่ละตัว
+ *       ต้องตั้ง GPIO เป็น Output ก่อนใช้
+ * 
+ * @example
+ * SPI_SetCSPin(GPIOA, GPIO_Pin_0);  // เปลี่ยน CS เป็น PA0
+ */
+void SPI_SetCSPin(GPIO_TypeDef* port, uint16_t pin);
+
+/**
  * @brief ควบคุม CS (Chip Select) pin
  * @param state 0 = LOW (active), 1 = HIGH (inactive)
  * 

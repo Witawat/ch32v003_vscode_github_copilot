@@ -33,6 +33,7 @@ void Timer_Init(void) {
   SysTick->CNT = 0;                      // เคลียร์ตัวนับ
   SysTick->CMP = SystemCoreClock / 1000; // ตั้งค่าคอมแพร์เพื่อให้เกิด interrupt ทุก 1ms
   SysTick->CTLR = 0xF;          // เปิดการทำงานของ SysTick พร้อม interrupt
+  NVIC_SetPriority(SysTick_IRQn, 3); // ตั้ง priority ต่ำสุด
   NVIC_EnableIRQ(SysTick_IRQn); // เปิดใช้งาน SysTick ใน NVIC
 }
 

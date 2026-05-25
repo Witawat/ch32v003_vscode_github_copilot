@@ -11,7 +11,7 @@
 /*                              Private Variables                             */
 /******************************************************************************/
 
-static void (*WWDG_Callback)(void) = 0;
+static volatile void (*WWDG_Callback)(void) = 0;
 
 /******************************************************************************/
 /*                              Basic API Functions                           */
@@ -112,7 +112,9 @@ void WWDG_InitWithInterrupt(uint8_t counter, uint8_t window, uint32_t prescaler)
  */
 void WWDG_SetCallback(void (*callback)(void))
 {
+    __disable_irq();
     WWDG_Callback = callback;
+    __enable_irq();
 }
 
 /******************************************************************************/

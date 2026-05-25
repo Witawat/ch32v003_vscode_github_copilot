@@ -168,6 +168,15 @@ void SPI_Read(uint8_t* data, uint16_t len, uint8_t dummy_byte) {
 }
 
 /**
+ * @brief เปลี่ยน CS pin
+ */
+void SPI_SetCSPin(GPIO_TypeDef* port, uint16_t pin) {
+    if (!port) return;
+    cs_port = port;
+    cs_pin = pin;
+}
+
+/**
  * @brief ควบคุม CS (Chip Select) pin
  */
 void SPI_SetCS(uint8_t state) {

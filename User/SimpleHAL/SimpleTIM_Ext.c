@@ -20,7 +20,7 @@ static volatile uint32_t countdown_ms = 0;           // เวลาที่เ
 static uint32_t countdown_initial_ms = 0;            // เวลาเริ่มต้น
 static volatile uint8_t countdown_running = 0;       // สถานะการทำงาน
 static volatile uint8_t countdown_finished = 0;      // สถานะหมดเวลา
-static void (*countdown_alarm_callback)(void) = NULL; // Alarm callback
+static volatile void (*countdown_alarm_callback)(void) = NULL; // Alarm callback
 
 /* ========== Internal Helper Functions ========== */
 
@@ -252,7 +252,9 @@ uint8_t Countdown_IsFinished(void) {
 }
 
 void Countdown_SetAlarmCallback(void (*callback)(void)) {
+    __disable_irq();
     countdown_alarm_callback = callback;
+    __enable_irq();
 }
 
 uint32_t Countdown_GetRemainingSeconds(void) {

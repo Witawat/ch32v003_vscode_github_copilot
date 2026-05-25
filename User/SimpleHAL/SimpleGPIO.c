@@ -66,7 +66,7 @@ static const PinMap_t pin_map[] = {
  * @brief Interrupt callback functions
  * @note สูงสุด 8 EXTI lines (0-7)
  */
-static void (*exti_callbacks[8])(void) = {0};
+static volatile void (*exti_callbacks[8])(void) = {0};
 
 /* ========== Analog Function State ========== */
 
@@ -227,8 +227,10 @@ void attachInterrupt(uint8_t pin, void (*callback)(void), GPIO_InterruptMode mod
     
     EXTI_Init(&EXTI_InitStructure);
     
-    // เก็บ callback
+    // เก็บ callback (กัน ISR อ่านค่ากลางทาง)
+    __disable_irq();
     exti_callbacks[map->pin_source] = callback;
+    __enable_irq();
     
     // เปิด NVIC
     NVIC_InitTypeDef NVIC_InitStructure = {0};
@@ -254,8 +256,10 @@ void detachInterrupt(uint8_t pin) {
     EXTI_InitStructure.EXTI_LineCmd = DISABLE;
     EXTI_Init(&EXTI_InitStructure);
     
-    // ลบ callback
+    // ลบ callback (กัน ISR อ่านค่ากลางทาง)
+    __disable_irq();
     exti_callbacks[map->pin_source] = NULL;
+    __enable_irq();
 }
 
 /**

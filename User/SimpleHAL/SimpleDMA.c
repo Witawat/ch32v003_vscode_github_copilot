@@ -11,10 +11,10 @@
 
 /* ========== Private Variables ========== */
 
-// Callback functions สำหรับแต่ละ channel
-static DMA_TransferCompleteCallback transfer_complete_callbacks[7] = {NULL};
-static DMA_ErrorCallback error_callbacks[7] = {NULL};
-static DMA_HalfTransferCallback half_transfer_callbacks[7] = {NULL};
+// Callback functions สำหรับแต่ละ channel (volatile เพราะอ่านใน ISR)
+static volatile DMA_TransferCompleteCallback transfer_complete_callbacks[7] = {NULL};
+static volatile DMA_ErrorCallback error_callbacks[7] = {NULL};
+static volatile DMA_HalfTransferCallback half_transfer_callbacks[7] = {NULL};
 
 // Status tracking
 static volatile DMA_Status channel_status[7] = {DMA_STATUS_IDLE};
@@ -176,11 +176,7 @@ DMA_Status DMA_GetStatus(DMA_Channel channel) {
  * @brief รอให้การถ่ายโอนเสร็จสิ้น (blocking)
  */
 uint8_t DMA_WaitComplete(DMA_Channel channel, uint32_t timeout_ms) {
-    // uint32_t start_time = 0;  // Reserved for future timeout implementation
-    uint8_t use_timeout = (timeout_ms > 0);
-    
-    // Note: ต้องมี timer/delay library สำหรับ timeout
-    // สำหรับตอนนี้ใช้ simple polling
+    uint32_t start_ms = Get_CurrentMs();
     
     while (1) {
         DMA_Status status = DMA_GetStatus(channel);
@@ -193,9 +189,9 @@ uint8_t DMA_WaitComplete(DMA_Channel channel, uint32_t timeout_ms) {
             return 0;
         }
         
-        // TODO: Implement timeout checking with millis()
-        if (use_timeout) {
-            // Placeholder for timeout logic
+        // Timeout checking
+        if (timeout_ms > 0 && (Get_CurrentMs() - start_ms) >= timeout_ms) {
+            return 0;  // Timeout
         }
     }
 }
@@ -204,14 +200,17 @@ uint8_t DMA_WaitComplete(DMA_Channel channel, uint32_t timeout_ms) {
  * @brief ตั้งค่า callback function สำหรับ Transfer Complete
  */
 void DMA_SetTransferCompleteCallback(DMA_Channel channel, DMA_TransferCompleteCallback callback) {
+    __disable_irq();
     transfer_complete_callbacks[channel - 1] = callback;
+    __enable_irq();
     
     // Enable TC interrupt
     DMA_Channel_TypeDef* dma_ch = get_channel_base(channel);
     DMA_ITConfig(dma_ch, DMA_IT_TC, ENABLE);
     
-    // Enable NVIC
+    // Enable NVIC with priority
     IRQn_Type irqn = get_channel_irqn(channel);
+    NVIC_SetPriority(irqn, 1);  // Preemption priority = 1
     NVIC_EnableIRQ(irqn);
 }
 
@@ -219,14 +218,17 @@ void DMA_SetTransferCompleteCallback(DMA_Channel channel, DMA_TransferCompleteCa
  * @brief ตั้งค่า callback function สำหรับ Error
  */
 void DMA_SetErrorCallback(DMA_Channel channel, DMA_ErrorCallback callback) {
+    __disable_irq();
     error_callbacks[channel - 1] = callback;
+    __enable_irq();
     
     // Enable TE interrupt
     DMA_Channel_TypeDef* dma_ch = get_channel_base(channel);
     DMA_ITConfig(dma_ch, DMA_IT_TE, ENABLE);
     
-    // Enable NVIC
+    // Enable NVIC with priority
     IRQn_Type irqn = get_channel_irqn(channel);
+    NVIC_SetPriority(irqn, 1);  // Preemption priority = 1
     NVIC_EnableIRQ(irqn);
 }
 
@@ -234,14 +236,17 @@ void DMA_SetErrorCallback(DMA_Channel channel, DMA_ErrorCallback callback) {
  * @brief ตั้งค่า callback function สำหรับ Half-Transfer
  */
 void DMA_SetHalfTransferCallback(DMA_Channel channel, DMA_HalfTransferCallback callback) {
+    __disable_irq();
     half_transfer_callbacks[channel - 1] = callback;
+    __enable_irq();
     
     // Enable HT interrupt
     DMA_Channel_TypeDef* dma_ch = get_channel_base(channel);
     DMA_ITConfig(dma_ch, DMA_IT_HT, ENABLE);
     
-    // Enable NVIC
+    // Enable NVIC with priority
     IRQn_Type irqn = get_channel_irqn(channel);
+    NVIC_SetPriority(irqn, 1);  // Preemption priority = 1
     NVIC_EnableIRQ(irqn);
 }
 
@@ -675,6 +680,13 @@ void DMA_USART_Send(DMA_Channel channel, const uint8_t* data, uint16_t length) {
 // Private variables for analogRead DMA
 static DMA_Channel adc_dma_channel = DMA_CH1;
 static uint8_t adc_dma_active = 0;
+
+/**
+ * @brief เปลี่ยน DMA channel สำหรับ analogRead DMA
+ */
+void DMA_SetAnalogReadChannel(DMA_Channel channel) {
+    adc_dma_channel = channel;
+}
 
 /**
  * @brief เริ่มต้น DMA สำหรับ analogRead แบบง่าย

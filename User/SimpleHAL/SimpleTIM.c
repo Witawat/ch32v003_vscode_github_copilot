@@ -36,7 +36,7 @@ static const uint8_t tim_irq[] = {
 /**
  * @brief Interrupt callback functions
  */
-static void (*tim_callbacks[2])(void) = {NULL, NULL};
+static volatile void (*tim_callbacks[2])(void) = {NULL, NULL};
 
 /* ========== Internal Helper Functions ========== */
 
@@ -57,7 +57,7 @@ static void enableTimerClock(TIM_Instance timer) {
     if (timer == TIM_1) {
         RCC_APB2PeriphClockCmd(tim_rcc[timer], ENABLE);
     } else {
-        RCC_APB2PeriphClockCmd(tim_rcc[timer], ENABLE);
+        RCC_APB1PeriphClockCmd(tim_rcc[timer], ENABLE);  // TIM2 อยู่บน APB1 bus
     }
 }
 
@@ -196,8 +196,10 @@ void TIM_AttachInterrupt(TIM_Instance timer, void (*callback)(void)) {
     TIM_TypeDef* TIMx = getTIM(timer);
     if (!TIMx || !callback) return;
     
-    // เก็บ callback
+    // เก็บ callback (กัน ISR อ่านค่ากลางทาง)
+    __disable_irq();
     tim_callbacks[timer] = callback;
+    __enable_irq();
     
     // เปิด update interrupt
     TIM_ITConfig(TIMx, TIM_IT_Update, ENABLE);
@@ -221,8 +223,10 @@ void TIM_DetachInterrupt(TIM_Instance timer) {
     // ปิด interrupt
     TIM_ITConfig(TIMx, TIM_IT_Update, DISABLE);
     
-    // ลบ callback
+    // ลบ callback (กัน ISR อ่านค่ากลางทาง)
+    __disable_irq();
     tim_callbacks[timer] = NULL;
+    __enable_irq();
     
     // ปิด NVIC
     NVIC_InitTypeDef NVIC_InitStructure = {0};

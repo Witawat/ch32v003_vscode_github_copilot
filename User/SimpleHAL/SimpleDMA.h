@@ -633,6 +633,19 @@ void DMA_analogReadStop(void);
  */
 uint8_t DMA_analogReadBusy(void);
 
+/**
+ * @brief เปลี่ยน DMA channel สำหรับ analogRead DMA
+ * @param channel DMA channel ที่ต้องการใช้
+ * 
+ * @note ต้องเรียกก่อน DMA_analogReadStart()
+ *       default คือ DMA_CH1
+ * 
+ * @example
+ * DMA_SetAnalogReadChannel(DMA_CH2);
+ * DMA_analogReadStart(PD2, buf, 100, 1);
+ */
+void DMA_SetAnalogReadChannel(DMA_Channel channel);
+
 /* ----- Helper Functions ----- */
 
 /**
