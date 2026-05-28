@@ -198,7 +198,7 @@ void TIM_AttachInterrupt(TIM_Instance timer, void (*callback)(void)) {
     
     // เก็บ callback (กัน ISR อ่านค่ากลางทาง)
     __disable_irq();
-    *(void (**)(void))&tim_callbacks[timer] = callback;
+    tim_callbacks[timer] = callback;
     __enable_irq();
     
     // เปิด update interrupt

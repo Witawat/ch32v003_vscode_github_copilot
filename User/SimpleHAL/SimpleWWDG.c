@@ -113,7 +113,7 @@ void WWDG_InitWithInterrupt(uint8_t counter, uint8_t window, uint32_t prescaler)
 void WWDG_SetCallback(void (*callback)(void))
 {
     __disable_irq();
-    *(void (**)(void))&WWDG_Callback = callback;
+    WWDG_Callback = callback;
     __enable_irq();
 }
 

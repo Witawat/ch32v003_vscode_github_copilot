@@ -229,7 +229,7 @@ void attachInterrupt(uint8_t pin, void (*callback)(void), GPIO_InterruptMode mod
     
     // เก็บ callback (กัน ISR อ่านค่ากลางทาง)
     __disable_irq();
-    *(void (**)(void))&exti_callbacks[map->pin_source] = callback;
+    exti_callbacks[map->pin_source] = callback;
     __enable_irq();
     
     // เปิด NVIC

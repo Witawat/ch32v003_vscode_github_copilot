@@ -254,7 +254,7 @@ uint8_t Countdown_IsFinished(void) {
 
 void Countdown_SetAlarmCallback(void (*callback)(void)) {
     __disable_irq();
-    *(void (**)(void))&countdown_alarm_callback = callback;
+    countdown_alarm_callback = callback;
     __enable_irq();
 }
 

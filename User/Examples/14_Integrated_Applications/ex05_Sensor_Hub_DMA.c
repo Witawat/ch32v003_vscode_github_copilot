@@ -36,6 +36,7 @@
  */
 
 #include <SimpleHAL.h>
+#include <string.h>
 
 #define BMP280_ADDR  0x76
 #define DS18B20_PIN  PD2
@@ -155,9 +156,7 @@ const char* W25Q_IDToName(uint32_t id) {
 void DMA_SendString(const char *str) {
     if (dmaBusy) return;
 
-    uint16_t len = 0;
-    while (str[len] != 0) len++;
-
+    uint16_t len = (uint16_t)strlen(str);
     DMA_USART_Send(DMA_USART_CH, (uint8_t*)str, len);
     dmaBusy = 1;
 }

@@ -28,14 +28,6 @@ set ARCH=-march=rv32ecxw -mabi=ilp32e
 set CFLAGS=%ARCH% -msmall-data-limit=0 -msave-restore -Os -fmessage-length=0 -fsigned-char -ffunction-sections -fdata-sections -fno-common -Wunused -Wuninitialized -g
 set INCLUDES=-I"%PROJECT_ROOT%\Debug" -I"%PROJECT_ROOT%\Core" -I"%PROJECT_ROOT%\User" -I"%PROJECT_ROOT%\Peripheral\inc" -I"%PROJECT_ROOT%\User\SimpleHAL"
 
-:: Check compiler
-if not exist "%TC_BIN%\%GCC_PREFIX%gcc.exe" (
-    echo [ERROR] Compiler not found: %TC_BIN%\%GCC_PREFIX%gcc.exe
-    echo.
-    echo  Check TOOLCHAIN_CHOICE or toolchain path in this script.
-    pause
-    exit /b 1
-)
 echo [OK] Compiler: %TC_BIN%\%GCC_PREFIX%gcc.exe
 echo.
 
