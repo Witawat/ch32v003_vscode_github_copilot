@@ -1,7 +1,7 @@
 # CH32V003 Project — Agent Reference
 
 > Quick reference สำหรับ AI/Copilot ใช้พัฒนาโปรเจกต์นี้
-> **Updated:** 2026-05-25
+> **Updated:** 2026-06-16
 
 ---
 
@@ -136,6 +136,29 @@ void DMA_MemCopy(void* dst, void* src, uint32_t size);
 // Flash — Flash_SaveConfig(&data, sizeof(data))
 FlashStatus Flash_SaveConfig(void* data, uint16_t size);
 FlashStatus Flash_LoadConfig(void* data, uint16_t size);
+```
+
+### Arduino Compatible API (`SimpleArduino.h`)
+
+| Function | Maps To | Notes |
+|----------|---------|-------|
+| `millis()` | `Get_CurrentMs()` | macro |
+| `micros()` | `Get_CurrentUs()` | macro |
+| `delay(ms)` | `Delay_Ms(ms)` | macro |
+| `delayMicroseconds(us)` | `Delay_Us(us)` | macro |
+| `interrupts()` | `__enable_irq()` | macro |
+| `noInterrupts()` | `__disable_irq()` | macro |
+| `digitalPinToInterrupt(pin)` | — | map pin→EXTI line |
+| `randomSeed(seed)` | — | LCG PRNG seed |
+| `_randomMax(max)` | — | `[0, max-1]`, ⚠️ ใช้ `_randomMax` แทน `random` เพราะ stdlib มี `long random(void)` |
+| `_randomRange(min, max)` | — | `[min, max-1]` |
+| `yield()` | `IWDG_Feed()` | cooperative multitasking |
+| `dtostrf(val, width, precision, buf)` | — | lightweight, no sprintf |
+
+**Optional (define before include):**
+```c
+#define ENABLE_USART_PRINTLN  1   // USART_Println, PrintlnNum, PrintlnHex
+#define ENABLE_USART_PRINTFLOAT 1 // USART_PrintFloat, PrintlnFloat (requires ENABLE_USART_PRINTLN)
 ```
 
 ### Pin Configurations

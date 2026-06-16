@@ -66,6 +66,7 @@ extern "C" {
 #include "SimpleI2C.h" // IWYU pragma: keep
 #include "SimpleSPI.h" // IWYU pragma: keep
 #include "SimpleADC.h" // IWYU pragma: keep
+#include "SimpleArduino.h" // IWYU pragma: keep
 #include "SimpleGPIO.h" // IWYU pragma: keep
 #include "SimpleTIM.h" // IWYU pragma: keep
 #include "SimpleTIM_Ext.h" // IWYU pragma: keep
