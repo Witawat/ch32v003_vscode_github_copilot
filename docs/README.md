@@ -136,11 +136,14 @@ int main(void) {
 | Library | คำอธิบาย | Interface |
 |---------|----------|-----------|
 | **ADS1115** | 16-bit ADC | I2C |
+| **AHT10** | AHT10/AHT20 Temp/Humidity Sensor | I2C |
+| **AS5600** | Magnetic Rotary Encoder (12-bit) | I2C |
 | **AT24Cxx** | EEPROM | I2C |
 | **BH1750** | Light Sensor | I2C |
 | **BMP280** | Pressure/Temperature | I2C |
 | **Button** | Push Button with debounce | GPIO |
 | **Buzzer** | Passive Buzzer พร้อม Melody, Tone, Beep | GPIO/PWM |
+| **CircularBuffer** | Generic Circular Buffer (FIFO) | — |
 | **DHT** | DHT11/DHT22 Temp/Humidity | GPIO |
 | **DRV8825** | Stepper Driver | GPIO |
 | **DS18B20** | 1-Wire Temperature Sensor | 1-Wire |
@@ -159,6 +162,7 @@ int main(void) {
 | **L298N** | Motor Driver | GPIO/PWM |
 | **LCD1602_I2C** | LCD 16x2 ผ่าน I2C (PCF8574) | I2C |
 | **LCDMenu** | Menu System for LCD1602/2004 (4-btn) | I2C + GPIO |
+| **MAX31855** | Thermocouple Reader (MAX31855/MAX6675) | SPI |
 | **MAX7219** | LED Matrix / 7-Segment Display Driver (v1.1: Thai UTF-8 + Effects) | SPI |
 | **MCP4725** | 12-bit DAC | I2C |
 | **MPU6050** | IMU Gyro/Accel | I2C |
@@ -171,6 +175,7 @@ int main(void) {
 | **P10** | P10 LED Panel Driver (Single/Dual/RGB, timer scan) | GPIO |
 | **PCA9685** | 16-ch PWM Driver | I2C |
 | **PCF8574** | I/O Expander | I2C |
+| **PID** | PID Controller Algorithm (P/PI/PD/PID) | — |
 | **PIR** | PIR Motion Sensor | GPIO |
 | **PMS5003** | PM2.5 Sensor | USART |
 | **PZEM004T** | AC Energy Meter | USART |
@@ -185,9 +190,12 @@ int main(void) {
 | **ServoTester** | Servo Test Utility | PWM |
 | **ShiftReg595** | 74HC595 Shift Register | GPIO |
 | **SHT3x** | Temp/Humidity Sensor | I2C |
+| **SimpleScheduler** | Cooperative Task Scheduler (non-RTOS) | — |
+| **SoftUART** | Software Bit-Bang Serial (เพิ่มพอร์ต USART) | GPIO |
 | **SoilMoisture_YL69** | Soil Moisture Sensor | ADC |
 | **SoundSensor_KY038** | Sound Sensor | ADC |
 | **StepperMotor** | Stepper Motor | GPIO |
+| **TCS34725** | RGB Color Sensor (RGBC, Lux, ColorTemp) | I2C |
 | **TJC** | TJC/Nextion HMI Display | USART |
 | **TM1637** | TM1637 4-Digit 7-Segment Display | GPIO |
 | **TM1650** | 4-Digit 7-Segment Display | I2C |
