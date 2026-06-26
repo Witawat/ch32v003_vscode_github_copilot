@@ -107,7 +107,19 @@ HC05_ATCommand(&bt, "AT+PSWD=1234", response, 64, 1000);
 - `HC05_ReadByte(bt, &byte)` : อ่านข้อมูล 1 Byte
 - `HC05_ReadLine(bt, buf, max_len, timeout)` : อ่านข้อมูลจนจบบรรทัด (`\n`)
 - `HC05_ATCommand(bt, cmd, resp, len, timeout)` : ส่งคำสั่ง AT Command
-- `HC05_Flush(bt)` : ล้างข้อมูลใน Buffer รับ
+- `HC05_Flush(bt)` : ล้างข้อมูลใน Buffer รับ (timeout 100ms)
+
+---
+
+## ข้อจำกัด
+
+| ข้อจำกัด | รายละเอียด |
+|----------|-----------|
+| **`Flush` timeout 100ms** | ป้องกัน infinite loop หาก noise บน RX |
+| **`Timer_Init()`** | ต้องเรียก `Timer_Init()` หลัง `SystemCoreClockUpdate()` |
+| **USART1 แข่ง** | HC05 ใช้ USART1 — หยุด USART debug print ก่อนใช้งาน |
+
+ดูข้อจำกัดทั้งหมด: [`LIMITATIONS.md`](../LIMITATIONS.md)
 
 ---
 **พัฒนาโดย:** CH32V003 Library Team

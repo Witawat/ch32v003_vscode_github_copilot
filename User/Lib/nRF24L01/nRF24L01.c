@@ -219,9 +219,11 @@ nRF24_Status nRF24_Transmit(nRF24_Instance* radio, const uint8_t* data, uint8_t 
             return NRF24_ERROR_TX_FAIL;
         }
         if ((Get_CurrentMs() - start) > 500) {
+            _command(radio, NRF24_CMD_FLUSH_TX);
             radio->is_rx_mode = 0;
             return NRF24_ERROR_TIMEOUT;
         }
+        Delay_Ms(1);
     }
 }
 

@@ -21,6 +21,7 @@ static P10_Instance* _active_instance = NULL;
  * สูงสุด: 32*16*3/8 = 192 bytes (RGB) — ใช้ RAM 9.4% ของ CH32V003
  */
 static uint8_t _framebuffer[32 * 16 * P10_NUM_PLANES / 8];
+#define P10_FB_SIZE  (32 * 16 * P10_NUM_PLANES / 8)
 
 /* ========== Private Function Prototypes ========== */
 
@@ -111,6 +112,8 @@ uint8_t P10_Init(P10_Instance* inst, P10_Config* cfg) {
 
     // === Calculate buffer size ===
     inst->buffer_size = (cfg->width * cfg->rows * P10_NUM_PLANES) / 8;
+
+    if (inst->buffer_size > P10_FB_SIZE) return 0;
 
     // === Assign frame buffer ===
     inst->framebuffer = _framebuffer;

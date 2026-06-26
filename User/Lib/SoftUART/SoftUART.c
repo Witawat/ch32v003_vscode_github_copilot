@@ -44,6 +44,7 @@ SoftUART_Status SoftUART_Init(SoftUART_Instance* uart, uint8_t tx_pin, uint8_t r
 
 SoftUART_Status SoftUART_SetBaud(SoftUART_Instance* uart, uint32_t baud) {
     if (uart == NULL || baud == 0) return SOFTUART_ERROR;
+    if (baud == 0) return SOFTUART_ERROR;
     uart->baud        = baud;
     uart->bit_time_us = 1000000 / baud;
     return SOFTUART_OK;

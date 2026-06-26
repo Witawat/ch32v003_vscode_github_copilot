@@ -149,7 +149,7 @@ const OLED_Font Font_8x16 = {
     .height = 16,
     .first_char = 32,
     .last_char = 126,
-    .data = font_6x8_data  // Placeholder - would be actual 8x16 data
+    .data = NULL  /* ยังไม่มีข้อมูล 8x16 — renderer จะ fallback เป็น Font_6x8 */
 };
 
 const OLED_Font Font_12x16 = {
@@ -157,7 +157,7 @@ const OLED_Font Font_12x16 = {
     .height = 16,
     .first_char = 32,
     .last_char = 126,
-    .data = font_6x8_data  // Placeholder - would be actual 12x16 data
+    .data = NULL  /* ยังไม่มีข้อมูล 12x16 — renderer จะ fallback เป็น Font_6x8 */
 };
 
 /* ========== Global Variables ========== */
@@ -295,6 +295,15 @@ static void _draw_bitmap8_scaled(OLED_Handle* oled, int16_t x, int16_t y, const 
 }
 
 static uint8_t _draw_ascii_scaled_internal(OLED_Handle* oled, int16_t x, int16_t y, char c, OLED_Color color, uint8_t scale) {
+    if(current_font->data == NULL) {
+        /* Font data ยังไม่พร้อม — fallback เป็น Font_6x8 */
+        const OLED_Font* saved = current_font;
+        current_font = &Font_6x8;
+        uint8_t w = _draw_ascii_scaled_internal(oled, x, y, c, color, scale);
+        current_font = saved;
+        return w;
+    }
+
     if(c < current_font->first_char || c > current_font->last_char) {
         return 0;
     }

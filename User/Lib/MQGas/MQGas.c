@@ -54,6 +54,7 @@ MQGas_Status MQGas_Init(MQGas_Instance* mq, ADC_Channel ch,
     mq->type         = type;
     mq->vcc          = vcc;
     mq->vref         = vref;
+    ADC_EnableChannel(ch);
     mq->rl           = MQGAS_RL_KOHM;
     mq->ro           = 10.0f;  /* default, ต้อง calibrate */
     mq->threshold    = 500.0f; /* default threshold 500 PPM */

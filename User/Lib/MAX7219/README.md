@@ -325,6 +325,17 @@ Library มีฟอนต์ทั้งหมด:
 - **RAM:** ~1KB (สำหรับ 1 matrix)
 - **Flash:** ~8KB
 
+## ข้อจำกัด
+
+| ข้อจำกัด | รายละเอียด |
+|----------|-----------|
+| **SPI init เอง** | ผู้ใช้ต้องเรียก `SPI_SimpleInit(SPI_MODE0, speed, pins)` ก่อน `MAX7219_Init` |
+| **`RunningLight`** | `while(1)` infinite loop — ใช้แบบ blocking ใน main loop |
+| **`Timer_Init()`** | ต้องเรียก `Timer_Init()` หลัง `SystemCoreClockUpdate()` |
+
+ดูข้อจำกัดทั้งหมด: [`LIMITATIONS.md`](../LIMITATIONS.md)
+
+---
 ## License
 
 MIT License - ใช้งานได้อย่างอิสระ

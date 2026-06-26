@@ -7,16 +7,16 @@
 
 #include "oled_i2c.h"
 
-/* ========== Static Buffers ========== */
+/* ========== Static Buffers (union — จองเฉพาะขนาดใหญ่สุด 1024B) ========== */
+static union {
+    uint8_t buf_128x64[1024];
+    uint8_t buf_128x32[512];
+    uint8_t buf_64x48[384];
+} oled_fb;
 
-// Static buffer for 128x64 (1024 bytes)
-static uint8_t oled_buffer_128x64[1024];
-
-// Static buffer for 128x32 (512 bytes)
-static uint8_t oled_buffer_128x32[512];
-
-// Static buffer for 64x48 (384 bytes)
-static uint8_t oled_buffer_64x48[384];
+#define oled_buffer_128x64  oled_fb.buf_128x64
+#define oled_buffer_128x32  oled_fb.buf_128x32
+#define oled_buffer_64x48   oled_fb.buf_64x48
 
 /* ========== Private Helper Functions ========== */
 

@@ -99,5 +99,16 @@ int main(void) {
 - `INA219_PowerUp(ina)` : กลับมาทำงานโหมดต่อเนื่อง
 
 ---
+
+## ข้อจำกัด
+
+| ข้อจำกัด | รายละเอียด |
+|----------|-----------|
+| **Error sentinel = `NAN`** | คืน `NAN` เมื่อ error — ตรวจสอบด้วย `isnan()` |
+| **`Timer_Init()`** | ต้องเรียก `Timer_Init()` หลัง `SystemCoreClockUpdate()` |
+
+ดูข้อจำกัดทั้งหมด: [`LIMITATIONS.md`](../LIMITATIONS.md)
+
+---
 **พัฒนาโดย:** CH32V003 Library Team
 **รองรับบอร์ด:** CH32V003 Development Board

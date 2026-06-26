@@ -300,5 +300,15 @@ int main(void) {
 
 ---
 
+## ข้อจำกัด
+
+| ข้อจำกัด | รายละเอียด |
+|----------|-----------|
+| **`WaitKey` timeout 5s** | Timeout 5s สำหรับ key press + 2s สำหรับ key release — ไม่ block ถาวร |
+| **`Timer_Init()`** | ต้องเรียก `Timer_Init()` หลัง `SystemCoreClockUpdate()` |
+
+ดูข้อจำกัดทั้งหมด: [`LIMITATIONS.md`](../LIMITATIONS.md)
+
+---
 @author CH32V003 Library Team
 @copyright MIT License

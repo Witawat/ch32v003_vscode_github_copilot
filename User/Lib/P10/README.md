@@ -861,6 +861,17 @@ void P10_ScanHandler(P10_Instance* inst);
 
 ---
 
+## ข้อจำกัด
+
+| ข้อจำกัด | รายละเอียด |
+|----------|-----------|
+| **Panel สูงสุด 32×16** | Buffer static 192B (RGB) — config ใหญ่กว่าถูก reject |
+| **TIM2 hardcoded** | P10 ใช้ TIM2 — แข่งกับ PWM2, SimpleTIM, Stopwatch |
+| **`Timer_Init()`** | ต้องเรียก `Timer_Init()` หลัง `SystemCoreClockUpdate()` |
+
+ดูข้อจำกัดทั้งหมด: [`LIMITATIONS.md`](../LIMITATIONS.md)
+
+---
 ## ใบอนุญาต
 
 MIT License — CH32V003 Library Team

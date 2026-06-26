@@ -122,8 +122,7 @@ MAX7219_Handle* MAX7219_Init(uint8_t clk_pin, uint8_t mosi_pin, uint8_t cs_pin, 
     // Clear display buffer
     memset(handle->buffer, 0, sizeof(handle->buffer));
     
-    // Initialize SPI
-    SPI_SimpleInit(SPI_MODE0, SPI_2MHZ, SPI_PINS_DEFAULT);
+    /* ผู้ใช้ต้องเรียก SPI_SimpleInit(SPI_MODE0, ..., SPI_PINS_DEFAULT) ก่อนเรียก MAX7219_Init */
     
     // Initialize CS pin
     pinMode(cs_pin, PIN_MODE_OUTPUT);

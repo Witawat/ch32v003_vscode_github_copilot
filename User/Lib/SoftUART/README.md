@@ -89,5 +89,18 @@ int main(void) {
 - `SoftUART_Printf(uart, format, ...)` : ส่งแบบ formatted print
 
 ---
+
+## ข้อจำกัด
+
+| ข้อจำกัด | รายละเอียด |
+|----------|-----------|
+| **Baud ≤ 38400** | Baud สูงกว่า timing error สะสม ~8% ต่อ 10 bits |
+| **Baud=0 guard** | Return error — ป้องกัน DIV/0 |
+| **RX buffer** | Ring buffer ไม่รับข้อมูลแบบ async — ใช้ `SoftUART_ReadByte` พร้อม timeout |
+| **`Timer_Init()`** | ต้องเรียก `Timer_Init()` หลัง `SystemCoreClockUpdate()` |
+
+ดูข้อจำกัดทั้งหมด: [`LIMITATIONS.md`](../LIMITATIONS.md)
+
+---
 **พัฒนาโดย:** CH32V003 Library Team
 **รองรับบอร์ด:** CH32V003 Development Board

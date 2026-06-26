@@ -46,7 +46,8 @@ static float CalculateTempBeta(NTC_Instance* ntc, float resistance) {
     // Beta equation: 1/T = 1/T0 + (1/B) × ln(R/R0)
     // T = 1 / (1/T0 + (1/B) × ln(R/R0))
     
-    float t0_kelvin = ntc->config.t_nominal + 273.15f;  // แปลง °C เป็น K
+    float t0_kelvin = ntc->config.t_nominal + 273.15f;
+    if (t0_kelvin <= 0.0f || ntc->config.b_value <= 0.0f) return 0.0f;
     float ln_r_ratio = logf(resistance / ntc->config.r_nominal);
     float temp_kelvin = 1.0f / ((1.0f / t0_kelvin) + (ln_r_ratio / ntc->config.b_value));
     float temp_celsius = temp_kelvin - 273.15f;

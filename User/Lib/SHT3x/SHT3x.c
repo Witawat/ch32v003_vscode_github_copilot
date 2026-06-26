@@ -36,7 +36,7 @@ static uint8_t _crc8(const uint8_t* data, uint8_t len) {
 /* ========== Private: send 2-byte command ========== */
 static SHT3x_Status _send_cmd(SHT3x_Instance* sht, const uint8_t cmd[2]) {
     uint8_t buf[2] = {cmd[0], cmd[1]};
-    return (I2C_Write(sht->i2c_addr, buf, 2) == 0) ? SHT3X_OK : SHT3X_ERROR_I2C;
+    return (I2C_Write(sht->i2c_addr, buf, 2) == I2C_OK) ? SHT3X_OK : SHT3X_ERROR_I2C;
 }
 
 /* ========== Public ========== */
@@ -52,7 +52,7 @@ SHT3x_Status SHT3x_Init(SHT3x_Instance* sht, uint8_t addr) {
 
     /* Soft reset */
     uint8_t cmd[2] = {_CMD_SOFT_RESET[0], _CMD_SOFT_RESET[1]};
-    if (I2C_Write(sht->i2c_addr, cmd, 2) != 0)
+    if (I2C_Write(sht->i2c_addr, cmd, 2) != I2C_OK)
         return SHT3X_ERROR_I2C;
 
     Delay_Ms(15);
@@ -79,7 +79,7 @@ SHT3x_Status SHT3x_Read(SHT3x_Instance* sht, float* temp, float* hum) {
 
     /* อ่าน 6 bytes: T_MSB, T_LSB, T_CRC, H_MSB, H_LSB, H_CRC */
     uint8_t buf[6];
-    if (I2C_Read(sht->i2c_addr, buf, 6) != 0)
+    if (I2C_Read(sht->i2c_addr, buf, 6) != I2C_OK)
         return SHT3X_ERROR_I2C;
 
     /* ตรวจ CRC */

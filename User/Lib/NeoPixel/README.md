@@ -172,5 +172,18 @@ void NeoPixel_Init(GPIO_TypeDef* port, uint16_t pin, uint16_t num_leds);
 - `NeoPixel_SetBrightness(brightness)` : ตั้งค่าความสว่างทั้งหมด (0-255)
 
 ---
+
+## ข้อจำกัด
+
+| ข้อจำกัด | รายละเอียด |
+|----------|-----------|
+| **`FillGradient` ≥ 2 LEDs** | ถ้ามี LED ดวงเดียวจะ return ทันที |
+| **`malloc` usage** | ใช้ `malloc` จอง buffer — หลีกเลี่ยงการเรียก `NeoPixel_Init` ซ้ำ (memory leak) |
+| **IRQ disabled** | ปิด interrupt ระหว่างส่งข้อมูล (64 LEDs ≈ 1.9ms) |
+| **`Timer_Init()`** | ต้องเรียก `Timer_Init()` หลัง `SystemCoreClockUpdate()` |
+
+ดูข้อจำกัดทั้งหมด: [`LIMITATIONS.md`](../LIMITATIONS.md)
+
+---
 **พัฒนาโดย:** CH32V003 Library Team
 **รองรับบอร์ด:** CH32V003 Development Board

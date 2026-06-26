@@ -23,11 +23,12 @@ static uint16_t _throttle_to_pulse(ESC_Instance* esc, uint8_t throttle) {
 static void _write_pulse(ESC_Instance* esc, uint16_t pulse_us) {
     uint32_t period = 1000000UL / ESC_PWM_FREQ;  /* period in µs */
     uint16_t duty;
+    uint16_t timer_period = PWM_GetPeriod(esc->channel);
 
-    if (period == 0) return;
+    if (period == 0 || timer_period == 0) return;
 
-    /* duty = (pulse / period) * 65535 */
-    duty = (uint16_t)(((uint32_t)pulse_us * 65535) / period);
+    /* duty = (pulse / period) * timer_period */
+    duty = (uint16_t)(((uint32_t)pulse_us * timer_period) / period);
     PWM_SetDutyCycleRaw(esc->channel, duty);
 }
 

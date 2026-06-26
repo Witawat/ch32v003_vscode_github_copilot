@@ -35,7 +35,8 @@ PCA9685_Status PCA9685_Init(PCA9685_Instance* pca, uint8_t addr, uint16_t freq) 
 
     /* Sleep (ต้อง sleep ก่อนตั้ง prescaler) */
     uint8_t mode1 = 0;
-    _read_reg(pca, PCA9685_REG_MODE1, &mode1);
+    if (_read_reg(pca, PCA9685_REG_MODE1, &mode1) != PCA9685_OK)
+        return PCA9685_ERROR_I2C;
     mode1 = (mode1 & ~PCA9685_MODE1_RESTART) | PCA9685_MODE1_SLEEP;
     if (_write_reg(pca, PCA9685_REG_MODE1, mode1) != PCA9685_OK)
         return PCA9685_ERROR_I2C;
@@ -49,7 +50,8 @@ PCA9685_Status PCA9685_Init(PCA9685_Instance* pca, uint8_t addr, uint16_t freq) 
         return PCA9685_ERROR_I2C;
 
     /* Wake up */
-    _read_reg(pca, PCA9685_REG_MODE1, &mode1);
+    if (_read_reg(pca, PCA9685_REG_MODE1, &mode1) != PCA9685_OK)
+        return PCA9685_ERROR_I2C;
     mode1 &= ~PCA9685_MODE1_SLEEP;
     if (_write_reg(pca, PCA9685_REG_MODE1, mode1) != PCA9685_OK)
         return PCA9685_ERROR_I2C;
@@ -58,7 +60,8 @@ PCA9685_Status PCA9685_Init(PCA9685_Instance* pca, uint8_t addr, uint16_t freq) 
 
     /* Restart */
     mode1 |= PCA9685_MODE1_RESTART;
-    _write_reg(pca, PCA9685_REG_MODE1, mode1);
+    if (_write_reg(pca, PCA9685_REG_MODE1, mode1) != PCA9685_OK)
+        return PCA9685_ERROR_I2C;
 
     pca->initialized = 1;
     return PCA9685_OK;
@@ -126,17 +129,22 @@ PCA9685_Status PCA9685_FullOn(PCA9685_Instance* pca, uint8_t channel) {
 
 PCA9685_Status PCA9685_Sleep(PCA9685_Instance* pca) {
     if (pca == NULL || !pca->initialized) return PCA9685_ERROR_PARAM;
+    PCA9685_Status st;
     uint8_t mode1 = 0;
-    _read_reg(pca, PCA9685_REG_MODE1, &mode1);
+    st = _read_reg(pca, PCA9685_REG_MODE1, &mode1);
+    if (st != PCA9685_OK) return st;
     return _write_reg(pca, PCA9685_REG_MODE1, mode1 | PCA9685_MODE1_SLEEP);
 }
 
 PCA9685_Status PCA9685_WakeUp(PCA9685_Instance* pca) {
     if (pca == NULL || !pca->initialized) return PCA9685_ERROR_PARAM;
+    PCA9685_Status st;
     uint8_t mode1 = 0;
-    _read_reg(pca, PCA9685_REG_MODE1, &mode1);
+    st = _read_reg(pca, PCA9685_REG_MODE1, &mode1);
+    if (st != PCA9685_OK) return st;
     mode1 &= ~PCA9685_MODE1_SLEEP;
-    _write_reg(pca, PCA9685_REG_MODE1, mode1);
+    st = _write_reg(pca, PCA9685_REG_MODE1, mode1);
+    if (st != PCA9685_OK) return st;
     Delay_Ms(5);
     mode1 |= PCA9685_MODE1_RESTART;
     return _write_reg(pca, PCA9685_REG_MODE1, mode1);

@@ -97,5 +97,16 @@ TM1637_DisplayChar(display, 3, 'P', false);
 - `TM1637_DisplayRaw(handle, pos, segments)` : ควบคุม Segment แต่ละดวงโดยตรง
 
 ---
+
+## ข้อจำกัด
+
+| ข้อจำกัด | รายละเอียด |
+|----------|-----------|
+| **`DisplayNumber` INT16_MIN** | รองรับค่า `-32768` — ใช้ unsigned arithmetic |
+| **`Timer_Init()`** | ต้องเรียก `Timer_Init()` หลัง `SystemCoreClockUpdate()` |
+
+ดูข้อจำกัดทั้งหมด: [`LIMITATIONS.md`](../LIMITATIONS.md)
+
+---
 **พัฒนาโดย:** CH32V003 Library Team
 **รองรับบอร์ด:** CH32V003 Development Board

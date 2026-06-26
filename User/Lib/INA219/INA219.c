@@ -4,6 +4,7 @@
  */
 
 #include "INA219.h"
+#include <math.h>
 
 /* ========== Private: Register R/W ========== */
 
@@ -62,34 +63,31 @@ INA219_Status INA219_Init(INA219_Instance* ina, uint8_t addr,
 }
 
 float INA219_GetBusVoltage(INA219_Instance* ina) {
-    if (ina == NULL || !ina->initialized) return -1.0f;
+    if (ina == NULL || !ina->initialized) return NAN;
     uint16_t raw = 0;
-    if (_read_reg16(ina, INA219_REG_BUSVOLTAGE, &raw) != INA219_OK) return -1.0f;
-    /* Bits 15:3 = voltage, LSB = 4mV, bit 0 = OVF */
+    if (_read_reg16(ina, INA219_REG_BUSVOLTAGE, &raw) != INA219_OK) return NAN;
     return (float)(raw >> 3) * 0.004f;
 }
 
 float INA219_GetShuntVoltage(INA219_Instance* ina) {
-    if (ina == NULL || !ina->initialized) return -999.0f;
+    if (ina == NULL || !ina->initialized) return NAN;
     uint16_t raw = 0;
-    if (_read_reg16(ina, INA219_REG_SHUNTVOLTAGE, &raw) != INA219_OK) return -999.0f;
-    /* LSB = 10µV = 0.01mV, signed */
-    return (float)(int16_t)raw * 0.01f;  /* mV */
+    if (_read_reg16(ina, INA219_REG_SHUNTVOLTAGE, &raw) != INA219_OK) return NAN;
+    return (float)(int16_t)raw * 0.01f;
 }
 
 float INA219_GetCurrent(INA219_Instance* ina) {
-    if (ina == NULL || !ina->initialized) return -999.0f;
+    if (ina == NULL || !ina->initialized) return NAN;
     uint16_t raw = 0;
-    if (_read_reg16(ina, INA219_REG_CURRENT, &raw) != INA219_OK) return -999.0f;
-    return (float)(int16_t)raw * ina->current_lsb;  /* A */
+    if (_read_reg16(ina, INA219_REG_CURRENT, &raw) != INA219_OK) return NAN;
+    return (float)(int16_t)raw * ina->current_lsb;
 }
 
 float INA219_GetPower(INA219_Instance* ina) {
-    if (ina == NULL || !ina->initialized) return -1.0f;
+    if (ina == NULL || !ina->initialized) return NAN;
     uint16_t raw = 0;
-    if (_read_reg16(ina, INA219_REG_POWER, &raw) != INA219_OK) return -1.0f;
-    /* power_lsb = 20 × current_lsb */
-    return (float)raw * (20.0f * ina->current_lsb);  /* W */
+    if (_read_reg16(ina, INA219_REG_POWER, &raw) != INA219_OK) return NAN;
+    return (float)raw * (20.0f * ina->current_lsb);
 }
 
 INA219_Status INA219_GetAll(INA219_Instance* ina,

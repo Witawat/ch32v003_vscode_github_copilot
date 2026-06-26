@@ -86,5 +86,17 @@ int main(void) {
 - `AS5600_BurnAngle(enc)` : เผา ZPOS/MPOS ลง OTP (ถาวร)
 
 ---
+
+## ข้อจำกัด
+
+| ข้อจำกัด | รายละเอียด |
+|----------|-----------|
+| **Atomic read** | Multi-byte I2C read — ป้องกัน torn read (ค่าฉีกระหว่างเปลี่ยน) |
+| **Error sentinel = `0xFFFF`** | คืน `0xFFFF` เมื่อ I2C error |
+| **`Timer_Init()`** | ต้องเรียก `Timer_Init()` หลัง `SystemCoreClockUpdate()` |
+
+ดูข้อจำกัดทั้งหมด: [`LIMITATIONS.md`](../LIMITATIONS.md)
+
+---
 **พัฒนาโดย:** CH32V003 Library Team
 **รองรับบอร์ด:** CH32V003 Development Board

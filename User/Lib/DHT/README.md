@@ -364,3 +364,16 @@ while (retry_count < 3) {
 | `DHT_ERROR_CHECKSUM` | ข้อมูลเสียหาย ตรวจสอบสาย |
 | `DHT_ERROR_NOT_READY` | รออีก 2 วินาที |
 | `DHT_ERROR_NOT_INIT` | ยังไม่ได้เรียก `DHT_Init()` |
+
+---
+
+## ข้อจำกัด
+
+| ข้อจำกัด | รายละเอียด |
+|----------|-----------|
+| **IRQ ปิด ~5ms** | อ่านค่า 1 ครั้งปิด interrupt ชั่วคราว — อาจพลาด SysTick millis |
+| **Timing calibration** | Overhead 3µs/loop — ปรับเทียบอัตโนมัติสำหรับ CH32V003 @ 48MHz |
+| **`Timer_Init()`** | ต้องเรียก `Timer_Init()` หลัง `SystemCoreClockUpdate()` |
+| **ความถี่อ่าน** | DHT11/DHT22 อ่านได้สูงสุด 1 ครั้ง/2 วินาที |
+
+ดูข้อจำกัดทั้งหมด: [`LIMITATIONS.md`](../LIMITATIONS.md)

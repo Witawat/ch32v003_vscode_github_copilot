@@ -136,3 +136,13 @@ ESP01_HTTPPost(&wifi,
 - แนะนำใช้ firmware AT รุ่นที่เสถียรและรู้จักชุดคำสั่งเดียวกัน
 - ฟังก์ชันบางตัว เช่น `AT+RFPOWER` ขึ้นกับเวอร์ชัน firmware
 - ถ้าต้องใช้ TLS หนัก แนะนำ offload งานฝั่ง gateway หรือใช้โมดูลที่รองรับตรงกว่า
+
+## 7) ข้อจำกัด
+
+| ข้อจำกัด | รายละเอียด |
+|----------|-----------|
+| **HTTP URL ≤ 200 chars** | `path` + `host` รวมกันเกิน 200 ตัวอักษร → `ESP01_ERROR_OVERFLOW` |
+| **`Timer_Init()`** | ต้องเรียก `Timer_Init()` หลัง `SystemCoreClockUpdate()` |
+| **USART1 แข่ง** | ESP01 ใช้ USART1 — หยุด USART debug print ก่อนใช้งาน |
+
+ดูข้อจำกัดทั้งหมด: [`LIMITATIONS.md`](../LIMITATIONS.md)

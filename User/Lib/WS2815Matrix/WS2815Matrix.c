@@ -438,6 +438,7 @@ void Matrix_DrawBitmap(int16_t x, int16_t y, const uint8_t* bitmap, uint8_t w, u
 /* ========== Advanced Effects ========== */
 
 void Matrix_FadeIn(uint16_t duration, uint8_t steps) {
+    if (steps == 0) return;
     uint16_t step_delay = duration / steps;
     
     for (uint8_t i = 0; i <= steps; i++) {
@@ -449,6 +450,7 @@ void Matrix_FadeIn(uint16_t duration, uint8_t steps) {
 }
 
 void Matrix_FadeOut(uint16_t duration, uint8_t steps) {
+    if (steps == 0) return;
     uint16_t step_delay = duration / steps;
     
     for (uint8_t i = steps; i > 0; i--) {
@@ -486,10 +488,10 @@ void Matrix_SlideTransition(uint32_t color, uint16_t delay_ms) {
 
 void Matrix_RotateBuffer90CW(void) {
     if (matrix_config.width != matrix_config.height) {
-        return;  // ใช้ได้เฉพาะ square matrix
+        return;
     }
     
-    uint32_t temp_buffer[MATRIX_MAX_PIXELS];
+    static uint32_t temp_buffer[MATRIX_MAX_PIXELS];
     memcpy(temp_buffer, matrix_buffer, sizeof(matrix_buffer));
     
     uint8_t n = matrix_config.width;
@@ -512,7 +514,7 @@ void Matrix_RotateBuffer90CCW(void) {
         return;
     }
     
-    uint32_t temp_buffer[MATRIX_MAX_PIXELS];
+    static uint32_t temp_buffer[MATRIX_MAX_PIXELS];
     memcpy(temp_buffer, matrix_buffer, sizeof(matrix_buffer));
     
     uint8_t n = matrix_config.width;

@@ -707,7 +707,7 @@ void NeoPixel_RotateRight(uint16_t positions) {
  * @brief Fill gradient
  */
 void NeoPixel_FillGradient(uint32_t start_color, uint32_t end_color) {
-    if(neo_num_leds == 0) return;
+    if(neo_num_leds <= 1) return;
     
     for(uint16_t i = 0; i < neo_num_leds; i++) {
         uint8_t position = (i * 255) / (neo_num_leds - 1);

@@ -87,7 +87,10 @@ static void _write_servo(ServoCluster_Instance* cluster, ServoCluster_Servo* s, 
     } else {
         /* HW backend: write PWM duty cycle directly */
         uint32_t period = 20000;  /* 50Hz */
-        uint16_t duty   = (uint16_t)(((uint32_t)pulse_us * 65535) / period);
+        uint16_t timer_period = PWM_GetPeriod((PWM_Channel)s->channel);
+        uint16_t duty = (timer_period > 0)
+            ? (uint16_t)(((uint32_t)pulse_us * timer_period) / period)
+            : 0;
         PWM_SetDutyCycleRaw((PWM_Channel)s->channel, duty);
     }
 }
@@ -158,8 +161,10 @@ void ServoCluster_MoveTo(ServoCluster_Instance* cluster, uint8_t servo_id, uint8
     if (angle > 180) angle = 180;
 
     /* apply speed modifier to duration */
+    if (duration_ms == 0) duration_ms = 1;
     if (cluster->speed_pct != 100 && cluster->speed_pct > 0) {
         duration_ms = (uint16_t)((uint32_t)duration_ms * 100 / cluster->speed_pct);
+        if (duration_ms == 0) duration_ms = 1;
     }
 
     cluster->servos[servo_id].start_angle  = cluster->servos[servo_id].current_angle;

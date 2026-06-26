@@ -333,6 +333,9 @@ ESP01_Status ESP01_HTTPGet(ESP01_Instance* esp,
         return st;
     }
 
+    /* ตรวจสอบความยาวก่อนสร้าง request */
+    if (strlen(path) + strlen(host) + 40 >= sizeof(req)) return ESP01_ERROR_OVERFLOW;
+
     snprintf(req, sizeof(req),
              "GET %s HTTP/1.1\r\n"
              "Host: %s\r\n"
@@ -372,6 +375,10 @@ ESP01_Status ESP01_HTTPPost(ESP01_Instance* esp,
     }
 
     body_len = (uint16_t)strlen(body);
+
+    /* ตรวจสอบความยาวก่อนสร้าง request */
+    if (strlen(path) + strlen(host) + strlen(content_type) + 60 >= sizeof(req))
+        return ESP01_ERROR_OVERFLOW;
 
     /* สร้าง HTTP header (body ไม่ถูก embed ใน req เพื่อประหยัด RAM) */
     size_t hdr_len = (size_t)snprintf(req, sizeof(req),

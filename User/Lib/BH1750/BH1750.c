@@ -8,7 +8,7 @@
 /* ========== Private ========== */
 
 static BH1750_Status _send_cmd(BH1750_Instance* bh, uint8_t cmd) {
-    return (I2C_Write(bh->i2c_addr, &cmd, 1) == 0) ? BH1750_OK : BH1750_ERROR_I2C;
+    return (I2C_Write(bh->i2c_addr, &cmd, 1) == I2C_OK) ? BH1750_OK : BH1750_ERROR_I2C;
 }
 
 /* ========== Public ========== */
@@ -53,7 +53,7 @@ BH1750_Status BH1750_ReadRaw(BH1750_Instance* bh, uint16_t* raw) {
     }
 
     uint8_t buf[2] = {0, 0};
-    if (I2C_Read(bh->i2c_addr, buf, 2) != 0)
+    if (I2C_Read(bh->i2c_addr, buf, 2) != I2C_OK)
         return BH1750_ERROR_I2C;
 
     *raw = ((uint16_t)buf[0] << 8) | buf[1];

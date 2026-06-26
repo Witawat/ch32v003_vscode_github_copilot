@@ -255,7 +255,7 @@ void TM1637_Clear(TM1637_Handle* handle) {
 void TM1637_DisplayNumber(TM1637_Handle* handle, int16_t number, bool leading_zero) {
     bool negative = (number < 0);
     if (negative) {
-        number = -number;
+        number = -(int16_t)((uint16_t)number);
     }
     
     // Clear buffer

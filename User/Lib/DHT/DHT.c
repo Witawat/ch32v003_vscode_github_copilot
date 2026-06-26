@@ -21,8 +21,11 @@ static bool DHT_WaitForState(uint8_t pin, uint8_t state, uint16_t timeout_us);
 
 /* ========== Private Functions ========== */
 
+#define DHT_LOOP_OVERHEAD_US  3  /* overhead ต่อ loop iteration บน CH32V003 */
+
 static bool DHT_WaitForState(uint8_t pin, uint8_t state, uint16_t timeout_us) {
-    for (uint16_t i = 0; i < timeout_us; i++) {
+    uint16_t max_iter = timeout_us / (1 + DHT_LOOP_OVERHEAD_US);
+    for (uint16_t i = 0; i < max_iter; i++) {
         if (digitalRead(pin) == state) return true;
         Delay_Us(1);
     }

@@ -111,5 +111,18 @@ Matrix_ScrollText("WELCOME TO CH32V003", COLOR_GREEN, 50); // ความเร
 - `Matrix_Show()` : ส่งข้อมูลไปแสดงผลที่ Matrix
 
 ---
+
+## ข้อจำกัด
+
+| ข้อจำกัด | รายละเอียด |
+|----------|-----------|
+| **ขนาดสูงสุด 8×8** | CH32V003 RAM 2KB — `matrix_buffer` ใช้ 256B; ต้องการใหญ่กว่านี้ใช้ MCU ที่มี RAM มากกว่า |
+| **`Timer_Init()`** | ต้องเรียก `Timer_Init()` หลัง `SystemCoreClockUpdate()` ใน `main()` |
+| **SOP-8** | SPI hardware ใช้ไม่ได้ — ใช้ `shiftOut` software แทน |
+
+ดูข้อจำกัดทั้งหมด: [`LIMITATIONS.md`](../LIMITATIONS.md)
+
+---
+
 **พัฒนาโดย:** CH32V003 Library Team
 **รองรับบอร์ด:** CH32V003 Development Board

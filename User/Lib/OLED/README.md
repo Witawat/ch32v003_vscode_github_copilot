@@ -736,6 +736,19 @@ while(1) {
 
 ---
 
+## ข้อจำกัด
+
+| ข้อจำกัด | รายละเอียด |
+|----------|-----------|
+| **1 buffer ร่วม 3 ขนาด** | 128x64, 128x32, 64x48 ใช้ RAM buffer เดียว — แสดงผลได้ทีละ 1 ขนาด |
+| **Font 8x16/12x16** | ยังไม่มีข้อมูล bitmap — fallback เป็น Font_6x8 อัตโนมัติ |
+| **I2C init** | ผู้ใช้ต้องเรียก `I2C_SimpleInit(...)` ก่อนใช้ OLED |
+| **`Timer_Init()`** | ต้องเรียก `Timer_Init()` หลัง `SystemCoreClockUpdate()` |
+| **SOP-8** | I2C hardware ใช้ไม่ได้ — ใช้ `SimpleI2C_Soft` แทน |
+
+ดูข้อจำกัดทั้งหมด: [`LIMITATIONS.md`](../LIMITATIONS.md)
+
+---
 ## License
 
 MIT License - ใช้งานได้อย่างอิสระ

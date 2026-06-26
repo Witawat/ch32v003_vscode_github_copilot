@@ -369,21 +369,21 @@ uint8_t TM1650_WaitKey(TM1650_Handle* handle) {
     if (handle == NULL || !handle->initialized) return 0;
 
     uint8_t key;
-    /* Wait for a key press */
+    uint32_t start = Get_CurrentMs();
+    /* Wait for a key press (timeout 5s) */
     do {
         key = _read_key_byte(handle);
         if (key != 0) {
             Delay_Ms(TM1650_KEY_DEBOUNCE_MS);
-            /* Re-read to confirm */
-            if (_read_key_byte(handle) == key) {
-                break;
-            }
+            if (_read_key_byte(handle) == key) break;
         }
         Delay_Ms(10);
-    } while (1);
+    } while ((Get_CurrentMs() - start) < 5000);
 
-    /* Wait for key release */
+    /* Wait for key release (timeout 2s) */
+    start = Get_CurrentMs();
     while (_read_key_byte(handle) != 0) {
+        if ((Get_CurrentMs() - start) > 2000) break;
         Delay_Ms(10);
     }
     Delay_Ms(TM1650_KEY_DEBOUNCE_MS);

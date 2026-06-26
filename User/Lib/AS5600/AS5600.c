@@ -8,9 +8,11 @@
 /* ========== Private Helpers ========== */
 
 static uint16_t _read_reg16(uint8_t dev_addr, uint8_t reg_hi) {
-    uint8_t hi = I2C_ReadReg(dev_addr, reg_hi);
-    uint8_t lo = I2C_ReadReg(dev_addr, reg_hi + 1);
-    return ((uint16_t)hi << 8) | lo;
+    uint8_t reg = reg_hi;
+    if (I2C_Write(dev_addr, &reg, 1) != I2C_OK) return 0xFFFF;
+    uint8_t buf[2];
+    if (I2C_Read(dev_addr, buf, 2) != I2C_OK) return 0xFFFF;
+    return ((uint16_t)buf[0] << 8) | buf[1];
 }
 
 /* ========== Public API ========== */

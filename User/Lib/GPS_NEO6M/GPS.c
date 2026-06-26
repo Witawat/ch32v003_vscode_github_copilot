@@ -115,6 +115,8 @@ static uint8_t _split_nmea(char* sentence, char** fields, uint8_t max_fields) {
     uint8_t count = 0;
     char* p = sentence;
 
+    if (max_fields == 0) return 0;
+
     fields[count++] = p;
 
     while (*p && count < max_fields) {

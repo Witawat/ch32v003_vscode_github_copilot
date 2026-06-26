@@ -170,3 +170,16 @@ int main(void) {
 | `nRF24_GetStatus(radio)` | อ่าน STATUS register |
 | `nRF24_PowerDown(radio)` | Power down mode |
 | `nRF24_PowerUp(radio)` | Wake up |
+
+---
+
+## ข้อจำกัด
+
+| ข้อจำกัด | รายละเอียด |
+|----------|-----------|
+| **SPI Mode 0** | ผู้ใช้ต้องเรียก `SPI_SimpleInit(SPI_MODE0, speed, pins)` ก่อนใช้งาน |
+| **TX timeout 500ms** | Busy-wait พร้อม `Delay_Ms(1)` — ลด CPU usage |
+| **`Timer_Init()`** | ต้องเรียก `Timer_Init()` หลัง `SystemCoreClockUpdate()` |
+| **SOP-8** | SPI hardware ใช้ไม่ได้ — ใช้ `shiftOut` software แทน |
+
+ดูข้อจำกัดทั้งหมด: [`LIMITATIONS.md`](../LIMITATIONS.md)

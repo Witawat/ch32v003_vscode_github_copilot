@@ -119,6 +119,19 @@ int main(void) {
 
 ---
 
+## ข้อจำกัด
+
+| ข้อจำกัด | รายละเอียด |
+|----------|-----------|
+| **PWM duty** | ใช้ `PWM_GetPeriod()` — ทำงานถูกต้องกับทุก PWM frequency |
+| **`speed_pct=0` guard** | Clamp เป็น 1 — ป้องกัน DIV/0 |
+| **`duration_ms=0` guard** | Clamp เป็น 1 — ป้องกัน DIV/0 |
+| **`Timer_Init()`** | ต้องเรียก `Timer_Init()` หลัง `SystemCoreClockUpdate()` |
+| **TIM conflict** | Servo+ESC+PWM ใช้ TIM1/TIM2 — ใช้ร่วมกันต้องความถี่เดียวกัน |
+
+ดูข้อจำกัดทั้งหมด: [`LIMITATIONS.md`](../LIMITATIONS.md)
+
+---
 ## 📝 Author
 
 - **CH32V003 Library Team**

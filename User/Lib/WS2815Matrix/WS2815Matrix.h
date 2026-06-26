@@ -59,8 +59,9 @@ extern "C" {
 
 /* ========== Configuration ========== */
 
-#define MATRIX_MAX_WIDTH   32  /**< ความกว้างสูงสุด */
-#define MATRIX_MAX_HEIGHT  32  /**< ความสูงสูงสุด */
+/* CH32V003 RAM = 2KB — จำกัด matrix สูงสุด 8x8 */
+#define MATRIX_MAX_WIDTH   8   /**< ความกว้างสูงสุด */
+#define MATRIX_MAX_HEIGHT  8   /**< ความสูงสูงสุด */
 #define MATRIX_MAX_PIXELS  (MATRIX_MAX_WIDTH * MATRIX_MAX_HEIGHT)
 
 /* ========== Wiring Pattern Enums ========== */

@@ -99,8 +99,8 @@ HC05_Status HC05_ATCommand(HC05_Instance* bt, const char* cmd,
 
 void HC05_Flush(HC05_Instance* bt) {
     if (bt == NULL || !bt->initialized) return;
-    /* อ่านทิ้งจน buffer ว่าง */
-    while (USART_Available()) {
+    uint32_t start = Get_CurrentMs();
+    while (USART_Available() && (Get_CurrentMs() - start) < 100) {
         USART_Read();
     }
 }
