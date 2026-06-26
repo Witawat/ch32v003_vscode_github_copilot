@@ -1,4 +1,4 @@
-/**
+﻿/**
  * ============================================================
  * ตัวอย่างที่ 4: ตัวอย่างการใช้งาน Timer Interrupt (TIM_SimpleInit, TIM_AttachInterrupt, TIM_Start, TIM_Stop)
  * ============================================================
@@ -70,8 +70,8 @@ int main(void)
 {
     // === เริ่มต้นระบบ ===
 
-    SystemCoreClockUpdate();            // อัปเดตความถี่ระบบ
-
+    SystemCoreClockUpdate();
+    Timer_Init();
     // === เริ่มต้น USART ===
 
     USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);  // เริ่มต้น USART ที่ 115200 baud

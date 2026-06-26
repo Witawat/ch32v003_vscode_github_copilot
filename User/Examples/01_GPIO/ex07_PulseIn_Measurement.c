@@ -1,4 +1,4 @@
-/**
+﻿/**
  * ============================================================
  * ตัวอยางที่ 7: PulseIn Measurement (วัดระยะดวย HC-SR04)
  * ============================================================
@@ -45,8 +45,8 @@
 
 int main(void)           // ฟงกชันหลักของโปรแกรม
 {
-    SystemCoreClockUpdate();  // อัปเดตคาความถี่สัญญาณนาฬิการะบบ
-
+    SystemCoreClockUpdate();
+    Timer_Init();
     pinMode(TRIG_PIN, PIN_MODE_OUTPUT); // ตั้งคาขา TRIG เปนเอาตพุต (สงพัลส)
     pinMode(ECHO_PIN, PIN_MODE_INPUT);  // ตั้งคาขา ECHO เปนอินพุต (รับพัลส)
 

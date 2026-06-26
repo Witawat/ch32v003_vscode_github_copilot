@@ -1,4 +1,4 @@
-/**
+﻿/**
  * ============================================================
  * ex05_WWDG_Advanced.c
  * โปรแกรมสาธิต WWDG ขั้นสูง: กำหนด prescaler, คำนวณ timeout, ปิด WWDG
@@ -39,8 +39,8 @@
 
 int main(void)
 {
-    SystemCoreClockUpdate();                    // อัปเดตความเร็วซีพียู (Update CPU clock speed)
-
+    SystemCoreClockUpdate();
+    Timer_Init();
     // ตัวแปรสำหรับเก็บค่า (Variables)
     uint32_t i = 0;                          // ตัวแปรวนรอบ (Loop variable)
 

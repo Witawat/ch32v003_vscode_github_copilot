@@ -1,4 +1,4 @@
-/**
+﻿/**
  * ============================================================
  * ตัวอย่างที่ 5: ตัวอย่างการใช้งาน Timer แบบ Advanced (TIM_AdvancedInit, TIM_SetPrescaler, TIM_SetMode, TIM_GetPeriod, Simple_TIM_GetCounter, TIM_GenerateUpdate)
  * ============================================================
@@ -51,8 +51,8 @@ int main(void)
 {
     // === เริ่มต้นระบบ ===
 
-    SystemCoreClockUpdate();             // อัปเดตความถี่ระบบ (สำคัญมากสำหรับการคำนวณ)
-
+    SystemCoreClockUpdate();
+    Timer_Init();
     // === เริ่มต้น USART ===
 
     USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);  // เริ่มต้น USART ที่ 115200 baud

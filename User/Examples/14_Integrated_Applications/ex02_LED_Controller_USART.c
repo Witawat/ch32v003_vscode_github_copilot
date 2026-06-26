@@ -124,6 +124,7 @@ void ProcessCommand(uint8_t *buf) {
 int main(void) {
     SystemCoreClockUpdate();
 
+    Timer_Init();
     PWM_Init(PWM1_CH1, 1000);
     PWM_Start(PWM1_CH1);
     PWM_Write(PWM1_CH1, 0);

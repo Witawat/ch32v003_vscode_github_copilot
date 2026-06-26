@@ -49,6 +49,7 @@ int main(void)
     // อัปเดตความถี่ระบบ
     SystemCoreClockUpdate();
 
+    Timer_Init();
     // --- กำหนดค่า PWM ---
     // TIM1: PD2 และ PA1 ใช้ความถี่เดียวกัน (50Hz สำหรับ Servo)
     PWM_Init(PWM1_CH1, 50);   // PD2 - LED1 (50Hz)

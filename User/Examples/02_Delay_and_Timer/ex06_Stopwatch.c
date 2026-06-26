@@ -1,4 +1,4 @@
-/**
+﻿/**
  * ============================================================
  * ตัวอย่างที่ 6: ตัวอย่างการใช้งาน Stopwatch (Stopwatch_Init, Stopwatch_Start, Stopwatch_Stop, Stopwatch_Reset, Stopwatch_GetTimeString, Stopwatch_GetTotalSeconds)
  * ============================================================
@@ -49,8 +49,8 @@ int main(void)
 {
     // === เริ่มต้นระบบ ===
 
-    SystemCoreClockUpdate();            // อัปเดตความถี่ระบบ (จำเป็นก่อนใช้ Timer)
-
+    SystemCoreClockUpdate();
+    Timer_Init();
     // === เริ่มต้น USART ===
 
     USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);  // เริ่มต้น USART ที่ 115200 baud

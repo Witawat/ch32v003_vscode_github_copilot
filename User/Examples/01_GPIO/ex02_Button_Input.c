@@ -1,4 +1,4 @@
-/**
+﻿/**
  * ============================================================
  * ตัวอยางที่ 2: Button Input (อานคาปุมกด)
  * ============================================================
@@ -38,8 +38,8 @@
 
 int main(void)           // ฟงกชันหลักของโปรแกรม
 {
-    SystemCoreClockUpdate();  // อัปเดตคาความถี่สัญญาณนาฬิการะบบ
-
+    SystemCoreClockUpdate();
+    Timer_Init();
     pinMode(PC0, PIN_MODE_OUTPUT);       // ตั้งคาขา PC0 เปนเอาตพุต (LED)
     pinMode(PC1, PIN_MODE_INPUT_PULLUP); // ตั้งคาขา PC1 เปนอินพุตพรอม Pull-up ภายใน
                                          // (Active LOW: HIGH=ไมกด, LOW=กด)

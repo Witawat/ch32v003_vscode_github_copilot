@@ -169,6 +169,7 @@ void DMA_CompleteCallback(DMA_Channel ch) {
 int main(void) {
     SystemCoreClockUpdate();
 
+    Timer_Init();
     I2C_SimpleInit(I2C_100KHZ, I2C_PINS_DEFAULT);
     dsBus = OneWire_Init(DS18B20_PIN);
     pinMode(W25Q_CS_PIN, PIN_MODE_OUTPUT);

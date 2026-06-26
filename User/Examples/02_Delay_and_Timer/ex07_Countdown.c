@@ -1,4 +1,4 @@
-/**
+﻿/**
  * ============================================================
  * ตัวอย่างที่ 7: ตัวอย่างการใช้งาน Countdown Timer (Countdown_Init, Countdown_Start, Countdown_Stop, Countdown_Reset, Countdown_IsFinished, Countdown_SetAlarmCallback, Countdown_GetRemainingSeconds)
  * ============================================================
@@ -74,8 +74,8 @@ int main(void)
 {
     // === เริ่มต้นระบบ ===
 
-    SystemCoreClockUpdate();            // อัปเดตความถี่ระบบ (จำเป็นก่อนใช้ Timer)
-
+    SystemCoreClockUpdate();
+    Timer_Init();
     // === เริ่มต้น USART ===
 
     USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);  // เริ่มต้น USART ที่ 115200 baud

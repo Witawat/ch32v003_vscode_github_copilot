@@ -65,6 +65,7 @@ void PrintTime(uint16_t totalSec) {
 int main(void) {
     SystemCoreClockUpdate();
 
+    Timer_Init();
     I2C_SimpleInit(I2C_100KHZ, I2C_PINS_DEFAULT);
 
     PWM_Init(PWM1_CH2, 1000);

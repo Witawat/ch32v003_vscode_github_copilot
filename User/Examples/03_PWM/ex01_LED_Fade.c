@@ -37,6 +37,7 @@ int main(void)
     // เรียกใช้ SystemCoreClockUpdate() เพื่ออัปเดตความถี่ระบบ
     SystemCoreClockUpdate();
 
+    Timer_Init();
     // กำหนดค่าเริ่มต้น PWM ช่อง 1 ที่ PD2 ความถี่ 1000 Hz (1kHz)
     PWM_Init(PWM1_CH1, 1000);
 

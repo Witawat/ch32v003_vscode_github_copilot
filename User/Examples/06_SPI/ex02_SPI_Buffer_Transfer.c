@@ -36,6 +36,7 @@
 int main(void)
 {
     SystemCoreClockUpdate();
+    Timer_Init();
     USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
     SPI_SimpleInit(SPI_MODE0, SPI_1MHZ, SPI_PINS_DEFAULT);
 

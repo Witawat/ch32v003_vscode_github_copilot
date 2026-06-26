@@ -108,6 +108,7 @@ void DumpAllLogs(void) {
 int main(void) {
     SystemCoreClockUpdate();
 
+    Timer_Init();
     ADC_SimpleInit();
     USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
     pinMode(BTN_PIN, PIN_MODE_INPUT_PULLUP);

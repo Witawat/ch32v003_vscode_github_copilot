@@ -1,4 +1,4 @@
-/**
+﻿/**
  * ============================================================
  * ex03_WWDG_Simple.c
  * โปรแกรมสาธิต WWDG (Window Watchdog) แบบง่าย
@@ -46,8 +46,8 @@
 
 int main(void)
 {
-    SystemCoreClockUpdate();                    // อัปเดตความเร็วซีพียู (Update CPU clock speed)
-
+    SystemCoreClockUpdate();
+    Timer_Init();
     // ตัวแปรนับรอบรีเฟรช (Refresh counter)
     uint8_t refreshCount = 0;                // จำนวนครั้งที่รีเฟรช WWDG (Number of WWDG refreshes)
 

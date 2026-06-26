@@ -38,6 +38,7 @@ int main(void)
 {
     SystemCoreClockUpdate();
 
+    Timer_Init();
     uint16_t prescaler = 239;
     uint16_t period    = 99;
     uint16_t duty_value = 50;

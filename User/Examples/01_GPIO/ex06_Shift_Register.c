@@ -1,4 +1,4 @@
-/**
+﻿/**
  * ============================================================
  * ตัวอยางที่ 6: Shift Register (74HC595 + Knight Rider)
  * ============================================================
@@ -44,8 +44,8 @@
 
 int main(void)           // ฟงกชันหลักของโปรแกรม
 {
-    SystemCoreClockUpdate();  // อัปเดตคาความถี่สัญญาณนาฬิการะบบ
-
+    SystemCoreClockUpdate();
+    Timer_Init();
     // ตั้งคาขาที่ตอ 74HC595 ทั้ง 3 ขาเปนเอาตพุต
     pinMode(DATA_PIN,  PIN_MODE_OUTPUT);  // DATA (DS) output
     pinMode(CLOCK_PIN, PIN_MODE_OUTPUT);  // CLOCK (SH_CP) output

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * ============================================================
  * ex01_IWDG_Simple.c
  * โปรแกรมสาธิต IWDG (Independent Watchdog) แบบง่าย
@@ -44,8 +44,8 @@
 
 int main(void)
 {
-    SystemCoreClockUpdate();                    // อัปเดตความเร็วซีพียู (Update CPU clock speed)
-
+    SystemCoreClockUpdate();
+    Timer_Init();
     // ตัวแปรนับรอบ (Loop counter)
     uint8_t blinkCount = 0;                  // จำนวนครั้งที่ LED กระพริบ (Number of LED blinks)
 

@@ -39,6 +39,7 @@ static uint16_t adcBuffer[DMA_BUF_SIZE];
 int main(void)
 {
     SystemCoreClockUpdate();
+    Timer_Init();
     USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
     ADC_SimpleInit();
 

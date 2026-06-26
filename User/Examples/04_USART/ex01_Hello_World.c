@@ -39,6 +39,7 @@ int main(void)
     // อัปเดตความถี่ระบบ
     SystemCoreClockUpdate();
 
+    Timer_Init();
     // เริ่มต้น USART: Baud Rate 115200, ใช้พินเริ่มต้น (PD5=TX, PD6=RX)
     USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
 

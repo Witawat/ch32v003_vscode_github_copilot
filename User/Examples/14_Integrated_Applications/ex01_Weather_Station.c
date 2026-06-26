@@ -129,6 +129,7 @@ float DS18B20_ReadTemp(void) {
 int main(void) {
     SystemCoreClockUpdate();
 
+    Timer_Init();
     I2C_SimpleInit(I2C_100KHZ, I2C_PINS_DEFAULT);
     dsBus = OneWire_Init(DS18B20_PIN);
     USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * ============================================================
  * ex02_IWDG_Advanced.c
  * โปรแกรมสาธิต IWDG แบบกำหนดค่าเอง พร้อมตรวจสอบสาเหตุรีเซ็ต
@@ -36,8 +36,8 @@
 
 int main(void)
 {
-    SystemCoreClockUpdate();                    // อัปเดตความเร็วซีพียู (Update CPU clock speed)
-
+    SystemCoreClockUpdate();
+    Timer_Init();
     // ตัวแปรต่าง ๆ (Variables)
     uint8_t  resetCause = 0;                 // สาเหตุการรีเซ็ต (Reset cause flag)
     uint32_t timeoutMs   = 0;                // ค่า timeout ที่คำนวณได้ (Calculated timeout in ms)

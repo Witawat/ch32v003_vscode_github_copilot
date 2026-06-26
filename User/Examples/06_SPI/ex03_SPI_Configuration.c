@@ -38,6 +38,7 @@ void readJedec(void);
 int main(void)
 {
     SystemCoreClockUpdate();
+    Timer_Init();
     USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
 
     pinMode(CS_PIN, PIN_MODE_OUTPUT);

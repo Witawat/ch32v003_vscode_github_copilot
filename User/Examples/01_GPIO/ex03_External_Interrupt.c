@@ -1,4 +1,4 @@
-/**
+﻿/**
  * ============================================================
  * ตัวอยางที่ 3: External Interrupt (อินเทอรรับตภายนอก)
  * ============================================================
@@ -44,8 +44,8 @@ void Button_ISR(void)    // ฟงกชัน Interrupt Service Routine สำ�
 
 int main(void)           // ฟงกชันหลักของโปรแกรม
 {
-    SystemCoreClockUpdate();  // อัปเดตคาความถี่สัญญาณนาฬิการะบบ
-
+    SystemCoreClockUpdate();
+    Timer_Init();
     pinMode(PC0, PIN_MODE_OUTPUT);       // ตั้งคาขา PC0 เปนเอาตพุต (LED)
     pinMode(PC1, PIN_MODE_INPUT_PULLUP); // ตั้งคาขา PC1 เปนอินพุต Pull-up (ปุมกด)
 

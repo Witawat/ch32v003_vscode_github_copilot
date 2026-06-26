@@ -35,6 +35,7 @@
 int main(void)
 {
     SystemCoreClockUpdate();
+    Timer_Init();
     USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
     I2C_SimpleInit(I2C_100KHZ, I2C_PINS_DEFAULT);
 

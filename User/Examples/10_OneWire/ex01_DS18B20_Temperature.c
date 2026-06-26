@@ -1,4 +1,4 @@
-/**
+﻿/**
  * ============================================================
  * ตัวอย่างที่ 1: DS18B20 อ่านอุณหภูมิ (Temperature Reading)
  * ============================================================
@@ -38,8 +38,8 @@
 
 int main(void)            // ฟังก์ชันหลัก จุดเริ่มต้นโปรแกรม
 {
-    SystemCoreClockUpdate(); // อัปเดตค่าความถี่สัญญาณนาฬิกา (จำเป็นทุกครั้ง)
-
+    SystemCoreClockUpdate();
+    Timer_Init();
     USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT); // เริ่มต้น USART ที่ 115200 baud
 
     OneWire_Bus* bus = OneWire_Init(PD2); // เริ่มต้น 1-Wire bus บนขา PD2

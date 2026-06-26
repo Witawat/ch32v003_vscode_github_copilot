@@ -1,4 +1,4 @@
-/**
+﻿/**
  * ============================================================
  * ex05_Factory_Reset.c
  * โปรแกรมรีเซ็ตค่าโรงงาน — กดปุ่ม 3 วินาทีเพื่อลบ Flash ทั้งหมด
@@ -44,8 +44,8 @@
 
 int main(void)
 {
-    SystemCoreClockUpdate();                 // ต้องมาก่อนบรรทัดแรกเสมอ (Must be the very first line)
-
+    SystemCoreClockUpdate();
+    Timer_Init();
     // ตัวแปรนับเวลา (Timing variables)
     uint32_t pressCount = 0;                 // ตัวนับจำนวนรอบที่กดปุ่มค้าง (Counter for button hold duration)
     uint8_t  buttonState = 0;                // สถานะปุ่มล่าสุด (Latest button state)

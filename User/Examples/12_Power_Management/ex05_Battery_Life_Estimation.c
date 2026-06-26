@@ -20,6 +20,7 @@ int main(void)
 {
     SystemCoreClockUpdate();
 
+    Timer_Init();
     USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
     Delay_Ms(100);
 

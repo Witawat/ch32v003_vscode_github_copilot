@@ -1,4 +1,4 @@
-/**
+﻿/**
  * ============================================================
  * ตัวอย่างที่ 3: ส่งข้อมูลผ่าน USART ด้วย DMA (DMA USART Transmit)
  * ============================================================
@@ -34,8 +34,8 @@
 
 int main(void)            // ฟังก์ชันหลัก จุดเริ่มต้นโปรแกรม
 {
-    SystemCoreClockUpdate(); // อัปเดตค่าความถี่สัญญาณนาฬิกา (จำเป็นทุกครั้ง)
-
+    SystemCoreClockUpdate();
+    Timer_Init();
     USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT); // เริ่มต้น USART ที่ 115200 baud
     pinMode(PC0, PIN_MODE_OUTPUT); // ตั้งค่า PC0 เป็น output สำหรับ LED แสดงสถานะ
 

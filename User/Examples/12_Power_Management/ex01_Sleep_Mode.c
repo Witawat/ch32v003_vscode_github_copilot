@@ -39,6 +39,7 @@ int main(void)
 {
     SystemCoreClockUpdate();
 
+    Timer_Init();
     pinMode(PC0, PIN_MODE_OUTPUT);
     pinMode(PC1, PIN_MODE_INPUT_PULLUP);
     USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);

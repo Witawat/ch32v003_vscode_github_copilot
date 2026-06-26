@@ -1,4 +1,4 @@
-/**
+﻿/**
  * ============================================================
  * ex04_WWDG_Interrupt.c
  * โปรแกรมสาธิต WWDG Interrupt (Early Wakeup Interrupt — EWI)
@@ -64,8 +64,8 @@ void WWDG_EarlyWarningCallback(void)         // ฟังก์ชันนี�
 
 int main(void)
 {
-    SystemCoreClockUpdate();                    // อัปเดตความเร็วซีพียู (Update CPU clock speed)
-
+    SystemCoreClockUpdate();
+    Timer_Init();
     // ---- ส่วนเริ่มต้น (Initialization) ----
     USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);                      // เริ่มต้นพอร์ตอนุกรม (Initialize USART)
     pinMode(PC0, PIN_MODE_OUTPUT);          // กำหนด PC0 เป็นเอาต์พุต (Set PC0 as PIN_MODE_OUTPUT)

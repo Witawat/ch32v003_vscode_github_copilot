@@ -30,6 +30,7 @@ void btn_isr(void) {
 
 int main(void) {
     SystemCoreClockUpdate();
+    Timer_Init();
     USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
 
     IWDG_Init(IWDG_PRESCALER_256, 4095);
