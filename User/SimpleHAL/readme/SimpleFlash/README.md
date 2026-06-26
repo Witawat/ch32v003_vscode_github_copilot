@@ -270,4 +270,5 @@ int main(void) {
 | `FLASH_ERROR_INVALID` | ยังไม่เคย save | ใช้ default values |
 | Flash อายุสั้น | save บ่อยมาก (~10,000 cycle) | save เฉพาะเมื่อข้อมูลเปลี่ยน |
 | ข้อมูลใหญ่เกิน 60 bytes | เกิน page limit | แยก struct ให้เล็กลง |
+| เขียนช้า 4× erase | ใช้ `WriteWordWithErase` v1.x | v2.0 แก้เป็น 1 erase ต่อ operation |
 | บันทึกระหว่าง interrupt | Flash write ต้องการ disable IRQ | ทำใน main loop เท่านั้น |

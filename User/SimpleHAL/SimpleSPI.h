@@ -62,14 +62,14 @@ typedef enum {
  * @brief ความเร็ว SPI
  */
 typedef enum {
-    SPI_125KHZ = 0,   /**< 125 kHz (PCLK/256) */
-    SPI_250KHZ = 1,   /**< 250 kHz (PCLK/128) */
-    SPI_500KHZ = 2,   /**< 500 kHz (PCLK/64) */
-    SPI_1MHZ   = 3,   /**< 1 MHz (PCLK/32) */
-    SPI_2MHZ   = 4,   /**< 2 MHz (PCLK/16) */
-    SPI_4MHZ   = 5,   /**< 4 MHz (PCLK/8) */
-    SPI_8MHZ   = 6,   /**< 8 MHz (PCLK/4) */
-    SPI_12MHZ  = 7    /**< 12 MHz (PCLK/2) */
+    SPI_125KHZ = 7,   /**< 125 kHz (PCLK/256) */
+    SPI_250KHZ = 6,   /**< 250 kHz (PCLK/128) */
+    SPI_500KHZ = 5,   /**< 500 kHz (PCLK/64) */
+    SPI_1MHZ   = 4,   /**< 1 MHz (PCLK/32) */
+    SPI_2MHZ   = 3,   /**< 2 MHz (PCLK/16) */
+    SPI_4MHZ   = 2,   /**< 4 MHz (PCLK/8) */
+    SPI_8MHZ   = 1,   /**< 8 MHz (PCLK/4) */
+    SPI_12MHZ  = 0    /**< 12 MHz (PCLK/2) */
 } SPI_Speed;
 
 /**
@@ -77,7 +77,7 @@ typedef enum {
  * 
  * @details Pin mapping สำหรับ SPI1:
  * - SPI_PINS_DEFAULT: SCK=PC5, MISO=PC7, MOSI=PC6, NSS=PC4
- * - SPI_PINS_REMAP:   SCK=PC6, MISO=PC8, MOSI=PC7, NSS=PC5
+ * - SPI_PINS_REMAP:   SCK=PD1, MISO=PD2, MOSI=PD3, NSS=PD0
  */
 typedef enum {
     SPI_PINS_DEFAULT = 0,  /**< Default pins */

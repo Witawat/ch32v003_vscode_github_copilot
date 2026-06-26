@@ -8,8 +8,8 @@
 #include "SimpleOPAMP.h"
 
 // Internal state tracking
-static OPAMP_Mode current_mode = OPAMP_MODE_VOLTAGE_FOLLOWER;
-static uint8_t opamp_enabled = 0;
+static volatile OPAMP_Mode current_mode = OPAMP_MODE_VOLTAGE_FOLLOWER;
+static volatile uint8_t opamp_enabled = 0;
 
 /******************************************************************************/
 /*                              Basic API Functions                           */

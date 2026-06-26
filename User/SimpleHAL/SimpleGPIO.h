@@ -74,9 +74,9 @@ typedef enum {
     PC6 = 16,  /**< GPIOC Pin 6 */
     PC7 = 17,  /**< GPIOC Pin 7 */
     
-    // Reserved (18-19)
-    
-    // GPIOD Pins (PD2-PD7)
+    // GPIOD Pins (PD0-PD7)
+    PD0 = 18,  /**< GPIOD Pin 0 — ไม่มีบน SOP-8/SOP-16 */
+    PD1 = 19,  /**< GPIOD Pin 1 / SWDIO */
     PD2 = 20,  /**< GPIOD Pin 2 - ADC Channel 3, PWM1_CH1 */
     PD3 = 21,  /**< GPIOD Pin 3 - ADC Channel 4, PWM2_CH2 */
     PD4 = 22,  /**< GPIOD Pin 4 - ADC Channel 7, PWM2_CH1 */

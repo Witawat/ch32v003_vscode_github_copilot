@@ -83,8 +83,8 @@ typedef enum {
  */
 typedef struct {
     uint16_t hours;      /**< ชั่วโมง (0-1193 สำหรับ max time) */
-    uint8_t minutes;     /**< นาที (0-59 normalized, 0-255 raw) */
-    uint8_t seconds;     /**< วินาที (0-59 normalized, 0-255 raw) */
+    uint16_t minutes;    /**< นาที (0-59 normalized, 0-71582788 raw) */
+    uint16_t seconds;    /**< วินาที (0-59 normalized, 0-4294967295 raw) */
 } Time_t;
 
 /* ========== Buffer Size Recommendations ========== */

@@ -1,7 +1,7 @@
 # CH32V003 Project — Agent Reference
 
 > Quick reference สำหรับ AI/Copilot ใช้พัฒนาโปรเจกต์นี้
-> **Updated:** 2026-06-16
+> **Updated:** 2026-06-26
 
 ---
 
@@ -13,7 +13,7 @@
 | Clock | 48MHz (HSI+PLL) |
 | Flash | 16KB (256 pages × 64 bytes) |
 | RAM | 2KB |
-| GPIO | PA1-PA2, PC0-PC7, PD2-PD7 (18 pins) |
+| GPIO | PA1-PA2, PC0-PC7, PD0-PD7 (18 pins) |
 | ADC | 10-bit, 8 external + 2 internal ch |
 | Timers | TIM1 (advanced), TIM2 (general) |
 | USART | 1× USART1 (3 pin configs) |
@@ -64,6 +64,8 @@ CH32V003/
 | PA1 | 0 | PWM1_CH2, ADC_CH1 |
 | PA2 | 1 | ADC_CH0 |
 | PC0-PC7 | 10-17 | Various PWM/ADC/I2C/SPI |
+| PD0 | 18 | TSSOP-20/QFN-20 only, SPI remap NSS |
+| PD1 | 19 | SWDIO, SPI remap SCK |
 | PD2-PD7 | 20-25 | USART, PWM, ADC |
 
 ### Pin Mode Enum
@@ -89,7 +91,7 @@ void detachInterrupt(uint8_t pin);
 uint16_t analogRead(uint8_t pin);    // PD2-PD7 → 0-1023
 void analogWrite(uint8_t pin, uint16_t value);
 
-// Delay (auto-initialized via __attribute__((constructor)))
+// Delay (ต้องเรียก Timer_Init() หลัง SystemCoreClockUpdate())
 void Delay_Ms(uint32_t n);
 void Delay_Us(uint32_t n);
 uint32_t Get_CurrentMs(void);
@@ -167,7 +169,7 @@ FlashStatus Flash_LoadConfig(void* data, uint16_t size);
 |-----------|----------|----------|----------|
 | **USART** | TX=PD5, RX=PD6 (DEFAULT) | TX=PD0, RX=PD1 (REMAP1) | TX=PD6, RX=PD5 (REMAP2) |
 | **I2C** | SCL=PC2, SDA=PC1 (DEFAULT) | SCL=PD0, SDA=PD1 (REMAP) | — |
-| **SPI** | SCK=PC5, MISO=PC7, MOSI=PC6, NSS=PC4 (DEFAULT) | SCK=PC6, MISO=PC8, MOSI=PC7, NSS=PC5 (REMAP) | — |
+| **SPI** | SCK=PC5, MISO=PC7, MOSI=PC6, NSS=PC4 (DEFAULT) | SCK=PD1, MISO=PD2, MOSI=PD3, NSS=PD0 (REMAP) | — |
 
 ### PWM Channel → Pin Mapping
 
@@ -258,7 +260,7 @@ void TIM2_IRQHandler(void) __attribute__((interrupt("WCH-Interrupt-fast")));
 | 7 | Struct variable on stack | Must be global or static (stack only 2KB) |
 | 8 | Missing `initialized` flag in struct | Always add `uint8_t initialized;` field |
 | 9 | Timer conflict (SimpleTIM + SimplePWM same TIM) | Choose one per timer instance |
-| 10 | `Timer_Init()` called manually | Not needed — auto-initialized via constructor |
+| 10 | `Timer_Init()` not called | Required after `SystemCoreClockUpdate()` in v2.0 — no auto-init |
 
 ## 7. Startup Sequence
 
@@ -268,10 +270,9 @@ Power On / Reset
     → handle_reset
       → SystemInit() (HSI PLL → 48MHz)
       → __libc_init_array()
-        → SimpleDelay_AutoInit()  ← constructor: SysTick @ 1ms
       → main()
-        → NVIC_PriorityGroupConfig()
         → SystemCoreClockUpdate()
+        → Timer_Init()  ← ★ ต้องเรียกเอง (v2.0)
         → ... user code ...
 ```
 
@@ -280,7 +281,8 @@ Power On / Reset
 ```c
 int main(void) {
     // 1. SystemCoreClockUpdate();     // required for all timing
-    // 2. Timer_Init auto-called — do NOT call manually
+    // 2. Timer_Init();                // ★ required in v2.0 — must be called explicitly
+    //    Note: if Timer_Init() not called, Delay_Ms/Us return 0 (runtime guard)
     // 3. Init peripherals as needed
     // 4. Init device libraries
     // ...
@@ -334,8 +336,22 @@ All handlers `.weak` in `startup_ch32v00x.S` — override by defining with `__at
 
 | Resource | Used By | Note |
 |----------|---------|------|
-| SysTick | SimpleDelay | Auto-init via constructor — do NOT touch |
+| SysTick | SimpleDelay | ต้องเรียก `Timer_Init()` หลัง `SystemCoreClockUpdate()` |
 | TIM1 | SimplePWM (ch1-4) **or** SimpleTIM | Choose ONE |
 | TIM2 | SimplePWM (ch1-4) **or** SimpleTIM **or** SimpleTIM_Ext | Choose ONE |
 | IWDG | SimpleIWDG | LSI clock |
 | WWDG | SimpleWWDG | PCLK clock |
+
+## 13. SimpleHAL v2.0 Breaking Changes
+
+| หมวด | การเปลี่ยนแปลง | สิ่งที่ต้องทำ |
+|------|--------------|-------------|
+| **SimpleDelay** | `Timer_Init()` ไม่เรียกอัตโนมัติ (constructor ถูกลบ) | เรียก `Timer_Init()` หลัง `SystemCoreClockUpdate()` |
+| **SimpleSPI** | SPI_Speed enum value สลับ (0=12M→7=125k กลับเป็น 0=12M,7=125k) | ใช้ชื่อ enum (`SPI_12MHZ`) — ไม่ใช้ค่าดิบ |
+| **SimpleSPI** | SPI remap pin แก้เป็น PD1/PD2/PD3/PD0 (เดิม PC6/PC8/PC7/PC5 ผิด) | ตรวจสอบ wiring ถ้าเคยใช้ SPI remap |
+| **SimplePWM** | ทุกช่องบน timer เดียวกันแชร์ความถี่ | ใช้ `PWM_SetFrequency()` หากต้องการเปลี่ยนความถี่ภายหลัง |
+| **SimpleGPIO** | เพิ่ม PD0(18), PD1(19) ใน pin enum | ใช้ PD1 เป็น GPIO ได้ (SOP-8 มี pin นี้) |
+| **SimpleADC** | `ADC_Read()` auto-init ตั้ง GPIO ให้อัตโนมัติ | ไม่ต้องเรียก `ADC_SimpleInit()` ก่อน — เรียก `ADC_Read()` ได้โดยตรง |
+| **SimpleFlash** | `WriteWordWithErase` 1 erase (เดิม 4) | ไม่ต้องเปลี่ยนโค้ด — เร็วขึ้น flash ทนขึ้น |
+| **SimpleI2C** | NACK ตรวจจับเร็ว — `I2C_Scan()` เร็ว ~10 เท่า | ไม่ต้องเปลี่ยนโค้ด |
+| **SimpleWWDG** | PCLK1 ใช้ `SystemCoreClock` runtime | ไม่ต้องเปลี่ยนโค้ด |

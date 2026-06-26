@@ -41,6 +41,8 @@ static PWM_ChannelConfig_t pwm_channels[] = {
 
 #define PWM_CHANNEL_COUNT (sizeof(pwm_channels) / sizeof(PWM_ChannelConfig_t))
 
+static uint8_t timer_base_init[2] = {0}; // 0=TIM1, 1=TIM2
+
 /* ========== Internal Helper Functions ========== */
 
 /**
@@ -68,7 +70,7 @@ static void enablePeripheralClocks(PWM_ChannelConfig_t* config) {
     if (config->timer == TIM1) {
         RCC_APB2PeriphClockCmd(RCC_APB2Periph_TIM1, ENABLE);
     } else if (config->timer == TIM2) {
-        RCC_APB2PeriphClockCmd(RCC_APB1Periph_TIM2, ENABLE);
+        RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, ENABLE);
     }
     
     // เปิด AFIO clock
@@ -90,6 +92,12 @@ static void configureGPIO(PWM_ChannelConfig_t* config) {
  * @brief คำนวณ prescaler และ period
  */
 static void calculatePWMParams(uint32_t frequency_hz, uint16_t* prescaler, uint16_t* period) {
+    if (frequency_hz == 0) {
+        *prescaler = 0;
+        *period = 65535;
+        return;
+    }
+
     uint32_t ticks = SystemCoreClock / frequency_hz;
     
     if (ticks <= 65536) {
@@ -157,6 +165,9 @@ static void configurePWMChannel(PWM_ChannelConfig_t* config, uint16_t duty_value
 
 /**
  * @brief เริ่มต้น PWM channel
+ * @warning ช่อง PWM บน timer เดียวกัน (PWM1_CH1-CH4 บน TIM1,
+ *          PWM2_CH1-CH4 บน TIM2) แชร์ความถี่ร่วมกันเสมอ
+ *          หาก init หลายช่องด้วยความถี่ต่างกัน — ความถี่ของช่องแรกจะเป็นตัวกำหนด
  */
 void PWM_Init(PWM_Channel channel, uint32_t frequency_hz) {
     PWM_InitRemap(channel, frequency_hz, PWM_REMAP_NONE);
@@ -214,15 +225,16 @@ void PWM_InitRemap(PWM_Channel channel, uint32_t frequency_hz, PWM_Remap remap) 
     // ตั้งค่า GPIO
     configureGPIO(config);
     
-    // คำนวณและตั้งค่า timer
-    uint16_t prescaler, period;
-    calculatePWMParams(frequency_hz, &prescaler, &period);
-    
-    configureTimerBase(config->timer, prescaler, period);
+    // คำนวณและตั้งค่า timer (เฉพาะครั้งแรกต่อ timer)
+    uint8_t tim_idx = (config->timer == TIM1) ? 0 : 1;
+    if (!timer_base_init[tim_idx]) {
+        uint16_t prescaler, period;
+        calculatePWMParams(frequency_hz, &prescaler, &period);
+        configureTimerBase(config->timer, prescaler, period);
+        TIM_Cmd(config->timer, ENABLE);
+        timer_base_init[tim_idx] = 1;
+    }
     configurePWMChannel(config, 0);  // เริ่มที่ 0% duty
-    
-    // เปิด timer (แต่ยังไม่เปิด output)
-    TIM_Cmd(config->timer, ENABLE);
     
     // สำหรับ TIM1 ต้องเปิด main output
     if (config->timer == TIM1) {
@@ -311,6 +323,7 @@ void PWM_Stop(PWM_Channel channel) {
  */
 void PWM_Write(PWM_Channel channel, uint8_t value) {
     PWM_ChannelConfig_t* config = getChannelConfig(channel);
+    if (!config) return;
     
     // Auto-init ถ้ายังไม่ได้ init
     if (!config->initialized) {

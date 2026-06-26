@@ -87,6 +87,9 @@ static void ADC_InitPeripheral(void) {
   ADC_StartCalibration(ADC1);
   while (ADC_GetCalibrationStatus(ADC1))
     ;
+
+  // เปิดใช้งาน internal channels (Vrefint, Temperature Sensor)
+  ADC1->CTLR2 |= (1 << 23);  // TSVREFE bit
 }
 
 /**
@@ -147,6 +150,15 @@ void ADC_SimpleInit(void) {
  * @brief อ่านค่า ADC จากช่องที่ระบุ
  */
 uint16_t ADC_Read(ADC_Channel channel) {
+  static uint8_t adc_inited = 0;
+  if (!adc_inited) {
+    ADC_InitPeripheral();
+    adc_inited = 1;
+  }
+  if (channel <= ADC_CH_7) {
+    ADC_EnableChannel(channel);
+  }
+
   uint8_t adc_channel = GetADCChannel(channel);
 
   // ตั้งค่า channel และ sample time
@@ -191,6 +203,8 @@ float ADC_ReadVoltage(ADC_Channel channel, float vref) {
  * @brief อ่านค่า ADC แบบ average หลายครั้ง
  */
 uint16_t ADC_ReadAverage(ADC_Channel channel, uint8_t samples) {
+  if (samples == 0) return 0;
+
   uint32_t sum = 0;
 
   for (uint8_t i = 0; i < samples; i++) {

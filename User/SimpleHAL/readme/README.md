@@ -3,7 +3,7 @@
 Simple Hardware Abstraction Layer สำหรับ CH32V003 - ใช้งานง่ายแบบ Arduino
 
 > **MCU:** CH32V003 (RISC-V, 48MHz, 16KB Flash, 2KB RAM)
-> **Version:** 1.9.0 | **License:** MIT
+> **Version:** 2.0.0 | **License:** MIT
 
 ---
 
@@ -38,8 +38,10 @@ Simple Hardware Abstraction Layer สำหรับ CH32V003 - ใช้งา�
 ```
 GPIOA: PA1(0)  PA2(1)
 GPIOC: PC0(10) PC1(11) PC2(12) PC3(13) PC4(14) PC5(15) PC6(16) PC7(17)
-GPIOD: PD2(20) PD3(21) PD4(22) PD5(23) PD6(24) PD7(25)
+GPIOD: PD0(18) PD1(19) PD2(20) PD3(21) PD4(22) PD5(23) PD6(24) PD7(25)
 ```
+
+> **หมายเหตุ:** PD0, PD1 มีเฉพาะ TSSOP-20/QFN-20 — SOP-8/SOP-16 ไม่มี PD0; PD1(SWDIO) มีในทุกแพ็กเกจ
 
 ### ADC Channels
 
@@ -81,7 +83,7 @@ GPIOD: PD2(20) PD3(21) PD4(22) PD5(23) PD6(24) PD7(25)
 | Config | SCK | MISO | MOSI | NSS |
 |--------|-----|------|------|-----|
 | `SPI_PINS_DEFAULT` | PC5 | PC7 | PC6 | PC4 |
-| `SPI_PINS_REMAP` | PC6 | PC8 | PC7 | PC5 |
+| `SPI_PINS_REMAP` | PD1 | PD2 | PD3 | PD0 |
 
 ### USART Pins
 
@@ -129,7 +131,7 @@ SimpleHAL/
 
 int main(void) {
     SystemCoreClockUpdate();
-    // Timer_Init() auto-called via __attribute__((constructor)) — ไม่ต้องเรียกเอง
+    Timer_Init();               // ★ ต้องเรียกเองหลัง SystemCoreClockUpdate()
     // เรียกใช้งาน API ได้เลย
 }
 ```
@@ -142,6 +144,7 @@ int main(void) {
 
 int main(void) {
     SystemCoreClockUpdate();
+    Timer_Init();
     
     pinMode(PC0, PIN_MODE_OUTPUT);
     digitalWrite(PC0, HIGH);
@@ -160,6 +163,7 @@ int main(void) {
 
 int main(void) {
     SystemCoreClockUpdate();
+    Timer_Init();
     
     // ใช้งาน GPIO
     pinMode(PC0, PIN_MODE_OUTPUT);
@@ -202,6 +206,7 @@ int main(void) {
 
 int main(void) {
     SystemCoreClockUpdate();
+    Timer_Init();
 
     pinMode(PC0, PIN_MODE_OUTPUT);
     USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
@@ -228,12 +233,13 @@ int main(void) {
 ```c
 int main(void) {
     SystemCoreClockUpdate();  // ① อัปเดต system clock (ต้องเป็นบรรทัดแรก)
-    // ② Timer_Init() auto-called via __attribute__((constructor))
-    // ไม่ต้องเรียก Timer_Init() เอง
+    Timer_Init();             // ② เริ่มต้น SysTick timer (ต้องเรียกเอง)
+    // ③ Init peripherals อื่น ๆ
 }
 ```
 
-ขาด `SystemCoreClockUpdate()` → baud rate ผิด, PWM ผิดความถี่
+ขาด `SystemCoreClockUpdate()` → baud rate ผิด, PWM ผิดความถี่  
+ขาด `Timer_Init()` → `Delay_Ms/Us` คืน 0 ทันที (runtime guard ป้องกัน crash)
 
 ---
 
@@ -241,7 +247,7 @@ int main(void) {
 
 | Resource | ใช้โดย | หมายเหตุ |
 |----------|--------|---------|
-| SysTick | SimpleDelay | ห้ามใช้ร่วม |
+| SysTick | SimpleDelay | ต้องเรียก `Timer_Init()` หลัง `SystemCoreClockUpdate()` |
 | TIM1 | SimplePWM (PWM1_CH1-4) **หรือ** SimpleTIM | เลือกอย่างใดอย่างหนึ่ง |
 | TIM2 | SimplePWM (PWM2_CH1-4) **หรือ** SimpleTIM **หรือ** SimpleTIM_Ext | เลือกอย่างใดอย่างหนึ่ง |
 | IWDG | SimpleIWDG | LSI clock อิสระ |
@@ -252,6 +258,19 @@ int main(void) {
 ## 📝 License
 
 MIT License
+
+---
+
+## 📦 Package Compatibility
+
+| โมดูล | TSSOP-20 / QFN-20 | SOP-16 | SOP-8 |
+|-------|:---:|:---:|:---:|
+| GPIO | ✅ 18 pins | ✅ ~14 pins | ✅ 6 pins |
+| ADC | ✅ 8 ch | ✅ 4 ch | ✅ 4 ch |
+| PWM | ✅ 8 ch | ✅ บางส่วน | ✅ 2 ch |
+| USART | ✅ | ✅ | ✅ |
+| SPI HW | ✅ | ✅ | ❌ ใช้ shiftOut |
+| I2C HW | ✅ | ✅ | ❌ ใช้ Software I2C |
 
 *สำหรับรายละเอียด API แต่ละ module ดูในไฟล์ README ของ module นั้นๆ หรือในไฟล์ `.h` โดยตรง*
 

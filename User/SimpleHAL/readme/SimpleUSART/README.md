@@ -266,6 +266,9 @@ uint8_t rx_get_byte(void) {
 
 ## ข้อควรระวัง
 
+> **⚡ v2.0:** Pin remapping เปิด AFIO clock อัตโนมัติ — USART/I2C/SPI remap ทุกแบบทำงานถูกต้อง  
+> `Int32ToString` จัดการ INT32_MIN ได้ (ใช้ unsigned arithmetic)
+
 | ปัญหา | สาเหตุ | วิธีแก้ |
 |-------|--------|---------|
 | Baud rate ผิด, ข้อมูลเสีย | ลืม `SystemCoreClockUpdate()` | เรียกเป็นบรรทัดแรกของ main |

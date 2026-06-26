@@ -467,15 +467,23 @@ static bool OneWire_SearchInternal(OneWire_Bus* bus, uint8_t command) {
 }
 
 /**
- * @brief ปิด interrupts (critical section)
+ * @brief ปิด interrupts (critical section) พร้อมบันทึกสถานะเดิม
  */
+static volatile uint8_t _irq_disabled_depth = 0;
+
 static void OneWire_DisableInterrupts(void) {
     __disable_irq();
+    _irq_disabled_depth++;
 }
 
 /**
- * @brief เปิด interrupts
+ * @brief เปิด interrupts — เปิดคืนเฉพาะเมื่อ depth กลับเป็น 0
  */
 static void OneWire_EnableInterrupts(void) {
-    __enable_irq();
+    if (_irq_disabled_depth > 0) {
+        _irq_disabled_depth--;
+    }
+    if (_irq_disabled_depth == 0) {
+        __enable_irq();
+    }
 }

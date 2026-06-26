@@ -230,6 +230,8 @@ int main(void) {
 
 ## ข้อควรระวัง
 
+> **⚡ v2.0:** `frequency_hz=0` ป้องกัน divide-by-zero → hard fault
+
 | ปัญหา | สาเหตุ | วิธีแก้ |
 |-------|--------|---------|
 | SimplePWM กับ SimpleTIM ชน | PWM ใช้ TIM1/TIM2 | ถ้าใช้ PWM ใน TIM1 อย่าใช้ SimpleTIM TIM_1 |

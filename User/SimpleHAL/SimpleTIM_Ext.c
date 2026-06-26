@@ -96,10 +96,13 @@ static void ms_to_time_raw_hhmmss(uint32_t ms, Time_t* time) {
 /* ========== Stopwatch Functions ========== */
 
 void Stopwatch_Init(void) {
-    // Initialize timer at 1000Hz (1ms)
-    TIM_SimpleInit(TIM_2, 1000);
-    TIM_AttachInterrupt(TIM_2, timer_ext_callback);
-    TIM_Start(TIM_2);
+    static uint8_t init = 0;
+    if (!init) {
+        TIM_SimpleInit(TIM_2, 1000);
+        TIM_AttachInterrupt(TIM_2, timer_ext_callback);
+        TIM_Start(TIM_2);
+        init = 1;
+    }
     
     // Reset state
     stopwatch_ms = 0;

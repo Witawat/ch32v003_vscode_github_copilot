@@ -39,7 +39,7 @@ static void IWDG_SelectPrescaler(uint16_t timeout_ms, uint8_t *prescaler, uint16
         if(calc_reload <= IWDG_MAX_RELOAD)
         {
             *prescaler = prescaler_codes[i];
-            *reload = (uint16_t)calc_reload;
+            *reload = (uint16_t)(calc_reload < 1 ? 1 : calc_reload);
             return;
         }
     }

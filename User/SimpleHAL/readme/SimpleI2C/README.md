@@ -270,4 +270,5 @@ int main(void) {
 | Bus stuck (ค้างที่ SDA LOW) | MCU reset กลางกาน transaction | ต่อ clock 9 ครั้งบน SCL เพื่อ release |
 | ข้อมูลผิดพลาดที่ 400kHz | สาย/PCB track ยาวเกิน | ลดเป็น 100kHz หรือสายสั้นลง |
 | `I2C_ReadReg` คืน `0xFF` | Error แต่ตรวจจากค่าลำบาก | ใช้ `I2C_ReadRegMulti` แล้วตรวจ return status |
+| Scan ช้ามาก (>10 วินาที) | NACK ไม่ถูกตรวจจับ (v1.x) | อัปเดตเป็น v2.0 — ใช้ I2C_FLAG_AF ตรวจจับเร็ว |
 | ใช้ I2C2 ไม่ได้ | CH32V003 มีแค่ I2C1 | ใช้ `SimpleI2C_Soft` ถ้าต้องการ bus ที่ 2 |

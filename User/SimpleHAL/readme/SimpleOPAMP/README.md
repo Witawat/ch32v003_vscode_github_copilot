@@ -202,6 +202,8 @@ int main(void) {
 
 ## ข้อควรระวัง
 
+> OPAMP ใช้ pins PA1, PA2 — ใช้ได้บน TSSOP-20/QFN-20; SOP-8/SOP-16 มี pins ครบ ใช้งานได้
+
 | ปัญหา | สาเหตุ | วิธีแก้ |
 |-------|--------|---------|
 | Input voltage เกิน VDD | OPA ทำงานในช่วง 0–VDD | ต่อ voltage divider ถ้า input เกิน 3.3V |

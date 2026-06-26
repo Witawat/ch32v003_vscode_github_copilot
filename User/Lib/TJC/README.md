@@ -239,6 +239,25 @@ TJC_SendCommand("get t0.txt");   // TJC ตอบกลับ → OnString() ถ
 
 ---
 
+### Page ID Event — การเปลี่ยนหน้า
+
+```c
+void OnPageId(uint8_t page_id) {
+    /* page_id : หมายเลขหน้าปัจจุบัน */
+    
+    switch (page_id) {
+        case 0: /* กลับมาหน้าหลัก */ break;
+        case 1: /* ไปหน้าการตั้งค่า */  break;
+    }
+}
+
+TJC_RegisterPageIdCallback(OnPageId);
+```
+
+> TJC จะส่ง `0x66` เมื่อมีการเปลี่ยนหน้า หรือตอบสนองคำสั่ง `sendme`
+
+---
+
 ### System Event — Startup / Sleep / Wake
 
 ```c
@@ -505,6 +524,7 @@ void OnError(uint8_t code) {
 | `TJC_MAX_PARAMS` | `10` | จำนวน parameters สูงสุดต่อคำสั่ง |
 | `TJC_TERMINATOR_SIZE` | `3` | ขนาด terminator (`0xFF 0xFF 0xFF`) |
 | `TJC_PACKET_MAX_SIZE` | `132` | ขนาด packet สูงสุดก่อน auto-reset |
+| `TJC_MAX_BAUDRATE` | `115200` | Baud rate สูงสุดที่อนุญาต (override ได้ด้วย `#define` ก่อน include) |
 
 ---
 

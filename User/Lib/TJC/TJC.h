@@ -32,6 +32,11 @@ extern "C" {
 /** @brief ขนาด packet สูงสุดที่ยอมรับได้ก่อน reset buffer (string + header + terminator) */
 #define TJC_PACKET_MAX_SIZE  (TJC_MAX_STRING_LENGTH + 4)
 
+/** @brief Baud rate สูงสุดที่อนุญาต (ป้องกันการตั้งค่าที่ไม่เสถียร) */
+#ifndef TJC_MAX_BAUDRATE
+#define TJC_MAX_BAUDRATE 115200
+#endif
+
 /* ========== Enumerations ========== */
 
 /**
@@ -138,6 +143,7 @@ typedef void (*TJC_TouchEventCallback_t)(TJC_TouchEvent_t *event);
 typedef void (*TJC_TouchCoordCallback_t)(TJC_TouchCoord_t *coord);
 typedef void (*TJC_NumericCallback_t)(uint32_t value);
 typedef void (*TJC_StringCallback_t)(const char *str, uint16_t len);
+typedef void (*TJC_PageIdCallback_t)(uint8_t page_id);
 typedef void (*TJC_SystemEventCallback_t)(uint8_t event_type);
 typedef void (*TJC_CommandCallback_t)(TJC_ReceivedCommand_t *cmd);
 
@@ -200,6 +206,11 @@ void TJC_RegisterNumericCallback(TJC_NumericCallback_t callback);
  * @brief ลงทะเบียน callback สำหรับ string data
  */
 void TJC_RegisterStringCallback(TJC_StringCallback_t callback);
+
+/**
+ * @brief ลงทะเบียน callback สำหรับ page ID events
+ */
+void TJC_RegisterPageIdCallback(TJC_PageIdCallback_t callback);
 
 /**
  * @brief ลงทะเบียน callback สำหรับ system events (startup, sleep, wake)

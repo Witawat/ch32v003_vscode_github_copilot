@@ -28,6 +28,8 @@ PWR_WAKEUP_AWU        // Auto Wake-Up Unit (timer)
 PWR_WAKEUP_RESET      // NRST pin
 ```
 
+> **⚠️ หมายเหตุ:** `PWR_EnableWakeupPin()` / `PWR_DisableWakeupPin()` ใช้ WKUP pin = PA0 แต่ CH32V003 **ทุกแพ็กเกจไม่มีขา PA0** (ไม่ได้ bond ออกมาจาก die) — ใช้ AWU หรือ EXTI interrupt แทน
+
 ## Entry Methods
 
 ```c

@@ -224,6 +224,8 @@ int main(void) {
 
 ## ข้อควรระวัง
 
+> **⚡ v2.0:** PCLK1 ใช้ `SystemCoreClock` runtime แทน hardcoded 24MHz — คำนวณ timeout ถูกต้องแม้เปลี่ยน system clock
+
 | ปัญหา | สาเหตุ | วิธีแก้ |
 |-------|--------|---------|
 | Reset ทันทีเมื่อเปิด | Refresh ก่อน window เปิด | ตรวจสอบ counter/window ให้ถูกต้อง |

@@ -123,9 +123,8 @@ void PWR_StandbyUntilInterrupt(void)
  */
 void PWR_EnterSleepMode(uint8_t entry_method)
 {
-    // Clear SLEEPDEEP bit to enter Sleep mode (not Standby)
-    NVIC->SCTLR &= ~(1 << 2);
-    
+    // RISC-V: Sleep mode entered via WFI/WFE instruction directly
+    // (ไม่มี SLEEPDEEP bit เหมือน ARM Cortex-M)
     if (entry_method == PWR_ENTRY_WFE) {
         __WFE();  // Wait For Event
     } else {
@@ -260,33 +259,31 @@ uint8_t PWR_WasStandbyWakeup(void)
  */
 void PWR_ClearStandbyFlag(void)
 {
-    // Clear standby flag
     RCC_ClearFlag();
 }
 
 /**
- * @brief  Enable wake-up pin (PA0)
+ * @brief  Enable wake-up pin
+ * @note   CH32V003 ทุกแพ็กเกจไม่มีขา PA0 (ไม่ได้ bond ออกมาจาก die)
+ *         ฟังก์ชันนี้ไม่มีผลในทางปฏิบัติ — ใช้ PWR_ConfigureAWU() แทน
  */
 void PWR_EnableWakeupPin(void)
 {
     // Initialize PWR if needed
     PWR_Init();
-    
-    // Enable wake-up pin functionality
-    // Note: On CH32V003, wake-up pin is typically PA0
-    // Configure in PWR control register
-    PWR->CTLR |= (1 << 8);  // Enable WKUP pin
+
+    PWR->CTLR |= (1 << 8);  // Enable WKUP pin (PA0 — ไม่มีในทุกแพ็กเกจ)
 }
 
 /**
  * @brief  Disable wake-up pin
+ * @note   CH32V003 ทุกแพ็กเกจไม่มีขา PA0 (ไม่ได้ bond ออกมาจาก die)
  */
 void PWR_DisableWakeupPin(void)
 {
     // Initialize PWR if needed
     PWR_Init();
-    
-    // Disable wake-up pin functionality
+
     PWR->CTLR &= ~(1 << 8);  // Disable WKUP pin
 }
 

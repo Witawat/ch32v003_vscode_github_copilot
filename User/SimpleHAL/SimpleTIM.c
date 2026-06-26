@@ -65,6 +65,12 @@ static void enableTimerClock(TIM_Instance timer) {
  * @brief คำนวณ prescaler และ period จากความถี่
  */
 static void calculateTimerParams(uint32_t frequency_hz, uint16_t* prescaler, uint16_t* period) {
+    if (frequency_hz == 0) {
+        *prescaler = 0;
+        *period = 65535;
+        return;
+    }
+
     uint32_t ticks = SystemCoreClock / frequency_hz;
     
     if (ticks <= 65536) {
@@ -196,10 +202,8 @@ void TIM_AttachInterrupt(TIM_Instance timer, void (*callback)(void)) {
     TIM_TypeDef* TIMx = getTIM(timer);
     if (!TIMx || !callback) return;
     
-    // เก็บ callback (กัน ISR อ่านค่ากลางทาง)
-    __disable_irq();
+    // Atomic pointer store on 32-bit RISC-V (volatile ensures no reorder)
     tim_callbacks[timer] = callback;
-    __enable_irq();
     
     // เปิด update interrupt
     TIM_ITConfig(TIMx, TIM_IT_Update, ENABLE);

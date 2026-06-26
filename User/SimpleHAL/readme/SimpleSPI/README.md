@@ -15,7 +15,7 @@ SimpleSPI ห่อหุ้ม Hardware SPI1 ให้ใช้งานง่�
 | Config | SCK | MISO | MOSI | NSS (CS) |
 |--------|-----|------|------|---------|
 | `SPI_PINS_DEFAULT` | PC5 | PC7 | PC6 | PC4 |
-| `SPI_PINS_REMAP`   | PC5 | PC7 | PC6 | PA2 |
+| `SPI_PINS_REMAP`   | PD1 | PD2 | PD3 | PD0 |
 
 > NSS ไม่ได้ถูกใช้โดย hardware — จัดการด้วย `digitalWrite` เอง
 
@@ -34,17 +34,18 @@ SimpleSPI ห่อหุ้ม Hardware SPI1 ให้ใช้งานง่�
 
 ## Speed Options
 
-| Enum | Clock | F = 48MHz / Divider |
-|------|-------|---------------------|
-| `SPI_125KHZ`  | 125kHz  | /256 (PCLK) |
-| `SPI_375KHZ`  | 375kHz  | /128 |
-| `SPI_750KHZ`  | 750kHz  | /64 |
-| `SPI_1_5MHZ`  | 1.5MHz  | /32 |
-| `SPI_3MHZ`    | 3MHz    | /16 |
-| `SPI_6MHZ`    | 6MHz    | /8 |
-| `SPI_12MHZ`   | 12MHz   | /4 |
+| Enum | Prescaler | ความเร็ว @24MHz PCLK |
+|------|-----------|----------------------|
+| `SPI_12MHZ`  | PCLK/2   | 12 MHz |
+| `SPI_8MHZ`   | PCLK/4   | 6 MHz |
+| `SPI_4MHZ`   | PCLK/8   | 3 MHz |
+| `SPI_2MHZ`   | PCLK/16  | 1.5 MHz |
+| `SPI_1MHZ`   | PCLK/32  | 750 kHz |
+| `SPI_500KHZ` | PCLK/64  | 375 kHz |
+| `SPI_250KHZ` | PCLK/128 | 187.5 kHz |
+| `SPI_125KHZ` | PCLK/256 | 93.75 kHz |
 
-> PCLK1 = HCLK/2 = 24MHz ดังนั้น `SPI_12MHZ` = 12MHz จริง
+> **หมายเหตุ:** ความเร็วจริงขึ้นกับ `SystemCoreClock` — ตารางอ้างอิง PCLK2=24MHz (APB2 prescaler=1, HCLK=48MHz) ที่ 48MHz PCLK2 ความเร็วจะเพิ่ม 2 เท่า
 
 ---
 
@@ -55,8 +56,8 @@ SimpleSPI ห่อหุ้ม Hardware SPI1 ให้ใช้งานง่�
 #### `void SPI_SimpleInit(SPI_Mode mode, SPI_Speed speed, SPI_PinConfig pin_config)`
 
 ```c
-SPI_SimpleInit(SPI_MODE0, SPI_6MHZ,  SPI_PINS_DEFAULT);  // Fast, Mode0
-SPI_SimpleInit(SPI_MODE3, SPI_1_5MHZ, SPI_PINS_DEFAULT); // Mode3 ช้ากว่า
+SPI_SimpleInit(SPI_MODE0, SPI_4MHZ,  SPI_PINS_DEFAULT);  // Fast, Mode0
+SPI_SimpleInit(SPI_MODE3, SPI_1MHZ, SPI_PINS_DEFAULT); // Mode3 ช้ากว่า
 ```
 
 ---

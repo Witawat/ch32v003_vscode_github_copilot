@@ -40,13 +40,14 @@ void Timer_Init(void) {
 /**
  * @brief Auto-initialization function
  *
- * ฟังก์ชันนี้จะถูกเรียกอัตโนมัติก่อน main()
- * ทำให้ไม่ต้องเรียก Timer_Init() เอง
+ * หมายเหตุ: ปิดใช้งาน auto-init เนื่องจาก constructor ทำงานก่อน main()
+ * ซึ่ง `SystemCoreClock` ยังไม่ได้ถูกอัพเดตผ่าน `SystemCoreClockUpdate()`
+ * ผู้ใช้ต้องเรียก `Timer_Init()` เองหลังจาก `SystemCoreClockUpdate()` ใน main()
  */
-__attribute__((constructor))
-static void SimpleDelay_AutoInit(void) {
-  Timer_Init();
-}
+// __attribute__((constructor))
+// static void SimpleDelay_AutoInit(void) {
+//   Timer_Init();
+// }
 
 /**
  * @brief SysTick Interrupt Handler
@@ -111,6 +112,7 @@ void Delay_Ms(uint32_t n) {
  * @note ใช้สำหรับการวัดเวลาที่ละเอียดกว่า millisecond
  */
 uint32_t Get_TickMicros(void) {
+  if (SysTick->CMP == 0) return 0;  // Timer ยังไม่ init
   return (SysTick->CNT * us_per_tick) / SysTick->CMP;
 }
 
@@ -132,6 +134,8 @@ uint32_t Get_CurrentMs(void) { return millis; }
  *       ฟังก์ชันนี้ปิด interrupt ชั่วคราวเพื่อความแม่นยำ
  */
 uint32_t Get_CurrentUs(void) {
+  if (SysTick->CMP == 0) return 0;  // Timer ยังไม่ init
+
   uint32_t current_millis;
   uint32_t current_tick;
 

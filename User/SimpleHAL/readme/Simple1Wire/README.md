@@ -312,6 +312,9 @@ int main(void) {
 
 ## ข้อควรระวัง
 
+> **⚡ v2.0:** IRQ disable/enable ใช้ depth counter — ป้องกัน nested enable/disable  
+> 1-Wire Reset ปิด global interrupt ~790µs — อาจสูญเสีย UART data ที่ 115200 bps
+
 | ปัญหา | สาเหตุ | วิธีแก้ |
 |-------|--------|---------|
 | Reset ไม่พบ device | ไม่มี pull-up 4.7kΩ | ต่อ resistor pull-up ทุกครั้ง |

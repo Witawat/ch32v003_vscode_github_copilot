@@ -257,6 +257,13 @@ if (percent < 20) {
 - 📝 เพิ่ม Example 8 และ 9
 
 **v1.0** (2025-12-12)
+### v2.0
+- **Breaking:** `Timer_Init()` ต้องเรียกเองหลัง `SystemCoreClockUpdate()`
+- `ADC_Read()` auto-init ตั้ง GPIO เป็น analog input โดยอัตโนมัติ
+- TSVREFE (Vrefint, Temperature Sensor) เปิดอัตโนมัติ
+- ป้องกัน divide-by-zero ใน `ADC_ReadAverage(samples=0)`
+
+### v1.0
 - 🎉 เวอร์ชันแรก
 - รองรับ 8 external channels
 - API แบบ Arduino-style

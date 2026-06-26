@@ -46,8 +46,9 @@ static const PinMap_t pin_map[] = {
     {GPIOC, GPIO_Pin_6, GPIO_PinSource6, GPIO_PortSourceGPIOC},  // PC6 (16)
     {GPIOC, GPIO_Pin_7, GPIO_PinSource7, GPIO_PortSourceGPIOC},  // PC7 (17)
     
-    // Reserved (18-19)
-    {0, 0, 0, 0}, {0, 0, 0, 0},
+    // GPIOD Pins (PD0-PD1) — PD0 ไม่มีบน SOP-8/SOP-16
+    {GPIOD, GPIO_Pin_0, GPIO_PinSource0, GPIO_PortSourceGPIOD},  // PD0 (18)
+    {GPIOD, GPIO_Pin_1, GPIO_PinSource1, GPIO_PortSourceGPIOD},  // PD1 (19)
     
     // GPIOD pins (PD2-PD7)
     {GPIOD, GPIO_Pin_2, GPIO_PinSource2, GPIO_PortSourceGPIOD},  // PD2 (20)
@@ -73,7 +74,7 @@ static void (* volatile exti_callbacks[8])(void) = {0};
 /**
  * @brief ADC initialization state
  */
-static uint8_t adc_initialized = 0;
+static volatile uint8_t adc_initialized = 0;
 
 /* ========== Internal Helper Functions ========== */
 

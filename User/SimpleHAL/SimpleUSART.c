@@ -33,12 +33,17 @@ static void Int32ToString(int32_t num, char* str) {
     
     if (num < 0) {
         is_negative = 1;
-        num = -num;
-    }
-    
-    while (num != 0) {
-        str[i++] = (num % 10) + '0';
-        num = num / 10;
+        uint32_t unum = (uint32_t)(-(num + 1)) + 1;
+        while (unum != 0) {
+            str[i++] = (unum % 10) + '0';
+            unum = unum / 10;
+        }
+    } else {
+        uint32_t unum = (uint32_t)num;
+        while (unum != 0) {
+            str[i++] = (unum % 10) + '0';
+            unum = unum / 10;
+        }
     }
     
     if (is_negative) {
@@ -69,7 +74,7 @@ void USART_SimpleInit(USART_BaudRate baud, USART_PinConfig pin_config) {
     USART_InitTypeDef USART_InitStructure = {0};
     
     // 1. เปิด Clock สำหรับ USART1 และ GPIOD
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOD | RCC_APB2Periph_USART1, ENABLE);
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOD | RCC_APB2Periph_USART1 | RCC_APB2Periph_AFIO, ENABLE);
     
     // 2. ตั้งค่า Pin Remapping และ GPIO
     switch(pin_config) {

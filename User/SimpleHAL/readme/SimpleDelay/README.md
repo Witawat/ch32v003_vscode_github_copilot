@@ -256,7 +256,10 @@ int main(void) {
 | ปัญหา | สาเหตุ | วิธีแก้ |
 |-------|--------|---------|
 | `Delay_Ms` ไม่ทำงาน | ลืม `Timer_Init()` | เรียก `Timer_Init()` ต้น main |
+| `Get_CurrentUs` คืน 0 | ยังไม่ init SysTick | เรียก `Timer_Init()` — runtime guard ป้องกัน crash |
 | overflow ของ `Get_CurrentMs()` | ใช้ `>=` เปรียบเทียบตรงๆ | ใช้ `(now - start) >= duration` เสมอ |
+
+> **⚡ v2.0 Breaking Change:** `Timer_Init()` ไม่ถูกเรียกอัตโนมัติแล้ว — ต้องเรียกเองหลัง `SystemCoreClockUpdate()`
 | `Timer_t` ทำงานผิด | ประกาศ local ใน loop | ประกาศ `static` หรือ global |
 | ห้ามใช้ `Delay_Ms` ใน ISR | บล็อก interrupt handler | ใช้ flag แล้วจัดการใน main loop |
 | `Delay_Us` ไม่แม่นที่ n=1-2 | compiler optimization | ใช้ `volatile` loop หรือยอมรับ margin เล็กน้อย |

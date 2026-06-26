@@ -24,6 +24,7 @@ static TJC_TouchEventCallback_t touch_event_callback = NULL;
 static TJC_TouchCoordCallback_t touch_coord_callback = NULL;
 static TJC_NumericCallback_t numeric_callback = NULL;
 static TJC_StringCallback_t string_callback = NULL;
+static TJC_PageIdCallback_t page_id_callback = NULL;
 static TJC_SystemEventCallback_t system_event_callback = NULL;
 static TJC_CommandCallback_t command_callback = NULL;
 
@@ -182,7 +183,7 @@ static void TJC_ProcessStringData(uint8_t *data, uint16_t len) {
       str_len = TJC_MAX_STRING_LENGTH;
     }
 
-    static char str_buffer[TJC_MAX_STRING_LENGTH + 1];
+    char str_buffer[TJC_MAX_STRING_LENGTH + 1];
     memcpy(str_buffer, &data[1], str_len);
     str_buffer[str_len] = '\0';
 
@@ -200,6 +201,15 @@ static void TJC_ProcessSystemEvent(uint8_t event_type) {
 }
 
 /**
+ * @brief ประมวลผล page ID (0x66)
+ */
+static void TJC_ProcessPageId(uint8_t *data) {
+  if (page_id_callback != NULL) {
+    page_id_callback(data[1]);
+  }
+}
+
+/**
  * @brief ประมวลผลคำสั่งที่รับมา (รูปแบบ CMD|PARA1|PARA2|...)
  */
 static void TJC_ProcessCommand(uint8_t *data, uint16_t len) {
@@ -213,7 +223,7 @@ static void TJC_ProcessCommand(uint8_t *data, uint16_t len) {
     str_len = TJC_MAX_STRING_LENGTH;
   }
 
-  static char cmd_buffer[TJC_MAX_STRING_LENGTH + 1];
+  char cmd_buffer[TJC_MAX_STRING_LENGTH + 1];
   memcpy(cmd_buffer, data, str_len);
   cmd_buffer[str_len] = '\0';
 
@@ -277,6 +287,14 @@ void TJC_Init(uint32_t baudrate, TJC_PinConfig pin_config) {
   USART_InitTypeDef USART_InitStructure = {0};
   NVIC_InitTypeDef NVIC_InitStructure = {0};
 
+  // 0. ตรวจสอบ SystemCoreClock และ clamp baud rate
+  if (SystemCoreClock == 0) {
+    SystemCoreClockUpdate();
+  }
+  if (baudrate > TJC_MAX_BAUDRATE) {
+    baudrate = TJC_MAX_BAUDRATE;
+  }
+
   // 1. เปิด Clock (รวม AFIO สำหรับ pin remapping)
   RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO | RCC_APB2Periph_GPIOD | RCC_APB2Periph_USART1, ENABLE);
 
@@ -284,6 +302,9 @@ void TJC_Init(uint32_t baudrate, TJC_PinConfig pin_config) {
   switch (pin_config) {
   case TJC_PINS_DEFAULT:
     // Default: TX=PD5, RX=PD6
+    GPIO_PinRemapConfig(GPIO_PartialRemap1_USART1, DISABLE);
+    GPIO_PinRemapConfig(GPIO_PartialRemap2_USART1, DISABLE);
+
     GPIO_InitStructure.GPIO_Pin = GPIO_Pin_5;
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
     GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
@@ -491,7 +512,7 @@ void TJC_ProcessResponse(void) {
       break;
 
     case TJC_RET_PAGE_ID:
-      /* Page ID = response_buffer[1] */
+      TJC_ProcessPageId(response_buffer);
       break;
 
     case TJC_RET_TOUCH_COORD:
@@ -517,9 +538,12 @@ void TJC_ProcessResponse(void) {
       break;
 
     default:
-      /* ตรวจสอบว่าเป็น ASCII text command หรือไม่ */
+      /* ASCII text command (0x20–0x7E) — ส่งจาก TJC ผ่าน prints/printh */
       if (response_buffer[0] >= 0x20 && response_buffer[0] <= 0x7E) {
         TJC_ProcessCommand(response_buffer, response_len);
+      } else {
+        /* Unknown binary code — fallback to error callback */
+        TJC_ProcessError(cmd_type);
       }
       break;
     }
@@ -550,6 +574,10 @@ void TJC_RegisterNumericCallback(TJC_NumericCallback_t callback) {
 
 void TJC_RegisterStringCallback(TJC_StringCallback_t callback) {
   string_callback = callback;
+}
+
+void TJC_RegisterPageIdCallback(TJC_PageIdCallback_t callback) {
+  page_id_callback = callback;
 }
 
 void TJC_RegisterSystemEventCallback(TJC_SystemEventCallback_t callback) {
@@ -585,8 +613,10 @@ uint16_t TJC_Available(void) {
  * @brief ล้าง receive buffer
  */
 void TJC_FlushRxBuffer(void) {
+  USART_ITConfig(USART1, USART_IT_RXNE, DISABLE);
   rx_buffer.head = 0;
   rx_buffer.tail = 0;
+  USART_ITConfig(USART1, USART_IT_RXNE, ENABLE);
 }
 
 /**

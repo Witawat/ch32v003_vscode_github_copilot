@@ -75,36 +75,31 @@ typedef enum {
     ADC_CH_5 = 5,  /**< ADC Channel 5 - PD5 */
     ADC_CH_6 = 6,  /**< ADC Channel 6 - PD6 */
     ADC_CH_7 = 7,  /**< ADC Channel 7 - PD4 */
-    
-    // Aliases สำหรับความสะดวก
-    ADC_CH_PA2 = 0,  /**< PA2 - ADC Channel 0 */
-    ADC_CH_PA1 = 1,  /**< PA1 - ADC Channel 1 */
-    ADC_CH_PC4 = 2,  /**< PC4 - ADC Channel 2 */
-    ADC_CH_PD2 = 3,  /**< PD2 - ADC Channel 3 */
-    ADC_CH_PD3 = 4,  /**< PD3 - ADC Channel 4 */
-    ADC_CH_PD5 = 5,  /**< PD5 - ADC Channel 5 */
-    ADC_CH_PD6 = 6,  /**< PD6 - ADC Channel 6 */
-    ADC_CH_PD4 = 7,  /**< PD4 - ADC Channel 7 */
-    
-    // ========== Internal Channels ==========
     ADC_CH_8 = 8,  /**< ADC Channel 8 - Internal Vref */
     ADC_CH_9 = 9,  /**< ADC Channel 9 - Internal Vcal */
-    
-    ADC_CH_VREFINT = 8,  /**< Internal Reference Voltage (≈1.2V) */
-    ADC_CH_VCALINT = 9,  /**< Internal Calibration Voltage */
-    
-    // ========== Backward Compatibility Aliases (DEPRECATED) ==========
-    // เก็บไว้เพื่อ backward compatibility กับโค้ดเดิม
-    // แมปตาม hardware channels ที่ถูกต้อง
-    ADC_CH_A0 = 0,   /**< @deprecated ใช้ ADC_CH_PA2 แทน - Channel 0 (PA2) */
-    ADC_CH_A1 = 1,   /**< @deprecated ใช้ ADC_CH_PA1 แทน - Channel 1 (PA1) */
-    ADC_CH_A2 = 2,   /**< @deprecated ใช้ ADC_CH_PC4 แทน - Channel 2 (PC4) */
-    ADC_CH_A3 = 3,   /**< @deprecated ใช้ ADC_CH_PD2 แทน - Channel 3 (PD2) */
-    ADC_CH_A4 = 4,   /**< @deprecated ใช้ ADC_CH_PD3 แทน - Channel 4 (PD3) */
-    ADC_CH_A5 = 5,   /**< @deprecated ใช้ ADC_CH_PD5 แทน - Channel 5 (PD5) */
-    ADC_CH_A6 = 6,   /**< @deprecated ใช้ ADC_CH_PD6 แทน - Channel 6 (PD6) */
-    ADC_CH_A7 = 7    /**< @deprecated ใช้ ADC_CH_PD4 แทน - Channel 7 (PD4) */
 } ADC_Channel;
+
+/* Aliases สำหรับความสะดวก (ใช้ #define เพื่อไม่ให้ enum ซ้ำค่า) */
+#define ADC_CH_PA2    ADC_CH_0
+#define ADC_CH_PA1    ADC_CH_1
+#define ADC_CH_PC4    ADC_CH_2
+#define ADC_CH_PD2    ADC_CH_3
+#define ADC_CH_PD3    ADC_CH_4
+#define ADC_CH_PD5    ADC_CH_5
+#define ADC_CH_PD6    ADC_CH_6
+#define ADC_CH_PD4    ADC_CH_7
+#define ADC_CH_VREFINT ADC_CH_8
+#define ADC_CH_VCALINT ADC_CH_9
+
+/* Backward Compatibility Aliases (DEPRECATED) */
+#define ADC_CH_A0     ADC_CH_0   /**< @deprecated ใช้ ADC_CH_PA2 แทน */
+#define ADC_CH_A1     ADC_CH_1   /**< @deprecated ใช้ ADC_CH_PA1 แทน */
+#define ADC_CH_A2     ADC_CH_2   /**< @deprecated ใช้ ADC_CH_PC4 แทน */
+#define ADC_CH_A3     ADC_CH_3   /**< @deprecated ใช้ ADC_CH_PD2 แทน */
+#define ADC_CH_A4     ADC_CH_4   /**< @deprecated ใช้ ADC_CH_PD3 แทน */
+#define ADC_CH_A5     ADC_CH_5   /**< @deprecated ใช้ ADC_CH_PD5 แทน */
+#define ADC_CH_A6     ADC_CH_6   /**< @deprecated ใช้ ADC_CH_PD6 แทน */
+#define ADC_CH_A7     ADC_CH_7   /**< @deprecated ใช้ ADC_CH_PD4 แทน */
 
 /**
  * @brief ADC Resolution

@@ -36,9 +36,9 @@ void I2C_SimpleInit(I2C_Speed speed, I2C_PinConfig pin_config) {
     
     // 1. เปิด Clock
     if(pin_config == I2C_PINS_DEFAULT) {
-        RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOC | RCC_APB1Periph_I2C1, ENABLE);
+        RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOC | RCC_APB1Periph_I2C1 | RCC_APB2Periph_AFIO, ENABLE);
     } else {
-        RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOD | RCC_APB1Periph_I2C1, ENABLE);
+        RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOD | RCC_APB1Periph_I2C1 | RCC_APB2Periph_AFIO, ENABLE);
     }
     
     // 2. ตั้งค่า Pin Remapping และ GPIO
@@ -93,12 +93,22 @@ I2C_Status I2C_Write(uint8_t addr, uint8_t* data, uint16_t len) {
     // 2. ส่ง address + Write bit
     I2C_Send7bitAddress(I2C1, addr << 1, I2C_Direction_Transmitter);
     status = I2C_WaitEvent(I2C_EVENT_MASTER_TRANSMITTER_MODE_SELECTED, I2C_TIMEOUT_MS);
+    if (I2C_GetFlagStatus(I2C1, I2C_FLAG_AF)) {
+        I2C_ClearFlag(I2C1, I2C_FLAG_AF);
+        I2C_GenerateSTOP(I2C1, ENABLE);
+        return I2C_ERROR_NACK;
+    }
     if(status != I2C_OK) return status;
     
     // 3. ส่งข้อมูล
     for(uint16_t i = 0; i < len; i++) {
         I2C_SendData(I2C1, data[i]);
         status = I2C_WaitEvent(I2C_EVENT_MASTER_BYTE_TRANSMITTED, I2C_TIMEOUT_MS);
+        if (I2C_GetFlagStatus(I2C1, I2C_FLAG_AF)) {
+            I2C_ClearFlag(I2C1, I2C_FLAG_AF);
+            I2C_GenerateSTOP(I2C1, ENABLE);
+            return I2C_ERROR_NACK;
+        }
         if(status != I2C_OK) return status;
     }
     
@@ -122,6 +132,11 @@ I2C_Status I2C_Read(uint8_t addr, uint8_t* data, uint16_t len) {
     // 2. ส่ง address + Read bit
     I2C_Send7bitAddress(I2C1, addr << 1, I2C_Direction_Receiver);
     status = I2C_WaitEvent(I2C_EVENT_MASTER_RECEIVER_MODE_SELECTED, I2C_TIMEOUT_MS);
+    if (I2C_GetFlagStatus(I2C1, I2C_FLAG_AF)) {
+        I2C_ClearFlag(I2C1, I2C_FLAG_AF);
+        I2C_GenerateSTOP(I2C1, ENABLE);
+        return I2C_ERROR_NACK;
+    }
     if(status != I2C_OK) return status;
     
     // 3. อ่านข้อมูล
@@ -187,17 +202,32 @@ I2C_Status I2C_WriteRegMulti(uint8_t addr, uint8_t reg, uint8_t* data, uint16_t 
     // 2. ส่ง address + Write bit
     I2C_Send7bitAddress(I2C1, addr << 1, I2C_Direction_Transmitter);
     status = I2C_WaitEvent(I2C_EVENT_MASTER_TRANSMITTER_MODE_SELECTED, I2C_TIMEOUT_MS);
+    if (I2C_GetFlagStatus(I2C1, I2C_FLAG_AF)) {
+        I2C_ClearFlag(I2C1, I2C_FLAG_AF);
+        I2C_GenerateSTOP(I2C1, ENABLE);
+        return I2C_ERROR_NACK;
+    }
     if(status != I2C_OK) return status;
     
     // 3. ส่ง register address
     I2C_SendData(I2C1, reg);
     status = I2C_WaitEvent(I2C_EVENT_MASTER_BYTE_TRANSMITTED, I2C_TIMEOUT_MS);
+    if (I2C_GetFlagStatus(I2C1, I2C_FLAG_AF)) {
+        I2C_ClearFlag(I2C1, I2C_FLAG_AF);
+        I2C_GenerateSTOP(I2C1, ENABLE);
+        return I2C_ERROR_NACK;
+    }
     if(status != I2C_OK) return status;
     
     // 4. ส่งข้อมูล
     for(uint16_t i = 0; i < len; i++) {
         I2C_SendData(I2C1, data[i]);
         status = I2C_WaitEvent(I2C_EVENT_MASTER_BYTE_TRANSMITTED, I2C_TIMEOUT_MS);
+        if (I2C_GetFlagStatus(I2C1, I2C_FLAG_AF)) {
+            I2C_ClearFlag(I2C1, I2C_FLAG_AF);
+            I2C_GenerateSTOP(I2C1, ENABLE);
+            return I2C_ERROR_NACK;
+        }
         if(status != I2C_OK) return status;
     }
     
@@ -240,22 +270,25 @@ uint8_t I2C_Scan(uint8_t* found_devices, uint8_t max_devices) {
  * @brief ตรวจสอบว่า device ตอบสนองหรือไม่
  */
 uint8_t I2C_IsDeviceReady(uint8_t addr) {
-    I2C_Status status;
-    
     // ส่ง START condition
     I2C_GenerateSTART(I2C1, ENABLE);
-    status = I2C_WaitEvent(I2C_EVENT_MASTER_MODE_SELECT, I2C_TIMEOUT_MS);
-    if(status != I2C_OK) {
+    if (I2C_WaitEvent(I2C_EVENT_MASTER_MODE_SELECT, I2C_TIMEOUT_MS) != I2C_OK) {
         I2C_GenerateSTOP(I2C1, ENABLE);
         return 0;
     }
     
-    // ส่ง address
+    // ส่ง address — ตรวจสอบ NACK ทันที
     I2C_Send7bitAddress(I2C1, addr << 1, I2C_Direction_Transmitter);
-    status = I2C_WaitEvent(I2C_EVENT_MASTER_TRANSMITTER_MODE_SELECTED, I2C_TIMEOUT_MS);
+    if (I2C_WaitEvent(I2C_EVENT_MASTER_TRANSMITTER_MODE_SELECTED, 1) != I2C_OK) {
+        if (I2C_GetFlagStatus(I2C1, I2C_FLAG_AF)) {
+            I2C_ClearFlag(I2C1, I2C_FLAG_AF);
+        }
+        I2C_GenerateSTOP(I2C1, ENABLE);
+        return 0;
+    }
     
     // ส่ง STOP condition
     I2C_GenerateSTOP(I2C1, ENABLE);
     
-    return (status == I2C_OK) ? 1 : 0;
+    return 1;
 }

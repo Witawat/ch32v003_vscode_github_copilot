@@ -279,6 +279,9 @@ int main(void) {
 
 ## ข้อควรระวัง
 
+> **⚡ v2.0:** `Time_t` fields (`minutes`, `seconds`) เปลี่ยนเป็น `uint16_t` — RAW mode เก็บค่าได้เกิน 255  
+> `Stopwatch_Init()` มี guard ไม่ re-init TIM2 ซ้ำ
+
 | ปัญหา | สาเหตุ | วิธีแก้ |
 |-------|--------|---------|
 | ใช้ `SimpleTIM TIM_2` พร้อมกันไม่ได้ | ทั้งคู่ใช้ TIM2 hardware | เลือกอย่างใดอย่างหนึ่ง |

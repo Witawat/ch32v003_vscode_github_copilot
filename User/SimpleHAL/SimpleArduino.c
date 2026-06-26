@@ -199,7 +199,8 @@ void USART_PrintlnHex(uint32_t num, uint8_t uppercase) {
 #if ENABLE_USART_PRINTFLOAT
 
 void USART_PrintFloat(float val, uint8_t decimal_places) {
-    char buf[24];
+    if (decimal_places > 20) decimal_places = 20;
+    char buf[64];
     dtostrf((double)val, 0, decimal_places, buf);
     USART_Print(buf);
 }

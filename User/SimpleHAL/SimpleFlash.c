@@ -31,7 +31,11 @@ FlashStatus Flash_Init(void) {
     
     // Enable flash clock (already enabled by default)
     // Set flash latency based on system clock
-    FLASH_SetLatency(FLASH_Latency_0);  // For 24MHz or less
+    if (SystemCoreClock > 24000000) {
+        FLASH_SetLatency(FLASH_Latency_1);  // 48MHz
+    } else {
+        FLASH_SetLatency(FLASH_Latency_0);  // ≤24MHz
+    }
     
     flash_initialized = true;
     return FLASH_OK;
@@ -456,37 +460,75 @@ FlashStatus Flash_WriteByteWithErase(uint32_t addr, uint8_t data) {
 }
 
 /**
- * @brief เขียน half-word พร้อม auto-erase
+ * @brief เขียน half-word พร้อม auto-erase (modify-erase-write, 1 erase cycle)
  */
 FlashStatus Flash_WriteHalfWordWithErase(uint32_t addr, uint16_t data) {
     if (!Flash_IsAddressValid(addr) || (addr & 0x01)) {
         return FLASH_ERROR_ALIGN;
     }
-    
-    // Use byte write for each byte
-    FlashStatus status = Flash_WriteByteWithErase(addr, (uint8_t)(data & 0xFF));
+
+    uint32_t page_addr = addr & ~(FLASH_PAGE_SIZE - 1);
+    uint8_t page_num = (addr - FLASH_BASE_ADDRESS) / FLASH_PAGE_SIZE;
+
+    uint8_t page_buffer[FLASH_PAGE_SIZE];
+    for (uint16_t i = 0; i < FLASH_PAGE_SIZE; i++) {
+        page_buffer[i] = Flash_ReadByte(page_addr + i);
+    }
+
+    uint16_t offset = addr - page_addr;
+    page_buffer[offset]     = (uint8_t)(data & 0xFF);
+    page_buffer[offset + 1] = (uint8_t)(data >> 8);
+
+    FlashStatus status = Flash_ErasePage(page_num);
     if (status != FLASH_OK) {
         return status;
     }
-    
-    return Flash_WriteByteWithErase(addr + 1, (uint8_t)(data >> 8));
+
+    for (uint16_t i = 0; i < FLASH_PAGE_SIZE; i++) {
+        status = Flash_WriteByte(page_addr + i, page_buffer[i]);
+        if (status != FLASH_OK) {
+            return status;
+        }
+    }
+
+    return FLASH_OK;
 }
 
 /**
- * @brief เขียน word พร้อม auto-erase
+ * @brief เขียน word พร้อม auto-erase (modify-erase-write, 1 erase cycle)
  */
 FlashStatus Flash_WriteWordWithErase(uint32_t addr, uint32_t data) {
     if (!Flash_IsAddressValid(addr) || (addr & 0x03)) {
         return FLASH_ERROR_ALIGN;
     }
-    
-    // Write as two half-words
-    FlashStatus status = Flash_WriteHalfWordWithErase(addr, (uint16_t)(data & 0xFFFF));
+
+    uint32_t page_addr = addr & ~(FLASH_PAGE_SIZE - 1);
+    uint8_t page_num = (addr - FLASH_BASE_ADDRESS) / FLASH_PAGE_SIZE;
+
+    uint8_t page_buffer[FLASH_PAGE_SIZE];
+    for (uint16_t i = 0; i < FLASH_PAGE_SIZE; i++) {
+        page_buffer[i] = Flash_ReadByte(page_addr + i);
+    }
+
+    uint16_t offset = addr - page_addr;
+    page_buffer[offset]     = (uint8_t)(data & 0xFF);
+    page_buffer[offset + 1] = (uint8_t)((data >> 8) & 0xFF);
+    page_buffer[offset + 2] = (uint8_t)((data >> 16) & 0xFF);
+    page_buffer[offset + 3] = (uint8_t)(data >> 24);
+
+    FlashStatus status = Flash_ErasePage(page_num);
     if (status != FLASH_OK) {
         return status;
     }
-    
-    return Flash_WriteHalfWordWithErase(addr + 2, (uint16_t)(data >> 16));
+
+    for (uint16_t i = 0; i < FLASH_PAGE_SIZE; i++) {
+        status = Flash_WriteByte(page_addr + i, page_buffer[i]);
+        if (status != FLASH_OK) {
+            return status;
+        }
+    }
+
+    return FLASH_OK;
 }
 
 /* ========== Private Functions ========== */

@@ -39,11 +39,10 @@ extern "C" {
 
 // Calculate timeout in microseconds
 // Formula: timeout_us = (4096 * prescaler * (counter - 0x3F)) / PCLK1
-// Assuming PCLK1 = 24MHz
-#define WWDG_PCLK1_FREQ         24000000UL
+// PCLK1 = SystemCoreClock (APB1 prescaler = 1 by default)
 
 #define WWDG_TIMEOUT_US(prescaler_val, counter) \
-    ((4096UL * (prescaler_val) * ((counter) - 0x3F) * 1000000UL) / WWDG_PCLK1_FREQ)
+    ((4096UL * (prescaler_val) * ((counter) - 0x3F) * 1000000UL) / SystemCoreClock)
 
 #define WWDG_TIMEOUT_MS(prescaler_val, counter) \
     (WWDG_TIMEOUT_US(prescaler_val, counter) / 1000UL)

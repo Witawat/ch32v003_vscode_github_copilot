@@ -10,7 +10,7 @@
 /* ========== Private Variables ========== */
 
 static GPIO_TypeDef* cs_port = GPIOC;
-static uint16_t cs_pin = GPIO_Pin_4;
+static volatile uint16_t cs_pin = GPIO_Pin_4;
 
 /* ========== Public Functions ========== */
 
@@ -22,11 +22,7 @@ void SPI_SimpleInit(SPI_Mode mode, SPI_Speed speed, SPI_PinConfig pin_config) {
     SPI_InitTypeDef SPI_InitStructure = {0};
     
     // 1. เปิด Clock
-    if(pin_config == SPI_PINS_DEFAULT) {
-        RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOC | RCC_APB2Periph_SPI1, ENABLE);
-    } else {
-        RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOC | RCC_APB2Periph_SPI1, ENABLE);
-    }
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOC | RCC_APB2Periph_SPI1 | RCC_APB2Periph_AFIO, ENABLE);
     
     // 2. ตั้งค่า Pin Remapping และ GPIO
     switch(pin_config) {
@@ -55,29 +51,28 @@ void SPI_SimpleInit(SPI_Mode mode, SPI_Speed speed, SPI_PinConfig pin_config) {
             break;
             
         case SPI_PINS_REMAP:
-            // Remap: SCK=PC6, MISO=PC8, MOSI=PC7, NSS=PC5
+            // Remap: SCK=PD1, MISO=PD2, MOSI=PD3, NSS=PD0
             GPIO_PinRemapConfig(GPIO_Remap_SPI1, ENABLE);
             
-            // SCK และ MOSI
-            GPIO_InitStructure.GPIO_Pin = GPIO_Pin_6 | GPIO_Pin_7;
+            // SCK (PD1) และ MOSI (PD3) - Alternate Function Push-Pull
+            GPIO_InitStructure.GPIO_Pin = GPIO_Pin_1 | GPIO_Pin_3;
             GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
             GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
-            GPIO_Init(GPIOC, &GPIO_InitStructure);
+            GPIO_Init(GPIOD, &GPIO_InitStructure);
             
-            // MISO (PC8 อาจต้องใช้ GPIOC หรือ port อื่น ตาม datasheet)
-            // สำหรับ CH32V003 อาจมีข้อจำกัด ให้ตรวจสอบ datasheet
-            GPIO_InitStructure.GPIO_Pin = GPIO_Pin_0;
+            // MISO (PD2) - Input Floating
+            GPIO_InitStructure.GPIO_Pin = GPIO_Pin_2;
             GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
-            GPIO_Init(GPIOC, &GPIO_InitStructure);
+            GPIO_Init(GPIOD, &GPIO_InitStructure);
             
-            // NSS (CS)
-            GPIO_InitStructure.GPIO_Pin = GPIO_Pin_5;
+            // NSS/CS (PD0) - Output Push-Pull (software control)
+            GPIO_InitStructure.GPIO_Pin = GPIO_Pin_0;
             GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
             GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
-            GPIO_Init(GPIOC, &GPIO_InitStructure);
+            GPIO_Init(GPIOD, &GPIO_InitStructure);
             
-            cs_port = GPIOC;
-            cs_pin = GPIO_Pin_5;
+            cs_port = GPIOD;
+            cs_pin = GPIO_Pin_0;
             break;
     }
     

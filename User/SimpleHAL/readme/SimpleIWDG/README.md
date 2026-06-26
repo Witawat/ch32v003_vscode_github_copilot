@@ -201,6 +201,9 @@ int main(void) {
 
 ## ข้อควรระวัง
 
+> **⚡ v2.0:** reload ถูก clamp ≥ 1 — ป้องกัน reload=0 (ตีความเป็นค่าสูงสุด)  
+> LSI tolerance ±25% — timeout เป็นค่าประมาณ ควรเลือก timeout ที่มี margin
+
 | ปัญหา | สาเหตุ | วิธีแก้ |
 |-------|--------|---------|
 | MCU reset ตลอด | ลืม Feed / task ช้าเกิน | เพิ่ม `IWDG_Feed()` ในทุก loop iteration ที่สำคัญ |

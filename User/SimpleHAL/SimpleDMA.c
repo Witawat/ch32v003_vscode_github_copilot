@@ -434,8 +434,10 @@ void DMA_USART_InitRx(DMA_Channel channel, uint8_t* buffer, uint16_t buffer_size
 void DMA_USART_Transmit(DMA_Channel channel, const uint8_t* data, uint16_t length) {
     DMA_Channel_TypeDef* dma_ch = get_channel_base(channel);
     
-    // Wait for previous transfer to complete
-    while (DMA_GetStatus(channel) == DMA_STATUS_BUSY);
+    // Wait for previous transfer to complete (with timeout)
+    uint32_t timeout = 100000;
+    while (DMA_GetStatus(channel) == DMA_STATUS_BUSY && --timeout);
+    if (timeout == 0) return;  // Timeout — do not modify running channel
     
     // Update transfer size and memory address
     DMA_Cmd(dma_ch, DISABLE);
@@ -680,7 +682,7 @@ void DMA_USART_Send(DMA_Channel channel, const uint8_t* data, uint16_t length) {
 
 // Private variables for analogRead DMA
 static DMA_Channel adc_dma_channel = DMA_CH1;
-static uint8_t adc_dma_active = 0;
+static volatile uint8_t adc_dma_active = 0;
 
 /**
  * @brief เปลี่ยน DMA channel สำหรับ analogRead DMA
