@@ -66,8 +66,8 @@ int main(void) {
         Delay_Ms(100);
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> <code>PWR_Sleep()</code> หยุดเฉพาะ CPU — SysTick, GPIO interrupt, USART ยังทำงาน — ใน Sleep กระแส ~0.5mA (เทียบกับ Active ~4mA) — <code>attachInterrupt(PA1, btn_isr, FALLING)</code> ผูก interrupt — เมื่อกดปุ่ม → PA1 LOW → interrupt → CPU ตื่น → <code>btn_isr()</code> ตั้ง flag — main loop เช็ค flag แยกสาเหตุการตื่น — ถ้าไม่มี interrupt → ตื่นด้วย SysTick (1ms) — วนกลับมา Sleep ใหม่ — <strong>ข้อควรระวัง:</strong> delay() ใน Sleep ยังทำงานเพราะใช้ SysTick — แต่อาจไม่แม่นเท่าเดิมเพราะบางรอบ CPU หลับ</div>
-</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>PWR_Sleep()</code> หยุดเฉพาะ CPU — SysTick, GPIO interrupt, USART ยังทำงาน — ใน Sleep กระแส ~0.5mA (เทียบกับ Active ~4mA) — <code>attachInterrupt(PA1, btn_isr, FALLING)</code> ผูก interrupt — เมื่อกดปุ่ม → PA1 LOW → interrupt → CPU ตื่น → <code>btn_isr()</code> ตั้ง flag — main loop เช็ค flag แยกสาเหตุการตื่น — ถ้าไม่มี interrupt → ตื่นด้วย SysTick (1ms) — วนกลับมา Sleep ใหม่ — <strong>ข้อควรระวัง:</strong> delay() ใน Sleep ยังทำงานเพราะใช้ SysTick — แต่อาจไม่แม่นเท่าเดิมเพราะบางรอบ CPU หลับ</ul></div>
+</ul></div>
 
 <div class="answer">
 <h2>ข้อ 2: PWR_Standby 10 วิ + ตรวจจับ wakeup source</h2>
@@ -131,8 +131,8 @@ int main(void) {
     // ไม่มีทางมาถึง — Standby = reset
     while (1);
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> <code>PWR_Standby()</code> หยุดทุกอย่าง — RAM สูญหาย! — ตื่นด้วย AWU หรือ reset pin เท่านั้น — <code>PWR_WasStandbyWakeup()</code> เช็ค flag ว่า reset ครั้งนี้เกิดจาก Standby หรือ Power-on — <strong>BKP registers</strong> (10 × 32-bit) เป็นหน่วยความจำเดียวที่คงค่าผ่าน Standby — ใช้เก็บ wake counter — AWU period: AWU_16MS, AWU_128MS, AWU_1S, AWU_2S, AWU_4S, AWU_8S, AWU_16S, AWU_30S — เพื่อให้ได้ 10 วิ: ใช้ AWU_8S + รอ 2S (Delay_Ms(2000)) ก่อนเข้า Standby — หรือใช้ AWU_4S แล้วนับ 3 รอบ — <strong>สำคัญ:</strong> ต้อง Delay รอ USART ส่งเสร็จก่อนเข้า Standby มิฉะนั้นข้อมูลค้างใน buffer</div>
-</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>PWR_Standby()</code> หยุดทุกอย่าง — RAM สูญหาย! — ตื่นด้วย AWU หรือ reset pin เท่านั้น — <code>PWR_WasStandbyWakeup()</code> เช็ค flag ว่า reset ครั้งนี้เกิดจาก Standby หรือ Power-on — <strong>BKP registers</strong> (10 × 32-bit) เป็นหน่วยความจำเดียวที่คงค่าผ่าน Standby — ใช้เก็บ wake counter — AWU period: AWU_16MS, AWU_128MS, AWU_1S, AWU_2S, AWU_4S, AWU_8S, AWU_16S, AWU_30S — เพื่อให้ได้ 10 วิ: ใช้ AWU_8S + รอ 2S (Delay_Ms(2000)) ก่อนเข้า Standby — หรือใช้ AWU_4S แล้วนับ 3 รอบ — <strong>สำคัญ:</strong> ต้อง Delay รอ USART ส่งเสร็จก่อนเข้า Standby มิฉะนั้นข้อมูลค้างใน buffer</ul></div>
+</ul></div>
 
 <div class="answer">
 <h2>ข้อ 3: คำนวณอายุแบตเตอรี่ 1000mAh</h2>
@@ -226,8 +226,8 @@ int main(void) {
         PWR_Standby();
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> การคำนวณอายุแบตเตอรี่อาศัย 3 ปัจจัย: (1) กระแส Active × เวลา + กระแส Sleep/Standby × เวลา = พลังงานต่อรอบ (2) ความจุแบตจริงลดลงตามแรงดัน — <code>PWR_CalculateBatteryLife()</code> คำนวณ % โดยประมาณ (3) Self-discharge + quiescent current ของ LDO มีผลในทางปฏิบัติ — สูตร: <code>อายุ(วัน) = (ความจุ(mAh) / พลังงานต่อรอบ(mAs)) × (เวลาต่อรอบ(s) / 86400)</code> — Standby 5µA ต่ำกว่า Sleep 0.5mA ถึง 100 เท่า — CR2032 225mAh: Sleep mode → ~20 วัน, Standby mode → ~2 ปี — Self-discharge ของ CR2032 ~1% ต่อปี — รวม quiescent ของ LDO (~1-2µA) — อายุจริง ~1-2 ปี</div>
-</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> การคำนวณอายุแบตเตอรี่อาศัย 3 ปัจจัย: (1) กระแส Active × เวลา + กระแส Sleep/Standby × เวลา = พลังงานต่อรอบ (2) ความจุแบตจริงลดลงตามแรงดัน — <code>PWR_CalculateBatteryLife()</code> คำนวณ % โดยประมาณ (3) Self-discharge + quiescent current ของ LDO มีผลในทางปฏิบัติ — สูตร: <code>อายุ(วัน) = (ความจุ(mAh) / พลังงานต่อรอบ(mAs)) × (เวลาต่อรอบ(s) / 86400)</code> — Standby 5µA ต่ำกว่า Sleep 0.5mA ถึง 100 เท่า — CR2032 225mAh: Sleep mode → ~20 วัน, Standby mode → ~2 ปี — Self-discharge ของ CR2032 ~1% ต่อปี — รวม quiescent ของ LDO (~1-2µA) — อายุจริง ~1-2 ปี</ul></div>
+</ul></div>
 
 <nav class="bottom-nav">
     <a href="index.html">← สารบัญ</a>

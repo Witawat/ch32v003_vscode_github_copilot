@@ -53,8 +53,8 @@ int main(void) {
         Delay_Ms(2000);
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> W25Qxx ใช้ SPI Mode 0 — เริ่มด้วย CS LOW เพื่อเลือก Flash — ส่ง command <code>0x9F</code> (Read JEDEC ID) — ต่อด้วย dummy byte <code>0x00</code> 3 ครั้งเพื่อสร้าง clock ให้รับข้อมูลกลับ — CS HIGH เพื่อปล่อย bus — JEDEC ID 3 bytes: [Manufacturer] [Memory Type] [Capacity] — W25Q32 = EF 40 16, W25Q64 = EF 40 17</div>
-</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> W25Qxx ใช้ SPI Mode 0 — เริ่มด้วย CS LOW เพื่อเลือก Flash — ส่ง command <code>0x9F</code> (Read JEDEC ID) — ต่อด้วย dummy byte <code>0x00</code> 3 ครั้งเพื่อสร้าง clock ให้รับข้อมูลกลับ — CS HIGH เพื่อปล่อย bus — JEDEC ID 3 bytes: [Manufacturer] [Memory Type] [Capacity] — W25Q32 = EF 40 16, W25Q64 = EF 40 17</ul></div>
+</ul></div>
 
 <div class="answer">
 <h2>ข้อ 2: เปลี่ยน SPI speed แบบ runtime</h2>
@@ -108,8 +108,8 @@ int main(void) {
     USART_Print("Done — all speeds OK!\r\n");
     while (1);
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> <code>SPI_SetSpeed(speed)</code> เปลี่ยนความเร็ว SPI ได้ทันทีที่ runtime — ไม่ต้อง re-init — speed constants: <code>SPI_500KHZ</code>, <code>SPI_1MHZ</code>, <code>SPI_2MHZ</code>, <code>SPI_4MHZ</code>, <code>SPI_8MHZ</code> — W25Qxx รองรับสูงสุด ~50MHz — ข้อควรระวัง: ความเร็วสูงมากอาจมีปัญหา noise หากสายยาวหรือ breadboard — 8MHz ควรใช้ PCB ที่มี layout ดี</div>
-</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>SPI_SetSpeed(speed)</code> เปลี่ยนความเร็ว SPI ได้ทันทีที่ runtime — ไม่ต้อง re-init — speed constants: <code>SPI_500KHZ</code>, <code>SPI_1MHZ</code>, <code>SPI_2MHZ</code>, <code>SPI_4MHZ</code>, <code>SPI_8MHZ</code> — W25Qxx รองรับสูงสุด ~50MHz — ข้อควรระวัง: ความเร็วสูงมากอาจมีปัญหา noise หากสายยาวหรือ breadboard — 8MHz ควรใช้ PCB ที่มี layout ดี</ul></div>
+</ul></div>
 
 <div class="answer">
 <h2>ข้อ 3: ใช้ SOP-8 — เปลี่ยนไปใช้ shiftOut แทน SPI HW</h2>
@@ -147,8 +147,8 @@ int main(void) {
         Delay_Ms(100);
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> SOP-8/SOP-16 ไม่มี Hardware SPI (ไม่มี PC5/PC6/PC7) — ใช้ <code>shiftOut()</code> แบบ software bit-bang แทน — 74HC595 เป็น shift register 8-bit — 3 pins control: DATA (serial in), CLOCK (shift), LATCH (output) — <code>shiftOut(DATA_PIN, CLOCK_PIN, MSBFIRST, data)</code> ส่ง 8 bits ทีละ bit — LATCH ใช้ pulse เพื่ออัปเดต output — ช้ากว่า HW SPI แต่ยืดหยุ่น ใช้ pin ไหนก็ได้ — สำหรับ W25Q Flash: SOP-8 ใช้ <code>shiftOut()</code> + <code>shiftIn()</code> ได้เช่นกัน</div>
-</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> SOP-8/SOP-16 ไม่มี Hardware SPI (ไม่มี PC5/PC6/PC7) — ใช้ <code>shiftOut()</code> แบบ software bit-bang แทน — 74HC595 เป็น shift register 8-bit — 3 pins control: DATA (serial in), CLOCK (shift), LATCH (output) — <code>shiftOut(DATA_PIN, CLOCK_PIN, MSBFIRST, data)</code> ส่ง 8 bits ทีละ bit — LATCH ใช้ pulse เพื่ออัปเดต output — ช้ากว่า HW SPI แต่ยืดหยุ่น ใช้ pin ไหนก็ได้ — สำหรับ W25Q Flash: SOP-8 ใช้ <code>shiftOut()</code> + <code>shiftIn()</code> ได้เช่นกัน</ul></div>
+</ul></div>
 
 <div class="answer">
 <h2>🔌 วงจรประกอบ — SPI (W25Q Flash)</h2>
@@ -166,8 +166,8 @@ int main(void) {
         SPI_PINS_DEFAULT: SCK=PC5, MOSI=PC6, MISO=PC7, CS=PC4
         ⚠️ SOP-8 ไม่มี PC5(SCK) → SPI HW ใช้ไม่ได้ → ใช้ shiftOut() แทน
 </pre>
-<div class="approach"><strong>💡 หลักการ SPI:</strong> Full-duplex — ส่ง 1 byte พร้อมรับ 1 byte — CS ต้อง LOW ก่อนส่ง, HIGH หลังส่งเสร็จ</div>
-</div>
+<div class="approach"><strong>💡 หลักการ SPI:</strong> Full-duplex — ส่ง 1 byte พร้อมรับ 1 byte — CS ต้อง LOW ก่อนส่ง, HIGH หลังส่งเสร็จ</ul></div>
+</ul></div>
 
 <div class="answer">
 <h2>🔌 วงจรประกอบ — SOP-8: 74HC595 (shiftOut)</h2>
@@ -184,8 +184,8 @@ int main(void) {
                              │  │  │      │
                             LED LED LED  LED
 </pre>
-<div class="approach"><strong>💡 หลักการ shiftOut:</strong> ส่งข้อมูลทีละ bit ผ่าน DS — SHCP clock แต่ละ pulse เลื่อนข้อมูลเข้า 1 bit — STCP latch copy ข้อมูลออก Q0-Q7 ทั้ง 8 ขาพร้อมกัน</div>
-</div>
+<div class="approach"><strong>💡 หลักการ shiftOut:</strong> ส่งข้อมูลทีละ bit ผ่าน DS — SHCP clock แต่ละ pulse เลื่อนข้อมูลเข้า 1 bit — STCP latch copy ข้อมูลออก Q0-Q7 ทั้ง 8 ขาพร้อมกัน</ul></div>
+</ul></div>
 
 <nav class="bottom-nav">
     <a href="index.html">← สารบัญ</a>

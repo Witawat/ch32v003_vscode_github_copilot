@@ -41,8 +41,8 @@ int main(void) {
         if (idx < 0)  { idx = 1; dir =  1; }
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> ใช้ <code>pinModeMultiple()</code> ตั้ง LED ทั้ง 3 ดวงเป็น output พร้อมกัน — array <code>leds[]</code> เก็บ pin — วน idx ไปข้างหน้า 0→1→2 แล้วกลับทิศ 2→1→0 — ก่อนเปลี่ยนดวงต้องดับทุกดวงด้วย <code>digitalWrite(LOW)</code> ก่อน แล้วติดเฉพาะดวงปัจจุบัน</div>
-</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ใช้ <code>pinModeMultiple()</code> ตั้ง LED ทั้ง 3 ดวงเป็น output พร้อมกัน — array <code>leds[]</code> เก็บ pin — วน idx ไปข้างหน้า 0→1→2 แล้วกลับทิศ 2→1→0 — ก่อนเปลี่ยนดวงต้องดับทุกดวงด้วย <code>digitalWrite(LOW)</code> ก่อน แล้วติดเฉพาะดวงปัจจุบัน</ul></div>
+</ul></div>
 
 <div class="answer">
 <h2>ข้อ 2: ปุ่มกด PC1 เปลี่ยนทิศทางการวิ่ง (ใช้ interrupt)</h2>
@@ -77,8 +77,8 @@ int main(void) {
         if (idx < 0)  { idx = 1; dir = -dir; }
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> <code>attachInterrupt(PC1, btn_isr, FALLING)</code> — เมื่อกดปุ่ม (Active LOW → FALLING edge) จะเรียก <code>btn_isr()</code> ที่กลับค่า <code>dir</code> ทันที — ISR ต้องสั้นและเร็ว — ใช้ <code>volatile</code> กับตัวแปรที่แชร์ระหว่าง ISR กับ main loop</div>
-</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>attachInterrupt(PC1, btn_isr, FALLING)</code> — เมื่อกดปุ่ม (Active LOW → FALLING edge) จะเรียก <code>btn_isr()</code> ที่กลับค่า <code>dir</code> ทันที — ISR ต้องสั้นและเร็ว — ใช้ <code>volatile</code> กับตัวแปรที่แชร์ระหว่าง ISR กับ main loop</ul></div>
+</ul></div>
 
 <div class="answer">
 <h2>ข้อ 3: ใช้ pulseIn วัดระยะทางด้วย HC-SR04</h2>
@@ -117,8 +117,8 @@ int main(void) {
         Delay_Ms(500);
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> HC-SR04 ทำงานโดยส่ง pulse 10μs ที่ TRIG → โมดูลส่งคลื่น ultrasonic → echo กลับที่ ECHO — <code>pulseIn(ECHO, HIGH, 30000)</code> วัดความกว้าง pulse หน่วย μs — แปลงเป็น cm ด้วย <code>pulse/58</code> (343m/s ÷ 2 = 171.5m/s = 58μs/cm) — timeout 30ms (~500cm) ป้องกันการค้าง</div>
-</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> HC-SR04 ทำงานโดยส่ง pulse 10μs ที่ TRIG → โมดูลส่งคลื่น ultrasonic → echo กลับที่ ECHO — <code>pulseIn(ECHO, HIGH, 30000)</code> วัดความกว้าง pulse หน่วย μs — แปลงเป็น cm ด้วย <code>pulse/58</code> (343m/s ÷ 2 = 171.5m/s = 58μs/cm) — timeout 30ms (~500cm) ป้องกันการค้าง</ul></div>
+</ul></div>
 
 <div class="answer">
 <h2>🔌 วงจรประกอบ — Knight Rider 3 LED</h2>
@@ -135,8 +135,8 @@ int main(void) {
   PC3 ──┤── ปุ่มกด ─┤── GND    │
         └──────────┘           │
 </pre>
-<div class="approach"><strong>💡 ทำไมต้อง 220Ω:</strong> LED ใช้กระแส ~10mA — ถ้าไม่มี R จะดึงกระแสเกินชิปพัง! <code>(3.3V - 2V) / 220Ω ≈ 6mA</code></div>
-</div>
+<div class="approach"><strong>💡 ทำไมต้อง 220Ω:</strong> LED ใช้กระแส ~10mA — ถ้าไม่มี R จะดึงกระแสเกินชิปพัง! <code>(3.3V - 2V) / 220Ω ≈ 6mA</code></ul></div>
+</ul></div>
 
 <div class="answer">
 <h2>🔌 วงจรประกอบ — HC-SR04 Ultrasonic</h2>
@@ -149,8 +149,8 @@ int main(void) {
         │    GND ──┼───────│ GND          │
         └──────────┘       └──────────────┘
 </pre>
-<div class="approach"><strong>💡 หลักการ:</strong> TRIG ส่ง pulse 10µs → HC-SR04 ยิงคลื่นเสียง → ECHO คืน pulse กว้างตามระยะทาง → <code>pulseIn(PD3, HIGH, 30000)</code> วัดความกว้าง → <code>distance = duration × 0.034 / 2</code></div>
-</div>
+<div class="approach"><strong>💡 หลักการ:</strong> TRIG ส่ง pulse 10µs → HC-SR04 ยิงคลื่นเสียง → ECHO คืน pulse กว้างตามระยะทาง → <code>pulseIn(PD3, HIGH, 30000)</code> วัดความกว้าง → <code>distance = duration × 0.034 / 2</code></ul></div>
+</ul></div>
 
 <nav class="bottom-nav">
     <a href="index.html">← สารบัญ</a>

@@ -81,8 +81,8 @@ int main(void) {
         // No busy-wait, no delay() blocking
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> <code>millis()</code> ใช้ SysTick 1ms — ทำ non-blocking timing: เช็ค <code>if(now - last >= period)</code> แทน <code>delay()</code> — ข้อดี: CPU ว่าง 100% — สามารถทำงานหลายอย่างพร้อมกัน — ตัวอย่างนี้: LED1(500ms) + LED2(100ms) + Print(2s) + Button — ทั้งหมดทำงานพร้อมกันโดยไม่มี <code>delay()</code> — <strong>ข้อควรระวัง:</strong> millis() overflow ทุก ~49.7 วัน (uint32_t) — ใช้ subtraction แบบ unsigned (now - last) ถึงจะปลอดภัย overflow — <strong>ต้องเรียก Timer_Init()</strong> ก่อนใช้ millis()</div>
-</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>millis()</code> ใช้ SysTick 1ms — ทำ non-blocking timing: เช็ค <code>if(now - last >= period)</code> แทน <code>delay()</code> — ข้อดี: CPU ว่าง 100% — สามารถทำงานหลายอย่างพร้อมกัน — ตัวอย่างนี้: LED1(500ms) + LED2(100ms) + Print(2s) + Button — ทั้งหมดทำงานพร้อมกันโดยไม่มี <code>delay()</code> — <strong>ข้อควรระวัง:</strong> millis() overflow ทุก ~49.7 วัน (uint32_t) — ใช้ subtraction แบบ unsigned (now - last) ถึงจะปลอดภัย overflow — <strong>ต้องเรียก Timer_Init()</strong> ก่อนใช้ millis()</ul></div>
+</ul></div>
 
 <div class="answer">
 <h2>ข้อ 2: random + dtostrf แสดงเลขสุ่ม</h2>
@@ -159,8 +159,8 @@ int main(void) {
         Delay_Ms(500);
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> <code>random(min, max)</code> ใช้ LFSR — เร็วกว่า software RNG — seed ด้วย <code>randomSeed(analogRead(unconnected_pin))</code> — ADC noise จาก pin ที่ไม่ได้ต่อ = entropy จริง — <code>dtostrf(val, width, prec, buf)</code> แปลง float เป็น string — width = จำนวนหลักรวม (รวมจุดทศนิยม), prec = จำนวนทศนิยม — จำเป็นมากเพราะ CH32V003 stdlib แบบ nano ไม่มี sprintf float — buffer ต้องใหญ่พอ: width + 1 — ตัวอย่าง: dtostrf(123.45, 6, 2, buf) → "123.45"</div>
-</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>random(min, max)</code> ใช้ LFSR — เร็วกว่า software RNG — seed ด้วย <code>randomSeed(analogRead(unconnected_pin))</code> — ADC noise จาก pin ที่ไม่ได้ต่อ = entropy จริง — <code>dtostrf(val, width, prec, buf)</code> แปลง float เป็น string — width = จำนวนหลักรวม (รวมจุดทศนิยม), prec = จำนวนทศนิยม — จำเป็นมากเพราะ CH32V003 stdlib แบบ nano ไม่มี sprintf float — buffer ต้องใหญ่พอ: width + 1 — ตัวอย่าง: dtostrf(123.45, 6, 2, buf) → "123.45"</ul></div>
+</ul></div>
 
 <div class="answer">
 <h2>ข้อ 3: yield() ร่วมกับ IWDG</h2>
@@ -224,8 +224,8 @@ int main(void) {
         delay(500);
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> <code>yield()</code> เป็น weak function — ถูกเรียกใน <code>delay()</code> ทุก ~1ms — override เพื่อ: (1) feed IWDG → prevent reset during long delay, (2) process background tasks, (3) check flags/buttons — <strong>โจทย์นี้:</strong> delay(4000) > IWDG timeout(2000) — ถ้าไม่มี yield() → IWDG reset ทุก 4 วิ — yield() feed ทุก ~1ms → ปลอดภัย — <strong>ข้อดี:</strong> ไม่ต้องเปลี่ยนโค้ด Arduino ที่ใช้ delay() — <strong>ข้อเสีย:</strong> yield() เรียกบ่อย → overhead — ควรทำงานน้อยที่สุด — <strong>alternative:</strong> ใช้ millis() non-blocking แทน delay() + yield() เพื่อประสิทธิภาพสูงกว่า</div>
-</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>yield()</code> เป็น weak function — ถูกเรียกใน <code>delay()</code> ทุก ~1ms — override เพื่อ: (1) feed IWDG → prevent reset during long delay, (2) process background tasks, (3) check flags/buttons — <strong>โจทย์นี้:</strong> delay(4000) > IWDG timeout(2000) — ถ้าไม่มี yield() → IWDG reset ทุก 4 วิ — yield() feed ทุก ~1ms → ปลอดภัย — <strong>ข้อดี:</strong> ไม่ต้องเปลี่ยนโค้ด Arduino ที่ใช้ delay() — <strong>ข้อเสีย:</strong> yield() เรียกบ่อย → overhead — ควรทำงานน้อยที่สุด — <strong>alternative:</strong> ใช้ millis() non-blocking แทน delay() + yield() เพื่อประสิทธิภาพสูงกว่า</ul></div>
+</ul></div>
 
 <nav class="bottom-nav">
     <a href="index.html">← สารบัญ</a>

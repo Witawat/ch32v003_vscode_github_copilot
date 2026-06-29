@@ -88,8 +88,8 @@ int main(void) {
         Delay_Ms(300);
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> <code>IS_VALID_PIN(pin)</code> เป็น compile-time macro — ใช้กับ <code>#if</code> — true ถ้า pin มีในแพ็กเกจ — <strong>Fallback chain:</strong> ลอง pin แรก → ถ้าไม่มี → ลองถัดไป — #error ถ้าไม่มีเลย → compile ล้มเหลวทันที (ดีกว่า runtime crash) — <strong>SOP8 pins:</strong> PC1,PC2,PC4,PA1,PA2,PD1,PD4,PD6 — PC0,PC3,PC5,PC6,PC7 ไม่มี — <strong>SOP16:</strong> มี PC0-PC7 แต่ไม่มี PC5,PD2-PD4 — <strong>TSSOP20:</strong> ครบทุก pin</div>
-</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>IS_VALID_PIN(pin)</code> เป็น compile-time macro — ใช้กับ <code>#if</code> — true ถ้า pin มีในแพ็กเกจ — <strong>Fallback chain:</strong> ลอง pin แรก → ถ้าไม่มี → ลองถัดไป — #error ถ้าไม่มีเลย → compile ล้มเหลวทันที (ดีกว่า runtime crash) — <strong>SOP8 pins:</strong> PC1,PC2,PC4,PA1,PA2,PD1,PD4,PD6 — PC0,PC3,PC5,PC6,PC7 ไม่มี — <strong>SOP16:</strong> มี PC0-PC7 แต่ไม่มี PC5,PD2-PD4 — <strong>TSSOP20:</strong> ครบทุก pin</ul></div>
+</ul></div>
 
 <div class="answer">
 <h2>ข้อ 2: ใช้ IS_PWM_VALID_PACKAGE เลือก PWM channel</h2>
@@ -176,8 +176,8 @@ int main(void) {
         Delay_Ms(100);
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> <code>IS_PWM_VALID_PACKAGE(pin, package)</code> ต้องระบุ package — เช็คทั้ง pin มีอยู่ และมี alternate function PWM — <strong>TSSOP20 PWM:</strong> PC4,PC5,PC6,PA1,PA2,PD3 — <strong>SOP16 PWM:</strong> PC4,PA1,PA2 (บาง pin ใช้ TIM1 ทับกับ PC5/PC6) — <strong>SOP8 PWM:</strong> PA1,PA2,PD1,PD4,PD6 (ไม่มี PC series) — <strong>Fallback strategy:</strong> ลอง PC4 → ถ้าไม่ได้ → PA1 → PD1 → PD4 — เลือกอันแรกที่ใช้ได้ — ใช้ #if เพื่อ compile-time decision — PWM init ล้มเหลว runtime ได้ถ้า timer ถูกใช้แล้ว</div>
-</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>IS_PWM_VALID_PACKAGE(pin, package)</code> ต้องระบุ package — เช็คทั้ง pin มีอยู่ และมี alternate function PWM — <strong>TSSOP20 PWM:</strong> PC4,PC5,PC6,PA1,PA2,PD3 — <strong>SOP16 PWM:</strong> PC4,PA1,PA2 (บาง pin ใช้ TIM1 ทับกับ PC5/PC6) — <strong>SOP8 PWM:</strong> PA1,PA2,PD1,PD4,PD6 (ไม่มี PC series) — <strong>Fallback strategy:</strong> ลอง PC4 → ถ้าไม่ได้ → PA1 → PD1 → PD4 — เลือกอันแรกที่ใช้ได้ — ใช้ #if เพื่อ compile-time decision — PWM init ล้มเหลว runtime ได้ถ้า timer ถูกใช้แล้ว</ul></div>
+</ul></div>
 
 <div class="answer">
 <h2>ข้อ 3: โค้ดเดียว เปลี่ยนแค่ PACKAGE_SOP8/SOP16/TSSOP20</h2>
@@ -326,8 +326,8 @@ int main(void) {
         Delay_Ms(1000);
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> หลักการ "เขียนครั้งเดียว ใช้ได้ทุกแพ็กเกจ" — <strong>ขั้นตอน:</strong> 1) กำหนด CH32V003_PACKAGE บรรทัดแรก 2) ใช้ #if IS_VALID_PIN() เลือก pin อัตโนมัติ 3) ใช้ #if IS_ADC_PIN() + IS_PWM_VALID_PACKAGE() เช็ค peripheral 4) ใช้ #if CH32V003_PACKAGE == ... เพื่อโค้ดเฉพาะแพ็กเกจ — <strong>ผลลัพธ์:</strong> โค้ดเดียวกัน → เปลี่ยน CH32V003_PACKAGE → คอมไพล์ใหม่ → ลง SOP8, SOP16, หรือ TSSOP20 ได้ทันที — <strong>ข้อดีทางธุรกิจ:</strong> SKU เดียว — ผลิต PCB ต่างกัน — ต้นทุนต่ำลง — ไม่ต้อง maintain 3 โค้ดเบส — <strong>SOP8 ข้อจำกัดหลัก:</strong> ไม่มี HW SPI, USART ต้อง remap, PWM ใช้ pin ต่างจาก TSSOP20 — แต่ด้วย #if จัดการได้ทั้งหมด</div>
-</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> หลักการ "เขียนครั้งเดียว ใช้ได้ทุกแพ็กเกจ" — <strong>ขั้นตอน:</strong> 1) กำหนด CH32V003_PACKAGE บรรทัดแรก 2) ใช้ #if IS_VALID_PIN() เลือก pin อัตโนมัติ 3) ใช้ #if IS_ADC_PIN() + IS_PWM_VALID_PACKAGE() เช็ค peripheral 4) ใช้ #if CH32V003_PACKAGE == ... เพื่อโค้ดเฉพาะแพ็กเกจ — <strong>ผลลัพธ์:</strong> โค้ดเดียวกัน → เปลี่ยน CH32V003_PACKAGE → คอมไพล์ใหม่ → ลง SOP8, SOP16, หรือ TSSOP20 ได้ทันที — <strong>ข้อดีทางธุรกิจ:</strong> SKU เดียว — ผลิต PCB ต่างกัน — ต้นทุนต่ำลง — ไม่ต้อง maintain 3 โค้ดเบส — <strong>SOP8 ข้อจำกัดหลัก:</strong> ไม่มี HW SPI, USART ต้อง remap, PWM ใช้ pin ต่างจาก TSSOP20 — แต่ด้วย #if จัดการได้ทั้งหมด</ul></div>
+</ul></div>
 
 <nav class="bottom-nav">
     <a href="index.html">← สารบัญ</a>

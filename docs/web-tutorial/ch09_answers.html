@@ -47,8 +47,8 @@ int main(void) {
 
     while (1);
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> <code>DMA_MemCopy(dst, src, size)</code> ทำทุกอย่างในฟังก์ชันเดียว — init + start + wait — เหมาะกับโจทย์ที่ไม่ต้องการ callback — buffer ต้องเป็น global/static เพราะ DMA เข้าถึงผ่าน pointer — ถ้าเป็น local stack buffer จะหายก่อน transfer เสร็จ — รองรับสูงสุด 65535 bytes — เร็วกว่า <code>memcpy()</code> CPU loop เพราะ CPU ไม่ต้อง fetch/store ทีละ byte</div>
-</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>DMA_MemCopy(dst, src, size)</code> ทำทุกอย่างในฟังก์ชันเดียว — init + start + wait — เหมาะกับโจทย์ที่ไม่ต้องการ callback — buffer ต้องเป็น global/static เพราะ DMA เข้าถึงผ่าน pointer — ถ้าเป็น local stack buffer จะหายก่อน transfer เสร็จ — รองรับสูงสุด 65535 bytes — เร็วกว่า <code>memcpy()</code> CPU loop เพราะ CPU ไม่ต้อง fetch/store ทีละ byte</ul></div>
+</ul></div>
 
 <div class="answer">
 <h2>ข้อ 2: DMA_USART_Send ส่งข้อความโดยไม่บล็อก CPU</h2>
@@ -92,8 +92,8 @@ int main(void) {
         Delay_Ms(1000);
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> <code>DMA_USART_Transmit(ch, data, len)</code> ส่งข้อมูลผ่าน USART โดย DMA — CPU ไม่ต้องวนลูปรอ TXE flag เหมือน <code>USART_Print()</code> — ใช้ DMA_CH2 เพราะ CH2 ผูกกับ USART1_TX ตาม channel mapping — <code>DMA_SetCallback()</code> รับแจ้งเมื่อส่งเสร็จ — ระหว่างรอ CPU blink LED ได้ตามปกติ — ข้อควรระวัง: ข้อมูลต้องอยู่ใน memory จนกว่า DMA ส่งเสร็จ — ใช้ const หรือ global buffer</div>
-</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>DMA_USART_Transmit(ch, data, len)</code> ส่งข้อมูลผ่าน USART โดย DMA — CPU ไม่ต้องวนลูปรอ TXE flag เหมือน <code>USART_Print()</code> — ใช้ DMA_CH2 เพราะ CH2 ผูกกับ USART1_TX ตาม channel mapping — <code>DMA_SetCallback()</code> รับแจ้งเมื่อส่งเสร็จ — ระหว่างรอ CPU blink LED ได้ตามปกติ — ข้อควรระวัง: ข้อมูลต้องอยู่ใน memory จนกว่า DMA ส่งเสร็จ — ใช้ const หรือ global buffer</ul></div>
+</ul></div>
 
 <div class="answer">
 <h2>ข้อ 3: DMA_ADC_Init + circular buffer อ่าน ADC ต่อเนื่อง</h2>
@@ -159,8 +159,8 @@ int main(void) {
         Delay_Ms(500);
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> <code>DMA_ADC_Init(ch, buf, n)</code> ผูก DMA กับ ADC — เมื่อ <code>ADC_StartContinuous()</code> เริ่ม sampling ต่อเนื่อง DMA จะย้ายข้อมูลจาก ADC data register ไป buffer อัตโนมัติ — DMA_CH1 ผูกกับ ADC ตาม channel mapping — ใช้ callback <code>dma_adc_done</code> แจ้งเมื่อครบ 128 samples — CPU ประมวลผลได้ระหว่างรอ (blink LED) — double-buffering: ใช้ 2 buffer สลับกัน — buffer 1 กำลังรับข้อมูล → buffer 2 ถูกประมวลผล — ลด lag — สถิติ min/max/avg ใช้ตรวจสอบ noise หรือ glitch</div>
-</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>DMA_ADC_Init(ch, buf, n)</code> ผูก DMA กับ ADC — เมื่อ <code>ADC_StartContinuous()</code> เริ่ม sampling ต่อเนื่อง DMA จะย้ายข้อมูลจาก ADC data register ไป buffer อัตโนมัติ — DMA_CH1 ผูกกับ ADC ตาม channel mapping — ใช้ callback <code>dma_adc_done</code> แจ้งเมื่อครบ 128 samples — CPU ประมวลผลได้ระหว่างรอ (blink LED) — double-buffering: ใช้ 2 buffer สลับกัน — buffer 1 กำลังรับข้อมูล → buffer 2 ถูกประมวลผล — ลด lag — สถิติ min/max/avg ใช้ตรวจสอบ noise หรือ glitch</ul></div>
+</ul></div>
 
 <nav class="bottom-nav">
     <a href="index.html">← สารบัญ</a>

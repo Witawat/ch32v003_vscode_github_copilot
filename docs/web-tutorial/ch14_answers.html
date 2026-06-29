@@ -95,8 +95,8 @@ int main(void) {
         Delay_Ms(2000);
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> DS18B20 ตัวเดียวใช้ <code>OneWire_SkipROM()</code> ข้าม ROM ID — Flow: Reset → SkipROM → 0x44 (Convert) → รอ 750ms → Reset → SkipROM → 0xBE (Read) → อ่าน 9 bytes — <strong>Temperature:</strong> signed 16-bit, LSB = 1/16 C — temp = raw / 16.0 — Byte 8 = CRC8 — ต้องตรวจสอบเสมอ — <strong>Pull-up 4.7kΩ</strong> สำคัญ — 1-Wire เป็น open-drain — <strong>Timing:</strong> CH32V003 ใช้ software bit-bang (ไม่มี HW 1-Wire)</div>
-</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> DS18B20 ตัวเดียวใช้ <code>OneWire_SkipROM()</code> ข้าม ROM ID — Flow: Reset → SkipROM → 0x44 (Convert) → รอ 750ms → Reset → SkipROM → 0xBE (Read) → อ่าน 9 bytes — <strong>Temperature:</strong> signed 16-bit, LSB = 1/16 C — temp = raw / 16.0 — Byte 8 = CRC8 — ต้องตรวจสอบเสมอ — <strong>Pull-up 4.7kΩ</strong> สำคัญ — 1-Wire เป็น open-drain — <strong>Timing:</strong> CH32V003 ใช้ software bit-bang (ไม่มี HW 1-Wire)</ul></div>
+</ul></div>
 
 <div class="answer">
 <h2>ข้อ 2: ค้นหา devices หลายตัวบน bus</h2>
@@ -196,8 +196,8 @@ int main(void) {
         Delay_Ms(2000);
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> <code>OneWire_SearchROM(roms, max)</code> ใช้ algorithm ค้นหาแบบ binary tree บน 1-Wire bus — คืนจำนวนที่พบ — แต่ละอุปกรณ์มี 64-bit ROM ID: Family(8) + Serial(48) + CRC8 — <strong>Family 0x28 = DS18B20</strong> — เทคนิคเร่งความเร็ว: ส่ง Convert T แบบ SkipROM → เริ่มวัดทุกตัวพร้อม → รอ 750ms ครั้งเดียว → อ่านทีละตัวด้วย MatchROM — ลดเวลาจาก N×750ms เป็น 750ms + N×เวลาอ่าน</div>
-</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>OneWire_SearchROM(roms, max)</code> ใช้ algorithm ค้นหาแบบ binary tree บน 1-Wire bus — คืนจำนวนที่พบ — แต่ละอุปกรณ์มี 64-bit ROM ID: Family(8) + Serial(48) + CRC8 — <strong>Family 0x28 = DS18B20</strong> — เทคนิคเร่งความเร็ว: ส่ง Convert T แบบ SkipROM → เริ่มวัดทุกตัวพร้อม → รอ 750ms ครั้งเดียว → อ่านทีละตัวด้วย MatchROM — ลดเวลาจาก N×750ms เป็น 750ms + N×เวลาอ่าน</ul></div>
+</ul></div>
 
 <div class="answer">
 <h2>ข้อ 3: OneWire_MatchROM เลือก device เฉพาะ</h2>
@@ -256,8 +256,8 @@ int main(void) {
         Delay_Ms(2000);
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> <code>OneWire_MatchROM(rom)</code> ส่ง ROM ID บนบัส — เฉพาะอุปกรณ์ที่มี ROM ตรงกันเท่านั้นที่จะตอบสนอง — ใช้คู่กับ <code>OneWire_SearchROM()</code> — <strong>Flow ทั่วไป:</strong> SearchROM → เก็บ ROM IDs → MatchROM(device[i]) → Command — <strong>ข้อควรระวัง:</strong> ROM ID เป็น 64-bit — ต้องใช้ <code>uint64_t</code> — Family code 0x28 = DS18B20 — Read Scratchpad 9 bytes ต่อครั้ง — ตรวจสอบ CRC8 ทุกครั้ง — MatchROM ใช้เมื่อมีหลายตัว — ถ้ามีตัวเดียว <code>SkipROM</code> ง่ายกว่า</div>
-</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>OneWire_MatchROM(rom)</code> ส่ง ROM ID บนบัส — เฉพาะอุปกรณ์ที่มี ROM ตรงกันเท่านั้นที่จะตอบสนอง — ใช้คู่กับ <code>OneWire_SearchROM()</code> — <strong>Flow ทั่วไป:</strong> SearchROM → เก็บ ROM IDs → MatchROM(device[i]) → Command — <strong>ข้อควรระวัง:</strong> ROM ID เป็น 64-bit — ต้องใช้ <code>uint64_t</code> — Family code 0x28 = DS18B20 — Read Scratchpad 9 bytes ต่อครั้ง — ตรวจสอบ CRC8 ทุกครั้ง — MatchROM ใช้เมื่อมีหลายตัว — ถ้ามีตัวเดียว <code>SkipROM</code> ง่ายกว่า</ul></div>
+</ul></div>
 
 <div class="answer">
 <h2>🔌 วงจรประกอบ — DS18B20 (1-Wire)</h2>
@@ -277,8 +277,8 @@ int main(void) {
         ⚠️ ต้องต่อ Pull-up 4.7kΩ ที่ Data line!
         ถ้าไม่ต่อ — OneWire_Reset() คืน 0 ตลอด
 </pre>
-<div class="approach"><strong>💡 หลักการ 1-Wire:</strong> 1 ขา รับ-ส่งข้อมูล — Open-Drain ใช้ R pull-up — timing ระดับ µs ต้องปิด interrupt ขณะส่ง</div>
-</div>
+<div class="approach"><strong>💡 หลักการ 1-Wire:</strong> 1 ขา รับ-ส่งข้อมูล — Open-Drain ใช้ R pull-up — timing ระดับ µs ต้องปิด interrupt ขณะส่ง</ul></div>
+</ul></div>
 
 <nav class="bottom-nav">
     <a href="index.html">← สารบัญ</a>

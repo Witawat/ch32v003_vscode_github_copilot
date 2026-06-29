@@ -46,8 +46,8 @@ int main(void) {
         }
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> ใช้ <code>Timer_t</code> แบบ repeat=1 หมดอัตโนมัติทุก 1 วิ — <code>Is_Timer_Expired()</code> ตรวจสอบโดยไม่หยุดรอ — LED กระพริบ 200ms ใช้ <code>ELAPSED_TIME()</code> macro (overflow-safe) พิสูจน์ว่า non-blocking ทำหลายงานพร้อมกันได้ — ต่างจาก <code>Delay_Ms()</code> ที่หยุดทุกอย่าง</div>
-</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ใช้ <code>Timer_t</code> แบบ repeat=1 หมดอัตโนมัติทุก 1 วิ — <code>Is_Timer_Expired()</code> ตรวจสอบโดยไม่หยุดรอ — LED กระพริบ 200ms ใช้ <code>ELAPSED_TIME()</code> macro (overflow-safe) พิสูจน์ว่า non-blocking ทำหลายงานพร้อมกันได้ — ต่างจาก <code>Delay_Ms()</code> ที่หยุดทุกอย่าง</ul></div>
+</ul></div>
 
 <div class="answer">
 <h2>ข้อ 2: Countdown 30 วิ พร้อม Buzzer เมื่อหมดเวลา</h2>
@@ -108,8 +108,8 @@ int main(void) {
         }
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> ใช้ <code>Timer_t</code> นับถอยหลังทีละวิ — <code>Stop_Timer()</code> หยุดทั้ง countdown และ LED เมื่อหมดเวลา — Buzzer เป็น active buzzer (มี oscillator ในตัว) แค่จ่าย HIGH ก็ดัง — ใช้ <code>for</code> loop สร้างเสียง 3 ครั้ง — หลังจากนั้น <code>while(1);</code> หยุดโปรแกรม</div>
-</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ใช้ <code>Timer_t</code> นับถอยหลังทีละวิ — <code>Stop_Timer()</code> หยุดทั้ง countdown และ LED เมื่อหมดเวลา — Buzzer เป็น active buzzer (มี oscillator ในตัว) แค่จ่าย HIGH ก็ดัง — ใช้ <code>for</code> loop สร้างเสียง 3 ครั้ง — หลังจากนั้น <code>while(1);</code> หยุดโปรแกรม</ul></div>
+</ul></div>
 
 <div class="answer">
 <h2>ข้อ 3: ใช้ Timer_t สร้าง LED 3 ดวงกระพริบที่ความถี่ต่างกัน</h2>
@@ -137,8 +137,8 @@ int main(void) {
         // Main loop วนอิสระ — ไม่มี Delay_Ms เลย!
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> <code>Timer_t</code> แต่ละตัวทำงานอิสระ — <code>Start_Timer()</code> ตั้งเวลา + repeat=1 ให้วนซ้ำ — array <code>tmr[3]</code> จับคู่กับ <code>leds[3]</code> — main loop วนตรวจสอบทั้ง 3 timer โดยไม่มี <code>Delay_Ms()</code> เลย CPU ไม่เคยหยุดรอ — ถ้าใช้ <code>Delay_Ms()</code> แต่ละดวงจะแย่งเวลากัน</div>
-</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>Timer_t</code> แต่ละตัวทำงานอิสระ — <code>Start_Timer()</code> ตั้งเวลา + repeat=1 ให้วนซ้ำ — array <code>tmr[3]</code> จับคู่กับ <code>leds[3]</code> — main loop วนตรวจสอบทั้ง 3 timer โดยไม่มี <code>Delay_Ms()</code> เลย CPU ไม่เคยหยุดรอ — ถ้าใช้ <code>Delay_Ms()</code> แต่ละดวงจะแย่งเวลากัน</ul></div>
+</ul></div>
 
 <nav class="bottom-nav">
     <a href="index.html">← สารบัญ</a>

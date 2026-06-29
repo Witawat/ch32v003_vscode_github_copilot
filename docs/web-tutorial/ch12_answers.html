@@ -74,8 +74,8 @@ int main(void) {
         // รวม 1 cycle = 500ms + feed = ปลอดภัย (< 1.6s)
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> <code>IWDG_SimpleInit(1600)</code> ตั้ง timeout 1.6 วิ — หลังจากเปิดแล้วปิดไม่ได้ — ทุกรอบ loop ใช้เวลา ~500ms → feed ทันเวลาเสมอ — LED blink: ON 500ms + OFF 500ms = 1s/cycle < 1.6s timeout — <strong>กฎเหล็ก IWDG:</strong> feed ใน main loop เท่านั้น — ห้าม feed ใน ISR เพราะ ISR อาจทำงานแม้ main loop ค้าง — <strong>IWDG timeout ที่ใช้ได้:</strong> 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 26208 ms — เลือกให้พอดีกับ worst-case loop time + margin 50% — debugger หยุด IWDG อัตโนมัติ — ต้องรันจริงถึงจะเห็นผล</div>
-</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>IWDG_SimpleInit(1600)</code> ตั้ง timeout 1.6 วิ — หลังจากเปิดแล้วปิดไม่ได้ — ทุกรอบ loop ใช้เวลา ~500ms → feed ทันเวลาเสมอ — LED blink: ON 500ms + OFF 500ms = 1s/cycle < 1.6s timeout — <strong>กฎเหล็ก IWDG:</strong> feed ใน main loop เท่านั้น — ห้าม feed ใน ISR เพราะ ISR อาจทำงานแม้ main loop ค้าง — <strong>IWDG timeout ที่ใช้ได้:</strong> 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 26208 ms — เลือกให้พอดีกับ worst-case loop time + margin 50% — debugger หยุด IWDG อัตโนมัติ — ต้องรันจริงถึงจะเห็นผล</ul></div>
+</ul></div>
 
 <div class="answer">
 <h2>ข้อ 2: WWDG window mode</h2>
@@ -130,8 +130,8 @@ int main(void) {
         // Delay_Ms(30); ← เลย 28ms → RESET!
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> WWDG window mode ต่างจาก IWDG ตรงที่ต้อง refresh ใน "หน้าต่างเวลา" — เร็วเกินก็ reset, ช้าเกินก็ reset — <code>WWDG_SimpleInit(WWDG_TIMEOUT_28MS, 50)</code> — window 50%: valid feed ระหว่าง 14-28ms — ลองทดสอบ: (1) feed ทันที → RESET (เร็วเกิน), (2) Delay_Ms(20) → feed → OK (ใน window), (3) Delay_Ms(30) → feed → RESET (ช้าเกิน) — WWDG ใช้ PCLK1 → แม่นยำกว่า IWDG (LSI) — timeout สั้น (μs-ms) → ตรวจจับ loop anomaly ได้ไวกว่า — EWI (Early Wakeup Interrupt): เตือนก่อน timeout → บันทึก debug info — <strong>ข้อควรระวัง:</strong> Debugger อาจรบกวน timing WWDG — ทดสอบแบบรันจริง</div>
-</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> WWDG window mode ต่างจาก IWDG ตรงที่ต้อง refresh ใน "หน้าต่างเวลา" — เร็วเกินก็ reset, ช้าเกินก็ reset — <code>WWDG_SimpleInit(WWDG_TIMEOUT_28MS, 50)</code> — window 50%: valid feed ระหว่าง 14-28ms — ลองทดสอบ: (1) feed ทันที → RESET (เร็วเกิน), (2) Delay_Ms(20) → feed → OK (ใน window), (3) Delay_Ms(30) → feed → RESET (ช้าเกิน) — WWDG ใช้ PCLK1 → แม่นยำกว่า IWDG (LSI) — timeout สั้น (μs-ms) → ตรวจจับ loop anomaly ได้ไวกว่า — EWI (Early Wakeup Interrupt): เตือนก่อน timeout → บันทึก debug info — <strong>ข้อควรระวัง:</strong> Debugger อาจรบกวน timing WWDG — ทดสอบแบบรันจริง</ul></div>
+</ul></div>
 
 <div class="answer">
 <h2>ข้อ 3: ตรวจจับ reset จาก IWDG</h2>
@@ -268,8 +268,8 @@ int main(void) {
         }
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> การตรวจจับ reset source เป็นสิ่งจำเป็นสำหรับระบบ production-grade — <code>IWDG_CheckReset()</code> อ่าน flag ใน RCC/WDG register — check ตั้งแต่ต้น main() ก่อน init อะไร — <strong>ข้อมูล reset log</strong> เก็บใน Flash (BKP อาจหายถ้าไฟดับนาน) — บันทึก: จำนวนครั้ง, เวลาล่าสุด, สาเหตุ — วิเคราะห์แนวโน้ม: ถ้า WDG reset ถี่ → safe mode — <strong>Safe Mode:</strong> ทำงานน้อยที่สุด — กระพริบ LED SOS — ไม่ใช้ peripheral ที่อาจเป็นสาเหตุของ crash — ต้องการ manual reset เพื่อออก — <strong>ข้อควรระวัง:</strong> ถ้าไม่ดีเลย์หลังเช็ค IWDG_CheckReset() → IWDG flag อาจยังไม่ clear → เข้า reset loop ไม่รู้จบ — ดีเลย์ ~50ms ก่อนเริ่ม init ปกติ</div>
-</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> การตรวจจับ reset source เป็นสิ่งจำเป็นสำหรับระบบ production-grade — <code>IWDG_CheckReset()</code> อ่าน flag ใน RCC/WDG register — check ตั้งแต่ต้น main() ก่อน init อะไร — <strong>ข้อมูล reset log</strong> เก็บใน Flash (BKP อาจหายถ้าไฟดับนาน) — บันทึก: จำนวนครั้ง, เวลาล่าสุด, สาเหตุ — วิเคราะห์แนวโน้ม: ถ้า WDG reset ถี่ → safe mode — <strong>Safe Mode:</strong> ทำงานน้อยที่สุด — กระพริบ LED SOS — ไม่ใช้ peripheral ที่อาจเป็นสาเหตุของ crash — ต้องการ manual reset เพื่อออก — <strong>ข้อควรระวัง:</strong> ถ้าไม่ดีเลย์หลังเช็ค IWDG_CheckReset() → IWDG flag อาจยังไม่ clear → เข้า reset loop ไม่รู้จบ — ดีเลย์ ~50ms ก่อนเริ่ม init ปกติ</ul></div>
+</ul></div>
 
 <nav class="bottom-nav">
     <a href="index.html">← สารบัญ</a>

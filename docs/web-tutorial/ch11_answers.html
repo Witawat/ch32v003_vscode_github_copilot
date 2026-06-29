@@ -109,8 +109,8 @@ int main(void) {
 
     while (1);
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> การออกแบบ Config struct: ต้องมี <code>magic</code> (เช็คว่ามีข้อมูลจริง), ฟิลด์ข้อมูล, <code>crc</code> (ตรวจสอบความถูกต้อง) — <code>Flash_SaveConfig()</code> ทำ Erase+Write+Verify ให้อัตโนมัติ — <code>Flash_LoadConfig()</code> ตรวจสอบ magic + CRC ก่อนยอมรับ — CRC คำนวณแบบไม่รวมฟิลด์ crc เอง — struct ใช้ <code>#pragma pack</code> หรือ <code>__attribute__((packed))</code> ถ้าต้องการ layout แน่นอน — Flash page = 1KB (0x400) — ที่อยู่ 0x08003C00 = page 60 — เก็บข้อมูล 2KB ที่ page 60-61 ได้ — ข้อควรระวัง: ห้ามเขียนทับพื้นที่โค้ด (~0x08000000-0x08003BFF)</div>
-</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> การออกแบบ Config struct: ต้องมี <code>magic</code> (เช็คว่ามีข้อมูลจริง), ฟิลด์ข้อมูล, <code>crc</code> (ตรวจสอบความถูกต้อง) — <code>Flash_SaveConfig()</code> ทำ Erase+Write+Verify ให้อัตโนมัติ — <code>Flash_LoadConfig()</code> ตรวจสอบ magic + CRC ก่อนยอมรับ — CRC คำนวณแบบไม่รวมฟิลด์ crc เอง — struct ใช้ <code>#pragma pack</code> หรือ <code>__attribute__((packed))</code> ถ้าต้องการ layout แน่นอน — Flash page = 1KB (0x400) — ที่อยู่ 0x08003C00 = page 60 — เก็บข้อมูล 2KB ที่ page 60-61 ได้ — ข้อควรระวัง: ห้ามเขียนทับพื้นที่โค้ด (~0x08000000-0x08003BFF)</ul></div>
+</ul></div>
 
 <div class="answer">
 <h2>ข้อ 2: CRC16 checksum ตรวจสอบความถูกต้อง</h2>
@@ -203,8 +203,8 @@ int main(void) {
 
     while (1);
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> CRC16 ป้องกันข้อมูลเสียหายจาก: ไฟดับระหว่างเขียน Flash, bit-flip จาก aging/radiation, noise ในสัญญาณ (ถ้าเป็น EEPROM ภายนอก) — <code>Flash_CalculateCRC16(buf, len)</code> ใช้ polynomial CRC-16-CCITT — ตรวจสอบ CRC ใน <code>Flash_LoadConfig()</code> ให้แล้ว — แต่ตรวจเองเพิ่มได้ — <strong>Dual-Page Strategy:</strong> เขียน config 2 หน้า → โหลดหน้าที่ CRC ผ่าน — ปลอดภัยกว่า — กรณีข้อมูลเสีย: แจ้งผู้ใช้ → ใช้ค่า default → ลองเขียนใหม่ — CRC ต้องคำนวณจากทุกฟิลด์ยกเว้น crc เอง — ถ้า magic ไม่ตรง = Flash ว่าง/ไม่เคยเขียน — ต้อง set default</div>
-</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> CRC16 ป้องกันข้อมูลเสียหายจาก: ไฟดับระหว่างเขียน Flash, bit-flip จาก aging/radiation, noise ในสัญญาณ (ถ้าเป็น EEPROM ภายนอก) — <code>Flash_CalculateCRC16(buf, len)</code> ใช้ polynomial CRC-16-CCITT — ตรวจสอบ CRC ใน <code>Flash_LoadConfig()</code> ให้แล้ว — แต่ตรวจเองเพิ่มได้ — <strong>Dual-Page Strategy:</strong> เขียน config 2 หน้า → โหลดหน้าที่ CRC ผ่าน — ปลอดภัยกว่า — กรณีข้อมูลเสีย: แจ้งผู้ใช้ → ใช้ค่า default → ลองเขียนใหม่ — CRC ต้องคำนวณจากทุกฟิลด์ยกเว้น crc เอง — ถ้า magic ไม่ตรง = Flash ว่าง/ไม่เคยเขียน — ต้อง set default</ul></div>
+</ul></div>
 
 <div class="answer">
 <h2>ข้อ 3: Factory Reset — Flash_EraseAll</h2>
@@ -325,8 +325,8 @@ int main(void) {
         Delay_Ms(10);
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> Factory Reset ไม่ใช่ลบ Flash ทั้งก้อน — <strong>ห้ามใช้ Flash_EraseAll()</strong> — เพราะจะลบโค้ดแอปพลิเคชันด้วย → MCU กลายเป็นอิฐ — วิธีที่ถูกต้อง: <code>Flash_ErasePage(CFG_ADDR)</code> ลบเฉพาะหน้า config → <code>settings_default()</code> คืนค่า default → <code>settings_save()</code> เขียน default ลง Flash — Trigger: กดปุ่มค้าง 3 วิ, หรือรับคำสั่งผ่าน USART, หรือ <code>Flash_CheckResetFlag()</code> ถ้ามี — หลัง Factory Reset ควร <code>NVIC_SystemReset()</code> เพื่อให้แน่ใจว่าทุกอย่างเริ่มใหม่ — ข้อควรระวัง: Flash_ErasePage ใช้เวลา ~1ms ต่อ 1KB — ป้องกันการกดผิดด้วยการกดค้าง + LED feedback</div>
-</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> Factory Reset ไม่ใช่ลบ Flash ทั้งก้อน — <strong>ห้ามใช้ Flash_EraseAll()</strong> — เพราะจะลบโค้ดแอปพลิเคชันด้วย → MCU กลายเป็นอิฐ — วิธีที่ถูกต้อง: <code>Flash_ErasePage(CFG_ADDR)</code> ลบเฉพาะหน้า config → <code>settings_default()</code> คืนค่า default → <code>settings_save()</code> เขียน default ลง Flash — Trigger: กดปุ่มค้าง 3 วิ, หรือรับคำสั่งผ่าน USART, หรือ <code>Flash_CheckResetFlag()</code> ถ้ามี — หลัง Factory Reset ควร <code>NVIC_SystemReset()</code> เพื่อให้แน่ใจว่าทุกอย่างเริ่มใหม่ — ข้อควรระวัง: Flash_ErasePage ใช้เวลา ~1ms ต่อ 1KB — ป้องกันการกดผิดด้วยการกดค้าง + LED feedback</ul></div>
+</ul></div>
 
 <nav class="bottom-nav">
     <a href="index.html">← สารบัญ</a>

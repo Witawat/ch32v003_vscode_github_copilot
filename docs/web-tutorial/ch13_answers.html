@@ -76,8 +76,8 @@ int main(void) {
         Delay_Ms(500);
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> Voltage Follower (Buffer) มี Gain = 1 — จุดประสงค์หลักคือ Impedance Matching — อินพุต impedance สูง ~100MΩ → ไม่ดึงกระแสจากเซ็นเซอร์ (เช่น pH probe, piezo, high-Z sensor) — เอาต์พุต impedance ต่ำ → ขับ ADC sample/hold ได้ดี — <code>OPAMP_SimpleInit(OPAMP_CH1, OPAMP_MODE_FOLLOWER)</code> ต่อวงจรภายใน — <code>OPAMP_Enable()</code> จ่ายไฟ — ต้องรอ settle ~10µs-10ms — <strong>Pin mapping:</strong> PA4=OP_IN+, PA5=OP_OUT, PA6=OP_IN- — ADC อ่าน PA5 — offset voltage ~5mV typ → calibration อาจจำเป็น — OPAMP bandwidth ~1MHz — ไม่ใช่ rail-to-rail: output 0.1V ถึง VDD-0.1V</div>
-</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> Voltage Follower (Buffer) มี Gain = 1 — จุดประสงค์หลักคือ Impedance Matching — อินพุต impedance สูง ~100MΩ → ไม่ดึงกระแสจากเซ็นเซอร์ (เช่น pH probe, piezo, high-Z sensor) — เอาต์พุต impedance ต่ำ → ขับ ADC sample/hold ได้ดี — <code>OPAMP_SimpleInit(OPAMP_CH1, OPAMP_MODE_FOLLOWER)</code> ต่อวงจรภายใน — <code>OPAMP_Enable()</code> จ่ายไฟ — ต้องรอ settle ~10µs-10ms — <strong>Pin mapping:</strong> PA4=OP_IN+, PA5=OP_OUT, PA6=OP_IN- — ADC อ่าน PA5 — offset voltage ~5mV typ → calibration อาจจำเป็น — OPAMP bandwidth ~1MHz — ไม่ใช่ rail-to-rail: output 0.1V ถึง VDD-0.1V</ul></div>
+</ul></div>
 
 <div class="answer">
 <h2>ข้อ 2: Comparator เปรียบเทียบแรงดัน 2 ค่า</h2>
@@ -144,8 +144,8 @@ int main(void) {
         Delay_Ms(300);
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> CH32V003 OPAMP ไม่มีโหมด comparator โดยตรง — ใช้ "Software Comparator" แทน: ADC อ่าน 2 ช่อง → เปรียบเทียบใน software — หรือใช้ hardware: ต่อ OPAMP เป็น open-loop → output จะ swing ไป rail ถ้า input ต่างกัน > offset — <strong>ข้อดีของ software comparator:</strong> ตั้ง hysteresis ได้, ตั้ง threshold ได้ง่าย, ไม่ต้องต่อวงจรภายนอก — <strong>ข้อเสีย:</strong> ช้ากว่า hardware comparator (ADC ใช้ ~10µs/sample) — <strong>Application:</strong> ตรวจจับแรงดันเกิน/ต่ำ, window detector, brown-out warning ก่อน VDD ตกถึง reset level — OPAMP ใช้เป็น buffer ให้ ADC เพื่อลด loading effect เมื่อเทียบแรงดันจาก high-impedance source</div>
-</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> CH32V003 OPAMP ไม่มีโหมด comparator โดยตรง — ใช้ "Software Comparator" แทน: ADC อ่าน 2 ช่อง → เปรียบเทียบใน software — หรือใช้ hardware: ต่อ OPAMP เป็น open-loop → output จะ swing ไป rail ถ้า input ต่างกัน > offset — <strong>ข้อดีของ software comparator:</strong> ตั้ง hysteresis ได้, ตั้ง threshold ได้ง่าย, ไม่ต้องต่อวงจรภายนอก — <strong>ข้อเสีย:</strong> ช้ากว่า hardware comparator (ADC ใช้ ~10µs/sample) — <strong>Application:</strong> ตรวจจับแรงดันเกิน/ต่ำ, window detector, brown-out warning ก่อน VDD ตกถึง reset level — OPAMP ใช้เป็น buffer ให้ ADC เพื่อลด loading effect เมื่อเทียบแรงดันจาก high-impedance source</ul></div>
+</ul></div>
 
 <div class="answer">
 <h2>ข้อ 3: Non-Inverting Amp gain=2</h2>
@@ -222,8 +222,8 @@ int main(void) {
         Delay_Ms(500);
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> Non-Inverting Amp ใช้ R ภายนอก 2 ตัว: Rf (feedback) และ Rg (to GND) — สูตร: Vout = Vin × (1 + Rf/Rg) — Rf = Rg = 10kΩ → Gain = 2 — <strong>ต่อวงจร:</strong> PA4 (+), PA6 (−) เชื่อมระหว่าง Rf กับ Rg, PA5 (out) — <code>OPAMP_MODE_NON_INVERTING</code> ตั้งวงจรภายในให้พร้อมรับ R ภายนอก — <strong>ข้อควรระวัง:</strong> output swing ไม่เกิน VDD-0.1V → ถ้า Vin = 2V, Gain=2 → Vout = 4V → saturated ที่ ~3.2V — ถ้าต้องการขยายมากกว่า VDD → ใช้ PGA แทน (Gain สูงสุด 16x) — <strong>ข้อดี:</strong> Non-inverting → input impedance สูง, เฟสไม่กลับ — <strong>Resistor tolerance:</strong> 1% R → Gain error ~2% — Calibrate ใน software ได้</div>
-</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> Non-Inverting Amp ใช้ R ภายนอก 2 ตัว: Rf (feedback) และ Rg (to GND) — สูตร: Vout = Vin × (1 + Rf/Rg) — Rf = Rg = 10kΩ → Gain = 2 — <strong>ต่อวงจร:</strong> PA4 (+), PA6 (−) เชื่อมระหว่าง Rf กับ Rg, PA5 (out) — <code>OPAMP_MODE_NON_INVERTING</code> ตั้งวงจรภายในให้พร้อมรับ R ภายนอก — <strong>ข้อควรระวัง:</strong> output swing ไม่เกิน VDD-0.1V → ถ้า Vin = 2V, Gain=2 → Vout = 4V → saturated ที่ ~3.2V — ถ้าต้องการขยายมากกว่า VDD → ใช้ PGA แทน (Gain สูงสุด 16x) — <strong>ข้อดี:</strong> Non-inverting → input impedance สูง, เฟสไม่กลับ — <strong>Resistor tolerance:</strong> 1% R → Gain error ~2% — Calibrate ใน software ได้</ul></div>
+</ul></div>
 
 <div class="answer">
 <h2>🔌 วงจรประกอบ — OPAMP Non-Inverting (Gain=2)</h2>
@@ -255,8 +255,8 @@ int main(void) {
         
         ⚠️ R1, R2 เป็นตัวต้านทานภายนอก — ต้องต่อเพิ่ม!
 </pre>
-<div class="approach"><strong>💡 หลักการ OPAMP:</strong> Non-Inverting — input เข้าขาบวก ชิปขยายสัญญาณผ่าน feedback resistor — output = input × (1+R2/R1)</div>
-</div>
+<div class="approach"><strong>💡 หลักการ OPAMP:</strong> Non-Inverting — input เข้าขาบวก ชิปขยายสัญญาณผ่าน feedback resistor — output = input × (1+R2/R1)</ul></div>
+</ul></div>
 
 <nav class="bottom-nav">
     <a href="index.html">← สารบัญ</a>

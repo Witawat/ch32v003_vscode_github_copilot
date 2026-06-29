@@ -44,8 +44,8 @@ int main(void) {
 
     while (1);
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> <code>I2C_IsDeviceReady(addr)</code> ส่ง START + address + ตรวจสอบ ACK — ถ้ามีอุปกรณ์ต่ออยู่จะตอบ ACK — address I2C อยู่ในช่วง 0x03-0x77 (1-127) — address 0x00-0x02 เป็น reserved — <strong>ต้องต่อ Pull-up 4.7kΩ ที่ SDA/SCL!</strong> — อุปกรณ์บางตัวมีหลาย address (เช่น BH1750: 0x23 หรือ 0x5C แล้วแต่ ADDR pin)</div>
-</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>I2C_IsDeviceReady(addr)</code> ส่ง START + address + ตรวจสอบ ACK — ถ้ามีอุปกรณ์ต่ออยู่จะตอบ ACK — address I2C อยู่ในช่วง 0x03-0x77 (1-127) — address 0x00-0x02 เป็น reserved — <strong>ต้องต่อ Pull-up 4.7kΩ ที่ SDA/SCL!</strong> — อุปกรณ์บางตัวมีหลาย address (เช่น BH1750: 0x23 หรือ 0x5C แล้วแต่ ADDR pin)</ul></div>
+</ul></div>
 
 <div class="answer">
 <h2>ข้อ 2: อ่านค่าแสง BH1750</h2>
@@ -90,8 +90,8 @@ int main(void) {
         Delay_Ms(500);
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> BH1750 = เซ็นเซอร์วัดแสง I2C — <code>I2C_WriteReg(0x23, 0x10, 0x00)</code> สั่ง Continuous High-Res Mode — รอ 180ms ให้วัดเสร็จ — <code>I2C_ReadRegMulti()</code> อ่าน 2 bytes — รวมเป็น 16-bit แล้วหาร 1.2 เป็น lux — เช็ค <code>I2C_Status</code> ทุกครั้ง — address เปลี่ยนได้ตาม ADDR pin (0x23 หรือ 0x5C)</div>
-</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> BH1750 = เซ็นเซอร์วัดแสง I2C — <code>I2C_WriteReg(0x23, 0x10, 0x00)</code> สั่ง Continuous High-Res Mode — รอ 180ms ให้วัดเสร็จ — <code>I2C_ReadRegMulti()</code> อ่าน 2 bytes — รวมเป็น 16-bit แล้วหาร 1.2 เป็น lux — เช็ค <code>I2C_Status</code> ทุกครั้ง — address เปลี่ยนได้ตาม ADDR pin (0x23 หรือ 0x5C)</ul></div>
+</ul></div>
 
 <div class="answer">
 <h2>ข้อ 3: เปลี่ยนไปใช้ I2C_PINS_PARTIAL_REMAP (PD2/PD1)</h2>
@@ -128,8 +128,8 @@ int main(void) {
     USART_Print("Done.\r\n");
     while (1);
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> <code>I2C_PINS_PARTIAL_REMAP</code> เปลี่ยน SCL=PD2, SDA=PD1 — จำเป็นสำหรับ SOP-8 (ไม่มี PC1/PC2) — SOP-8 มี PA1,PA2,PC1,PC2,PC4,PD6 — PD1/PD2 อยู่บน SOP-8 — DEFAULT (PC1/PC2) ก็ใช้ได้บน SOP-8 — <code>I2C_PINS_FULL_REMAP</code> (PD0/PD1) ใช้ได้เฉพาะ TSSOP-20/QFN-20 เพราะ PD0 ไม่มีใน SOP-8/16</div>
-</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>I2C_PINS_PARTIAL_REMAP</code> เปลี่ยน SCL=PD2, SDA=PD1 — จำเป็นสำหรับ SOP-8 (ไม่มี PC1/PC2) — SOP-8 มี PA1,PA2,PC1,PC2,PC4,PD6 — PD1/PD2 อยู่บน SOP-8 — DEFAULT (PC1/PC2) ก็ใช้ได้บน SOP-8 — <code>I2C_PINS_FULL_REMAP</code> (PD0/PD1) ใช้ได้เฉพาะ TSSOP-20/QFN-20 เพราะ PD0 ไม่มีใน SOP-8/16</ul></div>
+</ul></div>
 
 <div class="answer">
 <h2>🔌 วงจรประกอบ — I2C (BH1750)</h2>
@@ -151,8 +151,8 @@ int main(void) {
         ⚠️ ต้องต่อ Pull-up 4.7kΩ ที่ SDA และ SCL!
         ถ้าไม่ต่อ — I2C จะไม่ทำงาน I2C_ERROR_NACK ตลอด
 </pre>
-<div class="approach"><strong>💡 หลักการ I2C:</strong> SDA และ SCL ใช้ Open-Drain — device ดึง LOW เท่านั้น ต้องมี R pull-up ดึง HIGH กลับ</div>
-</div>
+<div class="approach"><strong>💡 หลักการ I2C:</strong> SDA และ SCL ใช้ Open-Drain — device ดึง LOW เท่านั้น ต้องมี R pull-up ดึง HIGH กลับ</ul></div>
+</ul></div>
 
 <nav class="bottom-nav">
     <a href="index.html">← สารบัญ</a>

@@ -86,8 +86,8 @@ int main(void) {
         Delay_Ms(1000);
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> ทุกครั้งที่ library ต้องการใช้ timer — เช็ค <code>g_timX_owner</code> — ถ้า != NONE → มีคนใช้อยู่ → คืน error (0) — ผู้ใช้รู้ทันที มี conflict — ไม่ใช่ silent corruption — <strong>การตรวจจับ:</strong> 1) ดู return value ของ init function 2) อ่าน g_tim1_owner/g_tim2_owner โดยตรง 3) ใช้ Timer_GetOwner() — <strong>เมื่อพบ conflict:</strong> เลือก timer อื่น, หรือ release timer ที่ใช้อยู่, หรือ disable feature ที่ไม่จำเป็น — CH32V003 มีแค่ TIM1 + TIM2 → ต้องบริหารให้ดี</div>
-</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ทุกครั้งที่ library ต้องการใช้ timer — เช็ค <code>g_timX_owner</code> — ถ้า != NONE → มีคนใช้อยู่ → คืน error (0) — ผู้ใช้รู้ทันที มี conflict — ไม่ใช่ silent corruption — <strong>การตรวจจับ:</strong> 1) ดู return value ของ init function 2) อ่าน g_tim1_owner/g_tim2_owner โดยตรง 3) ใช้ Timer_GetOwner() — <strong>เมื่อพบ conflict:</strong> เลือก timer อื่น, หรือ release timer ที่ใช้อยู่, หรือ disable feature ที่ไม่จำเป็น — CH32V003 มีแค่ TIM1 + TIM2 → ต้องบริหารให้ดี</ul></div>
+</ul></div>
 
 <div class="answer">
 <h2>ข้อ 2: เปลี่ยน TIMEXT_DEFAULT_TIMER เป็น TIM1</h2>
@@ -142,8 +142,8 @@ int main(void) {
 
     while (1) { Delay_Ms(1000); }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> <code>TIMEXT_DEFAULT_TIMER</code> กำหนดว่า library ไหนจะใช้ timer อะไรเป็น default — เปลี่ยนแค่ #define — library ทุกตัวที่รับ default จะเปลี่ยนไปใช้ timer ที่กำหนด — <strong>ตัวอย่าง:</strong> ถ้า TIMEXT_DEFAULT_TIMER = TIM2 → Servo, PWM จะพยายามใช้ TIM2 → TIM1 ว่างสำหรับ Encoder โดยอัตโนมัติ — <strong>Explicit override:</strong> บางฟังก์ชันมีเวอร์ชัน Ex (เช่น Servo_SimpleInitEx) ให้ระบุ timer เอง — ข้าม default — <strong>กลยุทธ์:</strong> ใช้ default สำหรับฟีเจอร์หลัก → ใช้ explicit สำหรับฟีเจอร์รอง → ป้องกัน conflict โดยไม่ต้องตรวจสอบเอง</div>
-</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>TIMEXT_DEFAULT_TIMER</code> กำหนดว่า library ไหนจะใช้ timer อะไรเป็น default — เปลี่ยนแค่ #define — library ทุกตัวที่รับ default จะเปลี่ยนไปใช้ timer ที่กำหนด — <strong>ตัวอย่าง:</strong> ถ้า TIMEXT_DEFAULT_TIMER = TIM2 → Servo, PWM จะพยายามใช้ TIM2 → TIM1 ว่างสำหรับ Encoder โดยอัตโนมัติ — <strong>Explicit override:</strong> บางฟังก์ชันมีเวอร์ชัน Ex (เช่น Servo_SimpleInitEx) ให้ระบุ timer เอง — ข้าม default — <strong>กลยุทธ์:</strong> ใช้ default สำหรับฟีเจอร์หลัก → ใช้ explicit สำหรับฟีเจอร์รอง → ป้องกัน conflict โดยไม่ต้องตรวจสอบเอง</ul></div>
+</ul></div>
 
 <div class="answer">
 <h2>ข้อ 3: ใช้ SysTick Timer_t แทน TIM2 (หลีกเลี่ยงชน)</h2>
@@ -276,8 +276,19 @@ int main(void) {
         }
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> CH32V003 มี hardware timer จำกัด (TIM1, TIM2) — ใช้ SysTick สำหรับ software task — ทำให้ TIM1/TIM2 ว่างสำหรับ PWM, Encoder, Servo — <strong>SysTick:</strong> interrupt ทุก 1ms — ใช้สร้าง software timer หลายตัวได้ไม่จำกัด (จำกัดด้วย RAM) — <strong>ข้อดี:</strong> ไม่เปลือง hardware timer, ปรับ interval ได้ละเอียด, one-shot/repeating — <strong>ข้อเสีย:</strong> interrupt overhead ~1ms, ใช้ CPU นิดหน่อย — ความละเอียด 1ms (จำกัดด้วย SysTick) — <strong>เหมาะกับ:</strong> LED blink, polling sensor ช้า, periodic print — <strong>ไม่เหมาะกับ:</strong> PWM (ต้องการ hardware), frequency measurement, encoder — <strong>Alternative:</strong> ใช้ Timer_Guard จัดการแทน SysTick — ถ้า project ใหญ่ให้ใช้ Guard ล้วน</div>
-</div>
+<div class="approach">
+<strong>🧠 แนวคิด</strong>
+<p>CH32V003 มี hardware timer จำกัด (<code>TIM1</code>, <code>TIM2</code>) — ใช้ <code>SysTick</code> สำหรับ software task แทน</p>
+<ul>
+    <li><strong>SysTick:</strong> interrupt ทุก 1ms — ใช้สร้าง software timer หลายตัวได้ไม่จำกัด (จำกัดด้วย RAM)</li>
+    <li><strong>ข้อดี:</strong> ไม่เปลือง hardware timer, ปรับ interval ได้ละเอียด, one-shot/repeating</li>
+    <li><strong>ข้อเสีย:</strong> interrupt overhead ~1ms, ใช้ CPU นิดหน่อย, ความละเอียด 1ms</li>
+    <li><strong>เหมาะกับ:</strong> LED blink, polling sensor ช้า, periodic print ผ่าน USART</li>
+    <li><strong>ไม่เหมาะกับ:</strong> PWM (ต้องการ hardware), frequency measurement, quadrature encoder</li>
+    <li><strong>Alternative:</strong> ใช้ <code>Timer_Guard</code> จัดการแทน — ถ้า project ใหญ่ให้ใช้ Guard ล้วน</li>
+</ul>
+</ul></div>
+</ul></div>
 
 <nav class="bottom-nav">
     <a href="index.html">← สารบัญ</a>

@@ -30,8 +30,8 @@ int main(void) {
         Delay_Ms(100);  // เปลี่ยนจาก 500 → 100ms
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> แค่เปลี่ยนตัวเลขใน <code>Delay_Ms()</code> — ค่าน้อย = กระพริบเร็ว ค่ามาก = กระพริบช้า <code>digitalToggle</code> สลับสถานะ HIGH↔LOW อัตโนมัติ</div>
-</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> แค่เปลี่ยนตัวเลขใน <code>Delay_Ms()</code> — ค่าน้อย = กระพริบเร็ว ค่ามาก = กระพริบช้า <code>digitalToggle</code> สลับสถานะ HIGH↔LOW อัตโนมัติ</ul></div>
+</ul></div>
 
 <div class="answer">
 <h2>ข้อ 2: เพิ่ม LED 2 ดวงบน PC0 และ PC1 กระพริบสลับกัน</h2>
@@ -54,8 +54,8 @@ int main(void) {
         Delay_Ms(300);
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> ใช้ <code>digitalWrite</code> ควบคุมแต่ละ pin แยกกัน — เมื่อ PC0=HIGH ก็ตั้ง PC1=LOW (สลับกัน) วงจร: LED แต่ละดวงต่อกับขาของตัวเอง ผ่าน R 220Ω ลง GND</div>
-</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ใช้ <code>digitalWrite</code> ควบคุมแต่ละ pin แยกกัน — เมื่อ PC0=HIGH ก็ตั้ง PC1=LOW (สลับกัน) วงจร: LED แต่ละดวงต่อกับขาของตัวเอง ผ่าน R 220Ω ลง GND</ul></div>
+</ul></div>
 
 <div class="answer">
 <h2>ข้อ 3: เปลี่ยนไปใช้ PACKAGE_SOP8 — โค้ดยังทำงานไหม?</h2>
@@ -74,8 +74,8 @@ int main(void) {
         Delay_Ms(500);
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> SOP-8 มี 6 pins: PA1,PA2,PC1,PC2,PC4,PD6 — PC0 ไม่มี! ต้องเปลี่ยนเป็น pin ที่มีอยู่ ใช้ <code>IS_VALID_PIN(pin)</code> ตรวจสอบก่อน หรือดูตาราง pinout ในบทที่ 17</div>
-</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> SOP-8 มี 6 pins: PA1,PA2,PC1,PC2,PC4,PD6 — PC0 ไม่มี! ต้องเปลี่ยนเป็น pin ที่มีอยู่ ใช้ <code>IS_VALID_PIN(pin)</code> ตรวจสอบก่อน หรือดูตาราง pinout ในบทที่ 17</ul></div>
+</ul></div>
 
 <nav class="bottom-nav">
     <a href="index.html">← สารบัญ</a>

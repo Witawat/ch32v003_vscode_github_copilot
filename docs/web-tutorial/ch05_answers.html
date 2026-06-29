@@ -41,8 +41,8 @@ int main(void) {
         if (duty1 > 100) { duty1 = 0; duty2 = 100; }
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> LED 2 ดวงใช้ PWM คนละ channel — <code>PWM1_CH1</code> (PD2) เพิ่ม duty จาก 0→100 ส่วน <code>PWM1_CH2</code> (PA1) ลดจาก 100→0 — พร้อมกันในทิศตรงข้าม — เมื่อ duty1 ถึง 100 ทั้งคู่รีเซ็ตกลับจุดเริ่ม — delay 15ms × 100 steps = 1.5 วิต่อรอบ</div>
-</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> LED 2 ดวงใช้ PWM คนละ channel — <code>PWM1_CH1</code> (PD2) เพิ่ม duty จาก 0→100 ส่วน <code>PWM1_CH2</code> (PA1) ลดจาก 100→0 — พร้อมกันในทิศตรงข้าม — เมื่อ duty1 ถึง 100 ทั้งคู่รีเซ็ตกลับจุดเริ่ม — delay 15ms × 100 steps = 1.5 วิต่อรอบ</ul></div>
+</ul></div>
 
 <div class="answer">
 <h2>ข้อ 2: Servo กวาด 0-180° วนลูป</h2>
@@ -70,8 +70,8 @@ int main(void) {
         if (angle <= 0)   dir = 1;
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> Servo ใช้ PWM 50Hz — duty 5% (1ms) = 0°, 10% (2ms) = 180° — สูตร <code>5 + angle*5/180</code> map มุม 0-180° → duty 5-10% — delay 20ms × 180 steps = 3.6 วิต่อเที่ยว รวมขากลับ ~7.2 วิ — <strong>สำคัญ:</strong> ต้องใช้ไฟ 5V ภายนอกเลี้ยง Servo — GND ต่อรวมกับ MCU</div>
-</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> Servo ใช้ PWM 50Hz — duty 5% (1ms) = 0°, 10% (2ms) = 180° — สูตร <code>5 + angle*5/180</code> map มุม 0-180° → duty 5-10% — delay 20ms × 180 steps = 3.6 วิต่อเที่ยว รวมขากลับ ~7.2 วิ — <strong>สำคัญ:</strong> ต้องใช้ไฟ 5V ภายนอกเลี้ยง Servo — GND ต่อรวมกับ MCU</ul></div>
+</ul></div>
 
 <div class="answer">
 <h2>ข้อ 3: ใช้ PWM_SetRemap เปลี่ยน pin PWM ไปขาอื่น</h2>
@@ -96,8 +96,8 @@ int main(void) {
         if (duty <= 0)   dir = 1;
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> <code>PWM_SetRemap(channel, alternate_pin)</code> เปลี่ยน mapping ก่อน <code>PWM_Init()</code> — PWM1_CH2 ปกติ = PA1 แต่ remap ไป PC3 ได้ — ตัวเลือก remap: <code>PWM_PIN_PD2</code>, <code>PWM_PIN_PA1</code>, <code>PWM_PIN_PC3</code>, <code>PWM_PIN_PC4</code> — การ remap มีประโยชน์เมื่อ pin เดิมถูกใช้โดยอุปกรณ์อื่นแล้ว</div>
-</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>PWM_SetRemap(channel, alternate_pin)</code> เปลี่ยน mapping ก่อน <code>PWM_Init()</code> — PWM1_CH2 ปกติ = PA1 แต่ remap ไป PC3 ได้ — ตัวเลือก remap: <code>PWM_PIN_PD2</code>, <code>PWM_PIN_PA1</code>, <code>PWM_PIN_PC3</code>, <code>PWM_PIN_PC4</code> — การ remap มีประโยชน์เมื่อ pin เดิมถูกใช้โดยอุปกรณ์อื่นแล้ว</ul></div>
+</ul></div>
 
 <div class="answer">
 <h2>🔌 วงจรประกอบ — Servo SG90</h2>
@@ -111,8 +111,8 @@ int main(void) {
         
         ⚠️ Servo ใช้ไฟ 5V — ต้องใช้ไฟเลี้ยงแยก! ถ้าใช้ 3.3V จาก CH32V003 ไม่พอ
 </pre>
-<div class="approach"><strong>💡 หลักการ PWM ควบคุม Servo:</strong> ความถี่ 50Hz = 20ms period — pulse 1ms=0°, 1.5ms=90°, 2ms=180°</div>
-</div>
+<div class="approach"><strong>💡 หลักการ PWM ควบคุม Servo:</strong> ความถี่ 50Hz = 20ms period — pulse 1ms=0°, 1.5ms=90°, 2ms=180°</ul></div>
+</ul></div>
 
 <nav class="bottom-nav">
     <a href="index.html">← สารบัญ</a>

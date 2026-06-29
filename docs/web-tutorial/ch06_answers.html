@@ -42,8 +42,8 @@ int main(void) {
         Delay_Ms(500);
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> <code>analogRead(PD2)</code> อ่านค่า ADC (0-1023) — <code>ADC_GetVDD()</code> ใช้ internal 1.2V reference คำนวณ VDD จริง — แปลงเป็น mV ด้วย <code>raw * (vdd*1000) / 1023</code> แบบ integer (เร็วกว่า float) — VDD จริงอาจเป็น 3.2V หรือ 3.4V ไม่ใช่ 3.3V เสมอ — การใช้ VDD จริงทำให้ค่า mV แม่นยำกว่า</div>
-</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>analogRead(PD2)</code> อ่านค่า ADC (0-1023) — <code>ADC_GetVDD()</code> ใช้ internal 1.2V reference คำนวณ VDD จริง — แปลงเป็น mV ด้วย <code>raw * (vdd*1000) / 1023</code> แบบ integer (เร็วกว่า float) — VDD จริงอาจเป็น 3.2V หรือ 3.4V ไม่ใช่ 3.3V เสมอ — การใช้ VDD จริงทำให้ค่า mV แม่นยำกว่า</ul></div>
+</ul></div>
 
 <div class="answer">
 <h2>ข้อ 2: วัดอุณหภูมิ NTC + แสดง °C</h2>
@@ -83,8 +83,8 @@ int main(void) {
         Delay_Ms(1000);
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> NTC = ตัวต้านทานที่ค่าเปลี่ยนตามอุณหภูมิ — วงจร voltage divider: 3.3V → R_fix → ADC_pin → NTC → GND — อุณหภูมิสูง → R_NTC ลด → แรงดันที่ ADC ลด — สูตร Steinhart-Hart ใช้ B-constant 3950 (ค่าทั่วไป) — <code>ADC_ReadAverage(n, 10)</code> ลด noise — ใช้ <code>logf()</code> จาก <code>math.h</code></div>
-</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> NTC = ตัวต้านทานที่ค่าเปลี่ยนตามอุณหภูมิ — วงจร voltage divider: 3.3V → R_fix → ADC_pin → NTC → GND — อุณหภูมิสูง → R_NTC ลด → แรงดันที่ ADC ลด — สูตร Steinhart-Hart ใช้ B-constant 3950 (ค่าทั่วไป) — <code>ADC_ReadAverage(n, 10)</code> ลด noise — ใช้ <code>logf()</code> จาก <code>math.h</code></ul></div>
+</ul></div>
 
 <div class="answer">
 <h2>ข้อ 3: ใช้ ADC_ReadAverage ลด noise 16 samples</h2>
@@ -115,8 +115,8 @@ int main(void) {
         Delay_Ms(500);
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> <code>ADC_ReadAverage(ch, 16)</code> อ่าน 16 ครั้งแล้วหาค่าเฉลี่ย — ยิ่ง samples มาก noise ยิ่งต่ำ (standard deviation ลดลง √N เท่า) — แต่ใช้เวลานานขึ้น (16 ครั้ง × ~3.5μs/ครั้ง ≈ 56μs) — แสดงทั้งค่าเดียวและค่าเฉลี่ยเทียบกัน — ค่าเฉลี่ยจะนิ่งกว่าเห็นชัด</div>
-</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>ADC_ReadAverage(ch, 16)</code> อ่าน 16 ครั้งแล้วหาค่าเฉลี่ย — ยิ่ง samples มาก noise ยิ่งต่ำ (standard deviation ลดลง √N เท่า) — แต่ใช้เวลานานขึ้น (16 ครั้ง × ~3.5μs/ครั้ง ≈ 56μs) — แสดงทั้งค่าเดียวและค่าเฉลี่ยเทียบกัน — ค่าเฉลี่ยจะนิ่งกว่าเห็นชัด</ul></div>
+</ul></div>
 
 <div class="answer">
 <h2>🔌 วงจรประกอบ — Potentiometer + NTC</h2>
@@ -146,8 +146,8 @@ int main(void) {
         │         GND  │
         └──────────────┘
 </pre>
-<div class="approach"><strong>💡 หลักการ:</strong> Potentiometer ใช้ขากลางต่อเข้า ADC โดยตรง — NTC ต้องใช้วงจร Voltage Divider (แบ่งแรงดัน) เพื่อแปลงความต้านทานเป็นแรงดัน</div>
-</div>
+<div class="approach"><strong>💡 หลักการ:</strong> Potentiometer ใช้ขากลางต่อเข้า ADC โดยตรง — NTC ต้องใช้วงจร Voltage Divider (แบ่งแรงดัน) เพื่อแปลงความต้านทานเป็นแรงดัน</ul></div>
+</ul></div>
 
 <nav class="bottom-nav">
     <a href="index.html">← สารบัญ</a>
