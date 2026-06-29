@@ -19,15 +19,26 @@
 <section class="flowchart">
     <h2>🧭 แผนภาพการทำงาน</h2>
     <pre class="mermaid">
-flowchart TD
-    A["Library A: PWM_Init()"] --> B{Check g_tim1_owner}
-    B -->|"owner == TIMER_OWNER_NONE"| C["Claim: g_tim1_owner = TIMER_OWNER_PWM"]
-    B -->|"owner != NONE"| D["return 0 (TIM1 already used by Library B)"]
-    C --> E["PWM ทำงานปกติ"]
-    F["Library B: Encoder_Init()"] --> G{Check g_tim1_owner}
-    G -->|"owner == NONE"| H["Claim: g_tim1_owner = TIMER_OWNER_ENCODER"]
-    G -->|"owner == PWM (ไม่ใช่ NONE)"| I["return 0 — Conflict!"]
-    H --> J["Encoder ทำงานปกติ"]
+flowchart TB
+    subgraph Init["🔌 Init Phase"]
+        A["PWM_Init(TIM1_CH1, 1kHz)"] --> B{"g_tim1_owner == NONE?"}
+        B -->|"✅ Yes — ยังว่าง"| C["Claim: g_tim1_owner = PWM"]
+        B -->|"❌ No — มีคนใช้แล้ว"| D["Return ทันที! PWM ไม่เริ่ม"]
+        C --> E["🎯 PWM ทำงานปกติ"]
+    end
+    subgraph Conflict["⚠️ Conflict Detection"]
+        F["TIM_SimpleInit(TIM_1, 100Hz)"] --> G{"g_tim1_owner == NONE?"}
+        G -->|"❌ No — PWM ใช้อยู่"| H["Return — ไม่เขียนทับ!"]
+        G -->|"✅ Yes"| I["Claim + ทำงาน"]
+    end
+    subgraph Safe["✅ Safe Path"]
+        J["PWM1_CH1 → TIM1"] --> K["Stopwatch → TIM2"]
+        K --> L["ใช้คนละ timer → ไม่ชนกัน!"]
+    end
+    style C fill:#dcfce7,stroke:#22c55e
+    style D fill:#fee2e2,stroke:#ef4444
+    style H fill:#fee2e2,stroke:#ef4444
+    style L fill:#dcfce7,stroke:#22c55e
     </pre>
 </section>
 
@@ -296,6 +307,6 @@ int main(void)
 </nav>
 
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
-<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'15px'}});</script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'18px'}});</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
 </html>

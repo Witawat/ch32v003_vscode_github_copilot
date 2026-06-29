@@ -19,15 +19,31 @@
 <section class="flowchart">
     <h2>🧭 แผนภาพการทำงาน</h2>
     <pre class="mermaid">
-flowchart TD
-    A["#define CH32V003_PACKAGE PACKAGE_SOP8"] --> B["Compile-time: IS_VALID_PIN(PC0)"]
-    B --> C{PC0 มีใน SOP8?}
-    C -->|ไม่มี| D["#error: PC0 not available on SOP8"]
-    C -->|มี| E["ผ่าน — ใช้ PC0 ได้"]
-    F["#define CH32V003_PACKAGE PACKAGE_TSSOP20"] --> G["IS_ADC_PIN(PD2)"]
-    G -->|"TSSOP20: YES"| H["analogRead(PD2) OK"]
-    I["IS_PWM_VALID_PACKAGE(PC4, SOP8)"] -->|"false"| J["PWM ไม่มีบน SOP8"]
-    K["เปลี่ยน #define แค่บรรทัดเดียว"] --> L["โค้ดเดิม รันบนคนละแพ็กเกจ"]
+flowchart TB
+    subgraph Setup["📦 เลือกแพ็กเกจ"]
+        A["#define CH32V003_PACKAGE PACKAGE_xxx"] --> B["#include SimpleHAL.h"]
+    end
+    subgraph Compile["⚙️ ตอน Compile"]
+        B --> C{"analogRead(PD2) → IS_ADC_PIN(PD2)?"}
+        C -->|"SOP8: PD2 ไม่มี → false"| D["❌ Static Assert — COMPILE ERROR"]
+        C -->|"TSSOP20: PD2 มี → true"| E["✅ ผ่าน — analogRead OK"]
+        B --> F{"IS_VALID_PIN(PC0)?"}
+        F -->|"SOP8: false"| G["pinMode → return ทันที (silent)"]
+        F -->|"SOP16: true"| H["pinMode → ตั้งค่า GPIO"]
+    end
+    subgraph Runtime["🔄 ตอน Runtime"]
+        I["IS_PWM_VALID_PACKAGE(ch)"] --> J{"SOP8?"}
+        J -->|"✅ Yes"| K["ใช้ได้แค่ PWM1_CH2 + PWM1_CH4"]
+        J -->|"❌ No"| L["ใช้ได้ทุก channel"]
+    end
+    subgraph Result["🎯 ผลลัพธ์"]
+        M["โค้ดเดียว เปลี่ยนแค่ #define"] --> N["รันบน SOP8 / SOP16 / TSSOP20"]
+        N --> O["Package-aware อัตโนมัติ"]
+    end
+    style D fill:#fee2e2,stroke:#ef4444
+    style E fill:#dcfce7,stroke:#22c55e
+    style K fill:#fef3c7,stroke:#f59e0b
+    style O fill:#dcfce7,stroke:#22c55e
     </pre>
 </section>
 
@@ -352,6 +368,6 @@ int main(void)
 </nav>
 
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
-<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'15px'}});</script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'18px'}});</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
 </html>
