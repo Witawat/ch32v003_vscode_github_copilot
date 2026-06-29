@@ -8,6 +8,12 @@
 #include "SimpleI2C.h"
 #include "SimpleDelay.h"
 
+#warning "I2C_PINS_PARTIAL_REMAP: Pin mapping needs CH32V003 datasheet verification."
+
+#if CH32V003_IS_SOP8
+#warning "I2C HW may not be available on SOP-8 (PC1/PC2 pins may not be bonded). Consider using SimpleI2C_Soft instead."
+#endif
+
 /* ========== Private Helper Functions ========== */
 
 /**

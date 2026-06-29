@@ -8,6 +8,8 @@
 #include "SimpleUSART.h"
 #include <string.h>
 
+#warning "USART_PINS_FULL_REMAP: Pin mapping needs CH32V003 datasheet verification."
+
 /* ========== Private Helper Functions ========== */
 
 /**

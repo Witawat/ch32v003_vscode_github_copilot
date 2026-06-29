@@ -8,6 +8,7 @@
 
 #include "SimplePWM.h"
 
+#warning "PWM_REMAP_PARTIAL1/PARTIAL2: Pin mappings need CH32V003 datasheet verification. Default pins used as fallback."
 
 /* ========== Internal Structures ========== */
 
