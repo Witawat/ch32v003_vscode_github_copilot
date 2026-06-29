@@ -299,17 +299,17 @@ uint8_t portRead(GPIO_TypeDef* port);
  * @brief ตรวจสอบว่า pin รองรับ ADC หรือไม่
  * @note ADC pins: PA1, PA2, PC4, PD2, PD3, PD4, PD5, PD6 (8 pins)
  */
-#define IS_ADC_PIN(pin) ((pin) == PA1 || (pin) == PA2 || (pin) == PC4 || \
-                         ((pin) >= PD2 && (pin) <= PD6))
+#define IS_ADC_PIN(pin) (IS_VALID_PIN(pin) && ((pin) == PA1 || (pin) == PA2 || (pin) == PC4 || \
+                         ((pin) >= PD2 && (pin) <= PD6)))
 
 /**
  * @brief ตรวจสอบว่า pin รองรับ PWM หรือไม่
  * @note Pins ที่รองรับ: PA1, PC0, PC3, PC4, PD2, PD3, PD4, PD7
  */
-#define IS_PWM_PIN(pin) ((pin) == PA1 || (pin) == PC0 || \
+#define IS_PWM_PIN(pin) (IS_VALID_PIN(pin) && ((pin) == PA1 || (pin) == PC0 || \
                          (pin) == PC3 || (pin) == PC4 || \
                          (pin) == PD2 || (pin) == PD3 || \
-                         (pin) == PD4 || (pin) == PD7)
+                         (pin) == PD4 || (pin) == PD7))
 
 /* ========== Analog Functions ========== */
 

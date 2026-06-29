@@ -54,13 +54,24 @@ static const PinMap_t pin_map[] = {
 #endif
     {GPIOD, GPIO_Pin_1, GPIO_PinSource1, GPIO_PortSourceGPIOD},  // PD1 (19)
     
-    // GPIOD pins (PD2-PD7)
+    // GPIOD pins (PD2-PD7) — PD3,PD7,PD4,PD5 not on SOP-8/SOP-16
+#if !CH32V003_IS_SOP8 && !CH32V003_IS_SOP16
     {GPIOD, GPIO_Pin_2, GPIO_PinSource2, GPIO_PortSourceGPIOD},  // PD2 (20)
     {GPIOD, GPIO_Pin_3, GPIO_PinSource3, GPIO_PortSourceGPIOD},  // PD3 (21)
     {GPIOD, GPIO_Pin_4, GPIO_PinSource4, GPIO_PortSourceGPIOD},  // PD4 (22)
     {GPIOD, GPIO_Pin_5, GPIO_PinSource5, GPIO_PortSourceGPIOD},  // PD5 (23)
+#else
+    {0, 0, 0, 0}, // PD2 — not bonded on SOP-8/SOP-16
+    {0, 0, 0, 0}, // PD3 — not bonded on SOP-8/SOP-16
+    {0, 0, 0, 0}, // PD4 — not bonded or shared with SWIO
+    {0, 0, 0, 0}, // PD5 — not bonded or shared with SWIO
+#endif
     {GPIOD, GPIO_Pin_6, GPIO_PinSource6, GPIO_PortSourceGPIOD},  // PD6 (24)
+#if !CH32V003_IS_SOP8
     {GPIOD, GPIO_Pin_7, GPIO_PinSource7, GPIO_PortSourceGPIOD}   // PD7 (25)
+#else
+    {0, 0, 0, 0}  // PD7 — not bonded on SOP-8
+#endif
 };
 
 #define PIN_MAP_SIZE (sizeof(pin_map) / sizeof(PinMap_t))

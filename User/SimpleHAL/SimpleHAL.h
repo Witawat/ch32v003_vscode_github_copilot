@@ -93,7 +93,7 @@ extern "C" {
   #warning "Define CH32V003_PACKAGE before #include <SimpleHAL.h>: PACKAGE_SOP8, PACKAGE_SOP16, PACKAGE_TSSOP20, or PACKAGE_QFN20"
 #endif
 
-#define PACKAGE_SOP8    1   /**< SOP-8  (CH32V003J4M6) — 6 user pins, no SPI/I2C HW */
+#define PACKAGE_SOP8    1   /**< SOP-8  (CH32V003J4M6) — 6 I/O pins, no SPI HW, I2C HW on PC1/PC2 */
 #define PACKAGE_SOP16   2   /**< SOP-16 (CH32V003A4M6) — 14+ pins, no PD0 */
 #define PACKAGE_TSSOP20 3   /**< TSSOP-20 (CH32V003F4P6) — all pins, all features */
 #define PACKAGE_QFN20   4   /**< QFN-20 (CH32V003F4U6) — all pins, all features */
