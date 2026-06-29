@@ -4,7 +4,7 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>บทที่ 16: Timer Resource Guard — ป้องกัน Timer ชนกัน — SimpleHAL Tutorial</title>
 <link rel="stylesheet" href="css/style.css">
-</head>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css"></head>
 <body>
 
 <nav class="top-nav">
@@ -106,7 +106,7 @@ flowchart TD
     <h2>💻 เขียน Code ทีละขั้น</h2>
 
     <div class="step"><h3>ขั้นที่ 1: ดูตัวอย่าง — TIM1 ถูกใช้โดย PWM</h3>
-    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 
 int main(void) {
@@ -119,7 +119,7 @@ int main(void) {
     <p class="explain">🔍 เมื่อ <code>PWM_SimpleInit()</code> ถูกเรียก — มันเช็ค <code>g_tim1_owner</code> — ถ้าเป็น NONE → จอง — ตอนนี้ TIM1 เป็นของ PWM</p></div>
 
     <div class="step"><h3>ขั้นที่ 2: Conflict — Encoder พยายามใช้ TIM1</h3>
-    <pre><code>    // พยายามใช้ Encoder บน TIM1
+    <pre><code class="language-c">    // พยายามใช้ Encoder บน TIM1
     uint8_t ok = Encoder_Init(TIM1, PA1, PA2);
     if(!ok) {
         // Conflict! TIM1 ถูกใช้โดย PWM แล้ว
@@ -135,7 +135,7 @@ int main(void) {
     <p class="explain">🔍 <code>Encoder_Init(TIM1, ...)</code> — จะเช็ค <code>g_tim1_owner</code> — พบว่า != NONE (เป็น PWM) → คืน 0 — ผู้ใช้รู้ทันทีว่ามี conflict — ไม่ใช่เงียบแล้ว PWM เพี้ยน</p></div>
 
     <div class="step"><h3>ขั้นที่ 3: Release Timer — เปลี่ยนเจ้าของ</h3>
-    <pre><code>    // คืน TIM1 (PWM เลิกใช้)
+    <pre><code class="language-c">    // คืน TIM1 (PWM เลิกใช้)
     PWM_DeInit(2);  // หรือ Timer_Release(TIM1)
     // ตอนนี้ g_tim1_owner = TIMER_OWNER_NONE
 
@@ -145,7 +145,7 @@ int main(void) {
     <p class="explain">🔍 <code>PWM_DeInit()</code> — คืนกรรมสิทธิ์ TIM1 — หลังจากนี้ library อื่นใช้ TIM1 ได้ — หรือใช้ <code>Timer_Release(TIM1)</code> โดยตรง</p></div>
 
     <div class="step"><h3>ขั้นที่ 4: TIMEXT_DEFAULT_TIMER — เปลี่ยน Timer เริ่มต้น</h3>
-    <pre><code>    // กำหนดให้ library ทั้งหมดใช้ TIM2 เป็น default
+    <pre><code class="language-c">    // กำหนดให้ library ทั้งหมดใช้ TIM2 เป็น default
     // (ไม่ต้องระบุ timer ทุกครั้ง)
     #define TIMEXT_DEFAULT_TIMER TIM2
 
@@ -160,7 +160,7 @@ int main(void) {
     <p class="explain">🔍 <code>TIMEXT_DEFAULT_TIMER</code> — กำหนด timer เริ่มต้น — แต่ละ library เคารพค่านี้ — แต่ถ้าระบุ timer เองในการเรียกฟังก์ชัน → ใช้ที่ระบุ</p></div>
 
     <div class="step"><h3>ขั้นที่ 5: เช็คสถานะ Timer ทั้งระบบ</h3>
-    <pre><code>    // ดูว่าใครใช้ timer อะไรอยู่
+    <pre><code class="language-c">    // ดูว่าใครใช้ timer อะไรอยู่
     USART_Print("TIM1 owner: ");
     switch(g_tim1_owner) {
         case TIMER_OWNER_NONE:    USART_Print("FREE\r\n"); break;
@@ -218,7 +218,7 @@ int main(void) {
 <section>
     <h2>🛠️ สร้าง Product: ระบบหลาย Timer ไม่เคยชน</h2>
     <p>ระบบที่ใช้ PWM (TIM1) + Encoder (TIM2) + Servo (TIM2 แชร์กับ Encoder) — Guard ป้องกัน conflict</p>
-    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 
 int main(void)
@@ -297,5 +297,5 @@ int main(void)
 
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
 <script>mermaid.initialize({startOnLoad:true,theme:'neutral'});</script>
-</body>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
 </html>

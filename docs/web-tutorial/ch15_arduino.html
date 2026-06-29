@@ -4,7 +4,7 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>บทที่ 15: Arduino API — เขียนง่ายเหมือน Arduino — SimpleHAL Tutorial</title>
 <link rel="stylesheet" href="css/style.css">
-</head>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css"></head>
 <body>
 
 <nav class="top-nav">
@@ -100,7 +100,7 @@ flowchart TD
     <h2>💻 เขียน Code ทีละขั้น</h2>
 
     <div class="step"><h3>ขั้นที่ 1: Blink — Arduino Style</h3>
-    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 
 // นี่คือโค้ด Arduino มาตรฐาน!
@@ -124,7 +124,7 @@ int main(void) {
     <p class="explain">🔍 <code>setup()</code> + <code>loop()</code> — แพทเทิร์น Arduino — SimpleHAL ไม่ได้บังคับให้มี <code>setup()</code>/<code>loop()</code> โดยอัตโนมัติ — แต่คุณเขียนแบบนี้ได้ — โค้ดนี้พอร์ตจาก Arduino มาโดยแทบไม่ต้องเปลี่ยนอะไร</p></div>
 
     <div class="step"><h3>ขั้นที่ 2: Non-blocking Blink (millis)</h3>
-    <pre><code>uint32_t last_toggle = 0;
+    <pre><code class="language-c">uint32_t last_toggle = 0;
 bool led_state = false;
 
 void setup() {
@@ -152,7 +152,7 @@ void loop() {
     <p class="explain">🔍 <code>millis()</code> — คืนค่า ms ตั้งแต่เริ่ม — ใช้ทำ non-blocking timing — ต่างจาก <code>delay()</code> ที่ block — <code>Serial.print()</code> — พิมพ์ผ่าน USART — ต้องเรียก <code>USART_SimpleInit()</code> ก่อน</p></div>
 
     <div class="step"><h3>ขั้นที่ 3: analogRead + analogWrite</h3>
-    <pre><code>void setup() {
+    <pre><code class="language-c">void setup() {
     pinMode(PC4, OUTPUT);  // PWM output
     ADC_SimpleInit();
     USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
@@ -179,7 +179,7 @@ void loop() {
     <p class="explain">🔍 <code>analogRead(pin)</code> — Arduino-style ADC — ต้องเรียก <code>ADC_SimpleInit()</code> ก่อน — <code>analogWrite(pin, val)</code> — PWM output 0-255 — <code>map(val, inMin, inMax, outMin, outMax)</code> — แมปช่วงค่า</p></div>
 
     <div class="step"><h3>ขั้นที่ 4: Interrupt + Button</h3>
-    <pre><code>volatile int button_pressed = 0;
+    <pre><code class="language-c">volatile int button_pressed = 0;
 
 void button_isr(void) {
     button_pressed = 1;  // ISR: แค่ตั้ง flag
@@ -209,7 +209,7 @@ void loop() {
     <p class="explain">🔍 <code>attachInterrupt(pin, func, mode)</code> — Arduino-style interrupt — <code>digitalPinToInterrupt(pin)</code> — แปลง pin เป็น interrupt number — รองรับ RISING, FALLING, CHANGE, LOW</p></div>
 
     <div class="step"><h3>ขั้นที่ 5: dtostrf — Float to String</h3>
-    <pre><code>void loop() {
+    <pre><code class="language-c">void loop() {
     float vdd = ADC_GetVDD();
     float temp = 25.6f;
 
@@ -228,7 +228,7 @@ void loop() {
     <p class="explain">🔍 <code>dtostrf(val, width, prec, buf)</code> — แปลง float เป็น string — สำคัญมากเพราะ CH32V003 stdlib แบบ nano ไม่รองรับ sprintf float — width=ความกว้างรวม, prec=จำนวนทศนิยม</p></div>
 
     <div class="step"><h3>ขั้นที่ 6: yield() — Cooperative Multitasking</h3>
-    <pre><code>// Override yield() — ถูกเรียกใน delay()
+    <pre><code class="language-c">// Override yield() — ถูกเรียกใน delay()
 void yield(void) {
     // ทำงานอื่นขณะ delay
     // เช่น: เช็ค button, อ่าน sensor, feed watchdog
@@ -288,7 +288,7 @@ void loop() {
 <section>
     <h2>🛠️ สร้าง Product: พอร์ตโค้ด Arduino มาลง CH32V003</h2>
     <p>ตัวอย่างพอร์ต Arduino sketch — อ่านเซ็นเซอร์ + PWM ควบคุม LED + Serial Monitor</p>
-    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 
 void setup()
@@ -370,5 +370,5 @@ int main(void) {
 
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
 <script>mermaid.initialize({startOnLoad:true,theme:'neutral'});</script>
-</body>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
 </html>

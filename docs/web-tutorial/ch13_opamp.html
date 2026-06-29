@@ -4,7 +4,7 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>บทที่ 13: OPAMP — ขยายสัญญาณในชิป — SimpleHAL Tutorial</title>
 <link rel="stylesheet" href="css/style.css">
-</head>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css"></head>
 <body>
 
 <nav class="top-nav">
@@ -86,7 +86,7 @@ flowchart TD
     <h2>💻 เขียน Code ทีละขั้น</h2>
 
     <div class="step"><h3>ขั้นที่ 1: OPAMP Voltage Follower พื้นฐาน</h3>
-    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 
 int main(void) {
@@ -103,7 +103,7 @@ int main(void) {
     <p class="explain">🔍 <code>OPAMP_SimpleInit(ch, mode)</code> — ตั้งค่า OPAMP — <code>OPAMP_MODE_FOLLOWER</code> — ทำหน้าที่เป็น buffer — <code>OPAMP_Enable()</code> — จ่ายไฟให้ OPAMP</p></div>
 
     <div class="step"><h3>ขั้นที่ 2: อ่านค่าผ่าน OPAMP Buffer</h3>
-    <pre><code>    while(1) {
+    <pre><code class="language-c">    while(1) {
         // อ่าน ADC จาก OPAMP output (PA5)
         // PA5 = ADC_CH5 (เช็ค datasheet)
         uint16_t raw = ADC_Read(ADC_CH_PA5);
@@ -118,7 +118,7 @@ int main(void) {
     <p class="explain">🔍 OPAMP buffer ทำให้ ADC อ่านค่าได้แม่นยำขึ้น — โดยเฉพาะเมื่อเซ็นเซอร์มี output impedance สูง — ถ้าไม่มี buffer, ADC sample/hold capacitor จะดึงกระแสจากเซ็นเซอร์ทำให้แรงดันตก</p></div>
 
     <div class="step"><h3>ขั้นที่ 3: PGA — ขยายสัญญาณเล็ก</h3>
-    <pre><code>    // ตัวอย่าง: Thermocouple ให้สัญญาณ ~0-50mV
+    <pre><code class="language-c">    // ตัวอย่าง: Thermocouple ให้สัญญาณ ~0-50mV
     // ขยาย 16x → 0-800mV → ADC อ่านได้
 
     OPAMP_SimpleInit(OPAMP_CH1, OPAMP_MODE_PGA);
@@ -137,7 +137,7 @@ int main(void) {
     <p class="explain">🔍 <code>OPAMP_ConfigPGA(ch, gain)</code> — ตั้ง gain 2/4/8/16 — <strong>ข้อควรระวัง:</strong> output ต้องไม่เกิน VDD — Input 50mV × 16 = 800mV ยังปลอดภัย</p></div>
 
     <div class="step"><h3>ขั้นที่ 4: เปิด/ปิด OPAMP เพื่อประหยัดไฟ</h3>
-    <pre><code>    // OPAMP กินไฟ ~200µA — ปิดเมื่อไม่ใช้
+    <pre><code class="language-c">    // OPAMP กินไฟ ~200µA — ปิดเมื่อไม่ใช้
     OPAMP_Enable(OPAMP_CH1);
     Delay_Ms(10);  // รอ OPAMP settle
 
@@ -182,7 +182,7 @@ int main(void) {
 <section>
     <h2>🛠️ สร้าง Product: เครื่องวัด pH</h2>
     <p>ใช้ OPAMP Buffer + ADC อ่านค่า pH probe — แสดงผลผ่าน USART</p>
-    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 
 // pH Calibration Constants
@@ -250,5 +250,5 @@ int main(void)
 
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
 <script>mermaid.initialize({startOnLoad:true,theme:'neutral'});</script>
-</body>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
 </html>

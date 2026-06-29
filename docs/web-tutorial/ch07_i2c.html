@@ -4,7 +4,7 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>บทที่ 7: I2C — คุยกับเซ็นเซอร์และ EEPROM — SimpleHAL Tutorial</title>
 <link rel="stylesheet" href="css/style.css">
-</head>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css"></head>
 <body>
 
 <nav class="top-nav">
@@ -74,7 +74,7 @@ flowchart TD
     <h2>💻 เขียน Code ทีละขั้น</h2>
 
     <div class="step"><h3>ขั้นที่ 1: Init + Scan Bus</h3>
-    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 
 int main(void) {
@@ -85,7 +85,7 @@ int main(void) {
     <p class="explain">🔍 <code>I2C_SimpleInit(speed, pins)</code> — ตั้งค่า hardware I2C — 100kHz ใช้ได้กับอุปกรณ์ส่วนใหญ่ — default pins PC1(SDA)/PC2(SCL)</p></div>
 
     <div class="step"><h3>ขั้นที่ 2: สแกนหา Devices</h3>
-    <pre><code>    USART_Print("Scanning I2C...\r\n");
+    <pre><code class="language-c">    USART_Print("Scanning I2C...\r\n");
     for(uint8_t addr = 1; addr < 128; addr++) {
         if(I2C_IsDeviceReady(addr)) {
             USART_Print("Found: 0x");
@@ -96,7 +96,7 @@ int main(void) {
     <p class="explain">🔍 <code>I2C_IsDeviceReady(addr)</code> — ส่ง address แล้วเช็คว่ามี ACK กลับมาหรือไม่ — วิธีที่เร็วสุดในการเช็คว่าอุปกรณ์ต่ออยู่หรือไม่</p></div>
 
     <div class="step"><h3>ขั้นที่ 3: เขียน/อ่าน Register (BH1750)</h3>
-    <pre><code>    // BH1750: One-time High-Res Mode
+    <pre><code class="language-c">    // BH1750: One-time High-Res Mode
     I2C_WriteReg(0x23, 0x10, 0x00);  // สั่งวัดแสง 1 ครั้ง
     Delay_Ms(180);  // รอ measurement time
 
@@ -107,7 +107,7 @@ int main(void) {
     <p class="explain">🔍 <code>I2C_WriteReg(addr, reg, data)</code> — เขียน 1 byte ไปยัง register — <code>I2C_ReadRegMulti()</code> — อ่านหลาย bytes จาก register — BH1750 ต้องรอ measurement time 180ms</p></div>
 
     <div class="step"><h3>ขั้นที่ 4: ตรวจสอบ Error</h3>
-    <pre><code>    I2C_Status status = I2C_WriteReg(0x50, 0x00, 0x55);
+    <pre><code class="language-c">    I2C_Status status = I2C_WriteReg(0x50, 0x00, 0x55);
     if(status != I2C_OK) {
         USART_Print("Write failed!\r\n");
     }
@@ -146,7 +146,7 @@ int main(void) {
 <section>
     <h2>🛠️ สร้าง Product: เครื่องวัดแสง + วัดความเร่ง</h2>
     <p>สแกน I2C bus → อ่าน BH1750 (แสง lux) และ MPU6050 (ความเร่งแกน Z) → แสดงผล Serial</p>
-    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 
 int main(void)
@@ -202,5 +202,5 @@ int main(void)
 
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
 <script>mermaid.initialize({startOnLoad:true,theme:'neutral'});</script>
-</body>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
 </html>

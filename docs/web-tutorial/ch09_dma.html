@@ -4,7 +4,7 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>บทที่ 9: DMA — ถ่ายโอนข้อมูลโดยไม่ใช้ CPU — SimpleHAL Tutorial</title>
 <link rel="stylesheet" href="css/style.css">
-</head>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css"></head>
 <body>
 
 <nav class="top-nav">
@@ -82,7 +82,7 @@ flowchart TD
     <h2>💻 เขียน Code ทีละขั้น</h2>
 
     <div class="step"><h3>ขั้นที่ 1: Memory Copy ด้วย DMA</h3>
-    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 
 uint8_t src[64] = {0xAA, 0xBB, 0xCC};
@@ -98,7 +98,7 @@ int main(void) {
     <p class="explain">🔍 <code>DMA_SimpleInit(ch, dst, src, size)</code> — กำหนด DMA channel, ปลายทาง, ต้นทาง, ขนาด — รองรับสูงสุด 65535 bytes</p></div>
 
     <div class="step"><h3>ขั้นที่ 2: รอ Transfer เสร็จ</h3>
-    <pre><code>    while(DMA_GetStatus(DMA_CH1) == 0) {
+    <pre><code class="language-c">    while(DMA_GetStatus(DMA_CH1) == 0) {
         // CPU ว่าง — ทำอย่างอื่นได้!
         Delay_Ms(1);
     }
@@ -113,7 +113,7 @@ int main(void) {
     <p class="explain">🔍 <code>DMA_GetStatus(ch)</code> — คืนค่า 0=กำลัง transfer, 1=เสร็จ — ในระหว่าง transfer CPU ว่าง 100% — <strong>ไม่ต้อง busy-wait</strong></p></div>
 
     <div class="step"><h3>ขั้นที่ 3: DMA + ADC Continuous Sampling</h3>
-    <pre><code>    uint16_t adc_buf[128];
+    <pre><code class="language-c">    uint16_t adc_buf[128];
     ADC_SimpleInit();
 
     DMA_ADC_Init(DMA_CH1, adc_buf, 128);  // ADC → buffer
@@ -132,7 +132,7 @@ int main(void) {
     <p class="explain">🔍 <code>DMA_ADC_Init(ch, buf, n)</code> — ตั้งค่า DMA อ่านจาก ADC ต่อเนื่อง — CPU รับข้อมูลทั้งหมดทีเดียวหลัง transfer เสร็จ</p></div>
 
     <div class="step"><h3>ขั้นที่ 4: DMA + USART ส่ง Buffer ใหญ่</h3>
-    <pre><code>    const char *msg = "Hello from DMA! 1234567890\r\n";
+    <pre><code class="language-c">    const char *msg = "Hello from DMA! 1234567890\r\n";
     DMA_USART_Transmit(DMA_CH2, (uint8_t*)msg, strlen(msg));
 
     USART_Print("Sending via DMA...\r\n");
@@ -140,7 +140,7 @@ int main(void) {
     <p class="explain">🔍 <code>DMA_USART_Transmit(ch, data, len)</code> — ส่งข้อมูลผ่าน USART โดย DMA — CPU ไม่ต้องวนลูปรอ TXE flag</p></div>
 
     <div class="step"><h3>ขั้นที่ 5: ใช้ DMA Callback</h3>
-    <pre><code>void on_dma_done(void) {
+    <pre><code class="language-c">void on_dma_done(void) {
     USART_Print("DMA transfer complete!\r\n");
 }
 
@@ -188,7 +188,7 @@ int main(void) {
 <section>
     <h2>🛠️ สร้าง Product: อัดเสียง/ข้อมูลเร็วโดย CPU ว่างทำงานอื่น</h2>
     <p>ใช้ DMA อ่าน ADC ต่อเนื่อง 128 samples ที่ 8kHz พร้อมกับส่งข้อมูลเก่า USART — CPU ว่างระหว่าง sampling</p>
-    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 
 #define BUF_SIZE 128
@@ -259,5 +259,5 @@ int main(void)
 
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
 <script>mermaid.initialize({startOnLoad:true,theme:'neutral'});</script>
-</body>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
 </html>

@@ -4,7 +4,7 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>บทที่ 17: ระบบแพ็กเกจ — เขียนโค้ดเดียวใช้ได้ทุกชิป — SimpleHAL Tutorial</title>
 <link rel="stylesheet" href="css/style.css">
-</head>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css"></head>
 <body>
 
 <nav class="top-nav">
@@ -118,7 +118,7 @@ flowchart TD
     <h2>💻 เขียน Code ทีละขั้น</h2>
 
     <div class="step"><h3>ขั้นที่ 1: เลือกแพ็กเกจ + Pin Validation</h3>
-    <pre><code>// เปลี่ยนแค่บรรทัดนี้ — โค้ดที่เหลือเหมือนเดิม
+    <pre><code class="language-c">// เปลี่ยนแค่บรรทัดนี้ — โค้ดที่เหลือเหมือนเดิม
 #define CH32V003_PACKAGE PACKAGE_TSSOP20
 // #define CH32V003_PACKAGE PACKAGE_SOP8
 #include "SimpleHAL.h"
@@ -137,7 +137,7 @@ int main(void) {
     <p class="explain">🔍 <code>IS_VALID_PIN(pin)</code> — compile-time macro — ใช้กับ <code>#if</code> directive — ถ้า pin ไม่มีในแพ็กเกจ → false → <code>#error</code> แสดงข้อความชัดเจน</p></div>
 
     <div class="step"><h3>ขั้นที่ 2: IS_ADC_PIN — เช็ค Analog Input</h3>
-    <pre><code>    // เช็คว่า pin นี้เป็น ADC ได้หรือไม่
+    <pre><code class="language-c">    // เช็คว่า pin นี้เป็น ADC ได้หรือไม่
     #if IS_ADC_PIN(PD2)
         ADC_SimpleInit();
         uint16_t val = analogRead(PD2);
@@ -153,7 +153,7 @@ int main(void) {
     <p class="explain">🔍 <code>IS_ADC_PIN(pin)</code> — false สำหรับ PD7 และ pin ที่ไม่ใช่ ADC — บน SOP16 PD2 ไม่มี → false</p></div>
 
     <div class="step"><h3>ขั้นที่ 3: IS_PWM_VALID_PACKAGE — PWM Output</h3>
-    <pre><code>    // PWM บน PC4 — มีแค่บน TSSOP20/SOP16/QFN20
+    <pre><code class="language-c">    // PWM บน PC4 — มีแค่บน TSSOP20/SOP16/QFN20
     // บน SOP8: PC4 เป็น I2C เท่านั้น
 
     #if IS_PWM_VALID_PACKAGE(PC4, CH32V003_PACKAGE)
@@ -171,7 +171,7 @@ int main(void) {
     <p class="explain">🔍 <code>IS_PWM_VALID_PACKAGE(pin, pkg)</code> — ต้องระบุ package — แต่ละแพ็กเกจมี PWM pin ต่างกัน — SOP8: PA1,PA2,PD1,PD4,PD6 — TSSOP20: PC4,PC5,PC6,PA1,PA2,PD3</p></div>
 
     <div class="step"><h3>ขั้นที่ 4: Multi-Package Code — Fallback Chain</h3>
-    <pre><code>    // เลือก pin LED อัตโนมัติตามแพ็กเกจ
+    <pre><code class="language-c">    // เลือก pin LED อัตโนมัติตามแพ็กเกจ
     #if IS_VALID_PIN(PC0)
         #define LED_PIN PC0
     #elif IS_VALID_PIN(PC1)
@@ -187,7 +187,7 @@ int main(void) {
     <p class="explain">🔍 Fallback chain — ลอง pin แรก → ถ้าไม่มี → ลอง pin ถัดไป — โค้ดนี้ทำงานบนทุกแพ็กเกจโดยไม่ต้องแก้ — TSSOP20: PC0, SOP16: PC0, SOP8: PC1</p></div>
 
     <div class="step"><h3>ขั้นที่ 5: ตารางเปรียบเทียบ 4 แพ็กเกจในโค้ด</h3>
-    <pre><code>void print_package_info(void) {
+    <pre><code class="language-c">void print_package_info(void) {
     USART_Print("Package: ");
     #if CH32V003_PACKAGE == PACKAGE_SOP8
         USART_Print("SOP-8\r\n");
@@ -265,7 +265,7 @@ int main(void) {
 <section>
     <h2>🛠️ สร้าง Product: โค้ดเดียว รันบน SOP8 SOP16 TSSOP20</h2>
     <p>ไฟกระพริบ LED + วัดอุณหภูมิ + USART — ทำงานบนทุกแพ็กเกจโดยเปลี่ยนแค่บรรทัดแรก</p>
-    <pre><code>// ====== เปลี่ยนแค่บรรทัดนี้ ======
+    <pre><code class="language-c">// ====== เปลี่ยนแค่บรรทัดนี้ ======
 #define CH32V003_PACKAGE PACKAGE_TSSOP20
 // #define CH32V003_PACKAGE PACKAGE_SOP16
 // #define CH32V003_PACKAGE PACKAGE_SOP8
@@ -353,5 +353,5 @@ int main(void)
 
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
 <script>mermaid.initialize({startOnLoad:true,theme:'neutral'});</script>
-</body>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
 </html>

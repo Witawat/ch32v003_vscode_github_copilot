@@ -4,7 +4,7 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>บทที่ 11: Flash Storage — เก็บข้อมูลไม่หายหลังปิดเครื่อง — SimpleHAL Tutorial</title>
 <link rel="stylesheet" href="css/style.css">
-</head>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css"></head>
 <body>
 
 <nav class="top-nav">
@@ -72,7 +72,7 @@ flowchart TD
     <h2>💻 เขียน Code ทีละขั้น</h2>
 
     <div class="step"><h3>ขั้นที่ 1: นิยาม Config Struct</h3>
-    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 
 #define FLASH_CONFIG_ADDR  0x08003C00   // Page 60
@@ -89,7 +89,7 @@ Config_t g_config;</code></pre>
     <p class="explain">🔍 ใช้ <code>struct</code> รวมค่าคอนฟิกทั้งหมด — <code>magic</code> ตรวจสอบว่า Flash มีข้อมูลหรือยัง (0xFFFF = empty) — <code>crc</code> ตรวจสอบความถูกต้องของข้อมูล</p></div>
 
     <div class="step"><h3>ขั้นที่ 2: Load Config เมื่อเริ่มต้น</h3>
-    <pre><code>int main(void) {
+    <pre><code class="language-c">int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
     USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
@@ -110,7 +110,7 @@ Config_t g_config;</code></pre>
     <p class="explain">🔍 <code>Flash_LoadConfig(data, size)</code> — อ่าน config จาก Flash — คืนค่า 1 ถ้าสำเร็จ (magic ตรง, CRC ผ่าน) — คืนค่า 0 ถ้าไม่มีข้อมูลหรือเสียหาย</p></div>
 
     <div class="step"><h3>ขั้นที่ 3: Save Config เมื่อแก้ไข</h3>
-    <pre><code>    // ผู้ใช้เปลี่ยน brightness
+    <pre><code class="language-c">    // ผู้ใช้เปลี่ยน brightness
     g_config.brightness = 75;
 
     // คำนวณ CRC16
@@ -131,7 +131,7 @@ Config_t g_config;</code></pre>
     <p class="explain">🔍 <code>Flash_SaveConfig(addr, data, size)</code> — Erase page อัตโนมัติ + เขียนข้อมูล + verify — คืนค่า 1 เมื่อสำเร็จ — <strong>สำคัญ:</strong> Flash_CalculateCRC16() ต้องไม่รวมฟิลด์ crc เอง</p></div>
 
     <div class="step"><h3>ขั้นที่ 4: อ่าน/เขียน Raw Flash</h3>
-    <pre><code>    // อ่าน raw Flash (เหมือนอ่าน RAM — ไม่ต้อง unlock)
+    <pre><code class="language-c">    // อ่าน raw Flash (เหมือนอ่าน RAM — ไม่ต้อง unlock)
     uint16_t val = *(uint16_t*)FLASH_CONFIG_ADDR;
     USART_Print("Raw value at 0x");
     USART_PrintHex(val >> 8, 1);
@@ -145,7 +145,7 @@ Config_t g_config;</code></pre>
     <p class="explain">🔍 <code>Flash_ErasePage(addr)</code> — ลบ 1KB page — <code>Flash_WriteHalfWord(addr, data)</code> — เขียน 16-bit — ใช้เมื่อต้องการควบคุมเอง</p></div>
 
     <div class="step"><h3>ขั้นที่ 5: Flash Read/Write Struct โดยตรง</h3>
-    <pre><code>    // เก็บ log ง่ายๆ ด้วย struct
+    <pre><code class="language-c">    // เก็บ log ง่ายๆ ด้วย struct
     typedef struct {
         uint32_t timestamp;
         uint16_t temperature;
@@ -194,7 +194,7 @@ Config_t g_config;</code></pre>
 <section>
     <h2>🛠️ สร้าง Product: ตั้งค่าผู้ใช้ที่จำได้ตลอด</h2>
     <p>อุปกรณ์ที่มี brightness/volume config — จำค่าได้แม้ปิดไฟ — มี factory reset</p>
-    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 
 #define CFG_ADDR   0x08003C00
@@ -289,5 +289,5 @@ int main(void)
 
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
 <script>mermaid.initialize({startOnLoad:true,theme:'neutral'});</script>
-</body>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
 </html>

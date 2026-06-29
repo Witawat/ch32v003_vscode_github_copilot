@@ -4,7 +4,7 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>บทที่ 14: 1-Wire — DS18B20 เซ็นเซอร์อุณหภูมิ — SimpleHAL Tutorial</title>
 <link rel="stylesheet" href="css/style.css">
-</head>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css"></head>
 <body>
 
 <nav class="top-nav">
@@ -110,7 +110,7 @@ flowchart TD
     <h2>💻 เขียน Code ทีละขั้น</h2>
 
     <div class="step"><h3>ขั้นที่ 1: Init OneWire</h3>
-    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 
 #define OW_PIN PC0
@@ -125,7 +125,7 @@ int main(void) {
     <p class="explain">🔍 <code>OneWire_Init(pin)</code> — ตั้ง pin เป็น open-drain + เปิด internal pull-up — แต่แนะนำให้ต่อ external 4.7kΩ pull-up ด้วยเพื่อความน่าเชื่อถือ</p></div>
 
     <div class="step"><h3>ขั้นที่ 2: ตรวจจับ DS18B20</h3>
-    <pre><code>    // ตรวจจับอุปกรณ์บนบัส
+    <pre><code class="language-c">    // ตรวจจับอุปกรณ์บนบัส
     uint8_t presence = OneWire_Reset();
 
     if(presence) {
@@ -138,7 +138,7 @@ int main(void) {
     <p class="explain">🔍 <code>OneWire_Reset()</code> — ส่ง reset pulse — คืนค่า 1 ถ้ามีอุปกรณ์ตอบ presence pulse — คืนค่า 0 ถ้าบัสว่างเปล่า — <strong>ควรเรียกก่อนทุก transaction</strong></p></div>
 
     <div class="step"><h3>ขั้นที่ 3: อ่านอุณหภูมิ (Single Device)</h3>
-    <pre><code>    while(1) {
+    <pre><code class="language-c">    while(1) {
         // ——— Step 1: Start Conversion ———
         OneWire_Reset();
         OneWire_SkipROM();              // ข้าม ROM — มีตัวเดียว
@@ -176,7 +176,7 @@ int main(void) {
     <p class="explain">🔍 <code>OneWire_SkipROM()</code> — ข้ามการระบุ ROM ID — ใช้เมื่อมีอุปกรณ์ตัวเดียวบนบัส — <strong>ถ้ามีหลายตัว — ห้ามใช้ SkipROM!</strong> — <code>OneWire_WriteByte()</code> — ส่ง 1 byte — <code>OneWire_ReadByte()</code> — อ่าน 1 byte — ต้องอ่าน 9 bytes (scratchpad)</p></div>
 
     <div class="step"><h3>ขั้นที่ 4: CRC Check</h3>
-    <pre><code>        // เช็ค CRC (byte 8 ของ scratchpad)
+    <pre><code class="language-c">        // เช็ค CRC (byte 8 ของ scratchpad)
         uint8_t crc = OneWire_CRC8(sp, 8);
         if(crc == sp[8]) {
             USART_Print("CRC OK: ");
@@ -186,7 +186,7 @@ int main(void) {
     <p class="explain">🔍 <code>OneWire_CRC8(data, len)</code> — คำนวณ CRC8 (Dallas 1-Wire CRC) — เทียบกับ byte 8 ของ scratchpad — ถ้าไม่ตรง = สัญญาณรบกวนหรือ timing ผิด — ควรอ่านใหม่</p></div>
 
     <div class="step"><h3>ขั้นที่ 5: ROM Search — หลายอุปกรณ์</h3>
-    <pre><code>    // ค้นหา ROM ID ทั้งหมดบนบัส
+    <pre><code class="language-c">    // ค้นหา ROM ID ทั้งหมดบนบัส
     uint64_t roms[10];
     uint8_t count = OneWire_SearchROM(roms, 10);
 
@@ -237,7 +237,7 @@ int main(void) {
 <section>
     <h2>🛠️ สร้าง Product: เทอร์โมมิเตอร์หลายจุด</h2>
     <p>อ่านอุณหภูมิจาก DS18B20 3 ตัวบนบัสเดียวกัน — แสดง ROM ID + อุณหภูมิ</p>
-    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 
 #define OW_PIN      PC0
@@ -344,5 +344,5 @@ int main(void)
 
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
 <script>mermaid.initialize({startOnLoad:true,theme:'neutral'});</script>
-</body>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
 </html>

@@ -4,7 +4,7 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>บทที่ 2: GPIO — Digital Input/Output พื้นฐาน — SimpleHAL Tutorial</title>
 <link rel="stylesheet" href="css/style.css">
-</head>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css"></head>
 <body>
 
 <nav class="top-nav">
@@ -64,7 +64,7 @@ flowchart TD
     <h2>💻 เขียน Code ทีละขั้น</h2>
 
     <div class="step"><h3>ขั้นที่ 1: Include + Setup</h3>
-    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 
 int main(void) {
@@ -73,12 +73,12 @@ int main(void) {
     <p class="explain">🔍 เริ่มต้นพื้นฐานเหมือนบทที่ 1 — SystemCoreClockUpdate() + Timer_Init()</p></div>
 
     <div class="step"><h3>ขั้นที่ 2: ตั้งค่า Pin LED + Button</h3>
-    <pre><code>    pinMode(PC0, PIN_MODE_OUTPUT);       // LED
+    <pre><code class="language-c">    pinMode(PC0, PIN_MODE_OUTPUT);       // LED
     pinMode(PC1, PIN_MODE_INPUT_PULLUP);  // Button (pull-up ภายใน)</code></pre>
     <p class="explain">🔍 <code>PIN_MODE_INPUT_PULLUP</code> ใช้ pull-up ภายใน (~40kΩ) ไม่ต้องต่อ R ภายนอก — ปุ่มกดต่อลง GND, ปกติอ่าน HIGH, กดแล้วอ่าน LOW (Active LOW)</p></div>
 
     <div class="step"><h3>ขั้นที่ 3: อ่านค่า + ควบคุม LED</h3>
-    <pre><code>    while(1) {
+    <pre><code class="language-c">    while(1) {
         uint8_t btn = digitalRead(PC1);
         digitalWrite(PC0, !btn);  // กด=LOW → LED=HIGH
         Delay_Ms(50);
@@ -87,7 +87,7 @@ int main(void) {
     <p class="explain">🔍 <code>digitalRead()</code> คืนค่า HIGH (1) หรือ LOW (0) — ใช้ <code>!</code> เพื่อกลับค่า Active LOW</p></div>
 
     <div class="step"><h3>ขั้นที่ 4: Interrupt (ทางเลือก)</h3>
-    <pre><code>volatile uint32_t count = 0;
+    <pre><code class="language-c">volatile uint32_t count = 0;
 void btn_isr(void) { count++; }
 
     attachInterrupt(PC1, btn_isr, FALLING);
@@ -127,7 +127,7 @@ void btn_isr(void) { count++; }
 <section>
     <h2>🛠️ สร้าง Product: ไฟกระพริบ + ปุ่มกดเปลี่ยนโหมด</h2>
     <p>LED กระพริบ 3 โหมด: เร็ว / ปานกลาง / ช้า — เปลี่ยนด้วยปุ่มกด (Interrupt)</p>
-    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 
 volatile uint8_t mode = 0;
@@ -171,5 +171,5 @@ int main(void)
 
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
 <script>mermaid.initialize({startOnLoad:true,theme:'neutral'});</script>
-</body>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
 </html>

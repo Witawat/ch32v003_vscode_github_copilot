@@ -4,7 +4,7 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>บทที่ 4: USART — สื่อสารผ่าน Serial — SimpleHAL Tutorial</title>
 <link rel="stylesheet" href="css/style.css">
-</head>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css"></head>
 <body>
 
 <nav class="top-nav">
@@ -66,7 +66,7 @@ flowchart TD
     <h2>💻 เขียน Code ทีละขั้น</h2>
 
     <div class="step"><h3>ขั้นที่ 1: Include + Init</h3>
-    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 
 int main(void) {
@@ -76,14 +76,14 @@ int main(void) {
     <p class="explain">🔍 <code>USART_SimpleInit(baud, pins)</code> — บรรทัดเดียวจบ! เปิด Clock, ตั้งค่า GPIO, ตั้ง USART 8N1, เปิดใช้งาน</p></div>
 
     <div class="step"><h3>ขั้นที่ 2: ส่งข้อความ</h3>
-    <pre><code>    USART_Print("Hello from CH32V003!\r\n");
+    <pre><code class="language-c">    USART_Print("Hello from CH32V003!\r\n");
     USART_PrintNum(12345);
     USART_Print(" 0x");
     USART_PrintHex(0xAB, 1);  // uppercase hex</code></pre>
     <p class="explain">🔍 <code>USART_Print()</code> ส่ง string — <code>USART_PrintNum()</code> ส่งตัวเลข signed 32-bit — <code>USART_PrintHex()</code> ส่งเลขฐาน 16</p></div>
 
     <div class="step"><h3>ขั้นที่ 3: รับข้อมูล</h3>
-    <pre><code>    while(1) {
+    <pre><code class="language-c">    while(1) {
         if(USART_Available()) {
             uint8_t ch = USART_Read();  // blocking — แต่มีข้อมูลแน่
             USART_WriteByte(ch);         // echo กลับ
@@ -124,7 +124,7 @@ int main(void) {
 <section>
     <h2>🛠️ สร้าง Product: ควบคุม LED ผ่านคอมพิวเตอร์</h2>
     <p>พิมพ์คำสั่งใน Serial Monitor เพื่อควบคุม LED (ON/OFF/TOGGLE/BLINK)</p>
-    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 
 int main(void)
@@ -181,5 +181,5 @@ int main(void)
 
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
 <script>mermaid.initialize({startOnLoad:true,theme:'neutral'});</script>
-</body>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
 </html>

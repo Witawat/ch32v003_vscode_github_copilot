@@ -4,7 +4,7 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>บทที่ 1: เริ่มต้นอย่างถูกต้อง — ระบบขั้นต่ำที่ใช้ได้ — SimpleHAL Tutorial</title>
 <link rel="stylesheet" href="css/style.css">
-</head>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css"></head>
 <body>
 
 <nav class="top-nav">
@@ -60,18 +60,18 @@ flowchart TD
     <h2>💻 เขียน Code ทีละขั้น</h2>
 
     <div class="step"><h3>ขั้นที่ 1: Include + เลือก Package</h3>
-    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"</code></pre>
     <p class="explain">🔍 <code>CH32V003_PACKAGE</code> บอกคอมไพเลอร์ว่าบอร์ดใช้แพ็กเกจไหน (SOP8, SOP16, TSSOP20, QFN20) ส่งผลต่อว่า pin ไหนใช้ได้บ้าง</p></div>
 
     <div class="step"><h3>ขั้นที่ 2: เริ่มต้นระบบ</h3>
-    <pre><code>int main(void) {
+    <pre><code class="language-c">int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();</code></pre>
     <p class="explain">🔍 <code>SystemCoreClockUpdate()</code> อัปเดต <code>SystemCoreClock</code> จาก HSI 48MHz default <code>Timer_Init()</code> เปิด SysTick ที่ 1ms — ใช้โดยฟังก์ชัน Delay ทั้งหมด</p></div>
 
     <div class="step"><h3>ขั้นที่ 3: ตั้งค่า Pin + LED Blink</h3>
-    <pre><code>    pinMode(PC0, PIN_MODE_OUTPUT);
+    <pre><code class="language-c">    pinMode(PC0, PIN_MODE_OUTPUT);
     while(1) {
         digitalWrite(PC0, HIGH);
         Delay_Ms(500);
@@ -109,7 +109,7 @@ flowchart TD
 <section>
     <h2>🛠️ สร้าง Product: LED กระพริบบนบอร์ดเปล่า</h2>
     <p>โปรเจกต์แรกสุด — ทำให้ LED กระพริบด้วย CH32V003 ขั้นต่ำ (MCU + LED + R 220Ω)</p>
-    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 
 int main(void)
@@ -145,5 +145,5 @@ int main(void)
 
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
 <script>mermaid.initialize({startOnLoad:true,theme:'neutral'});</script>
-</body>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
 </html>

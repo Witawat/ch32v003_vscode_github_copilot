@@ -4,7 +4,7 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>บทที่ 12: Watchdog — ป้องกันระบบค้าง — SimpleHAL Tutorial</title>
 <link rel="stylesheet" href="css/style.css">
-</head>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css"></head>
 <body>
 
 <nav class="top-nav">
@@ -96,7 +96,7 @@ flowchart TD
     <h2>💻 เขียน Code ทีละขั้น</h2>
 
     <div class="step"><h3>ขั้นที่ 1: IWDG พื้นฐาน — Feed ใน Main Loop</h3>
-    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 
 int main(void) {
@@ -128,7 +128,7 @@ int main(void) {
     <p class="explain">🔍 <code>IWDG_CheckReset()</code> — เช็ค flag ว่า reset ครั้งนี้เกิดจาก IWDG timeout หรือไม่ — <code>IWDG_SimpleInit(2000)</code> — เริ่ม IWDG timeout 2000ms — <strong>หลังจากนี้ต้อง feed ภายใน 2s มิฉะนั้น reset!</strong></p></div>
 
     <div class="step"><h3>ขั้นที่ 2: Feed ใน Main Loop</h3>
-    <pre><code>    uint32_t counter = 0;
+    <pre><code class="language-c">    uint32_t counter = 0;
 
     while(1) {
         // ทำงานปกติ ...
@@ -149,7 +149,7 @@ int main(void) {
     <p class="explain">🔍 <code>IWDG_Feed()</code> — รีเซ็ต IWDG counter กลับไปค่า timeout — ต้องเรียกก่อน timeout — <strong>กฎสำคัญ:</strong> feed ใน main loop เท่านั้น — ห้าม feed ใน ISR (เพราะ ISR อาจยังทำงานแม้ main loop ค้าง)</p></div>
 
     <div class="step"><h3>ขั้นที่ 3: WWDG — Window Watchdog</h3>
-    <pre><code>    // WWDG — ต้อง feed ใน window 50%-100% ของ timeout
+    <pre><code class="language-c">    // WWDG — ต้อง feed ใน window 50%-100% ของ timeout
     // ถ้า feed เร็วเกิน (ก่อน 50%) → reset
     // ถ้า feed ช้าเกิน (เกิน 100%) → reset
 
@@ -167,7 +167,7 @@ int main(void) {
     <p class="explain">🔍 <code>WWDG_SimpleInit(timeout, window_pct)</code> — เริ่ม WWDG — <strong>Window:</strong> ต้อง refresh ในช่วง window_pct%-100% ของ timeout — ป้องกัน loop เร็วเกิน (bug infinite loop แบบไม่ทำอะไร) และช้าเกิน (loop ค้าง)</p></div>
 
     <div class="step"><h3>ขั้นที่ 4: ทดสอบ Watchdog (จงใจทำให้ค้าง)</h3>
-    <pre><code>    // จงใจทำให้ระบบค้าง — Watchdog ควร reset
+    <pre><code class="language-c">    // จงใจทำให้ระบบค้าง — Watchdog ควร reset
     if(counter == 5) {
         USART_Print("Intentionally freezing... Watchdog should reset!\r\n");
         Delay_Ms(100);  // รอ USART ส่งเสร็จ
@@ -207,7 +207,7 @@ int main(void) {
 <section>
     <h2>🛠️ สร้าง Product: ระบบที่ไม่เคยค้าง</h2>
     <p>ระบบ production-grade — IWDG 4s timeout + ตรวจจับ reset + log การค้าง</p>
-    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 
 volatile uint32_t g_wdg_reset_count = 0;
@@ -290,5 +290,5 @@ int main(void)
 
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
 <script>mermaid.initialize({startOnLoad:true,theme:'neutral'});</script>
-</body>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
 </html>

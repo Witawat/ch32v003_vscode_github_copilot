@@ -4,7 +4,7 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>บทที่ 10: จัดการพลังงาน — Sleep, Standby, AWU — SimpleHAL Tutorial</title>
 <link rel="stylesheet" href="css/style.css">
-</head>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css"></head>
 <body>
 
 <nav class="top-nav">
@@ -85,7 +85,7 @@ flowchart TD
     <h2>💻 เขียน Code ทีละขั้น</h2>
 
     <div class="step"><h3>ขั้นที่ 1: Sleep Mode พื้นฐาน</h3>
-    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 
 int main(void) {
@@ -105,7 +105,7 @@ int main(void) {
     <p class="explain">🔍 <code>PWR_Sleep()</code> — CPU หยุดทำงาน — ตื่นได้จาก interrupt ใดๆ — รวมถึง SysTick — ดังนั้นในตัวอย่างนี้จะตื่นทุก 1ms โดยอัตโนมัติ</p></div>
 
     <div class="step"><h3>ขั้นที่ 2: Standby + AWU (ตื่นทุกนาที)</h3>
-    <pre><code>    SystemCoreClockUpdate();
+    <pre><code class="language-c">    SystemCoreClockUpdate();
     Timer_Init();
     USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
     ADC_SimpleInit();
@@ -129,7 +129,7 @@ int main(void) {
     <p class="explain">🔍 <code>PWR_ConfigureAWU(period)</code> — ตั้ง AWU timer — รองรับ AWU_16MS ถึง AWU_30S — <code>PWR_Standby()</code> — เข้าโหมด Standby — MCU จะ reset เมื่อตื่น — ทุกอย่างเริ่มต้นใหม่</p></div>
 
     <div class="step"><h3>ขั้นที่ 3: ตรวจจับการตื่นจาก Standby</h3>
-    <pre><code>    if(PWR_WasStandbyWakeup()) {
+    <pre><code class="language-c">    if(PWR_WasStandbyWakeup()) {
         // ตื่นจาก Standby — ข้อมูลเก่าหายหมด
         USART_Print("Woke from Standby!\r\n");
     } else {
@@ -145,7 +145,7 @@ int main(void) {
     <p class="explain">🔍 <code>PWR_WasStandbyWakeup()</code> — เช็คว่าตื่นจาก Standby หรือ power-on จริง — <strong>BKP Registers:</strong> 10 registers (32-bit) ที่คงค่าผ่าน Standby — ใช้เก็บ counter, config</p></div>
 
     <div class="step"><h3>ขั้นที่ 4: Sensor Node — วัด + ส่ง + หลับ</h3>
-    <pre><code>    // วัด VDD (แบตเตอรี่)
+    <pre><code class="language-c">    // วัด VDD (แบตเตอรี่)
     float vdd = ADC_GetVDD();
     uint32_t batt_pct = (uint32_t)PWR_CalculateBatteryLife(vdd, 2.7f, 3.3f);
 
@@ -194,7 +194,7 @@ int main(void) {
 <section>
     <h2>🛠️ สร้าง Product: อุปกรณ์ใช้ถ่านได้ 1 ปี</h2>
     <p>Wireless Sensor Node — ตื่นทุก 60 วินาที อ่านอุณหภูมิ + แรงดันแบต หลับต่อ — ใช้กระแสเฉลี่ย &lt;10µA</p>
-    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 
 int main(void)
@@ -278,5 +278,5 @@ int main(void)
 
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
 <script>mermaid.initialize({startOnLoad:true,theme:'neutral'});</script>
-</body>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
 </html>

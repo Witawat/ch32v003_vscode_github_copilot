@@ -4,7 +4,7 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>บทที่ 3: Delay & Timer — จับเวลา Blocking และ Non-Blocking — SimpleHAL Tutorial</title>
 <link rel="stylesheet" href="css/style.css">
-</head>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css"></head>
 <body>
 
 <nav class="top-nav">
@@ -64,7 +64,7 @@ flowchart TD
     <h2>💻 เขียน Code ทีละขั้น</h2>
 
     <div class="step"><h3>ขั้นที่ 1: Setup + LED 2 ดวง</h3>
-    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 
 int main(void) {
@@ -75,12 +75,12 @@ int main(void) {
     <p class="explain">🔍 ตั้งค่า pin ทั้ง 2 ดวง — PC0 จะใช้ Non-Blocking ส่วน PC1 ใช้ Blocking เทียบกัน</p></div>
 
     <div class="step"><h3>ขั้นที่ 2: Non-Blocking Timer (PC0)</h3>
-    <pre><code>    Timer_t tmr_led1;
+    <pre><code class="language-c">    Timer_t tmr_led1;
     Start_Timer(&tmr_led1, 500, 1);  // repeat ทุก 500ms</code></pre>
     <p class="explain">🔍 <code>Start_Timer(timer, ms, repeat)</code> — repeat=1 หมายถึง reset อัตโนมัติหลังหมดเวลา repeat=0 ต้องเรียก Start ใหม่เอง</p></div>
 
     <div class="step"><h3>ขั้นที่ 3: เปรียบเทียบใน Loop</h3>
-    <pre><code>    while(1) {
+    <pre><code class="language-c">    while(1) {
         // Non-Blocking: LED1 toggle ทุก 500ms
         if(Is_Timer_Expired(&tmr_led1)) {
             digitalToggle(PC0);
@@ -126,7 +126,7 @@ int main(void) {
 <section>
     <h2>🛠️ สร้าง Product: นาฬิกาจับเวลาแบบไม่บล็อก + Stopwatch</h2>
     <p>LED 2 ดวงกระพริบอิสระที่ความถี่ต่างกัน โดย main loop ไม่เคยหยุดรอ</p>
-    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 
 int main(void)
@@ -171,5 +171,5 @@ int main(void)
 
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
 <script>mermaid.initialize({startOnLoad:true,theme:'neutral'});</script>
-</body>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
 </html>

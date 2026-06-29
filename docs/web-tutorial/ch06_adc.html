@@ -4,7 +4,7 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>บทที่ 6: ADC — อ่านค่า Analog จากเซ็นเซอร์ — SimpleHAL Tutorial</title>
 <link rel="stylesheet" href="css/style.css">
-</head>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css"></head>
 <body>
 
 <nav class="top-nav">
@@ -69,7 +69,7 @@ flowchart TD
     <h2>💻 เขียน Code ทีละขั้น</h2>
 
     <div class="step"><h3>ขั้นที่ 1: Init + Setup</h3>
-    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 
 int main(void) {
@@ -80,14 +80,14 @@ int main(void) {
     <p class="explain">🔍 <code>ADC_SimpleInit()</code> — เปิดทุก 8 channels พร้อมกัน (หรือใช้ <code>ADC_SimpleInitChannels()</code> เลือกเฉพาะที่ต้องการเพื่อประหยัด)</p></div>
 
     <div class="step"><h3>ขั้นที่ 2: อ่าน Potentiometer</h3>
-    <pre><code>    while(1) {
+    <pre><code class="language-c">    while(1) {
         uint16_t val = ADC_Read(ADC_CH_PD2);  // หรือ analogRead(PD2)
         float voltage = ADC_ToVoltage(val, 3.3f);
         uint8_t percent = (uint8_t)ADC_ToPercent(val);</code></pre>
     <p class="explain">🔍 <code>ADC_Read(channel)</code> — อ่านดิบ 0-1023 — <code>ADC_ToVoltage(val, vref)</code> — แปลงเป็นแรงดัน — <code>ADC_ToPercent()</code> — 0-100% (ใช้กับ pot ได้สวย)</p></div>
 
     <div class="step"><h3>ขั้นที่ 3: Battery Monitor (VDD จริง)</h3>
-    <pre><code>        float vdd = ADC_GetVDD();  // คำนวณจาก internal Vref
+    <pre><code class="language-c">        float vdd = ADC_GetVDD();  // คำนวณจาก internal Vref
         float batt = ADC_GetBatteryPercent(vdd, 3.0f, 4.2f);
         USART_Print("VDD: "); USART_PrintNum((int32_t)vdd);
         USART_Print("V, Batt: "); USART_PrintNum(batt);
@@ -95,7 +95,7 @@ int main(void) {
     <p class="explain">🔍 <code>ADC_GetVDD()</code> — อ่าน internal 1.2V reference แล้วคำนวณ VDD จริง — ไม่ต้องต่ออะไรเพิ่ม! — <code>ADC_GetBatteryPercent(vdd, vmin, vmax)</code> — แปลงเป็น % แบตเตอรี่</p></div>
 
     <div class="step"><h3>ขั้นที่ 4: Average Reading (ลด Noise)</h3>
-    <pre><code>        uint16_t avg = ADC_ReadAverage(ADC_CH_PD2, 10);  // 10 samples
+    <pre><code class="language-c">        uint16_t avg = ADC_ReadAverage(ADC_CH_PD2, 10);  // 10 samples
         Delay_Ms(500);
     }
 }</code></pre>
@@ -134,7 +134,7 @@ int main(void) {
 <section>
     <h2>🛠️ สร้าง Product: เครื่องวัดอุณหภูมิ + วัดแรงดันแบตเตอรี่</h2>
     <p>อ่าน NTC Thermistor (PD3) แปลงเป็น °C พร้อมแสดง VDD และ % แบตเตอรี่</p>
-    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 
 #define NTC_PIN   ADC_CH_PD3
@@ -194,5 +194,5 @@ int main(void)
 
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
 <script>mermaid.initialize({startOnLoad:true,theme:'neutral'});</script>
-</body>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
 </html>

@@ -4,7 +4,7 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>บทที่ 8: SPI — สื่อสารความเร็วสูง — SimpleHAL Tutorial</title>
 <link rel="stylesheet" href="css/style.css">
-</head>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css"></head>
 <body>
 
 <nav class="top-nav">
@@ -79,7 +79,7 @@ flowchart TD
     <h2>💻 เขียน Code ทีละขั้น</h2>
 
     <div class="step"><h3>ขั้นที่ 1: Init + Setup CS</h3>
-    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 
 int main(void) {
@@ -93,7 +93,7 @@ int main(void) {
     <p class="explain">🔍 <code>SPI_SimpleInit(mode, speed, pins)</code> — เริ่มต้น SPI hardware — <strong>CS ต้องตั้งเอง!</strong> — <code>pinMode()</code> + <code>SPI_SetCSPin()</code></p></div>
 
     <div class="step"><h3>ขั้นที่ 2: Loopback Test</h3>
-    <pre><code>    while(1) {
+    <pre><code class="language-c">    while(1) {
         SPI_SetCS(0);                    // LOW = select
         uint8_t rx = SPI_Transfer(0xAA); // ส่ง 0xAA รับกลับ
         SPI_SetCS(1);                    // HIGH = deselect
@@ -107,7 +107,7 @@ int main(void) {
     <p class="explain">🔍 <code>SPI_SetCS(0)</code> — เลือกอุปกรณ์ (active LOW) — <code>SPI_Transfer(tx)</code> — ส่ง 1 byte พร้อมรับ 1 byte — <code>SPI_SetCS(1)</code> — ปล่อย CS (สำคัญ!)</p></div>
 
     <div class="step"><h3>ขั้นที่ 3: อ่าน JEDEC ID จาก W25Qxx Flash</h3>
-    <pre><code>    SPI_SetCS(0);
+    <pre><code class="language-c">    SPI_SetCS(0);
     SPI_Transfer(0x9F);  // Command: Read JEDEC ID
     uint8_t mfg = SPI_Transfer(0x00);
     uint8_t mem = SPI_Transfer(0x00);
@@ -121,7 +121,7 @@ int main(void) {
     <p class="explain">🔍 ส่ง command 0x9F แล้วอ่าน 3 bytes ตอบกลับ — SPI ให้ส่ง dummy byte (0x00) เพื่อสร้าง clock สำหรับรับข้อมูล</p></div>
 
     <div class="step"><h3>ขั้นที่ 4: MAX7219 (LED Driver)</h3>
-    <pre><code>    // MAX7219: ส่ง address + data (16-bit)
+    <pre><code class="language-c">    // MAX7219: ส่ง address + data (16-bit)
     SPI_SetCS(0);
     SPI_Transfer(0x0C);  // Shutdown register
     SPI_Transfer(0x01);  // Normal operation
@@ -166,7 +166,7 @@ int main(void) {
 <section>
     <h2>🛠️ สร้าง Product: จอ LED 8 หลัก + อ่าน Flash ID</h2>
     <p>แสดง "12345678" บน MAX7219 8-digit display และแสดง JEDEC ID ของ W25Qxx Flash</p>
-    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 
 #define CS_FLASH  PC3
@@ -215,7 +215,7 @@ int main(void)
     while(1);
 }</code></pre>
     <p><strong>SOP-8 Alternative (Software SPI):</strong></p>
-    <pre><code>// SOP-8 ไม่มี Hardware SPI — ใช้ shiftOut แทน
+    <pre><code class="language-c">// SOP-8 ไม่มี Hardware SPI — ใช้ shiftOut แทน
 #define DATA_PIN PC1
 #define CLOCK_PIN PC2
 #define LATCH_PIN PC4
@@ -242,5 +242,5 @@ digitalWrite(LATCH_PIN, HIGH);</code></pre>
 
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
 <script>mermaid.initialize({startOnLoad:true,theme:'neutral'});</script>
-</body>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
 </html>

@@ -4,7 +4,7 @@
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>บทที่ 5: PWM — ควบคุมความสว่าง LED และ Servo Motor — SimpleHAL Tutorial</title>
 <link rel="stylesheet" href="css/style.css">
-</head>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css"></head>
 <body>
 
 <nav class="top-nav">
@@ -68,7 +68,7 @@ flowchart TD
     <h2>💻 เขียน Code ทีละขั้น</h2>
 
     <div class="step"><h3>ขั้นที่ 1: LED Fade (ง่ายสุด)</h3>
-    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 
 int main(void) {
@@ -78,7 +78,7 @@ int main(void) {
     <p class="explain">🔍 <code>PWM_Init(channel, freq)</code> — ตั้งค่า Timer + GPIO + auto-start! ไม่ต้องเรียก <code>PWM_Start()</code> แยก (ตั้งแต่ SimpleHAL v1.9)</p></div>
 
     <div class="step"><h3>ขั้นที่ 2: Fade Animation</h3>
-    <pre><code>    int duty = 0, direction = 1;
+    <pre><code class="language-c">    int duty = 0, direction = 1;
     while(1) {
         PWM_SetDutyCycle(PWM1_CH1, duty);
         Delay_Ms(10);
@@ -90,7 +90,7 @@ int main(void) {
     <p class="explain">🔍 <code>PWM_SetDutyCycle(ch, 0-100)</code> — ตั้งค่าเป็นเปอร์เซ็นต์ — 10ms delay × 100 steps = fade 1 วิ</p></div>
 
     <div class="step"><h3>ขั้นที่ 3: Servo Control</h3>
-    <pre><code>    PWM_Init(PWM1_CH1, 50);  // 50Hz สำหรับ Servo
+    <pre><code class="language-c">    PWM_Init(PWM1_CH1, 50);  // 50Hz สำหรับ Servo
     while(1) {
         PWM_SetDutyCycle(PWM1_CH1, 5);   // 0°
         Delay_Ms(2000);
@@ -102,7 +102,7 @@ int main(void) {
     <p class="explain">🔍 เปลี่ยนจาก 1kHz เป็น 50Hz — duty 5%=1ms, 7%=1.4ms, 10%=2ms</p></div>
 
     <div class="step"><h3>ขั้นที่ 4: Arduino-Style analogWrite</h3>
-    <pre><code>    analogWrite(PA1, 128);  // 50% duty @ 1kHz on PA1
+    <pre><code class="language-c">    analogWrite(PA1, 128);  // 50% duty @ 1kHz on PA1
     analogWrite(PC3, 64);   // 25% duty @ 1kHz on PC3</code></pre>
     <p class="explain">🔍 <code>analogWrite(pin, 0-255)</code> — Arduino-style — auto-init ที่ 1kHz — ใช้ pin name โดยตรง (compile-time validation)</p></div>
 </section>
@@ -138,7 +138,7 @@ int main(void) {
 <section>
     <h2>🛠️ สร้าง Product: ไฟ LED Fade + ควบคุม Servo</h2>
     <p>LED ค่อยๆ สว่างขึ้น-ดับลงที่ PD2 พร้อมกับ Servo กวาด 0°→180° ที่ PA1</p>
-    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 
 int main(void)
@@ -187,5 +187,5 @@ int main(void)
 
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
 <script>mermaid.initialize({startOnLoad:true,theme:'neutral'});</script>
-</body>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
 </html>
