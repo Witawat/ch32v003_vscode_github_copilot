@@ -309,8 +309,8 @@ MIT License
 | USART FULL_REMAP | ✅ | ✅ | ✅ |
 | SPI HW (Default) | ✅ | ✅ | ❌ ไม่ถูก compile |
 | SPI HW REMAP (PD0-3) | ✅ | ❌ #error | ❌ #error |
-| I2C HW (Default) | ✅ | ✅ | ❌ ใช้ PARTIAL_REMAP |
-| I2C HW PARTIAL (PD2/PD1) | ✅ | ✅ | ✅ ใช้ได้! |
+| I2C HW (Default) | ✅ | ✅ | ✅ PC2/PC1 |
+| I2C HW PARTIAL (PD2/PD1) | ✅ | ✅ | ❌ ไม่มี PD2 |
 | I2C HW REMAP (PD0/PD1) | ✅ | ❌ #error | ❌ #error |
 | Software I2C | ✅ | ✅ | ✅ |
 | shiftOut/shiftIn | ✅ | ✅ | ✅ |

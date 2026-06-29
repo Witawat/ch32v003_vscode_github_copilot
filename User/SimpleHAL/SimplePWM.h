@@ -99,7 +99,7 @@ typedef enum {
  * SOP-8: ใช้ได้แค่ PWM1_CH1 (PD2) + PWM2_CH1 (PD4)
  */
 #if CH32V003_IS_SOP8
-  #define IS_PWM_VALID_PACKAGE(ch)  ((ch) == PWM1_CH1 || (ch) == PWM2_CH1)
+  #define IS_PWM_VALID_PACKAGE(ch)  ((ch) == PWM1_CH2 || (ch) == PWM2_CH1)  // PA1, PD4
 #else
   #define IS_PWM_VALID_PACKAGE(ch)  (1)
 #endif

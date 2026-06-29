@@ -14,12 +14,12 @@ SimpleI2C ห่อหุ้ม Hardware I2C1 ให้ใช้งานง่�
 
 | Config | SCL | SDA | SOP-8/16 |
 |--------|-----|-----|:---:|
-| `I2C_PINS_DEFAULT` | PC2 | PC1 | ❌ ไม่มี PC1/PC2 |
-| `I2C_PINS_PARTIAL_REMAP` 🆕 | PD2 | PD1 | ✅ ใช้ได้! |
+| `I2C_PINS_DEFAULT` | PC2 | PC1 | ✅ ใช้ได้ |
+| `I2C_PINS_PARTIAL_REMAP` 🆕 | PD2 | PD1 | ❌ ไม่มี PD2 |
 | `I2C_PINS_REMAP`   | PD0 | PD1 | ❌ ไม่มี PD0 |
 
-> ✅ **SOP-8:** ใช้ `I2C_PINS_PARTIAL_REMAP` (SCL=PD2, SDA=PD1) — Hardware I2C ทำงานได้!  
-> ⚠️ `I2C_PINS_REMAP` ใช้ PD0 (เฉพาะ TSSOP-20/QFN-20) — ไม่มีใน enum บนแพ็กเกจเล็ก → compile error
+> ✅ **SOP-8:** ใช้ `I2C_PINS_DEFAULT` (SCL=PC2, SDA=PC1) — Hardware I2C ทำงานได้!  
+> ❌ `I2C_PINS_PARTIAL_REMAP` / `I2C_PINS_REMAP` ใช้ไม่ได้บน SOP-8 (ไม่มี PD2/PD0)
 
 > ต้องต่อ **pull-up resistor 4.7kΩ** ที่ SDA และ SCL ทุกครั้ง
 
