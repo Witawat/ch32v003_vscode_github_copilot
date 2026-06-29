@@ -138,15 +138,15 @@ void ADC_SimpleInit(void) {
 
   // เลือก channels ตามแพ็กเกจ
 #if !CH32V003_IS_SOP8
-  all_channels[count++] = ADC_CH_0;  // PA2
-  all_channels[count++] = ADC_CH_1;  // PA1
-  all_channels[count++] = ADC_CH_3;  // PD2
-  all_channels[count++] = ADC_CH_4;  // PD3
+  all_channels[count++] = ADC_CH_3;  // PD2 (no on SOP-8)
+  all_channels[count++] = ADC_CH_4;  // PD3 (no on SOP-8)
+  all_channels[count++] = ADC_CH_5;  // PD5 (no on SOP-8)
+  all_channels[count++] = ADC_CH_7;  // PD4 (no on SOP-8)
 #endif
+  all_channels[count++] = ADC_CH_0;  // PA2 — มีในทุกแพ็กเกจ
+  all_channels[count++] = ADC_CH_1;  // PA1 — มีในทุกแพ็กเกจ
   all_channels[count++] = ADC_CH_2;  // PC4 — มีในทุกแพ็กเกจ
-  all_channels[count++] = ADC_CH_5;  // PD5 — มีในทุกแพ็กเกจ
   all_channels[count++] = ADC_CH_6;  // PD6 — มีในทุกแพ็กเกจ
-  all_channels[count++] = ADC_CH_7;  // PD4 — มีในทุกแพ็กเกจ
 
   ADC_SimpleInitChannels(all_channels, count);
 }

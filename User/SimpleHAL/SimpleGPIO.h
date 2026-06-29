@@ -285,9 +285,10 @@ uint8_t portRead(GPIO_TypeDef* port);
 #include "SimpleHAL.h"
 
 #if CH32V003_IS_SOP8
+  // SOP-8 (J4M6): PA1,PA2,PC1,PC2,PC4,PD6 — 6 I/O pins per official datasheet
   #define IS_VALID_PIN(pin) \
-      ((pin) == PD1 || (pin) == PA1 || (pin) == PA2 || (pin) == PD4 || (pin) == PD5 || (pin) == PD6 || \
-       (pin) == PC1 || (pin) == PC2 || (pin) == PC4)
+      ((pin) == PA1 || (pin) == PA2 || (pin) == PC1 || (pin) == PC2 || (pin) == PC4 || \
+       (pin) == PD6)
 #elif CH32V003_IS_SOP16
   #define IS_VALID_PIN(pin)  ((pin) != PD0)
 #else
