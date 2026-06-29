@@ -33,9 +33,11 @@ SimplePWM ให้ใช้งาน PWM output บน CH32V003 ได้ง่
 
 #### `void PWM_Init(PWM_Channel channel, uint32_t frequency_hz)`
 
+เริ่มต้น PWM **และ auto-start output** — ไม่ต้องเรียก `PWM_Start()` แยกอีกต่อไป!
+
 ```c
-PWM_Init(PWM1_CH1, 1000);   // PD2, 1kHz (default pin)
-PWM_Init(PWM2_CH3, 50);     // PC0, 50Hz (servo)
+PWM_Init(PWM1_CH1, 1000);   // PD2, 1kHz — auto-start!
+PWM_SetDutyCycle(PWM1_CH1, 50);  // 50% duty — ทำงานทันที
 ```
 
 #### `void PWM_InitRemap(PWM_Channel channel, uint32_t frequency_hz, PWM_Remap remap)`
@@ -204,9 +206,8 @@ int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
 
-    // PD2, 1kHz
+    // PD2, 1kHz — auto-starts!
     PWM_Init(PWM1_CH1, 1000);
-    PWM_Start(PWM1_CH1);
 
     while (1) {
         // Fade up

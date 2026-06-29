@@ -303,6 +303,13 @@ uint8_t portRead(GPIO_TypeDef* port);
                          ((pin) >= PD2 && (pin) <= PD6)))
 
 /**
+ * @brief อ่านค่า ADC เป็นมิลลิโวลต์ (mV) — สะดวกกว่า analogRead
+ * @note Vref = 3.3V = 3300mV, ADC 10-bit = 0-1023
+ */
+#define analogReadMilliVolts(pin) \
+    ((uint16_t)(((uint32_t)analogRead(pin) * 3300) / 1023))
+
+/**
  * @brief ตรวจสอบว่า pin รองรับ PWM หรือไม่
  * @note Pins ที่รองรับ: PA1, PC0, PC3, PC4, PD2, PD3, PD4, PD7
  */

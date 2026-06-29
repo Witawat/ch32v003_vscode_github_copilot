@@ -14,7 +14,7 @@
  *     ขาแคโทดของ LED ตอลงกราวนด (GND)
  *
  * API ที่ใช้:
- *   PWM_Init(PWM1_CH1, 1000)   // 1kHz
+ *   PWM_Init(PWM1_CH1, 1000)   // 1kHz (auto-starts now!)
  *   PWM_Start(PWM1_CH1)
  *   PWM_SetDutyCycle(PWM1_CH1, percent)
  *
@@ -24,7 +24,7 @@
  *   แล้วค่อยๆ ดับลงจาก 100% ถึง 0% สลับไปเรื่อยๆ
  * ============================================================
  * คำเตือน (WARNINGS):
- *   - ต้องเรียก PWM_Start() หลังจาก PWM_Init() เสมอ ไม่เช่นนั้นจะไม่มีสัญญาณ PWM ออกมา!
+ *   - PWM_Init() auto-starts output — no need to call PWM_Start() separately
  *   - ต่อ LED ถูกขั้ว (ขั้วบวกต่อกับตัวต้านทาน)
  *   - ค่าตัวต้านทาน 220 Ohm เหมาะสำหรับ LED ทั่วไปที่ 3.3V
  * ============================================================
@@ -40,10 +40,7 @@ int main(void)
 
     Timer_Init();
     // กำหนดค่าเริ่มต้น PWM ช่อง 1 ที่ PD2 ความถี่ 1000 Hz (1kHz)
-    PWM_Init(PWM1_CH1, 1000);
-
-    // เริ่มต้นการทำงาน PWM (ถ้าไม่มีบรรทัดนี้ จะไม่มีสัญญาณออก!)
-    PWM_Start(PWM1_CH1);
+    PWM_Init(PWM1_CH1, 1000);  // auto-starts! No need for PWM_Start()
 
     // ตัวแปรเก็บค่า Duty Cycle (0-100)
     int duty = 0;

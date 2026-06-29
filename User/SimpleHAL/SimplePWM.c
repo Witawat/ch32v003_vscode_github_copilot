@@ -232,9 +232,11 @@ static void configurePWMChannel(PWM_ChannelConfig_t* config, uint16_t duty_value
  * @warning ช่อง PWM บน timer เดียวกัน (PWM1_CH1-CH4 บน TIM1,
  *          PWM2_CH1-CH4 บน TIM2) แชร์ความถี่ร่วมกันเสมอ
  *          หาก init หลายช่องด้วยความถี่ต่างกัน — ความถี่ของช่องแรกจะเป็นตัวกำหนด
+ * @note PWM output is auto-started after init. Use PWM_Stop() to disable.
  */
 void PWM_Init(PWM_Channel channel, uint32_t frequency_hz) {
     PWM_InitRemap(channel, frequency_hz, PWM_REMAP_NONE);
+    PWM_Start(channel);  // auto-start for convenience
 }
 
 /**
@@ -313,6 +315,8 @@ void PWM_InitRemap(PWM_Channel channel, uint32_t frequency_hz, PWM_Remap remap) 
     }
     
     config->initialized = 1;
+    
+    PWM_Start(channel);  // auto-start for convenience
 }
 
 /**
@@ -398,8 +402,7 @@ void PWM_Write(PWM_Channel channel, uint8_t value) {
     
     // Auto-init ถ้ายังไม่ได้ init (ใช้รีแมปที่ตั้งไว้ล่วงหน้าถ้ามี)
     if (!config->initialized) {
-        PWM_InitRemap(channel, 1000, config->current_remap);  // Default 1kHz + stored remap
-        PWM_Start(channel);
+        PWM_InitRemap(channel, 1000, config->current_remap);  // auto-starts via InitRemap
     }
     
     uint8_t duty_percent = PWM_ARDUINO_TO_PERCENT(value);

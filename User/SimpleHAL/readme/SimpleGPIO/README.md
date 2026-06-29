@@ -325,6 +325,15 @@ int main(void) {
 
 ### Analog I/O (Arduino-style)
 
+#### `uint16_t analogReadMilliVolts(uint8_t pin)` — Macro 🆕
+
+อ่านค่า ADC และแปลงเป็นมิลลิโวลต์ (mV) โดยตรง — ไม่ต้องคำนวณเอง!
+
+```c
+uint16_t mv = analogReadMilliVolts(PD2);  // 1 บรรทัด — ได้ mV เลย!
+// เทียบเท่า: (uint16_t)(((uint32_t)analogRead(PD2) * 3300) / 1023)
+```
+
 #### `uint16_t analogRead(uint8_t pin)` — Macro
 
 อ่านค่า ADC (0-1023) จาก pin ที่รองรับ ADC
