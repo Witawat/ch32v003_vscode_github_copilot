@@ -28,7 +28,9 @@
  * ============================================================
  */
 
+#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include <SimpleHAL.h>
+#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include "SimpleI2C_Soft.h"
 
 #define SOFT_SCL_PIN PD2

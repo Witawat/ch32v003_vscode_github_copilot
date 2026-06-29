@@ -28,6 +28,7 @@
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20
+/* CH32V003 has no hardware FPU — float/double use software emulation (~800 cycles) */
 #include <SimpleHAL.h>
 
 #define ADC_PIN PD2

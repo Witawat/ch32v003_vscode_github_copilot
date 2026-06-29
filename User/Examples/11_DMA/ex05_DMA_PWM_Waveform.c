@@ -28,6 +28,8 @@
  * ============================================================
  */
 
+#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+/* CH32V003 has no hardware FPU � float/double use software emulation (~800 cycles) */
 #include <SimpleHAL.h>    // รวมไลบรารี SimpleHAL ทั้งหมด
 #include <math.h>         // รวมไลบรารี math.h สำหรับฟังก์ชัน sin()
 

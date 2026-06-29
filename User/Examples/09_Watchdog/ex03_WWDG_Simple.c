@@ -1,25 +1,25 @@
-Ôªø/**
+/**
  * ============================================================
  * ex03_WWDG_Simple.c
- * ‡πÇ‡∏õ‡∏£‡πÅ‡∏Å‡∏£‡∏°‡∏™‡∏≤‡∏ò‡∏¥‡∏ï WWDG (Window Watchdog) ‡πÅ‡∏ö‡∏ö‡∏á‡πà‡∏≤‡∏¢
+ * ‚ª√·°√¡ “∏‘µ WWDG (Window Watchdog) ·∫∫ßË“¬
  * (Simple WWDG demonstration)
  * ============================================================
  *
- * ‡πÅ‡∏ú‡∏ô‡∏ú‡∏±‡∏á‡∏ß‡∏á‡∏à‡∏£ (Circuit Diagram):
+ * ·ºπº—ß«ß®√ (Circuit Diagram):
  *
  *   CH32V003
  *   ------
- *   PC0 (OUT) ----[220Œ©]----+---- LED ---- GND
+ *   PC0 (OUT) ----[220?]----+---- LED ---- GND
  *                            |
  *   PD5 (TX)  ----> USB-UART (RX)
  *   PD6 (RX)  <---- USB-UART (TX)
  *
- *   ‡πÑ‡∏°‡πà‡∏ï‡πâ‡∏≠‡∏á‡πÉ‡∏ä‡πâ‡∏≠‡∏∏‡∏õ‡∏Å‡∏£‡∏ì‡πå‡∏≠‡∏∑‡πà‡∏ô‡πÄ‡∏û‡∏¥‡πà‡∏°
+ *   ‰¡ËµÈÕß„™ÈÕÿª°√≥ÏÕ◊Ëπ‡æ‘Ë¡
  *
  * ============================================================
- * ‡∏ú‡∏•‡∏•‡∏±‡∏û‡∏ò‡πå‡∏ó‡∏µ‡πà‡∏Ñ‡∏≤‡∏î‡∏´‡∏ß‡∏±‡∏á (Expected Results):
- *   LED ‡∏ï‡∏¥‡∏î‡∏Ñ‡πâ‡∏≤‡∏á ‚Üí WWDG ‡∏£‡∏µ‡πÄ‡∏ü‡∏£‡∏ä 5 ‡∏Ñ‡∏£‡∏±‡πâ‡∏á ‚Üí ‡∏´‡∏¢‡∏∏‡∏î‡∏£‡∏µ‡πÄ‡∏ü‡∏£‡∏ä ‚Üí MCU ‡∏£‡∏µ‡πÄ‡∏ã‡πá‡∏ï ‚Üí ‡πÄ‡∏£‡∏¥‡πà‡∏°‡πÉ‡∏´‡∏°‡πà
- *   USART ‡πÅ‡∏™‡∏î‡∏á:
+ * º≈≈—æ∏Ï∑’Ë§“¥À«—ß (Expected Results):
+ *   LED µ‘¥§È“ß  WWDG √’‡ø√™ 5 §√—Èß  À¬ÿ¥√’‡ø√™  MCU √’‡´Áµ  ‡√‘Ë¡„À¡Ë
+ *   USART · ¥ß:
  *   "--- WWDG Simple ---"
  *   "Refresh #1: feeding WWDG"
  *   "Refresh #2: feeding WWDG"
@@ -27,62 +27,63 @@
  *   "Refresh #4: feeding WWDG"
  *   "Refresh #5: feeding WWDG"
  *   "Stop refreshing! Reset in ~5.4ms..."
- *   (MCU reset ‚Üí ‡∏Ç‡πâ‡∏≠‡∏Ñ‡∏ß‡∏≤‡∏°‡∏ã‡πâ‡∏≥‡∏≠‡∏µ‡∏Å‡∏Ñ‡∏£‡∏±‡πâ‡∏á)
+ *   (MCU reset  ¢ÈÕ§«“¡´È”Õ’°§√—Èß)
  * ============================================================
- * ‡∏Ñ‡∏≥‡πÄ‡∏ï‡∏∑‡∏≠‡∏ô (WARNINGS):
- *   WWDG ‡∏°‡∏µ‡∏Ç‡πâ‡∏≠‡∏à‡∏≥‡∏Å‡∏±‡∏î‡πÄ‡∏£‡∏∑‡πà‡∏≠‡∏á Window: ‡∏£‡∏µ‡πÄ‡∏ü‡∏£‡∏ä‡πÄ‡∏£‡πá‡∏ß‡πÄ‡∏Å‡∏¥‡∏ô‡πÑ‡∏õ (counter > window)
- *     ‡∏Å‡πá‡∏ó‡∏≥‡πÉ‡∏´‡πâ‡∏£‡∏µ‡πÄ‡∏ã‡πá‡∏ï‡πÄ‡∏ä‡πà‡∏ô‡∏Å‡∏±‡∏ô! ‡∏ï‡πâ‡∏≠‡∏á‡∏£‡∏µ‡πÄ‡∏ü‡∏£‡∏ä‡πÄ‡∏°‡∏∑‡πà‡∏≠ window < counter < 0x40
+ * §”‡µ◊Õπ (WARNINGS):
+ *   WWDG ¡’¢ÈÕ®”°—¥‡√◊ËÕß Window: √’‡ø√™‡√Á«‡°‘π‰ª (counter > window)
+ *     °Á∑”„ÀÈ√’‡´Áµ‡™Ëπ°—π! µÈÕß√’‡ø√™‡¡◊ËÕ window < counter < 0x40
  *     (WWDG has WINDOW constraint: refresh too EARLY also causes reset!)
- *   ‡πÄ‡∏ß‡∏•‡∏≤ timeout ‡∏™‡∏π‡∏á‡∏™‡∏∏‡∏î ~87ms ‡∏ó‡∏µ‡πà prescaler = 8
+ *   ‡«≈“ timeout  Ÿß ÿ¥ ~87ms ∑’Ë prescaler = 8
  *     (Max timeout ~87ms at prescaler 8)
  * ============================================================
  */
 
-#include <SimpleHAL.h>                      // ‡∏£‡∏ß‡∏°‡πÑ‡∏•‡∏ö‡∏£‡∏≤‡∏£‡∏µ SimpleHAL (Include SimpleHAL library)
+#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include <SimpleHAL.h>                      // √«¡‰≈∫√“√’ SimpleHAL (Include SimpleHAL library)
 
 // --------------------------------------------------------------------------
-// ‡∏ü‡∏±‡∏á‡∏Å‡πå‡∏ä‡∏±‡∏ô‡∏´‡∏•‡∏±‡∏Å (Main function)
+// ø—ß°Ï™—πÀ≈—° (Main function)
 // --------------------------------------------------------------------------
 
 int main(void)
 {
     SystemCoreClockUpdate();
     Timer_Init();
-    // ‡∏ï‡∏±‡∏ß‡πÅ‡∏õ‡∏£‡∏ô‡∏±‡∏ö‡∏£‡∏≠‡∏ö‡∏£‡∏µ‡πÄ‡∏ü‡∏£‡∏ä (Refresh counter)
-    uint8_t refreshCount = 0;                // ‡∏à‡∏≥‡∏ô‡∏ß‡∏ô‡∏Ñ‡∏£‡∏±‡πâ‡∏á‡∏ó‡∏µ‡πà‡∏£‡∏µ‡πÄ‡∏ü‡∏£‡∏ä WWDG (Number of WWDG refreshes)
+    // µ—«·ª√π—∫√Õ∫√’‡ø√™ (Refresh counter)
+    uint8_t refreshCount = 0;                // ®”π«π§√—Èß∑’Ë√’‡ø√™ WWDG (Number of WWDG refreshes)
 
-    // ---- ‡∏™‡πà‡∏ß‡∏ô‡πÄ‡∏£‡∏¥‡πà‡∏°‡∏ï‡πâ‡∏ô (Initialization) ----
-    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);                      // ‡πÄ‡∏£‡∏¥‡πà‡∏°‡∏ï‡πâ‡∏ô‡∏û‡∏≠‡∏£‡πå‡∏ï‡∏≠‡∏ô‡∏∏‡∏Å‡∏£‡∏° (Initialize USART)
-    pinMode(PC0, PIN_MODE_OUTPUT);          // ‡∏Å‡∏≥‡∏´‡∏ô‡∏î PC0 ‡πÄ‡∏õ‡πá‡∏ô‡πÄ‡∏≠‡∏≤‡∏ï‡πå‡∏û‡∏∏‡∏ï (Set PC0 as PIN_MODE_OUTPUT)
-    digitalWrite(PC0, LOW);                 // ‡πÄ‡∏£‡∏¥‡πà‡∏°‡∏ï‡πâ‡∏ô LED ‡∏î‡∏±‡∏ö (Initialize LED off)
+    // ----  Ë«π‡√‘Ë¡µÈπ (Initialization) ----
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);                      // ‡√‘Ë¡µÈπæÕ√ÏµÕπÿ°√¡ (Initialize USART)
+    pinMode(PC0, PIN_MODE_OUTPUT);          // °”Àπ¥ PC0 ‡ªÁπ‡Õ“µÏæÿµ (Set PC0 as PIN_MODE_OUTPUT)
+    digitalWrite(PC0, LOW);                 // ‡√‘Ë¡µÈπ LED ¥—∫ (Initialize LED off)
 
-    USART_Print("--- WWDG Simple ---\r\n"); // ‡πÅ‡∏™‡∏î‡∏á‡∏´‡∏±‡∏ß‡∏Ç‡πâ‡∏≠ (Display title)
+    USART_Print("--- WWDG Simple ---\r\n"); // · ¥ßÀ—«¢ÈÕ (Display title)
 
-    // ---- ‡πÄ‡∏£‡∏¥‡πà‡∏°‡∏ï‡πâ‡∏ô WWDG (Initialize WWDG) ----
+    // ---- ‡√‘Ë¡µÈπ WWDG (Initialize WWDG) ----
     // WWDG_SimpleInit(127, 80)
-    // counter = 127 (‡∏Ñ‡πà‡∏≤‡πÄ‡∏£‡∏¥‡πà‡∏°‡∏ï‡πâ‡∏ô ‡∏™‡∏π‡∏á‡∏™‡∏∏‡∏î)  (initial counter, max value)
-    // window  = 80  (‡∏ï‡πâ‡∏≠‡∏á‡∏£‡∏µ‡πÄ‡∏ü‡∏£‡∏ä‡πÄ‡∏°‡∏∑‡πà‡∏≠ counter < 80)  (must refresh when counter < 80)
-    // prescaler ‡πÉ‡∏ä‡πâ‡∏Ñ‡πà‡∏≤‡πÄ‡∏£‡∏¥‡πà‡∏°‡∏ï‡πâ‡∏ô = 8
-    WWDG_SimpleInit(0x7F, 80);               // ‡πÄ‡∏£‡∏¥‡πà‡∏° WWDG: counter=127, window=80 (Init WWDG)
+    // counter = 127 (§Ë“‡√‘Ë¡µÈπ  Ÿß ÿ¥)  (initial counter, max value)
+    // window  = 80  (µÈÕß√’‡ø√™‡¡◊ËÕ counter < 80)  (must refresh when counter < 80)
+    // prescaler „™È§Ë“‡√‘Ë¡µÈπ = 8
+    WWDG_SimpleInit(0x7F, 80);               // ‡√‘Ë¡ WWDG: counter=127, window=80 (Init WWDG)
 
-    digitalWrite(PC0, HIGH);                // ‡∏ï‡∏¥‡∏î LED ‡πÅ‡∏™‡∏î‡∏á‡∏ß‡πà‡∏≤‡∏ó‡∏≥‡∏á‡∏≤‡∏ô (Turn LED on to indicate active)
+    digitalWrite(PC0, HIGH);                // µ‘¥ LED · ¥ß«Ë“∑”ß“π (Turn LED on to indicate active)
 
-    USART_Print("WWDG started: counter=127, window=80\r\n");  // ‡πÅ‡∏à‡πâ‡∏á‡∏Ñ‡πà‡∏≤‡πÄ‡∏£‡∏¥‡πà‡∏°‡∏ï‡πâ‡∏ô (Notify init values)
+    USART_Print("WWDG started: counter=127, window=80\r\n");  // ·®Èß§Ë“‡√‘Ë¡µÈπ (Notify init values)
 
-    // ---- ‡∏£‡∏µ‡πÄ‡∏ü‡∏£‡∏ä WWDG 5 ‡∏Ñ‡∏£‡∏±‡πâ‡∏á (Refresh WWDG 5 times) ----
-    for (refreshCount = 1; refreshCount <= 5; refreshCount++) {  // ‡∏ß‡∏ô 5 ‡∏£‡∏≠‡∏ö (Loop 5 times)
-        // ‡∏´‡∏ô‡πà‡∏ß‡∏á‡πÄ‡∏ß‡∏•‡∏≤‡πÄ‡∏•‡πá‡∏Å‡∏ô‡πâ‡∏≠‡∏¢‡πÄ‡∏û‡∏∑‡πà‡∏≠‡πÉ‡∏´‡πâ counter ‡∏•‡∏î‡∏•‡∏á‡∏ñ‡∏∂‡∏á‡∏ä‡πà‡∏ß‡∏á window (Small delay to let counter enter window range)
-        Delay_Ms(1);                         // ‡∏´‡∏ô‡πà‡∏ß‡∏á 1ms ‡πÉ‡∏´‡πâ counter ‡∏•‡∏î‡∏•‡∏á (Delay 1ms for counter to decrease)
+    // ---- √’‡ø√™ WWDG 5 §√—Èß (Refresh WWDG 5 times) ----
+    for (refreshCount = 1; refreshCount <= 5; refreshCount++) {  // «π 5 √Õ∫ (Loop 5 times)
+        // ÀπË«ß‡«≈“‡≈Á°πÈÕ¬‡æ◊ËÕ„ÀÈ counter ≈¥≈ß∂÷ß™Ë«ß window (Small delay to let counter enter window range)
+        Delay_Ms(1);                         // ÀπË«ß 1ms „ÀÈ counter ≈¥≈ß (Delay 1ms for counter to decrease)
 
-        WWDG_Refresh(0x7F);                  // ‡∏£‡∏µ‡πÄ‡∏ü‡∏£‡∏ä WWDG (Refresh WWDG)
-        USART_Print("Refresh #"); USART_PrintNum(refreshCount); USART_Print(": feeding WWDG\r\n");  // ‡πÅ‡∏à‡πâ‡∏á‡∏£‡∏≠‡∏ö‡∏ó‡∏µ‡πà‡∏£‡∏µ‡πÄ‡∏ü‡∏£‡∏ä (Notify refresh round)
+        WWDG_Refresh(0x7F);                  // √’‡ø√™ WWDG (Refresh WWDG)
+        USART_Print("Refresh #"); USART_PrintNum(refreshCount); USART_Print(": feeding WWDG\r\n");  // ·®Èß√Õ∫∑’Ë√’‡ø√™ (Notify refresh round)
     }
 
-    // ---- ‡∏´‡∏¢‡∏∏‡∏î‡∏£‡∏µ‡πÄ‡∏ü‡∏£‡∏ä ‚Äî WWDG ‡∏à‡∏∞‡∏£‡∏µ‡πÄ‡∏ã‡πá‡∏ï MCU (Stop refreshing ‚Äî WWDG will reset MCU) ----
-    USART_Print("Stop refreshing! Reset in ~5.4ms...\r\n");  // ‡πÅ‡∏à‡πâ‡∏á‡∏ß‡πà‡∏≤‡∏´‡∏¢‡∏∏‡∏î‡∏£‡∏µ‡πÄ‡∏ü‡∏£‡∏ä (Notify stop refreshing)
+    // ---- À¬ÿ¥√’‡ø√™ ó WWDG ®–√’‡´Áµ MCU (Stop refreshing ó WWDG will reset MCU) ----
+    USART_Print("Stop refreshing! Reset in ~5.4ms...\r\n");  // ·®Èß«Ë“À¬ÿ¥√’‡ø√™ (Notify stop refreshing)
 
-    // WWDG ‡∏à‡∏∞‡∏•‡∏î‡∏Ñ‡πà‡∏≤‡∏•‡∏á‡πÄ‡∏£‡∏∑‡πà‡∏≠‡∏¢ ‡πÜ ‡πÄ‡∏°‡∏∑‡πà‡∏≠‡∏ñ‡∏∂‡∏á 0x3F (63) ‡∏à‡∏∞‡∏£‡∏µ‡πÄ‡∏ã‡πá‡∏ï (WWDG decrements; when reaching 0x3F (63), resets)
-    while (1) {                              // ‡∏£‡∏≠ WWDG ‡∏£‡∏µ‡πÄ‡∏ã‡πá‡∏ï (Wait for WWDG reset)
-        // ‡πÑ‡∏°‡πà‡∏°‡∏µ‡∏Å‡∏≤‡∏£ WWDG_Feed() ‡∏≠‡∏µ‡∏Å (No more WWDG_Feed() calls)
+    // WWDG ®–≈¥§Ë“≈ß‡√◊ËÕ¬ Ê ‡¡◊ËÕ∂÷ß 0x3F (63) ®–√’‡´Áµ (WWDG decrements; when reaching 0x3F (63), resets)
+    while (1) {                              // √Õ WWDG √’‡´Áµ (Wait for WWDG reset)
+        // ‰¡Ë¡’°“√ WWDG_Feed() Õ’° (No more WWDG_Feed() calls)
     }
 }

@@ -19,6 +19,7 @@
  * - CH32V003 มี EXTI 8 lines แชร์กับทุกพินใน line เดียวกัน
  * - IWDG ต้อง init ก่อนถึงจะใช้ yield() ได้
  */
+#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include <SimpleHAL.h>
 
 static volatile uint8_t intr_flag = 0;

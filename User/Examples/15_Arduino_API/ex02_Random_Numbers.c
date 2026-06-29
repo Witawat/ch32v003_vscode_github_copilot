@@ -19,6 +19,7 @@
  * - ใช้ _randomMax() / _randomRange() แทน random() เพราะ stdlib.h
  *   มี long random(void) อยู่แล้ว C จึงใช้ชื่อ random โดยตรงไม่ได้
  */
+#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include <SimpleHAL.h>
 
 int main(void) {

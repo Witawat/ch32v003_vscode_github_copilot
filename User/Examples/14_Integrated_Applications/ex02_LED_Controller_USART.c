@@ -24,6 +24,7 @@
  * ============================================================
  */
 
+#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include <SimpleHAL.h>
 
 #define LED1_PIN PD2
@@ -167,10 +168,24 @@ int main(void) {
             }
         }
 
-        if (digitalRead(BTN_PIN) == LOW) {
-            Delay_Ms(50);
-            while (digitalRead(BTN_PIN) == LOW);
-            USART_Print("Button pressed\r\n");
+        // === ปุ่มกดแบบ non-blocking (state machine) ===
+        static uint8_t btn_state = 0;
+        static Timer_t btn_timer;
+
+        if (btn_state == 0 && digitalRead(BTN_PIN) == LOW) {
+            btn_state = 1;
+            Start_Timer(&btn_timer, 50, 0);
+        }
+        if (btn_state == 1 && Is_Timer_Expired(&btn_timer)) {
+            if (digitalRead(BTN_PIN) == LOW) {
+                btn_state = 2;
+                USART_Print("Button pressed\r\n");
+            } else {
+                btn_state = 0;
+            }
+        }
+        if (btn_state == 2 && digitalRead(BTN_PIN) == HIGH) {
+            btn_state = 0;
         }
     }
 }

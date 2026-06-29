@@ -1,15 +1,15 @@
-﻿/**
+/**
  * ============================================================
- * ตัวอย่างที่ 4: ตัวอย่างการใช้งาน Timer Interrupt (TIM_SimpleInit, TIM_AttachInterrupt, TIM_Start, TIM_Stop)
+ * ������ҧ��� 4: ������ҧ�����ҹ Timer Interrupt (TIM_SimpleInit, TIM_AttachInterrupt, TIM_Start, TIM_Stop)
  * ============================================================
  *
- * แสดงการใช้ Hardware Timer Interrupt เพื่อสลับสถานะ LED ทุก 500ms
+ * �ʴ������ Hardware Timer Interrupt ������Ѻʶҹ� LED �ء 500ms
  *
- * แผนผังวงจร (Circuit Diagram):
+ * Ἱ�ѧǧ�� (Circuit Diagram):
  *
  *                        +3.3V
  *                         |
- *                        [ ] 220Ω
+ *                        [ ] 220?
  *                         |
  *     PC0 (Output) ----+----->| LED (Blue)
  *                       |
@@ -20,145 +20,153 @@
  *                    (Pull-up external)
  *
  * ============================================================
- * ผลลัพธ์ที่คาดหวัง (Expected Results):
- * - Timer interrupt ยิงทุก 500ms → ISR สลับสถานะ LED
- * - Main loop ไม่ต้องทำอะไรเกี่ยวกับ LED (ISR จัดการให้)
- * - กดปุ่ม PC1 เพื่อเริ่ม/หยุด timer
- * - แสดงการทำงานแบบ interrupt-driven
+ * ���Ѿ����Ҵ��ѧ (Expected Results):
+ * - Timer interrupt �ԧ�ء 500ms  ISR ��Ѻʶҹ� LED
+ * - Main loop ����ͧ����������ǡѺ LED (ISR �Ѵ������)
+ * - ������ PC1 ���������/��ش timer
+ * - �ʴ���÷ӧҹẺ interrupt-driven
  * ============================================================
- * คำเตือน (WARNINGS):
- * - TIM1 ขัดแย้งกับ SimplePWM! ให้ใช้ TIM2 สำหรับตัวอย่างนี้
- * - Callback ทำงานใน ISR context - ต้องทำงานให้เสร็จไวที่สุด!
- * - ห้ามใช้ Delay_Ms() ใน ISR (Delay ใช้ SysTick interrupt)
- * - ห้ามเรียก USART_Print() ใน ISR (blocking นานเกินไป)
- * - ควรใช้ volatile สำหรับตัวแปรที่แชร์กับ ISR
- * - TIM2 เป็น shared resource - ระวังการใช้งานร่วมกับ module อื่น
+ * ����͹ (WARNINGS):
+ * - TIM1 �Ѵ��駡Ѻ SimplePWM! ����� TIM2 ����Ѻ������ҧ���
+ * - Callback �ӧҹ� ISR context - ��ͧ�ӧҹ��������Ƿ���ش!
+ * - ������ Delay_Ms() � ISR (Delay �� SysTick interrupt)
+ * - �������¡ USART_Print() � ISR (blocking �ҹ�Թ�)
+ * - ����� volatile ����Ѻ����÷�����Ѻ ISR
+ * - TIM2 �� shared resource - ���ѧ�����ҹ�����Ѻ module ���
  * ============================================================
  */
 
+#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include <SimpleHAL.h>
 
-// === ตัวแปร Global (แชร์กับ ISR) ===
+// === ����� Global (���Ѻ ISR) ===
 
-static volatile uint8_t led_state = 0;   // สถานะ LED (volatile เพราะเปลี่ยนใน ISR)
-static uint8_t led_pin = PC0;            // pin PC0 สำหรับ LED
-static uint8_t button_pin = PC1;         // pin PC1 สำหรับปุ่มกด
+static volatile uint8_t led_state = 0;   // ʶҹ� LED (volatile ��������¹� ISR)
+static uint8_t led_pin = PC0;            // pin PC0 ����Ѻ LED
+static uint8_t button_pin = PC1;         // pin PC1 ����Ѻ������
 
 /**
  * @brief Timer Interrupt Callback
- * @details ฟังก์ชันนี้ถูกเรียกทุกครั้งที่ timer overflow (ทุก 500ms)
- *          ทำงานใน ISR context - ต้องกระชับและรวดเร็ว!
+ * @details �ѧ��ѹ���١���¡�ء���駷�� timer overflow (�ء 500ms)
+ *          �ӧҹ� ISR context - ��ͧ��ЪѺ����Ǵ����!
  *
- * @warning ห้ามใช้ Delay, USART_Print, หรือฟังก์ชัน blocking ใดๆ ในนี้!
+ * @warning ������ Delay, USART_Print, ���Ϳѧ��ѹ blocking �� 㹹��!
  */
 void timer_isr_callback(void)
 {
-    // === ISR Context: ทำงานเร็วที่สุด! ===
+    // === ISR Context: �ӧҹ���Ƿ���ش! ===
 
-    led_state = !led_state;              // สลับสถานะ LED (รวดเร็ว)
-    digitalWrite(led_pin, led_state);    // เขียนค่าไปยัง LED โดยตรง (ใช้ register-level)
+    led_state = !led_state;              // ��Ѻʶҹ� LED (�Ǵ����)
+    digitalWrite(led_pin, led_state);    // ��¹�����ѧ LED �µç (�� register-level)
 
-    // หมายเหตุ: ใน ISR ไม่ควรทำอะไรมากกว่านี้
-    // ถ้าต้องการส่งข้อมูล ใช้ flag แล้วจัดการใน main loop แทน
+    // �����˵�: � ISR ����÷������ҡ���ҹ��
+    // ��ҵ�ͧ����觢����� �� flag ���ǨѴ���� main loop ᷹
 }
 
 /**
- * @brief ฟังก์ชันหลัก
- * @return ไม่มี return (loop ไม่มีที่สิ้นสุด)
+ * @brief �ѧ��ѹ��ѡ
+ * @return ����� return (loop ����շ������ش)
  */
 int main(void)
 {
-    // === เริ่มต้นระบบ ===
+    // === ��������к� ===
 
     SystemCoreClockUpdate();
     Timer_Init();
-    // === เริ่มต้น USART ===
+    // === ������� USART ===
 
-    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);  // เริ่มต้น USART ที่ 115200 baud
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);  // ������� USART ��� 115200 baud
 
-    // === ตั้งค่า GPIO ===
+    // === ��駤�� GPIO ===
 
-    pinMode(led_pin, PIN_MODE_OUTPUT);         // ตั้ง PC0 เป็น output สำหรับ LED
-    pinMode(button_pin, PIN_MODE_INPUT_PULLUP);  // ตั้ง PC1 เป็น input pull-up สำหรับปุ่ม
+    pinMode(led_pin, PIN_MODE_OUTPUT);         // ��� PC0 �� output ����Ѻ LED
+    pinMode(button_pin, PIN_MODE_INPUT_PULLUP);  // ��� PC1 �� input pull-up ����Ѻ����
 
-    // === ตั้งค่า Timer ===
+    // === ��駤�� Timer ===
 
-    // ใช้ TIM2 (ไม่ขัดแย้งกับ SimplePWM ที่ใช้ TIM1)
-    TIM_SimpleInit(TIM_2, 2);                  // ตั้งค่า TIM2 ที่ 2Hz (500ms ต่อรอบ)
-    TIM_AttachInterrupt(TIM_2, timer_isr_callback);  // ผูก callback กับ timer interrupt
-    TIM_Start(TIM_2);                          // เริ่มการทำงานของ timer
+    // �� TIM2 (���Ѵ��駡Ѻ SimplePWM ����� TIM1)
+    TIM_SimpleInit(TIM_2, 2);                  // ��駤�� TIM2 ��� 2Hz (500ms ����ͺ)
+    TIM_AttachInterrupt(TIM_2, timer_isr_callback);  // �١ callback �Ѻ timer interrupt
+    TIM_Start(TIM_2);                          // �������÷ӧҹ�ͧ timer
 
-    // === แสดงข้อความเริ่มต้น ===
+    // === �ʴ���ͤ���������� ===
 
-    USART_Print("Timer Interrupt Example\r\n");    // แสดงชื่อตัวอย่าง
-    USART_Print("TIM2 configured at 2Hz (500ms)\r\n");  // แจ้งความถี่ timer
-    USART_Print("Press PC1 button to start/stop\r\n");  // แจ้งวิธีใช้งาน
+    USART_Print("Timer Interrupt Example\r\n");    // �ʴ����͵�����ҧ
+    USART_Print("TIM2 configured at 2Hz (500ms)\r\n");  // �駤������ timer
+    USART_Print("Press PC1 button to start/stop\r\n");  // ���Ը���ҹ
 
-    // === ตัวแปรสำหรับ main loop ===
+    // === ���������Ѻ main loop ===
 
-    uint32_t last_print = 0;                 // เก็บเวลาครั้งสุดท้ายที่พิมพ์สถานะ
+    uint32_t last_print = 0;                 // �����Ҥ����ش���·������ʶҹ�
 
-    // === Main Loop (ไม่สิ้นสุด) ===
+    // === Main Loop (�������ش) ===
 
     while (1)
     {
-        // === อ่านสถานะปุ่มกด ===
+        // === ��ҹʶҹл����� ===
 
-        if (digitalRead(button_pin) == LOW)  // ถ้ากดปุ่ม (active LOW)
-        {
-            Delay_Ms(50);                    // หน่วง 50ms เพื่อ debounce
-            if (digitalRead(button_pin) == LOW)  // เช็คซ้ำว่ากดจริง
-            {
-                // ตรวจสอบสถานะ timer ปัจจุบันโดยใช้ TIM_GetPeriod เพื่อดูว่ากำลังทำงาน
-                // (ไม่มี TIM_IsRunning ดังนั้นเราจะใช้ตัวแปรอื่น)
+        // === Non-blocking button handling with state machine ===
+        static uint8_t timer_running = 1;
+        static uint8_t btn_state = 0;
+        static Timer_t btn_timer;
 
-                USART_Print("Button pressed!\r\n");  // แจ้งผ่าน USART
-
-                // หยุด timer (ถัดไปจะใช้ตัวแปร flag แทน)
-                if (TIM_GetPeriod(TIM_2) > 0)  // ถ้า timer ยังทำงาน (period > 0)
-                {
-                    TIM_Stop(TIM_2);           // หยุด timer
-                    digitalWrite(led_pin, LOW);  // ปิด LED
-                    USART_Print("Timer Stopped\r\n");  // แจ้งหยุด
+        // State 0: waiting for press
+        if (btn_state == 0 && digitalRead(button_pin) == LOW) {
+            btn_state = 1;
+            Start_Timer(&btn_timer, 50, 0);  // 50ms debounce
+        }
+        // State 1: debouncing
+        if (btn_state == 1 && Is_Timer_Expired(&btn_timer)) {
+            if (digitalRead(button_pin) == LOW) {
+                btn_state = 2;
+                timer_running = !timer_running;
+                if (timer_running) {
+                    TIM_Start(TIM_2);
+                    USART_Print("Button pressed!\r\n");
+                    USART_Print("Timer Started\r\n");
+                } else {
+                    TIM_Stop(TIM_2);
+                    digitalWrite(led_pin, LOW);
+                    USART_Print("Button pressed!\r\n");
+                    USART_Print("Timer Stopped\r\n");
                 }
-                else
-                {
-                    TIM_Start(TIM_2);          // เริ่ม timer ใหม่
-                    USART_Print("Timer Started\r\n");  // แจ้งเริ่ม
-                }
-
-                while (digitalRead(button_pin) == LOW);  // รอปล่อยปุ่ม
+            } else {
+                btn_state = 0;
             }
         }
+        // State 2: waiting for release
+        if (btn_state == 2 && digitalRead(button_pin) == HIGH) {
+            btn_state = 0;
+        }
 
-        // === Main Loop ทำงานอื่นๆ ===
+        // === Main Loop �ӧҹ���� ===
 
-        // ตัวอย่าง: พิมพ์สถานะทุก 2 วินาที
+        // ������ҧ: �����ʶҹзء 2 �Թҷ�
         if (ELAPSED_TIME(last_print, Get_CurrentMs()) >= 2000)
         {
-            last_print = Get_CurrentMs();      // อัปเดตเวลา
+            last_print = Get_CurrentMs();      // �ѻവ����
 
-            // แสดงสถานะ LED ปัจจุบัน (LED ถูกควบคุมโดย ISR)
-            USART_Print("Main loop running, LED state: ");  // แสดงข้อความ
-            if (led_state)                     // ถ้า LED เปิด
+            // �ʴ�ʶҹ� LED �Ѩ�غѹ (LED �١�Ǻ����� ISR)
+            USART_Print("Main loop running, LED state: ");  // �ʴ���ͤ���
+            if (led_state)                     // ��� LED �Դ
             {
-                USART_Print("ON\r\n");         // แสดง ON
+                USART_Print("ON\r\n");         // �ʴ� ON
             }
             else
             {
-                USART_Print("OFF\r\n");        // แสดง OFF
+                USART_Print("OFF\r\n");        // �ʴ� OFF
             }
 
-            // แสดงค่าตัวนับปัจจุบัน
-            uint16_t counter = Simple_TIM_GetCounter(TIM_2);  // อ่าน counter
-            USART_Print("TIM2 Counter: ");     // แสดงข้อความ counter
-            USART_PrintNum(counter);            // แสดงค่า counter
-            USART_Print("\r\n");                // ขึ้นบรรทัดใหม่
+            // �ʴ���ҵ�ǹѺ�Ѩ�غѹ
+            uint16_t counter = Simple_TIM_GetCounter(TIM_2);  // ��ҹ counter
+            USART_Print("TIM2 Counter: ");     // �ʴ���ͤ��� counter
+            USART_PrintNum(counter);            // �ʴ���� counter
+            USART_Print("\r\n");                // ��鹺�÷Ѵ����
         }
 
-        // ISR จะจัดการ LED โดยอัตโนมัติ - main loop ไม่ต้องยุ่ง!
+        // ISR �ШѴ��� LED ���ѵ��ѵ� - main loop ����ͧ���!
     }
 
-    // สิ่งนี้จะไม่มีวันถึง
+    // ��觹���������ѹ�֧
     // return 0;
 }

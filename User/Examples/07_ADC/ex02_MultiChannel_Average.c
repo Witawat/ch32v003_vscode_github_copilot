@@ -28,6 +28,7 @@
  * ============================================================
  */
 
+#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include <SimpleHAL.h>
 
 #define CH_PD2  ADC_CH_PD2

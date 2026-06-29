@@ -1,15 +1,15 @@
-Ôªø/**
+/**
  * ============================================================
- * ‡∏ï‡∏±‡∏ß‡∏≠‡∏¢‡πà‡∏≤‡∏á‡∏ó‡∏µ‡πà 7: ‡∏ï‡∏±‡∏ß‡∏≠‡∏¢‡πà‡∏≤‡∏á‡∏Å‡∏≤‡∏£‡πÉ‡∏ä‡πâ‡∏á‡∏≤‡∏ô Countdown Timer (Countdown_Init, Countdown_Start, Countdown_Stop, Countdown_Reset, Countdown_IsFinished, Countdown_SetAlarmCallback, Countdown_GetRemainingSeconds)
+ * µ—«Õ¬Ë“ß∑’Ë 7: µ—«Õ¬Ë“ß°“√„™Èß“π Countdown Timer (Countdown_Init, Countdown_Start, Countdown_Stop, Countdown_Reset, Countdown_IsFinished, Countdown_SetAlarmCallback, Countdown_GetRemainingSeconds)
  * ============================================================
  *
- * ‡πÅ‡∏™‡∏î‡∏á‡∏Å‡∏≤‡∏£‡πÉ‡∏ä‡πâ‡∏á‡∏≤‡∏ô Countdown Timer ‡∏™‡∏≥‡∏´‡∏£‡∏±‡∏ö‡∏ô‡∏±‡∏ö‡∏ñ‡∏≠‡∏¢‡∏´‡∏•‡∏±‡∏á
+ * · ¥ß°“√„™Èß“π Countdown Timer  ”À√—∫π—∫∂Õ¬À≈—ß
  *
- * ‡πÅ‡∏ú‡∏ô‡∏ú‡∏±‡∏á‡∏ß‡∏á‡∏à‡∏£ (Circuit Diagram):
+ * ·ºπº—ß«ß®√ (Circuit Diagram):
  *
  *                        +3.3V
  *                         |
- *                        [ ] 220Œ©
+ *                        [ ] 220?
  *                         |
  *     PC0 (Output) ----+----->| LED (Red) - Alarm Indicator
  *                       |
@@ -20,171 +20,172 @@
  *
  *     (Optional) Buzzer on PWM pin (PA1 or PC3)
  *
- *     USART (TX=PD5, RX=PD6) ‡πÄ‡∏ä‡∏∑‡πà‡∏≠‡∏°‡∏ï‡πà‡∏≠ PC ‡∏ú‡πà‡∏≤‡∏ô USB-Serial
+ *     USART (TX=PD5, RX=PD6) ‡™◊ËÕ¡µËÕ PC ºË“π USB-Serial
  *
- *     (Pull-up ‡∏†‡∏≤‡∏¢‡πÉ‡∏ô‡∏Ç‡∏≠‡∏á CH32V003 ‡∏ñ‡∏π‡∏Å‡πÉ‡∏ä‡πâ‡∏á‡∏≤‡∏ô‡∏ú‡πà‡∏≤‡∏ô PIN_MODE_INPUT_PULLUP)
+ *     (Pull-up ¿“¬„π¢Õß CH32V003 ∂Ÿ°„™Èß“πºË“π PIN_MODE_INPUT_PULLUP)
  *
  * ============================================================
- * ‡∏ú‡∏•‡∏•‡∏±‡∏û‡∏ò‡πå‡∏ó‡∏µ‡πà‡∏Ñ‡∏≤‡∏î‡∏´‡∏ß‡∏±‡∏á (Expected Results):
- * - ‡∏ï‡∏±‡πâ‡∏á‡πÄ‡∏ß‡∏•‡∏≤ countdown 10 ‡∏ß‡∏¥‡∏ô‡∏≤‡∏ó‡∏µ
- * - ‡∏Å‡∏î‡∏õ‡∏∏‡πà‡∏° PC1 ‚Üí ‡πÄ‡∏£‡∏¥‡πà‡∏°‡∏ô‡∏±‡∏ö‡∏ñ‡∏≠‡∏¢‡∏´‡∏•‡∏±‡∏á
- * - USART ‡πÅ‡∏™‡∏î‡∏á‡πÄ‡∏ß‡∏•‡∏≤‡∏ó‡∏µ‡πà‡πÄ‡∏´‡∏•‡∏∑‡∏≠‡∏ó‡∏∏‡∏Å 1 ‡∏ß‡∏¥‡∏ô‡∏≤‡∏ó‡∏µ
- * - ‡πÄ‡∏°‡∏∑‡πà‡∏≠‡∏´‡∏°‡∏î‡πÄ‡∏ß‡∏•‡∏≤ ‚Üí Alarm callback ‡∏ó‡∏≥‡∏á‡∏≤‡∏ô ‚Üí LED ‡∏Å‡∏£‡∏∞‡∏û‡∏£‡∏¥‡∏ö‡πÄ‡∏£‡πá‡∏ß
- * - USART ‡πÅ‡∏™‡∏î‡∏á "Time's up!"
+ * º≈≈—æ∏Ï∑’Ë§“¥À«—ß (Expected Results):
+ * - µ—Èß‡«≈“ countdown 10 «‘π“∑’
+ * - °¥ªÿË¡ PC1  ‡√‘Ë¡π—∫∂Õ¬À≈—ß
+ * - USART · ¥ß‡«≈“∑’Ë‡À≈◊Õ∑ÿ° 1 «‘π“∑’
+ * - ‡¡◊ËÕÀ¡¥‡«≈“  Alarm callback ∑”ß“π  LED °√–æ√‘∫‡√Á«
+ * - USART · ¥ß "Time's up!"
  * ============================================================
- * ‡∏Ñ‡∏≥‡πÄ‡∏ï‡∏∑‡∏≠‡∏ô (WARNINGS):
- * - Countdown ‡πÉ‡∏ä‡πâ TIM2 ‡πÄ‡∏õ‡πá‡∏ô base timer ‡∏†‡∏≤‡∏¢‡πÉ‡∏ô (‡πÄ‡∏ä‡πà‡∏ô‡πÄ‡∏î‡∏µ‡∏¢‡∏ß‡∏Å‡∏±‡∏ö Stopwatch)!
- * - ‡∏´‡πâ‡∏≤‡∏°‡πÉ‡∏ä‡πâ Countdown ‡πÅ‡∏•‡∏∞ Stopwatch ‡∏û‡∏£‡πâ‡∏≠‡∏°‡∏Å‡∏±‡∏ô (‡∏ó‡∏±‡πâ‡∏á‡∏Ñ‡∏π‡πà‡πÉ‡∏ä‡πâ TIM2)
- * - ‡∏ï‡πâ‡∏≠‡∏á‡πÄ‡∏£‡∏µ‡∏¢‡∏Å Countdown_Init() ‡∏Å‡πà‡∏≠‡∏ô‡πÉ‡∏ä‡πâ‡∏á‡∏≤‡∏ô‡∏ü‡∏±‡∏á‡∏Å‡πå‡∏ä‡∏±‡∏ô‡∏≠‡∏∑‡πà‡∏ô
- * - Callback (AlarmCallback) ‡∏ó‡∏≥‡∏á‡∏≤‡∏ô‡πÉ‡∏ô main loop context (‡πÑ‡∏°‡πà‡πÉ‡∏ä‡πà ISR)
- * - Countdown_Stop() ‡∏´‡∏¢‡∏∏‡∏î‡∏ä‡∏±‡πà‡∏ß‡∏Ñ‡∏£‡∏≤‡∏ß (pause) - ‡πÄ‡∏£‡∏¥‡πà‡∏°‡∏ï‡πà‡∏≠‡πÑ‡∏î‡πâ‡∏î‡πâ‡∏ß‡∏¢ Countdown_Start()
- * - Countdown_Reset() ‡∏£‡∏µ‡πÄ‡∏ã‡πá‡∏ï‡∏Å‡∏•‡∏±‡∏ö‡πÄ‡∏õ‡πá‡∏ô‡πÄ‡∏ß‡∏•‡∏≤‡πÄ‡∏£‡∏¥‡πà‡∏°‡∏ï‡πâ‡∏ô‡πÅ‡∏•‡∏∞‡∏´‡∏¢‡∏∏‡∏î‡∏Å‡∏≤‡∏£‡∏ô‡∏±‡∏ö
- * - ‡πÅ‡∏°‡πà‡∏ô‡∏¢‡∏≥‡∏ó‡∏µ‡πà‡∏£‡∏∞‡∏î‡∏±‡∏ö milliseconds (resolution 1ms ‡∏à‡∏≤‡∏Å TIM2)
+ * §”‡µ◊Õπ (WARNINGS):
+ * - Countdown „™È TIM2 ‡ªÁπ base timer ¿“¬„π (‡™Ëπ‡¥’¬«°—∫ Stopwatch)!
+ * - ÀÈ“¡„™È Countdown ·≈– Stopwatch æ√ÈÕ¡°—π (∑—Èß§ŸË„™È TIM2)
+ * - µÈÕß‡√’¬° Countdown_Init() °ËÕπ„™Èß“πø—ß°Ï™—πÕ◊Ëπ
+ * - Callback (AlarmCallback) ∑”ß“π„π main loop context (‰¡Ë„™Ë ISR)
+ * - Countdown_Stop() À¬ÿ¥™—Ë«§√“« (pause) - ‡√‘Ë¡µËÕ‰¥È¥È«¬ Countdown_Start()
+ * - Countdown_Reset() √’‡´Áµ°≈—∫‡ªÁπ‡«≈“‡√‘Ë¡µÈπ·≈–À¬ÿ¥°“√π—∫
+ * - ·¡Ëπ¬”∑’Ë√–¥—∫ milliseconds (resolution 1ms ®“° TIM2)
  * ============================================================
  */
 
+#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include <SimpleHAL.h>
 
-// === ‡∏ï‡∏±‡∏ß‡πÅ‡∏õ‡∏£ Global ===
+// === µ—«·ª√ Global ===
 
-static uint8_t led_alarm = PC0;          // pin PC0 ‡∏™‡∏≥‡∏´‡∏£‡∏±‡∏ö LED alarm indicator
-static uint8_t btn_start_pause = PC1;    // pin PC1 ‡∏™‡∏≥‡∏´‡∏£‡∏±‡∏ö‡∏õ‡∏∏‡πà‡∏° Start/Pause
-static volatile uint8_t alarm_triggered = 0;  // ‡∏™‡∏ñ‡∏≤‡∏ô‡∏∞ alarm (1=‡∏´‡∏°‡∏î‡πÄ‡∏ß‡∏•‡∏≤‡πÅ‡∏•‡πâ‡∏ß)
+static uint8_t led_alarm = PC0;          // pin PC0  ”À√—∫ LED alarm indicator
+static uint8_t btn_start_pause = PC1;    // pin PC1  ”À√—∫ªÿË¡ Start/Pause
+static volatile uint8_t alarm_triggered = 0;  //  ∂“π– alarm (1=À¡¥‡«≈“·≈È«)
 
 /**
  * @brief Alarm Callback
- * @details ‡∏ü‡∏±‡∏á‡∏Å‡πå‡∏ä‡∏±‡∏ô‡∏ô‡∏µ‡πâ‡∏ñ‡∏π‡∏Å‡πÄ‡∏£‡∏µ‡∏¢‡∏Å‡πÄ‡∏°‡∏∑‡πà‡∏≠ countdown ‡∏´‡∏°‡∏î‡πÄ‡∏ß‡∏•‡∏≤
- *          ‡∏ï‡∏±‡πâ‡∏á‡∏Ñ‡πà‡∏≤ flag ‡πÄ‡∏û‡∏∑‡πà‡∏≠‡πÉ‡∏´‡πâ main loop ‡∏à‡∏±‡∏î‡∏Å‡∏≤‡∏£‡∏ï‡πà‡∏≠‡πÑ‡∏õ
+ * @details ø—ß°Ï™—ππ’È∂Ÿ°‡√’¬°‡¡◊ËÕ countdown À¡¥‡«≈“
+ *          µ—Èß§Ë“ flag ‡æ◊ËÕ„ÀÈ main loop ®—¥°“√µËÕ‰ª
  */
 void alarm_callback(void)
 {
-    // === Alarm ‡∏ñ‡∏π‡∏Å‡πÄ‡∏£‡∏µ‡∏¢‡∏Å‡πÄ‡∏°‡∏∑‡πà‡∏≠‡∏´‡∏°‡∏î‡πÄ‡∏ß‡∏•‡∏≤ ===
+    // === Alarm ∂Ÿ°‡√’¬°‡¡◊ËÕÀ¡¥‡«≈“ ===
 
-    alarm_triggered = 1;                 // ‡∏ï‡∏±‡πâ‡∏á flag ‡πÅ‡∏à‡πâ‡∏á main loop ‡∏ß‡πà‡∏≤ alarm ‡∏ó‡∏≥‡∏á‡∏≤‡∏ô
+    alarm_triggered = 1;                 // µ—Èß flag ·®Èß main loop «Ë“ alarm ∑”ß“π
 
-    // ‡∏´‡∏°‡∏≤‡∏¢‡πÄ‡∏´‡∏ï‡∏∏: callback ‡∏ô‡∏µ‡πâ‡∏ó‡∏≥‡∏á‡∏≤‡∏ô‡πÉ‡∏ô context ‡∏õ‡∏Å‡∏ï‡∏¥ (‡πÑ‡∏°‡πà‡πÉ‡∏ä‡πà ISR)
-    // ‡πÅ‡∏ï‡πà‡∏Å‡πá‡∏Ñ‡∏ß‡∏£‡∏ó‡∏≥‡∏á‡∏≤‡∏ô‡πÉ‡∏´‡πâ‡πÑ‡∏ß‡∏ó‡∏µ‡πà‡∏™‡∏∏‡∏î
+    // À¡“¬‡Àµÿ: callback π’È∑”ß“π„π context ª°µ‘ (‰¡Ë„™Ë ISR)
+    // ·µË°Á§«√∑”ß“π„ÀÈ‰«∑’Ë ÿ¥
 }
 
 /**
- * @brief ‡∏ü‡∏±‡∏á‡∏Å‡πå‡∏ä‡∏±‡∏ô‡∏´‡∏•‡∏±‡∏Å
- * @return ‡πÑ‡∏°‡πà‡∏°‡∏µ return (loop ‡πÑ‡∏°‡πà‡∏°‡∏µ‡∏ó‡∏µ‡πà‡∏™‡∏¥‡πâ‡∏ô‡∏™‡∏∏‡∏î)
+ * @brief ø—ß°Ï™—πÀ≈—°
+ * @return ‰¡Ë¡’ return (loop ‰¡Ë¡’∑’Ë ‘Èπ ÿ¥)
  */
 int main(void)
 {
-    // === ‡πÄ‡∏£‡∏¥‡πà‡∏°‡∏ï‡πâ‡∏ô‡∏£‡∏∞‡∏ö‡∏ö ===
+    // === ‡√‘Ë¡µÈπ√–∫∫ ===
 
     SystemCoreClockUpdate();
     Timer_Init();
-    // === ‡πÄ‡∏£‡∏¥‡πà‡∏°‡∏ï‡πâ‡∏ô USART ===
+    // === ‡√‘Ë¡µÈπ USART ===
 
-    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);  // ‡πÄ‡∏£‡∏¥‡πà‡∏°‡∏ï‡πâ‡∏ô USART ‡∏ó‡∏µ‡πà 115200 baud
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);  // ‡√‘Ë¡µÈπ USART ∑’Ë 115200 baud
 
-    // === ‡∏ï‡∏±‡πâ‡∏á‡∏Ñ‡πà‡∏≤ GPIO ===
+    // === µ—Èß§Ë“ GPIO ===
 
-    pinMode(led_alarm, PIN_MODE_OUTPUT);       // ‡∏ï‡∏±‡πâ‡∏á PC0 ‡πÄ‡∏õ‡πá‡∏ô output ‡∏™‡∏≥‡∏´‡∏£‡∏±‡∏ö LED alarm
-    pinMode(btn_start_pause, PIN_MODE_INPUT_PULLUP);  // ‡∏ï‡∏±‡πâ‡∏á PC1 ‡πÄ‡∏õ‡πá‡∏ô input pull-up ‡∏™‡∏≥‡∏´‡∏£‡∏±‡∏ö‡∏õ‡∏∏‡πà‡∏°
+    pinMode(led_alarm, PIN_MODE_OUTPUT);       // µ—Èß PC0 ‡ªÁπ output  ”À√—∫ LED alarm
+    pinMode(btn_start_pause, PIN_MODE_INPUT_PULLUP);  // µ—Èß PC1 ‡ªÁπ input pull-up  ”À√—∫ªÿË¡
 
-    // === ‡πÄ‡∏£‡∏¥‡πà‡∏°‡∏ï‡πâ‡∏ô Countdown ===
+    // === ‡√‘Ë¡µÈπ Countdown ===
 
-    // ‡∏ï‡∏±‡πâ‡∏á‡πÄ‡∏ß‡∏•‡∏≤ countdown 0 ‡∏ä‡∏±‡πà‡∏ß‡πÇ‡∏°‡∏á, 0 ‡∏ô‡∏≤‡∏ó‡∏µ, 10 ‡∏ß‡∏¥‡∏ô‡∏≤‡∏ó‡∏µ
-    Countdown_Init(0, 0, 10);            // ‡πÄ‡∏£‡∏¥‡πà‡∏°‡∏ï‡πâ‡∏ô countdown ‡∏ó‡∏µ‡πà 10 ‡∏ß‡∏¥‡∏ô‡∏≤‡∏ó‡∏µ
-    Countdown_SetAlarmCallback(alarm_callback);  // ‡∏ï‡∏±‡πâ‡∏á callback ‡∏ó‡∏µ‡πà‡∏à‡∏∞‡∏ñ‡∏π‡∏Å‡πÄ‡∏£‡∏µ‡∏¢‡∏Å‡πÄ‡∏°‡∏∑‡πà‡∏≠‡∏´‡∏°‡∏î‡πÄ‡∏ß‡∏•‡∏≤
+    // µ—Èß‡«≈“ countdown 0 ™—Ë«‚¡ß, 0 π“∑’, 10 «‘π“∑’
+    Countdown_Init(0, 0, 10);            // ‡√‘Ë¡µÈπ countdown ∑’Ë 10 «‘π“∑’
+    Countdown_SetAlarmCallback(alarm_callback);  // µ—Èß callback ∑’Ë®–∂Ÿ°‡√’¬°‡¡◊ËÕÀ¡¥‡«≈“
 
-    // ‡∏´‡∏°‡∏≤‡∏¢‡πÄ‡∏´‡∏ï‡∏∏: countdown ‡∏¢‡∏±‡∏á‡πÑ‡∏°‡πà‡πÄ‡∏£‡∏¥‡πà‡∏°‡∏ô‡∏±‡∏ö ‡∏ï‡πâ‡∏≠‡∏á‡πÄ‡∏£‡∏µ‡∏¢‡∏Å Countdown_Start() ‡∏Å‡πà‡∏≠‡∏ô
+    // À¡“¬‡Àµÿ: countdown ¬—ß‰¡Ë‡√‘Ë¡π—∫ µÈÕß‡√’¬° Countdown_Start() °ËÕπ
 
-    // === ‡πÅ‡∏™‡∏î‡∏á‡∏Ç‡πâ‡∏≠‡∏Ñ‡∏ß‡∏≤‡∏°‡πÄ‡∏£‡∏¥‡πà‡∏°‡∏ï‡πâ‡∏ô ===
+    // === · ¥ß¢ÈÕ§«“¡‡√‘Ë¡µÈπ ===
 
-    USART_Print("Countdown Example\r\n");           // ‡πÅ‡∏™‡∏î‡∏á‡∏ä‡∏∑‡πà‡∏≠‡∏ï‡∏±‡∏ß‡∏≠‡∏¢‡πà‡∏≤‡∏á
-    USART_Print("===================\r\n");         // ‡πÄ‡∏™‡πâ‡∏ô‡πÅ‡∏ö‡πà‡∏á
-    USART_Print("Countdown: 10 seconds\r\n");       // ‡πÅ‡∏à‡πâ‡∏á‡πÄ‡∏ß‡∏•‡∏≤‡∏ó‡∏µ‡πà‡∏ï‡∏±‡πâ‡∏á
-    USART_Print("Press PC1 to Start/Pause\r\n");    // ‡πÅ‡∏à‡πâ‡∏á‡∏ß‡∏¥‡∏ò‡∏µ‡πÉ‡∏ä‡πâ‡∏á‡∏≤‡∏ô
-    USART_Print("Status: Stopped\r\n");             // ‡∏™‡∏ñ‡∏≤‡∏ô‡∏∞‡πÄ‡∏£‡∏¥‡πà‡∏°‡∏ï‡πâ‡∏ô
+    USART_Print("Countdown Example\r\n");           // · ¥ß™◊ËÕµ—«Õ¬Ë“ß
+    USART_Print("===================\r\n");         // ‡ Èπ·∫Ëß
+    USART_Print("Countdown: 10 seconds\r\n");       // ·®Èß‡«≈“∑’Ëµ—Èß
+    USART_Print("Press PC1 to Start/Pause\r\n");    // ·®Èß«‘∏’„™Èß“π
+    USART_Print("Status: Stopped\r\n");             //  ∂“π–‡√‘Ë¡µÈπ
 
-    // === ‡∏ï‡∏±‡∏ß‡πÅ‡∏õ‡∏£‡∏™‡∏≥‡∏´‡∏£‡∏±‡∏ö‡∏Å‡∏≤‡∏£‡∏ó‡∏≥‡∏á‡∏≤‡∏ô ===
+    // === µ—«·ª√ ”À√—∫°“√∑”ß“π ===
 
-    uint32_t last_report = 0;            // ‡πÄ‡∏Å‡πá‡∏ö‡πÄ‡∏ß‡∏•‡∏≤‡∏Ñ‡∏£‡∏±‡πâ‡∏á‡∏™‡∏∏‡∏î‡∏ó‡πâ‡∏≤‡∏¢‡∏ó‡∏µ‡πà‡∏£‡∏≤‡∏¢‡∏á‡∏≤‡∏ô
-    uint8_t button_prev = HIGH;          // ‡∏™‡∏ñ‡∏≤‡∏ô‡∏∞‡∏Å‡πà‡∏≠‡∏ô‡∏´‡∏ô‡πâ‡∏≤‡∏Ç‡∏≠‡∏á‡∏õ‡∏∏‡πà‡∏° (‡∏™‡∏≥‡∏´‡∏£‡∏±‡∏ö edge detection)
+    uint32_t last_report = 0;            // ‡°Á∫‡«≈“§√—Èß ÿ¥∑È“¬∑’Ë√“¬ß“π
+    uint8_t button_prev = HIGH;          //  ∂“π–°ËÕπÀπÈ“¢ÕßªÿË¡ ( ”À√—∫ edge detection)
 
-    // === Main Loop (‡πÑ‡∏°‡πà‡∏™‡∏¥‡πâ‡∏ô‡∏™‡∏∏‡∏î) ===
+    // === Main Loop (‰¡Ë ‘Èπ ÿ¥) ===
 
     while (1)
     {
-        // === ‡∏≠‡πà‡∏≤‡∏ô‡∏™‡∏ñ‡∏≤‡∏ô‡∏∞‡∏õ‡∏∏‡πà‡∏° (Edge Detection) ===
+        // === ÕË“π ∂“π–ªÿË¡ (Edge Detection) ===
 
-        uint8_t btn_current = digitalRead(btn_start_pause);  // ‡∏≠‡πà‡∏≤‡∏ô‡∏™‡∏ñ‡∏≤‡∏ô‡∏∞‡∏õ‡∏∏‡πà‡∏°‡∏õ‡∏±‡∏à‡∏à‡∏∏‡∏ö‡∏±‡∏ô
+        uint8_t btn_current = digitalRead(btn_start_pause);  // ÕË“π ∂“π–ªÿË¡ª—®®ÿ∫—π
 
-        // === Button: Start/Pause (‡∏ï‡∏£‡∏ß‡∏à‡∏à‡∏±‡∏ö Falling Edge) ===
+        // === Button: Start/Pause (µ√«®®—∫ Falling Edge) ===
 
-        if (button_prev == HIGH && btn_current == LOW)  // ‡∏ñ‡πâ‡∏≤‡∏õ‡∏∏‡πà‡∏°‡πÄ‡∏û‡∏¥‡πà‡∏á‡∏ñ‡∏π‡∏Å‡∏Å‡∏î (HIGH‚ÜíLOW)
+        if (button_prev == HIGH && btn_current == LOW)  // ∂È“ªÿË¡‡æ‘Ëß∂Ÿ°°¥ (HIGHLOW)
         {
-            Delay_Ms(50);                    // ‡∏´‡∏ô‡πà‡∏ß‡∏á 50ms ‡πÄ‡∏û‡∏∑‡πà‡∏≠ debounce
-            if (digitalRead(btn_start_pause) == LOW)  // ‡πÄ‡∏ä‡πá‡∏Ñ‡∏ã‡πâ‡∏≥‡∏ß‡πà‡∏≤‡∏Å‡∏î‡∏à‡∏£‡∏¥‡∏á
+            Delay_Ms(50);                    // ÀπË«ß 50ms ‡æ◊ËÕ debounce
+            if (digitalRead(btn_start_pause) == LOW)  // ‡™Á§´È”«Ë“°¥®√‘ß
             {
-                if (Countdown_IsRunning())   // ‡∏ñ‡πâ‡∏≤ countdown ‡∏Å‡∏≥‡∏•‡∏±‡∏á‡∏ó‡∏≥‡∏á‡∏≤‡∏ô
+                if (Countdown_IsRunning())   // ∂È“ countdown °”≈—ß∑”ß“π
                 {
-                    Countdown_Stop();        // ‡∏´‡∏¢‡∏∏‡∏î countdown ‡∏ä‡∏±‡πà‡∏ß‡∏Ñ‡∏£‡∏≤‡∏ß (pause)
-                    USART_Print("Status: Paused\r\n");  // ‡πÅ‡∏à‡πâ‡∏á‡∏™‡∏ñ‡∏≤‡∏ô‡∏∞ pause
+                    Countdown_Stop();        // À¬ÿ¥ countdown ™—Ë«§√“« (pause)
+                    USART_Print("Status: Paused\r\n");  // ·®Èß ∂“π– pause
                 }
-                else                         // ‡∏ñ‡πâ‡∏≤ countdown ‡∏´‡∏¢‡∏∏‡∏î‡∏≠‡∏¢‡∏π‡πà
+                else                         // ∂È“ countdown À¬ÿ¥Õ¬ŸË
                 {
-                    // ‡∏ñ‡πâ‡∏≤‡∏´‡∏°‡∏î‡πÄ‡∏ß‡∏•‡∏≤‡πÅ‡∏•‡πâ‡∏ß ‡πÉ‡∏´‡πâ reset ‡∏Å‡πà‡∏≠‡∏ô‡πÄ‡∏£‡∏¥‡πà‡∏°‡πÉ‡∏´‡∏°‡πà
-                    if (Countdown_IsFinished())  // ‡∏ñ‡πâ‡∏≤‡∏´‡∏°‡∏î‡πÄ‡∏ß‡∏•‡∏≤‡πÅ‡∏•‡πâ‡∏ß
+                    // ∂È“À¡¥‡«≈“·≈È« „ÀÈ reset °ËÕπ‡√‘Ë¡„À¡Ë
+                    if (Countdown_IsFinished())  // ∂È“À¡¥‡«≈“·≈È«
                     {
-                        Countdown_Reset();   // ‡∏£‡∏µ‡πÄ‡∏ã‡πá‡∏ï‡∏Å‡∏•‡∏±‡∏ö‡πÄ‡∏õ‡πá‡∏ô 10 ‡∏ß‡∏¥‡∏ô‡∏≤‡∏ó‡∏µ
-                        alarm_triggered = 0; // ‡∏•‡πâ‡∏≤‡∏á‡∏™‡∏ñ‡∏≤‡∏ô‡∏∞ alarm
-                        digitalWrite(led_alarm, LOW);  // ‡∏õ‡∏¥‡∏î LED alarm
-                        USART_Print("Countdown Reset to 10s\r\n");  // ‡πÅ‡∏à‡πâ‡∏á reset
+                        Countdown_Reset();   // √’‡´Áµ°≈—∫‡ªÁπ 10 «‘π“∑’
+                        alarm_triggered = 0; // ≈È“ß ∂“π– alarm
+                        digitalWrite(led_alarm, LOW);  // ª‘¥ LED alarm
+                        USART_Print("Countdown Reset to 10s\r\n");  // ·®Èß reset
                     }
 
-                    Countdown_Start();       // ‡πÄ‡∏£‡∏¥‡πà‡∏° countdown
-                    USART_Print("Status: Running\r\n");  // ‡πÅ‡∏à‡πâ‡∏á‡∏™‡∏ñ‡∏≤‡∏ô‡∏∞ running
+                    Countdown_Start();       // ‡√‘Ë¡ countdown
+                    USART_Print("Status: Running\r\n");  // ·®Èß ∂“π– running
                 }
             }
         }
 
-        // === ‡∏≠‡∏±‡∏õ‡πÄ‡∏î‡∏ï‡∏™‡∏ñ‡∏≤‡∏ô‡∏∞‡∏õ‡∏∏‡πà‡∏°‡∏™‡∏≥‡∏´‡∏£‡∏±‡∏ö‡∏£‡∏≠‡∏ö‡∏ñ‡∏±‡∏î‡πÑ‡∏õ ===
+        // === Õ—ª‡¥µ ∂“π–ªÿË¡ ”À√—∫√Õ∫∂—¥‰ª ===
 
-        button_prev = btn_current;          // ‡∏≠‡∏±‡∏õ‡πÄ‡∏î‡∏ï‡∏™‡∏ñ‡∏≤‡∏ô‡∏∞‡∏õ‡∏∏‡πà‡∏°
+        button_prev = btn_current;          // Õ—ª‡¥µ ∂“π–ªÿË¡
 
-        // === ‡∏£‡∏≤‡∏¢‡∏á‡∏≤‡∏ô‡πÄ‡∏ß‡∏•‡∏≤‡∏ó‡∏µ‡πà‡πÄ‡∏´‡∏•‡∏∑‡∏≠‡∏ó‡∏∏‡∏Å 1 ‡∏ß‡∏¥‡∏ô‡∏≤‡∏ó‡∏µ ===
+        // === √“¬ß“π‡«≈“∑’Ë‡À≈◊Õ∑ÿ° 1 «‘π“∑’ ===
 
-        if (Countdown_IsRunning())           // ‡∏ñ‡πâ‡∏≤ countdown ‡∏Å‡∏≥‡∏•‡∏±‡∏á‡∏ó‡∏≥‡∏á‡∏≤‡∏ô
+        if (Countdown_IsRunning())           // ∂È“ countdown °”≈—ß∑”ß“π
         {
-            if (ELAPSED_TIME(last_report, Get_CurrentMs()) >= 1000)  // ‡∏ó‡∏∏‡∏Å 1 ‡∏ß‡∏¥‡∏ô‡∏≤‡∏ó‡∏µ
+            if (ELAPSED_TIME(last_report, Get_CurrentMs()) >= 1000)  // ∑ÿ° 1 «‘π“∑’
             {
-                last_report = Get_CurrentMs();  // ‡∏≠‡∏±‡∏õ‡πÄ‡∏î‡∏ï‡πÄ‡∏ß‡∏•‡∏≤
+                last_report = Get_CurrentMs();  // Õ—ª‡¥µ‡«≈“
 
-                // ‡πÅ‡∏™‡∏î‡∏á‡πÄ‡∏ß‡∏•‡∏≤‡∏ó‡∏µ‡πà‡πÄ‡∏´‡∏•‡∏∑‡∏≠‡πÄ‡∏õ‡πá‡∏ô‡∏ß‡∏¥‡∏ô‡∏≤‡∏ó‡∏µ
-                uint32_t remaining = Countdown_GetRemainingSeconds();  // ‡∏≠‡πà‡∏≤‡∏ô‡∏ß‡∏¥‡∏ô‡∏≤‡∏ó‡∏µ‡∏ó‡∏µ‡πà‡πÄ‡∏´‡∏•‡∏∑‡∏≠
-                USART_Print("Remaining: ");      // ‡πÅ‡∏™‡∏î‡∏á‡∏Ç‡πâ‡∏≠‡∏Ñ‡∏ß‡∏≤‡∏°
-                USART_PrintNum(remaining);        // ‡πÅ‡∏™‡∏î‡∏á‡∏Ñ‡πà‡∏≤‡∏ó‡∏µ‡πà‡πÄ‡∏´‡∏•‡∏∑‡∏≠
-                USART_Print(" seconds\r\n");      // ‡∏´‡∏ô‡πà‡∏ß‡∏¢‡∏ß‡∏¥‡∏ô‡∏≤‡∏ó‡∏µ
+                // · ¥ß‡«≈“∑’Ë‡À≈◊Õ‡ªÁπ«‘π“∑’
+                uint32_t remaining = Countdown_GetRemainingSeconds();  // ÕË“π«‘π“∑’∑’Ë‡À≈◊Õ
+                USART_Print("Remaining: ");      // · ¥ß¢ÈÕ§«“¡
+                USART_PrintNum(remaining);        // · ¥ß§Ë“∑’Ë‡À≈◊Õ
+                USART_Print(" seconds\r\n");      // ÀπË«¬«‘π“∑’
             }
         }
 
-        // === ‡∏ï‡∏£‡∏ß‡∏à‡∏™‡∏≠‡∏ö Alarm ===
+        // === µ√«® Õ∫ Alarm ===
 
-        if (alarm_triggered)                 // ‡∏ñ‡πâ‡∏≤ alarm ‡∏ñ‡∏π‡∏Å trigger
+        if (alarm_triggered)                 // ∂È“ alarm ∂Ÿ° trigger
         {
-            alarm_triggered = 0;             // ‡∏•‡πâ‡∏≤‡∏á flag
+            alarm_triggered = 0;             // ≈È“ß flag
 
-            USART_Print("\r\n*** Time's up! ***\r\n");  // ‡πÅ‡∏à‡πâ‡∏á‡∏´‡∏°‡∏î‡πÄ‡∏ß‡∏•‡∏≤
-            USART_Print("Countdown finished!\r\n");     // ‡πÅ‡∏à‡πâ‡∏á‡πÄ‡∏™‡∏£‡πá‡∏à‡∏™‡∏¥‡πâ‡∏ô
+            USART_Print("\r\n*** Time's up! ***\r\n");  // ·®ÈßÀ¡¥‡«≈“
+            USART_Print("Countdown finished!\r\n");     // ·®Èß‡ √Á® ‘Èπ
 
-            // LED ‡∏Å‡∏£‡∏∞‡∏û‡∏£‡∏¥‡∏ö‡πÄ‡∏£‡πá‡∏ß 10 ‡∏Ñ‡∏£‡∏±‡πâ‡∏á
-            for (uint8_t i = 0; i < 10; i++)  // ‡∏Å‡∏£‡∏∞‡∏û‡∏£‡∏¥‡∏ö 10 ‡∏£‡∏≠‡∏ö
+            // LED °√–æ√‘∫‡√Á« 10 §√—Èß
+            for (uint8_t i = 0; i < 10; i++)  // °√–æ√‘∫ 10 √Õ∫
             {
-                digitalWrite(led_alarm, HIGH);  // ‡πÄ‡∏õ‡∏¥‡∏î LED
-                Delay_Ms(100);                  // ‡∏´‡∏ô‡πà‡∏ß‡∏á 100ms
-                digitalWrite(led_alarm, LOW);   // ‡∏õ‡∏¥‡∏î LED
-                Delay_Ms(100);                  // ‡∏´‡∏ô‡πà‡∏ß‡∏á 100ms
+                digitalWrite(led_alarm, HIGH);  // ‡ª‘¥ LED
+                Delay_Ms(100);                  // ÀπË«ß 100ms
+                digitalWrite(led_alarm, LOW);   // ª‘¥ LED
+                Delay_Ms(100);                  // ÀπË«ß 100ms
             }
 
-            USART_Print("Press PC1 to reset and start again\r\n");  // ‡πÅ‡∏à‡πâ‡∏á‡∏ß‡∏¥‡∏ò‡∏µ‡πÄ‡∏£‡∏¥‡πà‡∏°‡πÉ‡∏´‡∏°‡πà
+            USART_Print("Press PC1 to reset and start again\r\n");  // ·®Èß«‘∏’‡√‘Ë¡„À¡Ë
         }
     }
 
-    // ‡∏™‡∏¥‡πà‡∏á‡∏ô‡∏µ‡πâ‡∏à‡∏∞‡πÑ‡∏°‡πà‡∏°‡∏µ‡∏ß‡∏±‡∏ô‡∏ñ‡∏∂‡∏á
+    //  ‘Ëßπ’È®–‰¡Ë¡’«—π∂÷ß
     // return 0;
 }

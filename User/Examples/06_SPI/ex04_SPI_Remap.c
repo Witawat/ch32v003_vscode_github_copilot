@@ -20,7 +20,6 @@
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20
-#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 
 static void test_spi_config(SPI_PinConfig config, const char* name) {

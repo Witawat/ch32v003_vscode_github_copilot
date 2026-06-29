@@ -28,6 +28,10 @@
  * ============================================================
  */
 
+#if CH32V003_IS_SOP8
+#error "Hardware SPI not available on SOP-8. Use shiftOut/shiftIn instead."
+#endif
+#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include <SimpleHAL.h>
 
 #define CS_PIN      PC4

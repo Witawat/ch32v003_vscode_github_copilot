@@ -1,14 +1,14 @@
-﻿/**
+/**
  * ============================================================
- * ตัวอยางที่ 7: PulseIn Measurement (วัดระยะดวย HC-SR04)
+ * �����ҧ��� 7: PulseIn Measurement (�Ѵ���д�� HC-SR04)
  * ============================================================
  *
- * แผนผังวงจร (Circuit Diagram):
+ * Ἱ�ѧǧ�� (Circuit Diagram):
  *
  *     HC-SR04                  CH32V003
  *     -------                  --------
  *     VCC (5V) ----> 5V Supply (External)
- *     GND ---------> GND (รวม)
+ *     GND ---------> GND (���)
  *     TRIG --------> PC3 (Digital Output)
  *     ECHO ---+----> PC4 (Digital Input)
  *             |
@@ -16,81 +16,83 @@
  *                          |
  *                        PC4
  *
- *     Voltage Divider: ECHO (5V) → 2kΩ → PC4 → 3.3kΩ → GND
- *     Vout = 5V × (3.3k / (2k + 3.3k)) = 5V × 0.623 = 3.11V
- *     (ปลอดภัยสำหรับ CH32V003 ที่ 3.3V)
+ *     Voltage Divider: ECHO (5V)  2k?  PC4  3.3k?  GND
+ *     Vout = 5V ? (3.3k / (2k + 3.3k)) = 5V ? 0.623 = 3.11V
+ *     (��ʹ�������Ѻ CH32V003 ��� 3.3V)
  *
  * ============================================================
- * ผลลัพธที่คาดหวัง (Expected Results):
- * - Serial Monitor แสดงระยะทางทุก 500ms
+ * ���Ѿ����Ҵ��ѧ (Expected Results):
+ * - Serial Monitor �ʴ����зҧ�ء 500ms
  * - "Distance: XX.X cm"
- * - วัดระยะไดประมาณ 2cm - 400cm
- * - ความละเอียด ±0.3cm
+ * - �Ѵ����䴻���ҳ 2cm - 400cm
+ * - ���������´ ?0.3cm
  * ============================================================
- * คำเตือน (WARNINGS):
- * - HC-SR04 ใช ECHO ที่ 5V ซึ่งอันตรายตอ CH32V003 (3.3V เทานั้น)
- * - ตองใช Voltage Divider (2kΩ ตออนุกรม + 3.3kΩ ตอลง GND) เสมอ!
- * - โดยไมตอ Voltage Divider จะทำให MCU เสียหายถาวร
- * - ระยะทางสูงสุดประมาณ 400cm ตองตั้ง timeout 30ms
- * - สูตร: ระยะทาง (cm) = pulse (us) × 0.034 / 2
- * - 0.034 = ความเร็วเสียง (cm/us), หาร 2 เพราะไป-กลับ
+ * ����͹ (WARNINGS):
+ * - HC-SR04 � ECHO ��� 5V ����ѹ���µ� CH32V003 (3.3V �ҹ��)
+ * - �ͧ� Voltage Divider (2k? ��͹ء�� + 3.3k? ��ŧ GND) ����!
+ * - ������ Voltage Divider �з��� MCU ������¶���
+ * - ���зҧ�٧�ش����ҳ 400cm �ͧ��� timeout 30ms
+ * - �ٵ�: ���зҧ (cm) = pulse (us) ? 0.034 / 2
+ * - 0.034 = �����������§ (cm/us), ��� 2 �����-��Ѻ
  * ============================================================
  */
 
-#include <SimpleHAL.h>   // รวมไลบรารี SimpleHAL ทั้งหมด
+#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+/* CH32V003 has no hardware FPU � float/double use software emulation (~800 cycles) */
+#include <SimpleHAL.h>   // ����ź���� SimpleHAL ������
 
-// กำหนดชื่อขา HC-SR04
-#define TRIG_PIN  PC3   // ขาสงสัญญาณ Trigger (Output)
-#define ECHO_PIN  PC4   // ขารับสัญญาณ Echo (Input - ผาน Voltage Divider)
+// ��˹����͢� HC-SR04
+#define TRIG_PIN  PC3   // ��ʧ�ѭ�ҳ Trigger (Output)
+#define ECHO_PIN  PC4   // ���Ѻ�ѭ�ҳ Echo (Input - �ҹ Voltage Divider)
 
-int main(void)           // ฟงกชันหลักของโปรแกรม
+int main(void)           // ����ѹ��ѡ�ͧ�����
 {
     SystemCoreClockUpdate();
     Timer_Init();
-    pinMode(TRIG_PIN, PIN_MODE_OUTPUT); // ตั้งคาขา TRIG เปนเอาตพุต (สงพัลส)
-    pinMode(ECHO_PIN, PIN_MODE_INPUT);  // ตั้งคาขา ECHO เปนอินพุต (รับพัลส)
+    pinMode(TRIG_PIN, PIN_MODE_OUTPUT); // ��駤Ң� TRIG ໹��ҵ�ص (ʧ����)
+    pinMode(ECHO_PIN, PIN_MODE_INPUT);  // ��駤Ң� ECHO ໹�Թ�ص (�Ѻ����)
 
-    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT); // เริ่มตน USART ที่ 115200 baud
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT); // ������� USART ��� 115200 baud
 
-    while(1)                 // วนลูปอนันต์
+    while(1)                 // ǹ�ٻ͹ѹ��
     {
-        // --- สงพัลส Trigger ไปยัง HC-SR04 ---
-        digitalWrite(TRIG_PIN, LOW);       // ตั้ง TRIG เปน LOW กอน
-        Delay_Us(2);                       // รอ 2 microseconds (ใหสัญญาณคงที่)
+        // --- ʧ���� Trigger ��ѧ HC-SR04 ---
+        digitalWrite(TRIG_PIN, LOW);       // ��� TRIG ໹ LOW �͹
+        Delay_Us(2);                       // �� 2 microseconds (���ѭ�ҳ�����)
 
-        digitalWrite(TRIG_PIN, HIGH);      // สง HIGH ไปที่ TRIG เปนเวลา 10us
-        Delay_Us(10);                      // HC-SR04 ตองการพัลส HIGH อยางนอย 10us
+        digitalWrite(TRIG_PIN, HIGH);      // ʧ HIGH 价�� TRIG ໹���� 10us
+        Delay_Us(10);                      // HC-SR04 �ͧ��þ��� HIGH ��ҧ��� 10us
 
-        digitalWrite(TRIG_PIN, LOW);       // ตั้ง TRIG กลับมาเปน LOW พรอมวัดระยะ
-        // --- จบการสง Trigger ---
+        digitalWrite(TRIG_PIN, LOW);       // ��� TRIG ��Ѻ��໹ LOW �����Ѵ����
+        // --- �����ʧ Trigger ---
 
-        // --- วัดความกวางของพัลส Echo ---
+        // --- �Ѵ������ҧ�ͧ���� Echo ---
         uint32_t pulseWidth = pulseIn(ECHO_PIN, HIGH, 30000);
-        // pulseIn: วัดความกวางของสัญญาณ HIGH ที่ ECHO_PIN
+        // pulseIn: �Ѵ������ҧ�ͧ�ѭ�ҳ HIGH ��� ECHO_PIN
         // timeout = 30000 microseconds (30ms)
-        // คืนคาความกวางเปน microseconds หรือ 0 ถา timeout
+        // �׹�Ҥ�����ҧ໹ microseconds ���� 0 �� timeout
 
-        // --- คำนวณระยะทาง ---
-        // สูตร: distance (cm) = time (us) × 0.034 / 2
-        // pulseWidth = เวลาที่เสียงเดินทางไป-กลับ
-        // 0.034 cm/us = ความเร็วเสียงในอากาศ
+        // --- �ӹǳ���зҧ ---
+        // �ٵ�: distance (cm) = time (us) ? 0.034 / 2
+        // pulseWidth = ���ҷ�����§�Թ�ҧ�-��Ѻ
+        // 0.034 cm/us = �����������§��ҡ��
         float distanceCm = (float)pulseWidth * 0.034f / 2.0f;
-        // หาร 2 เพราะ pulseWidth คือเวลาไป-กลับ ตองการแคเที่ยวเดียว
+        // ��� 2 ���� pulseWidth ��������-��Ѻ �ͧ�������������
 
-        // --- แสดงผลทาง Serial ---
-        if (pulseWidth > 0)                // ตรวจสอบวาไมได timeout
+        // --- �ʴ��ŷҧ Serial ---
+        if (pulseWidth > 0)                // ��Ǩ�ͺ����� timeout
         {
-            USART_Print("Distance: ");     // สงขอความ "Distance: "
-            USART_PrintNum((int32_t)(distanceCm * 10));  // สงเลข (x10 เพื่อใหมีทศนิยม)
-            USART_Print(" cm\r\n");        // สงหนวย " cm" พรอมขึ้นบรรทัดใหม
-            // ตัวอยาง: 150 → "150" cm ควรปรับปรุงใหแสดงทศนิยมโดยแบงเปนสวน Integer/Fraction
+            USART_Print("Distance: ");     // ʧ�ͤ��� "Distance: "
+            USART_PrintNum((int32_t)(distanceCm * 10));  // ʧ�Ţ (x10 �������շȹ���)
+            USART_Print(" cm\r\n");        // ʧ˹�� " cm" ������鹺�÷Ѵ���
+            // �����ҧ: 150  "150" cm ��û�Ѻ��ا���ʴ��ȹ�����ầ໹�ǹ Integer/Fraction
         }
-        else                               // ถา timeout (pulseWidth == 0)
+        else                               // �� timeout (pulseWidth == 0)
         {
-            USART_Print("Out of range!\r\n"); // แจงวาเกินระยะที่วัดได
+            USART_Print("Out of range!\r\n"); // ᨧ���Թ���з���Ѵ�
         }
 
-        Delay_Ms(500);         // หนวง 500ms กอนวัดครั้งถัดไป
-                               // ลดความถี่เพือให HC-SR04 ทำงานไดคงที่
-    }                            // สิ้นสุด while loop
-}                                // สิ้นสุดฟงกชัน main
+        Delay_Ms(500);         // ˹ǧ 500ms �͹�Ѵ���駶Ѵ�
+                               // Ŵ������������ HC-SR04 �ӧҹ䴤����
+    }                            // ����ش while loop
+}                                // ����ش����ѹ main

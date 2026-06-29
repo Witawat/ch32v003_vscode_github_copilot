@@ -1,11 +1,11 @@
-﻿/**
+/**
  * ============================================================
- * ตัวอย่างที่ 6: ตัวอย่างการใช้งาน Stopwatch (Stopwatch_Init, Stopwatch_Start, Stopwatch_Stop, Stopwatch_Reset, Stopwatch_GetTimeString, Stopwatch_GetTotalSeconds)
+ * ������ҧ��� 6: ������ҧ�����ҹ Stopwatch (Stopwatch_Init, Stopwatch_Start, Stopwatch_Stop, Stopwatch_Reset, Stopwatch_GetTimeString, Stopwatch_GetTotalSeconds)
  * ============================================================
  *
- * แสดงการใช้งาน Stopwatch สำหรับจับเวลาแบบนับขึ้น
+ * �ʴ������ҹ Stopwatch ����Ѻ�Ѻ����Ẻ�Ѻ���
  *
- * แผนผังวงจร (Circuit Diagram):
+ * Ἱ�ѧǧ�� (Circuit Diagram):
  *
  *     Button1 (PC0) ----[ ]----> GND    (Start/Stop)
  *                      Start/Stop
@@ -13,141 +13,134 @@
  *     Button2 (PC1) ----[ ]----> GND    (Reset)
  *                      Reset
  *
- *     USART (TX=PD5, RX=PD6) เชื่อมต่อ PC ผ่าน USB-Serial
+ *     USART (TX=PD5, RX=PD6) �������� PC ��ҹ USB-Serial
  *
- *     (Pull-up ภายในของ CH32V003 ถูกใช้งานผ่าน PIN_MODE_INPUT_PULLUP)
+ *     (Pull-up ���㹢ͧ CH32V003 �١��ҹ��ҹ PIN_MODE_INPUT_PULLUP)
  *
  * ============================================================
- * ผลลัพธ์ที่คาดหวัง (Expected Results):
- * - กด Button1 (PC0): เริ่มนับเวลา / หยุดนับเวลา
- * - กด Button2 (PC1): รีเซ็ต stopwatch กลับเป็น 00:00:00
- * - USART แสดงเวลาในรูปแบบ "HH:MM:SS" หรือจำนวนวินาทีทั้งหมด
- * - รายงานเวลาทุก 100ms เพื่อความละเอียดสูง
+ * ���Ѿ����Ҵ��ѧ (Expected Results):
+ * - �� Button1 (PC0): ������Ѻ���� / ��ش�Ѻ����
+ * - �� Button2 (PC1): ���� stopwatch ��Ѻ�� 00:00:00
+ * - USART �ʴ�������ٻẺ "HH:MM:SS" ���ͨӹǹ�Թҷշ�����
+ * - ��§ҹ���ҷء 100ms ���ͤ��������´�٧
  * ============================================================
- * คำเตือน (WARNINGS):
- * - Stopwatch ใช้ TIM2 เป็น base timer ภายใน - ห้ามใช้ TIM2 เพื่อวัตถุประสงค์อื่น
- * - การใช้ Stopwatch ร่วมกับ Countdown (ex07) พร้อมกันไม่ได้ (ทั้งคู่ใช้ TIM2)
- * - Stopwatch ใช้ TIM2 ที่ 1000Hz → resolution 1ms
- * - ต้องเรียก Stopwatch_Init() ก่อนใช้งานฟังก์ชันอื่น
- * - Stopwatch_Reset() หยุดการนับและรีเซ็ตเป็น 0
- * - เวลาสูงสุด ~49 วัน (overflow ของ uint32_t milliseconds)
+ * ����͹ (WARNINGS):
+ * - Stopwatch �� TIM2 �� base timer ���� - ������ TIM2 �����ѵ�ػ��ʧ�����
+ * - ����� Stopwatch �����Ѻ Countdown (ex07) ������ѹ����� (��駤���� TIM2)
+ * - Stopwatch �� TIM2 ��� 1000Hz  resolution 1ms
+ * - ��ͧ���¡ Stopwatch_Init() ��͹��ҹ�ѧ��ѹ���
+ * - Stopwatch_Reset() ��ش��ùѺ��������� 0
+ * - �����٧�ش ~49 �ѹ (overflow �ͧ uint32_t milliseconds)
  * ============================================================
  */
 
+#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include <SimpleHAL.h>
 
-// === ตัวแปร Global ===
+// === ����� Global ===
 
-static uint8_t btn_start_stop = PC0;   // pin PC0 สำหรับปุ่ม Start/Stop
-static uint8_t btn_reset = PC1;        // pin PC1 สำหรับปุ่ม Reset
+static uint8_t btn_start_stop = PC0;   // pin PC0 ����Ѻ���� Start/Stop
+static uint8_t btn_reset = PC1;        // pin PC1 ����Ѻ���� Reset
 
 /**
- * @brief ฟังก์ชันหลัก
- * @return ไม่มี return (loop ไม่มีที่สิ้นสุด)
+ * @brief �ѧ��ѹ��ѡ
+ * @return ����� return (loop ����շ������ش)
  */
 int main(void)
 {
-    // === เริ่มต้นระบบ ===
+    // === ��������к� ===
 
     SystemCoreClockUpdate();
     Timer_Init();
-    // === เริ่มต้น USART ===
+    // === ������� USART ===
 
-    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);  // เริ่มต้น USART ที่ 115200 baud
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);  // ������� USART ��� 115200 baud
 
-    // === ตั้งค่า GPIO สำหรับปุ่มกด ===
+    // === ��駤�� GPIO ����Ѻ������ ===
 
-    pinMode(btn_start_stop, PIN_MODE_INPUT_PULLUP);  // ตั้ง PC0 เป็น input pull-up (Button1)
-    pinMode(btn_reset, PIN_MODE_INPUT_PULLUP);       // ตั้ง PC1 เป็น input pull-up (Button2)
+    pinMode(btn_start_stop, PIN_MODE_INPUT_PULLUP);  // ��� PC0 �� input pull-up (Button1)
+    pinMode(btn_reset, PIN_MODE_INPUT_PULLUP);       // ��� PC1 �� input pull-up (Button2)
 
-    // === เริ่มต้น Stopwatch ===
+    // === ������� Stopwatch ===
 
-    Stopwatch_Init();                   // เริ่มต้นระบบ Stopwatch (ใช้ TIM2 ที่ 1000Hz)
-    // Stopwatch ยังไม่เริ่มนับ ต้องเรียก Stopwatch_Start() ก่อน
+    Stopwatch_Init();                   // ��������к� Stopwatch (�� TIM2 ��� 1000Hz)
+    // Stopwatch �ѧ���������Ѻ ��ͧ���¡ Stopwatch_Start() ��͹
 
-    // === แสดงข้อความเริ่มต้น ===
+    // === �ʴ���ͤ���������� ===
 
-    USART_Print("Stopwatch Example\r\n");           // แสดงชื่อตัวอย่าง
-    USART_Print("===================\r\n");         // เส้นแบ่ง
-    USART_Print("PC0: Start/Stop\r\n");            // แจ้งการทำงานของปุ่ม
-    USART_Print("PC1: Reset\r\n");                 // แจ้งการทำงานของปุ่ม
-    USART_Print("Status: Stopped\r\n");            // สถานะเริ่มต้น
-    USART_Print("Time: 00:00:00\r\n");             // เวลาเริ่มต้น
+    USART_Print("Stopwatch Example\r\n");           // �ʴ����͵�����ҧ
+    USART_Print("===================\r\n");         // �����
+    USART_Print("PC0: Start/Stop\r\n");            // �駡�÷ӧҹ�ͧ����
+    USART_Print("PC1: Reset\r\n");                 // �駡�÷ӧҹ�ͧ����
+    USART_Print("Status: Stopped\r\n");            // ʶҹ��������
+    USART_Print("Time: 00:00:00\r\n");             // �����������
 
-    // === ตัวแปรสำหรับการทำงาน ===
+    // === ���������Ѻ��÷ӧҹ ===
 
-    uint32_t last_display = 0;          // เก็บเวลาครั้งสุดท้ายที่อัปเดตหน้าจอ
-    uint8_t button1_prev = HIGH;        // สถานะก่อนหน้าของ Button1 (สำหรับ edge detection)
-    uint8_t button2_prev = HIGH;        // สถานะก่อนหน้าของ Button2 (สำหรับ edge detection)
+    uint32_t last_display = 0;          // �����Ҥ����ش���·���ѻവ˹�Ҩ�
+    uint8_t button1_prev = HIGH;        // ʶҹС�͹˹�Ңͧ Button1 (����Ѻ edge detection)
+    uint8_t button2_prev = HIGH;        // ʶҹС�͹˹�Ңͧ Button2 (����Ѻ edge detection)
 
-    // === Main Loop (ไม่สิ้นสุด) ===
+    // === Main Loop (�������ش) ===
 
     while (1)
     {
-        // === อ่านสถานะปุ่ม (Edge Detection) ===
+        // === ��ҹʶҹл��� (Edge Detection) ===
 
-        uint8_t btn1_current = digitalRead(btn_start_stop);  // อ่านสถานะ Button1 ปัจจุบัน
-        uint8_t btn2_current = digitalRead(btn_reset);       // อ่านสถานะ Button2 ปัจจุบัน
+        uint8_t btn1_current = digitalRead(btn_start_stop);  // ��ҹʶҹ� Button1 �Ѩ�غѹ
+        uint8_t btn2_current = digitalRead(btn_reset);       // ��ҹʶҹ� Button2 �Ѩ�غѹ
 
-        // === Button1: Start/Stop (ตรวจจับ Falling Edge) ===
+        // === Button1: Start/Stop (��Ǩ�Ѻ Falling Edge) ===
 
-        if (button1_prev == HIGH && btn1_current == LOW)  // ถ้าปุ่มเพิ่งถูกกด (HIGH→LOW)
-        {
-            Delay_Ms(50);                    // หน่วง 50ms เพื่อ debounce
-            if (digitalRead(btn_start_stop) == LOW)  // เช็คซ้ำว่ากดจริง
-            {
-                if (Stopwatch_IsRunning())   // ถ้า stopwatch กำลังทำงาน
-                {
-                    Stopwatch_Stop();        // หยุด stopwatch
-                    USART_Print("Status: Paused\r\n");  // แจ้งสถานะ pause
+                // === Button1: Start/Stop (non-blocking debounce) ===
+        static uint8_t btn1_state = 0;
+        static Timer_t btn1_timer;
+
+        if (btn1_state == 0 && button1_prev == HIGH && btn1_current == LOW) {
+            Start_Timer(&btn1_timer, 50, 0);
+            btn1_state = 1;
+        }
+        if (btn1_state == 1 && Is_Timer_Expired(&btn1_timer)) {
+            if (digitalRead(btn_start_stop) == LOW) {
+                btn1_state = 2;
+                if (Stopwatch_IsRunning()) {
+                    Stopwatch_Stop();
+                    USART_Print("Status: Paused\r\n");
+                } else {
+                    Stopwatch_Start();
+                    USART_Print("Status: Running\r\n");
                 }
-                else                         // ถ้า stopwatch หยุดอยู่
-                {
-                    Stopwatch_Start();       // เริ่ม stopwatch ต่อ
-                    USART_Print("Status: Running\r\n");  // แจ้งสถานะ running
-                }
+            } else {
+                btn1_state = 0;
             }
         }
-
-        // === Button2: Reset (ตรวจจับ Falling Edge) ===
-
-        if (button2_prev == HIGH && btn2_current == LOW)  // ถ้าปุ่มเพิ่งถูกกด (HIGH→LOW)
-        {
-            Delay_Ms(50);                    // หน่วง 50ms เพื่อ debounce
-            if (digitalRead(btn_reset) == LOW)  // เช็คซ้ำว่ากดจริง
-            {
-                Stopwatch_Reset();           // รีเซ็ต stopwatch กลับเป็น 00:00:00
-                USART_Print("Status: Reset\r\n");   // แจ้งสถานะ reset
-                USART_Print("Time: 00:00:00\r\n");  // แสดงเวลา 0
-            }
+        if (btn1_state == 2 && digitalRead(btn_start_stop) == HIGH) {
+            btn1_state = 0;
         }
+        // �ѻവʶҹ� Button1
+        button2_prev = btn2_current;        // �ѻവʶҹ� Button2
 
-        // === อัปเดตสถานะปุ่มสำหรับรอบถัดไป ===
+        // === �ʴ����ҷء 100ms ===
 
-        button1_prev = btn1_current;        // อัปเดตสถานะ Button1
-        button2_prev = btn2_current;        // อัปเดตสถานะ Button2
-
-        // === แสดงเวลาทุก 100ms ===
-
-        if (ELAPSED_TIME(last_display, Get_CurrentMs()) >= 100)  // ทุก 100ms
+        if (ELAPSED_TIME(last_display, Get_CurrentMs()) >= 100)  // �ء 100ms
         {
-            last_display = Get_CurrentMs();  // อัปเดตเวลา
+            last_display = Get_CurrentMs();  // �ѻവ����
 
-            // แสดงเวลาในรูปแบบ HH:MM:SS
-            char time_buf[32];               // buffer สำหรับเก็บ string เวลา
-            Stopwatch_GetTimeString(time_buf, TIME_FORMAT_HHMMSS, TIME_DISPLAY_NORMALIZED);  // อ่านเวลาเป็น string
+            // �ʴ�������ٻẺ HH:MM:SS
+            char time_buf[32];               // buffer ����Ѻ�� string ����
+            Stopwatch_GetTimeString(time_buf, TIME_FORMAT_HHMMSS, TIME_DISPLAY_NORMALIZED);  // ��ҹ������ string
 
-            USART_Print("Time: ");           // แสดงข้อความ Time
-            USART_Print(time_buf);           // แสดงค่าเวลา
+            USART_Print("Time: ");           // �ʴ���ͤ��� Time
+            USART_Print(time_buf);           // �ʴ��������
 
-            // แสดงเวลาทั้งหมดในหน่วยวินาที
-            uint32_t total_sec = Stopwatch_GetTotalSeconds();  // อ่านเวลาทั้งหมดเป็นวินาที
-            USART_Print(" (");               // เปิดวงเล็บ
-            USART_PrintNum(total_sec);        // แสดงจำนวนวินาที
-            USART_Print(" sec)\r\n");         // ปิดวงเล็บและขึ้นบรรทัดใหม่
+            // �ʴ����ҷ������˹����Թҷ�
+            uint32_t total_sec = Stopwatch_GetTotalSeconds();  // ��ҹ���ҷ��������Թҷ�
+            USART_Print(" (");               // �Դǧ���
+            USART_PrintNum(total_sec);        // �ʴ��ӹǹ�Թҷ�
+            USART_Print(" sec)\r\n");         // �Դǧ�����Т�鹺�÷Ѵ����
         }
     }
 
-    // สิ่งนี้จะไม่มีวันถึง
+    // ��觹���������ѹ�֧
     // return 0;
 }

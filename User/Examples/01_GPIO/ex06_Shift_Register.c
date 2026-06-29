@@ -1,9 +1,9 @@
-﻿/**
+/**
  * ============================================================
- * ตัวอยางที่ 6: Shift Register (74HC595 + Knight Rider)
+ * �����ҧ��� 6: Shift Register (74HC595 + Knight Rider)
  * ============================================================
  *
- * แผนผังวงจร (Circuit Diagram):
+ * Ἱ�ѧǧ�� (Circuit Diagram):
  *
  *     CH32V003              74HC595                LEDs
  *     --------              --------               ----
@@ -15,74 +15,75 @@
  *                            GND (8)   Q5 (5)  ---/\/\---|>|--- GND
  *                            MR (10)   Q6 (6)  ---/\/\---|>|--- GND
  *                            OE (13)   Q7 (7)  ---/\/\---|>|--- GND
- *                                          (ทุกตัว 220 Ohm)
+ *                                          (�ء��� 220 Ohm)
  *
  *     MR (10) ---> 3.3V (reset disable)
  *     OE (13) ---> GND (output enable  = active LOW)
  *
  * ============================================================
- * ผลลัพธที่คาดหวัง (Expected Results):
- * - LEDs 8 ดวงแสดงรูปแบบ Knight Rider (ไลไฟกลับไปกลับมา)
- * - เหมือนไฟ KITT ในรถ Knight Rider
- * - LED วิ่งจากซายไปขวา แลวกลับจากขวามาซาย วนไปเรื่อยๆ
+ * ���Ѿ����Ҵ��ѧ (Expected Results):
+ * - LEDs 8 �ǧ�ʴ��ٻẺ Knight Rider (��信�Ѻ仡�Ѻ��)
+ * - ����͹� KITT �ö Knight Rider
+ * - LED ��觨ҡ���仢�� ��ǡ�Ѻ�ҡ����ҫ�� ǹ��������
  * ============================================================
- * คำเตือน (WARNINGS):
- * - 74HC595 รองรับไฟ 5V แต CH32V003 เปน 3.3V ซึ่ง OK สำหรับลอจิก
- * - 74HC595 รับ Vih ขั้นต่ำ ~3.15V ที่ 5V VCC - ควรใช VCC=3.3V หรือ 5V
- * - ตองตอ MR (pin 10) ไป VCC เพื่อไมใหรีเซต
- * - ตองตอ OE (pin 13) ไป GND เพื่อเปดใชงานเอาตพุต
- * - อยาลืม C 100nF ระหวาง VCC-GND ใกลๆ 74HC595
+ * ����͹ (WARNINGS):
+ * - 74HC595 �ͧ�Ѻ� 5V � CH32V003 ໹ 3.3V ��� OK ����Ѻ�ͨԡ
+ * - 74HC595 �Ѻ Vih ��鹵�� ~3.15V ��� 5V VCC - ���� VCC=3.3V ���� 5V
+ * - �ͧ�� MR (pin 10) � VCC ����������૵
+ * - �ͧ�� OE (pin 13) � GND ����໴㪧ҹ��ҵ�ص
+ * - ������ C 100nF ����ҧ VCC-GND ��� 74HC595
  * ============================================================
  */
 
-#include <SimpleHAL.h>   // รวมไลบรารี SimpleHAL ทั้งหมด
+#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include <SimpleHAL.h>   // ����ź���� SimpleHAL ������
 
-// กำหนดชื่อขาสำหรับตอ 74HC595 เพื่องายตอการเขาใจ
-#define DATA_PIN   PC0   // ขาสงขอมูล (Serial Data Input - DS)
-#define CLOCK_PIN  PC1   // ขาสัญญาณนาฬิกา (Shift Clock - SH_CP)
-#define LATCH_PIN  PC2   // ขาล็อคขอมูล (Storage/Latch Clock - ST_CP)
+// ��˹����͢�����Ѻ�� 74HC595 ���ͧ�µ͡�����
+#define DATA_PIN   PC0   // ��ʧ����� (Serial Data Input - DS)
+#define CLOCK_PIN  PC1   // ���ѭ�ҳ���ԡ� (Shift Clock - SH_CP)
+#define LATCH_PIN  PC2   // ����ͤ����� (Storage/Latch Clock - ST_CP)
 
-int main(void)           // ฟงกชันหลักของโปรแกรม
+int main(void)           // ����ѹ��ѡ�ͧ�����
 {
     SystemCoreClockUpdate();
     Timer_Init();
-    // ตั้งคาขาที่ตอ 74HC595 ทั้ง 3 ขาเปนเอาตพุต
+    // ��駤Ңҷ��� 74HC595 ��� 3 ��໹��ҵ�ص
     pinMode(DATA_PIN,  PIN_MODE_OUTPUT);  // DATA (DS) output
     pinMode(CLOCK_PIN, PIN_MODE_OUTPUT);  // CLOCK (SH_CP) output
     pinMode(LATCH_PIN, PIN_MODE_OUTPUT);  // LATCH (ST_CP) output
 
-    while(1)                 // วนลูปอนันต์
+    while(1)                 // ǹ�ٻ͹ѹ��
     {
-        // Knight Rider Pattern: วิ่งจากซายไปขวา (PC0 → PC7)
-        // LED ที่ 0 = QA, LED ที่ 7 = QH
-        for (int i = 0; i < 8; i++)   // i = 0 ถึง 7 (ซายไปขวา)
+        // Knight Rider Pattern: ��觨ҡ���仢�� (PC0  PC7)
+        // LED ��� 0 = QA, LED ��� 7 = QH
+        for (int i = 0; i < 8; i++)   // i = 0 �֧ 7 (���仢��)
         {
-            digitalWrite(LATCH_PIN, LOW);  // ตั้ง LATCH เปน LOW เพือเริ่มสงขอมูล
-                                           // (ไมตอง latch จนกวาจะสงขอมูลครบ)
+            digitalWrite(LATCH_PIN, LOW);  // ��� LATCH ໹ LOW ��������ʧ�����
+                                           // (���ͧ latch ����Ҩ�ʧ����Ťú)
 
             shiftOut(DATA_PIN, CLOCK_PIN, MSBFIRST, (1 << i));
-            // shiftOut: สงขอมูล 1 byte แบบ MSB กอน
-            // (1 << i) = สราง bit pattern เชน i=0 → 00000001, i=1 → 00000010
-            // bit ที่ i จะเปน 1 (LED ดวงนั้นติด) ที่เหลือเปน 0 (ดับ)
+            // shiftOut: ʧ����� 1 byte Ẻ MSB �͹
+            // (1 << i) = ��ҧ bit pattern હ i=0  00000001, i=1  00000010
+            // bit ��� i ��໹ 1 (LED �ǧ��鹵Դ) ��������໹ 0 (�Ѻ)
 
-            digitalWrite(LATCH_PIN, HIGH); // ตั้ง LATCH เปน HIGH เพือล็อคขอมูล
-                                           // ขอมูลจะปรากฏที่ Q0-Q7 ทันที
+            digitalWrite(LATCH_PIN, HIGH); // ��� LATCH ໹ HIGH �����ͤ�����
+                                           // ����Ũл�ҡ���� Q0-Q7 �ѹ��
 
-            Delay_Ms(100);                  // หนวงเวลา 100ms กอนขยับ LED ถัดไป
+            Delay_Ms(100);                  // ˹ǧ���� 100ms �͹��Ѻ LED �Ѵ�
         }
 
-        // Knight Rider Pattern: วิ่งจากขวามาซาย (PC7 → PC0)
-        for (int i = 7; i >= 0; i--)  // i = 7 ถึง 0 (ขวามาซาย)
+        // Knight Rider Pattern: ��觨ҡ����ҫ�� (PC7  PC0)
+        for (int i = 7; i >= 0; i--)  // i = 7 �֧ 0 (����ҫ��)
         {
-            digitalWrite(LATCH_PIN, LOW);  // เริ่มสงขอมูลไปยัง shift register
+            digitalWrite(LATCH_PIN, LOW);  // �����ʧ�������ѧ shift register
 
             shiftOut(DATA_PIN, CLOCK_PIN, MSBFIRST, (1 << i));
-            // (1 << i) = สราง bit pattern เชน i=7 → 10000000, i=6 → 01000000
+            // (1 << i) = ��ҧ bit pattern હ i=7  10000000, i=6  01000000
 
-            digitalWrite(LATCH_PIN, HIGH); // ล็อคขอมูลใหปรากฏที่เอาตพุต
+            digitalWrite(LATCH_PIN, HIGH); // ��ͤ������˻�ҡ������ҵ�ص
 
-            Delay_Ms(100);                  // หนวงเวลา 100ms
+            Delay_Ms(100);                  // ˹ǧ���� 100ms
         }
-        // เมื่อจบ 2 loops จะกลับไปทำซ้ำอีก (วิ่งไป-มาวนไปเรื่อยๆ)
-    }                            // สิ้นสุด while loop
-}                                // สิ้นสุดฟงกชัน main
+        // ����ͨ� 2 loops �С�Ѻ价ӫ���ա (����-��ǹ��������)
+    }                            // ����ش while loop
+}                                // ����ش����ѹ main

@@ -1,78 +1,79 @@
-﻿/**
+/**
  * ============================================================
- * ตัวอยางที่ 3: External Interrupt (อินเทอรรับตภายนอก)
+ * �����ҧ��� 3: External Interrupt (�Թ����Ѻ���¹͡)
  * ============================================================
  *
- * แผนผังวงจร (Circuit Diagram):
+ * Ἱ�ѧǧ�� (Circuit Diagram):
  *
- *     CH32V003                  ปุมกด (Button)
+ *     CH32V003                  ����� (Button)
  *     --------                  -------------
  *     PC1 ---+----/\/\/\---- 3.3V
  *            |      10k Ohm    (Pull-up)
  *            |
- *            +---- ปุมกด ---- GND
+ *            +---- ����� ---- GND
  *
  *     PC0 ----/\/\/\---->|---- GND
  *            220 Ohm
  *
  * ============================================================
- * ผลลัพธที่คาดหวัง (Expected Results):
- * - ทุกครั้งที่กดปุม LED ที่ PC0 จะเปลี่ยนสถานะ (ติด←→ดับ)
- * - Serial Monitor แสดง "Interrupt #1", "#2", "#3"...
- * - ใชการทำงานแบบ Interrupt (ไมตอง Polling)
+ * ���Ѿ����Ҵ��ѧ (Expected Results):
+ * - �ء���駷�衴��� LED ��� PC0 ������¹ʶҹ� (�Դ�Ѻ)
+ * - Serial Monitor �ʴ� "Interrupt #1", "#2", "#3"...
+ * - 㪡�÷ӧҹẺ Interrupt (���ͧ Polling)
  * ============================================================
- * คำเตือน (WARNINGS):
- * - ฟงกชัน callback ใน interrupt ตองสั้นและทำงานเร็วที่สุด
- * - ไมควรเรียก Delay_Ms() หรือฟงกชันที่ blocking ใน ISR
- * - ตองประกาศตัวแปรที่แชรกับ ISR ดวยคําสําคัญ volatile
- * - CH32V003 รองรับ EXTI สูงสุด 8 lines เทานั้น
- * - ถากดปุมเร็วเกินไป อาจเกิด interrupt ซ้ำ (debounce)
+ * ����͹ (WARNINGS):
+ * - ����ѹ callback � interrupt �ͧ�����зӧҹ���Ƿ���ش
+ * - ��������¡ Delay_Ms() ���Ϳ���ѹ��� blocking � ISR
+ * - �ͧ��С�ȵ���÷���áѺ ISR ��¤����Ҥѭ volatile
+ * - CH32V003 �ͧ�Ѻ EXTI �٧�ش 8 lines �ҹ��
+ * - �ҡ���������Թ� �Ҩ�Դ interrupt ��� (debounce)
  * ============================================================
  */
 
-#include <SimpleHAL.h>   // รวมไลบรารี SimpleHAL ทั้งหมด
+#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include <SimpleHAL.h>   // ����ź���� SimpleHAL ������
 
-volatile uint32_t interruptCounter = 0; // ตัวแปรนับจำนวน interrupt ที่เกิดซึ้น
-                                         // volatile ปองกัน compiler optimize คา
-                                         // เพราะมีการเปลี่ยนแปลงจาก ISR
+volatile uint32_t interruptCounter = 0; // ����ùѺ�ӹǹ interrupt ����Դ���
+                                         // volatile �ͧ�ѹ compiler optimize ��
+                                         // �����ա������¹�ŧ�ҡ ISR
 
-void Button_ISR(void)    // ฟงกชัน Interrupt Service Routine สำหรับปุมกด
-{                        // ฟงกชันนี้จะถูกเรียกอัตโนมัติเมื่อเกิด interrupt ที่ PC1
-    interruptCounter++;  // เพิ่มคานับ interrupt ทีละ 1
-                         // (ทำงานเร็ว ไมมีการ Delay หรือ USART ใน ISR)
-}                        // สิ้นสุด ISR
+void Button_ISR(void)    // ����ѹ Interrupt Service Routine ����Ѻ�����
+{                        // ����ѹ���ж١���¡�ѵ��ѵ�������Դ interrupt ��� PC1
+    interruptCounter++;  // �����ҹѺ interrupt ���� 1
+                         // (�ӧҹ���� ���ա�� Delay ���� USART � ISR)
+}                        // ����ش ISR
 
-int main(void)           // ฟงกชันหลักของโปรแกรม
+int main(void)           // ����ѹ��ѡ�ͧ�����
 {
     SystemCoreClockUpdate();
     Timer_Init();
-    pinMode(PC0, PIN_MODE_OUTPUT);       // ตั้งคาขา PC0 เปนเอาตพุต (LED)
-    pinMode(PC1, PIN_MODE_INPUT_PULLUP); // ตั้งคาขา PC1 เปนอินพุต Pull-up (ปุมกด)
+    pinMode(PC0, PIN_MODE_OUTPUT);       // ��駤Ң� PC0 ໹��ҵ�ص (LED)
+    pinMode(PC1, PIN_MODE_INPUT_PULLUP); // ��駤Ң� PC1 ໹�Թ�ص Pull-up (�����)
 
-    attachInterrupt(PC1, Button_ISR, FALLING); // ลงทะเบียน interrupt สำหรับขา PC1
-                                         // โหมด FALLING: เกิด interrupt เมื่อสัญญาณ
-                                         // เปลี่ยนจาก HIGH → LOW (ตอนกดปุม)
-                                         // ฟงกชัน Button_ISR จะถูกเรียกทุกครั้ง
+    attachInterrupt(PC1, Button_ISR, FALLING); // ŧ����¹ interrupt ����Ѻ�� PC1
+                                         // ���� FALLING: �Դ interrupt ������ѭ�ҳ
+                                         // ����¹�ҡ HIGH  LOW (�͹�����)
+                                         // ����ѹ Button_ISR �ж١���¡�ء����
 
-    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT); // เริ่มตน USART ที่ 115200 baud
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT); // ������� USART ��� 115200 baud
 
-    uint32_t lastCount = 0;  // ตัวแปรเก็บคานับครั้งกอนหนา เพื่อตรวจสอบการเปลี่ยนแปลง
+    uint32_t lastCount = 0;  // ������纤ҹѺ���駡͹˹� ���͵�Ǩ�ͺ�������¹�ŧ
 
-    while(1)                 // วนลูปอนันต์
+    while(1)                 // ǹ�ٻ͹ѹ��
     {
-        if (interruptCounter != lastCount)  // ตรวจสอบวาคานับ interrupt เปลี่ยนแปลง
-        {                                    // (มีการเกิด interrupt ใหม)
-            digitalToggle(PC0);              // สลับสถานะ LED ที่ PC0 (ติด←→ดับ)
-                                             // ไมตองอานคากอน เปลี่ยนทันที
+        if (interruptCounter != lastCount)  // ��Ǩ�ͺ�ҤҹѺ interrupt ����¹�ŧ
+        {                                    // (�ա���Դ interrupt ���)
+            digitalToggle(PC0);              // ��Ѻʶҹ� LED ��� PC0 (�Դ�Ѻ)
+                                             // ���ͧ�ҹ�ҡ͹ ����¹�ѹ��
 
-            lastCount = interruptCounter;    // อัปเดตคานับลาสุด
+            lastCount = interruptCounter;    // �ѻവ�ҹѺ���ش
 
-            USART_Print("Interrupt #");      // สงขอความ "Interrupt #" ไป Serial
-            USART_PrintNum((int32_t)interruptCounter); // สงตัวเลขนับ interrupt
-            USART_Print("\r\n");             // ขึ้นบรรทัดใหม
+            USART_Print("Interrupt #");      // ʧ�ͤ��� "Interrupt #" � Serial
+            USART_PrintNum((int32_t)interruptCounter); // ʧ����Ţ�Ѻ interrupt
+            USART_Print("\r\n");             // ��鹺�÷Ѵ���
         }
 
-        // ไมมี Delay_Ms ในลูปหลัก เพราะตองการใหตอบสนองเร็ว
-        // การรอแบบ Busy-wait ชวยประหยัดพลังงานไดในบางกรณี
-    }                            // สิ้นสุด while loop
-}                                // สิ้นสุดฟงกชัน main
+        // ���� Delay_Ms ��ٻ��ѡ ���еͧ����˵ͺʹͧ����
+        // �����Ẻ Busy-wait ��»����Ѵ��ѧ�ҹ�㹺ҧ�ó�
+    }                            // ����ش while loop
+}                                // ����ش����ѹ main

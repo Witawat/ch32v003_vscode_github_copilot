@@ -30,6 +30,7 @@
  * ============================================================
  */
 
+#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include <SimpleHAL.h>    // รวมไลบรารี SimpleHAL ทั้งหมด
 
 #define BUFFER_SIZE 256   // กำหนดขนาด buffer 256 ไบต์

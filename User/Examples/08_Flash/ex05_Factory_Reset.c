@@ -1,95 +1,96 @@
-﻿/**
+/**
  * ============================================================
  * ex05_Factory_Reset.c
- * โปรแกรมรีเซ็ตค่าโรงงาน — กดปุ่ม 3 วินาทีเพื่อลบ Flash ทั้งหมด
- * (Factory reset — hold button 3 seconds to erase entire Flash)
+ * ��������絤���ç�ҹ � ������ 3 �Թҷ�����ź Flash ������
+ * (Factory reset � hold button 3 seconds to erase entire Flash)
  * ============================================================
  *
- * แผนผังวงจร (Circuit Diagram):
+ * Ἱ�ѧǧ�� (Circuit Diagram):
  *
  *   CH32V003
  *   ------
- *   PA1 (OUT) ----[220Ω]----+---- LED (แดง) ---- GND
+ *   PA1 (OUT) ----[220?]----+---- LED (ᴧ) ---- GND
  *                            |
- *   PC0 (IN)  ----[10kΩ]----+---- GND  (ดึงลง)
+ *   PC0 (IN)  ----[10k?]----+---- GND  (�֧ŧ)
  *                  |
- *                  +---- ปุ่มกด ---- VCC (3.3V)
+ *                  +---- ������ ---- VCC (3.3V)
  *
  *   PD5 (TX) ----> USB-UART (RX)
  *   PD6 (RX) <---- USB-UART (TX)
  *
- *   เมื่อกดปุ่มค้าง 3 วินาที: Factory reset
- *   LED กระพริบเร็วระหว่าง reset
+ *   ����͡�������ҧ 3 �Թҷ�: Factory reset
+ *   LED ��о�Ժ���������ҧ reset
  *
  * ============================================================
- * ผลลัพธ์ที่คาดหวัง (Expected Results):
+ * ���Ѿ����Ҵ��ѧ (Expected Results):
  *   "--- Flash Factory Reset ---"
  *   "System running. Hold button PC0 for 3s to factory reset..."
- *   (กดปุ่มค้าง 3 วินาที → LED กระพริบเร็ว)
+ *   (��������ҧ 3 �Թҷ�  LED ��о�Ժ����)
  *   "Factory reset: 2 pages erased"
- *   (LED ดับ)
+ *   (LED �Ѻ)
  *   "--- Done ---"
  * ============================================================
- * คำเตือน (WARNINGS):
- *   ⚠ Flash_EraseAll() จะลบทั้งคอนฟิกและข้อมูล — ไม่สามารถกู้คืนได้!
+ * ����͹ (WARNINGS):
+ *   ? Flash_EraseAll() ��ź��駤͹�ԡ��Т����� � �������ö���׹��!
  *     (Flash_EraseAll erases BOTH config and data pages irreversibly!)
  * ============================================================
  */
 
-#include <SimpleHAL.h>                      // รวมไลบรารี SimpleHAL (Include SimpleHAL library)
+#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include <SimpleHAL.h>                      // ����ź���� SimpleHAL (Include SimpleHAL library)
 
 // --------------------------------------------------------------------------
-// ฟังก์ชันหลัก (Main function)
+// �ѧ��ѹ��ѡ (Main function)
 // --------------------------------------------------------------------------
 
 int main(void)
 {
     SystemCoreClockUpdate();
     Timer_Init();
-    // ตัวแปรนับเวลา (Timing variables)
-    uint32_t pressCount = 0;                 // ตัวนับจำนวนรอบที่กดปุ่มค้าง (Counter for button hold duration)
-    uint8_t  buttonState = 0;                // สถานะปุ่มล่าสุด (Latest button state)
+    // ����ùѺ���� (Timing variables)
+    uint32_t pressCount = 0;                 // ��ǹѺ�ӹǹ�ͺ��衴������ҧ (Counter for button hold duration)
+    uint8_t  buttonState = 0;                // ʶҹл�������ش (Latest button state)
 
-    // ---- ส่วนเริ่มต้น (Initialization) ----
-    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);                      // เริ่มต้นพอร์ตอนุกรม (Initialize USART)
-    pinMode(PC0, PIN_MODE_INPUT_PULLUP);    // กำหนด PC0 เป็นอินพุตดึงขึ้น (Set PC0 as input with pull-up)
-    pinMode(PA1, PIN_MODE_OUTPUT);          // กำหนด PA1 เป็นเอาต์พุต (Set PA1 as output)
-    digitalWrite(PA1, LOW);                 // เริ่มต้น LED ดับ (Initialize LED off)
+    // ---- ��ǹ������� (Initialization) ----
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);                      // ������鹾���͹ء�� (Initialize USART)
+    pinMode(PC0, PIN_MODE_INPUT_PULLUP);    // ��˹� PC0 ���Թ�ص�֧��� (Set PC0 as input with pull-up)
+    pinMode(PA1, PIN_MODE_OUTPUT);          // ��˹� PA1 ����ҵ�ص (Set PA1 as output)
+    digitalWrite(PA1, LOW);                 // ������� LED �Ѻ (Initialize LED off)
 
-    USART_Print("--- Flash Factory Reset ---\r\n");  // แสดงหัวข้อ (Display title)
-    Flash_Init();                            // เริ่มต้นโมดูล Flash (Initialize Flash module)
+    USART_Print("--- Flash Factory Reset ---\r\n");  // �ʴ���Ǣ�� (Display title)
+    Flash_Init();                            // ������������ Flash (Initialize Flash module)
 
-    USART_Print("System running. Hold button PC0 for 3s to factory reset...\r\n");  // แจ้งผู้ใช้ (Prompt user)
+    USART_Print("System running. Hold button PC0 for 3s to factory reset...\r\n");  // �駼���� (Prompt user)
 
-    // ---- วังวนหลัก (Main loop) ----
-    while (1) {                              // วนรอบไม่สิ้นสุด (Infinite loop)
-        buttonState = digitalRead(PC0);     // อ่านสถานะปุ่มกด (Read button state)
+    // ---- �ѧǹ��ѡ (Main loop) ----
+    while (1) {                              // ǹ�ͺ�������ش (Infinite loop)
+        buttonState = digitalRead(PC0);     // ��ҹʶҹл����� (Read button state)
 
-        if (buttonState == 0) {              // ถ้ากดปุ่ม (ดึงลง, Active Low) (If button is pressed, active low)
-            pressCount++;                    // เพิ่มตัวนับ (Increment counter)
-            if (pressCount >= 300) {         // 300 × ~10ms = ~3000ms (3 seconds)
-                USART_Print("Factory reset initiated!\r\n");  // แจ้งเริ่มรีเซ็ต (Notify factory reset start)
+        if (buttonState == 0) {              // ��ҡ����� (�֧ŧ, Active Low) (If button is pressed, active low)
+            pressCount++;                    // ������ǹѺ (Increment counter)
+            if (pressCount >= 300) {         // 300 ? ~10ms = ~3000ms (3 seconds)
+                USART_Print("Factory reset initiated!\r\n");  // ����������� (Notify factory reset start)
 
-                // กระพริบ LED เร็ว ๆ (Fast LED blink)
-                for (uint8_t i = 0; i < 10; i++) {  // กระพริบ 10 ครั้ง (Blink 10 times)
-                    digitalWrite(PA1, HIGH);  // ติด LED (LED on)
-                    Delay_Ms(50);            // หน่วง 50ms (Delay 50ms)
-                    digitalWrite(PA1, LOW);  // ดับ LED (LED off)
-                    Delay_Ms(50);            // หน่วง 50ms (Delay 50ms)
+                // ��о�Ժ LED ���� � (Fast LED blink)
+                for (uint8_t i = 0; i < 10; i++) {  // ��о�Ժ 10 ���� (Blink 10 times)
+                    digitalWrite(PA1, HIGH);  // �Դ LED (LED on)
+                    Delay_Ms(50);            // ˹�ǧ 50ms (Delay 50ms)
+                    digitalWrite(PA1, LOW);  // �Ѻ LED (LED off)
+                    Delay_Ms(50);            // ˹�ǧ 50ms (Delay 50ms)
                 }
 
-                // ลบ Flash ทั้งหมด (Erase all Flash)
-                Flash_EraseAll();            // ลบข้อมูลทั้งหมด (Erase all data)
+                // ź Flash ������ (Erase all Flash)
+                Flash_EraseAll();            // ź�����ŷ����� (Erase all data)
 
-                USART_Print("Factory reset: 2 pages erased\r\n");  // แจ้งลบสำเร็จ (Notify erase complete)
-                digitalWrite(PA1, LOW);     // ดับ LED (LED off)
+                USART_Print("Factory reset: 2 pages erased\r\n");  // ��ź����� (Notify erase complete)
+                digitalWrite(PA1, LOW);     // �Ѻ LED (LED off)
 
-                pressCount = 0;              // รีเซ็ตตัวนับ (Reset counter)
+                pressCount = 0;              // ���絵�ǹѺ (Reset counter)
             }
-        } else {                             // ถ้าปล่อยปุ่ม (If button is released)
-            pressCount = 0;                  // รีเซ็ตตัวนับ (Reset counter)
+        } else {                             // ��һ���»��� (If button is released)
+            pressCount = 0;                  // ���絵�ǹѺ (Reset counter)
         }
 
-        Delay_Ms(10);                        // หน่วง 10ms เพื่อลดการใช้ซีพียู (Delay 10ms to reduce CPU usage)
+        Delay_Ms(10);                        // ˹�ǧ 10ms ����Ŵ�����վ��� (Delay 10ms to reduce CPU usage)
     }
 }

@@ -26,6 +26,7 @@
  * ============================================================
  */
 
+#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include <SimpleHAL.h>  // รวมไลบรารี SimpleHAL สำหรับการเข้าถึงฟังก์ชันของชิป CH32V003
 
 int main(void)
