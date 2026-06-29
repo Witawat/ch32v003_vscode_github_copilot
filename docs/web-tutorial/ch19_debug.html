@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>บทที่ 19: Workshop ดีบัก — แก้ปัญหาเมื่อโค้ดไม่ทำงาน — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch18_multi_module.html">บทก่อน</a>
+    <a href="chapx_pcb.html">บทถัดไป →</a>
+</nav>
+
+<h1>บทที่ 19: Workshop ดีบัก — แก้ปัญหาเมื่อโค้ดไม่ทำงาน</h1>
+<span class="level advanced">ระดับสูง</span>
+
+<section class="flowchart">
+    <h2>🧭 แผนภาพการดีบัก — ไล่จากง่ายไปยาก</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["❌ โค้ดไม่ทำงาน"] --> B{"MCU มีไฟไหม?"}
+    B -->|"ไม่"| B1["เช็ค VDD=3.3V, GND ครบวงจร"]
+    B -->|"มี"| C{"Build ผ่านไหม?"}
+    C -->|"ไม่"| C1["อ่าน error message, เช็ค include path"]
+    C -->|"ผ่าน"| D{"Upload ผ่านไหม?"}
+    D -->|"ไม่"| D1["เช็ค WCH-Link, สาย SWIO, driver"]
+    D -->|"ผ่าน"| E{"LED กระพริบไหม?"}
+    E -->|"ไม่"| E1["ระดับ 1: Print Debug"]
+    E -->|"กระพริบ แต่ไม่ถูก"| F["ระดับ 2: GPIO Debug"]
+    E1 --> F
+    F --> G["ระดับ 3: มัลติมิเตอร์"]
+    G --> H["ระดับ 4: Logic Analyzer"]
+    H --> I["ระดับ 5: GDB Debug"]
+    style A fill:#fee2e2
+    style I fill:#dcfce7,stroke:#22c55e
+    </pre>
+</section>
+
+<section>
+    <h2>🔌 ต่อวงจรสำหรับดีบัก</h2>
+    <pre class="ascii-circuit">
+    CH32V003 Debug Setup — ต้องต่อพร้อมกัน 2 อย่าง:
+    ┌─────────────────────────────────────────────────────────┐
+    │                                                          │
+    │  WCH-Link                  CH32V003              USB-Serial
+    │  ┌──────┐                 ┌──────┐              ┌──────┐
+    │  │ 3.3V ├────────────────┤ VDD  │              │      │
+    │  │ GND  ├────────────────┤ GND  │              │ RX ◄─┤ PD5
+    │  │ SWIO ├────────────────┤ PD1  │  PD5(TX) ────►│ TX   │
+    │  └──────┘                 │      │  PD6(RX) ◄────┤      │
+    │                           │ PD6  │              │ GND──┤ GND
+    │                           │      │              └──────┘
+    │                           │ PC0──┼──/\/\/\──|LED|──GND
+    │                           └──────┘
+    │                                                          │
+    │  ⚡ WCH-Link = Flash + GDB Debug                          │
+    │  ⚡ USB-Serial = Print output (ใช้พร้อมกันได้)              │
+    └─────────────────────────────────────────────────────────┘
+    </pre>
+</section>
+
+<section>
+    <h2>📚 ระดับ 1: Print Debug — วิธีที่ใช้บ่อยที่สุด</h2>
+
+    <h3>SDI_Printf — ผ่าน WCH-Link (ไม่ใช้ขา USART)</h3>
+    <pre><code class="language-c">#define ENABLE_PRINTF  1
+#include "debug.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    SDI_Printf_Enable();
+
+    printf("=== Debug Start ===\r\n");
+    printf("SystemCoreClock=%lu\r\n", (unsigned long)SystemCoreClock);
+    printf("ChipID=%08lx\r\n", (unsigned long)DBGMCU_GetCHIPID());
+
+    int x = 42;
+    printf("x = %d (0x%x)\r\n", x, x);
+    // ดูผลใน MounRiver Studio Console
+}</code></pre>
+
+    <h3>USART_Print — ผ่าน USB-to-Serial (ใช้ terminal ไหนก็ได้)</h3>
+    <pre><code class="language-c">#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    Delay_Ms(500);  // รอ USB-to-Serial พร้อม
+
+    USART_Println("=== App Started ===");
+    USART_Print("  Flash free: ");
+    USART_PrintNum(16384 - 3572);
+    USART_Println(" bytes");
+}</code></pre>
+
+    <h3>DBG_PRINT Macro — เปิดตอน develop, ปิดตอน release</h3>
+    <pre><code class="language-c">#define DEBUG_MODE  1
+
+#if DEBUG_MODE
+    #define DBG_PRINT(msg)           USART_Println(msg)
+    #define DBG_PRINT_VAL(name, val) \
+        do { USART_Print(name); USART_PrintNum(val); USART_Print("\r\n"); } while(0)
+#else
+    #define DBG_PRINT(msg)           ((void)0)
+    #define DBG_PRINT_VAL(name, val) ((void)0)
+#endif
+
+// ใช้งาน:
+DBG_PRINT("Entering init phase");
+DBG_PRINT_VAL("ADC raw: ", adc_val);
+// DEBUG_MODE=0 → โค้ดนี้หายไป — ใช้ 0 Flash!</code></pre>
+
+    <div class="callout callout-warn">
+        <strong>⚠️ ข้อควรระวัง:</strong> อย่า print ใน loop เร็ว (เช่นทุก 1ms) — USART baud 115200 = ~11.5KB/s — print เร็วเกิน buffer overflow → ข้อมูลหาย
+    </div>
+</section>
+
+<section>
+    <h2>📚 ระดับ 2: GPIO/LED Debug — ดีบักโดยไม่ใช้ USART</h2>
+
+    <h3>LED Blink Code — บอกสถานะ</h3>
+    <pre><code class="language-c">void blink_code(uint8_t count) {
+    for(int i = 0; i < count; i++) {
+        digitalWrite(PC0, HIGH); Delay_Ms(200);
+        digitalWrite(PC0, LOW);  Delay_Ms(200);
+    }
+    Delay_Ms(1000);  // pause between codes
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    pinMode(PC0, PIN_MODE_OUTPUT);
+
+    // Startup blink: 1 = init เริ่ม, 2 = init สำเร็จ
+    blink_code(1);  // กระพริบ 1 ครั้ง = กำลัง init
+
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    blink_code(2);  // กระพริบ 2 ครั้ง = USART ready
+
+    // Error blink: 3 = sensor fail, 4 = flash fail
+    if(!sensor_init()) { blink_code(3); while(1); }
+    blink_code(5);  // 5 ครั้ง = ทุกอย่าง OK
+
+    while(1) { /* main loop */ }
+}</code></pre>
+
+    <h3>Toggle Pin — จับด้วย Logic Analyzer</h3>
+    <pre><code class="language-c">#define DEBUG_PIN  PC2
+pinMode(DEBUG_PIN, PIN_MODE_OUTPUT);
+
+// วัดว่าโค้ดช่วงนี้ใช้เวลาเท่าไหร่
+digitalWrite(DEBUG_PIN, HIGH);
+do_heavy_work();
+digitalWrite(DEBUG_PIN, LOW);
+// → ต่อ Logic Analyzer ที่ PC2 → วัด pulse width = execution time</code></pre>
+</section>
+
+<section>
+    <h2>📚 ระดับ 3: ดีบักด้วยมัลติมิเตอร์</h2>
+    <table>
+        <tr><th>วัดอะไร</th><th>วิธีวัด</th><th>ค่าที่ควรได้</th><th>ถ้าผิด → ปัญหาคือ</th></tr>
+        <tr><td>VDD</td><td>โหมด DCV — จิ้ม VDD กับ GND</td><td>3.2-3.4V</td><td>แหล่งจ่ายไฟ, LDO, สายไฟ</td></tr>
+        <tr><td>GND ครบวงจร</td><td>โหมด Continuity (🔊)</td><td>มีเสียง</td><td>สาย GND หลวม/ขาด</td></tr>
+        <tr><td>Pin output HIGH</td><td>DCV — pin กับ GND</td><td>~3.3V</td><td>pinMode, MCU พัง</td></tr>
+        <tr><td>Pin output LOW</td><td>DCV — pin กับ GND</td><td>~0V</td><td>short circuit</td></tr>
+        <tr><td>กระแส MCU</td><td>DCA — อนุกรมกับ VDD</td><td>3-6mA (active)</td><td>short, pin overcurrent</td></tr>
+        <tr><td>กระแส Sleep</td><td>DCA — อนุกรมกับ VDD</td><td>~0.5mA</td><td>peripheral ไม่ปิด</td></tr>
+        <tr><td>กระแส Standby</td><td>DCA — อนุกรมกับ VDD</td><td>~5µA</td><td>pin floating, IO ไม่ได้ตั้งค่า</td></tr>
+        <tr><td>R ต่อเนื่อง</td><td>Ω — คร่อมตัวต้านทาน</td><td>~220Ω / ~10kΩ</td><td>R เสีย, ค่าผิด</td></tr>
+        <tr><td>สายไฟขาด</td><td>Continuity — ปลายถึงปลาย</td><td>มีเสียง</td><td>สายไฟหักใน</td></tr>
+    </table>
+
+    <div class="callout callout-note">
+        <strong>💡 มัลติมิเตอร์มือสอง — ลงทุน ~100-300 บาท —</strong> เป็นอุปกรณ์ดีบักที่คุ้มค่าที่สุด — ใช้ตรวจ hardware ได้แทบทุกปัญหา
+    </div>
+</section>
+
+<section>
+    <h2>📚 ระดับ 4: Logic Analyzer — มองเห็นสัญญาณ</h2>
+
+    <h3>อุปกรณ์ + ซอฟต์แวร์</h3>
+    <pre class="ascii-circuit">
+    USB Logic Analyzer 8ch 24MHz (~$10)
+    ┌────────┐
+    │ USB ───┼── PC (PulseView / sigrok)
+    │ CH0────┼── PC0 (GPIO)
+    │ CH1────┼── PD5 (USART TX)
+    │ CH2────┼── PC1 (I2C SDA)
+    │ CH3────┼── PC4 (PWM)
+    │ GND────┼── GND (MCU)
+    └────────┘
+
+    ใช้จับสัญญาณ:
+    ├─ USART: Baud rate, data bits, parity
+    ├─ I2C:   Start/Stop, Address, Data, ACK/NACK
+    ├─ SPI:   CS, SCK, MOSI, MISO timing
+    ├─ PWM:   Frequency, Duty Cycle
+    └─ GPIO:  Pulse width, timing, interrupt latency
+    </pre>
+
+    <h3>ตัวอย่าง: ตรวจสอบ I2C ว่า sensor ตอบไหม</h3>
+    <pre><code class="language-c">// ต่อ Logic Analyzer CH1=SDA, CH2=SCL
+I2C_SimpleInit(I2C_SPEED_100K, I2C_PINS_DEFAULT);
+
+uint8_t data;
+uint8_t result = I2C_Read(0x76, 0xD0, &data, 1);
+// result=1 → sensor ตอบ → 🟢
+// result=0 → sensor ไม่ตอบ → ดู Logic Analyzer:
+//   - SDA stuck LOW? → bus hang → reset bus
+//   - No Start condition? → I2C init fail
+//   - Address wrong? → เช็ค datasheet (0x76 vs 0xEC)</code></pre>
+</section>
+
+<section>
+    <h2>📚 ระดับ 5: WCH-Link GDB Debug — Breakpoint & Watch</h2>
+
+    <h3>ตั้งค่า VS Code</h3>
+    <p>แก้ไข <code>.vscode/launch.json</code>:</p>
+    <pre><code class="language-json">{
+    "version": "0.2.0",
+    "configurations": [{
+        "name": "CH32V003 Debug (WCH-Link)",
+        "type": "gdb",
+        "request": "launch",
+        "target": "output/CH32V003.elf",
+        "cwd": "${workspaceRoot}",
+        "gdbpath": "C:\\MounRiver\\MounRiver_Studio2\\...\\bin\\riscv-wch-elf-gdb.exe",
+        "autorun": [
+            "target extended-remote localhost:3333",
+            "monitor reset halt",
+            "load",
+            "monitor reset halt"
+        ]
+    }]
+}</code></pre>
+
+    <h3>วิธีใช้</h3>
+    <ol>
+        <li>เปิด Terminal → รัน OpenOCD: <code>.\scripts\upload.bat</code> (ค้างไว้ — หรือใช้คำสั่ง openocd ตรง ๆ แบบไม่ exit)</li>
+        <li>VS Code → Run → Start Debugging → เลือก "CH32V003 Debug"</li>
+        <li>ตั้ง breakpoint — คลิกซ้ายข้างเลขบรรทัด → จุดแดง</li>
+        <li>กด Continue (F5) → โปรแกรมหยุดที่ breakpoint</li>
+        <li>ดูค่า variables ที่แถบซ้าย — hover ดูค่าได้</li>
+    </ol>
+
+    <div class="callout callout-warn">
+        <strong>⚠️ ข้อจำกัด CH32V003:</strong> มี hardware breakpoint แค่ 4 จุด — ตั้งเกิน → GDB error "Cannot insert breakpoint"
+    </div>
+</section>
+
+<section>
+    <h2>📚 อ่าน .map File — รู้ว่า RAM/Flash ไปไหน</h2>
+    <pre><code class="language-c">// เปิด output\CH32V003.map ด้วย Notepad
+
+// ส่วนที่ 1: Memory Configuration
+Memory Configuration
+  FLASH  0x00000000  0x00004000    // 16KB
+  RAM    0x20000000  0x00000800    // 2KB
+
+// ส่วนที่ 2: ตัวแปร Global — ใช้ RAM เท่าไหร่
+.bss           0x20000000       0x10 main.o
+.bss           0x20000010       0x20 SimpleUSART.o
+//                 ↑ 0x10 = 16 bytes, 0x20 = 32 bytes
+
+// ส่วนที่ 3: Stack (สำคัญมาก)
+// Stack = RAM_END - _heap_start
+// ถ้า Stack เหลือน้อย → array ใหญ่ในฟังก์ชัน → stack overflow!</code></pre>
+
+    <h3>วิธีเช็ค Stack เหลือ</h3>
+    <pre><code class="language-c">// เติม RAM ด้วย pattern ตอนเริ่ม
+extern uint32_t _heap_start;
+void fill_stack_pattern(void) {
+    uint32_t *p = (uint32_t*)0x20000000;
+    uint32_t *end = &_heap_start;
+    while(p < end) { *p++ = 0xDEADBEEF; }
+}
+
+// เช็คหลังรัน — pattern ถูกเขียนทับ = stack ใช้ถึงตรงนั้น
+uint32_t stack_used(void) {
+    uint32_t *p = (uint32_t*)0x20000000;
+    while(*p == 0xDEADBEEF && (uint32_t)p < 0x20000800) p++;
+    return 0x20000800 - (uint32_t)p;
+}</code></pre>
+</section>
+
+<section>
+    <h2>⚠️ 12 กรณีศึกษาจริง</h2>
+    <table>
+        <tr><th>#</th><th>อาการ</th><th>สาเหตุ</th><th>วิธีวินิจฉัย</th><th>วิธีแก้</th></tr>
+        <tr><td>1</td><td>ต่อไฟแล้ว MCU ร้อน</td><td>ต่อ 5V เข้า VDD</td><td>วัดไฟที่ VDD = 5V</td><td>ใช้ LDO 3.3V</td></tr>
+        <tr><td>2</td><td>Upload แล้วไม่มีอะไรเกิดขึ้น</td><td>ลืมต่อ SWIO หรือสายหลวม</td><td>เช็ค continuity SWIO</td><td>เสียบสายให้แน่น</td></tr>
+        <tr><td>3</td><td>LED ติดค้าง ไม่กระพริบ</td><td>ลืม SystemCoreClockUpdate()</td><td>Print SystemCoreClock → 0</td><td>เรียกก่อน Timer_Init()</td></tr>
+        <tr><td>4</td><td>USART ตัวอักษรเพี้ยน</td><td>Baud rate ผิดจาก clock</td><td>Logic Analyzer จับ baud</td><td>SystemCoreClockUpdate() ก่อน USART_SimpleInit</td></tr>
+        <tr><td>5</td><td>I2C ไม่เจอ sensor</td><td>Pull-up R หาย หรือ address ผิด</td><td>วัด SDA/SCL = ~3.3V? Logic Analyzer</td><td>ต่อ R 4.7kΩ, เช็ค datasheet</td></tr>
+        <tr><td>6</td><td>ADC อ่าน 0 ตลอด</td><td>pin ไม่ใช่ ADC หรือ PACKAGE ผิด</td><td>Print IS_ADC_PIN → false</td><td>เปลี่ยน pin หรือ PACKAGE</td></tr>
+        <tr><td>7</td><td>PWM ไม่มี output</td><td>PWM_Start() ไม่ได้เรียก</td><td>วัด pin ด้วย multimeter → 0V</td><td>เรียก PWM_Start() หลัง PWM_Init</td></tr>
+        <tr><td>8</td><td>ตัวแปรเปลี่ยนค่าเอง</td><td>Stack overflow ทับ RAM</td><td>เช็ค stack pattern</td><td>ลดขนาด local array, ใช้ static</td></tr>
+        <tr><td>9</td><td>Interrupt ทำงานครั้งเดียวแล้วหาย</td><td>ลืม clear interrupt flag</td><td>Print ใน ISR → ออกแค่ครั้งเดียว</td><td>EXIT_ClearITPendingBit() หรือใช้ SimpleHAL (จัดการให้)</td></tr>
+        <tr><td>10</td><td>รีเซ็ตตัวเองวน</td><td>IWDG timeout หรือ stack overflow</td><td>เช็ค IWDG_Feed() ทุก path</td><td>Feed IWDG ใน while(1) + ทุก blocking wait</td></tr>
+        <tr><td>11</td><td>Flash config อ่านผิด</td><td>Page ถูกเขียนซ้ำเกิน 10K ครั้ง</td><td>อ่านแล้ว key ไม่ตรง</td><td>Wear leveling (บท 11, 18)</td></tr>
+        <tr><td>12</td><td>Sleep แล้วไม่ตื่น</td><td>ลืมตั้ง wake source</td><td>วัดกระแส → ~0.5mA ค้าง</td><td>ตั้ง EXTI หรือ AWU ก่อน PWR_Sleep</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>🛠️ สร้าง Tool: System Health Monitor</h2>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+void print_system_info(void) {
+    USART_Println("=== System Health ===");
+
+    USART_Print("  SysClk: ");
+    USART_PrintNum(SystemCoreClock);
+    USART_Println(" Hz");
+
+    USART_Print("  ChipID: ");
+    USART_PrintHex(DBGMCU_GetCHIPID(), 8);
+
+    USART_Print("  VDD: ");
+    USART_PrintNum(ADC_GetVDD());
+    USART_Println(" mV");
+
+    USART_Print("  Reset: ");
+    if(RCC_GetFlagStatus(RCC_FLAG_PINRST))  USART_Print("PIN ");
+    if(RCC_GetFlagStatus(RCC_FLAG_PORRST))  USART_Print("POR ");
+    if(RCC_GetFlagStatus(RCC_FLAG_SFTRST))  USART_Print("SFT ");
+    if(RCC_GetFlagStatus(RCC_FLAG_IWDGRST)) USART_Print("IWDG ");
+    if(RCC_GetFlagStatus(RCC_FLAG_WWDGRST)) USART_Print("WWDG ");
+    if(RCC_GetFlagStatus(RCC_FLAG_LPWRRST)) USART_Print("LPWR ");
+    USART_Println("");
+
+    RCC_ClearFlag();  // เคลียร์ทุก flag หลังอ่าน
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    ADC_SimpleInit();
+    Delay_Ms(500);
+
+    print_system_info();
+
+    pinMode(PC0, PIN_MODE_OUTPUT);
+    while(1) {
+        digitalToggle(PC0);
+        Delay_Ms(1000);
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>✏️ ลองทำดู</h2>
+    <ol>
+        <li>จงใจใส่ bug — ลบ <code>SystemCoreClockUpdate()</code> — สังเกตอาการ USART เพี้ยน → ใช้ Print Debug หาสาเหตุ</li>
+        <li>ต่อ Logic Analyzer — จับสัญญาณ I2C ระหว่างอ่าน BMP280 — ดู addressing + ACK</li>
+        <li>ใช้ <code>blink_code()</code> แทน USART — ดัดแปลงให้กระพริบบอก error code ต่าง ๆ ได้ 10 แบบ</li>
+        <li>เช็ค Stack Usage — เติม pattern 0xDEADBEEF → รันโปรแกรม 10 นาที → ดูว่า pattern ถูกเขียนทับไปแค่ไหน</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch18_multi_module.html">บทก่อน</a>
+    <a href="chapx_pcb.html">บทถัดไป →</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

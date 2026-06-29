@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>บทเสริม B: สูตรสำเร็จ — อุปกรณ์ยอดนิยม 18 ชนิด — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_pcb.html">บทก่อน</a>
+    <a href="chapx_production.html">บทถัดไป →</a>
+</nav>
+
+<h1>บทเสริม B: สูตรสำเร็จ — อุปกรณ์ยอดนิยม 18 ชนิด</h1>
+<span class="level intermediate">ระดับกลาง</span>
+
+<div class="callout callout-note" style="margin-top:1rem">
+    <strong>📋 วิธีใช้:</strong> แต่ละอุปกรณ์ — โค้ดขั้นต่ำ, วงจร, ข้อควรระวัง — copy + วาง + ต่อวงจรตาม = ใช้งานได้ทันที
+</div>
+
+<section>
+    <h2>🖥️ หมวดแสดงผล</h2>
+
+    <div class="step"><h3>OLED SSD1306 (I2C) — จอ 128x64</h3>
+    <pre class="ascii-circuit">
+    3.3V ── VCC    GND ── GND
+    PC1  ── SDA    PC2 ── SCL
+    </pre>
+    <pre><code class="language-c">#include "OLED.h"
+OLED_t oled;
+
+OLED_Init(&oled, 0x3C, OLED_128x64);  // I2C addr 0x3C
+OLED_Clear(&oled);
+OLED_SetCursor(&oled, 0, 0);
+OLED_Print(&oled, "Hello CH32V003!");
+OLED_SetCursor(&oled, 0, 2);
+OLED_PrintFloat(&oled, "Temp:", 25.5f, 1);
+OLED_Print(&oled, "C");
+OLED_Display(&oled);  // ตอ้งเรียก — push buffer</code></pre>
+    <p class="explain">⚠️ OLED มี 2 address: 0x3C กับ 0x3D — เช็คที่บอร์ด, ต้องมี pull-up 4.7kΩ ที่ SDA/SCL (บางบอร์ดมีในตัว)</p></div>
+
+    <div class="step"><h3>LCD1602 I2C — จอตัวอักษร 16x2</h3>
+    <pre><code class="language-c">#include "LCD1602_I2C.h"
+
+LCD1602_I2C_Init(0x27);  // I2C addr (0x27 หรือ 0x3F)
+LCD1602_I2C_SetCursor(0, 0);
+LCD1602_I2C_Print("Temp: 25.5C");
+LCD1602_I2C_SetCursor(1, 0);
+LCD1602_I2C_Print("Hum:  65%%");</code></pre>
+    <p class="explain">⚠️ address 0x27 vs 0x3F — ใช้ I2C Scanner ตรวจสอบก่อน</p></div>
+
+    <div class="step"><h3>MAX7219 LED Matrix 8x8 — แสดงตัวอักษรวิ่ง</h3>
+    <pre class="ascii-circuit">
+    PC4 ── CS    PC5 ── SCK    PC6 ── DIN
+    5V  ── VCC   GND ── GND   (ใช้ 5V ได้)
+    </pre>
+    <pre><code class="language-c">#include "MAX7219.h"
+
+MAX7219_Init(1, PC4);  // 1 module, CS=PC4
+MAX7219_SetIntensity(5);
+MAX7219_Clear();
+
+// Scroll text
+MAX7219_ScrollText("สวัสดี", 100);  // 100ms/frame
+// หรือแสดง static:
+MAX7219_PrintChar('A');</code></pre>
+    <p class="explain">⚠️ MAX7219 ใช้ SPI: SCK=PC5(SPI_SCK), DIN=PC6(SPI_MOSI) — ห้ามใช้ pin อื่นยกเว้น CS</p></div>
+
+    <div class="step"><h3>TM1637 — 7-Segment 4 หลัก</h3>
+    <pre class="ascii-circuit">
+    PC0 ── CLK    PC1 ── DIO    3.3V ── VCC    GND ── GND
+    </pre>
+    <pre><code class="language-c">#include "TM1637.h"
+
+TM1637_Init(PC0, PC1);   // CLK, DIO
+TM1637_SetBrightness(7);
+TM1637_DisplayNumber(1234);   // "1234"
+TM1637_DisplayTime(12, 30);   // "12:30"</code></pre>
+    <p class="explain">⚠️ TM1637 ใช้ GPIO bit-bang — เลือก pin ไหนก็ได้</p></div>
+</section>
+
+<section>
+    <h2>🌡️ หมวดเซนเซอร์</h2>
+
+    <div class="step"><h3>DHT11 / DHT22 — อุณหภูมิ + ความชื้น</h3>
+    <pre class="ascii-circuit">
+    PC0 ── DATA    3.3V ── VCC
+    R 4.7kΩ ระหว่าง DATA ↔ VCC (pull-up)
+    </pre>
+    <pre><code class="language-c">#include "DHT.h"
+
+DHT_Init(PC0, DHT11);  // หรือ DHT22
+float temp, hum;
+if(DHT_Read(&temp, &hum) == DHT_OK) {
+    USART_Print("Temp: ");
+    USART_PrintFloat(temp, 1);
+    USART_Print("C  Hum: ");
+    USART_PrintFloat(hum, 1);
+    USART_Println("%%");
+}</code></pre>
+    <p class="explain">⚠️ DHT11 อ่านได้ทุก 1 วิ, DHT22 ทุก 2 วิ — อ่านถี่กว่านั้นค่าผิด — ต้องมี pull-up 4.7kΩ เสมอ</p></div>
+
+    <div class="step"><h3>BH1750 — เซนเซอร์วัดแสง</h3>
+    <pre><code class="language-c">#include "BH1750.h"
+
+BH1750_Init(0x23, BH1750_CONT_HIRES);  // I2C addr 0x23 or 0x5C
+uint16_t lux = BH1750_ReadLux();
+USART_Print("Light: ");
+USART_PrintNum(lux);
+USART_Println(" lux");</code></pre>
+    <p class="explain">⚠️ BH1750 ใช้ I2C — ต่อ SDA=PC1, SCL=PC2 — address: ADDR pin → GND=0x23, VCC=0x5C</p></div>
+
+    <div class="step"><h3>HC-SR04 — วัดระยะ Ultrasonic</h3>
+    <pre class="ascii-circuit">
+    PC0 ── TRIG    PC1 ── ECHO
+    5V  ── VCC     GND ── GND   (จ่ายไฟ 5V ได้)
+    </pre>
+    <pre><code class="language-c">#include "HCSR04.h"
+
+HCSR04_Init(PC0, PC1);  // TRIG, ECHO
+float dist = HCSR04_ReadCm();
+if(dist > 0) {
+    USART_Print("Distance: ");
+    USART_PrintFloat(dist, 1);
+    USART_Println(" cm");
+}</code></pre>
+    <p class="explain">⚠️ ECHO pin รับ 5V → ต้องใช้ voltage divider 2:1 (R 2.2kΩ+3.3kΩ) หรือ CH32V003 pin ทน 5V ได้ (5V tolerant)</p></div>
+
+    <div class="step"><h3>MPU6050 — IMU Gyro + Accelerometer</h3>
+    <pre><code class="language-c">#include "MPU6050.h"
+
+MPU6050_Init(0x68);  // I2C addr 0x68 (AD0=GND)
+MPU6050_Data_t data;
+MPU6050_ReadAll(&data);
+
+USART_Print("Accel: ");
+USART_PrintNum(data.ax); USART_Print(", ");
+USART_PrintNum(data.ay); USART_Print(", ");
+USART_PrintNum(data.az);
+USART_Print("  Gyro: ");
+USART_PrintNum(data.gx); USART_Print(", ");
+USART_PrintNum(data.gy); USART_Print(", ");
+USART_PrintNum(data.gz);
+USART_Println("");</code></pre>
+    <p class="explain">⚠️ MPU6050 ใช้ไฟ 3.3V ได้, I2C address 0x68 (AD0=GND) หรือ 0x69 (AD0=VCC)</p></div>
+
+    <div class="step"><h3>PIR Motion Sensor (HC-SR501)</h3>
+    <pre class="ascii-circuit">
+    PC1 ── OUT (digital)    5V ── VCC    GND ── GND
+    </pre>
+    <pre><code class="language-c">volatile uint8_t motion = 0;
+void pir_isr(void) { motion = 1; }
+
+pinMode(PC1, PIN_MODE_INPUT_PULLUP);
+attachInterrupt(PC1, pir_isr, RISING);
+
+while(1) {
+    if(motion) {
+        motion = 0;
+        USART_Println("Motion detected!");
+        digitalWrite(PC0, HIGH);  // LED on
+        Delay_Ms(3000);
+        digitalWrite(PC0, LOW);
+    }
+}</code></pre>
+    <p class="explain">⚠️ PIR output 3.3V — ต่อตรง CH32V003 ได้ — มี potentiometer ปรับ sensitivity + delay time บนตัวโมดูล</p></div>
+</section>
+
+<section>
+    <h2>⚡ หมวดมอเตอร์</h2>
+
+    <div class="step"><h3>Servo SG90 — มอเตอร์หมุนตามองศา</h3>
+    <pre class="ascii-circuit">
+    PD2 ── Signal (PWM)    5V ภายนอก ── VCC    GND ร่วมกัน
+    </pre>
+    <pre><code class="language-c">PWM_SimpleInit(1, PD2, 50);  // TIM1 CH1, 50Hz
+PWM_Start(1);
+
+// 0 องศา (pulse 1ms)
+PWM_SetDuty(1, 5);
+Delay_Ms(1000);
+
+// 90 องศา (pulse 1.5ms)
+PWM_SetDuty(1, 7.5);
+Delay_Ms(1000);
+
+// 180 องศา (pulse 2ms)
+PWM_SetDuty(1, 10);
+Delay_Ms(1000);
+
+// Duty cycle: 0°=5%, 90°=7.5%, 180°=10% (for 50Hz)
+// OR: 0°=2.5%, 90°=5%, 180°=7.5% (เปลี่ยน pulse range บน servo)</code></pre>
+    <p class="explain">⚠️ Servo กินกระแส ~500mA ตอนหมุน — ต้องจ่ายไฟ 5V แยก — ห้ามจ่ายจาก WCH-Link — GND ต้องต่อร่วมกัน</p></div>
+
+    <div class="step"><h3>Stepper 28BYJ-48 + ULN2003</h3>
+    <pre class="ascii-circuit">
+    PC0 ── IN1    PC1 ── IN2    PC2 ── IN3    PC3 ── IN4
+    5V  ── VCC (ULN2003)   (CH32V003 จ่าย 3.3V)
+    </pre>
+    <pre><code class="language-c">#include "StepperMotor.h"
+
+Stepper_Init(PC0, PC1, PC2, PC3);  // IN1-IN4
+Stepper_SetSpeed(5);  // RPM
+Stepper_Rotate(2048); // 2048 steps = 1 รอบ (full-step)
+// หรือ:
+Stepper_RotateDegrees(90);  // หมุน 90 องศา</code></pre>
+    <p class="explain">⚠️ 28BYJ-48 = 2048 steps/รอบ (full-step) หรือ 4096 (half-step) — เกียร์ทด 1:64 — ULN2003 รับ 5V logic แต่ 3.3V ก็ใช้ได้ (marginal)</p></div>
+
+    <div class="step"><h3>L298N — DC Motor Driver</h3>
+    <pre class="ascii-circuit">
+    PC0 ── IN1    PC1 ── IN2    PC4 ── ENA (PWM)
+    5V-12V ภายนอก ── VCC Motor    GND ร่วมกัน
+    </pre>
+    <pre><code class="language-c">pinMode(PC0, PIN_MODE_OUTPUT);  // IN1
+pinMode(PC1, PIN_MODE_OUTPUT);  // IN2
+PWM_SimpleInit(1, PC4, 1000);   // ENA
+PWM_Start(1);
+
+// Forward
+digitalWrite(PC0, HIGH); digitalWrite(PC1, LOW);
+PWM_SetDuty(1, 75);   // speed 75%
+
+// Reverse
+digitalWrite(PC0, LOW); digitalWrite(PC1, HIGH);
+
+// Stop
+digitalWrite(PC0, LOW); digitalWrite(PC1, LOW);</code></pre>
+    <p class="explain">⚠️ ต้องมี flyback diode ที่มอเตอร์ — L298N มีในตัว — VCC Motor แยกจาก VCC Logic — GND ต้องต่อรวมกัน</p></div>
+</section>
+
+<section>
+    <h2>📡 หมวดสื่อสารไร้สาย</h2>
+
+    <div class="step"><h3>nRF24L01 — 2.4GHz Radio</h3>
+    <pre class="ascii-circuit">
+    PC4 ── CSN    PC5 ── SCK    PC6 ── MOSI    PC7 ── MISO
+    PC3 ── CE     3.3V ── VCC (ห้าม 5V!)
+    </pre>
+    <pre><code class="language-c">#include "nRF24L01.h"
+
+uint8_t tx_addr[] = {0xE7, 0xE7, 0xE7, 0xE7, 0xE7};
+uint8_t rx_addr[] = {0xC2, 0xC2, 0xC2, 0xC2, 0xC2};
+
+// --- Transmitter ---
+nRF24_Init(PC4, PC3);  // CSN, CE
+nRF24_TXMode(tx_addr, 0x60);
+char msg[] = "Hello";
+nRF24_Send((uint8_t*)msg, sizeof(msg));
+
+// --- Receiver ---
+nRF24_Init(PC4, PC3);
+nRF24_RXMode(rx_addr, 0x60);
+if(nRF24_Available()) {
+    char buf[32];
+    nRF24_Read((uint8_t*)buf, 32);
+    USART_Println(buf);
+}</code></pre>
+    <p class="explain">⚠️ nRF24L01 ใช้ไฟ 3.3V เท่านั้น — 5V จะพัง — address 5 bytes — pipe 0-5 channel ต้องตรงกันทั้ง sender/receiver — ต่อ decoupling 100nF ใกล้ VCC</p></div>
+
+    <div class="step"><h3>HC-05 Bluetooth</h3>
+    <pre class="ascii-circuit">
+    PD5 (TX) ── RX (HC05)    PD6 (RX) ── TX (HC05)
+    5V ── VCC (HC05)         GND ── GND
+    </pre>
+    <pre><code class="language-c">USART_SimpleInit(BAUD_9600, USART_PINS_DEFAULT);  // Default 9600
+
+// AT Mode: ต่อ EN pin HIGH
+// ส่งคำสั่ง:
+USART_Print("AT\r\n");           Delay_Ms(100);
+USART_Print("AT+NAME=MyDevice\r\n");  Delay_Ms(100);
+USART_Print("AT+PSWD=1234\r\n");      Delay_Ms(100);
+
+// Data Mode: EN pin LOW (หรือไม่ต่อ)
+while(1) {
+    if(USART_Available()) {
+        char c = USART_Read();
+        USART_WriteByte(c);  // echo back
+    }
+}</code></pre>
+    <p class="explain">⚠️ HC-05 default baud 9600 — AT mode ใช้ EN pin HIGH — TX/RX cross-connect — CH32V003 TX→RX(HC05), RX→TX(HC05)</p></div>
+</section>
+
+<section>
+    <h2>🔧 หมวดอุปกรณ์อื่น ๆ</h2>
+
+    <div class="step"><h3>Relay — เปิด-ปิดไฟ AC/DC</h3>
+    <pre class="ascii-circuit">
+    PC0 ── R 220Ω ── B (NPN Transistor: 2N2222/BC547)
+                            E ── GND
+                            C ── Relay Coil ── 5V
+    อย่าลืม Flyback Diode (1N4148) คร่อม coil!
+    </pre>
+    <pre><code class="language-c">#include "Relay.h"
+
+Relay_Init(PC0, RELAY_ACTIVE_HIGH);
+
+Relay_On(PC0);   // เปิด
+Delay_Ms(5000);
+Relay_Off(PC0);  // ปิด
+Relay_Toggle(PC0);  // สลับ</code></pre>
+    <p class="explain">⚠️ ห้ามต่อ relay coil ตรงกับ pin MCU — กระแสสูงเกิน — ต้องใช้ทรานซิสเตอร์ + flyback diode เสมอ — ระวัง 220VAC!</p></div>
+
+    <div class="step"><h3>Buzzer — สร้างเสียง</h3>
+    <pre class="ascii-circuit">
+    PC4 ── Buzzer (+)    GND ── Buzzer (-)
+    (Active buzzer: ใช้ GPIO, Passive: ใช้ PWM)
+    </pre>
+    <pre><code class="language-c">#include "Buzzer.h"
+
+// Active buzzer — เปิดปิดด้วย GPIO
+Buzzer_Init(PC0, BUZZER_ACTIVE);
+Buzzer_Beep(PC0, 200);   // บี๊บ 200ms
+
+// Passive buzzer — ใช้ PWM ทำ tone
+Buzzer_Init(PC4, BUZZER_PASSIVE);
+Buzzer_Tone(PC4, 1000, 500);  // 1000Hz, 500ms
+Delay_Ms(200);
+Buzzer_Tone(PC4, 2000, 500);  // 2000Hz
+
+// เล่นเพลง
+const uint16_t notes[] = {262, 294, 330, 349, 392, 440, 494, 523};
+for(int i = 0; i < 8; i++) {
+    Buzzer_Tone(PC4, notes[i], 200);
+    Delay_Ms(50);
+}</code></pre>
+    <p class="explain">⚠️ Active buzzer มีวงจร oscillator ในตัว → แค่จ่ายไฟก็ดัง — Passive buzzer ต้องใช้ PWM/Tone — Active ง่ายกว่า</p></div>
+
+    <div class="step"><h3>DS3231 RTC — นาฬิกาจริง</h3>
+    <pre><code class="language-c">#include "DS3231.h"
+
+DS3231_DateTime_t dt;
+
+// Set time
+dt.year = 26; dt.month = 6; dt.day = 29;
+dt.hour = 14; dt.minute = 30; dt.second = 0;
+dt.weekday = 1;
+DS3231_SetDateTime(&dt);
+
+// Read time
+DS3231_GetDateTime(&dt);
+USART_Print("Time: ");
+USART_PrintNum(dt.hour);
+USART_Print(":");
+USART_PrintNum(dt.minute);
+USART_Print(":");
+USART_PrintNum(dt.second);
+USART_Print("  Date: ");
+USART_PrintNum(dt.day);
+USART_Print("/");
+USART_PrintNum(dt.month);
+USART_Print("/20");
+USART_PrintNum(dt.year);
+USART_Println("");
+
+// Read temperature (built-in)
+float temp = DS3231_GetTemperature();
+USART_Print("RTC Temp: ");
+USART_PrintFloat(temp, 1);
+USART_Println("C");</code></pre>
+    <p class="explain">⚠️ DS3231 ใช้ I2C addr 0x68 — ต้องมีแบตเตอรี่ CR2032 (รักษาเวลาตอนไฟดับ) — ความแม่นยำ ±2ppm (~1 นาที/ปี)</p></div>
+
+    <div class="step"><h3>Rotary Encoder — ปุ่มหมุน + กด</h3>
+    <pre class="ascii-circuit">
+    PC0 ── CLK    PC1 ── DT    PC2 ── SW (button)
+    ใช้ pull-up ภายใน (PIN_MODE_INPUT_PULLUP)
+    </pre>
+    <pre><code class="language-c">#include "RotaryEncoder.h"
+
+int32_t position = 0;
+
+void on_rotate(int8_t dir) {
+    position += dir;
+    USART_Print("Position: ");
+    USART_PrintNum(position);
+    USART_Println("");
+}
+
+void on_button(void) {
+    USART_Println("Button pressed!");
+    position = 0;  // reset
+}
+
+int main(void) {
+    // ... init ...
+    RotaryEncoder_Init(PC0, PC1, PC2);
+    RotaryEncoder_OnRotate(on_rotate);
+    RotaryEncoder_OnButton(on_button);
+
+    while(1) {
+        RotaryEncoder_Update();  // poll
+        // หรือใช้ interrupt: RotaryEncoder_InitInt()
+    }
+}</code></pre>
+    <p class="explain">⚠️ Rotary encoder ต้อง poll บ่อย — ถ้าใช้ใน SimpleScheduler ตั้ง interval ~1-5ms — ถ้าขาด rotation → เพิ่มความถี่ poll</p></div>
+</section>
+
+<section>
+    <h2>📋 ข้อมูลเพิ่มเติม</h2>
+    <table>
+        <tr><th>อุปกรณ์</th><th>Lib Path</th><th>อินเทอร์เฟส</th><th>ราคาประมาณ</th></tr>
+        <tr><td>OLED SSD1306</td><td><code>User/Lib/OLED/</code></td><td>I2C</td><td>~60-100฿</td></tr>
+        <tr><td>LCD1602 I2C</td><td><code>User/Lib/LCD1602_I2C/</code></td><td>I2C</td><td>~80-150฿</td></tr>
+        <tr><td>MAX7219</td><td><code>User/Lib/MAX7219/</code></td><td>SPI</td><td>~30-50฿</td></tr>
+        <tr><td>TM1637</td><td><code>User/Lib/TM1637/</code></td><td>GPIO</td><td>~15-30฿</td></tr>
+        <tr><td>DHT11</td><td><code>User/Lib/DHT/</code></td><td>GPIO</td><td>~20-30฿</td></tr>
+        <tr><td>BH1750</td><td><code>User/Lib/BH1750/</code></td><td>I2C</td><td>~25-40฿</td></tr>
+        <tr><td>HC-SR04</td><td><code>User/Lib/HCSR04/</code></td><td>GPIO</td><td>~20-30฿</td></tr>
+        <tr><td>MPU6050</td><td><code>User/Lib/MPU6050/</code></td><td>I2C</td><td>~40-60฿</td></tr>
+        <tr><td>PIR</td><td>— (GPIO)</td><td>GPIO</td><td>~20-30฿</td></tr>
+        <tr><td>Servo SG90</td><td>— (PWM)</td><td>PWM</td><td>~40-60฿</td></tr>
+        <tr><td>28BYJ-48</td><td><code>User/Lib/StepperMotor/</code></td><td>GPIO</td><td>~30-50฿</td></tr>
+        <tr><td>L298N</td><td><code>User/Lib/L298N/</code></td><td>GPIO+PWM</td><td>~30-50฿</td></tr>
+        <tr><td>nRF24L01</td><td><code>User/Lib/nRF24L01/</code></td><td>SPI</td><td>~30-40฿</td></tr>
+        <tr><td>HC-05</td><td><code>User/Lib/HC05/</code></td><td>USART</td><td>~80-120฿</td></tr>
+        <tr><td>Relay Module</td><td><code>User/Lib/Relay/</code></td><td>GPIO</td><td>~20-30฿</td></tr>
+        <tr><td>Buzzer</td><td><code>User/Lib/Buzzer/</code></td><td>GPIO/PWM</td><td>~5-10฿</td></tr>
+        <tr><td>DS3231</td><td><code>User/Lib/DS3231/</code></td><td>I2C</td><td>~25-40฿</td></tr>
+        <tr><td>Rotary Encoder</td><td><code>User/Lib/RotaryEncoder/</code></td><td>GPIO</td><td>~10-20฿</td></tr>
+    </table>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_pcb.html">บทก่อน</a>
+    <a href="chapx_production.html">บทถัดไป →</a>
+</nav>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

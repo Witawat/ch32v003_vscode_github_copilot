@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>บทเสริม A: จาก Breadboard สู่ PCB — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch19_debug.html">บทก่อน</a>
+    <a href="chapx_recipes.html">บทถัดไป →</a>
+</nav>
+
+<h1>บทเสริม A: จาก Breadboard สู่ PCB</h1>
+<span class="level advanced">ระดับสูง</span>
+
+<div class="callout callout-note" style="margin-top:1rem">
+    <strong>📋 บทนี้สำหรับ:</strong> คนที่ลองบน Breadboard แล้ว อยากทำ PCB จริง — ไม่ต้องมีประสบการณ์ PCB มาก่อน
+</div>
+
+<section class="flowchart">
+    <h2>🧭 ขั้นตอนทำ PCB — 6 ขั้นตอน</h2>
+    <pre class="mermaid">
+flowchart LR
+    A["1. Schematic"] --> B["2. Footprint"]
+    B --> C["3. Layout"]
+    C --> D["4. Gerber Export"]
+    D --> E["5. สั่งผลิต JLCPCB"]
+    E --> F["6. ประกอบ + ทดสอบ"]
+    </pre>
+</section>
+
+<section>
+    <h2>📚 1. Schematic — ออกแบบวงจร</h2>
+    <p>ใช้ <strong>EasyEDA</strong> (ฟรี, บนเว็บ) หรือ <strong>KiCad</strong> (ฟรี, ติดตั้ง) — เราจะใช้ EasyEDA เพราะเริ่มต้นง่ายสุด ไม่ต้องติดตั้งอะไร</p>
+
+    <h3>Schematic ขั้นต่ำ — CH32V003 เปล่า ๆ</h3>
+    <pre class="ascii-circuit">
+    ╔════════════════════════════════════════════════════╗
+    ║  CH32V003 Minimum System Schematic               ║
+    ╠════════════════════════════════════════════════════╣
+    ║                                                     ║
+    ║   VDD ──┬── 3.3V                                   ║
+    ║         ├── [100nF] ── GND  ← decoupling cap       ║
+    ║         ├── [10µF]  ── GND  ← bulk cap (optional)  ║
+    ║   GND ── GND                                       ║
+    ║   PD1 ── Header (SWIO)  ← ต่อ WCH-Link             ║
+    ║   NRST ── [10kΩ] ── 3.3V (pull-up)                ║
+    ║         ├── [100nF] ── GND (optional debounce)      ║
+    ║         └── Button ── GND (optional reset btn)     ║
+    ║                                                     ║
+    ║  ⚡ Decoupling 100nF ต้องวางใกล้ VDD pin ที่สุด      ║
+    ╚════════════════════════════════════════════════════╝
+    </pre>
+
+    <h3>Schematic ขั้นกลาง — มี USB-C + LDO + USB-Serial</h3>
+    <pre class="ascii-circuit">
+    USB-C ──► AMS1117-3.3V ──► VDD (3.3V)
+    │            │
+    │    [10µF]──┴──[100nF]──GND  ← input/output caps
+    │
+    └──► CH340N (USB-Serial) ──► PD5(RX), PD6(TX)
+              │
+         [100nF]──GND   (close to CH340N VCC)
+
+    Programming Header (4-pin 2.54mm):
+    ┌────┬────┬────┬────┐
+    │ 3V3│ GND│SWIO│ NC │  ← WCH-Link ต่อตรง
+    └────┴────┴────┴────┘
+    </pre>
+
+    <h3>รายการอุปกรณ์ที่ต้องใส่ใน Schematic</h3>
+    <table>
+        <tr><th>อุปกรณ์</th><th>Value</th><th>Package</th><th>หมายเหตุ</th></tr>
+        <tr><td>CH32V003</td><td>F4P6</td><td>TSSOP-20</td><td>MCU หลัก</td></tr>
+        <tr><td>AMS1117-3.3</td><td>3.3V LDO</td><td>SOT-223</td><td>Regulator (5V→3.3V)</td></tr>
+        <tr><td>CH340N</td><td>USB-UART</td><td>SOP-8</td><td>USB-to-Serial</td></tr>
+        <tr><td>Capacitor</td><td>100nF</td><td>0805 หรือ 0603</td><td>Decoupling — 1 ตัวต่อ VDD pin</td></tr>
+        <tr><td>Capacitor</td><td>10µF</td><td>0805 หรือ SMD electrolytic</td><td>Bulk — input LDO</td></tr>
+        <tr><td>Resistor</td><td>10kΩ</td><td>0805</td><td>NRST pull-up</td></tr>
+        <tr><td>Resistor</td><td>220Ω</td><td>0805</td><td>LED current limit</td></tr>
+        <tr><td>LED</td><td>5mm หรือ 0805</td><td>—</td><td>Indicator</td></tr>
+        <tr><td>Pin Header</td><td>1x4 2.54mm</td><td>THT</td><td>Programming port</td></tr>
+        <tr><td>USB-C</td><td>16-pin</td><td>SMD</td><td>Power + Data</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>📚 2. Footprint — เลือกแพ็กเกจอุปกรณ์</h2>
+
+    <h3>CH32V003 Package Footprint</h3>
+    <table>
+        <tr><th>แพ็กเกจ</th><th>ขนาด</th><th>Pitch</th><th>ความยากบัดกรี</th><th>แนะนำ</th></tr>
+        <tr><td>SOP-8 (J4M6)</td><td>~6x5mm</td><td>1.27mm</td><td>🟢 ง่าย</td><td>Product ราคาถูก, ใช้ pin น้อย</td></tr>
+        <tr><td>SOP-16 (A4M6)</td><td>~10x5mm</td><td>1.27mm</td><td>🟢 ง่าย</td><td>พอดี — มี I2C+SPI+USART</td></tr>
+        <tr><td>TSSOP-20 (F4P6)</td><td>~6.5x4.4mm</td><td>0.65mm</td><td>🟡 ปานกลาง</td><td>⭐ แนะนำ — ครบทุก pin</td></tr>
+        <tr><td>QFN-20 (F4U6)</td><td>3x3mm</td><td>0.50mm</td><td>🔴 ยาก (hot air)</td><td>Product เล็กมาก</td></tr>
+    </table>
+
+    <div class="callout callout-note">
+        <strong>💡 สำหรับมือใหม่:</strong> เริ่มที่ TSSOP-20 — ใหญ่พอให้บัดกรีด้วยมือ (drag soldering) — อย่าเริ่มที่ QFN-20
+    </div>
+</section>
+
+<section>
+    <h2>📚 3. Layout — วางอุปกรณ์ + ลากเส้น</h2>
+
+    <h3>กฎเหล็ก 10 ข้อ</h3>
+    <ol>
+        <li><strong>Decoupling cap ใกล้ VDD:</strong> 100nF ต้องอยู่ห่างจาก VDD pin < 5mm</li>
+        <li><strong>Ground Plane:</strong> Layer ล่างควรเป็น GND ทั้งแผ่น — ลด noise, ลด EMI</li>
+        <li><strong>Track Width:</strong> Signal = 0.25-0.3mm (10-12mil), Power = 0.5-0.8mm (20-30mil)</li>
+        <li><strong>Via Size:</strong> 0.6mm hole / 1.0mm pad (24/40mil) — มาตรฐาน JLCPCB</li>
+        <li><strong>Keep-out โซน RF:</strong> ถ้ามี nRF24L01 / WiFi — antenna ต้องลอย ไม่มี copper ใต้</li>
+        <li><strong>แยก Analog/Digital:</strong> AGND ต้องแยกจาก DGND → เชื่อมจุดเดียว (star ground)</li>
+        <li><strong>Crystal (ถ้าใช้):</strong> วางใกล้ MCU, track สมมาตร, ห้ามมีสัญญาณอื่นไขว้</li>
+        <li><strong>USB Diff Pair:</strong> D+/D- — track คู่ขนาน, ความยาวเท่ากัน, impedance ~90Ω</li>
+        <li><strong>Silkscreen:</strong> ใส่ชื่อ pin, ขั้ว LED, ขั้ว capacitor — ช่วยตอนประกอบ</li>
+        <li><strong>Board Edge:</strong> Keep-out ≥ 0.5mm จากขอบบอร์ด</li>
+    </ol>
+
+    <h3>ขนาดบอร์ดแนะนำ</h3>
+    <pre class="ascii-circuit">
+    ขนาดเล็กสุด (2-layer, 1.6mm):
+    ├─ 20x20mm  → ~$2 (5 ชิ้น) JLCPCB
+    ├─ 30x40mm  → ~$2 (5 ชิ้น) พอสำหรับ CH32V003 + LDO + header
+    └─ 50x50mm  → ~$5 (5 ชิ้น) มีพื้นที่เหลือ
+
+    ✅ ใช้ 2-layer ก็พอสำหรับ CH32V003
+    ✅ 4-layer ไม่จำเป็น (แพงขึ้น 3-5 เท่า)
+    </pre>
+</section>
+
+<section>
+    <h2>📚 4-5. Gerber Export + สั่งผลิต</h2>
+
+    <h3>วิธี Export จาก EasyEDA</h3>
+    <ol>
+        <li>Open PCB → <strong>File → Export → Gerber</strong></li>
+        <li>เช็ค layers: GTL (top copper), GBL (bottom copper), GTS (top soldermask), GBS, GTO (top silkscreen), GBO, GKO (outline), TXT (drill)</li>
+        <li>บีบอัดเป็น .zip</li>
+        <li>อัปโหลดไป <strong>jlcpcb.com</strong> → Gerber Viewer ออนไลน์จะแสดงตัวอย่าง</li>
+    </ol>
+
+    <h3>ตั้งค่าสั่ง JLCPCB</h3>
+    <table>
+        <tr><th>ตั้งค่า</th><th>เลือก</th></tr>
+        <tr><td>Layers</td><td>2</td></tr>
+        <tr><td>Thickness</td><td>1.6mm</td></tr>
+        <tr><td>Copper Weight</td><td>1oz</td></tr>
+        <tr><td>Surface Finish</td><td>HASL (with lead) — ถูกสุด</td></tr>
+        <tr><td>Color</td><td>Green (ถูกสุด) / Black (สวย)</td></tr>
+        <tr><td>Quantity</td><td>5 ชิ้น</td></tr>
+        <tr><td>ราคา</td><td>~$2 + shipping (~$5-8)</td></tr>
+    </table>
+
+    <div class="callout callout-good">
+        <strong>✅ Checklist ก่อนสั่ง:</strong>
+        <ul>
+            <li>เปิด Gerber Viewer ดูทุก layer — ถูกต้องไหม</li>
+            <li>ขนาดบอร์ดตรงกับที่คิดไหม</li>
+            <li>รู drill ครบ — mounting hole, via, component pad</li>
+            <li>ไม่มี track สั้น (DRC check ผ่าน)</li>
+            <li>Silkscreen ไม่ทับ pad</li>
+        </ul>
+    </div>
+</section>
+
+<section>
+    <h2>📚 6. ประกอบ + ทดสอบ</h2>
+
+    <h3>การบัดกรี TSSOP-20 ด้วยมือ (Drag Soldering)</h3>
+    <ol>
+        <li>ทา flux บาง ๆ ที่ pad</li>
+        <li>วาง IC ตรงตำแหน่ง — บัดกรี 1 ขาตรงมุมก่อน (ยึด IC)</li>
+        <li>ตรวจสอบว่าขาตรง pad ทุกขา — ถ้าไม่ตรง → ละลายขามุมแล้วเลื่อน</li>
+        <li>หยด solder ที่ปลายหัวแร้ง → ลากจากขา 1 → 20 ช้า ๆ</li>
+        <li>ถ้ามี solder bridge → ใช้ solder wick ซับออก</li>
+        <li>ล้าง flux ด้วย IPA (isopropyl alcohol)</li>
+        <li>ตรวจสอบด้วยแว่นขยาย — ทุกขาดูดี</li>
+    </ol>
+
+    <h3>การทดสอบ PCB ใหม่</h3>
+    <ol>
+        <li><strong>Visual:</strong> ตรวจด้วยตา — มี solder bridge? ขาไหนไม่ติด?</li>
+        <li><strong>Short Circuit:</strong> มัลติมิเตอร์โหมด Continuity — จิ้ม VDD กับ GND → ต้องไม่มีเสียง (ถ้ามี = short!)</li>
+        <li><strong>Power-on:</strong> จ่ายไฟ — วัด VDD = 3.3V — เอานิ้วจับ MCU → ไม่ควรร้อน</li>
+        <li><strong>Flash Test:</strong> ต่อ WCH-Link → Upload → LED กระพริบไหม?</li>
+        <li><strong>Peripheral Test:</strong> ทดสอบ USART, I2C, SPI ทีละตัว</li>
+        <li><strong>Burn-in:</strong> ปล่อยรัน 24 ชม. — ไม่ควรมี reset หรือ hang</li>
+    </ol>
+</section>
+
+<section>
+    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>PCB มาแล้ว MCU ไม่ทำงาน</td><td>ลืมต่อ VDD หรือ GND</td><td>เช็ค schematic, วัดไฟที่ pin MCU</td></tr>
+        <tr><td>โปรแกรมผ่าน WCH-Link ไม่ได้</td><td>ลืม pull-up NRST, SWIO track ยาวเกิน</td><td>ต่อ 10kΩ NRST→3.3V, SWIO line < 10cm</td></tr>
+        <tr><td>MCU รีเซ็ตเอง</td><td>Noise บน VDD, decoupling cap ไกล</td><td>เพิ่ม 100nF ใกล้ VDD, เช็ค ground plane</td></tr>
+        <tr><td>USB เสียบแล้วไม่รู้จัก</td><td>CH340N ไม่ได้ไฟ, CC resistors หาย (USB-C)</td><td>USB-C ต้องมี R 5.1kΩ CC1,CC2→GND</td></tr>
+        <tr><td>Solder bridge TSSOP-20</td><td>ใช้ solder มากเกิน, flux ไม่พอ</td><td>ใช้ flux แบบ pen, solder wire 0.3mm</td></tr>
+        <tr><td>Silkscreen บน pad</td><td>ลืมตั้ง design rule</td><td>DRC → Silkscreen over pad → error</td></tr>
+    </table>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch19_debug.html">บทก่อน</a>
+    <a href="chapx_recipes.html">บทถัดไป →</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

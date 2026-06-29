@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>บทที่ 18: รวมหลายโมดูล — สร้าง Product จริงทั้งระบบ — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch17_package.html">บทก่อน</a>
+    <a href="ch19_debug.html">บทถัดไป →</a>
+</nav>
+
+<h1>บทที่ 18: รวมหลายโมดูล — สร้าง Product จริงทั้งระบบ</h1>
+<span class="level expert">ระดับผู้เชี่ยวชาญ</span>
+
+<div class="callout callout-note" style="margin-top:1rem">
+    <strong>📋 สิ่งที่ต้องรู้ก่อน:</strong> บทที่ 1-17 — ต้องเข้าใจ GPIO, Timer, USART, PWM, ADC, I2C, Flash, Power Management มาก่อน
+</div>
+
+<section class="flowchart">
+    <h2>🧭 แผนภาพภาพรวม — Product จริงใช้หลายโมดูล</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["Product จริง"] --> B["Input: Sensor, Button, USART"]
+    B --> C["Process: State Machine / Scheduler"]
+    C --> D["Output: LED, Display, Motor, USART"]
+    C --> E["Storage: Flash (config + log)"]
+    C --> F["Power: Sleep/Standby เมื่อว่าง"]
+    A --> G["Reliability: IWDG, Package Check"]
+    style C fill:#eff6ff,stroke:#2563eb,stroke-width:2px
+    </pre>
+</section>
+
+<section>
+    <h2>📚 หลักการ: Non-Blocking Architecture</h2>
+    <p><strong>ปัญหาของ <code>Delay_Ms()</code> ใน Product จริง:</strong> โปรแกรมหยุดรอ — ในระหว่างนั้นอ่านเซ็นเซอร์ไม่ได้, รับคำสั่ง USART ไม่ได้, ตอบสนองปุ่มกดไม่ทัน</p>
+    <p><strong>ทางแก้:</strong> ใช้ <code>Timer_t</code> + <code>Is_Timer_Expired()</code> (บทที่ 3) หรือ <code>SimpleScheduler</code> — ทั้งคู่เป็น non-blocking</p>
+
+    <h3>State Machine Pattern</h3>
+    <pre><code class="language-c">typedef enum {
+    STATE_INIT,      // เริ่มต้นระบบ
+    STATE_READ,      // อ่านเซ็นเซอร์
+    STATE_PROCESS,   // ประมวลผล
+    STATE_OUTPUT,    // แสดงผล
+    STATE_SLEEP      // เข้าโหมดประหยัดพลังงาน
+} SystemState_t;
+
+SystemState_t state = STATE_INIT;
+
+while(1) {
+    switch(state) {
+        case STATE_INIT:
+            // เริ่มต้น peripheral
+            state = STATE_READ;
+            break;
+        case STATE_READ:
+            // อ่าน sensor ด้วย non-blocking
+            if(Is_Timer_Expired(&sensor_timer)) {
+                read_sensors();
+                Start_Timer(&sensor_timer, 5000);
+                state = STATE_PROCESS;
+            }
+            break;
+        case STATE_PROCESS:
+            process_data();
+            state = STATE_OUTPUT;
+            break;
+        case STATE_OUTPUT:
+            update_display();
+            state = STATE_SLEEP;
+            break;
+        case STATE_SLEEP:
+            PWR_Sleep();
+            state = STATE_READ;
+            break;
+    }
+    IWDG_Feed();  // feed watchdog ทุกรอบ
+}</code></pre>
+    <p class="explain">🔍 State machine — ทำงานทีละ state, ไม่มี blocking — IWDG_Feed() ทุกรอบป้องกัน watchdog reset — CPU ว่างเมื่อใดก็ Sleep</p>
+
+    <h3>SimpleScheduler — Cooperative Multitasking</h3>
+    <p>SimpleScheduler เป็นไลบรารีใน <code>User/Lib/SimpleScheduler/</code> — รองรับสูงสุด 8 tasks, ใช้ <code>yield()</code> สลับงาน</p>
+    <pre><code class="language-c">#include "SimpleScheduler.h"
+
+void task_read_sensor(void) {
+    static uint16_t count = 0;
+    USART_Print("Sensor read #");
+    USART_PrintNum(++count);
+    USART_Print("\r\n");
+}
+
+void task_blink_led(void) {
+    digitalToggle(PC0);
+}
+
+void task_check_button(void) {
+    if(digitalRead(PC1) == LOW) {
+        USART_Print("Button pressed!\r\n");
+    }
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    pinMode(PC0, PIN_MODE_OUTPUT);
+    pinMode(PC1, PIN_MODE_INPUT_PULLUP);
+
+    SimpleScheduler_Init();
+    SimpleScheduler_AddTask(task_read_sensor,  5000);  // ทุก 5 วิ
+    SimpleScheduler_AddTask(task_blink_led,     500);   // ทุก 0.5 วิ
+    SimpleScheduler_AddTask(task_check_button,   50);   // ทุก 50ms
+
+    while(1) {
+        SimpleScheduler_Run();  // เรียก task ที่ถึงเวลา
+        yield();                // feed IWDG + เปิดช่องให้ task อื่น
+    }
+}</code></pre>
+    <p class="explain">🔍 แต่ละ task ทำงานตาม interval ของตัวเอง — <code>SimpleScheduler_Run()</code> ตรวจสอบว่า task ไหนถึงเวลาแล้วเรียก — task ที่ทำงานนานควรแตกเป็น state machine ย่อย</p>
+</section>
+
+<section>
+    <h2>🛠️ Product 1: Weather Station — BMP280 + DS18B20 + USART</h2>
+
+    <h3>🔌 การต่อวงจร</h3>
+    <pre class="ascii-circuit">
+    CH32V003 (TSSOP-20)                        Weather Station
+    ┌──────────────────────────────────────────────────────┐
+    │                                                       │
+    │  PC1 (SDA) ──────┬────── SDA ──── BMP280              │
+    │  PC2 (SCL) ──────┤────── SCL ──── BMP280              │
+    │                   │                                    │
+    │                   ├────── SDA ──── OLED SSD1306 (optional) │
+    │                   └────── SCL ──── OLED                │
+    │                                                       │
+    │  PC0 (DQ) ───┬─── 4.7kΩ ──── 3.3V                    │
+    │              └─── DQ ──── DS18B20 (1-Wire)            │
+    │                                                       │
+    │  PD5 (TX) ──────── USB-to-Serial → PC                 │
+    │  PD6 (RX) ──────── USB-to-Serial → PC                 │
+    │                                                       │
+    │  I2C: PC1=SDA, PC2=SCL — ร่วมบัสกันได้หลายอุปกรณ์      │
+    │  BMP280 addr=0x76, OLED addr=0x3C                    │
+    └──────────────────────────────────────────────────────┘
+    </pre>
+
+    <h3>💻 โค้ด</h3>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "BMP280.h"
+#include "DS18B20.h"
+
+Timer_t read_timer;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+
+    // Init sensors
+    BMP280_Init(0x76);                       // BMP280 addr 0x76
+    BMP280_SetMode(BMP280_MODE_NORMAL);
+    OneWire_Init(PC0);                       // DS18B20 on PC0
+    DS18B20_Init();
+
+    USART_Print("=== Weather Station ===\r\n");
+    Start_Timer(&read_timer, 5000);          // อ่านทุก 5 วิ
+
+    while(1) {
+        if(Is_Timer_Expired(&read_timer)) {
+            Start_Timer(&read_timer, 5000);
+
+            // อ่าน BMP280
+            float temp_bmp = BMP280_ReadTemperature();
+            float press = BMP280_ReadPressure() / 100.0f;
+            float humid = BMP280_ReadHumidity();
+
+            // อ่าน DS18B20
+            DS18B20_RequestTemperatures();
+            Delay_Ms(750);
+            float temp_ds = DS18B20_GetTempCByIndex(0);
+
+            // แสดงผล
+            USART_Print("BMP: ");
+            USART_PrintFloat(temp_bmp, 2);
+            USART_Print("C, ");
+            USART_PrintFloat(press, 1);
+            USART_Print("hPa");
+            if(humid > 0) {
+                USART_Print(", Hum:");
+                USART_PrintFloat(humid, 1);
+                USART_Print("%%");
+            }
+            USART_Print(" | DS18B20: ");
+            USART_PrintFloat(temp_ds, 2);
+            USART_Print("C\r\n");
+        }
+        IWDG_Feed();  // ป้องกัน hang
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>🛠️ Product 2: LED Controller — USART + PWM + Flash + Button</h2>
+
+    <h3>🔌 การต่อวงจร</h3>
+    <pre class="ascii-circuit">
+    LED Controller — รับคำสั่งผ่าน USART ปรับ PWM LED
+    ┌────────────────────────────────────────────────┐
+    │  CH32V003                          LED Strip   │
+    │  PC4 (PWM) ──── 220Ω ────|LED|─── GND         │
+    │  PC1 ──── Button ──── GND (pull-up)            │
+    │  PD5/PD6 ──── USB-to-Serial                   │
+    │                                                 │
+    │  คำสั่ง USART:                                   │
+    │    "D50"   → duty 50%                           │
+    │    "D100"  → duty 100%                          │
+    │    "S"     → save config to Flash               │
+    │    "L"     → load config from Flash              │
+    │    "?"     → print current state                │
+    └────────────────────────────────────────────────┘
+    </pre>
+
+    <h3>💻 โค้ด</h3>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#define ENABLE_USART_PRINTLN 1
+#include "SimpleHAL.h"
+#include "SimpleFlash.h"
+
+#define FLASH_KEY  0xABCD
+#define PWM_CH     2
+#define LED_PIN    PC4
+
+uint8_t  duty = 50;
+uint32_t last_save_ms = 0;
+volatile uint8_t btn_pressed = 0;
+
+void btn_isr(void) { btn_pressed = 1; }
+
+void save_config(void) {
+    FlashConfig_t cfg;
+    cfg.key  = FLASH_KEY;
+    cfg.data[0] = duty;
+    Flash_SaveConfig(&cfg);
+    USART_Println("Config saved");
+    last_save_ms = Get_CurrentMs();
+}
+
+void load_config(void) {
+    FlashConfig_t cfg;
+    if(Flash_LoadConfig(&cfg) && cfg.key == FLASH_KEY) {
+        duty = cfg.data[0];
+        USART_Print("Config loaded: duty=");
+        USART_PrintlnNum(duty);
+    } else {
+        USART_Println("No valid config");
+    }
+}
+
+void process_cmd(char cmd, uint8_t val) {
+    switch(cmd) {
+        case 'D':  // Set duty
+            if(val <= 100) {
+                duty = val;
+                PWM_SetDuty(PWM_CH, duty);
+                USART_Print("Duty set: ");
+                USART_PrintNum(duty);
+                USART_Println("%%");
+            }
+            break;
+        case 'S': save_config(); break;
+        case 'L': load_config();
+                   PWM_SetDuty(PWM_CH, duty);
+                   break;
+        case '?':
+            USART_Print("Duty: ");
+            USART_PrintNum(duty);
+            USART_Println("%%");
+            break;
+    }
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+
+    pinMode(LED_PIN, PIN_MODE_OUTPUT);
+    pinMode(PC1, PIN_MODE_INPUT_PULLUP);
+    attachInterrupt(PC1, btn_isr, FALLING);
+
+    PWM_Init(PWM_CH, LED_PIN, 1000);
+    PWM_SetDuty(PWM_CH, duty);
+    PWM_Start(PWM_CH);
+
+    Flash_Init();
+    load_config();
+
+    USART_Println("LED Controller Ready");
+    USART_Println("Cmd: D0-100, S, L, ?");
+
+    while(1) {
+        // Process button
+        if(btn_pressed) {
+            btn_pressed = 0;
+            duty = (duty + 25) % 101;
+            PWM_SetDuty(PWM_CH, duty);
+        }
+
+        // Process USART commands
+        if(USART_Available()) {
+            char cmd = USART_Read();
+
+            if(cmd == 'D' && USART_Available()) {
+                // Parse number after 'D'
+                uint8_t val = 0;
+                while(USART_Available()) {
+                    char c = USART_Read();
+                    if(c >= '0' && c <= '9')
+                        val = val * 10 + (c - '0');
+                    else break;
+                }
+                process_cmd(cmd, val);
+            } else {
+                process_cmd(cmd, 0);
+            }
+        }
+
+        // Auto-save หลังเปลี่ยนค่า 3 วิ
+        if(Get_CurrentMs() - last_save_ms > 3000 && last_save_ms > 0) {
+            save_config();
+            last_save_ms = 0;
+        }
+
+        IWDG_Feed();
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>🛠️ Product 3: Battery Data Logger — ADC + Flash + Standby + AWU</h2>
+
+    <h3>💻 โค้ด</h3>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "SimpleFlash.h"
+
+#define LOG_INTERVAL_S  60    // บันทึกทุก 1 นาที
+
+typedef struct {
+    uint32_t timestamp;       // seconds since boot
+    uint16_t vdd_mv;          // battery mV
+} LogEntry_t;
+
+uint32_t boot_count = 0;
+uint32_t entry_index = 0;
+
+void log_battery(void) {
+    uint16_t vdd = ADC_GetVDD();
+
+    LogEntry_t entry;
+    entry.timestamp = boot_count * LOG_INTERVAL_S;
+    entry.vdd_mv     = vdd;
+
+    Flash_WriteLog(&entry, sizeof(LogEntry_t), entry_index);
+    entry_index++;
+}
+
+void print_all_logs(void) {
+    USART_Println("=== Battery Log ===");
+    for(uint32_t i = 0; i < entry_index; i++) {
+        LogEntry_t e;
+        if(Flash_ReadLog(&e, sizeof(LogEntry_t), i)) {
+            USART_Print("  [");
+            USART_PrintNum(e.timestamp);
+            USART_Print("s] VDD=");
+            USART_PrintNum(e.vdd_mv);
+            USART_Println("mV");
+        }
+    }
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    // อ่าน boot_count จาก Flash (1KB page แรกหลัง config)
+    Flash_Init();
+
+    // ต่อ USART เมื่อต้องการ dump log
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+
+    ADC_SimpleInit();
+
+    USART_Print("Boot #");
+    USART_PrintNum(++boot_count);
+    USART_Println(" | Battery Logger Started");
+
+    while(1) {
+        // อ่านแบต + บันทึก
+        log_battery();
+
+        // Dump log ทุก 10 รอบ (10 นาที) — เผื่อต่อ USART ดู
+        if(boot_count % 10 == 0) {
+            print_all_logs();
+        }
+
+        // เข้า Standby 60 วินาที
+        PWR_ConfigureAWU(AWU_60S);
+        Delay_Ms(10);  // ให้ USART ส่งเสร็จ
+        PWR_Standby();
+        // ─── ตื่นที่นี่หลัง 60s ───
+    }
+}</code></pre>
+    <p class="explain">🔍 <code>PWR_Standby()</code> — MCU หยุดทุกอย่าง, RAM หาย, ตื่นด้วย AWU — กระแส ~5µA — CR2032 225mAh อยู่ได้ ~2.5 ปี (ตื่นนาทีละครั้ง)</p>
+</section>
+
+<section>
+    <h2>📋 API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน / Concept</th><th>คำอธิบาย</th><th>ใช้ใน</th></tr>
+        <tr><td><code>SimpleScheduler_Init()</code></td><td>เริ่มต้น scheduler</td><td>Product ทั่วไป</td></tr>
+        <tr><td><code>SimpleScheduler_AddTask(fn, ms)</code></td><td>เพิ่ม task เรียกทุก ms</td><td>Product ทั่วไป</td></tr>
+        <tr><td><code>SimpleScheduler_Run()</code></td><td>รัน task ที่ถึงเวลา</td><td>ใน while(1)</td></tr>
+        <tr><td>State Machine</td><td>จัดการ state ด้วย switch/case</td><td>ทุก Product</td></tr>
+        <tr><td><code>Timer_t</code> + <code>Is_Timer_Expired()</code></td><td>Non-blocking timer</td><td>บทที่ 3</td></tr>
+        <tr><td><code>IWDG_Feed()</code></td><td>Feed watchdog ทุกรอบ loop</td><td>Reliability</td></tr>
+        <tr><td><code>PWR_Sleep()</code> / <code>PWR_Standby()</code></td><td>ประหยัดพลังงานระหว่าง idle</td><td>บทที่ 10</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>ระบบค้าง — ไม่ตอบสนอง</td><td>ลืม feed IWDG หรือมี blocking delay</td><td>เพิ่ม <code>IWDG_Feed()</code> ใน while(1), เปลี่ยน <code>Delay_Ms</code> เป็น <code>Timer_t</code></td></tr>
+        <tr><td>RAM หมด — ตัวแปรหาย</td><td>ใช้ stack เกิน 2KB</td><td>ใช้ global/static แทน local array ใหญ่, ตรวจสอบ .map file</td></tr>
+        <tr><td>Task ชนกัน — output เพี้ยน</td><td>2 task ใช้ peripheral เดียวกันพร้อมกัน</td><td>ใช้ flag/lock ป้องกัน concurrent access</td></tr>
+        <tr><td>Flash config หายหลังอัปเดตเฟิร์มแวร์</td><td>Flash page ถูกเขียนทับ</td><td>จอง page สุดท้ายไว้สำหรับ config/log โดยเฉพาะ</td></tr>
+        <tr><td>Standby แล้วตื่นไม่ทำงาน</td><td>ลืม re-init peripheral หลัง wake</td><td>หลัง Standby wake — GPIO/USART/I2C ต้อง init ใหม่ (ยกเว้น AWU)</td></tr>
+        <tr><td>I2C bus hang — SDA ค้าง LOW</td><td>Sensor disconnected หรือ noise</td><td>Reset I2C bus: toggle SCL 9 ครั้ง, แล้ว <code>I2C_SimpleInit</code> ใหม่</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>✏️ ลองทำดู</h2>
+    <ol>
+        <li>ดัดแปลง Weather Station — เพิ่ม OLED แสดงผลแทน USART (ใช้ I2C ร่วมบัสกับ BMP280)</li>
+        <li>เพิ่ม Sleep mode ใน LED Controller — ถ้าไม่มีคำสั่ง USART เกิน 30 วิ → Sleep (wake ด้วย button interrupt)</li>
+        <li>ใช้ SimpleScheduler รวมทั้ง 3 Product เป็นโปรเจกต์เดียว — 3 tasks ทำงานพร้อมกัน</li>
+        <li>เพิ่ม Flash wear leveling ใน Battery Logger — กระจาย log entry ไปหลาย page</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch17_package.html">บทก่อน</a>
+    <a href="ch19_debug.html">บทถัดไป →</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

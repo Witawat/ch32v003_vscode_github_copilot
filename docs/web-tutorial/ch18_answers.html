@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>เฉลย บทที่ 18 — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+<style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:0.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:0.9em}</style>
+</head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch18_multi_module.html">กลับบทที่ 18</a>
+</nav>
+
+<h1>📝 เฉลย — บทที่ 18: รวมหลายโมดูล</h1>
+
+<div class="answer">
+<h2>ข้อ 1: Weather Station + OLED Display</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "BMP280.h"
+#include "DS18B20.h"
+#include "OLED.h"
+
+Timer_t sensor_timer;
+OLED_t oled;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    I2C_SimpleInit(I2C_SPEED_400K, I2C_PINS_DEFAULT);
+
+    BMP280_Init(0x76);
+    BMP280_SetMode(BMP280_MODE_NORMAL);
+
+    OneWire_Init(PC0);
+    DS18B20_Init();
+
+    OLED_Init(&oled, 0x3C, OLED_128x64);
+    OLED_Clear(&oled);
+    OLED_SetCursor(&oled, 0, 0);
+    OLED_Print(&oled, "Weather Station");
+    OLED_Display(&oled);
+
+    Start_Timer(&sensor_timer, 5000);
+
+    while(1) {
+        if(Is_Timer_Expired(&sensor_timer)) {
+            Start_Timer(&sensor_timer, 5000);
+
+            float t = BMP280_ReadTemperature();
+            float p = BMP280_ReadPressure() / 100.0f;
+
+            DS18B20_RequestTemperatures();
+            Delay_Ms(750);
+            float t2 = DS18B20_GetTempCByIndex(0);
+
+            OLED_Clear(&oled);
+            OLED_SetCursor(&oled, 0, 0);
+            OLED_PrintFloat(&oled, "T1:", t, 1);
+            OLED_Print(&oled, "C");
+
+            OLED_SetCursor(&oled, 0, 2);
+            OLED_PrintFloat(&oled, "T2:", t2, 1);
+            OLED_Print(&oled, "C");
+
+            OLED_SetCursor(&oled, 0, 4);
+            OLED_PrintFloat(&oled, "P:", p, 0);
+            OLED_Print(&oled, "hPa");
+
+            OLED_Display(&oled);
+        }
+        IWDG_Feed();
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> OLED ใช้ I2C address 0x3C — ต่อร่วมบัสเดียวกับ BMP280 (0x76) ได้เลย — I2C รองรับหลายอุปกรณ์บนบัสเดียวกันโดย address ไม่ซ้ำกัน <code>OLED_Display()</code> จำเป็นต้องเรียกเพื่อ push buffer ลงหน้าจอ</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: LED Controller + Auto Sleep</h2>
+<pre><code class="language-c">// เพิ่มหลังจาก process_cmd()...
+uint32_t last_activity = 0;
+uint8_t  sleeping = 0;
+
+void check_sleep(void) {
+    if(!sleeping && Get_CurrentMs() - last_activity > 30000) {
+        sleeping = 1;
+        PWM_SetDuty(PWM_CH, 0);       // ดับ LED
+        USART_Println("Sleeping...");
+        Delay_Ms(10);
+
+        pinMode(PC1, PIN_MODE_INPUT_PULLUP);  // wake source
+        attachInterrupt(PC1, wake_isr, FALLING);
+
+        PWR_Sleep();  // หลับ — ตื่นเมื่อกดปุ่ม
+        // ─── ตื่นที่นี่ ───
+        sleeping = 0;
+        PWM_SetDuty(PWM_CH, duty);     // กลับค่าเดิม
+        last_activity = Get_CurrentMs();
+        USART_Println("Woke up!");
+    }
+}
+
+void wake_isr(void) {
+    // ปลุก MCU จาก Sleep
+}
+
+// ใน while(1) เพิ่ม:
+process_usart();   // อ่าน USART — update last_activity ทุกครั้งที่มีคำสั่ง
+check_sleep();</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>PWR_Sleep()</code> หยุด CPU แต่ peripherals ยังทำงาน — USART receive interrupt ทำงานไม่ได้ใน Sleep, ต้องใช้ GPIO interrupt (EXTI) แทน — หลังตื่นต้องคืนค่า PWM เดิม</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: SimpleScheduler — 3 Tasks พร้อมกัน</h2>
+<pre><code class="language-c">#include "SimpleScheduler.h"
+// ... include sensors ...
+
+void task_weather(void) {
+    static uint8_t phase = 0;
+    switch(phase) {
+        case 0: BMP280_ReadTemperature(); phase++; break;
+        case 1: DS18B20_RequestTemperatures(); phase++; break;
+        case 2: {
+            float t = DS18B20_GetTempCByIndex(0);
+            USART_Print("DS18B20: ");
+            USART_PrintFloat(t, 2);
+            USART_Print("C\r\n");
+            phase = 0;
+        } break;
+    }
+}
+
+void task_led(void) {
+    static uint8_t d = 0;
+    d = (d + 5) % 101;
+    PWM_SetDuty(2, d);
+}
+
+void task_log(void) {
+    uint16_t vdd = ADC_GetVDD();
+    USART_Print("VDD: ");
+    USART_PrintNum(vdd);
+    USART_Print("mV\r\n");
+}
+
+int main(void) {
+    // ... init ...
+    SimpleScheduler_Init();
+    SimpleScheduler_AddTask(task_weather, 5000);   // 5s
+    SimpleScheduler_AddTask(task_led,     50);     // 50ms
+    SimpleScheduler_AddTask(task_log,     60000);  // 60s
+
+    while(1) {
+        SimpleScheduler_Run();
+        yield();
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> task_weather ใช้ internal phase counter เพราะ SimpleScheduler เรียก task ทุก interval — แต่ละครั้งที่เรียกทำงานแค่ 1 phase (non-blocking) — ส่วน task_led และ task_log ทำงานเสร็จในครั้งเดียว</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 4: Flash Wear Leveling</h2>
+<pre><code class="language-c">#define LOG_PAGE_START  60    // หน้าเริ่ม (60-63 = 4KB)
+#define LOG_PAGE_COUNT  4
+#define ENTRIES_PER_PAGE (1024 / sizeof(LogEntry_t))
+
+uint32_t current_page = LOG_PAGE_START;
+uint32_t entry_in_page = 0;
+
+void wear_leveling_write(LogEntry_t *entry) {
+    Flash_WriteLog(entry, sizeof(LogEntry_t),
+                   current_page * ENTRIES_PER_PAGE + entry_in_page);
+
+    entry_in_page++;
+    if(entry_in_page >= ENTRIES_PER_PAGE) {
+        // เต็มหน้า — ไปหน้าถัดไป (วน)
+        entry_in_page = 0;
+        current_page++;
+        if(current_page >= LOG_PAGE_START + LOG_PAGE_COUNT) {
+            current_page = LOG_PAGE_START;  // วนกลับหน้าแรก
+        }
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> CH32V003 Flash มี endurance ~10K write cycles — ถ้าเขียนหน้าเดียวตลอดจะพังเร็ว — กระจายการเขียนไป 4 หน้า (4KB) → endurance รวม ~40K writes — entry_in_page นับว่าหน้านี้เขียนไปกี่ entry แล้ว, เต็มเมื่อไหร่ย้ายไปหน้าถัดไป</div>
+</div>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch18_multi_module.html">กลับบทที่ 18</a>
+    <a href="ch19_answers.html">เฉลยบทที่ 19 →</a>
+</nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

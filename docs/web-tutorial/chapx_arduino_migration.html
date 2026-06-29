@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>บทเสริม D: ย้ายจาก Arduino มา CH32V003 — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_production.html">บทก่อน</a>
+    <span style="visibility:hidden">บทถัดไป</span>
+</nav>
+
+<h1>บทเสริม D: ย้ายจาก Arduino มา CH32V003</h1>
+<span class="level beginner">ระดับเริ่มต้น</span>
+
+<div class="callout callout-note" style="margin-top:1rem">
+    <strong>📋 สำหรับ:</strong> คนที่เคยเขียน Arduino มาก่อน — เข้าใจความต่าง + วิธีย้ายโค้ด — ไม่ต้องเรียนรู้ใหม่ทั้งหมด
+</div>
+
+<section class="flowchart">
+    <h2>🧭 Arduino → CH32V003 Migration Path</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["Arduino Sketch (.ino)"] --> B["แปลง setup() → main()"]
+    B --> C["แปลง loop() → while(1)"]
+    C --> D["เพิ่ม SystemCoreClockUpdate() + Timer_Init()"]
+    D --> E["ตรวจสอบ pin mapping"]
+    E --> F{"ใช้ String หรือ dynamic alloc?"}
+    F -->|"ใช่"| G["เปลี่ยนเป็น char array แทน"]
+    F -->|"ไม่"| H["ตรวจสอบ 3.3V vs 5V I/O"]
+    G --> H
+    H --> I["Build → Test → Debug"]
+    I --> J["เพิ่ม Sleep/Power Save (เฉพาะ CH32V003)"]
+    style J fill:#dcfce7,stroke:#22c55e
+    </pre>
+</section>
+
+<section>
+    <h2>📊 เปรียบเทียบ Arduino vs CH32V003</h2>
+    <table>
+        <tr><th>สเปค</th><th>Arduino Uno/Nano</th><th>CH32V003 (TSSOP-20)</th><th>ผลกระทบ</th></tr>
+        <tr><td>MCU</td><td>ATmega328P (AVR)</td><td>CH32V003 (RISC-V)</td><td>คนละสถาปัตยกรรม — binary ไม่เข้ากัน</td></tr>
+        <tr><td>ความเร็ว</td><td>16 MHz</td><td>48 MHz</td><td>CH32V003 เร็วกว่า 3 เท่า</td></tr>
+        <tr><td>Flash</td><td>32 KB</td><td>16 KB</td><td>⚠️ เหลือครึ่งเดียว — ต้อง optimize</td></tr>
+        <tr><td>RAM</td><td>2 KB</td><td>2 KB</td><td>เท่ากัน — แต่ CH32V003 ไม่มี SRAM แยก</td></tr>
+        <tr><td>EEPROM</td><td>1 KB</td><td>❌ ไม่มี (ใช้ Flash แทน)</td><td>⚠️ ต้องใช้ Flash Storage</td></tr>
+        <tr><td>Voltage</td><td>5V</td><td>3.3V</td><td>⚠️ I/O 3.3V — ต่อ 5V sensor ต้องระวัง</td></tr>
+        <tr><td>GPIO Pins</td><td>14 ดิจิทัล</td><td>18 (TSSOP-20)</td><td>CH32V003 มีมากกว่า</td></tr>
+        <tr><td>Analog Inputs</td><td>6 (10-bit)</td><td>8 (10-bit)</td><td>CH32V003 มีมากกว่า</td></tr>
+        <tr><td>PWM Outputs</td><td>6 (8-bit)</td><td>8 (16-bit)</td><td>CH32V003 resolution ดีกว่า</td></tr>
+        <tr><td>Hardware I2C</td><td>1</td><td>1</td><td>เท่ากัน</td></tr>
+        <tr><td>Hardware SPI</td><td>1</td><td>1</td><td>เท่ากัน</td></tr>
+        <tr><td>Hardware USART</td><td>1</td><td>1</td><td>เท่ากัน</td></tr>
+        <tr><td>Sleep Current</td><td>~15mA (idle)</td><td>~0.5mA (sleep) / 5µA (standby)</td><td>CH32V003 ประหยัดกว่า 30-3000 เท่า!</td></tr>
+        <tr><td>ราคา</td><td>~$2-3 (clone)</td><td>~$0.10 (chip)</td><td>CH32V003 ถูกกว่า 20-30 เท่า</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>📋 ตารางเทียบฟังก์ชัน Arduino ↔ SimpleHAL</h2>
+
+    <table>
+        <tr><th>Arduino</th><th>SimpleHAL</th><th>หมายเหตุ</th></tr>
+        <tr><td><code>pinMode(pin, OUTPUT)</code></td><td><code>pinMode(pin, PIN_MODE_OUTPUT)</code></td><td>เหมือนกัน — เปลี่ยนแค่ชื่อค่าคงที่</td></tr>
+        <tr><td><code>pinMode(pin, INPUT_PULLUP)</code></td><td><code>pinMode(pin, PIN_MODE_INPUT_PULLUP)</code></td><td>เหมือนกัน</td></tr>
+        <tr><td><code>digitalWrite(pin, HIGH)</code></td><td><code>digitalWrite(pin, HIGH)</code></td><td>✅ เหมือนกัน</td></tr>
+        <tr><td><code>digitalRead(pin)</code></td><td><code>digitalRead(pin)</code></td><td>✅ เหมือนกัน</td></tr>
+        <tr><td><code>analogRead(A0)</code></td><td><code>analogRead(PD2)</code></td><td>⚠️ ใช้ชื่อ pin จริง — ไม่ใช่ A0/A1</td></tr>
+        <tr><td><code>analogWrite(pin, 0-255)</code></td><td><code>analogWrite(pin, 0-255)</code></td><td>✅ เหมือนกัน (มีใน SimpleHAL)</td></tr>
+        <tr><td><code>delay(ms)</code></td><td><code>Delay_Ms(ms)</code></td><td>⚠️ เปลี่ยนชื่อ — ฟังก์ชันทำงานเหมือนกัน</td></tr>
+        <tr><td><code>delayMicroseconds(us)</code></td><td><code>Delay_Us(us)</code></td><td>⚠️ เปลี่ยนชื่อ</td></tr>
+        <tr><td><code>millis()</code></td><td><code>Get_CurrentMs()</code></td><td>⚠️ เปลี่ยนชื่อ — <code>millis()</code> ก็ใช้ได้ (macro)</td></tr>
+        <tr><td><code>micros()</code></td><td><code>Get_CurrentUs()</code></td><td>⚠️ เปลี่ยนชื่อ — <code>micros()</code> ก็ใช้ได้ (macro)</td></tr>
+        <tr><td><code>attachInterrupt(pin, fn, mode)</code></td><td><code>attachInterrupt(pin, fn, mode)</code></td><td>✅ เหมือนกัน</td></tr>
+        <tr><td><code>detachInterrupt(pin)</code></td><td><code>detachInterrupt(pin)</code></td><td>✅ เหมือนกัน</td></tr>
+        <tr><td><code>interrupts()</code></td><td><code>__enable_irq()</code></td><td>⚠️ ต่าง — <code>interrupts()</code> macro มีให้</td></tr>
+        <tr><td><code>noInterrupts()</code></td><td><code>__disable_irq()</code></td><td>⚠️ ต่าง — <code>noInterrupts()</code> macro มีให้</td></tr>
+        <tr><td><code>Serial.begin(baud)</code></td><td><code>USART_SimpleInit(baud, pins)</code></td><td>⚠️ ต้องระบุ pins ด้วย</td></tr>
+        <tr><td><code>Serial.print("hello")</code></td><td><code>USART_Print("hello")</code></td><td>⚠️ เปลี่ยนชื่อ</td></tr>
+        <tr><td><code>Serial.println("hello")</code></td><td><code>USART_Println("hello")</code></td><td>⚠️ ต้องเปิด macro ก่อน</td></tr>
+        <tr><td><code>Serial.print(x, DEC)</code></td><td><code>USART_PrintNum(x)</code></td><td>⚠️ แยกฟังก์ชัน</td></tr>
+        <tr><td><code>Serial.available()</code></td><td><code>USART_Available()</code></td><td>⚠️ เปลี่ยนชื่อ</td></tr>
+        <tr><td><code>Serial.read()</code></td><td><code>USART_Read()</code></td><td>⚠️ เปลี่ยนชื่อ</td></tr>
+        <tr><td><code>Wire.begin()</code></td><td><code>I2C_SimpleInit(speed, pins)</code></td><td>⚠️ ต้องระบุ speed + pins</td></tr>
+        <tr><td><code>Wire.write()</code></td><td><code>I2C_Write(addr, data, len)</code></td><td>⚠️ ระบุ address ในฟังก์ชัน</td></tr>
+        <tr><td><code>tone(pin, freq)</code></td><td>ใช้ <code>Buzzer_Tone()</code> (Buzzer lib)</td><td>⚠️ ไม่มี tone() ในตัว — ใช้ Lib</td></tr>
+        <tr><td><code>map(x, in_min, in_max, out_min, out_max)</code></td><td><code>MAP(x, a,b, c,d)</code> (macro)</td><td>✅ มีให้ (ใน ch32v00x_conf.h)</td></tr>
+        <tr><td><code>constrain(x, a, b)</code></td><td><code>CONSTRAIN(x, a, b)</code> (macro)</td><td>✅ มีให้</td></tr>
+        <tr><td><code>random(min, max)</code></td><td><code>_randomRange(min, max)</code></td><td>⚠️ เปลี่ยนชื่อ — <code>random()</code> ชนกับ stdlib</td></tr>
+        <tr><td><code>pulseIn(pin, state, timeout)</code></td><td><code>pulseIn(pin, state, timeout)</code></td><td>✅ เหมือนกัน</td></tr>
+        <tr><td><code>shiftOut(data, clock, order, val)</code></td><td><code>shiftOut(data, clock, order, val)</code></td><td>✅ เหมือนกัน</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>🔄 Porting Example — Temp Monitor + LED Alert</h2>
+
+    <h3>Arduino Version (ไฟล์ .ino)</h3>
+    <pre><code class="language-cpp">#include &lt;DHT.h&gt;  // หรือ Adafruit DHT library
+
+#define DHTPIN    2
+#define LEDPIN    13
+#define TEMP_MAX  35.0
+
+DHT dht(DHTPIN, DHT11);
+
+void setup() {
+    Serial.begin(9600);
+    pinMode(LEDPIN, OUTPUT);
+    dht.begin();
+    Serial.println("Temp Monitor Ready");
+}
+
+void loop() {
+    float temp = dht.readTemperature();
+
+    if(!isnan(temp)) {
+        Serial.print("Temp: ");
+        Serial.print(temp);
+        Serial.println(" C");
+
+        if(temp > TEMP_MAX) {
+            digitalWrite(LEDPIN, HIGH);  // Alert
+        } else {
+            digitalWrite(LEDPIN, LOW);
+        }
+    }
+
+    delay(2000);
+}</code></pre>
+
+    <h3>CH32V003 Version — แปลงแล้ว</h3>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#define ENABLE_USART_PRINTLN   1
+#define ENABLE_USART_PRINTFLOAT 1
+#include "SimpleHAL.h"
+#include "DHT.h"
+
+#define DHTPIN    PC0     // ใช้ชื่อ pin จริง — ไม่ใช่แค่เลข 2
+#define LEDPIN    PC1
+#define TEMP_MAX  35.0f
+
+int main(void) {                             // ← แทน setup()
+    SystemCoreClockUpdate();                  // ← ต้องเพิ่ม
+    Timer_Init();                             // ← ต้องเพิ่ม
+    USART_SimpleInit(BAUD_9600, USART_PINS_DEFAULT);  // ← Serial.begin()
+
+    pinMode(LEDPIN, PIN_MODE_OUTPUT);
+    DHT_Init(DHTPIN, DHT11);                 // ← dht.begin()
+    USART_Println("Temp Monitor Ready");
+
+    while(1) {                               // ← แทน loop()
+        float temp, hum;
+        if(DHT_Read(&temp, &hum) == DHT_OK) {  // ← dht.readTemperature()
+            USART_Print("Temp: ");
+            USART_PrintFloat(temp, 1);
+            USART_Println(" C");
+
+            if(temp > TEMP_MAX) {
+                digitalWrite(LEDPIN, HIGH);
+            } else {
+                digitalWrite(LEDPIN, LOW);
+            }
+        }
+
+        Delay_Ms(2000);                      // ← แทน delay(2000)
+        IWDG_Feed();                         // ← กัน hang (ของแถม CH32V003)
+    }
+}</code></pre>
+
+    <div class="callout callout-good">
+        <strong>✅ สิ่งที่เปลี่ยน:</strong> setup()→main(), loop()→while(1), Serial→USART, delay→Delay_Ms, pin number→pin name, เพิ่ม SystemCoreClockUpdate+Timer_Init
+    </div>
+</section>
+
+<section>
+    <h2>⚠️ สิ่งที่ Arduino มีแต่ต้องระวังบน CH32V003</h2>
+
+    <h3>1. String Class — ห้ามใช้</h3>
+    <pre><code class="language-c">// ❌ Arduino style — ใช้ dynamic memory
+String msg = "Hello ";
+msg += "World";
+Serial.println(msg);
+
+// ✅ CH32V003 style — ใช้ char array
+char msg[32];
+snprintf(msg, sizeof(msg), "Hello World");
+USART_Println(msg);</code></pre>
+
+    <h3>2. 3.3V vs 5V I/O</h3>
+    <pre class="ascii-circuit">
+    Arduino 5V sensor → CH32V003 (3.3V):
+    ┌──────────────┐
+    │ Sensor (5V)  │── output 5V ──┬── R 2.2k ──┬── CH32V003 pin
+    │              │               └── R 3.3k ── GND
+    └──────────────┘
+    Voltage divider 2.2k+3.3k → 5V→3.0V (safe)
+
+    หรือใช้ Logic Level Converter module (~10 บาท)
+    </pre>
+
+    <h3>3. EEPROM → Flash</h3>
+    <pre><code class="language-c">// ❌ Arduino — EEPROM library
+#include &lt;EEPROM.h&gt;
+EEPROM.write(0, 42);
+uint8_t val = EEPROM.read(0);
+
+// ✅ CH32V003 — Flash Storage
+#include "SimpleFlash.h"
+FlashConfig_t cfg;
+cfg.key = 0xABCD;
+cfg.data[0] = 42;
+Flash_SaveConfig(&cfg);           // write
+Flash_LoadConfig(&cfg);           // read
+uint8_t val = cfg.data[0];
+// ⚠️ ต้อง erase ทั้ง page (1KB) ก่อนเขียน!
+// ⚠️ Endurance ~10K writes (น้อยกว่า EEPROM 100K)</code></pre>
+
+    <h3>4. Library — ใช้ของ SimpleHAL/Lib แทน</h3>
+    <table>
+        <tr><th>Arduino Library</th><th>SimpleHAL/Lib Equivalent</th></tr>
+        <tr><td>Adafruit DHT</td><td><code>User/Lib/DHT/</code></td></tr>
+        <tr><td>Adafruit BMP280</td><td><code>User/Lib/BMP280/</code></td></tr>
+        <tr><td>Adafruit SSD1306</td><td><code>User/Lib/OLED/</code></td></tr>
+        <tr><td>LiquidCrystal_I2C</td><td><code>User/Lib/LCD1602_I2C/</code></td></tr>
+        <tr><td>DallasTemperature</td><td><code>User/Lib/DS18B20/</code></td></tr>
+        <tr><td>Servo</td><td>ใช้ PWM_SimpleInit โดยตรง</td></tr>
+        <tr><td>RF24 (nRF24L01)</td><td><code>User/Lib/nRF24L01/</code></td></tr>
+        <tr><td>RTClib</td><td><code>User/Lib/DS3231/</code></td></tr>
+        <tr><td>IRremote</td><td><code>User/Lib/IR/</code></td></tr>
+        <tr><td>NeoPixel</td><td><code>User/Lib/NeoPixel/</code></td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>✅ จุดเด่นของ CH32V003 ที่ Arduino ไม่มี</h2>
+
+    <table>
+        <tr><th>ความสามารถ</th><th>CH32V003</th><th>Arduino Uno</th></tr>
+        <tr><td>Sleep Power</td><td>~5µA (Standby)</td><td>~15mA (ไม่มี sleep จริง)</td></tr>
+        <tr><td>Hardware Watchdog</td><td>✅ IWDG + WWDG</td><td>✅ WDT (แต่ใช้ยากกว่า)</td></tr>
+        <tr><td>DMA</td><td>✅ 7 channels</td><td>❌ ไม่มี</td></tr>
+        <tr><td>OPAMP</td><td>✅ Internal Op-Amp</td><td>❌ ไม่มี</td></tr>
+        <tr><td>Brown-out Detect</td><td>✅ PVD</td><td>✅ BOD (ไม่ค่อยใช้)</td></tr>
+        <tr><td>Read-Out Protection</td><td>✅ ROP 0/1/2</td><td>✅ Lock bits</td></tr>
+        <tr><td>Package Options</td><td>4 (SOP8-SOP16-TSSOP20-QFN20)</td><td>1 (DIP-28/TQFP-32)</td></tr>
+        <tr><td>PWM Resolution</td><td>16-bit</td><td>8-bit</td></tr>
+        <tr><td>Compiler</td><td>GCC12 (modern)</td><td>GCC7 (old)</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>✏️ ลองทำดู</h2>
+    <ol>
+        <li>เลือก Arduino sketch ที่มีอยู่ — แปลงตามขั้นตอนด้านบน — ทดสอบว่าได้ผลเหมือน Arduino ไหม</li>
+        <li>เพิ่ม Sleep mode ในโค้ดที่แปลงแล้ว — วัดกระแสเปรียบเทียบก่อน/หลัง</li>
+        <li>ลองใช้ <code>SimpleScheduler</code> (บท 18) แทน <code>delay()</code> — ทำให้โค้ด Arduino เดิมเป็น non-blocking</li>
+        <li>แปลง Arduino project ใหญ่ (3+ libraries) → ดูว่าใช้ Flash/RAM เท่าไหร่ → optimize</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_production.html">บทก่อน</a>
+    <span style="visibility:hidden">บทถัดไป</span>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

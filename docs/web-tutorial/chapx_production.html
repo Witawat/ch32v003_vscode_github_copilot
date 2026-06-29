@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>บทเสริม C: ข้อควรรู้ก่อนผลิตจริง — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_recipes.html">บทก่อน</a>
+    <a href="chapx_arduino_migration.html">บทถัดไป →</a>
+</nav>
+
+<h1>บทเสริม C: ข้อควรรู้ก่อนผลิตจริง</h1>
+<span class="level expert">ระดับผู้เชี่ยวชาญ</span>
+
+<div class="callout callout-note" style="margin-top:1rem">
+    <strong>📋 บทนี้สำหรับ:</strong> คนที่พร้อมจะผลิตสินค้าจริง — ครอบคลุม security, reliability, testing และ deployment
+</div>
+
+<section class="flowchart">
+    <h2>🧭 เส้นทางจาก Dev → Production</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["Development Build"] --> B["Release Build"]
+    B --> C["Lock Firmware (ROP)"]
+    C --> D["Pre-Production Testing"]
+    D --> E["Production Programming"]
+    E --> F["QC Testing"]
+    F --> G["Pack & Ship"]
+    style C fill:#fee2e2
+    style G fill:#dcfce7,stroke:#22c55e
+    </pre>
+</section>
+
+<section>
+    <h2>📚 1. Release Build — ปิดทุก debug</h2>
+    <pre><code class="language-c">// ====== Release Configuration ======
+#define ENABLE_PRINTF           0   // ปิด SDI printf
+#define ENABLE_USART_PRINTLN    0   // ปิด USART_Println
+#define ENABLE_USART_PRINTFLOAT 0   // ปิด float print
+#define DEBUG_MODE              0   // ปิด DBG_PRINT macros
+// ===================================
+
+#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+// DBG_PRINT macros จะกลายเป็น ((void)0) — ใช้ 0 Flash
+// Build script ใช้ -Os (size optimization) + --gc-sections</code></pre>
+
+    <h3>เช็ค Flash/RAM ก่อน release</h3>
+    <pre><code>Flash:  14580 / 16384 bytes  (88%)  [Free: 1804 bytes]
+RAM:    1892  / 2048  bytes  (92%)  [Free: 156  bytes]
+⚠️ RAM เหลือน้อย → เสี่ยง stack overflow ใน production!</code></pre>
+
+    <div class="callout callout-warn">
+        <strong>⚠️ กฎ:</strong> Flash < 90%, RAM < 80% — เว้นที่ไว้สำหรับ stack และโค้ดที่อาจเพิ่มทีหลัง
+    </div>
+</section>
+
+<section>
+    <h2>📚 2. Read-Out Protection (ROP) — ล็อกเฟิร์มแวร์</h2>
+    <p>ป้องกันไม่ให้ใครอ่านเฟิร์มแวร์จากชิปผ่าน WCH-Link — CH32V003 มี 3 ระดับ:</p>
+    <table>
+        <tr><th>ระดับ</th><th>อ่าน Flash</th><th>เขียน Flash</th><th>Debug (GDB)</th><th>ใช้ตอน</th></tr>
+        <tr><td>ROP=0 (default)</td><td>✅ ได้</td><td>✅ ได้</td><td>✅ ได้</td><td>Development</td></tr>
+        <tr><td>ROP=1</td><td>❌ ไม่ได้</td><td>✅ ได้ (ผ่าน user code)</td><td>❌ ไม่ได้</td><td>Pre-production</td></tr>
+        <tr><td>ROP=2</td><td>❌ ไม่ได้</td><td>❌ ไม่ได้</td><td>❌ ไม่ได้</td><td>⚠️ เปลี่ยนไม่ได้อีก!</td></tr>
+    </table>
+
+    <pre><code class="language-c">#include "SimpleFlash.h"
+
+void enable_readout_protection(void) {
+    FLASH_Unlock();
+    FLASH_EraseOptionBytes();
+    FLASH_EnableROP();       // ROP=1
+    // FLASH_EnableROP2();   // ROP=2 — ระวัง! เปลี่ยนกลับไม่ได้
+    FLASH_Lock();
+    // ต้อง reset ถึงจะมีผล
+    NVIC_SystemReset();
+}
+
+// เรียกครั้งเดียวตอน production programming
+// หลังล็อก → WCH-Link อ่านเฟิร์มแวร์ไม่ได้
+// แต่ยังอัปเดตเฟิร์มแวร์ได้ผ่าน bootloader (ถ้ามี)</code></pre>
+
+    <div class="callout callout-err">
+        <strong>⚠️ ROP=2:</strong> เมื่อตั้งแล้ว แฟลชผ่าน WCH-Link ไม่ได้อีก — ใช้เมื่อสินค้าพร้อมขายเท่านั้น — ถ้าต้องอัปเดตเฟิร์มแวร์ภายหลัง ต้องมี bootloader ตั้งแต่แรก
+    </div>
+</section>
+
+<section>
+    <h2>📚 3. Unique ID — ระบุตัวตนชิป</h2>
+    <pre><code class="language-c">uint32_t chip_id = DBGMCU_GetCHIPID();
+
+// ใช้เป็น serial number
+USART_Print("S/N: CH32-");
+USART_PrintHex(chip_id, 8);
+USART_Println("");
+
+// ใช้เป็น encryption key (simple XOR)
+uint8_t xor_key = (uint8_t)(chip_id & 0xFF);
+for(int i = 0; i < data_len; i++) {
+    data[i] ^= xor_key;
+}
+
+// Anti-clone check
+#define MY_CHIP_IDS  {0x12345678, 0x9ABCDEF0}
+const uint32_t allowed[] = MY_CHIP_IDS;
+uint8_t authorized = 0;
+for(int i = 0; i < sizeof(allowed)/4; i++) {
+    if(chip_id == allowed[i]) { authorized = 1; break; }
+}
+if(!authorized) while(1);  // หยุดถ้าไม่ใช่ชิปที่อนุญาต</code></pre>
+</section>
+
+<section>
+    <h2>📚 4. Brown-out Detection — ป้องกัน Flash เสีย</h2>
+    <pre><code class="language-c">// PVD = Programmable Voltage Detector
+// ตรวจจับไฟตกก่อนที่จะต่ำเกินไป (~2.4V)
+PWR_PVDLevelConfig(PWR_PVDLevel_2V4);
+PWR_PVDCmd(ENABLE);
+
+// ใน ch32v00x_it.c:
+void PVD_IRQHandler(void) {
+    if(PWR_GetFlagStatus(PWR_FLAG_PVDO)) {
+        // ไฟกำลังตก — save critical data แล้ว stop
+        Flash_SaveConfig(&critical_config);
+        PWR_ClearFlag(PWR_FLAG_PVDO);
+
+        // รอจนกว่าไฟจะหายหรือกลับมาปกติ
+        while(PWR_GetFlagStatus(PWR_FLAG_PVDO)) {
+            __NOP();
+        }
+    }
+}
+
+// ตั้งค่าใน main():
+NVIC_EnableIRQ(PVD_IRQn);</code></pre>
+</section>
+
+<section>
+    <h2>📚 5. การทดสอบก่อนส่งผลิต</h2>
+
+    <h3>15-Point Production Checklist</h3>
+    <table>
+        <tr><th>#</th><th>การทดสอบ</th><th>วิธี</th><th>Pass Criteria</th></tr>
+        <tr><td>1</td><td>Power-on</td><td>เสียบไฟ</td><td>VDD=3.3V ±0.1V</td></tr>
+        <tr><td>2</td><td>Short circuit</td><td>มัลติมิเตอร์</td><td>VDD-GND ไม่ดัง</td></tr>
+        <tr><td>3</td><td>Current draw (idle)</td><td>DCA อนุกรม VDD</td><td>< 10mA</td></tr>
+        <tr><td>4</td><td>Current draw (sleep)</td><td>DCA อนุกรม VDD</td><td>< 2mA</td></tr>
+        <tr><td>5</td><td>Program flash</td><td>WCH-Link upload</td><td>✅ success</td></tr>
+        <tr><td>6</td><td>LED indicator</td><td>ตามอง</td><td>กระพริบตามสเปค</td></tr>
+        <tr><td>7</td><td>USART output</td><td>Terminal read</td><td>ข้อความถูกต้อง</td></tr>
+        <tr><td>8</td><td>Button input</td><td>กดปุ่ม</td><td>ตอบสนองถูกต้อง</td></tr>
+        <tr><td>9</td><td>Sensor reading</td><td>เทียบค่าจริง</td><td>±5% tolerance</td></tr>
+        <tr><td>10</td><td>Motor/PWM output</td><td>วัด duty/freq</td><td>ตรงตามสเปค</td></tr>
+        <tr><td>11</td><td>Flash storage</td><td>เขียน → รีเซ็ต → อ่าน</td><td>ค่าคงเดิม</td></tr>
+        <tr><td>12</td><td>Watchdog</td><td>หยุด feed → รอ</td><td>รีเซ็ตภายใน timeout</td></tr>
+        <tr><td>13</td><td>Power cycle</td><td>ถอดไฟ 10 ครั้ง</td><td>ทุกครั้ง boot ถูกต้อง</td></tr>
+        <tr><td>14</td><td>Burn-in (24hr)</td><td>ปล่อยรัน 24 ชม.</td><td>ไม่ hang, ไม่ reset</td></tr>
+        <tr><td>15</td><td>ROP lock</td><td>เปิดแล้วลองอ่าน</td><td>อ่านไม่ได้</td></tr>
+    </table>
+
+    <h3>Test Firmware — ตรวจทุก peripheral ใน 1 โปรแกรม</h3>
+    <pre><code class="language-c">void run_production_test(void) {
+    USART_Println("=== PROD TEST START ===");
+
+    // 1. GPIO
+    digitalWrite(PC0, HIGH); Delay_Ms(100); digitalWrite(PC0, LOW);
+    USART_Println("[PASS] GPIO");
+
+    // 2. ADC — อ่าน VDD
+    uint16_t vdd = ADC_GetVDD();
+    if(vdd > 2800 && vdd < 3600) USART_Println("[PASS] ADC");
+    else                         USART_Println("[FAIL] ADC");
+
+    // 3. Flash — write + read
+    FlashConfig_t test = { .key = 0xBEEF, .data = {42} };
+    Flash_SaveConfig(&test);
+    FlashConfig_t verify;
+    if(Flash_LoadConfig(&verify) && verify.data[0] == 42)
+        USART_Println("[PASS] Flash");
+    else
+        USART_Println("[FAIL] Flash");
+
+    // 4. I2C — scan bus
+    uint8_t found = 0;
+    for(uint8_t a = 1; a < 127; a++) {
+        I2C_Start(); I2C_WriteAddr(a << 1);
+        if(I2C_WaitAck()) { found++; }
+        I2C_Stop();
+    }
+    USART_Print("[INFO] I2C devices: ");
+    USART_PrintNum(found);
+    USART_Println("");
+
+    // 5. PWM
+    PWM_SimpleInit(1, PD2, 1000);
+    PWM_Start(1);
+    PWM_SetDuty(1, 50);
+    USART_Println("[PASS] PWM (check with scope)");
+
+    USART_Println("=== PROD TEST COMPLETE ===");
+}</code></pre>
+</section>
+
+<section>
+    <h2>📚 6. Bootloader Concept</h2>
+    <p>Bootloader ช่วยให้อัปเดตเฟิร์มแวร์ผ่าน USART/I2C/SPI โดยไม่ต้องใช้ WCH-Link — มีประโยชน์เมื่อสินค้าถึงมือลูกค้าแล้ว</p>
+
+    <h3>โครงสร้าง Flash กับ Bootloader</h3>
+    <pre class="ascii-circuit">
+    0x00000000 ┌──────────────────┐
+               │ Bootloader (2KB) │ ← ไม่เปลี่ยน ป้องกัน brick
+    0x00000800 ├──────────────────┤
+               │ Application      │ ← เปลี่ยนได้ผ่าน bootloader
+    0x00003C00 ├──────────────────┤
+               │ Config (1KB)     │ ← เก็บ WiFi password, calib data
+    0x00004000 └──────────────────┘
+
+    Boot sequence:
+    1. Power on → Bootloader รันก่อน
+    2. เช็ค pin (เช่นปุ่มกดค้าง) — ต้องการอัปเดตเฟิร์มแวร์?
+    3. ถ้าใช่ → รับเฟิร์มแวร์ผ่าน USART → เขียน Flash → jump
+    4. ถ้าไม่ → jump to Application (0x00000800)
+    </pre>
+</section>
+
+<section>
+    <h2>📚 7. การตั้งราคา + BOM Cost</h2>
+    <table>
+        <tr><th>รายการ</th><th>ราคาต่อชิ้น (ผลิต 100+ ชิ้น)</th></tr>
+        <tr><td>CH32V003 (TSSOP-20)</td><td>~$0.10-0.15</td></tr>
+        <tr><td>PCB (20x20mm)</td><td>~$0.40 (JLC)</td></tr>
+        <tr><td>AMS1117-3.3 + caps</td><td>~$0.10</td></tr>
+        <tr><td>CH340N + USB-C + parts</td><td>~$0.60</td></tr>
+        <tr><td>Passive components (R, C, LED)</td><td>~$0.15</td></tr>
+        <tr><td>Pin headers, connectors</td><td>~$0.20</td></tr>
+        <tr><td>Assembly (PCBA)</td><td>~$2-5 (แล้วแต่จำนวน)</td></tr>
+        <tr><td><strong>รวม BOM (CH32V003 Board)</strong></td><td><strong>~$1.50-2.00</strong></td></tr>
+        <tr><td>PCB Assembly</td><td>~$3-7</td></tr>
+        <tr><td><strong>รวมต้นทุนต่อบอร์ดสำเร็จ</strong></td><td><strong>~$5-9</strong></td></tr>
+    </table>
+
+    <div class="callout callout-note">
+        <strong>💡 เทียบ Arduino Nano:</strong> บอร์ดจีนประมาณ $2-3 — CH32V003 custom board = $1.5-2 (ถูกกว่า 25-50%)
+    </div>
+</section>
+
+<section>
+    <h2>⚠️ ข้อผิดพลาดที่พบบ่อยในการผลิต</h2>
+    <table>
+        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>ล็อก ROP=2 แล้วอัปเดตเฟิร์มแวร์ไม่ได้</td><td>ไม่มี bootloader</td><td>ต้องมี bootloader ก่อนตั้ง ROP=2 — มิฉะนั้นชิปใช้ได้แค่ครั้งเดียว</td></tr>
+        <tr><td>10% ของบอร์ดไม่ทำงาน</td><td>Batch PCB มี defect, solder joint ไม่ดี</td><td>เพิ่ม production test ทุกบอร์ดก่อนส่ง</td></tr>
+        <tr><td>ลูกค้าคืนสินค้า — "เปิดไม่ติด"</td><td>ไฟแบตหมดตั้งแต่ในโกดัง</td><td>ใช้ Deep Sleep ระหว่าง shipping, ใส่ battery tab</td></tr>
+        <tr><td>Flash config อ่านค่าเริ่มต้นทุกครั้ง</td><td>ลืม init Flash หรือ .data section ทับ config</td><td>จอง page สุดท้ายใน linker script</td></tr>
+        <tr><td>MCU reset สุ่ม ตอนมอเตอร์ทำงาน</td><td>EMI/noise จากมอเตอร์เข้า VDD</td><td>แยก VDD MCU กับ VDD motor, เพิ่ม ferrite bead</td></tr>
+        <tr><td>เฟิร์มแวร์เวอร์ชันสับสน</td><td>ไม่มี versioning</td><td>ฝัง version string + build date ใน firmware</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>🛠️ Firmware Versioning</h2>
+    <pre><code class="language-c">// ฝัง version ใน firmware — อ่านได้จาก hex หรือ USART
+#define FW_VERSION_MAJOR  1
+#define FW_VERSION_MINOR  0
+#define FW_VERSION_PATCH  0
+#define FW_BUILD_DATE     "2026-06-29"
+
+const char __attribute__((section(".rodata"))) firmware_version[] =
+    "v" STR(FW_VERSION_MAJOR) "." STR(FW_VERSION_MINOR) "." STR(FW_VERSION_PATCH)
+    " (" FW_BUILD_DATE ")";
+
+// STR macro
+#define STR_(x) #x
+#define STR(x)  STR_(x)
+
+// เช็ค version ใน production test:
+USART_Print("Firmware: ");
+USART_Println(firmware_version);</code></pre>
+</section>
+
+<section>
+    <h2>✏️ ลองทำดู</h2>
+    <ol>
+        <li>สร้าง release build — ปิดทุก print macro → เช็ค Flash/RAM ที่ประหยัดได้</li>
+        <li>เขียน production test firmware — รันบนบอร์ด 3 บอร์ด → เทียบค่า ADC ว่าต่างกันไม่เกิน ±5%</li>
+        <li>ตั้ง ROP=1 — ทดสอบว่ายังแฟลชเฟิร์มแวร์ใหม่ได้ แต่ WCH-Link อ่านกลับไม่ได้</li>
+        <li>ออกแบบ bootloader แบบง่าย — รับเฟิร์มแวร์ผ่าน USART (binary) → เขียนที่ address 0x800 → jump</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_recipes.html">บทก่อน</a>
+    <a href="chapx_arduino_migration.html">บทถัดไป →</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

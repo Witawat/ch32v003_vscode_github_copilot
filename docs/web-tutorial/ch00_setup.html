@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>บทที่ 0: เตรียมความพร้อม — ติดตั้งทุกอย่างให้พร้อมใช้งาน — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <span style="visibility:hidden">บทก่อน</span>
+    <a href="ch01_getting_started.html">บทถัดไป →</a>
+</nav>
+
+<h1>บทที่ 0: เตรียมความพร้อม — ติดตั้งทุกอย่างให้พร้อมใช้งาน</h1>
+<span class="level beginner">ระดับเริ่มต้น</span>
+
+<section class="flowchart">
+    <h2>🧭 แผนภาพการเตรียมตัว</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["❓ ยังไม่มีอะไรเลย"] --> B["🛒 ซื้ออุปกรณ์"]
+    B --> C["💻 ติดตั้ง MounRiver Studio 2"]
+    C --> D["📦 โคลนโปรเจกต์ / เปิดใน VS Code"]
+    D --> E["🔨 Build ครั้งแรก"]
+    E --> F{"Build ผ่าน?"}
+    F -->|"✅ ผ่าน"| G["🔌 ต่อวงจร + WCH-Link"]
+    F -->|"❌ ไม่ผ่าน"| H["ตรวจสอบ Toolchain Path"]
+    H --> E
+    G --> I["⚡ Upload Firmware"]
+    I --> J{"LED กระพริบ?"}
+    J -->|"✅ ใช่"| K["🎉 พร้อมเรียนบทที่ 1!"]
+    J -->|"❌ ไม่"| L["ตรวจสอบสายไฟ"]
+    L --> I
+    </pre>
+</section>
+
+<section>
+    <h2>🛒 สิ่งที่ต้องมี (Hardware)</h2>
+
+    <h3>อุปกรณ์จำเป็น</h3>
+    <table>
+        <tr><th>รายการ</th><th>จำนวน</th><th>ราคาประมาณ</th><th>หมายเหตุ</th></tr>
+        <tr><td><strong>CH32V003 Board</strong></td><td>2-3 ชิ้น</td><td>~20-40 บาท/ชิ้น</td><td>แนะนำ TSSOP-20 (F4P6) — มี pin ครบที่สุด</td></tr>
+        <tr><td><strong>WCH-Link Programmer</strong></td><td>1 ชิ้น</td><td>~150-250 บาท</td><td>ใช้สำหรับแฟลชโปรแกรมลง MCU</td></tr>
+        <tr><td><strong>USB-to-Serial (CH340/CP2102)</strong></td><td>1 ชิ้น</td><td>~30-50 บาท</td><td>ใช้ดู Serial Output (เริ่มบทที่ 4)</td></tr>
+        <tr><td><strong>Breadboard</strong></td><td>1 แผ่น</td><td>~30-60 บาท</td><td>400 holes ก็พอ</td></tr>
+        <tr><td><strong>สายไฟ Jumper (ผู้-ผู้)</strong></td><td>1 ชุด</td><td>~20-40 บาท</td><td></td></tr>
+        <tr><td><strong>LED 5mm</strong></td><td>5-10 ดวง</td><td>~1-2 บาท/ดวง</td><td>สีแดง เหลือง เขียว</td></tr>
+        <tr><td><strong>ตัวต้านทาน 220Ω</strong></td><td>10 ชิ้น</td><td>~0.5-1 บาท/ชิ้น</td><td>ใช้กับ LED</td></tr>
+        <tr><td><strong>ตัวต้านทาน 10kΩ</strong></td><td>10 ชิ้น</td><td>~0.5-1 บาท/ชิ้น</td><td>ใช้กับ Pull-up / Voltage Divider</td></tr>
+        <tr><td><strong>ปุ่มกด Tactile Switch</strong></td><td>3-5 ชิ้น</td><td>~2-5 บาท/ชิ้น</td><td>เริ่มใช้บทที่ 2</td></tr>
+    </table>
+
+    <h3>อุปกรณ์เสริม (ใช้ในบทหลัง ๆ)</h3>
+    <table>
+        <tr><th>รายการ</th><th>ใช้ในบทที่</th><th>ราคาประมาณ</th></tr>
+        <tr><td>Potentiometer 10kΩ</td><td>6 (ADC)</td><td>~10 บาท</td></tr>
+        <tr><td>Servo SG90</td><td>5 (PWM)</td><td>~40-60 บาท</td></tr>
+        <tr><td>DS18B20 Temperature Sensor</td><td>14 (1-Wire)</td><td>~20-40 บาท</td></tr>
+        <tr><td>OLED SSD1306 (I2C)</td><td>7 (I2C)</td><td>~60-100 บาท</td></tr>
+        <tr><td>NTC Thermistor 10kΩ</td><td>6 (ADC)</td><td>~5-10 บาท</td></tr>
+        <tr><td>Multimeter (มัลติมิเตอร์)</td><td>มีประโยชน์มาก</td><td>~100-300 บาท</td></tr>
+    </table>
+
+    <div class="callout callout-note">
+        <strong>💡 แนะนำ:</strong> ซื้อ CH32V003 อย่างน้อย 2-3 ชิ้น — ราคาถูกมาก (~20 บาท) เผื่อขาด เผื่อพัง ตอนหัดบัดกรี
+    </div>
+
+    <h3>ชื่อชิปที่พบบ่อยตามแพ็กเกจ</h3>
+    <pre class="ascii-circuit">
+    CH32V003J4M6  = SOP-8  (8 ขา, เล็กสุด)     ~15-20 บาท
+    CH32V003F4P6  = TSSOP-20 (20 ขา, แนะนำ)    ~20-30 บาท
+    CH32V003A4M6  = SOP-16 (16 ขา)             ~20-25 บาท
+    CH32V003F4U6  = QFN-20 (20 pads, บัดกรียาก) ~25-35 บาท
+
+    ⚠️ บางร้านขายบอร์ดสำเร็จที่มีคริสตัล + regulator ในตัว — สะดวกกว่า
+       แต่มือใหม่ควรซื้อ bare chip + breadboard จะเข้าใจดีกว่า
+    </pre>
+</section>
+
+<section>
+    <h2>💻 ติดตั้งซอฟต์แวร์</h2>
+
+    <h3>1. ติดตั้ง MounRiver Studio 2</h3>
+    <p>MounRiver Studio 2 (MRS2) เป็น IDE ฟรีสำหรับ RISC-V MCU จาก WCH — เราใช้ MRS2 เพื่องาน 2 อย่าง:</p>
+    <ol>
+        <li><strong>Toolchain (GCC12):</strong> คอมไพเลอร์ RISC-V สำหรับ CH32V003</li>
+        <li><strong>OpenOCD + Driver:</strong> ใช้แฟลชโปรแกรมผ่าน WCH-Link</li>
+    </ol>
+
+    <p><strong>วิธีติดตั้ง:</strong></p>
+    <ol>
+        <li>ไปที่ <a href="http://www.mounriver.com/" target="_blank">http://www.mounriver.com/</a> → ดาวน์โหลด MounRiver Studio 2</li>
+        <li>ติดตั้งที่ <code>C:\MounRiver\MounRiver_Studio2\</code> (path default — <strong>แนะนำให้ใช้ path นี้</strong>)</li>
+        <li>ติดตั้งเสร็จแล้ว <strong>ไม่ต้องเปิด MRS2</strong> — เราใช้แค่ toolchain ที่มาพร้อมมัน</li>
+    </ol>
+
+    <div class="callout callout-warn">
+        <strong>⚠️ สำคัญ:</strong> ต้องติดตั้งที่ <code>C:\MounRiver\</code> — เพราะ build script ของเราอ้างอิง path นี้ หากติดตั้งที่อื่น ต้องแก้ <code>scripts\build.bat</code> และ <code>scripts\upload.bat</code>
+    </div>
+
+    <h3>2. ติดตั้ง VS Code</h3>
+    <ol>
+        <li>ดาวน์โหลดจาก <a href="https://code.visualstudio.com/" target="_blank">https://code.visualstudio.com/</a></li>
+        <li>ติดตั้งแบบปกติ (next → next → finish)</li>
+    </ol>
+
+    <h3>3. ตรวจสอบ Toolchain</h3>
+    <p>เปิด <strong>Command Prompt</strong> หรือ <strong>PowerShell</strong> แล้วพิมพ์:</p>
+    <pre><code class="language-bat">dir "C:\MounRiver\MounRiver_Studio2\resources\app\resources\win32\components\WCH\Toolchain\RISC-V Embedded GCC12\bin\riscv-wch-elf-gcc.exe"</code></pre>
+    <p>ถ้าเจอไฟล์ — toolchain พร้อมใช้</p>
+    <p>ถ้าไม่เจอ — ตรวจสอบว่า:</p>
+    <ul>
+        <li>ติดตั้ง MounRiver Studio 2 แล้วหรือยัง</li>
+        <li>ติดตั้งที่ path ถูกต้องหรือไม่</li>
+        <li>ลองค้นหา <code>riscv-wch-elf-gcc.exe</code> ในเครื่อง แล้วแก้ไข path ใน <code>scripts\build.bat</code></li>
+    </ul>
+
+    <h3>4. ติดตั้ง Driver WCH-Link</h3>
+    <p>เสียบ WCH-Link เข้า USB — Windows ควรติดตั้ง driver ให้เอง</p>
+    <p>หากไม่ติด ให้ลง driver จาก:</p>
+    <pre><code>C:\MounRiver\MounRiver_Studio2\resources\app\resources\win32\components\WCH\Drivers\</code></pre>
+
+    <h3>5. ดาวน์โหลดโปรเจกต์</h3>
+    <p><strong>แบบที่ 1 — Git Clone (แนะนำ):</strong></p>
+    <pre><code class="language-bat">git clone https://github.com/Witawat/ch32v003_vscode_github_copilot.git
+cd ch32v003_vscode_github_copilot
+code .</code></pre>
+
+    <p><strong>แบบที่ 2 — ดาวน์โหลด ZIP:</strong></p>
+    <ol>
+        <li>ไปที่ GitHub repository → Code → Download ZIP</li>
+        <li>แตกไฟล์ไว้ที่โฟลเดอร์ที่ต้องการ</li>
+        <li>เปิด VS Code → File → Open Folder → เลือกโฟลเดอร์ที่แตกไว้</li>
+    </ol>
+
+    <div class="callout callout-note">
+        <strong>💡 เนื้อหาในโปรเจกต์:</strong> ทุกอย่างพร้อมใช้ — SimpleHAL library, build scripts, examples, และ tutorial นี้ก็อยู่ใน <code>docs/web-tutorial/</code>
+    </div>
+</section>
+
+<section>
+    <h2>🗂️ ทำความรู้จักโครงสร้างโปรเจกต์</h2>
+    <pre class="ascii-circuit">
+    CH32V003/                       ← เปิดโฟลเดอร์นี้ใน VS Code
+    ├── User/
+    │   ├── main.c                 ← ⭐ ไฟล์ที่เราเขียนโค้ด
+    │   ├── main.h                 ← include SimpleHAL.h
+    │   ├── SimpleHAL/             ← ⭐ HAL Library (ห้ามแก้)
+    │   ├── Lib/                   ← ⭐ Device Libraries (ห้ามแก้)
+    │   └── Examples/              ← ตัวอย่างโค้ดแยกตามบท
+    ├── Core/                      ← RISC-V Core (ห้ามแก้)
+    ├── Peripheral/                ← Standard Peripheral Library (ห้ามแก้)
+    ├── Debug/                     ← SDI Printf (ห้ามแก้)
+    ├── Startup/                   ← Startup code (ห้ามแก้)
+    ├── Ld/                        ← Linker script (ห้ามแก้)
+    ├── scripts/
+    │   ├── build.bat              ← คอมไพล์โปรเจกต์
+    │   ├── clean.bat              ← ล้างไฟล์เก่า
+    │   ├── rebuild.bat            ← Clean + Build
+    │   └── upload.bat             ← แฟลชลง MCU
+    ├── .vscode/                   ← VS Code settings
+    │   └── tasks.json             ← Build/Upload Tasks
+    └── docs/web-tutorial/         ← 📖 บทเรียนที่คุณกำลังอ่านอยู่
+
+    ⚡ จุดที่เราแก้ไข = User/main.c เท่านั้น
+       ส่วนอื่น ๆ = library / config — ไม่ต้องแตะ
+    </pre>
+</section>
+
+<section>
+    <h2>🔨 Build ครั้งแรก — คอมไพล์โปรเจกต์</h2>
+
+    <p>เปิด VS Code ที่โฟลเดอร์โปรเจกต์ แล้วทำตามขั้นตอน:</p>
+
+    <div class="step"><h3>ขั้นที่ 1: เปิด Terminal</h3>
+    <p>กด <code>Ctrl + `</code> (ปุ่ม backtick) เพื่อเปิด Terminal ใน VS Code</p></div>
+
+    <div class="step"><h3>ขั้นที่ 2: รัน Build</h3>
+    <pre><code class="language-bat">.\scripts\build.bat</code></pre>
+    <p class="explain">🔍 สคริปต์จะคอมไพล์ทุกไฟล์ในโปรเจกต์ → link → สร้างไฟล์ .hex และ .elf ในโฟลเดอร์ <code>output\</code></p></div>
+
+    <div class="step"><h3>ขั้นที่ 3: ดูผลลัพธ์</h3>
+    <p>ถ้า Build สำเร็จ จะเห็นข้อความประมาณนี้:</p>
+    <pre><code>========================================
+BUILD SUCCESSFUL
+========================================
+Flash:  3572 / 16384 bytes  (21%)  [Free: 12812 bytes]
+RAM:    420  / 2048  bytes  (20%)  [Free: 1628  bytes]</code></pre>
+    <p class="explain">🔍 CH32V003 มี Flash 16KB และ RAM 2KB — ตัวเลขด้านบนบอกว่าใช้ไปเท่าไหร่</p></div>
+
+    <h3>ใช้ VS Code Task (ทางเลือก)</h3>
+    <p>กด <code>Ctrl+Shift+B</code> → เลือก <strong>"Build CH32V003 (MounRiver)"</strong></p>
+
+    <h3>Build ไม่ผ่าน? เช็คตามนี้</h3>
+    <table>
+        <tr><th>Error</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td><code>Compiler not found</code></td><td>Toolchain path ผิด</td><td>ตรวจสอบว่า MounRiver Studio 2 ติดตั้งที่ <code>C:\MounRiver\</code> หรือแก้ <code>TOOLCHAIN_BASE</code> ใน <code>scripts\build.bat</code></td></tr>
+        <tr><td><code>can't link RVE</code></td><td>ใช้ GCC8 แทน GCC12</td><td>ตรวจสอบใน <code>build.bat</code> ว่า <code>TOOLCHAIN_CHOICE=2</code></td></tr>
+        <tr><td><code>No such file or directory</code></td><td>Source files หาย</td><td>ตรวจสอบว่า clone ครบ — ลอง <code>git status</code></td></tr>
+        <tr><td>Build ค้าง ไม่มี output</td><td>Path มี space หรืออักขระพิเศษ</td><td>ย้ายโปรเจกต์ไป path ที่ไม่มีภาษาไทยหรือ space</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>🔌 ต่อวงจรขั้นต่ำ — CH32V003 + LED</h2>
+
+    <pre class="ascii-circuit">
+    ╔══════════════════════════════════════════════════════╗
+    ║  CH32V003 TSSOP-20 Pinout (มองจากด้านบน)           ║
+    ╠══════════════════════════════════════════════════════╣
+    ║                                                      ║
+    ║          ┌──────────────────────┐                    ║
+    ║  PD7 ── 1┤○                  20├── PD6              ║
+    ║  PA1 ── 2┤                    19├── PC7              ║
+    ║  PA2 ── 3┤                    18├── PD4              ║
+    ║  GND ── 4┤    CH32V003        17├── PD3              ║
+    ║  VDD ── 5┤    TSSOP-20        16├── PC4              ║
+    ║  PD0 ── 6┤                    15├── PC3              ║
+    ║  PD1 ── 7┤    (F4P6)          14├── PC2              ║
+    ║  PD5 ── 8┤                    13├── PC1              ║
+    ║  PD6 ── 9┤                    12├── PC0  ← LED      ║
+    ║  PD2 ──10┤                    11├── PD4              ║
+    ║          └──────────────────────┘                    ║
+    ║                                                      ║
+    ╚══════════════════════════════════════════════════════╝
+
+    วงจรขั้นต่ำ — ต่อบน Breadboard:
+    ┌──────────────────────────────────────────────────┐
+    │                                                   │
+    │  CH32V003 (TSSOP-20)                              │
+    │  ┌──────┐                                         │
+    │  │      │  Pin 12 (PC0) ───/\/\/\───|LED|─── GND │
+    │  │ MCU  │              220Ω    (ขาสั้น=GND)       │
+    │  │      │                                         │
+    │  │      │  Pin 5 (VDD) ─────── 3.3V               │
+    │  │      │  Pin 4 (GND) ─────── GND                │
+    │  └──────┘                                         │
+    │                                                   │
+    │  ⚡ ไฟเลี้ยง: 3.3V เท่านั้น — ห้ามต่อ 5V โดยตรง!    │
+    │     ใช้ LDO 3.3V (AMS1117-3.3) หรือ               │
+    │     จ่ายจาก WCH-Link (มี 3.3V output)              │
+    └──────────────────────────────────────────────────┘
+    </pre>
+
+    <h3>การต่อ WCH-Link สำหรับแฟลช</h3>
+    <pre class="ascii-circuit">
+    WCH-Link                    CH32V003
+    ┌──────┐                   ┌──────┐
+    │ 3.3V ├───────────────────┤ VDD  │  Pin 5
+    │ GND  ├───────────────────┤ GND  │  Pin 4
+    │ SWIO ├───────────────────┤ PD1  │  Pin 7  (SWD data)
+    │      │                   └──────┘
+    └──────┘
+
+    ⚠️ ต่อ 3 เส้นนี้ก่อนแฟลชทุกครั้ง
+       WCH-Link จ่ายไฟ 3.3V ให้ CH32V003 ได้เลย (กระแสเพียงพอ)
+    </pre>
+
+    <div class="callout callout-warn">
+        <strong>⚠️ คำเตือน:</strong>
+        <ul>
+            <li>CH32V003 ใช้ไฟ 3.3V — <strong>ห้าม</strong> ต่อ 5V เข้า VDD โดยตรง</li>
+            <li>LED ต้องมี R 220Ω เสมอ — ต่อตรงจะดึงกระแสเกิน pin พังได้</li>
+            <li>ตรวจสอบสาย GND ให้ดี — วงจรไม่ครบ = ไม่ทำงาน</li>
+        </ul>
+    </div>
+</section>
+
+<section>
+    <h2>⚡ แฟลชโปรแกรมลง MCU</h2>
+
+    <div class="step"><h3>ขั้นที่ 1: ต่อ WCH-Link</h3>
+    <p>ต่อสาย 3 เส้น (3.3V, GND, SWIO) ระหว่าง WCH-Link ↔ CH32V003<br>
+    เสียบ WCH-Link เข้า USB คอมพิวเตอร์</p></div>
+
+    <div class="step"><h3>ขั้นที่ 2: รัน Upload</h3>
+    <p>ใน VS Code Terminal:</p>
+    <pre><code class="language-bat">.\scripts\upload.bat</code></pre>
+    <p>หรือใช้ Task: <strong>Terminal → Run Task → Upload CH32V003 (WCH-Link)</strong></p>
+    <p class="explain">🔍 OpenOCD จะเชื่อมต่อกับ WCH-Link → ลบ Flash เดิม → เขียน firmware ใหม่ → verify → reset MCU</p></div>
+
+    <div class="step"><h3>ขั้นที่ 3: ดูผล</h3>
+    <p>ถ้า Upload สำเร็จ — LED ที่ PC0 จะเริ่มกระพริบ!</p>
+    <p>ถ้าไม่กระพริบ — ดูหัวข้อ "ข้อผิดพลาดที่พบบ่อย" ด้านล่าง</p></div>
+</section>
+
+<section>
+    <h2>📚 พื้นฐานภาษา C — สำหรับคนไม่เคยเขียนโค้ด</h2>
+
+    <p>เนื้อหาในบทเรียนใช้ภาษา C — ถ้าไม่เคยเขียน C มาก่อน นี่คือสิ่งจำเป็นที่ต้องรู้:</p>
+
+    <h3>1. โครงสร้างโปรแกรม C พื้นฐาน</h3>
+    <pre><code class="language-c">// คำสั่งที่ขึ้นต้นด้วย # คือ Preprocessor — รันก่อนคอมไพล์
+#define CH32V003_PACKAGE PACKAGE_TSSOP20   // กำหนดค่าคงที่
+#include "SimpleHAL.h"                     // ดึงโค้ดจากไฟล์อื่นเข้ามา
+
+// ฟังก์ชัน main() — จุดเริ่มต้นของทุกโปรแกรม
+int main(void) {
+    // โค้ดที่นี่รันครั้งเดียวตอนเริ่มต้น (setup)
+
+    while (1) {
+        // โค้ดที่นี่รันวนไปเรื่อย ๆ ไม่หยุด (loop)
+    }
+}</code></pre>
+
+    <h3>2. ตัวแปร (Variables)</h3>
+    <pre><code class="language-c">uint8_t  led_state = 0;      // เลข 0-255 (8-bit)
+uint16_t adc_value = 512;    // เลข 0-65535 (16-bit)
+uint32_t time_ms   = 1000;   // เลข 0-4,294,967,295 (32-bit)
+float    voltage   = 3.3f;   // เลขทศนิยม
+
+const uint16_t MAX = 100;    // const = ห้ามเปลี่ยนค่า</code></pre>
+    <p class="explain">🔍 <code>uint8_t</code> ย่อมาจาก unsigned integer 8-bit — ใช้แทน <code>int</code> เพื่อประหยัด RAM บน MCU</p>
+
+    <h3>3. การตัดสินใจ (if/else)</h3>
+    <pre><code class="language-c">if (digitalRead(PC1) == LOW) {   // ถ้ากดปุ่ม (Active LOW)
+    digitalWrite(PC0, HIGH);      // ติด LED
+} else {                          // ถ้าไม่กด
+    digitalWrite(PC0, LOW);       // ดับ LED
+}</code></pre>
+
+    <h3>4. การวนซ้ำ (while/for)</h3>
+    <pre><code class="language-c">// วนตลอดไป
+while (1) {
+    // ทำซ้ำ
+}
+
+// วนตามจำนวนครั้ง
+for (int i = 0; i < 10; i++) {
+    digitalToggle(PC0);
+    Delay_Ms(200);
+}</code></pre>
+
+    <div class="callout callout-note">
+        <strong>💡 ไม่ต้องกลัว:</strong> โค้ดในบทเรียนเขียนให้เข้าใจง่ายที่สุด — คัดลอกไปใช้ได้เลย ไม่ต้องดัดแปลงมาก แต่ถ้าอยากเข้าใจลึกซึ้ง แนะนำให้หัดเขียน C พื้นฐานไปด้วย
+    </div>
+</section>
+
+<section>
+    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย (ก่อนเริ่ม)</h2>
+    <table>
+        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>Build ไม่ผ่าน — compiler not found</td><td>ไม่ได้ติดตั้ง MounRiver Studio 2 หรือ path ผิด</td><td>ตรวจสอบว่า <code>riscv-wch-elf-gcc.exe</code> อยู่ที่ path ใน build.bat</td></tr>
+        <tr><td>Upload แล้ว LED ไม่กระพริบ</td><td>ต่อสายผิด — ตรวจสอบ pin</td><td>PC0 = Pin 12 บน TSSOP-20, ต่อ LED + R 220Ω ระหว่าง PC0 → GND</td></tr>
+        <tr><td>Upload — "Error: open failed"</td><td>WCH-Link ไม่ได้ต่อ หรือ driver ไม่ติดตั้ง</td><td>ตรวจสอบ USB, ลองเสียบพอร์ทอื่น, ติดตั้ง driver</td></tr>
+        <tr><td>MCU ร้อนผิดปกติ</td><td>ต่อไฟ 5V เข้า VDD โดยตรง</td><td>ถอดไฟทันที — CH32V003 ใช้ 3.3V เท่านั้น</td></tr>
+        <tr><td>Breadboard ต่อแล้วไฟเข้าแต่ MCU ไม่ทำงาน</td><td>สายไฟไม่แน่น, GND ไม่ครบวงจร</td><td>ใช้มัลติมิเตอร์วัดความต่อเนื่องของสาย</td></tr>
+        <tr><td>เปิด VS Code แล้วไม่มี IntelliSense</td><td>C/C++ extension ไม่ได้ติดตั้ง</td><td>ติดตั้ง extension "C/C++" (Microsoft) ใน VS Code</td></tr>
+        <tr><td>Terminal ใน VS Code รัน <code>build.bat</code> ไม่ได้</td><td>Execution Policy ใน PowerShell</td><td>ใช้ Command Prompt แทน: <code>cmd</code> → <code>scripts\build.bat</code></td></tr>
+        <tr><td>VS Code Tasks ไม่ขึ้น</td><td>ไม่ได้เปิด workspace ถูกต้อง</td><td>ต้องเปิดโฟลเดอร์ <code>CH32V003/</code> ใน VS Code (ไม่ใช่โฟลเดอร์ <code>docs/</code>)</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>✅ Checklist: พร้อมหรือยัง?</h2>
+    <table>
+        <tr><th>ข้อ</th><th>รายการ</th><th>สถานะ</th></tr>
+        <tr><td>1</td><td>มี CH32V003 + Breadboard + LED + R 220Ω + สายไฟ</td><td>☐</td></tr>
+        <tr><td>2</td><td>ติดตั้ง MounRiver Studio 2 แล้ว</td><td>☐</td></tr>
+        <tr><td>3</td><td>ติดตั้ง VS Code แล้ว</td><td>☐</td></tr>
+        <tr><td>4</td><td>โคลนโปรเจกต์ / เปิดใน VS Code ได้</td><td>☐</td></tr>
+        <tr><td>5</td><td><code>.\scripts\build.bat</code> — Build ผ่าน</td><td>☐</td></tr>
+        <tr><td>6</td><td>ต่อวงจร CH32V003 + WCH-Link ถูกต้อง</td><td>☐</td></tr>
+        <tr><td>7</td><td><code>.\scripts\upload.bat</code> — Upload ผ่าน, LED กระพริบ</td><td>☐</td></tr>
+    </table>
+    <p>ถ้า ✅ ครบ 7 ข้อ — <strong>พร้อมไปบทที่ 1 แล้ว!</strong></p>
+</section>
+
+<section>
+    <h2>✏️ ลองทำดู</h2>
+    <ol>
+        <li>ทดลองเปลี่ยน delay ใน main.c จาก <code>Delay_Ms(500)</code> เป็น <code>Delay_Ms(100)</code> → Build → Upload — LED กระพริบเร็วขึ้น</li>
+        <li>ทดลองเปลี่ยน LED จาก PC0 ไป pin อื่น (เช่น PC1, PA1) — ต่อวงจรใหม่ → แก้โค้ด → Build → Upload</li>
+        <li>ลองรัน <code>.\scripts\clean.bat</code> แล้ว <code>.\scripts\rebuild.bat</code> — สังเกตว่า rebuild ใช้เวลามากกว่า build ครั้งหลัง</li>
+        <li>ถ้าใช้ SOP-8: แก้ <code>#define CH32V003_PACKAGE</code> ใน main.c → สังเกต warning ถ้าใช้ pin ที่ไม่มี</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <span style="visibility:hidden">บทก่อน</span>
+    <a href="ch01_getting_started.html">บทถัดไป →</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

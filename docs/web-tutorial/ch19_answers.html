@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>เฉลย บทที่ 19 — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+<style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:0.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:0.9em}</style>
+</head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch19_debug.html">กลับบทที่ 19</a>
+    <a href="ch18_answers.html">เฉลยบทที่ 18 →</a>
+</nav>
+
+<h1>📝 เฉลย — บทที่ 19: Workshop ดีบัก</h1>
+
+<div class="answer">
+<h2>ข้อ 1: จงใจใส่ Bug → Print Debug หาสาเหตุ</h2>
+<pre><code class="language-c">// Bug: ลบ SystemCoreClockUpdate() — USART จะเพี้ยน
+int main(void) {
+    // SystemCoreClockUpdate();  // ❌ ลืม
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+
+    // Debug: เช็ค SystemCoreClock
+    USART_Print("SystemCoreClock=");
+    USART_PrintNum(SystemCoreClock);  // จะเห็น 0 หรือค่าผิด
+    USART_Println("");
+
+    // Debug: ไล่เช็คทีละขั้น
+    USART_Println("step1: Timer_Init OK");
+
+    pinMode(PC0, PIN_MODE_OUTPUT);
+    USART_Println("step2: pinMode OK");
+
+    // พอถึงตรงนี้ USART output เพี้ยนแล้ว
+    // → แสดงว่า USART_SimpleInit ใช้ SystemCoreClock
+    // → แต่ SystemCoreClock ไม่ได้อัปเดต = 0
+    // → baud rate คำนวณผิด → ตัวอักษรเพี้ยน
+    while(1) { digitalToggle(PC0); Delay_Ms(500); }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ใส่ <code>USART_Print</code> checkpoint ระหว่าง init แต่ละขั้น — "step1 OK" แสดงว่าถึงบรรทัดนั้น — "step2 OK" ถ้าตัวอักษรเริ่มเพี้ยน → bug อยู่ระหว่าง step1 กับ step2 — วิธีนี้เรียกว่า "bisect debugging" — ผ่าครึ่งหาจุดที่พัง</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: จับ I2C ด้วย Logic Analyzer</h2>
+<pre><code class="language-c">// ต่อ CH0=SDA, CH1=SCL — ตั้ง sample rate 12MHz
+I2C_SimpleInit(I2C_SPEED_100K, I2C_PINS_DEFAULT);
+
+// ทดลอง scan bus
+for(uint8_t addr = 1; addr < 127; addr++) {
+    I2C_Start();
+    I2C_WriteAddr(addr << 1);
+    if(I2C_WaitAck()) {
+        USART_Print("Found: 0x");
+        USART_PrintHex(addr, 2);
+        USART_Println("");
+    }
+    I2C_Stop();
+}
+// บน Logic Analyzer จะเห็น:
+// [S][Addr(W)][ACK/NACK][P]
+//  S = SDA↓ while SCL=HIGH
+//  P = SDA↑ while SCL=HIGH
+//  ACK = SDA=LOW at 9th clock
+//  NACK = SDA=HIGH at 9th clock → sensor ไม่อยู่</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> Logic Analyzer แสดงทุก pulse — เห็นว่ามี Start condition ไหม, address ถูกส่งถูกต้องไหม, sensor ตอบ ACK หรือ NACK — ถ้า NACK ตลอด = sensor ไม่ได้ต่อ / address ผิด / pull-up R หาย</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: blink_code() บอก Error 10 แบบ</h2>
+<pre><code class="language-c">// Error Code:
+// 1 = SystemCoreClock fail
+// 2 = Timer_Init fail
+// 3 = USART init fail
+// 4 = I2C init fail
+// 5 = SPI init fail
+// 6 = PWM init fail
+// 7 = ADC init fail
+// 8 = Sensor not found
+// 9 = Flash read fail
+// 10 = Stack overflow
+
+void error_blink(uint8_t code) {
+    while(1) {
+        for(int i = 0; i < code; i++) {
+            digitalWrite(PC0, HIGH); Delay_Ms(150);
+            digitalWrite(PC0, LOW);  Delay_Ms(150);
+        }
+        Delay_Ms(1500);  // pause
+    }
+}
+
+// ใช้:
+if(SystemCoreClock == 0) error_blink(1);
+if(!sensor_found)        error_blink(8);</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> นับจำนวนครั้งที่ LED กระพริบ = error code — ไม่ต้องใช้ USART เลย — เหมาะสำหรับ field debugging — 1 กระพริบ = code 1, 8 กระพริบ = sensor fail — ถ้ามี 2 error ซ้อนกัน? → ใช้สี LED ต่างกัน หรือ blink pattern (สั้น-ยาว)</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 4: เช็ค Stack Usage ด้วย Pattern 0xDEADBEEF</h2>
+<pre><code class="language-c">#define STACK_PATTERN  0xDEADBEEF
+#define RAM_START      0x20000000
+#define RAM_END        0x20000800
+
+void fill_stack_guard(void) {
+    uint32_t *p = (uint32_t*)RAM_START;
+    while((uint32_t)p < RAM_END) {
+        *p++ = STACK_PATTERN;
+    }
+}
+
+uint32_t measure_max_stack(void) {
+    uint32_t *p = (uint32_t*)RAM_START;
+    uint32_t used = 0;
+    while((uint32_t)p < RAM_END) {
+        if(*p != STACK_PATTERN) {
+            used = RAM_END - (uint32_t)p;
+            break;
+        }
+        p++;
+    }
+    return used;
+}
+
+int main(void) {
+    fill_stack_guard();
+
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    Delay_Ms(500);
+
+    // ... รันโปรแกรม 10 นาที ...
+
+    uint32_t stack = measure_max_stack();
+    USART_Print("Max stack used: ");
+    USART_PrintNum(stack);
+    USART_Print(" / 2048 bytes (");
+    USART_PrintNum(stack * 100 / 2048);
+    USART_Println("%)");
+
+    // ถ้า > 90% → เสี่ยง overflow → ลดขนาด local array
+    while(1) { IWDG_Feed(); }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> เติม RAM ทั้งหมดด้วย 0xDEADBEEF ก่อนเริ่มโปรแกรมจริง — stack จะโตจาก RAM_END ลงมา — เขียนทับ pattern ไปเรื่อย ๆ — หลังรันโปรแกรมนานพอ เช็คว่า pattern ถูกเขียนทับไปถึงไหน — ถ้าใกล้ RAM_START แปลว่า stack เกือบเต็ม</div>
+</div>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch19_debug.html">กลับบทที่ 19</a>
+</nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

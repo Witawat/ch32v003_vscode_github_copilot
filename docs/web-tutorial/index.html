@@ -12,8 +12,8 @@
     <h1>🔌 SimpleHAL Tutorial</h1>
     <p>เรียนรู้การเขียนโปรแกรม CH32V003 แบบทีละขั้น<br>จากศูนย์จนสร้าง Product จริงได้ — ด้วยภาษาไทย</p>
     <div class="stats">
-        <div class="stat"><div class="stat-num">17</div><div class="stat-label">บทเรียน</div></div>
-        <div class="stat"><div class="stat-num">94</div><div class="stat-label">ตัวอย่างโค้ด</div></div>
+        <div class="stat"><div class="stat-num">24</div><div class="stat-label">บทเรียน</div></div>
+        <div class="stat"><div class="stat-num">120+</div><div class="stat-label">ตัวอย่างโค้ด</div></div>
         <div class="stat"><div class="stat-num">4</div><div class="stat-label">แพ็กเกจ</div></div>
         <div class="stat"><div class="stat-num">18</div><div class="stat-label">โมดูล</div></div>
     </div>
@@ -22,6 +22,10 @@
 <h2>📚 สารบัญ</h2>
 
 <ul id="toc">
+<li><a href="ch00_setup.html">
+    <span class="ch-num">บทที่ 0</span><span class="ch-level level-beginner">เริ่มต้น</span>
+    <span class="ch-desc">เตรียมความพร้อม — ติดตั้ง Toolchain, VS Code, ต่อวงจร, Build & Flash ครั้งแรก</span>
+</a></li>
 <li><a href="ch01_getting_started.html">
     <span class="ch-num">บทที่ 1</span><span class="ch-level level-beginner">เริ่มต้น</span>
     <span class="ch-desc">เริ่มต้นอย่างถูกต้อง — SystemCoreClockUpdate, Timer_Init, CH32V003_PACKAGE, Debug Print</span>
@@ -90,10 +94,36 @@
     <span class="ch-num">บทที่ 17</span><span class="ch-level level-expert">ผู้เชี่ยวชาญ</span>
     <span class="ch-desc">Package System — เลือก SOP8/SOP16/TSSOP20, Pin Validation</span>
 </a></li>
+<li style="border-top:2px solid var(--accent);margin-top:2rem;padding-top:1.2rem"></li>
+<li><a href="ch18_multi_module.html">
+    <span class="ch-num">บทที่ 18</span><span class="ch-level level-expert">ผู้เชี่ยวชาญ</span>
+    <span class="ch-desc">รวมหลายโมดูล — State Machine, SimpleScheduler, Product จริง 3 ตัวอย่าง</span>
+</a></li>
+<li><a href="ch19_debug.html">
+    <span class="ch-num">บทที่ 19</span><span class="ch-level level-advanced">สูง</span>
+    <span class="ch-desc">Workshop ดีบัก — Print Debug, LED Code, มัลติมิเตอร์, Logic Analyzer, GDB</span>
+</a></li>
+<li style="border-top:2px solid var(--border);margin-top:2rem;padding-top:1.2rem"><span style="color:#64748b;font-weight:700">📎 บทเสริม</span></li>
+<li><a href="chapx_pcb.html">
+    <span class="ch-num">เสริม A</span><span class="ch-level level-advanced">สูง</span>
+    <span class="ch-desc">จาก Breadboard สู่ PCB — Schematic, Layout, Gerber, สั่งผลิต, ประกอบ</span>
+</a></li>
+<li><a href="chapx_recipes.html">
+    <span class="ch-num">เสริม B</span><span class="ch-level level-intermediate">กลาง</span>
+    <span class="ch-desc">สูตรสำเร็จ — 18 อุปกรณ์ยอดนิยม: OLED, DHT11, Servo, nRF24L01, Relay...</span>
+</a></li>
+<li><a href="chapx_production.html">
+    <span class="ch-num">เสริม C</span><span class="ch-level level-expert">ผู้เชี่ยวชาญ</span>
+    <span class="ch-desc">ข้อควรรู้ก่อนผลิตจริง — ROP Lock, Unique ID, Brown-out, Testing, Bootloader</span>
+</a></li>
+<li><a href="chapx_arduino_migration.html">
+    <span class="ch-num">เสริม D</span><span class="ch-level level-beginner">เริ่มต้น</span>
+    <span class="ch-desc">ย้ายจาก Arduino มา CH32V003 — ตารางเทียบฟังก์ชัน, Porting ตัวอย่าง, ข้อควรระวัง</span>
+</a></li>
 </ul>
 
 <div class="callout callout-note" style="margin-top:2rem">
-    <strong>💡 วิธีอ่าน:</strong> เริ่มจากบทที่ 1 ไปตามลำดับ — แต่ละบทมี Flowchart, วงจร, Code ทีละขั้น, และ Product จริงให้ลองทำ
+    <strong>💡 วิธีอ่าน:</strong> ถ้ายังไม่ได้ติดตั้งอะไรเลย → เริ่มที่ <a href="ch00_setup.html">บทที่ 0</a> ก่อน ไล่ไปตามลำดับ 1→19 — บทเสริม A-D อ่านเมื่อพร้อมทำของจริง — แต่ละบทมี Flowchart, วงจร, Code ทีละขั้น, และ Product จริงให้ลองทำ
 </div>
 
 <p style="text-align:center;margin:3rem 0;color:#94a3b8;font-size:0.85em">
