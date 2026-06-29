@@ -69,10 +69,22 @@ pre code { background: transparent; padding: 0; color: inherit; }
 /* Highlight.js syntax coloring — match dark code blocks */
 .hljs { background: #0d1117 !important; border-radius: var(--radius); padding: 1.2rem !important; }
 
-/* ASCII Circuit */
+/* Lists — consistent bullet spacing */
+ul, ol { margin: 0.6rem 0; padding-left: 1.6rem; }
+li { margin: 0.35rem 0; line-height: 1.7; }
+section ul, section ol { margin-left: 0; }
+
+/* Paragraphs — uniform gap */
+p { margin: 0.6rem 0; }
+
+/* ASCII Circuit — monospace, high contrast, readable */
 pre.ascii-circuit {
-    background: #f8fafc; color: #334155; font-size: 0.82em;
-    border: 2px solid #e2e8f0; text-align: center; line-height: 1.3;
+    background: #f0f4f8; color: #1e293b;
+    font-size: 0.75em; font-family: 'Courier New', 'Consolas', 'Liberation Mono', monospace;
+    border: 2px solid #94a3b8; text-align: center;
+    line-height: 1.2; padding: 1rem 0.6rem;
+    letter-spacing: 0.03em; overflow-x: auto;
+    white-space: pre; font-weight: 600;
 }
 
 /* Tables */
