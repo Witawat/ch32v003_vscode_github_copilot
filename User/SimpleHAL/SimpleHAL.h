@@ -104,7 +104,7 @@ extern "C" {
 #define CH32V003_IS_QFN20    (CH32V003_PACKAGE == PACKAGE_QFN20)
 
 #define CH32V003_HAS_PD0         (!CH32V003_IS_SOP8 && !CH32V003_IS_SOP16)
-#define CH32V003_HAS_SPI_HW      (!CH32V003_IS_SOP8)
+#define CH32V003_HAS_SPI_HW      (!CH32V003_IS_SOP8 && !CH32V003_IS_SOP16)  // no SCK on SOP-8/SOP-16
 
 
 /* ========== Include All SimpleHAL Libraries ========== */

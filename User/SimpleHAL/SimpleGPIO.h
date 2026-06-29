@@ -290,7 +290,7 @@ uint8_t portRead(GPIO_TypeDef* port);
       ((pin) == PA1 || (pin) == PA2 || (pin) == PC1 || (pin) == PC2 || (pin) == PC4 || \
        (pin) == PD6)
 #elif CH32V003_IS_SOP16
-  #define IS_VALID_PIN(pin)  ((pin) != PD0)
+  #define IS_VALID_PIN(pin)  ((pin) != PD0 && (pin) != PD2 && (pin) != PD3 && (pin) != PC5)
 #else
   #define IS_VALID_PIN(pin)  (1)
 #endif

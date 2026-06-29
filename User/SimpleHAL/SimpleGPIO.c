@@ -42,7 +42,11 @@ static const PinMap_t pin_map[] = {
     {GPIOC, GPIO_Pin_2, GPIO_PinSource2, GPIO_PortSourceGPIOC},  // PC2 (12)
     {GPIOC, GPIO_Pin_3, GPIO_PinSource3, GPIO_PortSourceGPIOC},  // PC3 (13)
     {GPIOC, GPIO_Pin_4, GPIO_PinSource4, GPIO_PortSourceGPIOC},  // PC4 (14)
-    {GPIOC, GPIO_Pin_5, GPIO_PinSource5, GPIO_PortSourceGPIOC},  // PC5 (15)
+#if !CH32V003_IS_SOP16
+    {GPIOC, GPIO_Pin_5, GPIO_PinSource5, GPIO_PortSourceGPIOC},  // PC5 (15) — TSSOP/QFN only
+#else
+    {0, 0, 0, 0},  // PC5 — not bonded on SOP-16
+#endif
     {GPIOC, GPIO_Pin_6, GPIO_PinSource6, GPIO_PortSourceGPIOC},  // PC6 (16)
     {GPIOC, GPIO_Pin_7, GPIO_PinSource7, GPIO_PortSourceGPIOC},  // PC7 (17)
     
@@ -54,21 +58,24 @@ static const PinMap_t pin_map[] = {
 #endif
     {GPIOD, GPIO_Pin_1, GPIO_PinSource1, GPIO_PortSourceGPIOD},  // PD1 (19)
     
-    // GPIOD pins (PD2-PD7) — PD3,PD7,PD4,PD5 not on SOP-8/SOP-16
+    // GPIOD pins (PD2-PD7) — package-aware guards per datasheet
 #if !CH32V003_IS_SOP8 && !CH32V003_IS_SOP16
-    {GPIOD, GPIO_Pin_2, GPIO_PinSource2, GPIO_PortSourceGPIOD},  // PD2 (20)
-    {GPIOD, GPIO_Pin_3, GPIO_PinSource3, GPIO_PortSourceGPIOD},  // PD3 (21)
-    {GPIOD, GPIO_Pin_4, GPIO_PinSource4, GPIO_PortSourceGPIOD},  // PD4 (22)
-    {GPIOD, GPIO_Pin_5, GPIO_PinSource5, GPIO_PortSourceGPIOD},  // PD5 (23)
+    {GPIOD, GPIO_Pin_2, GPIO_PinSource2, GPIO_PortSourceGPIOD},  // PD2 (20) — TSSOP/QFN only
+    {GPIOD, GPIO_Pin_3, GPIO_PinSource3, GPIO_PortSourceGPIOD},  // PD3 (21) — TSSOP/QFN only
 #else
     {0, 0, 0, 0}, // PD2 — not bonded on SOP-8/SOP-16
     {0, 0, 0, 0}, // PD3 — not bonded on SOP-8/SOP-16
-    {0, 0, 0, 0}, // PD4 — not bonded or shared with SWIO
-    {0, 0, 0, 0}, // PD5 — not bonded or shared with SWIO
 #endif
-    {GPIOD, GPIO_Pin_6, GPIO_PinSource6, GPIO_PortSourceGPIOD},  // PD6 (24)
 #if !CH32V003_IS_SOP8
-    {GPIOD, GPIO_Pin_7, GPIO_PinSource7, GPIO_PortSourceGPIOD}   // PD7 (25)
+    {GPIOD, GPIO_Pin_4, GPIO_PinSource4, GPIO_PortSourceGPIOD},  // PD4 (22) — SOP16/TSSOP/QFN
+    {GPIOD, GPIO_Pin_5, GPIO_PinSource5, GPIO_PortSourceGPIOD},  // PD5 (23) — SOP16/TSSOP/QFN
+#else
+    {0, 0, 0, 0}, // PD4 — shared with SWIO on SOP-8 (kept inactive)
+    {0, 0, 0, 0}, // PD5 — shared with SWIO on SOP-8 (kept inactive)
+#endif
+    {GPIOD, GPIO_Pin_6, GPIO_PinSource6, GPIO_PortSourceGPIOD},  // PD6 (24) — all packages
+#if !CH32V003_IS_SOP8
+    {GPIOD, GPIO_Pin_7, GPIO_PinSource7, GPIO_PortSourceGPIOD}   // PD7 (25) — SOP16/TSSOP/QFN
 #else
     {0, 0, 0, 0}  // PD7 — not bonded on SOP-8
 #endif
