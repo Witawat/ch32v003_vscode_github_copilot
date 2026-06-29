@@ -36,11 +36,13 @@ void I2C_SimpleInit(I2C_Speed speed, I2C_PinConfig pin_config) {
     GPIO_InitTypeDef GPIO_InitStructure = {0};
     I2C_InitTypeDef I2C_InitStructure = {0};
     
-    // 1. เปิด Clock — PARTIAL_REMAP ใช้ PD2/PD1 (GPIOD) เหมือน REMAP
+    // 1. เปิด Clock — I2C1 อยู่ APB1, GPIO/AFIO อยู่ APB2 (คนละบัส ต้องแยกเรียก!)
     if(pin_config == I2C_PINS_PARTIAL_REMAP || pin_config == I2C_PINS_REMAP) {
-        RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOD | RCC_APB1Periph_I2C1 | RCC_APB2Periph_AFIO, ENABLE);
+        RCC_APB1PeriphClockCmd(RCC_APB1Periph_I2C1, ENABLE);
+        RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOD | RCC_APB2Periph_AFIO, ENABLE);
     } else {
-        RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOC | RCC_APB1Periph_I2C1 | RCC_APB2Periph_AFIO, ENABLE);
+        RCC_APB1PeriphClockCmd(RCC_APB1Periph_I2C1, ENABLE);
+        RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOC | RCC_APB2Periph_AFIO, ENABLE);
     }
     
     // 2. ตั้งค่า Pin Remapping และ GPIO

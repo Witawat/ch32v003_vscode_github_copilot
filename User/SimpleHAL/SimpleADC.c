@@ -89,6 +89,7 @@ static void ADC_InitPeripheral(void) {
     ;
 
   // เปิดใช้งาน internal channels (Vrefint, Temperature Sensor)
+  // Note: TSVREFE bit (bit 23 of CTLR2) — verify with CH32V003 datasheet
   ADC1->CTLR2 |= (1 << 23);  // TSVREFE bit
 }
 

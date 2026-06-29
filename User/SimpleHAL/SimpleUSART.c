@@ -76,7 +76,7 @@ void USART_SimpleInit(USART_BaudRate baud, USART_PinConfig pin_config) {
     USART_InitTypeDef USART_InitStructure = {0};
     
     // 1. เปิด Clock สำหรับ USART1 และ GPIOD
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOD | RCC_APB2Periph_USART1 | RCC_APB2Periph_AFIO, ENABLE);
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOD | RCC_APB2Periph_USART1, ENABLE);
     
     // 2. ตั้งค่า Pin Remapping และ GPIO
     switch(pin_config) {
@@ -97,6 +97,7 @@ void USART_SimpleInit(USART_BaudRate baud, USART_PinConfig pin_config) {
             
         case USART_PINS_REMAP1:
             // Remap1: TX=PD0, RX=PD1
+            RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);
             GPIO_PinRemapConfig(GPIO_PartialRemap1_USART1, ENABLE);
             
             // TX
@@ -113,6 +114,7 @@ void USART_SimpleInit(USART_BaudRate baud, USART_PinConfig pin_config) {
             
         case USART_PINS_REMAP2:
             // Remap2: TX=PD6, RX=PD5
+            RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);
             GPIO_PinRemapConfig(GPIO_PartialRemap2_USART1, ENABLE);
             
             // TX
@@ -129,6 +131,7 @@ void USART_SimpleInit(USART_BaudRate baud, USART_PinConfig pin_config) {
             
         case USART_PINS_FULL_REMAP:
             // Full Remap: TX=PD6, RX=PD5 (รวมบิต REMAP1+REMAP2)
+            RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);
             // @note pin mapping อาจแตกต่าง — ตรวจสอบ CH32V003 datasheet
             GPIO_PinRemapConfig(GPIO_FullRemap_USART1, ENABLE);
             

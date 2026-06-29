@@ -62,6 +62,7 @@ void SPI_SimpleInit(SPI_Mode mode, SPI_Speed speed, SPI_PinConfig pin_config) {
             
         case SPI_PINS_REMAP:
             // Remap: SCK=PD1, MISO=PD2, MOSI=PD3, NSS=PD0
+            // PD0 (NSS) not available on SOP-8/SOP-16
             GPIO_PinRemapConfig(GPIO_Remap_SPI1, ENABLE);
             
             // SCK (PD1) และ MOSI (PD3) - Alternate Function Push-Pull
@@ -75,6 +76,7 @@ void SPI_SimpleInit(SPI_Mode mode, SPI_Speed speed, SPI_PinConfig pin_config) {
             GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
             GPIO_Init(GPIOD, &GPIO_InitStructure);
             
+#if CH32V003_HAS_PD0
             // NSS/CS (PD0) - Output Push-Pull (software control)
             GPIO_InitStructure.GPIO_Pin = GPIO_Pin_0;
             GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
@@ -83,6 +85,10 @@ void SPI_SimpleInit(SPI_Mode mode, SPI_Speed speed, SPI_PinConfig pin_config) {
             
             cs_port = GPIOD;
             cs_pin = GPIO_Pin_0;
+#else
+            cs_port = GPIOC;
+            cs_pin = GPIO_Pin_4;  // fallback CS (PC4 — available on SOP-16)
+#endif
             break;
     }
     

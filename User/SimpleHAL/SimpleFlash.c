@@ -433,7 +433,7 @@ FlashStatus Flash_WriteByteWithErase(uint32_t addr, uint8_t data) {
     uint8_t page_num = (addr - FLASH_BASE_ADDRESS) / FLASH_PAGE_SIZE;
     
     // Read entire page into buffer
-    uint8_t page_buffer[FLASH_PAGE_SIZE];
+static uint8_t page_buffer[FLASH_PAGE_SIZE];  // shared buffer (64B in .bss, not stack)
     for (uint16_t i = 0; i < FLASH_PAGE_SIZE; i++) {
         page_buffer[i] = Flash_ReadByte(page_addr + i);
     }
@@ -470,7 +470,7 @@ FlashStatus Flash_WriteHalfWordWithErase(uint32_t addr, uint16_t data) {
     uint32_t page_addr = addr & ~(FLASH_PAGE_SIZE - 1);
     uint8_t page_num = (addr - FLASH_BASE_ADDRESS) / FLASH_PAGE_SIZE;
 
-    uint8_t page_buffer[FLASH_PAGE_SIZE];
+static uint8_t page_buffer[FLASH_PAGE_SIZE];  // shared buffer (64B in .bss, not stack)
     for (uint16_t i = 0; i < FLASH_PAGE_SIZE; i++) {
         page_buffer[i] = Flash_ReadByte(page_addr + i);
     }
@@ -505,7 +505,7 @@ FlashStatus Flash_WriteWordWithErase(uint32_t addr, uint32_t data) {
     uint32_t page_addr = addr & ~(FLASH_PAGE_SIZE - 1);
     uint8_t page_num = (addr - FLASH_BASE_ADDRESS) / FLASH_PAGE_SIZE;
 
-    uint8_t page_buffer[FLASH_PAGE_SIZE];
+static uint8_t page_buffer[FLASH_PAGE_SIZE];  // shared buffer (64B in .bss, not stack)
     for (uint16_t i = 0; i < FLASH_PAGE_SIZE; i++) {
         page_buffer[i] = Flash_ReadByte(page_addr + i);
     }
