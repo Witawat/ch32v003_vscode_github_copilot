@@ -28,10 +28,10 @@
 /* Global Variable */
 
 int main(void) {
-    // 1. System init — ต้องเรียกเอง ไม่มี auto-init
+    // 1. System init
     NVIC_PriorityGroupConfig(NVIC_PriorityGroup_1);
-    SystemCoreClockUpdate();   // ★ ต้องเป็นบรรทัดแรก — อัปเดต system clock
-    Timer_Init();              // ★ ต้องเรียกเอง — เริ่มต้น SysTick สำหรับ Delay/Timer
+    SystemCoreClockUpdate();   // ★ ต้องเรียก — อัปเดต system clock (แม้ auto-init ก็ควรเรียกซ้ำเพื่อความชัดเจน)
+    Timer_Init();              // ★ เรียกซ้ำได้อย่างปลอดภัย (SimpleDelay constructor ก็เรียกให้แล้ว)
 
 #if ENABLE_PRINTF
     SDI_Printf_Enable();       // ★ ต้องเรียกก่อน printf() ครั้งแรก

@@ -38,16 +38,20 @@ void Timer_Init(void) {
 }
 
 /**
- * @brief Auto-initialization function
+ * @brief Auto-initialization function (constructor)
  *
- * หมายเหตุ: ปิดใช้งาน auto-init เนื่องจาก constructor ทำงานก่อน main()
- * ซึ่ง `SystemCoreClock` ยังไม่ได้ถูกอัพเดตผ่าน `SystemCoreClockUpdate()`
- * ผู้ใช้ต้องเรียก `Timer_Init()` เองหลังจาก `SystemCoreClockUpdate()` ใน main()
+ * ทำงานอัตโนมัติก่อน main() — เรียก SystemCoreClockUpdate() + Timer_Init()
+ * ฮาร์ดแวร์ clock ถูกตั้งค่าแล้วจาก startup code (SystemInit)
+ * แค่ยังไม่มีใครเรียก SystemCoreClockUpdate() เพื่ออัปเดตตัวแปร
+ *
+ * ถ้าต้องการควบคุมเอง → comment บรรทัด constructors แล้วเรียก
+ * SystemCoreClockUpdate(); Timer_Init(); ใน main() เอง
  */
-// __attribute__((constructor))
-// static void SimpleDelay_AutoInit(void) {
-//   Timer_Init();
-// }
+__attribute__((constructor))
+static void SimpleDelay_AutoInit(void) {
+    SystemCoreClockUpdate();  // อ่านค่าจริงจากฮาร์ดแวร์ (startup code ตั้งไว้แล้ว)
+    Timer_Init();
+}
 
 /**
  * @brief SysTick Interrupt Handler
