@@ -259,6 +259,27 @@ int main(void) {
 <div class="approach"><strong>🧠 แนวคิด:</strong> <code>OneWire_MatchROM(rom)</code> ส่ง ROM ID บนบัส — เฉพาะอุปกรณ์ที่มี ROM ตรงกันเท่านั้นที่จะตอบสนอง — ใช้คู่กับ <code>OneWire_SearchROM()</code> — <strong>Flow ทั่วไป:</strong> SearchROM → เก็บ ROM IDs → MatchROM(device[i]) → Command — <strong>ข้อควรระวัง:</strong> ROM ID เป็น 64-bit — ต้องใช้ <code>uint64_t</code> — Family code 0x28 = DS18B20 — Read Scratchpad 9 bytes ต่อครั้ง — ตรวจสอบ CRC8 ทุกครั้ง — MatchROM ใช้เมื่อมีหลายตัว — ถ้ามีตัวเดียว <code>SkipROM</code> ง่ายกว่า</div>
 </div>
 
+<div class="answer">
+<h2>🔌 วงจรประกอบ — DS18B20 (1-Wire)</h2>
+<pre class="ascii-circuit">
+        CH32V003              DS18B20
+        ┌──────────┐       ┌──────────────┐
+        │    PD2 ──┼──┬────│ DQ (Data)    │
+        │          │  │    │              │
+        │    VCC ──┼──┼────│ VDD          │
+        │          │  │    │              │
+        │    GND ──┼──┤    │ GND          │
+        └──────────┘  │    └──────────────┘
+                      │
+                    R4.7kΩ
+                    (Pull-up → VCC)
+        
+        ⚠️ ต้องต่อ Pull-up 4.7kΩ ที่ Data line!
+        ถ้าไม่ต่อ — OneWire_Reset() คืน 0 ตลอด
+</pre>
+<div class="approach"><strong>💡 หลักการ 1-Wire:</strong> 1 ขา รับ-ส่งข้อมูล — Open-Drain ใช้ R pull-up — timing ระดับ µs ต้องปิด interrupt ขณะส่ง</div>
+</div>
+
 <nav class="bottom-nav">
     <a href="index.html">← สารบัญ</a>
     <a href="ch14_onewire.html">กลับบทที่ 14</a>

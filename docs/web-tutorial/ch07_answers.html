@@ -131,6 +131,29 @@ int main(void) {
 <div class="approach"><strong>🧠 แนวคิด:</strong> <code>I2C_PINS_PARTIAL_REMAP</code> เปลี่ยน SCL=PD2, SDA=PD1 — จำเป็นสำหรับ SOP-8 (ไม่มี PC1/PC2) — SOP-8 มี PA1,PA2,PC1,PC2,PC4,PD6 — PD1/PD2 อยู่บน SOP-8 — DEFAULT (PC1/PC2) ก็ใช้ได้บน SOP-8 — <code>I2C_PINS_FULL_REMAP</code> (PD0/PD1) ใช้ได้เฉพาะ TSSOP-20/QFN-20 เพราะ PD0 ไม่มีใน SOP-8/16</div>
 </div>
 
+<div class="answer">
+<h2>🔌 วงจรประกอบ — I2C (BH1750)</h2>
+<pre class="ascii-circuit">
+        CH32V003              BH1750
+        ┌──────────┐       ┌──────────────┐
+        │    PC2 ──┼──┬────│ SCL          │
+        │          │  │    │              │
+        │    PC1 ──┼──┼────│ SDA          │
+        │          │  │    │              │
+        │    VCC ──┼──┼────│ VCC          │
+        │          │  │    │              │
+        │    GND ──┼──┼────│ GND          │
+        └──────────┘  │    │ ADDR → GND   │
+                      │    └──────────────┘
+                    R4.7kΩ × 2
+                    (Pull-up SDA, SCL → VCC)
+        
+        ⚠️ ต้องต่อ Pull-up 4.7kΩ ที่ SDA และ SCL!
+        ถ้าไม่ต่อ — I2C จะไม่ทำงาน I2C_ERROR_NACK ตลอด
+</pre>
+<div class="approach"><strong>💡 หลักการ I2C:</strong> SDA และ SCL ใช้ Open-Drain — device ดึง LOW เท่านั้น ต้องมี R pull-up ดึง HIGH กลับ</div>
+</div>
+
 <nav class="bottom-nav">
     <a href="index.html">← สารบัญ</a>
     <a href="ch07_i2c.html">กลับบทที่ 7</a>

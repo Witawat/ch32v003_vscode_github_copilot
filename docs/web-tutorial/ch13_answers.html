@@ -225,6 +225,39 @@ int main(void) {
 <div class="approach"><strong>🧠 แนวคิด:</strong> Non-Inverting Amp ใช้ R ภายนอก 2 ตัว: Rf (feedback) และ Rg (to GND) — สูตร: Vout = Vin × (1 + Rf/Rg) — Rf = Rg = 10kΩ → Gain = 2 — <strong>ต่อวงจร:</strong> PA4 (+), PA6 (−) เชื่อมระหว่าง Rf กับ Rg, PA5 (out) — <code>OPAMP_MODE_NON_INVERTING</code> ตั้งวงจรภายในให้พร้อมรับ R ภายนอก — <strong>ข้อควรระวัง:</strong> output swing ไม่เกิน VDD-0.1V → ถ้า Vin = 2V, Gain=2 → Vout = 4V → saturated ที่ ~3.2V — ถ้าต้องการขยายมากกว่า VDD → ใช้ PGA แทน (Gain สูงสุด 16x) — <strong>ข้อดี:</strong> Non-inverting → input impedance สูง, เฟสไม่กลับ — <strong>Resistor tolerance:</strong> 1% R → Gain error ~2% — Calibrate ใน software ได้</div>
 </div>
 
+<div class="answer">
+<h2>🔌 วงจรประกอบ — OPAMP Non-Inverting (Gain=2)</h2>
+<pre class="ascii-circuit">
+        CH32V003
+        ┌────────────────────────────┐
+        │                            │
+        │  Input ── PA2(CHP0) ──┐    │
+        │                       │    │
+        │                    ┌──┴──┐ │
+        │                    │ OPA │─┼── Output (ผ่าน ADC)
+        │                    └──┬──┘ │
+        │                       │    │
+        │            PA1(CHN0)──┤    │
+        │            (feedback) │    │
+        │                    ┌──┤    │
+        │                    │R2│    │
+        │                    │10k│   │
+        │                    └──┤    │
+        │                       │    │
+        │                    ┌──┤    │
+        │                    │R1│    │
+        │                    │10k│   │
+        │                    └──┤    │
+        │                      GND   │
+        └────────────────────────────┘
+        
+        Gain = 1 + R2/R1 = 1 + 10k/10k = 2
+        
+        ⚠️ R1, R2 เป็นตัวต้านทานภายนอก — ต้องต่อเพิ่ม!
+</pre>
+<div class="approach"><strong>💡 หลักการ OPAMP:</strong> Non-Inverting — input เข้าขาบวก ชิปขยายสัญญาณผ่าน feedback resistor — output = input × (1+R2/R1)</div>
+</div>
+
 <nav class="bottom-nav">
     <a href="index.html">← สารบัญ</a>
     <a href="ch13_opamp.html">กลับบทที่ 13</a>

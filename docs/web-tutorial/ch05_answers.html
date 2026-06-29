@@ -99,6 +99,21 @@ int main(void) {
 <div class="approach"><strong>🧠 แนวคิด:</strong> <code>PWM_SetRemap(channel, alternate_pin)</code> เปลี่ยน mapping ก่อน <code>PWM_Init()</code> — PWM1_CH2 ปกติ = PA1 แต่ remap ไป PC3 ได้ — ตัวเลือก remap: <code>PWM_PIN_PD2</code>, <code>PWM_PIN_PA1</code>, <code>PWM_PIN_PC3</code>, <code>PWM_PIN_PC4</code> — การ remap มีประโยชน์เมื่อ pin เดิมถูกใช้โดยอุปกรณ์อื่นแล้ว</div>
 </div>
 
+<div class="answer">
+<h2>🔌 วงจรประกอบ — Servo SG90</h2>
+<pre class="ascii-circuit">
+        CH32V003              SG90 Servo
+        ┌──────────┐       ┌──────────────┐
+        │    PC0 ──┼──────▶│ Signal (ส้ม)  │
+        │    VCC ──┼───────│ VCC  (แดง)    │
+        │    GND ──┼───────│ GND  (น้ำตาล) │
+        └──────────┘       └──────────────┘
+        
+        ⚠️ Servo ใช้ไฟ 5V — ต้องใช้ไฟเลี้ยงแยก! ถ้าใช้ 3.3V จาก CH32V003 ไม่พอ
+</pre>
+<div class="approach"><strong>💡 หลักการ PWM ควบคุม Servo:</strong> ความถี่ 50Hz = 20ms period — pulse 1ms=0°, 1.5ms=90°, 2ms=180°</div>
+</div>
+
 <nav class="bottom-nav">
     <a href="index.html">← สารบัญ</a>
     <a href="ch05_pwm.html">กลับบทที่ 5</a>

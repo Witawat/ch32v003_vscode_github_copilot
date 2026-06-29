@@ -150,6 +150,43 @@ int main(void) {
 <div class="approach"><strong>🧠 แนวคิด:</strong> SOP-8/SOP-16 ไม่มี Hardware SPI (ไม่มี PC5/PC6/PC7) — ใช้ <code>shiftOut()</code> แบบ software bit-bang แทน — 74HC595 เป็น shift register 8-bit — 3 pins control: DATA (serial in), CLOCK (shift), LATCH (output) — <code>shiftOut(DATA_PIN, CLOCK_PIN, MSBFIRST, data)</code> ส่ง 8 bits ทีละ bit — LATCH ใช้ pulse เพื่ออัปเดต output — ช้ากว่า HW SPI แต่ยืดหยุ่น ใช้ pin ไหนก็ได้ — สำหรับ W25Q Flash: SOP-8 ใช้ <code>shiftOut()</code> + <code>shiftIn()</code> ได้เช่นกัน</div>
 </div>
 
+<div class="answer">
+<h2>🔌 วงจรประกอบ — SPI (W25Q Flash)</h2>
+<pre class="ascii-circuit">
+        CH32V003              W25Qxx Flash
+        ┌──────────┐       ┌──────────────┐
+        │    PC5 ──┼──────▶│ SCK (Clock)  │
+        │    PC6 ──┼──────▶│ MOSI (Data)  │
+        │    PC7 ──┼───────│ MISO (Data)  │
+        │    PC4 ──┼──────▶│ CS  (Select) │
+        │    VCC ──┼───────│ VCC          │
+        │    GND ──┼───────│ GND          │
+        └──────────┘       └──────────────┘
+        
+        SPI_PINS_DEFAULT: SCK=PC5, MOSI=PC6, MISO=PC7, CS=PC4
+        ⚠️ SOP-8 ไม่มี PC5(SCK) → SPI HW ใช้ไม่ได้ → ใช้ shiftOut() แทน
+</pre>
+<div class="approach"><strong>💡 หลักการ SPI:</strong> Full-duplex — ส่ง 1 byte พร้อมรับ 1 byte — CS ต้อง LOW ก่อนส่ง, HIGH หลังส่งเสร็จ</div>
+</div>
+
+<div class="answer">
+<h2>🔌 วงจรประกอบ — SOP-8: 74HC595 (shiftOut)</h2>
+<pre class="ascii-circuit">
+        CH32V003              74HC595
+        ┌──────────┐       ┌──────────────┐
+        │    PD5 ──┼──────▶│ DS  (Data)   │
+        │    PD6 ──┼──────▶│ SHCP(Clock)  │
+        │    PD4 ──┼──────▶│ STCP(Latch)  │
+        │    VCC ──┼───────│ VCC, MR      │
+        │    GND ──┼───────│ GND, OE      │
+        └──────────┘       └──┬──┬──┬──┬──┘
+                            Q0 Q1 Q2 ... Q7
+                             │  │  │      │
+                            LED LED LED  LED
+</pre>
+<div class="approach"><strong>💡 หลักการ shiftOut:</strong> ส่งข้อมูลทีละ bit ผ่าน DS — SHCP clock แต่ละ pulse เลื่อนข้อมูลเข้า 1 bit — STCP latch copy ข้อมูลออก Q0-Q7 ทั้ง 8 ขาพร้อมกัน</div>
+</div>
+
 <nav class="bottom-nav">
     <a href="index.html">← สารบัญ</a>
     <a href="ch08_spi.html">กลับบทที่ 8</a>

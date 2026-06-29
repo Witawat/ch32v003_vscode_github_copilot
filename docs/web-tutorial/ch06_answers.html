@@ -118,6 +118,37 @@ int main(void) {
 <div class="approach"><strong>🧠 แนวคิด:</strong> <code>ADC_ReadAverage(ch, 16)</code> อ่าน 16 ครั้งแล้วหาค่าเฉลี่ย — ยิ่ง samples มาก noise ยิ่งต่ำ (standard deviation ลดลง √N เท่า) — แต่ใช้เวลานานขึ้น (16 ครั้ง × ~3.5μs/ครั้ง ≈ 56μs) — แสดงทั้งค่าเดียวและค่าเฉลี่ยเทียบกัน — ค่าเฉลี่ยจะนิ่งกว่าเห็นชัด</div>
 </div>
 
+<div class="answer">
+<h2>🔌 วงจรประกอบ — Potentiometer + NTC</h2>
+<pre class="ascii-circuit">
+        CH32V003
+        ┌──────────────┐
+        │         VCC  │── 3.3V
+        │          │   │
+        │       ┌──┤   │
+        │       │ POT  │    10kΩ Potentiometer
+        │       │ 10kΩ │    ขากลาง → PD2 (ADC)
+        │       └──┤   │
+        │          │   │
+        │    PD2 ──┤───│─ อ่านค่า ADC 0-1023
+        │         GND  │
+        │              │
+        │         VCC  │── 3.3V
+        │          │   │
+        │       ┌──┤   │
+        │       │ NTC  │    10kΩ Thermistor
+        │       │ 10kΩ │    จุดต่อ → PD3 (ADC)
+        │       └──┤   │
+        │          │   │
+        │       ┌──┤   │
+        │       │ R10k │    Voltage Divider
+        │       └──┤   │    Vout = 3.3V × Rfix/(Rfix+NTC)
+        │         GND  │
+        └──────────────┘
+</pre>
+<div class="approach"><strong>💡 หลักการ:</strong> Potentiometer ใช้ขากลางต่อเข้า ADC โดยตรง — NTC ต้องใช้วงจร Voltage Divider (แบ่งแรงดัน) เพื่อแปลงความต้านทานเป็นแรงดัน</div>
+</div>
+
 <nav class="bottom-nav">
     <a href="index.html">← สารบัญ</a>
     <a href="ch06_adc.html">กลับบทที่ 6</a>
