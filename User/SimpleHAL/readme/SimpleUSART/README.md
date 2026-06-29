@@ -124,7 +124,7 @@ uint8_t b = USART_Read();
 
 #### `uint16_t USART_ReadBytes(uint8_t* buffer, uint16_t length)`
 
-อ่านหลาย bytes (non-blocking — อ่านเฉพาะที่มีค้างใน buffer)
+อ่านหลาย bytes (non-blocking — อ่านเฉพาะข้อมูลที่มีค้างใน hardware buffer ไม่รอ)
 
 ```c
 uint8_t buf[64];

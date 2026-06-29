@@ -369,3 +369,5 @@ int main(void) {
 | ข้อมูลใหญ่เกิน 60 bytes | เกิน page limit | แยก struct ให้เล็กลง |
 | เขียนช้า 4× erase | ใช้ `WriteWordWithErase` v1.x | v2.0 แก้เป็น 1 erase ต่อ operation |
 | บันทึกระหว่าง interrupt | Flash write ต้องการ disable IRQ | ทำใน main loop เท่านั้น |
+
+> ⚠️ Flash endurance ~10,000-80,000 cycles ต่อหน้า — สำหรับข้อมูลที่เปลี่ยนบ่อยมาก ใช้ external EEPROM

@@ -130,6 +130,16 @@ pinModeMultiple(btns, PIN_MODE_INPUT_PULLUP);
 
 > **หมายเหตุ:** ต้องประกาศ array เป็น `const uint8_t arr[] = {...}` เพื่อให้ macro คำนวณ size ได้ถูกต้อง
 
+#### `digitalWriteMultiple(array, values)` — Macro
+
+เขียนค่าหลาย pin พร้อมกัน ไม่ต้องระบุจำนวน
+
+```c
+const uint8_t leds[] = {PC0, PC1, PC2};
+const uint8_t states[] = {HIGH, LOW, HIGH};
+digitalWriteMultiple(leds, states);
+```
+
 ---
 
 ### Port-level I/O (ขั้นสูง)

@@ -272,6 +272,8 @@ if (percent < 20) {
 // แล้วเปลี่ยนค่า ADC_VREFINT_CAL ใน SimpleADC.h
 ```
 
+⚠️ CH32V003 ไม่มี FPU — หลีกเลี่ยง float ใน main loop ใช้ fixed-point integer แทน (เช่น แปลงเป็น mV แทน V)
+
 ---
 
 ## เวอร์ชัน

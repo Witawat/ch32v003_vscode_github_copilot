@@ -30,6 +30,13 @@ PWR_WAKEUP_RESET      // NRST pin
 
 > **⚠️ หมายเหตุ:** `PWR_EnableWakeupPin()` / `PWR_DisableWakeupPin()` ใช้ WKUP pin = PA0 แต่ CH32V003 **ทุกแพ็กเกจไม่มีขา PA0** (ไม่ได้ bond ออกมาจาก die) — ใช้ AWU หรือ EXTI interrupt แทน
 
+#### `void PWR_EnableWakeupPin(void)`
+#### `void PWR_DisableWakeupPin(void)`
+
+เปิด/ปิด WKUP pin (PA0) สำหรับ wakeup จาก Standby
+
+> ⚠️ ไม่มีผลบน CH32V003 (ไม่มีขา PA0) — ฟังก์ชันนี้เก็บไว้เพื่อความสมบูรณ์ของ API เท่านั้น
+
 ## Entry Methods
 
 ```c

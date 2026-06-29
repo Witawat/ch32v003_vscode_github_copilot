@@ -70,6 +70,7 @@ analogWrite(PD4, 255);  // เลือกใช้ remap คนละแบบ
 | `PWM_REMAP_PARTIAL2` | TIM1, TIM2 | Partial remap 2 |
 
 > ⚠️ `PWM_REMAP_FULL` ถูกลบ — ใช้พอร์ท PE/PB ที่ไม่มีใน CH32V003
+> ⚠️ `PWM_REMAP_PARTIAL1`/`PWM_REMAP_PARTIAL2`: EXPERIMENTAL — ตรวจสอบ pin mapping กับ CH32V003 datasheet
 
 #### `IS_PWM_VALID_PACKAGE(ch)` 🆕
 

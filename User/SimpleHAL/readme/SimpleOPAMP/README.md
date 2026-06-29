@@ -379,3 +379,4 @@ int main(void) {
 | Gain ไม่ถูกต้อง | R ภายนอกค่าผิด | คำนวณ Gain = 1 + Rf/Rin ให้ถูกต้อง |
 | Output oscillate | Op-amp feedback loop ไม่เสถียร | เพิ่ม capacitor 10–100pF ที่ feedback |
 | ค่า ADC หลัง OPA ไม่ตรง | Rail-to-rail limitation | OPA อาจไม่ถึง VDD เต็มที่ เหลือ headroom ~100-300mV |
+| `CalculateGain*` ช้ามาก | ใช้ float (software emulation) บน MCU ที่ไม่มี FPU | ใช้เฉพาะตอน init เท่านั้น ไม่ควรใช้ใน main loop |

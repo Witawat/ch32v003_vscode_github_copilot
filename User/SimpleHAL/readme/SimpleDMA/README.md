@@ -335,3 +335,4 @@ int main(void) {
 | `DMA_MemCopy` ยังไม่เสร็จ | ใช้ผลลัพธ์เร็วเกินไป | รอ callback หรือ `DMA_WaitComplete()` ก่อน |
 | `CIRCULAR` mode ไม่หยุด | ออกแบบมาให้วนตลอด | ใช้ `DMA_MODE_NORMAL` ถ้าต้องการครั้งเดียว |
 | Callback ไม่ทำงาน | ลืม `volatile` หรือไม่ได้ตั้ง NVIC priority | ดูคำแนะนำใน `KNOWLEDGE_BASE.md §8.8–8.10` |
+| `DMA_TIM_UpdatePWM` ไม่เริ่ม | ไม่ได้เรียก `TIM_DMACmd(TIMx, TIM_DMA_Update, ENABLE)` ก่อน `DMA_Start()` | ต้องเปิด DMA request บน TIM ก่อน — ดูตัวอย่าง usage |

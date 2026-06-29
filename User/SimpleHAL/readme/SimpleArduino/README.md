@@ -74,6 +74,7 @@ long val = _randomRange(100, 200);  // 100-199
 ```
 
 > ⚠️ ใช้ชื่อ `_randomMax` / `_randomRange` เพราะ `random` ชนกับ `stdlib.h`
+> ⚠️ ต้องเรียก `randomSeed()` ก่อน `_randomMax`/`_randomRange` ไม่งั้นจะได้ค่าเดิมทุกครั้งที่รีเซ็ต
 
 ## yield() — Cooperative Multitasking
 
