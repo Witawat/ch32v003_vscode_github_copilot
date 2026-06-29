@@ -120,6 +120,63 @@ TIM_AdvancedInit(TIM_1, 47, 999, TIM_MODE_UP);
 
 ---
 
+### Runtime Configuration
+
+ฟังก์ชันต่อไปนี้ใช้เปลี่ยนการตั้งค่าโดยไม่ต้อง re-init timer
+
+#### `void TIM_SetMode(TIM_Instance timer, TIM_Mode mode)` — เปลี่ยน counting mode โดยไม่ต้อง re-init
+
+| พารามิเตอร์ | ชนิด | คำอธิบาย |
+|------------|------|----------|
+| `timer` | `TIM_Instance` | `TIM_1` หรือ `TIM_2` |
+| `mode` | `TIM_Mode` | `TIM_MODE_UP` หรือ `TIM_MODE_DOWN` |
+
+```c
+TIM_AdvancedInit(TIM_1, 47, 999, TIM_MODE_UP);
+// ... ภายหลังเปลี่ยนเป็นนับลง
+TIM_SetMode(TIM_1, TIM_MODE_DOWN);
+```
+
+#### `void TIM_SetPrescaler(TIM_Instance timer, uint16_t prescaler)` — เปลี่ยนค่า prescaler โดยไม่ต้อง re-init
+
+| พารามิเตอร์ | ชนิด | คำอธิบาย |
+|------------|------|----------|
+| `timer` | `TIM_Instance` | `TIM_1` หรือ `TIM_2` |
+| `prescaler` | `uint16_t` | ค่า prescaler ใหม่ (0–65535) |
+
+```c
+// เปลี่ยนจาก prescaler=47 เป็น prescaler=95 (ลดความถี่ลงครึ่งหนึ่ง)
+TIM_SetPrescaler(TIM_1, 95);
+TIM_GenerateUpdate(TIM_1);  // ⚠️ บังคับ update ทันที
+```
+
+#### `uint16_t Simple_TIM_GetPrescaler(TIM_Instance timer)` — อ่านค่า prescaler ปัจจุบัน
+
+| พารามิเตอร์ | ชนิด | คำอธิบาย |
+|------------|------|----------|
+| `timer` | `TIM_Instance` | `TIM_1` หรือ `TIM_2` |
+
+**คืนค่า:** `uint16_t` — ค่า PSC ปัจจุบัน
+
+```c
+uint16_t psc = Simple_TIM_GetPrescaler(TIM_1);
+```
+
+#### `void TIM_GenerateUpdate(TIM_Instance timer)` — สร้าง update event ด้วยซอฟต์แวร์
+
+| พารามิเตอร์ | ชนิด | คำอธิบาย |
+|------------|------|----------|
+| `timer` | `TIM_Instance` | `TIM_1` หรือ `TIM_2` |
+
+```c
+TIM_SetPrescaler(TIM_1, 95);
+TIM_GenerateUpdate(TIM_1);  // บังคับให้ค่าใหม่มีผลทันที
+```
+
+> ⚠️ ข้อควรระวัง: ต้องเรียก `TIM_GenerateUpdate()` ทุกครั้งหลังจากเปลี่ยน PSC หรือ ARR ขณะ timer กำลังทำงาน มิฉะนั้นค่าใหม่จะไม่มีผลจนกว่า counter overflow รอบถัดไป
+
+---
+
 ## ตัวอย่างการใช้งาน
 
 ### ขั้นต้น — LED Blink ด้วย Timer Interrupt

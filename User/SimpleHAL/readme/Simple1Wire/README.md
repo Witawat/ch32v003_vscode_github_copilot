@@ -37,13 +37,17 @@ typedef struct {
 
 ## ROM Commands
 
+> ⚠️ `SearchFirst/SearchNext` ถูกเปลี่ยนเป็น `ResetSearch() + Search()` ตั้งแต่ v2.0
+
 | ฟังก์ชัน | Command | ใช้เมื่อ |
 |---------|---------|---------|
-| `OneWire_SkipROM(bus)` | 0xCC | มี device เดียว หรือ broadcast |
-| `OneWire_ReadROM(bus, rom[8])` | 0x33 | มี device เดียว — อ่าน ROM address |
-| `OneWire_MatchROM(bus, rom[8])` | 0x55 | เลือก device เฉพาะตัวจาก ROM |
-| `OneWire_SearchFirst(bus)` | 0xF0 | ค้นหา device แรก |
-| `OneWire_SearchNext(bus)` | 0xF0 | ค้นหา device ถัดไป |
+| `OneWire_SkipROM(bus)` | 0xCC | device เดียว / broadcast |
+| `OneWire_ReadROM(bus, rom)` | 0x33 | device เดียว — อ่าน ROM 8 bytes |
+| `OneWire_MatchROM(bus, rom)` | 0x55 | เลือก device เฉพาะ |
+| `OneWire_ResetSearch(bus)` | — | รีเซ็ต search state |
+| `OneWire_Search(bus)` | 0xF0 | ค้นหา device ถัดไป (คืน `1` = เจอ) |
+| `OneWire_AlarmSearch(bus)` | 0xEC | ค้นหา devices ที่มี alarm |
+| `OneWire_Select(bus, rom)` | — | Reset + MatchROM ในขั้นตอนเดียว |
 
 ---
 
@@ -101,27 +105,73 @@ uint8_t data = OneWire_ReadByte(bus);
 
 ---
 
-### ROM Search
+### ROM Search (ใหม่ — ResetSearch + Search)
 
-#### `uint8_t OneWire_SearchFirst(OneWire_Bus* bus)`
-#### `uint8_t OneWire_SearchNext(OneWire_Bus* bus)`
+#### `void OneWire_ResetSearch(OneWire_Bus* bus)`
 
-คืน `1` ถ้าพบ device และเก็บ ROM address ใน `bus->rom[8]`
+รีเซ็ต search state — ต้องเรียกก่อน search ครั้งแรก
+
+#### `uint8_t OneWire_Search(OneWire_Bus* bus)`
+
+ค้นหา device ถัดไป — **คืน `1` ถ้าพบ**, ROM ถูกเก็บใน `bus->rom[8]`
 
 ```c
-uint8_t roms[8][8];
-uint8_t count = 0;
-
-if (OneWire_SearchFirst(bus)) {
-    do {
-        memcpy(roms[count++], bus->rom, 8);
-    } while (OneWire_SearchNext(bus) && count < 8);
+uint8_t roms[8][8], count = 0;
+OneWire_ResetSearch(bus);
+while (OneWire_Search(bus) && count < 8) {
+    memcpy(roms[count++], bus->rom, 8);
 }
-
-USART_Print("Found: "); USART_PrintNum(count); USART_Print(" devices\r\n");
 ```
 
----
+> ⚠️ **API เก่าถูกเปลี่ยนแล้ว** — `SearchFirst/SearchNext` ไม่มีใน SimpleHAL v2.0
+
+#### `uint8_t OneWire_AlarmSearch(OneWire_Bus* bus)`
+
+ค้นหาเฉพาะ devices ที่มี alarm flag — ใช้กับ DS18B20 temperature alarm
+
+#### `void OneWire_GetAddress(OneWire_Bus* bus, uint8_t rom[8])`
+
+ดึง ROM address จาก bus หลัง search
+
+#### `void OneWire_Select(OneWire_Bus* bus, const uint8_t rom[8])`
+
+`Reset + MatchROM` ในขั้นตอนเดียว — สะดวกกว่าเรียกแยก
+
+```c
+OneWire_Select(bus, sensor1_rom);  // เลือก sensor 1
+```
+
+### Low-Level Bit/Byte
+
+#### `void OneWire_WriteBit(OneWire_Bus* bus, uint8_t bit)`
+
+ส่ง 1 bit
+
+#### `uint8_t OneWire_ReadBit(OneWire_Bus* bus)`
+
+รับ 1 bit — **คืน `0` หรือ `1`**
+
+#### `void OneWire_WriteBytes(OneWire_Bus* bus, const uint8_t* data, uint16_t len)`
+
+ส่งหลาย bytes — เร็วกว่าเรียก `WriteByte` ต่อเนื่อง
+
+#### `void OneWire_ReadBytes(OneWire_Bus* bus, uint8_t* buf, uint16_t len)`
+
+รับหลาย bytes
+
+### Utility
+
+#### `OneWire_Bus* OneWire_GetBusByPin(uint8_t pin)`
+
+หา bus instance จาก GPIO pin — **คืน `NULL` ถ้าไม่พบ**
+
+#### `void OneWire_Depower(OneWire_Bus* bus)`
+
+ปิด strong pull-up (ใช้ใน parasite power mode)
+
+#### `uint8_t OneWire_VerifyCRC(OneWire_Bus* bus, uint8_t* data, uint8_t len)`
+
+ตรวจสอบ CRC — **คืน `1` ถ้าถูกต้อง**
 
 ### CRC
 

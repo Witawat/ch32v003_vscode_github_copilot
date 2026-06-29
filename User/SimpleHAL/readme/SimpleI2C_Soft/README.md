@@ -61,12 +61,51 @@ I2C_Soft_Read(0x50, buf, 2);
 
 สำหรับ implement protocol เองแบบละเอียด
 
+#### `void I2C_Soft_Start(void)` — ส่ง START condition
+#### `void I2C_Soft_Stop(void)` — ส่ง STOP condition
+
+#### `uint8_t I2C_Soft_WriteByte(uint8_t data)` — ส่ง 1 byte และรับ ACK/NACK
+
+| พารามิเตอร์ | ชนิด | คำอธิบาย |
+|------------|------|----------|
+| `data` | `uint8_t` | 1 byte ที่จะส่ง |
+
+**คืนค่า:** `uint8_t` — `0` = ได้รับ ACK จาก slave, `1` = ได้รับ NACK (device ไม่ตอบ)
+
 ```c
-I2C_Soft_Start();           // ส่ง START condition
-I2C_Soft_Stop();            // ส่ง STOP condition
-I2C_Soft_WriteByte(0x55);   // ส่ง 1 byte, คืน ACK (0=ACK, 1=NACK)
-uint8_t b = I2C_Soft_ReadByte(1);   // อ่าน 1 byte, 1=ACK, 0=NACK
+// ส่ง device address (write): addr << 1 | 0
+if (I2C_Soft_WriteByte(0x3C << 1)) {
+    // NACK — device ไม่ตอบ
+    I2C_Soft_Stop();
+    return;
+}
+// ส่ง register address
+I2C_Soft_WriteByte(0x00);
+// ส่ง data byte
+I2C_Soft_WriteByte(0xAE);
 ```
+
+#### `uint8_t I2C_Soft_ReadByte(uint8_t ack)` — อ่าน 1 byte พร้อมส่ง ACK/NACK
+
+| พารามิเตอร์ | ชนิด | คำอธิบาย |
+|------------|------|----------|
+| `ack` | `uint8_t` | `1` = ส่ง ACK (จะอ่านต่อ), `0` = ส่ง NACK (byte สุดท้าย) |
+
+**คืนค่า:** `uint8_t` — byte ที่อ่านได้
+
+```c
+uint8_t buf[4];
+
+// อ่าน 3 byte แรก — ส่ง ACK ทุก byte (ack=1)
+for (uint8_t i = 0; i < 3; i++) {
+    buf[i] = I2C_Soft_ReadByte(1);
+}
+// byte สุดท้าย — ส่ง NACK (ack=0) เพื่อให้ slave ปล่อย bus
+buf[3] = I2C_Soft_ReadByte(0);
+```
+
+> **การทำงานของ ack:** `I2C_Soft_ReadByte(1)` = master ดึง SDA เป็น LOW หลังอ่าน (ACK) → slave จะส่ง byte ถัดไป  
+> `I2C_Soft_ReadByte(0)` = master ปล่อย SDA เป็น HIGH (NACK) → slave หยุดส่ง และพร้อมรับ STOP condition
 
 ---
 

@@ -30,38 +30,240 @@ CH32V003 มี DMA 7 channels:
 
 ### Core Functions
 
-| ฟังก์ชั่น | คำอธิบาย |
-|-----------|----------|
-| `DMA_Init(ch, periph, mem, size, dir, mode)` | กำหนดค่า DMA channel เต็มรูปแบบ |
-| `DMA_Start(ch)` | เริ่ม transfer |
-| `DMA_Stop(ch)` | หยุด transfer |
-| `DMA_SetCallback(ch, cb)` | ตั้ง callback เมื่อ transfer เสร็จ |
-| `DMA_SetHalfTransferCallback(ch, cb)` | ตั้ง callback เมื่อ transfer ถึงครึ่งทาง |
-| `DMA_WaitComplete(ch, timeout_ms)` | รอ transfer เสร็จ (มี timeout ป้องกันค้าง) |
-| `DMA_MemCopy(dst, src, size)` | คัดลอกหน่วยความจำแบบบล็อกกิ้ง (เร็วกว่า memcpy) |
-| `DMA_SetAnalogReadChannel(adc_ch)` | ระบุ ADC channel สำหรับ DMA-triggered conversion |
+#### `void DMA_SimpleInit(DMA_Config_t* config)`
 
-### USART Helper
+เริ่มต้น DMA channel — เปิด RCC clock + ตั้งค่าตาม config
 
-| ฟังก์ชั่น | คำอธิบาย |
-|-----------|----------|
-| `DMA_USART_Send(data, len)` | ส่งข้อมูลผ่าน USART1 TX แบบ one-shot (non-blocking แต่มี callback รอเสร็จ) |
+| พารามิเตอร์ | ชนิด | คำอธิบาย |
+|------------|------|----------|
+| `config` | `DMA_Config_t*` | โครงสร้างตั้งค่า: channel, direction, priority, data_size, mode, addresses, buffer_size |
 
-### I2C Helper
+```c
+DMA_Config_t cfg = {
+    .channel = DMA_CH1, .direction = DMA_DIR_MEM_TO_MEM,
+    .data_size = DMA_SIZE_BYTE, .mode = DMA_MODE_NORMAL,
+    .mem_increment = 1, .periph_increment = 1,
+    .periph_addr = (uint32_t)src, .mem_addr = (uint32_t)dst,
+    .buffer_size = 100
+};
+DMA_SimpleInit(&cfg);
+```
 
-| ฟังก์ชั่น | คำอธิบาย |
-|-----------|----------|
-| `DMA_I2C_InitTx(data, len)` | ตั้งค่า DMA สำหรับ I2C TX (ใช้ DMA_CH4) |
-| `DMA_I2C_InitRx(data, len)` | ตั้งค่า DMA สำหรับ I2C RX (ใช้ DMA_CH5) |
-| `DMA_I2C_Transfer(tx_data, rx_data, len)` | ตั้งค่า DMA สำหรับ I2C TX + RX พร้อมกัน |
+#### `void DMA_Start(DMA_Channel channel)` / `void DMA_Stop(DMA_Channel channel)`
 
-### TIM Helper
+เริ่ม/หยุด transfer
 
-| ฟังก์ชั่น | คำอธิบาย |
-|-----------|----------|
-| `DMA_TIM_InitCapture(timer, ch)` | เปิดใช้งาน TIM → DMA เมื่อมี Capture/Compare event |
-| `DMA_TIM_UpdatePWM(timer, ch, duty_buf)` | ตั้งค่า DMA อัปเดต duty cycle PWM อัตโนมัติจาก buffer |
-| `DMA_TIM_GetCCRAddress(timer, pwm_ch)` | คืนค่า address ของ CCR register สำหรับ PWM channel |
+#### `DMA_Status DMA_GetStatus(DMA_Channel channel)`
+
+| **คืนค่า** | `DMA_Status` — `IDLE` (0), `BUSY` (1), `COMPLETE` (2), `ERROR` (3) |
+
+#### `uint8_t DMA_WaitComplete(DMA_Channel channel, uint32_t timeout_ms)`
+
+รอ transfer เสร็จ (blocking) พร้อม timeout
+
+| **คืนค่า** | `1` = เสร็จ, `0` = timeout |
+|---|---|
+
+```c
+DMA_Start(DMA_CH1);
+if (!DMA_WaitComplete(DMA_CH1, 1000)) {
+    USART_Print("DMA timeout!\r\n");
+}
+```
+
+#### `void DMA_Reset(DMA_Channel channel)`
+
+รีเซ็ต DMA channel — หยุด transfer ทั้งหมด, เคลียร์ flags
+
+#### `uint16_t DMA_GetRemainingCount(DMA_Channel channel)`
+
+จำนวนข้อมูลที่ยังไม่ได้ถ่ายโอน
+
+#### `void DMA_EnableInterrupt(DMA_Channel channel, uint8_t enable)`
+
+เปิด/ปิด DMA interrupt — `1` = เปิด, `0` = ปิด
+
+#### `DMA_Channel_TypeDef* DMA_GetChannelBase(DMA_Channel channel)`
+
+แปลง enum `DMA_Channel` → pointer ไปยัง `DMA_Channel_TypeDef` register
+
+#### `IRQn_Type DMA_GetChannelIRQn(DMA_Channel channel)`
+
+แปลง `DMA_Channel` → `IRQn` สำหรับ `NVIC_Init()`
+
+### Callbacks
+
+#### `void DMA_SetTransferCompleteCallback(DMA_Channel ch, DMA_TransferCompleteCallback cb)`
+
+ตั้ง callback เมื่อ transfer เสร็จ — `cb(DMA_Channel ch)` ถูกเรียกจาก DMA ISR
+
+| ⚠️ | callback ทำงานใน interrupt context — ห้ามใช้ `Delay_Ms`, `USART_Print` |
+|---|---|
+
+```c
+void on_complete(DMA_Channel ch) { dma_done = 1; }
+DMA_SetTransferCompleteCallback(DMA_CH1, on_complete);
+```
+
+#### `void DMA_SetErrorCallback(DMA_Channel ch, DMA_ErrorCallback cb)`
+
+ตั้ง callback เมื่อ DMA error
+
+#### `void DMA_SetHalfTransferCallback(DMA_Channel ch, DMA_HalfTransferCallback cb)`
+
+ตั้ง callback เมื่อ transfer ถึงครึ่งทาง — ใช้กับ ping-pong buffer
+
+### Memory Transfer
+
+#### `void DMA_MemCopy(void* dst, const void* src, uint16_t size)`
+
+คัดลอกหน่วยความจำแบบ blocking (รอให้เสร็จก่อน return)
+
+```c
+DMA_MemCopy(dst_buf, src_buf, 128);
+```
+
+#### `void DMA_MemCopyAsync(DMA_Channel ch, void* dst, const void* src, uint16_t size)`
+
+คัดลอกแบบ non-blocking — ใช้ `DMA_GetStatus()` หรือ callback ตรวจสอบ
+
+#### `void DMA_MemSet(void* dst, uint8_t value, uint16_t size)`
+
+กำหนดค่าหน่วยความจำเป็นค่าเดียว (เหมือน memset)
+
+```c
+DMA_MemSet(buf, 0, 256);  // เคลียร์ 256 bytes เป็น 0
+```
+
+### ADC Integration
+
+#### `void DMA_ADC_Init(DMA_Channel ch, uint16_t* buf, uint16_t size, uint8_t circular)`
+
+ตั้งค่า DMA สำหรับ ADC continuous conversion
+
+| ⚠️ | ต้องเรียก `ADC_SimpleInit()` ก่อน |
+|---|---|
+| `circular` | `1` = วนซ้ำ (ring buffer), `0` = ครั้งเดียว |
+
+#### `void DMA_ADC_InitMultiChannel(DMA_Channel ch, uint16_t* buf, uint8_t n_ch, uint16_t samples)`
+
+ADC multi-channel — เก็บ n_ch × samples ค่าใน buf
+
+#### `void DMA_analogReadStart(uint8_t pin, uint16_t* buf, uint16_t size, uint8_t continuous)`
+
+เริ่ม ADC DMA แบบง่าย — ระบุ GPIO pin ได้เลย
+
+| `pin` | ต้องเป็น pin ที่รองรับ ADC (ใช้ `IS_ADC_PIN` ตรวจสอบ) |
+|---|---|
+
+```c
+uint16_t buf[100];
+DMA_analogReadStart(PD2, buf, 100, 1);  // circular, PD2
+```
+
+#### `uint16_t DMA_analogReadAverage(uint16_t* buf, uint16_t size)`
+
+อ่านค่าเฉลี่ยจาก DMA buffer
+
+#### `void DMA_analogReadStop(void)` / `uint8_t DMA_analogReadBusy(void)`
+
+หยุด/ตรวจสอบสถานะ DMA ADC
+
+#### `void DMA_SetAnalogReadChannel(DMA_Channel ch)`
+
+เปลี่ยน DMA channel สำหรับ `DMA_analogReadStart()` — default `DMA_CH1`
+
+### USART Integration
+
+#### `void DMA_USART_InitTx(DMA_Channel ch, uint8_t* buf, uint16_t size)`
+
+ตั้งค่า DMA สำหรับ USART transmit
+
+| ⚠️ | ต้องเรียก `USART_SimpleInit()` ก่อน |
+|---|---|
+
+#### `void DMA_USART_InitRx(DMA_Channel ch, uint8_t* buf, uint16_t size, uint8_t circular)`
+
+ตั้งค่า DMA สำหรับ USART receive — แนะนำ circular mode สำหรับ RX
+
+#### `void DMA_USART_Transmit(DMA_Channel ch, const uint8_t* data, uint16_t len)`
+
+ส่งข้อมูลผ่าน USART DMA — non-blocking
+
+#### `uint16_t DMA_USART_GetReceivedCount(DMA_Channel ch, uint16_t buf_size)`
+
+จำนวนข้อมูลที่ DMA USART รับได้
+
+#### `void DMA_USART_Send(DMA_Channel ch, const uint8_t* data, uint16_t len)`
+
+ส่งข้อมูลแบบ one-shot blocking — init + transmit + wait ครบในฟังก์ชันเดียว
+
+```c
+uint8_t msg[] = "Hello DMA!\r\n";
+DMA_USART_Send(DMA_CH2, msg, sizeof(msg)-1);  // บล็อกจนส่งเสร็จ
+```
+
+### SPI Integration
+
+#### `void DMA_SPI_Init(DMA_Channel tx_ch, DMA_Channel rx_ch)`
+
+ตั้งค่า DMA TX+RX สำหรับ SPI
+
+| ⚠️ | ต้องเรียก `SPI_SimpleInit()` ก่อน |
+|---|---|
+
+#### `void DMA_SPI_TransferBuffer(DMA_Channel tx_ch, DMA_Channel rx_ch, const uint8_t* tx, uint8_t* rx, uint16_t len)`
+
+ส่ง+รับข้อมูล SPI ผ่าน DMA
+
+### I2C Integration
+
+#### `void DMA_I2C_InitTx(DMA_Channel ch)` / `void DMA_I2C_InitRx(DMA_Channel ch)`
+
+ตั้งค่า DMA สำหรับ I2C transmit/receive — **ต้องใช้ DMA_CH4 (TX), DMA_CH5 (RX)** เท่านั้น
+
+| ⚠️ | ต้องเรียก `I2C_SimpleInit()` ก่อน |
+|---|---|
+
+#### `void DMA_I2C_Transfer(DMA_Channel tx_ch, DMA_Channel rx_ch, const uint8_t* tx, uint8_t* rx, uint16_t len)`
+
+ส่ง+รับ I2C ผ่าน DMA
+
+| ⚠️ | ต้องเรียก `I2C_WriteReg()` ส่ง slave+register address ก่อน ถึงจะใช้ DMA transfer ได้ |
+|---|---|
+
+### TIM Integration
+
+#### `void DMA_TIM_InitCapture(DMA_Channel ch, TIM_TypeDef* TIMx, uint16_t* buf, uint16_t len, uint32_t ccx_addr)`
+
+จับค่า TIM capture → buffer ด้วย DMA
+
+| ⚠️ | ต้องตั้งค่า TIM input capture ก่อน |
+|---|---|
+
+| พารามิเตอร์ | ชนิด | คำอธิบาย |
+|------------|------|----------|
+| `ccx_addr` | `uint32_t` | Address ของ CCR register เช่น `(uint32_t)&TIM1->CH4CVR` |
+
+#### `void DMA_TIM_UpdatePWM(DMA_Channel ch, TIM_TypeDef* TIMx, uint32_t ccr_addr, const uint16_t* waveform, uint16_t len, uint8_t circular)`
+
+อัปเดต PWM duty cycle อัตโนมัติจาก lookup table — ใช้สร้าง sine wave, sawtooth
+
+| ⚠️ | ต้องเรียก `TIM_DMACmd(TIMx, TIM_DMA_Update, ENABLE)` ก่อน |
+|---|---|
+
+```c
+// สร้าง sine wave 64 samples ที่ PWM output
+uint16_t sine_table[64];  // คำนวณล่วงหน้า
+DMA_TIM_UpdatePWM(DMA_CH5, TIM1, DMA_TIM_GetCCRAddress(TIM1, 1),
+                  sine_table, 64, 1);  // circular
+TIM_DMACmd(TIM1, TIM_DMA_Update, ENABLE);
+DMA_Start(DMA_CH5);
+```
+
+#### `uint32_t DMA_TIM_GetCCRAddress(TIM_TypeDef* TIMx, uint8_t channel)`
+
+คืนค่า address ของ TIMx CCR register สำหรับ PWM channel 1-4
 
 ---
 

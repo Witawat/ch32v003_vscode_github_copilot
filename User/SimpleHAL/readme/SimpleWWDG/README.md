@@ -78,6 +78,77 @@ WWDG_Refresh(0x7F);  // reload counter กลับ max
 
 ---
 
+### Timeout Calculation
+
+#### `uint32_t WWDG_CalcTimeout(uint32_t prescaler, uint8_t counter)` — คำนวณ timeout เป็น ms
+
+| พารามิเตอร์ | ชนิด | คำอธิบาย |
+|------------|------|----------|
+| `prescaler` | `uint32_t` | Prescaler จาก enum `WWDG_PRESCALER_*` |
+| `counter` | `uint8_t` | ค่า counter (0x40–0x7F) |
+
+**คืนค่า:** `uint32_t` — timeout ในหน่วย ms
+
+```c
+uint32_t ms = WWDG_CalcTimeout(WWDG_PRESCALER_8, 0x7F);
+// ms ≈ 55ms ที่ PCLK1=24MHz
+```
+
+---
+
+### Interrupt Flag Management
+
+#### `uint8_t WWDG_GetInterruptFlag(void)` — ตรวจสอบ interrupt flag (early warning)
+
+**คืนค่า:** `uint8_t` — `1` ถ้า counter ถึง 0x40 และเกิด early warning interrupt, `0` ถ้ายังไม่เกิด
+
+```c
+if (WWDG_GetInterruptFlag()) {
+    // counter ใกล้ถึง 0x3F แล้ว!
+}
+```
+
+#### `void WWDG_ClearInterruptFlag(void)` — ล้าง interrupt flag
+
+```c
+if (WWDG_GetInterruptFlag()) {
+    WWDG_ClearInterruptFlag();
+}
+```
+
+---
+
+### Control
+
+#### `void WWDG_Disable(void)` — ปิดการทำงาน WWDG (reset peripheral)
+
+```c
+WWDG_Disable();  // ปิด WWDG โดยสมบูรณ์
+```
+
+> ใช้เมื่อต้องการปิด WWDG ก่อนเข้า sleep หรือเปลี่ยนไปใช้ IWDG
+
+#### `void WWDG_InitWithInterrupt(uint8_t counter, uint8_t window, uint8_t prescaler)` — เริ่ม WWDG พร้อมเปิด early warning interrupt
+
+| พารามิเตอร์ | ชนิด | คำอธิบาย |
+|------------|------|----------|
+| `counter` | `uint8_t` | ค่าเริ่มต้น counter (0x40–0x7F) |
+| `window` | `uint8_t` | ค่า window (0x40–0x7F) |
+| `prescaler` | `uint8_t` | Prescaler จาก enum `WWDG_PRESCALER_*` |
+
+```c
+void wwdg_warning(void) {
+    // ตั้ง flag ให้ main loop จัดการ
+}
+
+WWDG_SetCallback(wwdg_warning);                     // ตั้ง callback ก่อน
+WWDG_InitWithInterrupt(0x7F, 0x50, WWDG_PRESCALER_8); // แล้วจึง init
+```
+
+> ⚠️ ข้อควรระวัง: ต้องเรียก `WWDG_SetCallback()` **ก่อน** `WWDG_InitWithInterrupt()` มิฉะนั้น callback จะไม่ถูกเรียกเมื่อเกิด early warning
+
+---
+
 ### Manual Init
 
 #### `void WWDG_Init(uint8_t counter, uint8_t window, uint8_t prescaler)`

@@ -106,6 +106,103 @@ if (st == FLASH_OK) {
 
 ลบ page 254 และ 255 ทั้งหมด (factory reset)
 
+#### `Flash_Status Flash_ErasePage(uint8_t page_num)`
+
+ลบเฉพาะหน้า — `254` = config, `255` = data
+
+| ⚠️ | ต้อง erase page ก่อนเขียนข้อมูลใหม่ทุกครั้ง |
+
+---
+
+### Basic Read/Write
+
+#### `uint8_t Flash_ReadByte(uint32_t addr)`
+
+| **คืนค่า** | 8-bit |
+
+#### `uint16_t Flash_ReadHalfWord(uint32_t addr)`
+
+| **คืนค่า** | 16-bit |
+| ⚠️ | addr ต้อง align 2 bytes (เลขคู่) |
+
+#### `uint32_t Flash_ReadWord(uint32_t addr)`
+
+| **คืนค่า** | 32-bit |
+| ⚠️ | addr ต้อง align 4 bytes (หาร 4 ลงตัว) |
+
+#### `Flash_Status Flash_WriteByte(uint32_t addr, uint8_t data)`
+
+| ⚠️ | ต้อง erase page ก่อน |
+
+#### `Flash_Status Flash_WriteHalfWord(uint32_t addr, uint16_t data)`
+
+| ⚠️ | ต้อง erase page ก่อน + align 2 bytes |
+
+#### `Flash_Status Flash_WriteWord(uint32_t addr, uint32_t data)`
+
+| ⚠️ | ต้อง erase page ก่อน + align 4 bytes |
+
+```c
+Flash_ErasePage(FLASH_CONFIG_PAGE);
+Flash_WriteHalfWord(FLASH_CONFIG_ADDR, 0x1234);
+uint16_t val = Flash_ReadHalfWord(FLASH_CONFIG_ADDR);
+```
+
+### Auto-Erase Write
+
+#### `Flash_Status Flash_WriteByteWithErase(uint32_t addr, uint8_t data)` / `Flash_WriteHalfWordWithErase(...)` / `Flash_WriteWordWithErase(...)`
+
+เขียนโดย erase page ให้อัตโนมัติ — สะดวกแต่**ช้า** (modify-erase-write)
+
+| ⚠️ | ใช้ RAM 64 bytes เป็น buffer | ไม่เหมาะเขียนบ่อย — ใช้ manual erase + write แทน |
+
+```c
+Flash_WriteByteWithErase(FLASH_CONFIG_ADDR + 5, 0xAB);  // 1 ขั้นตอน
+```
+
+### String
+
+#### `uint16_t Flash_ReadString(uint32_t addr, char* buffer, uint16_t max_len)`
+
+| **คืนค่า** | จำนวน byte ที่อ่านได้ (ไม่รวม null), `0` = error |
+
+#### `Flash_Status Flash_WriteString(uint32_t addr, const char* str)`
+
+| ⚠️ | ต้อง erase page ก่อน | string ≤ 60 chars |
+
+### Struct
+
+#### `Flash_Status Flash_ReadStruct(uint32_t addr, void* ptr, uint16_t size)` / `Flash_WriteStruct(uint32_t addr, const void* ptr, uint16_t size)`
+
+| ⚠️ | WriteStruct: ต้อง erase ก่อน | size ≤ 64 bytes |
+
+### Utility
+
+#### `bool Flash_IsConfigValid(void)`
+
+| **คืนค่า** | `true` = มี valid config ใน Flash |
+
+#### `uint16_t Flash_CalculateCRC16(const uint8_t* data, uint16_t len)`
+
+คำนวณ CRC16-CCITT checksum
+
+#### `bool Flash_IsAddressValid(uint32_t addr)`
+
+ตรวจสอบว่า addr อยู่ใน storage area หรือไม่
+
+#### `uint32_t Flash_GetPageAddress(uint8_t page_num)`
+
+แปลง page → address — คืน `0` ถ้าไม่ถูกต้อง
+
+### Simplified Macros
+
+```c
+FLASH_SAVE_CONFIG(&config)       // บันทึก — คำนวณ size + CRC อัตโนมัติ
+FLASH_LOAD_CONFIG(&config)       // โหลด — ตรวจสอบ CRC
+FLASH_WRITE_AUTO(addr, val)      // เขียน + auto-erase (auto-detect type)
+FLASH_READ(addr, &var)           // อ่าน (auto-detect type)
+```
+
 ```c
 Flash_EraseAll();
 ```

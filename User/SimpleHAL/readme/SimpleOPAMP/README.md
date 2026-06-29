@@ -65,13 +65,182 @@ OPAMP_SimpleInit(OPAMP_MODE_COMPARATOR);
 ### Enable / Disable
 
 #### `void OPAMP_Enable(void)`
-#### `void OPAMP_Disable(void)`
+
+| — | — |
+|---|---|
+| **คืนค่า** | `void` |
+| **เงื่อนไข** | ต้องเรียก `OPAMP_SimpleInit()` หรือ `OPAMP_Init()` ก่อน |
+| **หมายเหตุ** | OPAMP ใช้ EXTEN controller — ไม่ต้องเปิด RCC clock แยก |
 
 ```c
-OPAMP_SimpleInit(OPAMP_MODE_VOLTAGE_FOLLOWER);
 OPAMP_Enable();
-// ... ทำงาน
-OPAMP_Disable();  // ประหยัดพลังงาน
+```
+
+#### `void OPAMP_Disable(void)`
+
+| — | — |
+|---|---|
+| **คืนค่า** | `void` |
+| **หมายเหตุ** | ปิดเพื่อประหยัดพลังงาน (~10µA) |
+
+```c
+OPAMP_Disable();
+```
+
+#### `uint8_t OPAMP_IsEnabled(void)`
+
+| — | — |
+|---|---|
+| **คืนค่า** | `uint8_t` — `1` = ทำงานอยู่, `0` = ปิด |
+
+```c
+if (!OPAMP_IsEnabled()) {
+    USART_Print("OPAMP not enabled!\r\n");
+}
+```
+
+---
+
+### Mode Control
+
+#### `void OPAMP_SetMode(OPAMP_Mode mode)`
+
+เปลี่ยนโหมดระหว่าง runtime โดยไม่ต้องเรียก `OPAMP_Init()` ใหม่
+
+| — | — |
+|---|---|
+| **หมายเหตุ** | ปิด OPA ชั่วคราวระหว่างเปลี่ยนโหมด — ถ้าเปิดอยู่จะเปิดใหม่ให้เอง |
+
+```c
+OPAMP_SetMode(OPAMP_MODE_COMPARATOR);  // เปลี่ยนเป็น comparator
+```
+
+#### `void OPAMP_GetConfig(OPAMP_Channel_Positive* pos, OPAMP_Channel_Negative* neg)`
+
+อ่านค่าคอนฟิกปัจจุบันของ OPA จาก `EXTEN->EXTEN_CTR` register
+
+| พารามิเตอร์ | ชนิด | คำอธิบาย |
+|------------|------|----------|
+| `pos_channel` | `OPAMP_Channel_Positive*` | เก็บค่า positive channel |
+| `neg_channel` | `OPAMP_Channel_Negative*` | เก็บค่า negative channel |
+
+```c
+OPAMP_Channel_Positive pos;
+OPAMP_Channel_Negative neg;
+OPAMP_GetConfig(&pos, &neg);
+```
+
+---
+
+### Advanced — เลือก Channel เอง
+
+#### `void OPAMP_Init(OPAMP_Channel_Positive pos_ch, OPAMP_Channel_Negative neg_ch)`
+
+ใช้เมื่อต้องการเลือก input channel เอง (แทนที่จะใช้ `OPAMP_SimpleInit()` ที่เลือกให้อัตโนมัติ)
+
+| พารามิเตอร์ | ชนิด | คำอธิบาย |
+|------------|------|----------|
+| `pos_channel` | `OPAMP_Channel_Positive` | `OPAMP_CHP0` (PA2) หรือ `OPAMP_CHP1` (PC4) |
+| `neg_channel` | `OPAMP_Channel_Negative` | `OPAMP_CHN0` (PA1) หรือ `OPAMP_CHN1` |
+
+```c
+OPAMP_Init(OPAMP_CHP1, OPAMP_CHN0);  // CHP1=PC4, CHN0=PA1
+OPAMP_Enable();
+```
+
+#### `void OPAMP_SetChannels(OPAMP_Channel_Positive pos_ch, OPAMP_Channel_Negative neg_ch)`
+
+เปลี่ยน channel โดยไม่ต้องตั้งค่าโหมดใหม่
+
+---
+
+### Advanced — ตั้งค่าโหมดเฉพาะ
+
+#### `void OPAMP_ConfigVoltageFollower(OPAMP_Channel_Positive pos_ch)`
+
+Voltage Follower (Buffer) — Gain = 1, output ต่อกลับเข้า negative
+
+```c
+OPAMP_ConfigVoltageFollower(OPAMP_CHP0);  // PA2 input
+OPAMP_Enable();
+```
+
+#### `void OPAMP_ConfigNonInverting(OPAMP_Channel_Positive pos_ch, OPAMP_Channel_Negative neg_ch)`
+
+Non-Inverting Amplifier — Gain > 1 ตั้งด้วย R ภายนอก
+
+| หมายเหตุ | Gain = 1 + (R2/R1) — ต่อ R1 จาก neg_ch → GND, R2 จาก output → neg_ch |
+|---|---|
+
+```c
+// Gain=2: R1=R2=10k
+OPAMP_ConfigNonInverting(OPAMP_CHP0, OPAMP_CHN0);
+OPAMP_Enable();
+```
+
+#### `void OPAMP_ConfigInverting(OPAMP_Channel_Positive pos_ch, OPAMP_Channel_Negative neg_ch)`
+
+Inverting Amplifier — Gain < 0, เฟสกลับด้าน
+
+| หมายเหตุ | Gain = -(R2/R1) — ต่อ R1 จาก input → neg_ch, R2 จาก output → neg_ch |
+|---|---|
+
+```c
+// Gain=-2: R1=10k, R2=20k
+OPAMP_ConfigInverting(OPAMP_CHP0, OPAMP_CHN0);
+OPAMP_Enable();
+```
+
+#### `void OPAMP_ConfigComparator(OPAMP_Channel_Positive pos_ch, OPAMP_Channel_Negative neg_ch)`
+
+Comparator — V+ > V- → HIGH, V+ < V- → LOW
+
+```c
+OPAMP_ConfigComparator(OPAMP_CHP0, OPAMP_CHN0);  // PA2 vs PA1
+OPAMP_Enable();
+```
+
+---
+
+### Utility — คำนวณ Gain และ Resistor
+
+> ⚠️ **CH32V003 ไม่มี FPU!** ฟังก์ชันเหล่านี้คืน `float` ซึ่งใช้ **software emulation** (~800 cycles ต่อการคำนวณ) — ใช้เฉพาะตอน init หรือ debug เท่านั้น ไม่ควรใช้ใน main loop
+
+#### `float OPAMP_CalculateGainNonInv(uint32_t r1, uint32_t r2)`
+
+คำนวณ gain ของ non-inverting amp — Gain = 1 + (R2/R1)
+
+| พารามิเตอร์ | ชนิด | คำอธิบาย |
+|------------|------|----------|
+| `r1` | `uint32_t` | Resistor ไป ground (Ω) |
+| `r2` | `uint32_t` | Feedback resistor (Ω) |
+| **คืนค่า** | `float` | Gain (≥ 1.0) |
+
+#### `float OPAMP_CalculateGainInv(uint32_t r1, uint32_t r2)`
+
+คำนวณ gain ของ inverting amp — Gain = -(R2/R1)
+
+| **คืนค่า** | `float` | Gain (≤ 0) |
+
+#### `uint32_t OPAMP_CalculateR2NonInv(uint32_t r1, float desired_gain)`
+
+คำนวณ R2 ที่ต้องใช้เพื่อให้ได้ gain ที่ต้องการ — R2 = R1 × (Gain - 1)
+
+| พารามิเตอร์ | ชนิด | คำอธิบาย |
+|------------|------|----------|
+| `r1` | `uint32_t` | Resistor ไป ground (Ω) |
+| `desired_gain` | `float` | Gain ที่ต้องการ (≥ 1.0) |
+| **คืนค่า** | `uint32_t` | R2 ที่ต้องการ (Ω) |
+
+#### `uint32_t OPAMP_CalculateR2Inv(uint32_t r1, float desired_gain)`
+
+คำนวณ R2 สำหรับ inverting amp — R2 = R1 × |Gain|
+
+| **คืนค่า** | `uint32_t` | R2 ที่ต้องการ (Ω) |
+
+```c
+// ตัวอย่าง: หา R2 สำหรับ Gain=5, R1=10k
+uint32_t r2 = OPAMP_CalculateR2NonInv(10000, 5.0f);  // → 40000 Ω
 ```
 
 ---

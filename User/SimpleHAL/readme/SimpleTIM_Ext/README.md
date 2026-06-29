@@ -123,6 +123,95 @@ uint32_t Countdown_GetRemainingSeconds(void);
 uint32_t Countdown_GetRemainingMilliseconds(void);
 ```
 
+#### `void Countdown_InitFromSeconds(uint32_t total_seconds)` — เริ่มต้น Countdown โดยระบุวินาทีโดยตรง
+
+| พารามิเตอร์ | ชนิด | คำอธิบาย |
+|------------|------|----------|
+| `total_seconds` | `uint32_t` | เวลานับถอยหลังในหน่วยวินาที |
+
+```c
+Countdown_InitFromSeconds(120);  // เริ่มนับถอยหลัง 2 นาทีทันที
+```
+
+#### `void Countdown_SetAlarmCallback(void (*callback)(void))` — ตั้ง callback เมื่อหมดเวลา
+
+| พารามิเตอร์ | ชนิด | คำอธิบาย |
+|------------|------|----------|
+| `callback` | `void (*)(void)` | ฟังก์ชันที่จะเรียกเมื่อนับถึง 0 |
+
+```c
+void alarm_handler(void) {
+    // เตือนเมื่อหมดเวลา
+}
+
+Countdown_InitFromSeconds(60);
+Countdown_SetAlarmCallback(alarm_handler);
+Countdown_Start();
+```
+
+> ⚠️ ข้อควรระวัง: callback ทำงานใน ISR context ห้ามใช้ `Delay_Ms` หรือ `USART_Print` ภายใน callback ควรตั้ง flag แล้วประมวลผลใน main loop
+
+#### `uint8_t Countdown_IsRunning(void)` — ตรวจสอบว่า Countdown กำลังทำงานอยู่หรือไม่
+
+**คืนค่า:** `uint8_t` — `1` ถ้ากำลังนับถอยหลัง, `0` ถ้าหยุด
+
+```c
+if (Countdown_IsRunning()) {
+    // กำลังนับถอยหลังอยู่
+}
+```
+
+---
+
+## API Reference — Time Utility Functions
+
+#### `void Time_ToString(Time_t* t, char* buf, TimeFormat_t fmt, TimeDisplayMode_t mode)` — แปลง `Time_t` เป็น string
+
+| พารามิเตอร์ | ชนิด | คำอธิบาย |
+|------------|------|----------|
+| `t` | `Time_t*` | pointer ไปยัง struct เวลา |
+| `buf` | `char*` | buffer สำหรับเก็บผลลัพธ์ |
+| `fmt` | `TimeFormat_t` | รูปแบบการแสดงผล (`TIME_FORMAT_SS`, `TIME_FORMAT_MMSS`, `TIME_FORMAT_HHMMSS`) |
+| `mode` | `TimeDisplayMode_t` | โหมดแสดงผล (`TIME_DISPLAY_NORMALIZED` หรือ `TIME_DISPLAY_RAW`) |
+
+**คืนค่า:** ไม่มี — ผลลัพธ์เขียนลง `buf`
+
+```c
+Time_t t = {.hours = 1, .minutes = 5, .seconds = 30};
+char buf[TIME_BUFFER_SIZE_HHMMSS];
+Time_ToString(&t, buf, TIME_FORMAT_HHMMSS, TIME_DISPLAY_NORMALIZED);
+// buf = "1:05:30"
+```
+
+> ใช้ขนาด buffer จาก `TIME_BUFFER_SIZE_*` macro เสมอเพื่อป้องกัน overflow
+
+#### `void Time_FromSeconds(uint32_t seconds, Time_t* t, TimeDisplayMode_t mode)` — แปลงวินาทีเป็น `Time_t`
+
+| พารามิเตอร์ | ชนิด | คำอธิบาย |
+|------------|------|----------|
+| `seconds` | `uint32_t` | จำนวนวินาทีทั้งหมด |
+| `t` | `Time_t*` | pointer ไปยัง struct เวลาสำหรับเก็บผลลัพธ์ |
+| `mode` | `TimeDisplayMode_t` | `TIME_DISPLAY_NORMALIZED` แปลง 60s→1min, `TIME_DISPLAY_RAW` เก็บวินาทีดิบ |
+
+```c
+Time_t t;
+Time_FromSeconds(3725, &t, TIME_DISPLAY_NORMALIZED);
+// t.hours=1, t.minutes=2, t.seconds=5
+```
+
+#### `uint32_t Time_ToSeconds(Time_t* t)` — แปลง `Time_t` กลับเป็นวินาที
+
+| พารามิเตอร์ | ชนิด | คำอธิบาย |
+|------------|------|----------|
+| `t` | `Time_t*` | pointer ไปยัง struct เวลา |
+
+**คืนค่า:** `uint32_t` — จำนวนวินาทีทั้งหมด
+
+```c
+Time_t t = {.hours = 1, .minutes = 30, .seconds = 0};
+uint32_t s = Time_ToSeconds(&t);  // s = 5400
+```
+
 ---
 
 ## ตัวอย่างการใช้งาน

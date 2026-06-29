@@ -74,6 +74,68 @@ IWDG_Feed();  // "เรายังทำงานอยู่"
 
 ---
 
+### Status & Reset Cause
+
+#### `uint8_t IWDG_IsBusy(void)` — ตรวจสอบว่า IWDG พร้อมรับคำสั่ง config หรือไม่
+
+**คืนค่า:** `uint8_t` — `1` ถ้ากำลัง busy (PVU หรือ RVU flag ยังไม่เคลียร์), `0` ถ้าพร้อม
+
+```c
+while (IWDG_IsBusy());  // รอจนกว่าจะพร้อม
+IWDG_Init(IWDG_PRESCALER_256, 4095);
+```
+
+> ⚠️ ข้อควรระวัง: ต้องรอ `IWDG_IsBusy() == 0` ก่อนเปลี่ยน prescaler หรือ reload ทุกครั้ง
+
+#### `void IWDG_Init(uint8_t prescaler, uint16_t reload)` — ตั้งค่า IWDG แบบ manual (advanced init)
+
+| พารามิเตอร์ | ชนิด | คำอธิบาย |
+|------------|------|----------|
+| `prescaler` | `uint8_t` | Prescaler จาก enum `IWDG_PRESCALER_*` |
+| `reload` | `uint16_t` | ค่า reload (0–4095) |
+
+```c
+// timeout ≈ (reload + 1) × prescaler / LSI_freq
+// ตัวอย่าง: ~1 วินาที
+IWDG_Init(IWDG_PRESCALER_256, 156);
+```
+
+#### `uint32_t IWDG_GetTimeout(uint8_t prescaler, uint16_t reload)` — คำนวณ timeout เป็นมิลลิวินาที
+
+| พารามิเตอร์ | ชนิด | คำอธิบาย |
+|------------|------|----------|
+| `prescaler` | `uint8_t` | Prescaler จาก enum `IWDG_PRESCALER_*` |
+| `reload` | `uint16_t` | ค่า reload |
+
+**คืนค่า:** `uint32_t` — timeout โดยประมาณในหน่วย ms
+
+```c
+uint32_t ms = IWDG_GetTimeout(IWDG_PRESCALER_128, 4095);
+USART_Print("Timeout: "); USART_PrintNum((int32_t)ms); USART_Print(" ms\r\n");
+```
+
+#### `uint8_t IWDG_WasResetCause(void)` — ตรวจสอบว่า MCU ถูกรีเซ็ตโดย IWDG หรือไม่
+
+**คืนค่า:** `uint8_t` — `1` ถ้าการรีเซ็ตล่าสุดเกิดจาก IWDG timeout, `0` ถ้าไม่ใช่
+
+```c
+if (IWDG_WasResetCause()) {
+    USART_Print("Previous reset: Watchdog timeout!\r\n");
+}
+```
+
+> ⚠️ ข้อควรระวัง: ต้องเรียก `IWDG_WasResetCause()` **ก่อน** `IWDG_Init()` หรือ `IWDG_SimpleInit()` เพราะ flag จะถูกล้างระหว่าง init
+
+#### `void IWDG_ClearResetFlag(void)` — ล้าง IWDG reset flag
+
+```c
+if (IWDG_WasResetCause()) {
+    IWDG_ClearResetFlag();
+}
+```
+
+---
+
 ### Manual Init
 
 #### `void IWDG_Init(uint8_t prescaler, uint16_t reload)`
