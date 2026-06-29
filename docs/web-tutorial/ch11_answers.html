@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>เฉลย บทที่ 11 — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+<style>.answer{margin:1.5rem 0;padding:1.2rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0}.approach{background:var(--note-bg);padding:1rem;border-radius:var(--radius);margin:0.8rem 0;border-left:4px solid var(--accent)}</style>
+</head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch11_flash.html">กลับบทที่ 11</a>
+</nav>
+<h1>📝 เฉลย — บทที่ 11: Flash Storage</h1>
+
+<div class="answer">
+<h2>ข้อ 1: บันทึกและโหลด Config struct</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+#define CFG_ADDR   0x08003C00
+#define CFG_MAGIC  0xBEEF
+
+typedef struct {
+    uint16_t magic;
+    uint8_t  device_id;      // 1-255
+    uint8_t  brightness;     // 0-100
+    uint8_t  volume;         // 0-100
+    uint8_t  auto_off_min;   // 0-60
+    char     label[8];       // device name
+    uint16_t crc;
+} Config_t;
+
+Config_t g_cfg;
+
+void cfg_set_defaults(void) {
+    g_cfg.magic = CFG_MAGIC;
+    g_cfg.device_id = 1;
+    g_cfg.brightness = 50;
+    g_cfg.volume = 80;
+    g_cfg.auto_off_min = 10;
+    memcpy(g_cfg.label, "DEV-001", 8);
+}
+
+static void cfg_compute_crc(void) {
+    g_cfg.crc = Flash_CalculateCRC16(
+        (uint8_t*)&g_cfg,
+        sizeof(Config_t) - sizeof(uint16_t)
+    );
+}
+
+uint8_t cfg_save(void) {
+    cfg_compute_crc();
+    return Flash_SaveConfig(CFG_ADDR, (uint8_t*)&g_cfg, sizeof(Config_t));
+}
+
+uint8_t cfg_load(void) {
+    if (!Flash_LoadConfig((uint8_t*)&g_cfg, sizeof(Config_t))) {
+        USART_Print("[Flash] No saved config — using defaults\r\n");
+        cfg_set_defaults();
+        return 0;
+    }
+    return 1;
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    Flash_Init();
+
+    cfg_load();
+
+    USART_Print("Device: ");
+    USART_Print(g_cfg.label);
+    USART_Print("\r\nID=");
+    USART_PrintNum(g_cfg.device_id);
+    USART_Print(" Bright=");
+    USART_PrintNum(g_cfg.brightness);
+    USART_Print(" Vol=");
+    USART_PrintNum(g_cfg.volume);
+    USART_Print(" AutoOff=");
+    USART_PrintNum(g_cfg.auto_off_min);
+    USART_Print("min\r\n");
+
+    // จำลองเปลี่ยนค่าแล้ว save
+    g_cfg.brightness = 75;
+    g_cfg.volume = 90;
+    g_cfg.auto_off_min = 5;
+    memcpy(g_cfg.label, "DEV-999", 8);
+
+    if (cfg_save()) {
+        USART_Print("Saved OK!\r\n");
+    } else {
+        USART_Print("Save FAILED!\r\n");
+    }
+
+    // โหลดใหม่ — เช็คว่าค่าใหม่ตรง
+    Config_t verify;
+    Flash_ReadStruct(CFG_ADDR, (uint8_t*)&verify, sizeof(verify));
+
+    USART_Print("Verify: Bright=");
+    USART_PrintNum(verify.brightness);
+    USART_Print(" CRC=0x");
+    USART_PrintHex(verify.crc >> 8, 1);
+    USART_PrintHex(verify.crc & 0xFF, 1);
+    USART_Print("\r\nDone!\r\n");
+
+    while (1);
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> การออกแบบ Config struct: ต้องมี <code>magic</code> (เช็คว่ามีข้อมูลจริง), ฟิลด์ข้อมูล, <code>crc</code> (ตรวจสอบความถูกต้อง) — <code>Flash_SaveConfig()</code> ทำ Erase+Write+Verify ให้อัตโนมัติ — <code>Flash_LoadConfig()</code> ตรวจสอบ magic + CRC ก่อนยอมรับ — CRC คำนวณแบบไม่รวมฟิลด์ crc เอง — struct ใช้ <code>#pragma pack</code> หรือ <code>__attribute__((packed))</code> ถ้าต้องการ layout แน่นอน — Flash page = 1KB (0x400) — ที่อยู่ 0x08003C00 = page 60 — เก็บข้อมูล 2KB ที่ page 60-61 ได้ — ข้อควรระวัง: ห้ามเขียนทับพื้นที่โค้ด (~0x08000000-0x08003BFF)</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: CRC16 checksum ตรวจสอบความถูกต้อง</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+#define CFG_ADDR   0x08003C00
+#define CFG_MAGIC  0xCAFE
+
+typedef struct {
+    uint16_t magic;
+    uint32_t serial;
+    uint8_t  calibrated;
+    int16_t  offset_x;
+    int16_t  offset_y;
+    uint16_t crc;
+} CalibData_t;
+
+CalibData_t g_cal;
+
+void cal_set_defaults(void) {
+    g_cal.magic = CFG_MAGIC;
+    g_cal.serial = 0x12345678;
+    g_cal.calibrated = 0;
+    g_cal.offset_x = 0;
+    g_cal.offset_y = 0;
+}
+
+uint8_t cal_save(void) {
+    // คำนวณ CRC — ไม่รวมฟิลด์ crc
+    g_cal.crc = Flash_CalculateCRC16(
+        (uint8_t*)&g_cal,
+        sizeof(CalibData_t) - sizeof(uint16_t)
+    );
+    return Flash_SaveConfig(CFG_ADDR, (uint8_t*)&g_cal, sizeof(CalibData_t));
+}
+
+uint8_t cal_load_and_verify(void) {
+    g_cal.crc = 0;  // เคลียร์ก่อนคำนวณ
+
+    if (!Flash_LoadConfig((uint8_t*)&g_cal, sizeof(CalibData_t))) {
+        USART_Print("CRC FAIL or no data — using defaults\r\n");
+        cal_set_defaults();
+        return 0;
+    }
+
+    // ตรวจสอบ CRC ด้วยตัวเองอีกครั้ง
+    uint16_t calc_crc = Flash_CalculateCRC16(
+        (uint8_t*)&g_cal,
+        sizeof(CalibData_t) - sizeof(uint16_t)
+    );
+
+    if (calc_crc != g_cal.crc) {
+        USART_Print("CRC MISMATCH! Data corrupted!\r\n");
+        USART_Print("Expected=0x");
+        USART_PrintHex(g_cal.crc >> 8, 1);
+        USART_PrintHex(g_cal.crc & 0xFF, 1);
+        USART_Print(" Got=0x");
+        USART_PrintHex(calc_crc >> 8, 1);
+        USART_PrintHex(calc_crc & 0xFF, 1);
+        USART_Print("\r\n");
+        cal_set_defaults();
+        return 0;
+    }
+
+    USART_Print("CRC OK! Data valid.\r\n");
+    return 1;
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    Flash_Init();
+
+    USART_Print("=== CRC16 Verification Demo ===\r\n");
+
+    cal_set_defaults();
+    USART_Print("Saving calibration...\r\n");
+    cal_save();
+
+    USART_Print("Loading + CRC verify...\r\n");
+    uint8_t ok = cal_load_and_verify();
+    USART_Print(ok ? "PASS\r\n" : "FAIL\r\n");
+
+    // จำลองข้อมูลเสียหาย: เขียนทับ CRC โดยตรง (เฉพาะ demo — ไม่ทำจริง)
+    // Flash_ErasePage(CFG_ADDR);
+    // Flash_WriteHalfWord(CFG_ADDR + sizeof(CalibData_t) - 2, 0xFFFF);
+    // cal_load_and_verify();  // จะ FAIL
+
+    while (1);
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> CRC16 ป้องกันข้อมูลเสียหายจาก: ไฟดับระหว่างเขียน Flash, bit-flip จาก aging/radiation, noise ในสัญญาณ (ถ้าเป็น EEPROM ภายนอก) — <code>Flash_CalculateCRC16(buf, len)</code> ใช้ polynomial CRC-16-CCITT — ตรวจสอบ CRC ใน <code>Flash_LoadConfig()</code> ให้แล้ว — แต่ตรวจเองเพิ่มได้ — <strong>Dual-Page Strategy:</strong> เขียน config 2 หน้า → โหลดหน้าที่ CRC ผ่าน — ปลอดภัยกว่า — กรณีข้อมูลเสีย: แจ้งผู้ใช้ → ใช้ค่า default → ลองเขียนใหม่ — CRC ต้องคำนวณจากทุกฟิลด์ยกเว้น crc เอง — ถ้า magic ไม่ตรง = Flash ว่าง/ไม่เคยเขียน — ต้อง set default</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: Factory Reset — Flash_EraseAll</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+#define CFG_ADDR   0x08003C00
+#define CFG_MAGIC  0xDA7A
+
+typedef struct {
+    uint16_t magic;
+    uint8_t  led_mode;       // 0=off, 1=blink, 2=solid
+    uint8_t  blink_speed;    // 1-10
+    uint8_t  power_mode;     // 0=normal, 1=eco, 2=ultra
+    uint16_t crc;
+} Settings_t;
+
+Settings_t g_settings;
+
+void settings_default(void) {
+    g_settings.magic = CFG_MAGIC;
+    g_settings.led_mode = 1;
+    g_settings.blink_speed = 5;
+    g_settings.power_mode = 0;
+}
+
+void settings_save(void) {
+    g_settings.crc = Flash_CalculateCRC16(
+        (uint8_t*)&g_settings,
+        sizeof(Settings_t) - sizeof(uint16_t)
+    );
+    Flash_SaveConfig(CFG_ADDR, (uint8_t*)&g_settings, sizeof(Settings_t));
+}
+
+uint8_t settings_load(void) {
+    if (!Flash_LoadConfig((uint8_t*)&g_settings, sizeof(Settings_t))) {
+        settings_default();
+        return 0;
+    }
+    return 1;
+}
+
+void factory_reset(void) {
+    USART_Print("=== FACTORY RESET ===\r\n");
+
+    // ลบเฉพาะหน้า config — ไม่ใช่ Flash ทั้งหมด!
+    // Flash_EraseAll() — อันตราย! ลบโค้ดด้วย!
+    // ใช้ Flash_ErasePage() เฉพาะหน้า config แทน
+    Flash_ErasePage(CFG_ADDR);
+
+    // คืนค่า default
+    settings_default();
+    settings_save();
+
+    USART_Print("All settings erased.\r\n");
+    USART_Print("Defaults restored.\r\n");
+    USART_Print("Reboot device to apply.\r\n");
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    Flash_Init();
+    pinMode(PC0, PIN_MODE_OUTPUT);
+    pinMode(PA1, PIN_MODE_INPUT_PULLUP);
+
+    settings_load();
+
+    USART_Print("Settings: LED=");
+    USART_PrintNum(g_settings.led_mode);
+    USART_Print(" Speed=");
+    USART_PrintNum(g_settings.blink_speed);
+    USART_Print(" Power=");
+    USART_PrintNum(g_settings.power_mode);
+    USART_Print("\r\n");
+
+    USART_Print("Hold PA1 for 3s to Factory Reset...\r\n");
+
+    uint32_t btn_start = 0;
+    uint8_t btn_was_pressed = 0;
+
+    while (1) {
+        // Non-blocking LED blink ตาม settings
+        static uint32_t last = 0;
+        uint32_t now = Get_CurrentMs();
+        uint32_t period = 1100 - (g_settings.blink_speed * 100);
+
+        if (now - last >= period) {
+            last = now;
+            if (g_settings.led_mode == 1) {
+                digitalToggle(PC0);
+            } else if (g_settings.led_mode == 2) {
+                digitalWrite(PC0, HIGH);
+            } else {
+                digitalWrite(PC0, LOW);
+            }
+        }
+
+        // ตรวจจับ factory reset: กดค้าง 3 วิ
+        if (digitalRead(PA1) == LOW) {
+            if (!btn_was_pressed) {
+                btn_start = now;
+                btn_was_pressed = 1;
+            }
+            if (now - btn_start >= 3000) {
+                factory_reset();
+                USART_Print("Rebooting...\r\n");
+                Delay_Ms(100);
+
+                // Software reset
+                NVIC_SystemReset();
+            }
+        } else {
+            btn_was_pressed = 0;
+        }
+
+        Delay_Ms(10);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> Factory Reset ไม่ใช่ลบ Flash ทั้งก้อน — <strong>ห้ามใช้ Flash_EraseAll()</strong> — เพราะจะลบโค้ดแอปพลิเคชันด้วย → MCU กลายเป็นอิฐ — วิธีที่ถูกต้อง: <code>Flash_ErasePage(CFG_ADDR)</code> ลบเฉพาะหน้า config → <code>settings_default()</code> คืนค่า default → <code>settings_save()</code> เขียน default ลง Flash — Trigger: กดปุ่มค้าง 3 วิ, หรือรับคำสั่งผ่าน USART, หรือ <code>Flash_CheckResetFlag()</code> ถ้ามี — หลัง Factory Reset ควร <code>NVIC_SystemReset()</code> เพื่อให้แน่ใจว่าทุกอย่างเริ่มใหม่ — ข้อควรระวัง: Flash_ErasePage ใช้เวลา ~1ms ต่อ 1KB — ป้องกันการกดผิดด้วยการกดค้าง + LED feedback</div>
+</div>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch11_flash.html">กลับบทที่ 11</a>
+    <a href="ch12_answers.html">เฉลยบทที่ 12 →</a>
+</nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

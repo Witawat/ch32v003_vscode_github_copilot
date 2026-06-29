@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>เฉลย บทที่ 17 — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+<style>.answer{margin:1.5rem 0;padding:1.2rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0}.approach{background:var(--note-bg);padding:1rem;border-radius:var(--radius);margin:0.8rem 0;border-left:4px solid var(--accent)}</style>
+</head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch17_package.html">กลับบทที่ 17</a>
+</nav>
+<h1>📝 เฉลย — บทที่ 17: Package System</h1>
+
+<div class="answer">
+<h2>ข้อ 1: เขียนโค้ดใช้ IS_VALID_PIN ตรวจสอบก่อนใช้ pin</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+// Fallback chain: เลือก pin อัตโนมัติตามแพ็กเกจ
+#if IS_VALID_PIN(PC0)
+    #define LED1_PIN  PC0
+    #define LED2_PIN  PC1
+#elif IS_VALID_PIN(PC1)
+    #define LED1_PIN  PC1
+    #define LED2_PIN  PC2
+#else
+    #define LED1_PIN  PA1
+    #define LED2_PIN  PA2
+#endif
+
+#if IS_VALID_PIN(PC4)
+    #define PWM_PIN   PC4
+#elif IS_VALID_PIN(PA1)
+    #define PWM_PIN   PA1
+#else
+    #error "No valid PWM pin!"
+#endif
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200,
+        IS_VALID_PIN(PD5) ? USART_PINS_DEFAULT : USART_PINS_SOP8);
+
+    // Compile-time: ถ้า pin ไม่มีในแพ็กเกจ #error จะแจ้ง
+    #if !IS_VALID_PIN(LED1_PIN)
+        #error "LED1_PIN not available!"
+    #endif
+
+    pinMode(LED1_PIN, PIN_MODE_OUTPUT);
+    pinMode(LED2_PIN, PIN_MODE_OUTPUT);
+
+    // PWM: เช็คทั้ง pin และ package
+    #if IS_PWM_VALID_PACKAGE(PWM_PIN, CH32V003_PACKAGE)
+        PWM_SimpleInit(4, PWM_PIN);
+        PWM_SetDuty(4, 50);
+        USART_Print("PWM on pin OK\r\n");
+    #else
+        USART_Print("PWM not available on this pin/package\r\n");
+    #endif
+
+    USART_Print("Package: ");
+    #if CH32V003_PACKAGE == PACKAGE_SOP8
+        USART_Print("SOP8\r\n");
+    #elif CH32V003_PACKAGE == PACKAGE_SOP16
+        USART_Print("SOP16\r\n");
+    #elif CH32V003_PACKAGE == PACKAGE_TSSOP20
+        USART_Print("TSSOP20\r\n");
+    #elif CH32V003_PACKAGE == PACKAGE_QFN20
+        USART_Print("QFN20\r\n");
+    #endif
+
+    USART_Print("LED1=");
+    USART_Print(LED1_PIN == PC0 ? "PC0" : LED1_PIN == PC1 ? "PC1" : "PA1");
+    USART_Print(" LED2=");
+    USART_Print(LED2_PIN == PC1 ? "PC1" : LED2_PIN == PC2 ? "PC2" : "PA2");
+    USART_Print("\r\n");
+
+    while (1) {
+        digitalWrite(LED1_PIN, HIGH);
+        digitalWrite(LED2_PIN, LOW);
+        Delay_Ms(300);
+        digitalWrite(LED1_PIN, LOW);
+        digitalWrite(LED2_PIN, HIGH);
+        Delay_Ms(300);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>IS_VALID_PIN(pin)</code> เป็น compile-time macro — ใช้กับ <code>#if</code> — true ถ้า pin มีในแพ็กเกจ — <strong>Fallback chain:</strong> ลอง pin แรก → ถ้าไม่มี → ลองถัดไป — #error ถ้าไม่มีเลย → compile ล้มเหลวทันที (ดีกว่า runtime crash) — <strong>SOP8 pins:</strong> PC1,PC2,PC4,PA1,PA2,PD1,PD4,PD6 — PC0,PC3,PC5,PC6,PC7 ไม่มี — <strong>SOP16:</strong> มี PC0-PC7 แต่ไม่มี PC5,PD2-PD4 — <strong>TSSOP20:</strong> ครบทุก pin</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: ใช้ IS_PWM_VALID_PACKAGE เลือก PWM channel</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200,
+        IS_VALID_PIN(PD5) ? USART_PINS_DEFAULT : USART_PINS_SOP8);
+
+    USART_Print("=== PWM Self-Test per Package ===\r\n\r\n");
+
+    // Test all possible PWM pins
+    // TSSOP20: PC4,PC5,PC6,PA1,PA2,PD3
+    // SOP16:   PC4,PA1,PA2
+    // SOP8:    PA1,PA2,PD1,PD4,PD6
+    uint8_t test_pins[] = {PC4, PC5, PC6, PA1, PA2, PD3, PD1, PD4, PD6};
+
+    for (int i = 0; i < 9; i++) {
+        uint8_t pin = test_pins[i];
+
+        // Check if pin exists
+        if (!IS_VALID_PIN(pin)) {
+            USART_Print("Pin ");
+            USART_PrintNum(pin);
+            USART_Print(": NOT AVAILABLE\r\n");
+            continue;
+        }
+
+        // Check if PWM is available on this pin
+        if (IS_PWM_VALID_PACKAGE(pin, CH32V003_PACKAGE)) {
+            USART_Print("Pin ");
+            USART_PrintNum(pin);
+            USART_Print(": PWM OK\r\n");
+        } else {
+            USART_Print("Pin ");
+            USART_PrintNum(pin);
+            USART_Print(": GPIO only (no PWM)\r\n");
+        }
+    }
+
+    // เลือก PWM pin แรกที่ใช้ได้
+    #if IS_PWM_VALID_PACKAGE(PC4, CH32V003_PACKAGE)
+        #define BEST_PWM  PC4
+    #elif IS_PWM_VALID_PACKAGE(PA1, CH32V003_PACKAGE)
+        #define BEST_PWM  PA1
+    #elif IS_PWM_VALID_PACKAGE(PD1, CH32V003_PACKAGE)
+        #define BEST_PWM  PD1
+    #elif IS_PWM_VALID_PACKAGE(PD4, CH32V003_PACKAGE)
+        #define BEST_PWM  PD4
+    #else
+        #error "No PWM available on this package!"
+    #endif
+
+    USART_Print("\r\nBest PWM pin: ");
+    USART_PrintNum(BEST_PWM);
+    USART_Print("\r\n");
+
+    // Use the selected PWM pin
+    pinMode(BEST_PWM, PIN_MODE_OUTPUT);
+    #if IS_PWM_VALID_PACKAGE(BEST_PWM, CH32V003_PACKAGE)
+        PWM_SimpleInit(2, BEST_PWM);
+    #endif
+
+    uint8_t duty = 0;
+    uint8_t dir = 1;
+
+    while (1) {
+        // Fade LED — PWM duty cycle 0-100%
+        #if IS_PWM_VALID_PACKAGE(BEST_PWM, CH32V003_PACKAGE)
+            PWM_SetDuty(2, duty);
+        #endif
+
+        USART_Print("PWM duty: ");
+        USART_PrintNum(duty);
+        USART_Print("%\r\n");
+
+        duty += (dir ? 5 : -5);
+        if (duty >= 100) { duty = 100; dir = 0; }
+        if (duty == 0)   { dir = 1; }
+
+        Delay_Ms(100);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>IS_PWM_VALID_PACKAGE(pin, package)</code> ต้องระบุ package — เช็คทั้ง pin มีอยู่ และมี alternate function PWM — <strong>TSSOP20 PWM:</strong> PC4,PC5,PC6,PA1,PA2,PD3 — <strong>SOP16 PWM:</strong> PC4,PA1,PA2 (บาง pin ใช้ TIM1 ทับกับ PC5/PC6) — <strong>SOP8 PWM:</strong> PA1,PA2,PD1,PD4,PD6 (ไม่มี PC series) — <strong>Fallback strategy:</strong> ลอง PC4 → ถ้าไม่ได้ → PA1 → PD1 → PD4 — เลือกอันแรกที่ใช้ได้ — ใช้ #if เพื่อ compile-time decision — PWM init ล้มเหลว runtime ได้ถ้า timer ถูกใช้แล้ว</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: โค้ดเดียว เปลี่ยนแค่ PACKAGE_SOP8/SOP16/TSSOP20</h2>
+<pre><code class="language-c">// ====== CHANGE THIS LINE ONLY ======
+#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+// #define CH32V003_PACKAGE  PACKAGE_SOP16
+// #define CH32V003_PACKAGE  PACKAGE_SOP8
+// ===================================
+#include "SimpleHAL.h"
+
+// --- Auto-select LED pin ---
+#if IS_VALID_PIN(PC0)
+    #define LED_PIN  PC0
+#elif IS_VALID_PIN(PC1)
+    #define LED_PIN  PC1
+#else
+    #define LED_PIN  PA1
+#endif
+
+// --- Auto-select ADC pin ---
+#if IS_VALID_PIN(PD2) && IS_ADC_PIN(PD2)
+    #define ADC_PIN  ADC_CH_PD2
+#elif IS_VALID_PIN(PD1) && IS_ADC_PIN(PD1)
+    #define ADC_PIN  ADC_CH_PD1
+#elif IS_VALID_PIN(PA1) && IS_ADC_PIN(PA1)
+    #define ADC_PIN  ADC_CH_PA1
+#elif IS_VALID_PIN(PC4) && IS_ADC_PIN(PC4)
+    #define ADC_PIN  ADC_CH_PC4
+#else
+    #error "No ADC pin available!"
+#endif
+
+// --- Auto-select USART pins ---
+#if IS_VALID_PIN(PD5) && IS_VALID_PIN(PD6)
+    #define MY_USART  USART_PINS_DEFAULT
+#elif IS_VALID_PIN(PD1) && IS_VALID_PIN(PA2)
+    #define MY_USART  USART_PINS_SOP8
+#else
+    #error "No USART pins available!"
+#endif
+
+// --- Auto-select PWM pin ---
+#if IS_PWM_VALID_PACKAGE(PC4, CH32V003_PACKAGE)
+    #define PWM_PIN  PC4
+#elif IS_PWM_VALID_PACKAGE(PA1, CH32V003_PACKAGE)
+    #define PWM_PIN  PA1
+#elif IS_PWM_VALID_PACKAGE(PD1, CH32V003_PACKAGE)
+    #define PWM_PIN  PD1
+#else
+    #define PWM_PIN  0  // no PWM
+#endif
+
+// --- Check SPI availability ---
+#if IS_VALID_PIN(PC5)
+    #define HAS_SPI  1
+#else
+    #define HAS_SPI  0
+#endif
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, MY_USART);
+    ADC_SimpleInit();
+
+    pinMode(LED_PIN, PIN_MODE_OUTPUT);
+
+    USART_Print("========== Multi-Package Demo ==========\r\n");
+
+    // Package info
+    USART_Print("Package: ");
+    #if CH32V003_PACKAGE == PACKAGE_SOP8
+        USART_Print("SOP-8 (8 pins)\r\n");
+        USART_Print("  Budget choice — no HW SPI\r\n");
+    #elif CH32V003_PACKAGE == PACKAGE_SOP16
+        USART_Print("SOP-16 (16 pins)\r\n");
+        USART_Print("  Has SPI, fewer ADC\r\n");
+    #elif CH32V003_PACKAGE == PACKAGE_TSSOP20
+        USART_Print("TSSOP-20 (20 pins)\r\n");
+        USART_Print("  Full features\r\n");
+    #elif CH32V003_PACKAGE == PACKAGE_QFN20
+        USART_Print("QFN-20 (20 pads)\r\n");
+        USART_Print("  Same as TSSOP20\r\n");
+    #endif
+
+    // Pin assignments
+    USART_Print("\r\nAuto-selected pins:\r\n");
+    USART_Print("  LED=");
+    USART_PrintNum(LED_PIN);
+    USART_Print("\r\n  ADC=");
+    USART_PrintNum(ADC_PIN);
+    USART_Print("\r\n  USART=");
+    #if MY_USART == USART_PINS_DEFAULT
+        USART_Print("PD5(TX)/PD6(RX)");
+    #else
+        USART_Print("PD1(TX)/PA2(RX)");
+    #endif
+
+    USART_Print("\r\n  PWM=");
+    #if PWM_PIN != 0
+        #if IS_PWM_VALID_PACKAGE(PWM_PIN, CH32V003_PACKAGE)
+            USART_PrintNum(PWM_PIN);
+            USART_Print("\r\n  SPI=");
+            USART_Print(HAS_SPI ? "YES" : "NO (use shiftOut)");
+        #endif
+    #else
+        USART_Print("NONE");
+    #endif
+
+    #if PWM_PIN != 0 && IS_PWM_VALID_PACKAGE(PWM_PIN, CH32V003_PACKAGE)
+        PWM_SimpleInit(2, PWM_PIN);
+        PWM_SetDuty(2, 50);
+    #endif
+
+    USART_Print("\r\n\r\nRunning...\r\n\r\n");
+
+    uint32_t tick = 0;
+    while (1) {
+        tick++;
+        digitalWrite(LED_PIN, HIGH);
+
+        // Read ADC
+        uint16_t adc = analogRead(ADC_PIN);
+        float v = ADC_ToVoltage(adc, 3.3f);
+
+        USART_Print("[");
+        USART_PrintNum((int32_t)tick);
+        USART_Print("] ADC=");
+        USART_PrintNum(adc);
+        USART_Print(" (");
+        USART_PrintNum((int32_t)(v * 1000));
+        USART_Print("mV)");
+
+        // Show feature availability
+        #if PWM_PIN != 0 && IS_PWM_VALID_PACKAGE(PWM_PIN, CH32V003_PACKAGE)
+            USART_Print("  PWM=");
+            USART_PrintNum(PWM_PIN);
+        #endif
+        #if HAS_SPI
+            USART_Print("  SPI=OK");
+        #endif
+
+        USART_Print("\r\n");
+
+        digitalWrite(LED_PIN, LOW);
+        Delay_Ms(1000);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> หลักการ "เขียนครั้งเดียว ใช้ได้ทุกแพ็กเกจ" — <strong>ขั้นตอน:</strong> 1) กำหนด CH32V003_PACKAGE บรรทัดแรก 2) ใช้ #if IS_VALID_PIN() เลือก pin อัตโนมัติ 3) ใช้ #if IS_ADC_PIN() + IS_PWM_VALID_PACKAGE() เช็ค peripheral 4) ใช้ #if CH32V003_PACKAGE == ... เพื่อโค้ดเฉพาะแพ็กเกจ — <strong>ผลลัพธ์:</strong> โค้ดเดียวกัน → เปลี่ยน CH32V003_PACKAGE → คอมไพล์ใหม่ → ลง SOP8, SOP16, หรือ TSSOP20 ได้ทันที — <strong>ข้อดีทางธุรกิจ:</strong> SKU เดียว — ผลิต PCB ต่างกัน — ต้นทุนต่ำลง — ไม่ต้อง maintain 3 โค้ดเบส — <strong>SOP8 ข้อจำกัดหลัก:</strong> ไม่มี HW SPI, USART ต้อง remap, PWM ใช้ pin ต่างจาก TSSOP20 — แต่ด้วย #if จัดการได้ทั้งหมด</div>
+</div>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch17_package.html">กลับบทที่ 17</a>
+    <span style="visibility:hidden">บทถัดไป</span>
+</nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

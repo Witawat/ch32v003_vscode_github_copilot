@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>เฉลย บทที่ 12 — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+<style>.answer{margin:1.5rem 0;padding:1.2rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0}.approach{background:var(--note-bg);padding:1rem;border-radius:var(--radius);margin:0.8rem 0;border-left:4px solid var(--accent)}</style>
+</head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch12_watchdog.html">กลับบทที่ 12</a>
+</nav>
+<h1>📝 เฉลย — บทที่ 12: Watchdog</h1>
+
+<div class="answer">
+<h2>ข้อ 1: IWDG 1.6 วิ + LED blink</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+volatile uint32_t g_wdg_count = 0;
+
+int main(void) {
+    SystemCoreClockUpdate();
+
+    // ตรวจจับ reset จาก IWDG
+    if (IWDG_CheckReset()) {
+        // หน่วงเล็กน้อย — ป้องกัน infinite reset loop
+        for (volatile uint32_t i = 0; i < 50000; i++);
+
+        Timer_Init();
+        USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+        pinMode(PC0, PIN_MODE_OUTPUT);
+        g_wdg_count++;
+
+        USART_Print("!!! WATCHDOG RESET !!!\r\n");
+        // LED กระพริบเร็ว 5 ครั้ง — แสดงว่าเกิด reset
+        for (int i = 0; i < 5; i++) {
+            digitalWrite(PC0, HIGH); Delay_Ms(50);
+            digitalWrite(PC0, LOW);  Delay_Ms(50);
+        }
+    }
+
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    pinMode(PC0, PIN_MODE_OUTPUT);
+
+    // IWDG timeout 1.6 วิ (1600ms)
+    IWDG_SimpleInit(1600);
+
+    USART_Print("IWDG Active — 1.6s timeout\r\n");
+    USART_Print("LED blink 0.5s ON + 0.5s OFF = 1s/cycle\r\n");
+    USART_Print("Must feed watchdog within 1.6s\r\n");
+
+    uint32_t counter = 0;
+
+    while (1) {
+        // LED ON 500ms
+        digitalWrite(PC0, HIGH);
+        USART_Print("ON  [#");
+        USART_PrintNum((int32_t)++counter);
+        USART_Print("]\r\n");
+        Delay_Ms(500);
+
+        // LED OFF 500ms
+        digitalWrite(PC0, LOW);
+        USART_Print("OFF [feed]\r\n");
+
+        // Feed watchdog — รีเซ็ต timer
+        // Must be called within 1.6s of last feed
+        IWDG_Feed();
+
+        // รวม 1 cycle = 500ms + feed = ปลอดภัย (< 1.6s)
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>IWDG_SimpleInit(1600)</code> ตั้ง timeout 1.6 วิ — หลังจากเปิดแล้วปิดไม่ได้ — ทุกรอบ loop ใช้เวลา ~500ms → feed ทันเวลาเสมอ — LED blink: ON 500ms + OFF 500ms = 1s/cycle < 1.6s timeout — <strong>กฎเหล็ก IWDG:</strong> feed ใน main loop เท่านั้น — ห้าม feed ใน ISR เพราะ ISR อาจทำงานแม้ main loop ค้าง — <strong>IWDG timeout ที่ใช้ได้:</strong> 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 26208 ms — เลือกให้พอดีกับ worst-case loop time + margin 50% — debugger หยุด IWDG อัตโนมัติ — ต้องรันจริงถึงจะเห็นผล</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: WWDG window mode</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    pinMode(PC0, PIN_MODE_OUTPUT);
+    pinMode(PC1, PIN_MODE_OUTPUT);
+
+    USART_Print("=== WWDG Window Mode Demo ===\r\n");
+
+    // WWDG: timeout ~28ms, window 50% (14ms-28ms)
+    // ต้อง refresh ระหว่าง 14ms ถึง 28ms
+    // เร็วเกิน 14ms → reset (loop เร็วผิดปกติ)
+    // ช้าเกิน 28ms → reset (loop ค้าง)
+    WWDG_SimpleInit(WWDG_TIMEOUT_28MS, 50);
+
+    USART_Print("WWDG 28ms timeout, 50% window\r\n");
+    USART_Print("Valid feed window: 14-28ms\r\n");
+    USART_Print("PC0=fast LED, PC1=feed indicator\r\n");
+
+    uint32_t counter = 0;
+
+    while (1) {
+        counter++;
+
+        // LED toggle ทุกรอบ (เร็ว)
+        digitalWrite(PC0, !digitalRead(PC0));
+
+        // หน่วง 20ms — เกิน 14ms (window start) แต่น้อยกว่า 28ms (timeout)
+        Delay_Ms(20);
+
+        // Feed WWDG — ใน window!
+        digitalWrite(PC1, HIGH);
+        WWDG_Refresh();
+        digitalWrite(PC1, LOW);
+
+        if (counter % 50 == 0) {
+            USART_Print("WWDG Feed #");
+            USART_PrintNum((int32_t)counter);
+            USART_Print(" OK (20ms in window)\r\n");
+        }
+
+        // สิ่งที่ไม่ควรทำ:
+        // WWDG_Refresh(); ← refresh ทันที = เร็วเกิน (0ms < 14ms) → RESET!
+
+        // สิ่งที่ไม่ควรทำ:
+        // Delay_Ms(30); ← เลย 28ms → RESET!
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> WWDG window mode ต่างจาก IWDG ตรงที่ต้อง refresh ใน "หน้าต่างเวลา" — เร็วเกินก็ reset, ช้าเกินก็ reset — <code>WWDG_SimpleInit(WWDG_TIMEOUT_28MS, 50)</code> — window 50%: valid feed ระหว่าง 14-28ms — ลองทดสอบ: (1) feed ทันที → RESET (เร็วเกิน), (2) Delay_Ms(20) → feed → OK (ใน window), (3) Delay_Ms(30) → feed → RESET (ช้าเกิน) — WWDG ใช้ PCLK1 → แม่นยำกว่า IWDG (LSI) — timeout สั้น (μs-ms) → ตรวจจับ loop anomaly ได้ไวกว่า — EWI (Early Wakeup Interrupt): เตือนก่อน timeout → บันทึก debug info — <strong>ข้อควรระวัง:</strong> Debugger อาจรบกวน timing WWDG — ทดสอบแบบรันจริง</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: ตรวจจับ reset จาก IWDG</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+#define CFG_ADDR  0x08003C00
+#define CFG_MAGIC 0x5AFE
+
+typedef struct {
+    uint16_t magic;
+    uint32_t power_on_count;
+    uint32_t wdg_reset_count;
+    uint32_t last_reset_ms;
+    uint8_t  reset_reason;  // 0=power-on, 1=iwdg, 2=wwdg, 3=soft, 4=pin
+    uint16_t crc;
+} ResetLog_t;
+
+ResetLog_t g_log;
+
+void log_init(void) {
+    Flash_Init();
+    if (!Flash_LoadConfig((uint8_t*)&g_log, sizeof(ResetLog_t))) {
+        memset(&g_log, 0, sizeof(g_log));
+        g_log.magic = CFG_MAGIC;
+    }
+}
+
+void log_save(void) {
+    g_log.crc = Flash_CalculateCRC16((uint8_t*)&g_log,
+                     sizeof(ResetLog_t) - sizeof(uint16_t));
+    Flash_SaveConfig(CFG_ADDR, (uint8_t*)&g_log, sizeof(ResetLog_t));
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+
+    // หน่วงเผื่อ stable power
+    for (volatile uint32_t i = 0; i < 50000; i++);
+
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    pinMode(PC0, PIN_MODE_OUTPUT);
+
+    log_init();
+
+    // ——— ตรวจจับ reset source ———
+    if (IWDG_CheckReset()) {
+        // Reset จาก IWDG — main loop ค้าง!
+        g_log.reset_reason = 1;
+        g_log.wdg_reset_count++;
+        g_log.last_reset_ms = Get_CurrentMs();
+
+        USART_Print("============================\r\n");
+        USART_Print("!!! IWDG WATCHDOG RESET !!!\r\n");
+        USART_Print("============================\r\n");
+        USART_Print("Reset count: ");
+        USART_PrintNum((int32_t)g_log.wdg_reset_count);
+        USART_Print("\r\n");
+
+        // LED SOS pattern ถ้า reset หลายครั้ง
+        if (g_log.wdg_reset_count >= 3) {
+            USART_Print("WARNING: Multiple WDG resets!\r\n");
+            USART_Print("Safe mode: LED blink SOS\r\n");
+
+            log_save();
+
+            // SOS: ... --- ... (short-short-short, long-long-long, short-short-short)
+            while (1) {
+                for (int s = 0; s < 3; s++) {
+                    digitalWrite(PC0, HIGH); Delay_Ms(150);
+                    digitalWrite(PC0, LOW);  Delay_Ms(150);
+                }
+                Delay_Ms(300);
+                for (int l = 0; l < 3; l++) {
+                    digitalWrite(PC0, HIGH); Delay_Ms(500);
+                    digitalWrite(PC0, LOW);  Delay_Ms(150);
+                }
+                Delay_Ms(300);
+                for (int s = 0; s < 3; s++) {
+                    digitalWrite(PC0, HIGH); Delay_Ms(150);
+                    digitalWrite(PC0, LOW);  Delay_Ms(150);
+                }
+                Delay_Ms(1000);  // IWDG feed โดยไม่ใช้ IWDG → system stays in safe mode
+            }
+        }
+    } else {
+        // Power-on reset ธรรมดา
+        g_log.reset_reason = 0;
+        g_log.power_on_count++;
+        g_log.last_reset_ms = 0;
+
+        USART_Print("=== Power-On Reset ===\r\n");
+        USART_Print("Boot count: ");
+        USART_PrintNum((int32_t)g_log.power_on_count);
+        USART_Print("\r\n");
+    }
+
+    USART_Print("Last reset reason: ");
+    switch (g_log.reset_reason) {
+        case 0: USART_Print("POWER-ON\r\n"); break;
+        case 1: USART_Print("IWDG\r\n"); break;
+        case 2: USART_Print("WWDG\r\n"); break;
+        case 3: USART_Print("SOFTWARE\r\n"); break;
+        case 4: USART_Print("PIN RESET\r\n"); break;
+        default: USART_Print("UNKNOWN\r\n"); break;
+    }
+
+    USART_Print("Total IWDG resets: ");
+    USART_PrintNum((int32_t)g_log.wdg_reset_count);
+    USART_Print("\r\n");
+
+    log_save();
+
+    // เริ่ม IWDG — 4 วิ timeout
+    IWDG_SimpleInit(4000);
+    USART_Print("IWDG 4s active — running normally\r\n");
+
+    uint32_t tick = 0;
+    while (1) {
+        digitalWrite(PC0, !digitalRead(PC0));
+        USART_Print("Tick ");
+        USART_PrintNum((int32_t)++tick);
+        USART_Print(" OK\r\n");
+
+        Delay_Ms(1500);
+        IWDG_Feed();
+
+        // ถ้า tick == 10 → จงใจค้าง (ทดสอบ)
+        if (tick == 10) {
+            USART_Print("Intentionally freezing...\r\n");
+            Delay_Ms(100);
+            while (1);  // ค้าง → 4s → reset → g_log.wdg_reset_count++
+        }
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> การตรวจจับ reset source เป็นสิ่งจำเป็นสำหรับระบบ production-grade — <code>IWDG_CheckReset()</code> อ่าน flag ใน RCC/WDG register — check ตั้งแต่ต้น main() ก่อน init อะไร — <strong>ข้อมูล reset log</strong> เก็บใน Flash (BKP อาจหายถ้าไฟดับนาน) — บันทึก: จำนวนครั้ง, เวลาล่าสุด, สาเหตุ — วิเคราะห์แนวโน้ม: ถ้า WDG reset ถี่ → safe mode — <strong>Safe Mode:</strong> ทำงานน้อยที่สุด — กระพริบ LED SOS — ไม่ใช้ peripheral ที่อาจเป็นสาเหตุของ crash — ต้องการ manual reset เพื่อออก — <strong>ข้อควรระวัง:</strong> ถ้าไม่ดีเลย์หลังเช็ค IWDG_CheckReset() → IWDG flag อาจยังไม่ clear → เข้า reset loop ไม่รู้จบ — ดีเลย์ ~50ms ก่อนเริ่ม init ปกติ</div>
+</div>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch12_watchdog.html">กลับบทที่ 12</a>
+    <a href="ch13_answers.html">เฉลยบทที่ 13 →</a>
+</nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

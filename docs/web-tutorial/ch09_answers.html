@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>เฉลย บทที่ 9 — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+<style>.answer{margin:1.5rem 0;padding:1.2rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0}.approach{background:var(--note-bg);padding:1rem;border-radius:var(--radius);margin:0.8rem 0;border-left:4px solid var(--accent)}</style>
+</head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch09_dma.html">กลับบทที่ 9</a>
+</nav>
+<h1>📝 เฉลย — บทที่ 9: DMA</h1>
+
+<div class="answer">
+<h2>ข้อ 1: DMA_MemCopy คัดลอก 128 bytes</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+uint8_t g_src[128];
+uint8_t g_dst[128];  // ต้อง global — DMA ใช้ pointer ตรง
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+
+    // เติม src ด้วย pattern
+    for (int i = 0; i < 128; i++) g_src[i] = (uint8_t)(i * 2);
+
+    // DMA_MemCopy — all-in-one: init + start + wait
+    uint8_t ok = DMA_MemCopy(g_dst, g_src, 128);
+
+    if (ok) {
+        USART_Print("DMA MemCopy 128 bytes — DONE!\r\n");
+        USART_Print("Verify: ");
+        for (int i = 0; i < 8; i++) {
+            USART_PrintHex(g_dst[i], 1);
+            USART_Print(" ");
+        }
+        USART_Print("\r\n");
+    } else {
+        USART_Print("DMA failed!\r\n");
+    }
+
+    while (1);
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>DMA_MemCopy(dst, src, size)</code> ทำทุกอย่างในฟังก์ชันเดียว — init + start + wait — เหมาะกับโจทย์ที่ไม่ต้องการ callback — buffer ต้องเป็น global/static เพราะ DMA เข้าถึงผ่าน pointer — ถ้าเป็น local stack buffer จะหายก่อน transfer เสร็จ — รองรับสูงสุด 65535 bytes — เร็วกว่า <code>memcpy()</code> CPU loop เพราะ CPU ไม่ต้อง fetch/store ทีละ byte</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: DMA_USART_Send ส่งข้อความโดยไม่บล็อก CPU</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+const char *g_msg = "Hello from DMA! CPU is free :)\r\n";
+volatile uint8_t g_dma_tx_done = 0;
+
+void on_tx_complete(void) {
+    g_dma_tx_done = 1;
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    pinMode(PC0, PIN_MODE_OUTPUT);
+
+    DMA_SetCallback(DMA_CH2, on_tx_complete);
+
+    USART_Print("=== DMA USART Send Demo ===\r\n");
+
+    while (1) {
+        // เริ่ม DMA ส่งข้อความ — CPU ไม่ต้องรอ
+        g_dma_tx_done = 0;
+        DMA_USART_Transmit(DMA_CH2, (uint8_t*)g_msg, strlen(g_msg));
+
+        // CPU ว่าง — ทำอย่างอื่นได้!
+        uint32_t start = Get_CurrentMs();
+        while (!g_dma_tx_done) {
+            // LED toggle: พิสูจน์ว่า CPU ไม่ได้ busy-wait
+            digitalToggle(PC0);
+            Delay_Ms(50);
+        }
+
+        USART_Print("  (sent in ");
+        USART_PrintNum((int32_t)(Get_CurrentMs() - start));
+        USART_Print("ms)\r\n");
+
+        Delay_Ms(1000);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>DMA_USART_Transmit(ch, data, len)</code> ส่งข้อมูลผ่าน USART โดย DMA — CPU ไม่ต้องวนลูปรอ TXE flag เหมือน <code>USART_Print()</code> — ใช้ DMA_CH2 เพราะ CH2 ผูกกับ USART1_TX ตาม channel mapping — <code>DMA_SetCallback()</code> รับแจ้งเมื่อส่งเสร็จ — ระหว่างรอ CPU blink LED ได้ตามปกติ — ข้อควรระวัง: ข้อมูลต้องอยู่ใน memory จนกว่า DMA ส่งเสร็จ — ใช้ const หรือ global buffer</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: DMA_ADC_Init + circular buffer อ่าน ADC ต่อเนื่อง</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+#define BUF_SIZE   128
+
+uint16_t g_adc_buf[BUF_SIZE];  // ต้อง global!
+volatile uint8_t g_new_data = 0;
+
+void dma_adc_done(void) {
+    g_new_data = 1;  // แจ้ง main loop ว่ามีข้อมูลใหม่
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    ADC_SimpleInit();
+    pinMode(PC0, PIN_MODE_OUTPUT);
+
+    // DMA + ADC — 128 samples ต่อเนื่อง
+    DMA_ADC_Init(DMA_CH1, g_adc_buf, BUF_SIZE);
+    DMA_SetCallback(DMA_CH1, dma_adc_done);
+
+    USART_Print("DMA ADC Continuous — 128 samples\r\n");
+
+    while (1) {
+        // กด start รอบใหม่
+        g_new_data = 0;
+        ADC_StartContinuous(ADC_CH_PD2);
+        DMA_Start(DMA_CH1);
+
+        // CPU ว่าง — blink LED
+        while (!g_new_data) {
+            digitalWrite(PC0, !digitalRead(PC0));
+            Delay_Ms(50);
+        }
+
+        // ประมวลผล 128 samples
+        uint32_t sum = 0;
+        uint16_t vmin = 4095, vmax = 0;
+        for (int i = 0; i < BUF_SIZE; i++) {
+            sum += g_adc_buf[i];
+            if (g_adc_buf[i] < vmin) vmin = g_adc_buf[i];
+            if (g_adc_buf[i] > vmax) vmax = g_adc_buf[i];
+        }
+        uint16_t avg = (uint16_t)(sum / BUF_SIZE);
+
+        USART_Print("Avg=");
+        USART_PrintNum(avg);
+        USART_Print(" Min=");
+        USART_PrintNum(vmin);
+        USART_Print(" Max=");
+        USART_PrintNum(vmax);
+
+        float v = ADC_ToVoltage(avg, 3.3f);
+        USART_Print(" (");
+        USART_PrintNum((int32_t)(v * 1000));
+        USART_Print("mV)\r\n");
+
+        Delay_Ms(500);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>DMA_ADC_Init(ch, buf, n)</code> ผูก DMA กับ ADC — เมื่อ <code>ADC_StartContinuous()</code> เริ่ม sampling ต่อเนื่อง DMA จะย้ายข้อมูลจาก ADC data register ไป buffer อัตโนมัติ — DMA_CH1 ผูกกับ ADC ตาม channel mapping — ใช้ callback <code>dma_adc_done</code> แจ้งเมื่อครบ 128 samples — CPU ประมวลผลได้ระหว่างรอ (blink LED) — double-buffering: ใช้ 2 buffer สลับกัน — buffer 1 กำลังรับข้อมูล → buffer 2 ถูกประมวลผล — ลด lag — สถิติ min/max/avg ใช้ตรวจสอบ noise หรือ glitch</div>
+</div>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch09_dma.html">กลับบทที่ 9</a>
+    <a href="ch10_answers.html">เฉลยบทที่ 10 →</a>
+</nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

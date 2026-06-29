@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>เฉลย บทที่ 3 — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+<style>.answer{margin:1.5rem 0;padding:1.2rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0}.approach{background:var(--note-bg);padding:1rem;border-radius:var(--radius);margin:0.8rem 0;border-left:4px solid var(--accent)}</style>
+</head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch03_delay_timer.html">กลับบทที่ 3</a>
+</nav>
+<h1>📝 เฉลย — บทที่ 3: Delay & Timer</h1>
+
+<div class="answer">
+<h2>ข้อ 1: นาฬิกาจับเวลาแบบ non-blocking แสดงผลผ่าน USART ทุก 1 วิ</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    pinMode(PC0, PIN_MODE_OUTPUT);
+
+    Timer_t tmr_sec;
+    Start_Timer(&tmr_sec, 1000, 1);  // repeat ทุก 1 วิ
+    uint32_t seconds = 0;
+
+    while (1) {
+        if (Is_Timer_Expired(&tmr_sec)) {
+            seconds++;
+            USART_Print("[");
+            USART_PrintNum(seconds);
+            USART_Print("s]\r\n");
+        }
+
+        // LED กระพริบ 200ms — พิสูจน์ว่า main loop ไม่เคยหยุด
+        static uint32_t last_toggle = 0;
+        uint32_t now = Get_CurrentMs();
+        if (ELAPSED_TIME(last_toggle, now) >= 200) {
+            last_toggle = now;
+            digitalToggle(PC0);
+        }
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ใช้ <code>Timer_t</code> แบบ repeat=1 หมดอัตโนมัติทุก 1 วิ — <code>Is_Timer_Expired()</code> ตรวจสอบโดยไม่หยุดรอ — LED กระพริบ 200ms ใช้ <code>ELAPSED_TIME()</code> macro (overflow-safe) พิสูจน์ว่า non-blocking ทำหลายงานพร้อมกันได้ — ต่างจาก <code>Delay_Ms()</code> ที่หยุดทุกอย่าง</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: Countdown 30 วิ พร้อม Buzzer เมื่อหมดเวลา</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+#define BUZZER  PC0
+#define LED     PC1
+
+void buzzer_beep(uint16_t ms) {
+    digitalWrite(BUZZER, HIGH);
+    Delay_Ms(ms);
+    digitalWrite(BUZZER, LOW);
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+
+    pinMode(BUZZER, PIN_MODE_OUTPUT);
+    pinMode(LED, PIN_MODE_OUTPUT);
+
+    Timer_t tmr_countdown, tmr_led;
+    Start_Timer(&tmr_countdown, 1000, 1);
+    Start_Timer(&tmr_led, 250, 1);
+
+    int32_t count = 30;
+
+    USART_Print("Countdown Start!\r\n");
+
+    while (1) {
+        if (count > 0 && Is_Timer_Expired(&tmr_countdown)) {
+            count--;
+            USART_Print("Remaining: ");
+            USART_PrintNum(count);
+            USART_Print("s\r\n");
+        }
+
+        if (count == 0) {
+            Stop_Timer(&tmr_countdown);
+            Stop_Timer(&tmr_led);
+
+            // Buzzer ดัง 3 ครั้ง + LED ติดค้าง
+            for (int i = 0; i < 3; i++) {
+                buzzer_beep(200);
+                Delay_Ms(100);
+            }
+            digitalWrite(LED, HIGH);
+            USART_Print("TIME'S UP!\r\n");
+
+            while (1);  // หยุด loop
+        }
+
+        // LED กระพริบระหว่างนับถอยหลัง
+        if (Is_Timer_Expired(&tmr_led)) {
+            digitalToggle(LED);
+        }
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ใช้ <code>Timer_t</code> นับถอยหลังทีละวิ — <code>Stop_Timer()</code> หยุดทั้ง countdown และ LED เมื่อหมดเวลา — Buzzer เป็น active buzzer (มี oscillator ในตัว) แค่จ่าย HIGH ก็ดัง — ใช้ <code>for</code> loop สร้างเสียง 3 ครั้ง — หลังจากนั้น <code>while(1);</code> หยุดโปรแกรม</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: ใช้ Timer_t สร้าง LED 3 ดวงกระพริบที่ความถี่ต่างกัน</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    uint8_t leds[] = {PC0, PC1, PC2};
+    pinModeMultiple(leds, PIN_MODE_OUTPUT);
+
+    Timer_t tmr[3];
+    Start_Timer(&tmr[0], 100, 1);   // 5Hz
+    Start_Timer(&tmr[1], 300, 1);   // ~1.67Hz
+    Start_Timer(&tmr[2], 700, 1);   // ~0.7Hz
+
+    while (1) {
+        for (int i = 0; i < 3; i++) {
+            if (Is_Timer_Expired(&tmr[i])) {
+                digitalToggle(leds[i]);
+            }
+        }
+        // Main loop วนอิสระ — ไม่มี Delay_Ms เลย!
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>Timer_t</code> แต่ละตัวทำงานอิสระ — <code>Start_Timer()</code> ตั้งเวลา + repeat=1 ให้วนซ้ำ — array <code>tmr[3]</code> จับคู่กับ <code>leds[3]</code> — main loop วนตรวจสอบทั้ง 3 timer โดยไม่มี <code>Delay_Ms()</code> เลย CPU ไม่เคยหยุดรอ — ถ้าใช้ <code>Delay_Ms()</code> แต่ละดวงจะแย่งเวลากัน</div>
+</div>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch03_delay_timer.html">กลับบทที่ 3</a>
+    <a href="ch04_answers.html">เฉลยบทที่ 4 →</a>
+</nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

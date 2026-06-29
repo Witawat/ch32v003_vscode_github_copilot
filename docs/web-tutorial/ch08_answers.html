@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>เฉลย บทที่ 8 — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+<style>.answer{margin:1.5rem 0;padding:1.2rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0}.approach{background:var(--note-bg);padding:1rem;border-radius:var(--radius);margin:0.8rem 0;border-left:4px solid var(--accent)}</style>
+</head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch08_spi.html">กลับบทที่ 8</a>
+</nav>
+<h1>📝 เฉลย — บทที่ 8: SPI</h1>
+
+<div class="answer">
+<h2>ข้อ 1: อ่าน JEDEC ID จาก W25Q Flash</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+#define CS_FLASH  PC4
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    SPI_SimpleInit(SPI_MODE0, SPI_1MHZ, SPI_PINS_DEFAULT);
+
+    pinMode(CS_FLASH, PIN_MODE_OUTPUT);
+    digitalWrite(CS_FLASH, HIGH);  // CS inactive
+    SPI_SetCSPin(GPIOC, GPIO_Pin_4);
+
+    while (1) {
+        // Send JEDEC ID command (0x9F)
+        digitalWrite(CS_FLASH, LOW);
+        SPI_Transfer(0x9F);
+        uint8_t mfg = SPI_Transfer(0x00);  // Manufacturer ID
+        uint8_t mem = SPI_Transfer(0x00);  // Memory Type
+        uint8_t cap = SPI_Transfer(0x00);  // Capacity
+        digitalWrite(CS_FLASH, HIGH);
+
+        USART_Print("JEDEC ID: ");
+        USART_PrintHex(mfg, 1);
+        USART_Print(" ");
+        USART_PrintHex(mem, 1);
+        USART_Print(" ");
+        USART_PrintHex(cap, 1);
+
+        // W25Q32: EF 40 16 (Winbond, QSPI, 32Mbit)
+        USART_Print("\r\n");
+
+        Delay_Ms(2000);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> W25Qxx ใช้ SPI Mode 0 — เริ่มด้วย CS LOW เพื่อเลือก Flash — ส่ง command <code>0x9F</code> (Read JEDEC ID) — ต่อด้วย dummy byte <code>0x00</code> 3 ครั้งเพื่อสร้าง clock ให้รับข้อมูลกลับ — CS HIGH เพื่อปล่อย bus — JEDEC ID 3 bytes: [Manufacturer] [Memory Type] [Capacity] — W25Q32 = EF 40 16, W25Q64 = EF 40 17</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: เปลี่ยน SPI speed แบบ runtime</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+#define CS_FLASH  PC4
+
+void read_jedec(void) {
+    digitalWrite(CS_FLASH, LOW);
+    SPI_Transfer(0x9F);
+    uint8_t id[3];
+    id[0] = SPI_Transfer(0x00);
+    id[1] = SPI_Transfer(0x00);
+    id[2] = SPI_Transfer(0x00);
+    digitalWrite(CS_FLASH, HIGH);
+
+    USART_Print("ID: ");
+    USART_PrintHex(id[0], 1); USART_Print(" ");
+    USART_PrintHex(id[1], 1); USART_Print(" ");
+    USART_PrintHex(id[2], 1); USART_Print("\r\n");
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    SPI_SimpleInit(SPI_MODE0, SPI_1MHZ, SPI_PINS_DEFAULT);
+
+    pinMode(CS_FLASH, PIN_MODE_OUTPUT);
+    digitalWrite(CS_FLASH, HIGH);
+    SPI_SetCSPin(GPIOC, GPIO_Pin_4);
+
+    // ทดสอบที่ 1MHz
+    USART_Print("Speed: 1MHz\r\n");
+    read_jedec();
+    Delay_Ms(500);
+
+    // เปลี่ยนเป็น 500kHz
+    SPI_SetSpeed(SPI_500KHZ);
+    USART_Print("Speed: 500kHz\r\n");
+    read_jedec();
+    Delay_Ms(500);
+
+    // เปลี่ยนเป็น 8MHz
+    SPI_SetSpeed(SPI_8MHZ);
+    USART_Print("Speed: 8MHz\r\n");
+    read_jedec();
+    Delay_Ms(500);
+
+    USART_Print("Done — all speeds OK!\r\n");
+    while (1);
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>SPI_SetSpeed(speed)</code> เปลี่ยนความเร็ว SPI ได้ทันทีที่ runtime — ไม่ต้อง re-init — speed constants: <code>SPI_500KHZ</code>, <code>SPI_1MHZ</code>, <code>SPI_2MHZ</code>, <code>SPI_4MHZ</code>, <code>SPI_8MHZ</code> — W25Qxx รองรับสูงสุด ~50MHz — ข้อควรระวัง: ความเร็วสูงมากอาจมีปัญหา noise หากสายยาวหรือ breadboard — 8MHz ควรใช้ PCB ที่มี layout ดี</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: ใช้ SOP-8 — เปลี่ยนไปใช้ shiftOut แทน SPI HW</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_SOP8
+#include "SimpleHAL.h"
+
+#define DATA_PIN   PC1    // DS (SER)
+#define CLOCK_PIN  PC2    // SHCP (SRCLK)
+#define LATCH_PIN  PC4    // STCP (RCLK)
+
+void hc595_write(uint8_t data) {
+    digitalWrite(LATCH_PIN, LOW);
+    shiftOut(DATA_PIN, CLOCK_PIN, MSBFIRST, data);
+    digitalWrite(LATCH_PIN, HIGH);
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    pinMode(DATA_PIN, PIN_MODE_OUTPUT);
+    pinMode(CLOCK_PIN, PIN_MODE_OUTPUT);
+    pinMode(LATCH_PIN, PIN_MODE_OUTPUT);
+
+    uint8_t pattern = 0x01;
+
+    while (1) {
+        hc595_write(pattern);   // แสดง LED
+        hc595_write(~pattern);  // ตรงข้าม
+
+        // Knight Rider 8-bit
+        pattern = (pattern << 1);
+        if (pattern == 0) pattern = 0x01;
+
+        Delay_Ms(100);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> SOP-8/SOP-16 ไม่มี Hardware SPI (ไม่มี PC5/PC6/PC7) — ใช้ <code>shiftOut()</code> แบบ software bit-bang แทน — 74HC595 เป็น shift register 8-bit — 3 pins control: DATA (serial in), CLOCK (shift), LATCH (output) — <code>shiftOut(DATA_PIN, CLOCK_PIN, MSBFIRST, data)</code> ส่ง 8 bits ทีละ bit — LATCH ใช้ pulse เพื่ออัปเดต output — ช้ากว่า HW SPI แต่ยืดหยุ่น ใช้ pin ไหนก็ได้ — สำหรับ W25Q Flash: SOP-8 ใช้ <code>shiftOut()</code> + <code>shiftIn()</code> ได้เช่นกัน</div>
+</div>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch08_spi.html">กลับบทที่ 8</a>
+    <a href="ch09_answers.html">เฉลยบทที่ 9 →</a>
+</nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

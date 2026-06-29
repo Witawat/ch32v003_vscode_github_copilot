@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>เฉลย บทที่ 7 — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+<style>.answer{margin:1.5rem 0;padding:1.2rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0}.approach{background:var(--note-bg);padding:1rem;border-radius:var(--radius);margin:0.8rem 0;border-left:4px solid var(--accent)}</style>
+</head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch07_i2c.html">กลับบทที่ 7</a>
+</nav>
+<h1>📝 เฉลย — บทที่ 7: I2C</h1>
+
+<div class="answer">
+<h2>ข้อ 1: สแกน I2C bus แสดง address ทั้งหมด</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    I2C_SimpleInit(I2C_100KHZ, I2C_PINS_DEFAULT);
+
+    USART_Print("=== I2C Scanner ===\r\n");
+
+    uint8_t found = 0;
+
+    for (uint8_t addr = 1; addr < 128; addr++) {
+        if (I2C_IsDeviceReady(addr)) {
+            USART_Print("Device at 0x");
+            USART_PrintHex(addr, 1);
+            USART_Print("\r\n");
+            found++;
+        }
+    }
+
+    USART_Print("Total devices: ");
+    USART_PrintNum(found);
+    USART_Print("\r\n=== Done ===\r\n");
+
+    while (1);
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>I2C_IsDeviceReady(addr)</code> ส่ง START + address + ตรวจสอบ ACK — ถ้ามีอุปกรณ์ต่ออยู่จะตอบ ACK — address I2C อยู่ในช่วง 0x03-0x77 (1-127) — address 0x00-0x02 เป็น reserved — <strong>ต้องต่อ Pull-up 4.7kΩ ที่ SDA/SCL!</strong> — อุปกรณ์บางตัวมีหลาย address (เช่น BH1750: 0x23 หรือ 0x5C แล้วแต่ ADDR pin)</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: อ่านค่าแสง BH1750</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+#define BH1750_ADDR  0x23   // ADDR pin LOW = 0x23
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    I2C_SimpleInit(I2C_100KHZ, I2C_PINS_DEFAULT);
+
+    // เช็คว่า BH1750 ต่ออยู่
+    if (!I2C_IsDeviceReady(BH1750_ADDR)) {
+        USART_Print("BH1750 not found!\r\n");
+        while (1);
+    }
+
+    // ตั้งโหมด Continuous High-Res (1 lux resolution)
+    I2C_WriteReg(BH1750_ADDR, 0x10, 0x00);
+    USART_Print("BH1750 Ready\r\n");
+
+    while (1) {
+        Delay_Ms(180);  // รอ measurement time
+
+        uint8_t buf[2];
+        I2C_Status st = I2C_ReadRegMulti(BH1750_ADDR, 0x00, buf, 2);
+
+        if (st == I2C_OK) {
+            uint16_t raw = ((uint16_t)buf[0] << 8) | buf[1];
+            uint16_t lux = raw / 1.2;  // High-Res mode
+
+            USART_Print("Light: ");
+            USART_PrintNum(lux);
+            USART_Print(" lux\r\n");
+        } else {
+            USART_Print("I2C Error!\r\n");
+        }
+
+        Delay_Ms(500);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> BH1750 = เซ็นเซอร์วัดแสง I2C — <code>I2C_WriteReg(0x23, 0x10, 0x00)</code> สั่ง Continuous High-Res Mode — รอ 180ms ให้วัดเสร็จ — <code>I2C_ReadRegMulti()</code> อ่าน 2 bytes — รวมเป็น 16-bit แล้วหาร 1.2 เป็น lux — เช็ค <code>I2C_Status</code> ทุกครั้ง — address เปลี่ยนได้ตาม ADDR pin (0x23 หรือ 0x5C)</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: เปลี่ยนไปใช้ I2C_PINS_PARTIAL_REMAP (PD2/PD1)</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+
+    // PARTIAL_REMAP: SCL=PD2, SDA=PD1
+    // SOP-8 compatible — ไม่มี PC1/PC2!
+    I2C_SimpleInit(I2C_100KHZ, I2C_PINS_PARTIAL_REMAP);
+
+    USART_Print("I2C Scanner (REMAP: PD2/PD1)\r\n");
+
+    uint8_t found = 0;
+
+    for (uint8_t addr = 1; addr < 128; addr++) {
+        if (I2C_IsDeviceReady(addr)) {
+            USART_Print("Found: 0x");
+            USART_PrintHex(addr, 1);
+            USART_Print("\r\n");
+            found++;
+        }
+    }
+
+    if (found == 0) {
+        USART_Print("No devices found.\r\n");
+        USART_Print("Check pull-up and wiring!\r\n");
+    }
+
+    USART_Print("Done.\r\n");
+    while (1);
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>I2C_PINS_PARTIAL_REMAP</code> เปลี่ยน SCL=PD2, SDA=PD1 — จำเป็นสำหรับ SOP-8 (ไม่มี PC1/PC2) — SOP-8 มี PA1,PA2,PC1,PC2,PC4,PD6 — PD1/PD2 อยู่บน SOP-8 — DEFAULT (PC1/PC2) ก็ใช้ได้บน SOP-8 — <code>I2C_PINS_FULL_REMAP</code> (PD0/PD1) ใช้ได้เฉพาะ TSSOP-20/QFN-20 เพราะ PD0 ไม่มีใน SOP-8/16</div>
+</div>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch07_i2c.html">กลับบทที่ 7</a>
+    <a href="ch08_answers.html">เฉลยบทที่ 8 →</a>
+</nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

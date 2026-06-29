@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>เฉลย บทที่ 6 — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+<style>.answer{margin:1.5rem 0;padding:1.2rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0}.approach{background:var(--note-bg);padding:1rem;border-radius:var(--radius);margin:0.8rem 0;border-left:4px solid var(--accent)}</style>
+</head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch06_adc.html">กลับบทที่ 6</a>
+</nav>
+<h1>📝 เฉลย — บทที่ 6: ADC</h1>
+
+<div class="answer">
+<h2>ข้อ 1: อ่าน potentiometer + แสดงผลเป็น mV ด้วย analogReadMilliVolts</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    ADC_SimpleInit();
+
+    while (1) {
+        // Arduino-style: อ่านค่า ADC เป็น mV โดยตรง
+        float vdd = ADC_GetVDD();
+        uint16_t raw = analogRead(PD2);
+        uint16_t mv = (uint32_t)raw * (uint32_t)(vdd * 1000) / 1023;
+
+        USART_Print("ADC: ");
+        USART_PrintNum(raw);
+        USART_Print(" (");
+        USART_PrintNum(mv);
+        USART_Print("mV) VDD=");
+        USART_PrintNum((uint16_t)(vdd * 1000));
+        USART_Print("mV\r\n");
+
+        Delay_Ms(500);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>analogRead(PD2)</code> อ่านค่า ADC (0-1023) — <code>ADC_GetVDD()</code> ใช้ internal 1.2V reference คำนวณ VDD จริง — แปลงเป็น mV ด้วย <code>raw * (vdd*1000) / 1023</code> แบบ integer (เร็วกว่า float) — VDD จริงอาจเป็น 3.2V หรือ 3.4V ไม่ใช่ 3.3V เสมอ — การใช้ VDD จริงทำให้ค่า mV แม่นยำกว่า</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: วัดอุณหภูมิ NTC + แสดง °C</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include &lt;math.h&gt;
+
+#define NTC_RFIX  10000.0f   // R คงที่ 10kΩ
+#define NTC_R25   10000.0f   // R NTC ที่ 25°C
+#define NTC_B     3950.0f    // B-constant
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    ADC_SimpleInit();
+
+    while (1) {
+        float vdd = ADC_GetVDD();
+
+        uint16_t adc = ADC_ReadAverage(ADC_CH_PD3, 10);
+        float v_ntc = ADC_ToVoltage(adc, vdd);
+
+        // คำนวณ R NTC จาก voltage divider
+        float r_ntc = NTC_RFIX * v_ntc / (vdd - v_ntc);
+
+        // Steinhart-Hart (B-parameter equation)
+        float temp_k = 1.0f / (1.0f/298.15f + logf(r_ntc/NTC_R25)/NTC_B);
+        float temp_c = temp_k - 273.15f;
+
+        USART_Print("NTC: ");
+        USART_PrintNum(adc);
+        USART_Print(" -> ");
+        USART_PrintNum((int32_t)(temp_c * 10));
+        USART_Print(" (x0.1C)\r\n");
+
+        Delay_Ms(1000);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> NTC = ตัวต้านทานที่ค่าเปลี่ยนตามอุณหภูมิ — วงจร voltage divider: 3.3V → R_fix → ADC_pin → NTC → GND — อุณหภูมิสูง → R_NTC ลด → แรงดันที่ ADC ลด — สูตร Steinhart-Hart ใช้ B-constant 3950 (ค่าทั่วไป) — <code>ADC_ReadAverage(n, 10)</code> ลด noise — ใช้ <code>logf()</code> จาก <code>math.h</code></div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: ใช้ ADC_ReadAverage ลด noise 16 samples</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    ADC_SimpleInit();
+
+    while (1) {
+        // 16 samples — noise ต่ำกว่าแต่ช้าลง (16x)
+        uint16_t avg = ADC_ReadAverage(ADC_CH_PD2, 16);
+        uint16_t mv = (uint32_t)avg * 3300 / 1023;
+
+        // เทียบกับค่าเดียว (อ่าน 1 ครั้ง)
+        uint16_t single = ADC_Read(ADC_CH_PD2);
+        uint16_t mv_single = (uint32_t)single * 3300 / 1023;
+
+        USART_Print("Single: ");
+        USART_PrintNum(mv_single);
+        USART_Print("mV | Avg16: ");
+        USART_PrintNum(mv);
+        USART_Print("mV\r\n");
+
+        Delay_Ms(500);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>ADC_ReadAverage(ch, 16)</code> อ่าน 16 ครั้งแล้วหาค่าเฉลี่ย — ยิ่ง samples มาก noise ยิ่งต่ำ (standard deviation ลดลง √N เท่า) — แต่ใช้เวลานานขึ้น (16 ครั้ง × ~3.5μs/ครั้ง ≈ 56μs) — แสดงทั้งค่าเดียวและค่าเฉลี่ยเทียบกัน — ค่าเฉลี่ยจะนิ่งกว่าเห็นชัด</div>
+</div>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch06_adc.html">กลับบทที่ 6</a>
+    <a href="ch07_answers.html">เฉลยบทที่ 7 →</a>
+</nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

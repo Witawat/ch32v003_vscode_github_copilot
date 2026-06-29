@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>เฉลย บทที่ 1 — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+<style>.answer{margin:1.5rem 0;padding:1.2rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0}.approach{background:var(--note-bg);padding:1rem;border-radius:var(--radius);margin:0.8rem 0;border-left:4px solid var(--accent)}</style>
+</head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch01_getting_started.html">กลับบทที่ 1</a>
+</nav>
+
+<h1>📝 เฉลย — บทที่ 1: เริ่มต้นอย่างถูกต้อง</h1>
+
+<div class="answer">
+<h2>ข้อ 1: แก้ไขให้ LED กระพริบถี่ขึ้น (100ms)</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    pinMode(PC0, PIN_MODE_OUTPUT);
+
+    while (1) {
+        digitalToggle(PC0);
+        Delay_Ms(100);  // เปลี่ยนจาก 500 → 100ms
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> แค่เปลี่ยนตัวเลขใน <code>Delay_Ms()</code> — ค่าน้อย = กระพริบเร็ว ค่ามาก = กระพริบช้า <code>digitalToggle</code> สลับสถานะ HIGH↔LOW อัตโนมัติ</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: เพิ่ม LED 2 ดวงบน PC0 และ PC1 กระพริบสลับกัน</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    pinMode(PC0, PIN_MODE_OUTPUT);
+    pinMode(PC1, PIN_MODE_OUTPUT);
+
+    while (1) {
+        digitalWrite(PC0, HIGH);
+        digitalWrite(PC1, LOW);
+        Delay_Ms(300);
+
+        digitalWrite(PC0, LOW);
+        digitalWrite(PC1, HIGH);
+        Delay_Ms(300);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ใช้ <code>digitalWrite</code> ควบคุมแต่ละ pin แยกกัน — เมื่อ PC0=HIGH ก็ตั้ง PC1=LOW (สลับกัน) วงจร: LED แต่ละดวงต่อกับขาของตัวเอง ผ่าน R 220Ω ลง GND</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: เปลี่ยนไปใช้ PACKAGE_SOP8 — โค้ดยังทำงานไหม?</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_SOP8   // เปลี่ยนแค่บรรทัดนี้!
+#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    // SOP-8 มี PC1, PC2 — PC0 ไม่มี! ต้องเปลี่ยน pin
+    pinMode(PC2, PIN_MODE_OUTPUT);  // PC2 มีบน SOP-8 (Pin 6)
+
+    while (1) {
+        digitalToggle(PC2);
+        Delay_Ms(500);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> SOP-8 มี 6 pins: PA1,PA2,PC1,PC2,PC4,PD6 — PC0 ไม่มี! ต้องเปลี่ยนเป็น pin ที่มีอยู่ ใช้ <code>IS_VALID_PIN(pin)</code> ตรวจสอบก่อน หรือดูตาราง pinout ในบทที่ 17</div>
+</div>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch01_getting_started.html">กลับบทที่ 1</a>
+    <a href="ch02_answers.html">เฉลยบทที่ 2 →</a>
+</nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

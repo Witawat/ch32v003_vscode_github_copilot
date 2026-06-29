@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>เฉลย บทที่ 4 — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+<style>.answer{margin:1.5rem 0;padding:1.2rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0}.approach{background:var(--note-bg);padding:1rem;border-radius:var(--radius);margin:0.8rem 0;border-left:4px solid var(--accent)}</style>
+</head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch04_usart.html">กลับบทที่ 4</a>
+</nav>
+<h1>📝 เฉลย — บทที่ 4: USART</h1>
+
+<div class="answer">
+<h2>ข้อ 1: รับคำสั่ง "LED1=ON", "LED1=OFF" ทาง Serial</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include &lt;string.h&gt;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    pinMode(PC0, PIN_MODE_OUTPUT);  // LED1
+
+    USART_Print("Ready. Commands: LED1=ON, LED1=OFF\r\n");
+
+    char buf[32];
+    uint8_t idx = 0;
+
+    while (1) {
+        if (USART_Available()) {
+            char ch = USART_Read();
+            if (ch == '\r' || ch == '\n') {
+                if (idx > 0) {
+                    buf[idx] = '\0';
+                    idx = 0;
+
+                    if (strcmp(buf, "LED1=ON") == 0) {
+                        digitalWrite(PC0, HIGH);
+                        USART_Print("LED1: ON\r\n");
+                    } else if (strcmp(buf, "LED1=OFF") == 0) {
+                        digitalWrite(PC0, LOW);
+                        USART_Print("LED1: OFF\r\n");
+                    } else {
+                        USART_Print("Unknown: ");
+                        USART_Print(buf);
+                        USART_Print("\r\n");
+                    }
+                }
+            } else if (idx < sizeof(buf) - 1) {
+                buf[idx++] = ch;
+            }
+        }
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> รับอักขระทีละตัว สะสมใน buffer <code>buf[]</code> — เมื่อเจอ <code>\r</code> หรือ <code>\n</code> แสดงว่าจบคำสั่ง — ใช้ <code>strcmp()</code> เปรียบเทียบ string แบบ case-sensitive — <code>LED1=ON</code> → HIGH, <code>LED1=OFF</code> → LOW — รวม <code>string.h</code> เพื่อใช้ <code>strcmp()</code></div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: ส่งค่า ADC แบบ real-time ทุก 100ms</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    ADC_SimpleInit();
+
+    Timer_t tmr_adc;
+    Start_Timer(&tmr_adc, 100, 1);  // ทุก 100ms
+
+    while (1) {
+        if (Is_Timer_Expired(&tmr_adc)) {
+            uint16_t adc = ADC_Read(ADC_CH_PD2);
+            uint16_t mv = (uint32_t)adc * 3300 / 1023;
+
+            USART_Print("ADC: ");
+            USART_PrintNum(adc);
+            USART_Print(" (");
+            USART_PrintNum(mv);
+            USART_Print("mV)\r\n");
+        }
+
+        // ทำงานอื่นใน main loop ได้ — ไม่หยุดรอ
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ใช้ <code>Timer_t</code> แบบ non-blocking หมดทุก 100ms — ไม่ใช้ <code>Delay_Ms()</code> เพราะจะหยุดโปรแกรม — แปลง ADC (0-1023) เป็น mV ด้วย <code>adc*3300/1023</code> (integer math เร็วกว่า float) — main loop ยังว่างทำอย่างอื่นได้</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: เปลี่ยนไปใช้ USART_PINS_REMAP2 แล้วส่งข้อมูล</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    // REMAP2: TX=PD6, RX=PD5 (ตรงข้ามกับ DEFAULT)
+    USART_SimpleInit(BAUD_115200, USART_PINS_REMAP2);
+
+    USART_Print("USART REMAP2 Active!\r\n");
+    USART_Print("TX=PD6, RX=PD5\r\n");
+
+    uint32_t counter = 0;
+
+    while (1) {
+        USART_Print("Count: ");
+        USART_PrintNum(counter++);
+        USART_Print("\r\n");
+
+        Delay_Ms(1000);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> แค่เปลี่ยน <code>USART_PINS_DEFAULT</code> → <code>USART_PINS_REMAP2</code> — TX/RX สลับกัน (TX=PD6, RX=PD5 แทน TX=PD5, RX=PD6) — มีประโยชน์เมื่อต้องการ cross-connect โดยไม่ต้องสลับสาย hardware — REMAP1 (TX=PD0, RX=PD1) มีเฉพาะ TSSOP-20/QFN-20 — REMAP2 ใช้ได้ทุกแพ็กเกจรวมถึง SOP-8</div>
+</div>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch04_usart.html">กลับบทที่ 4</a>
+    <a href="ch05_answers.html">เฉลยบทที่ 5 →</a>
+</nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

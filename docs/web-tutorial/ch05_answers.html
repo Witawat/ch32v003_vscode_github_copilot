@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>เฉลย บทที่ 5 — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+<style>.answer{margin:1.5rem 0;padding:1.2rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0}.approach{background:var(--note-bg);padding:1rem;border-radius:var(--radius);margin:0.8rem 0;border-left:4px solid var(--accent)}</style>
+</head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch05_pwm.html">กลับบทที่ 5</a>
+</nav>
+<h1>📝 เฉลย — บทที่ 5: PWM</h1>
+
+<div class="answer">
+<h2>ข้อ 1: LED Fade 2 ดวงสลับทิศทาง</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    // LED1 = PD2 (PWM1_CH1), LED2 = PA1 (PWM1_CH2)
+    PWM_Init(PWM1_CH1, 1000);  // 1kHz
+    PWM_Init(PWM1_CH2, 1000);
+
+    int duty1 = 0, duty2 = 100;
+
+    while (1) {
+        PWM_SetDutyCycle(PWM1_CH1, duty1);   // ดวง1: 0→100
+        PWM_SetDutyCycle(PWM1_CH2, duty2);   // ดวง2: 100→0 (สลับทิศ)
+
+        Delay_Ms(15);
+
+        duty1++;
+        duty2--;
+
+        if (duty1 > 100) { duty1 = 0; duty2 = 100; }
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> LED 2 ดวงใช้ PWM คนละ channel — <code>PWM1_CH1</code> (PD2) เพิ่ม duty จาก 0→100 ส่วน <code>PWM1_CH2</code> (PA1) ลดจาก 100→0 — พร้อมกันในทิศตรงข้าม — เมื่อ duty1 ถึง 100 ทั้งคู่รีเซ็ตกลับจุดเริ่ม — delay 15ms × 100 steps = 1.5 วิต่อรอบ</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: Servo กวาด 0-180° วนลูป</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    // Servo = PD2 (PWM1_CH1) @50Hz
+    PWM_Init(PWM1_CH1, 50);
+
+    int angle = 0, dir = 1;
+
+    while (1) {
+        // แปลง 0-180° → duty 5%-10% @50Hz
+        uint8_t duty = (uint8_t)(5 + (angle * 5 / 180));
+        PWM_SetDutyCycle(PWM1_CH1, duty);
+
+        Delay_Ms(20);
+
+        angle += dir;
+        if (angle >= 180) dir = -1;
+        if (angle <= 0)   dir = 1;
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> Servo ใช้ PWM 50Hz — duty 5% (1ms) = 0°, 10% (2ms) = 180° — สูตร <code>5 + angle*5/180</code> map มุม 0-180° → duty 5-10% — delay 20ms × 180 steps = 3.6 วิต่อเที่ยว รวมขากลับ ~7.2 วิ — <strong>สำคัญ:</strong> ต้องใช้ไฟ 5V ภายนอกเลี้ยง Servo — GND ต่อรวมกับ MCU</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: ใช้ PWM_SetRemap เปลี่ยน pin PWM ไปขาอื่น</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    // PWM1_CH2 ปกติใช้ PA1 — remap ไป PC3 แทน
+    PWM_SetRemap(PWM1_CH2, PWM_PIN_PC3);
+    PWM_Init(PWM1_CH2, 1000);
+
+    int duty = 0, dir = 1;
+
+    while (1) {
+        PWM_SetDutyCycle(PWM1_CH2, duty);
+        Delay_Ms(10);
+        duty += dir;
+        if (duty >= 100) dir = -1;
+        if (duty <= 0)   dir = 1;
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>PWM_SetRemap(channel, alternate_pin)</code> เปลี่ยน mapping ก่อน <code>PWM_Init()</code> — PWM1_CH2 ปกติ = PA1 แต่ remap ไป PC3 ได้ — ตัวเลือก remap: <code>PWM_PIN_PD2</code>, <code>PWM_PIN_PA1</code>, <code>PWM_PIN_PC3</code>, <code>PWM_PIN_PC4</code> — การ remap มีประโยชน์เมื่อ pin เดิมถูกใช้โดยอุปกรณ์อื่นแล้ว</div>
+</div>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch05_pwm.html">กลับบทที่ 5</a>
+    <a href="ch06_answers.html">เฉลยบทที่ 6 →</a>
+</nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
