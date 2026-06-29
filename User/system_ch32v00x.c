@@ -11,18 +11,38 @@
 *******************************************************************************/
 #include <ch32v00x.h>
 
-/* 
-* Uncomment the line corresponding to the desired System clock (SYSCLK) frequency (after 
-* reset the HSI is used as SYSCLK source).
-* If none of the define below is enabled, the HSI is used as System clock source. 
-*/
+/*
+ * ตั้งค่าความถี่ระบบ — แก้ 2 บรรทัดนี้ก็พอ
+ *   CH32V003_SYSCLK_FREQ: 8, 24, หรือ 48 (MHz)
+ *   CH32V003_SYSCLK_SRC:  HSI หรือ HSE
+ * ============================================================ */
+#define CH32V003_SYSCLK_FREQ  48   /* MHz: 8, 24, 48 */
+#define CH32V003_SYSCLK_SRC   HSI  /* HSI หรือ HSE */
 
-//#define SYSCLK_FREQ_8MHz_HSI    8000000
-//#define SYSCLK_FREQ_24MHZ_HSI   HSI_VALUE
-#define SYSCLK_FREQ_48MHZ_HSI   48000000
-//#define SYSCLK_FREQ_8MHz_HSE    8000000
-//#define SYSCLK_FREQ_24MHz_HSE   HSE_VALUE
-// #define SYSCLK_FREQ_48MHz_HSE   48000000
+/* ========== อย่าแก้ไขด้านล่าง — auto-generate ========== */
+#if CH32V003_SYSCLK_SRC == HSI
+  #if   CH32V003_SYSCLK_FREQ == 8
+    #define SYSCLK_FREQ_8MHz_HSI    8000000
+  #elif CH32V003_SYSCLK_FREQ == 24
+    #define SYSCLK_FREQ_24MHZ_HSI   HSI_VALUE
+  #elif CH32V003_SYSCLK_FREQ == 48
+    #define SYSCLK_FREQ_48MHZ_HSI   48000000
+  #else
+    #error "Invalid CH32V003_SYSCLK_FREQ — use 8, 24, or 48"
+  #endif
+#elif CH32V003_SYSCLK_SRC == HSE
+  #if   CH32V003_SYSCLK_FREQ == 8
+    #define SYSCLK_FREQ_8MHz_HSE    8000000
+  #elif CH32V003_SYSCLK_FREQ == 24
+    #define SYSCLK_FREQ_24MHz_HSE   HSE_VALUE
+  #elif CH32V003_SYSCLK_FREQ == 48
+    #define SYSCLK_FREQ_48MHz_HSE   48000000
+  #else
+    #error "Invalid CH32V003_SYSCLK_FREQ — use 8, 24, or 48"
+  #endif
+#else
+  #error "Invalid CH32V003_SYSCLK_SRC — use HSI or HSE"
+#endif
 
 /* Clock Definitions */
 #ifdef SYSCLK_FREQ_8MHz_HSI
