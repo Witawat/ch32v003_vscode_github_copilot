@@ -238,6 +238,11 @@ void PWM_Init(PWM_Channel channel, uint32_t frequency_hz) {
 
 /**
  * @brief เริ่มต้น PWM พร้อม remap
+ * @warning ⚠️ EXPERIMENTAL: PARTIAL1/PARTIAL2 pin mappings use DEFAULT pins as fallback.
+ *          The remap hardware register is set correctly, but GPIO pins configured
+ *          may not match the actual remapped pins. Verify pin assignments with the
+ *          CH32V003 datasheet before using in production.
+ *          PWM_REMAP_NONE is safe and fully supported.
  */
 void PWM_InitRemap(PWM_Channel channel, uint32_t frequency_hz, PWM_Remap remap) {
     PWM_ChannelConfig_t* config = getChannelConfig(channel);

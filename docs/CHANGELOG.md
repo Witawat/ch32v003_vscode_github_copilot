@@ -1,3 +1,72 @@
+## [2026-06-29] - SimpleHAL v2.0 — Package-Aware + Remap Support + Production-Ready
+
+### เพิ่มเติม (Added)
+
+- **Package System (`CH32V003_PACKAGE`)**:
+  - `PACKAGE_SOP8/SOP16/TSSOP20/QFN20` — เลือกแพ็กเกจก่อน include
+  - `CH32V003_HAS_PD0/SPI_HW` — helper macros สำหรับ conditional compile
+  - `IS_VALID_PIN/IS_ADC_PIN/IS_PWM_PIN/IS_PWM_VALID_PACKAGE` — validation macros
+  - Default PACKAGE_TSSOP20 พร้อม `#warning` ถ้าไม่กำหนด
+
+- **Remap Support**:
+  - `USART_PINS_FULL_REMAP` — เพิ่ม USART Full Remap (GPIO_FullRemap_USART1)
+  - `I2C_PINS_PARTIAL_REMAP` — เพิ่ม I2C Partial Remap (GPIO_PartialRemap_I2C1)
+  - `PWM_SetRemap()` — ตั้งรีแมปล่วงหน้า ใช้ตอน PWM_Write/analogWrite auto-init
+  - `SPI_PINS_REMAP` — แก้บั๊ก ลืมเปิด GPIOD clock
+
+- **11 ไฟล์ตัวอย่างใหม่**:
+  - USART Remap, USART Package-Aware (04_USART)
+  - PWM Remap, PWM SOP8 Guard, PWM ADC Control (03_PWM)
+  - I2C Remap (05_I2C), SPI Remap (06_SPI)
+  - Error Handling (01_GPIO), Timer Resource Management (02_Delay)
+  - SOP-8 Maximized, Battery Data Logger (14_Integrated)
+
+- **15 README.md** — เอกสารประจำทุกโฟลเดอร์ Examples
+
+### ปรับปรุง (Improved)
+
+- **SimpleHAL.h**: `#include "SimpleI2C_Soft.h"` — รวม software I2C ใน header หลัก
+- **SimplePWM.h**: `IS_PWM_VALID_PACKAGE()` — SOP-8 ใช้ได้แค่ 2 channels
+- **analogRead/analogWrite**: `_Static_assert` compile-time check → ternary `?:` runtime fallback
+- **yield()**: เพิ่ม guard `arduino_SetIWDGActive()` — feed IWDG เฉพาะเมื่อเปิดใช้งาน
+- **SimpleOPAMP**: comment อธิบาย EXTEN controller ไม่ต้องใช้ RCC clock แยก
+
+### เอกสาร (Documentation)
+
+- อัปเดต 7 SimpleHAL module READMEs: PWM, USART, I2C, SPI, ADC, GPIO, PWR
+- เพิ่ม Package Configuration ใน main README
+- แก้ USART_Flush doc (ล้าง RX ไม่ใช่รอ TX)
+- แก้ PWM README parameter types (uint8_t → PWM_Channel)
+- แก้ SPI speed table + เพิ่ม Package Compatibility tables
+
+### แก้ไขบั๊ก (Bug Fixes)
+
+- **SimpleSPI.c**: SPI_PINS_REMAP — เพิ่ม GPIOD clock enable
+- **SimplePWM.c**: PWM_InitRemap — อัปเดต GPIO config หลัง GPIO_PinRemapConfig
+- **SimpleADC.c**: ADC_SimpleInit — กรอง channels ตามแพ็กเกจ
+- **SimplePWM.h**: ลบ PWM_REMAP_FULL (PE/PB ports ไม่มีใน CH32V003)
+- **SimpleGPIO.h**: analogRead/analogWrite — ternary `?:` แก้ RISC-V GCC `__builtin_choose_expr` static assert issue
+- **SimpleUSART.h/SimpleI2C.h/SimpleSPI.h**: เปลี่ยน `#error` → `#ifndef` enum entries (ไม่พังเมื่อ include SimpleHAL.h บนแพ็กเกจเล็ก)
+- **SimpleHAL.h**: ลบ dead macros `CH32V003_HAS_GPIOA/GPIOC_FULL/I2C_HW`
+
+### ตัวอย่างที่แก้ไข (Example Fixes)
+
+- ex01_NonBlocking_Timer — Delay_Ms → timer debounce, busy-wait → state machine
+- ex02_NonInverting_Amp — float → fixed-point integer (no FPU)
+- ex03_DMA_USART_Transmit — เพิ่ม timeout 5s ใน DMA polling
+- ex02_LED_Controller — เพิ่ม bounds check ป้องกัน buffer overflow
+- ex03_Interrupt_yield — IWDG_Init raw → IWDG_SimpleInit Arduino-style
+- ex05_Battery_Life_Estimation — static message → PWR_CalculateBatteryLife จริง
+- ex03_Data_Logger_Flash — hardcoded 0x08006000 → FLASH_DATA_ADDR
+- ex05_Sensor_Hub_DMA — SPI_SimpleInit ย้ายออกจากลูป while(1)
+
+### Build Verification
+
+- Main: Flash 1928 / 16384 bytes (11%), RAM 440 / 2048 bytes (21%)
+- Examples: 88/88 passed (build_all.bat)
+
+---
+
 ## [2026-05-04] - LCDMenu v1.0 — ระบบเมนูหลายระดับบน LCD1602/LCD2004 ควบคุมด้วย 4 ปุ่ม
 
 ### เพิ่มเติม (Added)

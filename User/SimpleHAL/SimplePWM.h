@@ -81,13 +81,15 @@ typedef enum {
 
 /**
  * @brief PWM Pin Remap options
- * @warning PWM_REMAP_FULL ใช้ไม่ได้บน CH32V003 (พอร์ท PE/PB ไม่มีจริง)
- *          ใช้เฉพาะ PWM_REMAP_PARTIAL1 / PWM_REMAP_PARTIAL2 เท่านั้น
+ * @warning PWM_REMAP_FULL ใช้ไม่ได้บน CH32V003 (พอร์ท PE/PB ไม่มีจริง) — ถูกลบแล้ว
+ * @warning ⚠️ EXPERIMENTAL: PWM_REMAP_PARTIAL1/PARTIAL2 — pin mappings ต้องตรวจสอบ
+ *          กับ CH32V003 datasheet ก่อนใช้งานจริง ตาราง lookup ใน SimplePWM.c ใช้
+ *          default pins เป็น fallback
  */
 typedef enum {
-    PWM_REMAP_NONE = 0,      /**< No remap (default pins) */
-    PWM_REMAP_PARTIAL1,      /**< Partial remap 1 */
-    PWM_REMAP_PARTIAL2       /**< Partial remap 2 */
+    PWM_REMAP_NONE = 0,      /**< No remap (default pins) — ปลอดภัย ใช้ได้จริง */
+    PWM_REMAP_PARTIAL1,      /**< Partial remap 1 ⚠️ EXPERIMENTAL */
+    PWM_REMAP_PARTIAL2       /**< Partial remap 2 ⚠️ EXPERIMENTAL */
 } PWM_Remap;
 
 /* ========== Package-Aware Validation ========== */

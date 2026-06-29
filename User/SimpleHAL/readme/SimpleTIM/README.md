@@ -95,6 +95,14 @@ uint16_t arr = TIM_GetPeriod(TIM_1);
 
 ### Advanced Init
 
+#### `void TIM_SetMode(TIM_Instance timer, TIM_Mode mode)`
+
+เปลี่ยน counting mode (UP/DOWN) โดยไม่ต้อง re-init
+
+```c
+TIM_SetMode(TIM_1, TIM_MODE_DOWN);  // เปลี่ยนเป็นนับลง
+```
+
 #### `void TIM_AdvancedInit(TIM_Instance timer, uint16_t prescaler, uint16_t period, TIM_Mode mode)`
 
 ตั้งค่า prescaler และ period เองโดยตรง
