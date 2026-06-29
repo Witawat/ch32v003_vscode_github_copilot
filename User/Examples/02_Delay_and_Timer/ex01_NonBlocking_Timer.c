@@ -40,8 +40,10 @@
 // === ตัวแปร Global ===
 
 static Timer_t led_timer;          // ตัวแปร timer สำหรับควบคุม LED
+static Timer_t debounce_timer;     // ตัวแปร timer สำหรับ debounce ปุ่ม (non-blocking)
 static uint8_t led_state = 0;      // สถานะ LED ปัจจุบัน (0=OFF, 1=ON)
 static uint8_t timer_running = 1;  // สถานะการทำงานของ timer (1=กำลังทำงาน)
+static uint8_t btn_pending = 0;    // flag: มีปุ่มกดรอประมวลผล
 
 /**
  * @brief ฟังก์ชันหลัก
@@ -76,28 +78,33 @@ int main(void)
 
     while (1)
     {
-        // === อ่านสถานะปุ่มกด ===
+        // === อ่านสถานะปุ่มกด (non-blocking debounce) ===
 
-        if (digitalRead(PC1) == LOW)    // ถ้ากดปุ่ม (active LOW)
-        {
-            Delay_Ms(50);               // หน่วง 50ms เพื่อ debounce
-            if (digitalRead(PC1) == LOW)  // เช็คซ้ำว่ากดจริง
-            {
-                if (timer_running)      // ถ้า timer กำลังทำงาน
-                {
-                    Stop_Timer(&led_timer);  // หยุด timer
-                    timer_running = 0;       // อัปเดตสถานะ
-                    digitalWrite(PC0, LOW);  // ปิด LED
-                    USART_Print("Timer Stopped\r\n");  // แจ้งเตือนผ่าน USART
+        if (digitalRead(PC1) == LOW) {  // ตรวจจับปุ่มถูกกด
+            if (!debounce_timer.active) {
+                Start_Timer(&debounce_timer, 50, 0);  // เริ่มนับ 50ms debounce
+            }
+            if (Is_Timer_Expired(&debounce_timer) && !btn_pending) {
+                btn_pending = 1;  // flag: รอปล่อยปุ่มก่อนประมวลผล
+            }
+        } else {
+            // ปุ่มถูกปล่อย → ประมวลผล (หลังจาก debounce 50ms ผ่านแล้ว)
+            if (btn_pending) {
+                btn_pending = 0;
+                if (timer_running) {
+                    Stop_Timer(&led_timer);
+                    timer_running = 0;
+                    digitalWrite(PC0, LOW);
+                    USART_Print("Timer Stopped\r\n");
+                } else {
+                    Start_Timer(&led_timer, 500, 1);
+                    timer_running = 1;
+                    USART_Print("Timer Started\r\n");
                 }
-                else                    // ถ้า timer หยุดอยู่
-                {
-                    Start_Timer(&led_timer, 500, 1);  // เริ่ม timer ใหม่
-                    timer_running = 1;       // อัปเดตสถานะ
-                    USART_Print("Timer Started\r\n");  // แจ้งเตือนผ่าน USART
-                }
-
-                while (digitalRead(PC1) == LOW);  // รอจนกว่าจะปล่อยปุ่ม
+            }
+            // รีเซ็ต debounce timer เมื่อปล่อยปุ่ม
+            if (debounce_timer.active) {
+                Stop_Timer(&debounce_timer);
             }
         }
 

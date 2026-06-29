@@ -150,6 +150,12 @@ long _randomRange(long min, long max);
  */
 void yield(void);
 
+/**
+ * @brief แจ้ง SimpleArduino ว่า IWDG ถูกเปิดแล้ว — yield() จะเรียก IWDG_Feed()
+ *        ถูกเรียกอัตโนมัติจาก SimpleIWDG ตอน init
+ */
+void arduino_SetIWDGActive(void);
+
 /* ========== dtostrf() — Float to String (Lightweight) ========== */
 
 /**

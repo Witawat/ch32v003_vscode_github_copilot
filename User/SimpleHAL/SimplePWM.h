@@ -58,6 +58,7 @@ extern "C" {
 
 #include <ch32v00x.h>
 #include <stdint.h>
+#include "SimpleHAL.h"
 
 /* ========== PWM Channel Definitions ========== */
 
@@ -80,13 +81,26 @@ typedef enum {
 
 /**
  * @brief PWM Pin Remap options
+ * @warning PWM_REMAP_FULL ใช้ไม่ได้บน CH32V003 (พอร์ท PE/PB ไม่มีจริง)
+ *          ใช้เฉพาะ PWM_REMAP_PARTIAL1 / PWM_REMAP_PARTIAL2 เท่านั้น
  */
 typedef enum {
     PWM_REMAP_NONE = 0,      /**< No remap (default pins) */
     PWM_REMAP_PARTIAL1,      /**< Partial remap 1 */
-    PWM_REMAP_PARTIAL2,      /**< Partial remap 2 */
-    PWM_REMAP_FULL           /**< Full remap */
+    PWM_REMAP_PARTIAL2       /**< Partial remap 2 */
 } PWM_Remap;
+
+/* ========== Package-Aware Validation ========== */
+
+/**
+ * @brief ตรวจสอบว่า PWM channel ใช้ได้กับแพ็กเกจปัจจุบัน
+ * SOP-8: ใช้ได้แค่ PWM1_CH1 (PD2) + PWM2_CH1 (PD4)
+ */
+#if CH32V003_IS_SOP8
+  #define IS_PWM_VALID_PACKAGE(ch)  ((ch) == PWM1_CH1 || (ch) == PWM2_CH1)
+#else
+  #define IS_PWM_VALID_PACKAGE(ch)  (1)
+#endif
 
 /* ========== Function Prototypes ========== */
 
@@ -183,11 +197,29 @@ void PWM_Stop(PWM_Channel channel);
  * 
  * @note 0 = 0%, 255 = 100%
  * @note ถ้า channel ยังไม่ได้ init จะ init อัตโนมัติที่ 1kHz
+ * @note ใช้รีแมปที่ตั้งไว้ล่วงหน้าผ่าน PWM_SetRemap()
  * 
  * @example
- * PWM_Write(PWM1_CH1, 128);  // 50% duty cycle
+ * PWM_SetRemap(PWM1_CH1, PWM_REMAP_PARTIAL1);
+ * PWM_Write(PWM1_CH1, 128);  // 50% duty cycle + PARTIAL1 remap
  */
 void PWM_Write(PWM_Channel channel, uint8_t value);
+
+/**
+ * @brief ตั้งค่ารีแมปล่วงหน้า ใช้ตอน PWM_Write() / analogWrite() auto-init
+ * @param channel PWM channel
+ * @param remap รีแมปที่ต้องการ
+ * 
+ * @note ต้องเรียกก่อน PWM_Write() หรือ analogWrite() ครั้งแรก
+ * @note รองรับการใช้ร่วมกับ analogWrite(): set remap บน PWM channel แล้วเรียก analogWrite(pin)
+ * 
+ * @example
+ * // วิธีง่าย — ตั้ง remap แล้ว analogWrite จัดการ auto-init เอง
+ * PWM_SetRemap(PWM1_CH1, PWM_REMAP_PARTIAL1);
+ * PWM_Write(PWM1_CH1, 128);     // หรือ
+ * analogWrite(PD2, 128);
+ */
+void PWM_SetRemap(PWM_Channel channel, PWM_Remap remap);
 
 /* ========== Advanced Functions ========== */
 

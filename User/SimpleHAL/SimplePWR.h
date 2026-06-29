@@ -266,7 +266,8 @@ void PWR_ClearStandbyFlag(void);
 
 /**
  * @brief  Enable wake-up pin (PA0)
- * @note   PA0 can wake the system from standby mode on rising edge
+ * @warning CH32V003 ทุกแพ็กเกจไม่มีขา PA0 — ฟังก์ชันนี้ไม่มีผลในทางปฏิบัติ
+ *          ใช้ PWR_ConfigureAWU() หรือ external interrupt แทน
  * @retval None
  * 
  * Example:

@@ -81,8 +81,25 @@ long _randomRange(long min, long max) {
 
 /* ========== yield() ========== */
 
+static uint8_t _iwdg_active = 0;  // set by SimpleIWDG when IWDG is enabled
+
+/**
+ * @brief ให้ CPU ทำงานพื้นหลัง (cooperative multitasking)
+ *        ถ้า IWDG ถูกเปิดใช้งาน → feed watchdog
+ *        ปลอดภัยที่จะเรียกแม้ไม่ได้เปิด IWDG
+ */
 void yield(void) {
-    IWDG_Feed();
+    if (_iwdg_active) {
+        IWDG_Feed();
+    }
+}
+
+/**
+ * @brief แจ้ง SimpleArduino ว่า IWDG ถูกเปิดใช้งานแล้ว
+ *        เรียกจาก SimpleIWDG.c ตอน IWDG_Init/IWDG_SimpleInit
+ */
+void arduino_SetIWDGActive(void) {
+    _iwdg_active = 1;
 }
 
 /* ========== dtostrf() — Lightweight Float-to-String ========== */

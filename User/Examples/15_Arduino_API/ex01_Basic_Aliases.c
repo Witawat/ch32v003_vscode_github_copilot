@@ -20,6 +20,7 @@
  * คำเตือน:
  * - ต้องเรียก SystemCoreClockUpdate() ก่อนใช้ millis/micros/delay
  */
+#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include <SimpleHAL.h>
 
 int main(void) {

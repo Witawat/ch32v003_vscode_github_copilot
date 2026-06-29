@@ -44,6 +44,7 @@ extern "C" {
 
 #include <ch32v00x_usart.h>
 #include <stdint.h>
+#include "SimpleHAL.h"
 
 /* ========== Enumerations ========== */
 
@@ -69,9 +70,12 @@ typedef enum {
  * - USART_PINS_REMAP2:  TX=PD6, RX=PD5
  */
 typedef enum {
-    USART_PINS_DEFAULT = 0,  /**< Default pins: TX=PD5, RX=PD6 */
-    USART_PINS_REMAP1  = 1,  /**< Remap 1: TX=PD0, RX=PD1 */
-    USART_PINS_REMAP2  = 2   /**< Remap 2: TX=PD6, RX=PD5 */
+    USART_PINS_DEFAULT = 0,  /**< Default pins: TX=PD5, RX=PD6 (ใช้ได้ทุกแพ็กเกจ) */
+#if CH32V003_HAS_PD0
+    USART_PINS_REMAP1  = 1,  /**< Remap 1: TX=PD0, RX=PD1 (ต้องมี PD0 — TSSOP-20/QFN-20 เท่านั้น) */
+#endif
+    USART_PINS_REMAP2  = 2,  /**< Remap 2: TX=PD6, RX=PD5 (ใช้ได้ทุกแพ็กเกจ) */
+    USART_PINS_FULL_REMAP = 3  /**< Full Remap: TX=PD6, RX=PD5 (รวมบิต REMAP1+REMAP2) */
 } USART_PinConfig;
 
 /* ========== Function Prototypes ========== */

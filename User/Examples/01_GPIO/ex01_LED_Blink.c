@@ -26,6 +26,7 @@
  * ============================================================
  */
 
+#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include <SimpleHAL.h>   // รวมไลบรารี SimpleHAL ทั้งหมด (GPIO, Delay, USART, ฯลฯ)
 
 int main(void)           // ฟงกชันหลักของโปรแกรม เปนจุดเริ่มตนการทำงาน

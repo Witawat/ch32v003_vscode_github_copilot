@@ -122,11 +122,36 @@ SimpleHAL/
 
 ---
 
+## 📦 การเลือกแพ็กเกจ (สำคัญ!)
+
+ต้องกำหนด `CH32V003_PACKAGE` ก่อน `#include "SimpleHAL.h"` เพื่อให้โค้ดรู้ว่าคุณใช้แพ็กเกจไหน
+โค้ดจะแสดง `#warning` ถ้าไม่กำหนด และ default เป็น TSSOP20
+
+```c
+// เลือกแพ็กเกจ ***ก่อน include***
+#define CH32V003_PACKAGE  PACKAGE_SOP8      // SOP-8  (J4M6, 6 user pins)
+// #define CH32V003_PACKAGE  PACKAGE_SOP16   // SOP-16 (A4M6, 14+ pins)
+// #define CH32V003_PACKAGE  PACKAGE_TSSOP20 // TSSOP-20 (F4P6, default)
+// #define CH32V003_PACKAGE  PACKAGE_QFN20   // QFN-20 (F4U6)
+
+#include "SimpleHAL.h"
+```
+
+**ผลของการเลือกแพ็กเกจ:**
+- บน SOP-8/SOP-16: `PD0` จะถูกปิดการใช้งาน (pinMode คืนค่าเงียบ)
+- บน SOP-8/SOP-16: `USART_PINS_REMAP1`, `I2C_PINS_REMAP`, `SPI_PINS_REMAP` → `#error` (ต้องใช้ PD0)
+- บน SOP-8: `SPI_HW` ทั้งหมด → ไม่ถูกคอมไพล์ (ใช้ shiftOut/shiftIn แทน)
+
+**คำเตือน:** ถ้าใช้ `USART_PINS_REMAP2` (TX=PD6/RX=PD5) หรือ `USART_PINS_DEFAULT` (TX=PD5/RX=PD6) → ใช้ได้กับทุกแพ็กเกจ
+
+---
+
 ## 🚀 การใช้งาน
 
 ### วิธีที่ 1: Include รวมทุกอย่าง (แนะนำ)
 
 ```c
+#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include "SimpleHAL.h"  // รวมทุก module
 
 int main(void) {
@@ -139,6 +164,7 @@ int main(void) {
 ### วิธีที่ 2: Include เฉพาะที่ต้องการ
 
 ```c
+#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include "SimpleHAL/SimpleGPIO.h"
 #include "SimpleHAL/SimpleDelay.h"
 
@@ -159,6 +185,7 @@ int main(void) {
 ### วิธีที่ 3: Include ทั้งหมด
 
 ```c
+#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include "SimpleHAL/SimpleHAL.h"
 
 int main(void) {
@@ -202,6 +229,7 @@ int main(void) {
 ## 📖 ตัวอย่างเริ่มต้น (Hello World)
 
 ```c
+#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 
 int main(void) {
@@ -239,7 +267,10 @@ int main(void) {
 ```
 
 ขาด `SystemCoreClockUpdate()` → baud rate ผิด, PWM ผิดความถี่  
-ขาด `Timer_Init()` → `Delay_Ms/Us` คืน 0 ทันที (runtime guard ป้องกัน crash)
+ขาด `Timer_Init()` → `Delay_Ms/Us` คืน 0 ทันที (runtime guard ป้องกัน crash)  
+ลืม `#define CH32V003_PACKAGE` → ได้ `#warning` + default TSSOP20
+
+> 💡 **แนะนำ:** ใส่ `#define CH32V003_PACKAGE  PACKAGE_xxx` เป็นบรรทัดแรกสุดใน main.c ก่อน include เสมอ
 
 ---
 
@@ -266,11 +297,23 @@ MIT License
 | โมดูล | TSSOP-20 / QFN-20 | SOP-16 | SOP-8 |
 |-------|:---:|:---:|:---:|
 | GPIO | ✅ 18 pins | ✅ ~14 pins | ✅ 6 pins |
+| PD0 (pin 18) | ✅ | ❌ (เป็น NULL) | ❌ (เป็น NULL) |
 | ADC | ✅ 8 ch | ✅ 4 ch | ✅ 4 ch |
-| PWM | ✅ 8 ch | ✅ บางส่วน | ✅ 2 ch |
-| USART | ✅ | ✅ | ✅ |
-| SPI HW | ✅ | ✅ | ❌ ใช้ shiftOut |
-| I2C HW | ✅ | ✅ | ❌ ใช้ Software I2C |
+| PWM | ✅ 8 ch | ✅ บางส่วน | ✅ 2 ch (PWM1_CH1, PWM2_CH1) |
+| PWM Remap PARTIAL1/2 | ⚠️ ทดลอง | ⚠️ ทดลอง | ⚠️ ทดลอง |
+| USART Default (PD5/PD6) | ✅ | ✅ | ✅ |
+| USART REMAP1 (PD0/PD1) | ✅ | ❌ #error | ❌ #error |
+| USART REMAP2 (PD6/PD5) | ✅ | ✅ | ✅ |
+| USART FULL_REMAP | ✅ | ✅ | ✅ |
+| SPI HW (Default) | ✅ | ✅ | ❌ ไม่ถูก compile |
+| SPI HW REMAP (PD0-3) | ✅ | ❌ #error | ❌ #error |
+| I2C HW (Default) | ✅ | ✅ | ⚠️ ใช้ Software I2C |
+| I2C HW REMAP (PD0/PD1) | ✅ | ❌ #error | ❌ #error |
+| Software I2C | ✅ | ✅ | ✅ |
+| shiftOut/shiftIn | ✅ | ✅ | ✅ |
+
+> ⚠️ **PWM Remap:** PWM_REMAP_FULL ถูกลบออกแล้ว (พอร์ท PE/PB ไม่มีใน CH32V003)  
+> ⚠️ **I2C บน SOP-8:** แนะนำใช้ SimpleI2C_Soft (Software I2C) เพราะพิน PC1/PC2 อาจไม่มี
 
 *สำหรับรายละเอียด API แต่ละ module ดูในไฟล์ README ของ module นั้นๆ หรือในไฟล์ `.h` โดยตรง*
 

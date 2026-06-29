@@ -35,10 +35,10 @@ void I2C_SimpleInit(I2C_Speed speed, I2C_PinConfig pin_config) {
     I2C_InitTypeDef I2C_InitStructure = {0};
     
     // 1. เปิด Clock
-    if(pin_config == I2C_PINS_DEFAULT) {
-        RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOC | RCC_APB1Periph_I2C1 | RCC_APB2Periph_AFIO, ENABLE);
-    } else {
+    if(pin_config == I2C_PINS_REMAP) {
         RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOD | RCC_APB1Periph_I2C1 | RCC_APB2Periph_AFIO, ENABLE);
+    } else {
+        RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOC | RCC_APB1Periph_I2C1 | RCC_APB2Periph_AFIO, ENABLE);
     }
     
     // 2. ตั้งค่า Pin Remapping และ GPIO
@@ -53,8 +53,19 @@ void I2C_SimpleInit(I2C_Speed speed, I2C_PinConfig pin_config) {
             GPIO_Init(GPIOC, &GPIO_InitStructure);
             break;
             
+        case I2C_PINS_PARTIAL_REMAP:
+            // Partial Remap: ใช้ GPIO_PartialRemap_I2C1
+            // @note pin mapping ต้องตรวจสอบ CH32V003 datasheet — fallback ใช้ PC2/PC1
+            GPIO_PinRemapConfig(GPIO_PartialRemap_I2C1, ENABLE);
+            
+            GPIO_InitStructure.GPIO_Pin = GPIO_Pin_2 | GPIO_Pin_1;
+            GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_OD;
+            GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+            GPIO_Init(GPIOC, &GPIO_InitStructure);
+            break;
+            
         case I2C_PINS_REMAP:
-            // Remap: SCL=PD0, SDA=PD1
+            // Full Remap: SCL=PD0, SDA=PD1
             GPIO_PinRemapConfig(GPIO_FullRemap_I2C1, ENABLE);
             
             // SCL และ SDA

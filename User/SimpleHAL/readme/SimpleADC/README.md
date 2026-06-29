@@ -6,9 +6,15 @@
 
 ## ภาพรวม
 
-SimpleADC ห่อหุ้ม ADC1 hardware ของ CH32V003 ให้ใช้งานได้ง่าย ADC มีความละเอียด **10 บิต** (0–1023) ความเร็วสูง รองรับ 8 external channels บน GPIO และ 2 internal channels (Vrefint, Vcalint)
+SimpleADC ห่อหุ้ม ADC1 hardware ของ CH32V003 ให้ใช้งานได้ง่าย ADC มีความละเอียด **10 บิต** (0–1023) รองรับ 8 external channels บน GPIO และ 2 internal channels (Vrefint, Vcalint)
 
-> หมายเหตุ: ฟังก์ชัน `ADC_GetVDD()`, `ADC_ReadVoltageCompensated()`, `ADC_GetBatteryPercent()` ที่เห็นในเอกสารเดิมเป็น helper ระดับสูง — ดูในไฟล์ source เพื่อตรวจสอบว่ามีใน version ที่ใช้งาน
+`ADC_SimpleInit()` จะเปิดเฉพาะ channels ที่มีในแพ็กเกจปัจจุบันอัตโนมัติ:
+
+| แพ็กเกจ | Channels ที่เปิด | ไม่เปิด |
+|:---:|------|------|
+| SOP-8 | PC4, PD4, PD5, PD6 (4 ch) | PA1, PA2, PD2, PD3 |
+| SOP-16 | ทั้งหมด ยกเว้น PA1 | PA1 |
+| TSSOP-20/QFN-20 | ครบทั้ง 8 channels | — |
 
 ## คุณสมบัติเด่น
 
@@ -160,16 +166,36 @@ void BatteryMonitor_Example(void) {
 ### Basic Functions
 
 #### `ADC_SimpleInit()`
-เปิดใช้งาน ADC ทุก channels (0-7)
+เปิดใช้งาน ADC เฉพาะ channels ที่มีในแพ็กเกจปัจจุบันอัตโนมัติ
 
 #### `ADC_SimpleInitChannels(channels, count)`
 เปิดใช้งานเฉพาะ channels ที่ระบุ
 
+#### `ADC_EnableChannel(ADC_Channel channel)`
+เปิด channel เพิ่มเติมหลัง init แล้ว — ไม่ต้อง init ใหม่
+
+```c
+ADC_SimpleInit();
+ADC_EnableChannel(ADC_CH_PD4);  // เพิ่ม PD4 ทีหลัง
+```
+
 #### `ADC_Read(channel)`
 อ่านค่า ADC (0-1023)
 
+#### `ADC_ReadMultiple(channels, values, count)`
+อ่านหลาย channels ในครั้งเดียว
+
+```c
+ADC_Channel ch[] = {ADC_CH_PD2, ADC_CH_PD3, ADC_CH_PD4};
+uint16_t vals[3];
+ADC_ReadMultiple(ch, vals, 3);
+```
+
 #### `ADC_ReadVoltage(channel, vref)`
 อ่านและแปลงเป็นแรงดัน (V)
+
+#### `ADC_ToVoltage(adc_value, vref)`
+แปลง raw ADC → voltage
 
 #### `ADC_ReadAverage(channel, samples)`
 อ่านค่าเฉลี่ยหลายครั้ง เพื่อลด noise
@@ -250,23 +276,18 @@ if (percent < 20) {
 
 ## เวอร์ชัน
 
-**v1.1** (2025-12-22)
-- ✨ เพิ่มฟีเจอร์ Battery Monitoring
-- ✨ เพิ่มการอ่าน Internal Vref
-- ✨ เพิ่มฟังก์ชัน VDD Compensation
-- 📝 เพิ่ม Example 8 และ 9
+**v2.1** (ปัจจุบัน)
+- 🆕 `ADC_SimpleInit()` กรอง channels ตามแพ็กเกจ (SOP-8/SOP-16/TSSOP-20)
+- 🆕 `ADC_EnableChannel()` — เปิด channel เพิ่มหลัง init
+- 🆕 `ADC_ReadMultiple()` — อ่านหลาย channels พร้อมกัน
+
+**v2.0** (2025-12-22)
+- **Breaking:** `Timer_Init()` ต้องเรียกเอง
+- `ADC_Read()` auto-init ตั้ง GPIO analog input อัตโนมัติ
+- Battery Monitoring: `ADC_GetVDD()`, `ADC_ReadVoltageCompensated()`, `ADC_GetBatteryPercent()`
 
 **v1.0** (2025-12-12)
-### v2.0
-- **Breaking:** `Timer_Init()` ต้องเรียกเองหลัง `SystemCoreClockUpdate()`
-- `ADC_Read()` auto-init ตั้ง GPIO เป็น analog input โดยอัตโนมัติ
-- TSVREFE (Vrefint, Temperature Sensor) เปิดอัตโนมัติ
-- ป้องกัน divide-by-zero ใน `ADC_ReadAverage(samples=0)`
-
-### v1.0
-- 🎉 เวอร์ชันแรก
-- รองรับ 8 external channels
-- API แบบ Arduino-style
+- รองรับ 8 external channels, API แบบ Arduino-style
 
 ---
 

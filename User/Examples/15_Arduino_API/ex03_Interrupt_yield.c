@@ -33,7 +33,7 @@ int main(void) {
     Timer_Init();
     USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
 
-    IWDG_Init(IWDG_PRESCALER_256, 4095);
+    IWDG_SimpleInit(1600);  // Arduino-style: ~1.6s timeout, auto-select best prescaler
 
     pinMode(PC0, PIN_MODE_OUTPUT);
     pinMode(PC1, PIN_MODE_INPUT_PULLUP);

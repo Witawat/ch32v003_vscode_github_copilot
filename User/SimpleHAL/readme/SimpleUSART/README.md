@@ -12,11 +12,14 @@ SimpleUSART ห่อหุ้ม USART1 hardware ให้ใช้งานง
 
 ## Pin Configuration
 
-| Config | TX | RX |
-|--------|----|----|
-| `USART_PINS_DEFAULT` | PD5 | PD6 |
-| `USART_PINS_REMAP1`  | PD0 | PD1 |
-| `USART_PINS_REMAP2`  | PD6 | PD5 |
+| Config | TX | RX | SOP-8/16 |
+|--------|----|----|:---:|
+| `USART_PINS_DEFAULT` | PD5 | PD6 | ✅ |
+| `USART_PINS_REMAP1`  | PD0 | PD1 | ❌ ไม่มี PD0 |
+| `USART_PINS_REMAP2`  | PD6 | PD5 | ✅ |
+| `USART_PINS_FULL_REMAP` 🆕 | PD6 | PD5 | ✅ |
+
+> ⚠️ `USART_PINS_REMAP1` ใช้ PD0 (มีเฉพาะ TSSOP-20/QFN-20) — บน SOP-8/SOP-16 ค่านี้ไม่มีใน enum → compile error
 
 ---
 
@@ -88,12 +91,14 @@ USART_PrintHex(0x1234, 1);  // "0x1234"
 
 #### `void USART_Flush(void)`
 
-รอจนส่งข้อมูลทั้งหมดเสร็จ
+ล้างข้อมูลค้างใน receive buffer (อ่านทิ้งจนหมด)
 
 ```c
-USART_Print("Goodbye\r\n");
-USART_Flush();  // รอก่อนปิดระบบ / เข้า sleep
+while (USART_Available()) { (void)USART_Read(); }  // manual flush
+USART_Flush();  // อ่านข้อมูล RX ค้างใน hardware buffer ทิ้ง
 ```
+
+> ⚠️ ต่างจาก Arduino `Serial.flush()` (ที่รอ TX เสร็จ) — CH32V003 `USART_Flush()` ล้าง RX buffer แทน ให้ใช้ `USART_Print` ตามด้วย `Delay_Ms(1)` แทนการรอ TX
 
 ---
 
@@ -115,6 +120,16 @@ if (USART_Available()) {
 
 ```c
 uint8_t b = USART_Read();
+```
+
+#### `uint16_t USART_ReadBytes(uint8_t* buffer, uint16_t length)`
+
+อ่านหลาย bytes (non-blocking — อ่านเฉพาะที่มีค้างใน buffer)
+
+```c
+uint8_t buf[64];
+uint16_t count = USART_ReadBytes(buf, sizeof(buf));
+// count = จำนวน byte ที่อ่านได้จริง
 ```
 
 ---

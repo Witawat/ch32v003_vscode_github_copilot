@@ -12,10 +12,14 @@ SimpleI2C ห่อหุ้ม Hardware I2C1 ให้ใช้งานง่�
 
 ## Pin Configuration
 
-| Config | SCL | SDA | หมายเหตุ |
-|--------|-----|-----|---------|
-| `I2C_PINS_DEFAULT` | PC2 | PC1 | ใช้บ่อยที่สุด |
-| `I2C_PINS_REMAP`   | PD0 | PD1 | สำรอง |
+| Config | SCL | SDA | SOP-8/16 |
+|--------|-----|-----|:---:|
+| `I2C_PINS_DEFAULT` | PC2 | PC1 | ⚠️ |
+| `I2C_PINS_PARTIAL_REMAP` 🆕 | PC2 | PC1 | ⚠️ |
+| `I2C_PINS_REMAP`   | PD0 | PD1 | ❌ ไม่มี PD0 |
+
+> ⚠️ SOP-8 อาจไม่มี PC1/PC2 — ใช้ `SimpleI2C_Soft` แทน  
+> ⚠️ `I2C_PINS_REMAP` ใช้ PD0 (เฉพาะ TSSOP-20/QFN-20) — ไม่มีใน enum บนแพ็กเกจเล็ก → compile error
 
 > ต้องต่อ **pull-up resistor 4.7kΩ** ที่ SDA และ SCL ทุกครั้ง
 
@@ -91,6 +95,15 @@ I2C_WriteReg(0x3C, 0x00, 0x8D);  // OLED: command byte
 
 ```c
 uint8_t who_am_i = I2C_ReadReg(0x68, 0x75);  // MPU6050: WHO_AM_I
+```
+
+#### `I2C_Status I2C_WriteRegMulti(uint8_t addr, uint8_t reg, uint8_t* data, uint16_t len)`
+
+เขียนหลาย bytes ไปยัง register — ใช้กับ sensor configuration
+
+```c
+uint8_t config[] = {0x00, 0x18};  // 2 bytes config
+I2C_WriteRegMulti(0x76, 0xF4, config, 2);
 ```
 
 #### `I2C_Status I2C_ReadRegMulti(uint8_t addr, uint8_t reg, uint8_t* buf, uint16_t len)`

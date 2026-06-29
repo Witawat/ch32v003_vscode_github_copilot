@@ -34,6 +34,5 @@
  * }
  */
 void SimpleHAL_Init(void) {
-    // Currently empty - auto-init handles everything
-    // Reserved for future use
+    (void)0;  // Reserved — auto-init via constructors handles everything
 }

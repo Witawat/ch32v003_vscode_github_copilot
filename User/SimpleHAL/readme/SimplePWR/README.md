@@ -45,12 +45,20 @@ PWR_ENTRY_WFE   // Wait For Event
 
 #### `void PWR_Sleep(void)`
 
-CPU หยุด — peripherals (DMA, TIM, ADC, USART) ทำงานต่อ  
-ตื่นเมื่อ **มี interrupt ใดก็ได้**
+CPU หยุด — peripherals ทำงานต่อ ตื่นเมื่อมี interrupt
 
 ```c
 PWR_Sleep();
-// โปรแกรมดำเนินต่อจากบรรทัดนี้หลัง wakeup
+// ทำงานต่อจากบรรทัดนี้หลัง wakeup
+```
+
+#### `void PWR_EnterSleepMode(uint8_t entry_method)`
+
+เลือก WFI/WFE
+
+```c
+PWR_EnterSleepMode(PWR_ENTRY_WFI);  // Wait For Interrupt
+PWR_EnterSleepMode(PWR_ENTRY_WFE);  // Wait For Event
 ```
 
 ---
@@ -59,50 +67,131 @@ PWR_Sleep();
 
 #### `void PWR_Standby(uint32_t timeout_ms)`
 
-เข้า Standby และตั้ง AWU timer — ตื่นหลัง `timeout_ms` → system resets  
-RAM และ register ทุกตัว**หายหมด** หลัง wakeup
+เข้า Standby + AWU timer — ตื่นหลัง timeout → system reset
 
 ```c
-PWR_Standby(5000);   // นอน 5 วินาที แล้ว reset
+PWR_Standby(5000);   // นอน 5 วิ → reset
 ```
 
 #### `void PWR_StandbyUntilInterrupt(void)`
 
-เข้า Standby และรอ EXTI interrupt (ปุ่มกด, sensor)
+เข้า Standby รอ EXTI — หลัง wakeup → reset
 
 ```c
 PWR_StandbyUntilInterrupt();
-// หลัง wakeup → MCU reset → main() รันใหม่ตั้งแต่ต้น
+```
+
+#### `void PWR_EnterStandbyMode(uint8_t entry_method)`
+
+เลือก WFI/WFE สำหรับ Standby
+
+```c
+PWR_ConfigureAWU(PWR_AWU_PRESCALER_1024, 31);  // ~1s
+PWR_EnterStandbyMode(PWR_ENTRY_WFI);
+```
+
+#### `uint8_t PWR_WasStandbyWakeup(void)`
+
+ตรวจสอบว่า wakeup มาจาก Standby หรือไม่ — คืน 1 ถ้าใช่
+
+```c
+if (PWR_WasStandbyWakeup()) { /* ตื่นจาก standby */ }
+```
+
+#### `void PWR_ClearStandbyFlag(void)`
+
+เคลียร์ standby wakeup flag
+
+---
+
+### AWU (Auto Wake-Up)
+
+#### `void PWR_ConfigureAWU(uint32_t prescaler, uint8_t window)`
+
+ตั้งค่า AWU แบบ manual
+
+```c
+// ~500ms: prescaler=1024 (~8ms/tick), window=63
+PWR_ConfigureAWU(PWR_AWU_PRESCALER_1024, PWR_AWU_CALC_WINDOW(1024, 500));
+```
+
+#### `uint32_t PWR_GetAWUTimeout(uint32_t prescaler, uint8_t window)`
+
+คำนวณ timeout จริง (ms)
+
+#### AWU Timeout Reference
+
+| Prescaler | ~Time/Count | Max (window=63) |
+|:---:|------|------|
+| 1 | ~7.8 us | ~0.49 ms |
+| 1024 | ~8 ms | ~504 ms |
+| 4096 | ~32 ms | ~2.0 s |
+| 10240 | ~80 ms | ~5.0 s |
+
+ตัวเต็มทั้งหมด: `PWR_AWU_PRESCALER_1` ถึง `_61440` (15 ค่า)
+
+#### Helper Macros
+
+```c
+PWR_AWU_CALC_WINDOW(prescaler, timeout_ms)  // คำนวณ window
+PWR_AWU_TIMEOUT_MS(prescaler, window)       // คำนวณ ms
+PWR_AWU_MAX_WINDOW                           // = 0x3F (63)
 ```
 
 ---
 
 ### PVD (Power Voltage Detector)
 
-ตรวจสอบแรงดัน VDD ว่าต่ำกว่า threshold หรือไม่
+#### `void PWR_EnablePVD(uint32_t voltage_level)`
+
+เปิด PVD — ตรวจจับแรงดันตก
 
 ```c
-typedef enum {
-    PWR_PVD_2V9,
-    PWR_PVD_3V1,
-    PWR_PVD_3V3,
-    PWR_PVD_3V5,
-    PWR_PVD_3V7,
-    PWR_PVD_3V9,
-    PWR_PVD_4V1,
-    PWR_PVD_4V4
-} PWR_PVD_Level;
+PWR_EnablePVD(PWR_PVD_3V3);  // trigger เมื่อ VDD < 3.3V
 ```
+
+#### `void PWR_DisablePVD(void)`
+
+ปิด PVD
+
+#### `uint8_t PWR_GetPVDStatus(void)`
+
+ตรวจสถานะ — คืน 1 ถ้า VDD ต่ำกว่า threshold
+
+```c
+if (PWR_GetPVDStatus()) { /* แบตต่ำ! */ }
+```
+
+**PVD Levels:** `PWR_PVD_2V9`, `_3V1`, `_3V3`, `_3V5`, `_3V7`, `_3V9`, `_4V1`, `_4V4`
 
 ---
 
-### AWU (Auto Wake-Up)
+### Battery & Power Estimation
+
+#### `uint32_t PWR_EstimateStandbyCurrent(pvd, awu)`
+ประมาณกระแสตอน standby (µA)
 
 ```c
-// AWU ใช้ LSI 128kHz
-// Prescaler options: PWR_AWU_PRESCALER_1 ถึง PWR_AWU_PRESCALER_61440
-// max window: 0x3F (6-bit)
+uint32_t cur = PWR_EstimateStandbyCurrent(0, 1);  // PVD off, AWU on → ~5µA
 ```
+
+#### `uint32_t PWR_CalculateBatteryLife(mAh, active%, active_mA, standby_uA)`
+คำนวณอายุแบตเตอรี่ (ชั่วโมง)
+
+```c
+// 1000mAh, 1% active @20mA, 99% standby @5uA
+uint32_t hours = PWR_CalculateBatteryLife(1000, 1, 20, 5);
+// → ~4878 hours (~203 days)
+```
+
+### Power Consumption Reference
+
+| Mode | Typical |
+|------|--------|
+| Active (Run) | ~3-5 mA |
+| Sleep | ~1-2 mA |
+| Standby (no AWU) | ~2 µA |
+| Standby (AWU on) | ~5 µA |
 
 ---
 

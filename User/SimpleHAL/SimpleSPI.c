@@ -3,9 +3,15 @@
  * @brief Simple SPI Library Implementation
  * @version 1.0
  * @date 2025-12-12
+ * 
+ * @note Hardware SPI ไม่สามารถใช้ได้บน SOP-8 (ไม่มีพิน SCK/MISO/MOSI)
+ *       โค้ดทั้งหมดจะถูกปิดการใช้งานสำหรับ SOP-8
+ *       ถ้าต้องการ SPI บน SOP-8 ให้ใช้ shiftOut()/shiftIn() จาก SimpleGPIO.h
  */
 
 #include "SimpleSPI.h"
+
+#if !CH32V003_IS_SOP8
 
 /* ========== Private Variables ========== */
 
@@ -22,7 +28,11 @@ void SPI_SimpleInit(SPI_Mode mode, SPI_Speed speed, SPI_PinConfig pin_config) {
     SPI_InitTypeDef SPI_InitStructure = {0};
     
     // 1. เปิด Clock
-    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOC | RCC_APB2Periph_SPI1 | RCC_APB2Periph_AFIO, ENABLE);
+    if (pin_config == SPI_PINS_REMAP) {
+        RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOC | RCC_APB2Periph_GPIOD | RCC_APB2Periph_SPI1 | RCC_APB2Periph_AFIO, ENABLE);
+    } else {
+        RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOC | RCC_APB2Periph_SPI1 | RCC_APB2Periph_AFIO, ENABLE);
+    }
     
     // 2. ตั้งค่า Pin Remapping และ GPIO
     switch(pin_config) {
@@ -210,3 +220,5 @@ void SPI_SetSpeed(SPI_Speed speed) {
     
     SPI_Cmd(SPI1, ENABLE);
 }
+
+#endif /* !CH32V003_IS_SOP8 */

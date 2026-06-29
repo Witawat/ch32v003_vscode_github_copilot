@@ -12,24 +12,42 @@ SimpleGPIO ให้ API แบบ Arduino-style สำหรับควบค�
 
 ## GPIO Pins ของ CH32V003
 
-| Pin | Enum Value | คุณสมบัติพิเศษ |
-|-----|-----------|----------------|
-| PA1 | 0  | PWM1_CH2, ADC_CH1 |
-| PA2 | 1  | ADC_CH0 |
-| PC0 | 10 | PWM2_CH3 |
-| PC1 | 11 | I2C SDA (default) |
-| PC2 | 12 | I2C SCL (default) |
-| PC3 | 13 | PWM1_CH3 |
-| PC4 | 14 | PWM1_CH4, ADC_CH2 |
-| PC5 | 15 | SPI SCK (default) |
-| PC6 | 16 | SPI MOSI (default) |
-| PC7 | 17 | SPI MISO (default) |
-| PD2 | 20 | PWM1_CH1, ADC_CH3 |
-| PD3 | 21 | PWM2_CH2, ADC_CH4 |
-| PD4 | 22 | PWM2_CH1, ADC_CH7 |
-| PD5 | 23 | ADC_CH5, USART TX (default) |
-| PD6 | 24 | ADC_CH6, USART RX (default) |
-| PD7 | 25 | PWM2_CH4 |
+| Pin | Enum Value | คุณสมบัติพิเศษ | SOP-8 |
+|-----|-----------|----------------|:---:|
+| PA1 | 0  | PWM1_CH2, ADC_CH1 | ❌ |
+| PA2 | 1  | ADC_CH0 | ⚠️ |
+| PC0 | 10 | PWM2_CH3 | ❌ |
+| PC1 | 11 | I2C SDA (default) | ⚠️ |
+| PC2 | 12 | I2C SCL (default) | ⚠️ |
+| PC3 | 13 | PWM1_CH3 | ❌ |
+| PC4 | 14 | PWM1_CH4, ADC_CH2 | ❌ |
+| PC5 | 15 | SPI SCK (default) | ❌ |
+| PC6 | 16 | SPI MOSI (default) | ❌ |
+| PC7 | 17 | SPI MISO (default) | ❌ |
+| PD0 | 18 | SPI NSS remap, USART TX remap, I2C SCL remap | ❌ |
+| PD1 | 19 | SWDIO, SPI SCK remap, USART RX remap, I2C SDA remap | ✅ |
+| PD2 | 20 | PWM1_CH1, ADC_CH3 | ❌ |
+| PD3 | 21 | PWM2_CH2, ADC_CH4 | ❌ |
+| PD4 | 22 | PWM2_CH1, ADC_CH7 | ✅ |
+| PD5 | 23 | ADC_CH5, USART TX (default) | ✅ |
+| PD6 | 24 | ADC_CH6, USART RX (default) | ✅ |
+| PD7 | 25 | PWM2_CH4 (ไม่รองรับ ADC!) | ❌ |
+
+> ⚠️ **PD0** ไม่มีใน SOP-8/SOP-16 — `pinMode()` จะคืนค่าเงียบ  
+> ⚠️ **PD7** ไม่รองรับ ADC — ใช้ `IS_ADC_PIN()` ตรวจสอบก่อน  
+> ⚠️ **SOP-8** มี 6 user pins: PD1, PD4, PD5, PD6, PC1, PC2
+
+### การตรวจสอบ Pin ตามแพ็กเกจ
+
+```c
+#define CH32V003_PACKAGE  PACKAGE_SOP8  // หรือ SOP16, TSSOP20, QFN20
+#include "SimpleHAL.h"
+
+// Compile-time check — pin ที่ไม่มีในแพ็กเกจจะคืน false
+if (IS_VALID_PIN(PD0)) {
+    pinMode(PD0, PIN_MODE_OUTPUT);  // SOP-8/SOP-16: ข้ามบรรทัดนี้
+}
+```
 
 ---
 
@@ -292,6 +310,77 @@ int main(void) {
     }
 }
 ```
+
+---
+
+### Analog I/O (Arduino-style)
+
+#### `uint16_t analogRead(uint8_t pin)` — Macro
+
+อ่านค่า ADC (0-1023) จาก pin ที่รองรับ ADC
+**Compile-time check** ด้วย `_Static_assert` — ใช้ pin ผิด → compile error
+
+```c
+uint16_t val = analogRead(PD2);   // OK — PD2 รองรับ ADC
+// analogRead(PD7);                // ✗ Compile Error! PD7 ไม่ใช่ ADC
+// analogRead(PC0);                // ✗ Compile Error! PC0 ไม่ใช่ ADC
+
+float voltage = val * 3.3f / 1023.f;
+```
+
+**ADC Pins:** PA1, PA2, PC4, PD2, PD3, PD4, PD5, PD6
+
+#### `void analogWrite(uint8_t pin, uint8_t value)` — Macro
+
+สร้าง PWM output (0-255) บน pin ที่รองรับ PWM
+**Compile-time check** เช่นกัน — ใช้ pin ผิด → compile error
+Auto-init @1kHz ถ้ายังไม่เคย init
+
+```c
+analogWrite(PA1, 128);  // 50% duty @ 1kHz — OK, PA1 รองรับ PWM
+// analogWrite(PA2, 128);  // ✗ Compile Error! PA2 ไม่ใช่ PWM
+```
+
+**PWM Pins:** PA1, PC0, PC3, PC4, PD2, PD3, PD4, PD7
+
+#### `uint32_t pulseIn(uint8_t pin, uint8_t state, uint32_t timeout)`
+
+วัดความกว้าง pulse (µs) — ใช้กับ Ultrasonic, IR receiver
+
+```c
+// HC-SR04 Ultrasonic
+digitalWrite(TRIG, LOW); Delay_Us(2);
+digitalWrite(TRIG, HIGH); Delay_Us(10);
+digitalWrite(TRIG, LOW);
+uint32_t duration = pulseIn(ECHO, HIGH, 30000);
+float distance = duration * 0.034f / 2.f;
+```
+
+#### `void shiftOut(dataPin, clkPin, bitOrder, value)`
+
+ส่ง 1 byte ผ่าน software SPI — ใช้กับ 74HC595, LED matrix
+
+```c
+#define DATA PC0
+#define CLK  PC1
+shiftOut(DATA, CLK, MSBFIRST, 0xFF);  // ส่ง 0b11111111
+```
+
+#### `uint8_t shiftIn(dataPin, clkPin, bitOrder)`
+
+รับ 1 byte ผ่าน software SPI — ใช้กับ 74HC165, shift register
+
+```c
+uint8_t data = shiftIn(DATA, CLK, MSBFIRST);
+```
+
+### Validation Macros
+
+| Macro | ใช้ตรวจสอบ |
+|-------|-----------|
+| `IS_VALID_PIN(pin)` | Pin มีจริงในแพ็กเกจไหม |
+| `IS_ADC_PIN(pin)` | Pin รองรับ ADC ไหม |
+| `IS_PWM_PIN(pin)` | Pin รองรับ PWM ไหม |
 
 ---
 

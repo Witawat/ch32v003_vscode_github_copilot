@@ -31,26 +31,64 @@ SimplePWM ให้ใช้งาน PWM output บน CH32V003 ได้ง่
 
 ### Initialization
 
-#### `void PWM_Init(uint8_t channel, uint32_t freq_hz)`
+#### `void PWM_Init(PWM_Channel channel, uint32_t frequency_hz)`
 
 ```c
-PWM_Init(PWM1_CH1, 1000);   // PD2, 1kHz
+PWM_Init(PWM1_CH1, 1000);   // PD2, 1kHz (default pin)
 PWM_Init(PWM2_CH3, 50);     // PC0, 50Hz (servo)
 ```
 
-#### `void PWM_InitRemap(uint8_t channel, uint32_t freq_hz, uint8_t remap)`
+#### `void PWM_InitRemap(PWM_Channel channel, uint32_t frequency_hz, PWM_Remap remap)`
 
-ใช้ pin remapping (ดู datasheet CH32V003 สำหรับ remap options)
+เริ่มต้น PWM พร้อม remap — เลือก pin ใหม่ให้ PWM output
 
 ```c
-PWM_InitRemap(PWM1_CH1, 1000, 1);
+PWM_InitRemap(PWM1_CH1, 1000, PWM_REMAP_PARTIAL1);
+PWM_Start(PWM1_CH1);
+PWM_SetDutyCycle(PWM1_CH1, 50);
+```
+
+#### `void PWM_SetRemap(PWM_Channel channel, PWM_Remap remap)` 🆕
+
+ตั้งค่ารีแมปล่วงหน้า — `PWM_Write()` / `analogWrite()` ใช้ตอน auto-init
+
+```c
+// วิธีง่าย — ตั้ง remap ล่วงหน้า แล้ว analogWrite จัดการเอง
+PWM_SetRemap(PWM1_CH1, PWM_REMAP_PARTIAL1);
+analogWrite(PD2, 128);  // auto-init @1kHz + PARTIAL1 remap
+
+PWM_SetRemap(PWM2_CH1, PWM_REMAP_PARTIAL2);
+analogWrite(PD4, 255);  // เลือกใช้ remap คนละแบบ
+```
+
+#### PWM_Remap Options
+
+| Option | ใช้กับ | หมายเหตุ |
+|--------|:---:|----------|
+| `PWM_REMAP_NONE` | TIM1, TIM2 | Default pins (ค่าเริ่มต้น) |
+| `PWM_REMAP_PARTIAL1` | TIM1, TIM2 | Partial remap 1 |
+| `PWM_REMAP_PARTIAL2` | TIM1, TIM2 | Partial remap 2 |
+
+> ⚠️ `PWM_REMAP_FULL` ถูกลบ — ใช้พอร์ท PE/PB ที่ไม่มีใน CH32V003
+
+#### `IS_PWM_VALID_PACKAGE(ch)` 🆕
+
+ตรวจสอบว่า PWM channel ใช้ได้กับแพ็กเกจปัจจุบัน — **SOP-8 ใช้ได้แค่ PWM1_CH1 + PWM2_CH1**
+
+```c
+#if CH32V003_IS_SOP8
+  if (IS_PWM_VALID_PACKAGE(PWM1_CH1))  // true
+      PWM_Init(PWM1_CH1, 1000);
+  if (IS_PWM_VALID_PACKAGE(PWM1_CH2))  // false — PA1 ไม่มีบน SOP-8
+      PWM_Init(PWM1_CH2, 1000);
+#endif
 ```
 
 ---
 
 ### Duty Cycle
 
-#### `void PWM_SetDutyCycle(uint8_t channel, uint8_t percent)`
+#### `void PWM_SetDutyCycle(PWM_Channel channel, uint8_t percent)`
 
 ตั้ง duty cycle เป็น **เปอร์เซ็นต์ 0–100**
 
@@ -60,7 +98,7 @@ PWM_SetDutyCycle(PWM1_CH1, 0);    // ปิด
 PWM_SetDutyCycle(PWM1_CH1, 100);  // เต็ม
 ```
 
-#### `void PWM_SetDutyCycleRaw(uint8_t channel, uint16_t value)`
+#### `void PWM_SetDutyCycleRaw(PWM_Channel channel, uint16_t value)`
 
 ตั้ง duty cycle เป็น raw CCR register (0 ถึง ARR value)
 
@@ -69,7 +107,7 @@ uint16_t period = PWM_GetPeriod(PWM1_CH1);
 PWM_SetDutyCycleRaw(PWM1_CH1, period / 2);  // 50%
 ```
 
-#### `void PWM_Write(uint8_t channel, uint8_t value)`
+#### `void PWM_Write(PWM_Channel channel, uint8_t value)`
 
 Arduino-compatible: `value` 0–255 (เหมือน `analogWrite`)
 
@@ -83,7 +121,7 @@ PWM_Write(PWM1_CH1, 255);   // 100%
 
 ### Frequency
 
-#### `void PWM_SetFrequency(uint8_t channel, uint32_t freq_hz)`
+#### `void PWM_SetFrequency(PWM_Channel channel, uint32_t frequency_hz)`
 
 เปลี่ยน frequency — **duty cycle จะรีเซ็ตเป็น 0%**
 
@@ -92,7 +130,7 @@ PWM_SetFrequency(PWM1_CH1, 2000);   // เปลี่ยนเป็น 2kHz
 PWM_SetFrequency(PWM2_CH1, 20000);  // เปลี่ยนเป็น 20kHz
 ```
 
-#### `uint16_t PWM_GetPeriod(uint8_t channel)`
+#### `uint16_t PWM_GetPeriod(PWM_Channel channel)`
 
 คืนค่า ARR register (ใช้กับ SetDutyCycleRaw)
 
@@ -104,14 +142,53 @@ uint16_t arr = PWM_GetPeriod(PWM1_CH1);
 
 ### Start / Stop
 
-#### `void PWM_Start(uint8_t channel)`
-#### `void PWM_Stop(uint8_t channel)`
+#### `void PWM_Start(PWM_Channel channel)`
+#### `void PWM_Stop(PWM_Channel channel)`
 
 ```c
 PWM_Start(PWM1_CH1);
 // ...
 PWM_Stop(PWM1_CH1);
 ```
+
+### Advanced
+
+#### `uint8_t PWM_GetDutyCycle(PWM_Channel channel)`
+อ่าน duty cycle ปัจจุบันเป็นเปอร์เซ็นต์ (0-100)
+
+```c
+uint8_t pct = PWM_GetDutyCycle(PWM1_CH1);
+```
+
+#### `uint16_t PWM_GetDutyCycleRaw(PWM_Channel channel)`
+อ่านค่า CCR register (raw value)
+
+```c
+uint16_t raw = PWM_GetDutyCycleRaw(PWM1_CH1);
+```
+
+#### `void PWM_AdvancedInit(channel, prescaler, period, duty_value)`
+ตั้งค่าแบบละเอียด — กำหนด prescaler และ period เอง
+
+```c
+// ตัวอย่าง: 1kHz @48MHz → prescaler=47, period=999
+PWM_AdvancedInit(PWM1_CH1, 47, 999, 500);  // 50% duty
+```
+
+#### `void PWM_SetPolarity(PWM_Channel channel, uint8_t inverted)`
+กลับขั้ว output — 0=normal, 1=inverted
+
+```c
+PWM_SetPolarity(PWM1_CH1, 1);  // Active low
+```
+
+### Helper Macros
+
+| Macro | ใช้ทำอะไร |
+|-------|----------|
+| `PWM_PERCENT_TO_RAW(pct, period)` | แปลง % → raw CCR |
+| `PWM_RAW_TO_PERCENT(raw, period)` | แปลง raw CCR → % |
+| `PWM_ARDUINO_TO_PERCENT(val)` | arduino 0-255 → % |
 
 ---
 
@@ -154,7 +231,7 @@ int main(void) {
 // Pulse: 1ms = 0°, 1.5ms = 90°, 2ms = 180°
 // duty (us) = 1000 + (angle/180) * 1000
 
-void servo_set_angle(uint8_t channel, uint8_t angle) {
+void servo_set_angle(PWM_Channel channel, uint8_t angle) {
     if (angle > 180) angle = 180;
     uint16_t period = PWM_GetPeriod(channel);     // ARR at 50Hz
     // period = 48MHz / (prescaler+1) / 50 - 1

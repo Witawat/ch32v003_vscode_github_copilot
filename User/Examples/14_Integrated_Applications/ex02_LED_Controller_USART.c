@@ -88,11 +88,12 @@ void ProcessCommand(uint8_t *buf) {
     uint8_t val[16];
     uint8_t i, k = 0, v = 0;
 
-    for (i = 0; i < eqPos; i++) key[k++] = buf[i];
+    // Bounds check — ป้องกัน buffer overflow
+    for (i = 0; i < eqPos && k < 15; i++) key[k++] = buf[i];
     key[k] = 0;
 
     i = eqPos + 1;
-    while (buf[i] != 0) val[v++] = buf[i++];
+    while (buf[i] != 0 && v < 15) val[v++] = buf[i++];
     val[v] = 0;
 
     if (StrCompare(key, (uint8_t*)"LED1")) {

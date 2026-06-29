@@ -44,6 +44,7 @@ extern "C" {
 
 #include <ch32v00x_i2c.h>
 #include <stdint.h>
+#include "SimpleHAL.h"
 
 /* ========== Enumerations ========== */
 
@@ -64,7 +65,10 @@ typedef enum {
  */
 typedef enum {
     I2C_PINS_DEFAULT = 0,    /**< Default pins: SCL=PC2, SDA=PC1 */
-    I2C_PINS_REMAP   = 1     /**< Remap: SCL=PD0, SDA=PD1 */
+    I2C_PINS_PARTIAL_REMAP = 1, /**< Partial Remap: SCL=PC2, SDA=PC1 (pin mapping ต้องตรวจสอบ datasheet) */
+#if CH32V003_HAS_PD0
+    I2C_PINS_REMAP   = 2     /**< Full Remap: SCL=PD0, SDA=PD1 (ต้องมี PD0 — TSSOP-20/QFN-20 เท่านั้น) */
+#endif
 } I2C_PinConfig;
 
 /**

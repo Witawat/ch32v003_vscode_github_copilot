@@ -46,14 +46,11 @@ int main(void)
     pinMode(PD2, PIN_MODE_INPUT);
     ADC_SimpleInit();
 
-    float r1 = 10000.0f;
-    float r2 = 10000.0f;
-
     OPAMP_ConfigNonInverting(OPAMP_CHP0, OPAMP_CHN0);
     OPAMP_Enable();
 
-    float gain = 1.0f + (r2 / r1);
     USART_Print("Non-inverting amp: R1=10k, R2=10k, Gain=2.0\r\n");
+    USART_Print("(Using fixed-point integer — no float on CH32V003)\r\n");
 
     if (!OPAMP_IsEnabled())
     {
@@ -66,20 +63,24 @@ int main(void)
     while (1)
     {
         uint16_t adcVal = ADC_Read(ADC_CH_PD2);
-        float vout = (adcVal * 3.3f) / 4095.0f;
-        float vin = vout / gain;
+
+        // Fixed-point: Vout(mV) = adcVal * 3300 / 1023  (10-bit ADC, 3.3V ref)
+        uint32_t vout_mv = ((uint32_t)adcVal * 3300) / 1023;
+
+        // Gain = 2 (Non-inverting: 1 + R2/R1 = 1 + 10k/10k)
+        uint32_t vin_mv = vout_mv / 2;
 
         USART_Print("Vin=");
-        USART_PrintNum((int32_t)vin);
+        USART_PrintNum(vin_mv / 1000);
         USART_Print(".");
-        uint16_t frac = (uint16_t)((vin - (int32_t)vin) * 10);
-        USART_PrintNum((int32_t)frac);
+        USART_PrintNum((vin_mv % 1000) / 100);
         USART_Print("V, Vout=");
-        USART_PrintNum((int32_t)vout);
+        USART_PrintNum(vout_mv / 1000);
         USART_Print(".");
-        frac = (uint16_t)((vout - (int32_t)vout) * 10);
-        USART_PrintNum((int32_t)frac);
-        USART_Print("V\r\n");
+        USART_PrintNum((vout_mv % 1000) / 100);
+        USART_Print("V (ADC=");
+        USART_PrintNum(adcVal);
+        USART_Print(")\r\n");
 
         Delay_Ms(500);
     }

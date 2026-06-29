@@ -49,11 +49,16 @@ int main(void)            // ฟังก์ชันหลัก จุดเ�
 
     uint32_t blink_count = 0; // ตัวนับรอบการกระพริบ LED
 
-    while (DMA_GetStatus(DMA_CH2) != DMA_STATUS_COMPLETE) // รอจนกว่า DMA จะส่งเสร็จ
+    uint32_t timeout = 5000;  // 5s timeout (กัน DMA ติดค้าง)
+    while (DMA_GetStatus(DMA_CH2) != DMA_STATUS_COMPLETE && timeout > 0)
     {
         blink_count++;       // เพิ่มจำนวนรอบ
         digitalWrite(PC0, blink_count % 2); // กระพริบ LED ด้วยการหาร modulo 2
         Delay_Ms(50);        // หน่วง 50ms ให้เห็นการกระพริบชัดเจน
+        timeout -= 50;
+    }
+    if (timeout == 0) {
+        USART_Print("DMA timeout!\r\n");
     }
 
     Delay_Ms(500);           // หน่วง 500ms ก่อนทดสอบแบบ blocking

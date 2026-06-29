@@ -34,6 +34,7 @@
  * ============================================================
  */
 
+#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include <SimpleHAL.h>
 
 #define DS18B20_PIN PD2

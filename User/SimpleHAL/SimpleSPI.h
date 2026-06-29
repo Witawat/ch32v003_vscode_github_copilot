@@ -39,6 +39,7 @@ extern "C" {
 
 #include <ch32v00x_spi.h>
 #include <stdint.h>
+#include "SimpleHAL.h"
 
 /* ========== Enumerations ========== */
 
@@ -80,8 +81,10 @@ typedef enum {
  * - SPI_PINS_REMAP:   SCK=PD1, MISO=PD2, MOSI=PD3, NSS=PD0
  */
 typedef enum {
-    SPI_PINS_DEFAULT = 0,  /**< Default pins */
-    SPI_PINS_REMAP   = 1   /**< Remapped pins */
+    SPI_PINS_DEFAULT = 0,  /**< Default pins (PC4-7) */
+#if CH32V003_HAS_PD0
+    SPI_PINS_REMAP   = 1   /**< Remapped pins (PD0-3) — ต้องมี PD0 (TSSOP-20/QFN-20 เท่านั้น) */
+#endif
 } SPI_PinConfig;
 
 /**

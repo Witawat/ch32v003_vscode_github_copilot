@@ -31,6 +31,7 @@
  * ============================================================
  */
 
+#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include <SimpleHAL.h>
 
 #define CS_PIN PC4

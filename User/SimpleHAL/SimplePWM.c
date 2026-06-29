@@ -21,27 +21,90 @@ typedef struct {
     uint16_t gpio_pin;
     uint32_t remap;
     uint8_t initialized;
+    PWM_Remap current_remap;  /**< รีแมปที่ตั้งไว้ล่วงหน้า ใช้ตอน auto-init */
 } PWM_ChannelConfig_t;
 
 /* ========== PWM Channel Mapping ========== */
 
 static PWM_ChannelConfig_t pwm_channels[] = {
     // TIM1 Channels
-    {TIM1, TIM_Channel_1, GPIOD, GPIO_Pin_2, 0, 0},  // PWM1_CH1 - PD2
-    {TIM1, TIM_Channel_2, GPIOA, GPIO_Pin_1, 0, 0},  // PWM1_CH2 - PA1
-    {TIM1, TIM_Channel_3, GPIOC, GPIO_Pin_3, 0, 0},  // PWM1_CH3 - PC3
-    {TIM1, TIM_Channel_4, GPIOC, GPIO_Pin_4, 0, 0},  // PWM1_CH4 - PC4
+    {TIM1, TIM_Channel_1, GPIOD, GPIO_Pin_2, 0, 0, PWM_REMAP_NONE},  // PWM1_CH1 - PD2
+    {TIM1, TIM_Channel_2, GPIOA, GPIO_Pin_1, 0, 0, PWM_REMAP_NONE},  // PWM1_CH2 - PA1
+    {TIM1, TIM_Channel_3, GPIOC, GPIO_Pin_3, 0, 0, PWM_REMAP_NONE},  // PWM1_CH3 - PC3
+    {TIM1, TIM_Channel_4, GPIOC, GPIO_Pin_4, 0, 0, PWM_REMAP_NONE},  // PWM1_CH4 - PC4
     
     // TIM2 Channels
-    {TIM2, TIM_Channel_1, GPIOD, GPIO_Pin_4, 0, 0},  // PWM2_CH1 - PD4
-    {TIM2, TIM_Channel_2, GPIOD, GPIO_Pin_3, 0, 0},  // PWM2_CH2 - PD3
-    {TIM2, TIM_Channel_3, GPIOC, GPIO_Pin_0, 0, 0},  // PWM2_CH3 - PC0
-    {TIM2, TIM_Channel_4, GPIOD, GPIO_Pin_7, 0, 0}   // PWM2_CH4 - PD7
+    {TIM2, TIM_Channel_1, GPIOD, GPIO_Pin_4, 0, 0, PWM_REMAP_NONE},  // PWM2_CH1 - PD4
+    {TIM2, TIM_Channel_2, GPIOD, GPIO_Pin_3, 0, 0, PWM_REMAP_NONE},  // PWM2_CH2 - PD3
+    {TIM2, TIM_Channel_3, GPIOC, GPIO_Pin_0, 0, 0, PWM_REMAP_NONE},  // PWM2_CH3 - PC0
+    {TIM2, TIM_Channel_4, GPIOD, GPIO_Pin_7, 0, 0, PWM_REMAP_NONE}   // PWM2_CH4 - PD7
 };
 
 #define PWM_CHANNEL_COUNT (sizeof(pwm_channels) / sizeof(PWM_ChannelConfig_t))
 
 static uint8_t timer_base_init[2] = {0}; // 0=TIM1, 1=TIM2
+
+/**
+ * @brief Remap pin lookup table
+ * แมป (timer, remap, channel) → (GPIO port, pin)
+ * @warning ⚠️ EXPERIMENTAL — pin mappings use DEFAULT pins as fallback.
+ *         Verify with CH32V003 datasheet before production use.
+ *         TIM1/TIM2 Partial Remap pin assignments need hardware testing.
+ */
+typedef struct {
+    GPIO_TypeDef* port;
+    uint16_t pin;
+} RemapPin_t;
+
+static const RemapPin_t* getRemapPin(TIM_TypeDef* timer, PWM_Remap remap, uint8_t tim_channel) {
+    static const RemapPin_t tim1_remap[2][4] = {
+        [PWM_REMAP_PARTIAL1 - 1] = {
+            {GPIOD, GPIO_Pin_2},  // CH1 — default PD2 (remap pin TBD)
+            {GPIOA, GPIO_Pin_1},  // CH2 — default PA1 (remap pin TBD)
+            {GPIOC, GPIO_Pin_3},  // CH3 — default PC3 (remap pin TBD)
+            {GPIOC, GPIO_Pin_4},  // CH4 — default PC4 (remap pin TBD)
+        },
+        [PWM_REMAP_PARTIAL2 - 1] = {
+            {GPIOD, GPIO_Pin_2},  // CH1 — default PD2 (remap pin TBD)
+            {GPIOA, GPIO_Pin_1},  // CH2 — default PA1 (remap pin TBD)
+            {GPIOC, GPIO_Pin_3},  // CH3 — default PC3 (remap pin TBD)
+            {GPIOC, GPIO_Pin_4},  // CH4 — default PC4 (remap pin TBD)
+        },
+    };
+    static const RemapPin_t tim2_remap[2][4] = {
+        [PWM_REMAP_PARTIAL1 - 1] = {
+            {GPIOD, GPIO_Pin_4},  // CH1 — default PD4 (remap pin TBD)
+            {GPIOD, GPIO_Pin_3},  // CH2 — default PD3 (remap pin TBD)
+            {GPIOC, GPIO_Pin_0},  // CH3 — default PC0 (remap pin TBD)
+            {GPIOD, GPIO_Pin_7},  // CH4 — default PD7 (remap pin TBD)
+        },
+        [PWM_REMAP_PARTIAL2 - 1] = {
+            {GPIOD, GPIO_Pin_4},  // CH1 — default PD4 (remap pin TBD)
+            {GPIOD, GPIO_Pin_3},  // CH2 — default PD3 (remap pin TBD)
+            {GPIOC, GPIO_Pin_0},  // CH3 — default PC0 (remap pin TBD)
+            {GPIOD, GPIO_Pin_7},  // CH4 — default PD7 (remap pin TBD)
+        },
+    };
+
+    if (remap == PWM_REMAP_NONE) return NULL;
+
+    uint8_t ch_idx;
+    switch (tim_channel) {
+        case TIM_Channel_1: ch_idx = 0; break;
+        case TIM_Channel_2: ch_idx = 1; break;
+        case TIM_Channel_3: ch_idx = 2; break;
+        case TIM_Channel_4: ch_idx = 3; break;
+        default: return NULL;
+    }
+
+    uint8_t remap_idx = remap - 1;  // PARTIAL1=0, PARTIAL2=1
+    if (timer == TIM1) {
+        if (remap_idx < 2) return &tim1_remap[remap_idx][ch_idx];
+    } else {
+        if (remap_idx < 2) return &tim2_remap[remap_idx][ch_idx];
+    }
+    return NULL;
+}
 
 /* ========== Internal Helper Functions ========== */
 
@@ -195,9 +258,6 @@ void PWM_InitRemap(PWM_Channel channel, uint32_t frequency_hz, PWM_Remap remap) 
                 case PWM_REMAP_PARTIAL2:
                     remap_value = GPIO_PartialRemap2_TIM1;
                     break;
-                case PWM_REMAP_FULL:
-                    remap_value = GPIO_FullRemap_TIM1;
-                    break;
                 default:
                     break;
             }
@@ -209,9 +269,6 @@ void PWM_InitRemap(PWM_Channel channel, uint32_t frequency_hz, PWM_Remap remap) 
                 case PWM_REMAP_PARTIAL2:
                     remap_value = GPIO_PartialRemap2_TIM2;
                     break;
-                case PWM_REMAP_FULL:
-                    remap_value = GPIO_FullRemap_TIM2;
-                    break;
                 default:
                     break;
             }
@@ -219,10 +276,18 @@ void PWM_InitRemap(PWM_Channel channel, uint32_t frequency_hz, PWM_Remap remap) 
         
         if (remap_value) {
             GPIO_PinRemapConfig(remap_value, ENABLE);
+            
+            // ⚠️ EXPERIMENTAL: อัปเดต GPIO config ตาม remap pin mapping
+            // Pin mapping ใช้ default pins เป็น fallback — ต้องตรวจสอบ datasheet
+            const RemapPin_t* rp = getRemapPin(config->timer, remap, config->tim_channel);
+            if (rp) {
+                config->gpio_port = rp->port;
+                config->gpio_pin = rp->pin;
+            }
         }
     }
     
-    // ตั้งค่า GPIO
+    // ตั้งค่า GPIO (ใช้พินที่อัปเดตแล้วถ้ามี remap)
     configureGPIO(config);
     
     // คำนวณและตั้งค่า timer (เฉพาะครั้งแรกต่อ timer)
@@ -325,14 +390,37 @@ void PWM_Write(PWM_Channel channel, uint8_t value) {
     PWM_ChannelConfig_t* config = getChannelConfig(channel);
     if (!config) return;
     
-    // Auto-init ถ้ายังไม่ได้ init
+    // Auto-init ถ้ายังไม่ได้ init (ใช้รีแมปที่ตั้งไว้ล่วงหน้าถ้ามี)
     if (!config->initialized) {
-        PWM_Init(channel, 1000);  // Default 1kHz
+        PWM_InitRemap(channel, 1000, config->current_remap);  // Default 1kHz + stored remap
         PWM_Start(channel);
     }
     
     uint8_t duty_percent = PWM_ARDUINO_TO_PERCENT(value);
     PWM_SetDutyCycle(channel, duty_percent);
+}
+
+/**
+ * @brief ตั้งค่ารีแมปล่วงหน้า (ใช้ก่อน analogWrite เพื่อ auto-init ด้วย remap)
+ * @param channel PWM channel
+ * @param remap รีแมปที่ต้องการ
+ * @note ต้องเรียกก่อน analogWrite() ครั้งแรก — PWM_Write() จะใช้ค่ารีแมปนี้ตอน auto-init
+ * 
+ * @example
+ * // ใช้ PWM1_CH1 รีแมป PARTIAL1 — ง่าย ๆ 2 บรรทัด
+ * PWM_SetRemap(PWM1_CH1, PWM_REMAP_PARTIAL1);
+ * PWM_Write(PWM1_CH1, 128);  // auto-init @ 1kHz + PARTIAL1 remap
+ * 
+ * @example
+ * // ใช้ผ่าน analogWrite
+ * PWM_SetRemap(mapPinToPWM(PA1), PWM_REMAP_PARTIAL1);
+ * analogWrite(PA1, 128);  // auto-init พร้อม remap
+ */
+void PWM_SetRemap(PWM_Channel channel, PWM_Remap remap) {
+    PWM_ChannelConfig_t* config = getChannelConfig(channel);
+    if (!config) return;
+    
+    config->current_remap = remap;
 }
 
 /* ========== Advanced Functions ========== */

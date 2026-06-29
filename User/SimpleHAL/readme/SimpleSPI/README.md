@@ -34,18 +34,28 @@ SimpleSPI ห่อหุ้ม Hardware SPI1 ให้ใช้งานง่�
 
 ## Speed Options
 
-| Enum | Prescaler | ความเร็ว @24MHz PCLK |
-|------|-----------|----------------------|
-| `SPI_12MHZ`  | PCLK/2   | 12 MHz |
-| `SPI_8MHZ`   | PCLK/4   | 6 MHz |
-| `SPI_4MHZ`   | PCLK/8   | 3 MHz |
-| `SPI_2MHZ`   | PCLK/16  | 1.5 MHz |
-| `SPI_1MHZ`   | PCLK/32  | 750 kHz |
-| `SPI_500KHZ` | PCLK/64  | 375 kHz |
-| `SPI_250KHZ` | PCLK/128 | 187.5 kHz |
-| `SPI_125KHZ` | PCLK/256 | 93.75 kHz |
+| Enum | Prescaler | @24MHz PCLK | @48MHz PCLK |
+|------|-----------|-------------|-------------|
+| `SPI_12MHZ`  | PCLK/2   | 12 MHz | 24 MHz |
+| `SPI_8MHZ`   | PCLK/4   | 6 MHz | 12 MHz |
+| `SPI_4MHZ`   | PCLK/8   | 3 MHz | 6 MHz |
+| `SPI_2MHZ`   | PCLK/16  | 1.5 MHz | 3 MHz |
+| `SPI_1MHZ`   | PCLK/32  | 750 kHz | 1.5 MHz |
+| `SPI_500KHZ` | PCLK/64  | 375 kHz | 750 kHz |
+| `SPI_250KHZ` | PCLK/128 | 187.5 kHz | 375 kHz |
+| `SPI_125KHZ` | PCLK/256 | 93.75 kHz | 187.5 kHz |
 
-> **หมายเหตุ:** ความเร็วจริงขึ้นกับ `SystemCoreClock` — ตารางอ้างอิง PCLK2=24MHz (APB2 prescaler=1, HCLK=48MHz) ที่ 48MHz PCLK2 ความเร็วจะเพิ่ม 2 เท่า
+> **หมายเหตุ:** ความเร็วจริงขึ้นกับ `SystemCoreClock` — ตารางอ้างอิง PCLK2=24MHz และ 48MHz
+
+## ข้อจำกัดแพ็กเกจ
+
+| แพ็กเกจ | SPI HW Default (PC4-7) | SPI HW Remap (PD0-3) | Software SPI |
+|:---:|:---:|:---:|:---:|
+| SOP-8 | ❌ | ❌ | ✅ shiftOut/shiftIn |
+| SOP-16 | ✅ | ❌ | ✅ |
+| TSSOP-20/QFN-20 | ✅ | ✅ | ✅ |
+
+> ⚠️ **SOP-8:** Hardware SPI ถูกปิดทั้งหมด (`#if !CH32V003_IS_SOP8`) — ซอร์สโค้ด SimpleSPI.c ไม่ถูกคอมไพล์
 
 ---
 
@@ -96,6 +106,53 @@ SPI_TransferBuffer(NULL, rx, 3);
 ```c
 uint8_t cmd[] = {0xAB, 0xCD};
 SPI_Write(cmd, 2);
+```
+
+#### `void SPI_Read(uint8_t* data, uint16_t len, uint8_t dummy_byte)`
+
+รับข้อมูลอย่างเดียว (ส่ง dummy byte)
+
+```c
+uint8_t buf[10];
+SPI_Read(buf, 10, 0xFF);  // ส่ง 0xFF ไป, รับ 10 bytes
+```
+
+### Chip Select Control
+
+#### `void SPI_SetCS(uint8_t state)`
+
+ควบคุม CS pin — 0=LOW, 1=HIGH
+
+```c
+SPI_SetCS(0);           // Select device
+SPI_Transfer(0xAA);
+SPI_SetCS(1);           // Deselect
+```
+
+#### `void SPI_SetCSPin(GPIO_TypeDef* port, uint16_t pin)`
+
+เปลี่ยน CS pin — รองรับหลาย SPI devices
+
+```c
+SPI_SetCSPin(GPIOA, GPIO_Pin_2);  // เปลี่ยน CS เป็น PA2
+```
+
+### Configuration
+
+#### `void SPI_SetSpeed(SPI_Speed speed)`
+
+เปลี่ยนความเร็วตอน runtime
+
+```c
+SPI_SetSpeed(SPI_8MHZ);  // เร่งความเร็ว
+```
+
+#### `void SPI_SetBitOrder(SPI_BitOrder order)`
+
+เปลี่ยน MSB/LSB first — `SPI_MSB_FIRST` หรือ `SPI_LSB_FIRST`
+
+```c
+SPI_SetBitOrder(SPI_LSB_FIRST);
 ```
 
 ---

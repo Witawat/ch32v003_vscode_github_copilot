@@ -47,7 +47,11 @@ static const PinMap_t pin_map[] = {
     {GPIOC, GPIO_Pin_7, GPIO_PinSource7, GPIO_PortSourceGPIOC},  // PC7 (17)
     
     // GPIOD Pins (PD0-PD1) — PD0 ไม่มีบน SOP-8/SOP-16
+#if CH32V003_HAS_PD0
     {GPIOD, GPIO_Pin_0, GPIO_PinSource0, GPIO_PortSourceGPIOD},  // PD0 (18)
+#else
+    {0, 0, 0, 0},  // PD0 — ไม่มีบน SOP-8/SOP-16 (ให้ getPinMap คืน NULL)
+#endif
     {GPIOD, GPIO_Pin_1, GPIO_PinSource1, GPIO_PortSourceGPIOD},  // PD1 (19)
     
     // GPIOD pins (PD2-PD7)
@@ -74,7 +78,7 @@ static void (* volatile exti_callbacks[8])(void) = {0};
 /**
  * @brief ADC initialization state
  */
-static volatile uint8_t adc_initialized = 0;
+static volatile uint8_t adc_initialized = 0;  // ADC init is idempotent — safe across modules
 
 /* ========== Internal Helper Functions ========== */
 

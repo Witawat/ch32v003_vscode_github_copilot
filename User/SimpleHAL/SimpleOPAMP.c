@@ -51,6 +51,8 @@ void OPAMP_SimpleInit(OPAMP_Mode mode) {
 
 /**
  * @brief  Enable OPAMP
+ * @note   OPAMP uses EXTEN controller (0x40023800) — always clocked when system
+ *         is running, no separate RCC clock enable needed.
  */
 void OPAMP_Enable(void) {
     OPA_Cmd(ENABLE);

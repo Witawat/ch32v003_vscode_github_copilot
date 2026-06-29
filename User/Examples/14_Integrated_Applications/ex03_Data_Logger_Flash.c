@@ -22,6 +22,7 @@
  * ============================================================
  */
 
+#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include <SimpleHAL.h>
 
 #define ADC_PIN  PD2
@@ -38,7 +39,7 @@ typedef struct {
 
 LogEntry logBuffer[MAX_LOG];
 uint16_t logCount = 0;
-uint32_t flashAddr = 0x08006000;
+uint32_t flashAddr = FLASH_DATA_ADDR;  // ใช้พื้นที่เก็บข้อมูลของ SimpleHAL (หน้า 255)
 
 uint32_t logStart = 0;
 uint32_t seconds = 0;

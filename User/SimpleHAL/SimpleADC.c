@@ -132,24 +132,29 @@ void ADC_SimpleInitChannels(ADC_Channel *channels, uint8_t count) {
  * @brief เริ่มต้นการใช้งาน ADC (เปิดทุก channels)
  */
 void ADC_SimpleInit(void) {
-  // เปิดทุก 8 channels
-  ADC_Channel all_channels[] = {
-    ADC_CH_0,  // PA2
-    ADC_CH_1,  // PA1
-    ADC_CH_2,  // PC4
-    ADC_CH_3,  // PD2
-    ADC_CH_4,  // PD3
-    ADC_CH_5,  // PD5
-    ADC_CH_6,  // PD6
-    ADC_CH_7   // PD4
-  };
-  ADC_SimpleInitChannels(all_channels, 8);
+  ADC_Channel all_channels[8];
+  uint8_t count = 0;
+
+  // เลือก channels ตามแพ็กเกจ
+#if !CH32V003_IS_SOP8
+  all_channels[count++] = ADC_CH_0;  // PA2
+  all_channels[count++] = ADC_CH_1;  // PA1
+  all_channels[count++] = ADC_CH_3;  // PD2
+  all_channels[count++] = ADC_CH_4;  // PD3
+#endif
+  all_channels[count++] = ADC_CH_2;  // PC4 — มีในทุกแพ็กเกจ
+  all_channels[count++] = ADC_CH_5;  // PD5 — มีในทุกแพ็กเกจ
+  all_channels[count++] = ADC_CH_6;  // PD6 — มีในทุกแพ็กเกจ
+  all_channels[count++] = ADC_CH_7;  // PD4 — มีในทุกแพ็กเกจ
+
+  ADC_SimpleInitChannels(all_channels, count);
 }
 
 /**
  * @brief อ่านค่า ADC จากช่องที่ระบุ
  */
 uint16_t ADC_Read(ADC_Channel channel) {
+  // ADC init is idempotent (calls ADC_DeInit first) — safe from multiple callers
   static uint8_t adc_inited = 0;
   if (!adc_inited) {
     ADC_InitPeripheral();

@@ -124,6 +124,23 @@ void USART_SimpleInit(USART_BaudRate baud, USART_PinConfig pin_config) {
             GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
             GPIO_Init(GPIOD, &GPIO_InitStructure);
             break;
+            
+        case USART_PINS_FULL_REMAP:
+            // Full Remap: TX=PD6, RX=PD5 (รวมบิต REMAP1+REMAP2)
+            // @note pin mapping อาจแตกต่าง — ตรวจสอบ CH32V003 datasheet
+            GPIO_PinRemapConfig(GPIO_FullRemap_USART1, ENABLE);
+            
+            // TX
+            GPIO_InitStructure.GPIO_Pin = GPIO_Pin_6;
+            GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
+            GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+            GPIO_Init(GPIOD, &GPIO_InitStructure);
+            
+            // RX
+            GPIO_InitStructure.GPIO_Pin = GPIO_Pin_5;
+            GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+            GPIO_Init(GPIOD, &GPIO_InitStructure);
+            break;
     }
     
     // 3. ตั้งค่า USART

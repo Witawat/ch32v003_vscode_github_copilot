@@ -275,6 +275,26 @@ uint8_t portRead(GPIO_TypeDef* port);
 /* ========== Pin Validation Macros ========== */
 
 /**
+ * @brief ตรวจสอบว่า pin มีจริงตามแพ็กเกจที่เลือก
+ * @note ใช้ร่วมกับ CH32V003_PACKAGE macros จาก SimpleHAL.h
+ *
+ * SOP-8  (J4M6): PD1, PD4, PD5, PD6, PC1, PC2 (6 pins)
+ * SOP-16 (A4M6): ทุก pin ยกเว้น PD0
+ * TSSOP-20 / QFN-20: ทุก pin
+ */
+#include "SimpleHAL.h"
+
+#if CH32V003_IS_SOP8
+  #define IS_VALID_PIN(pin) \
+      ((pin) == PD1 || (pin) == PD4 || (pin) == PD5 || (pin) == PD6 || \
+       (pin) == PC1 || (pin) == PC2)
+#elif CH32V003_IS_SOP16
+  #define IS_VALID_PIN(pin)  ((pin) != PD0)
+#else
+  #define IS_VALID_PIN(pin)  (1)
+#endif
+
+/**
  * @brief ตรวจสอบว่า pin รองรับ ADC หรือไม่
  * @note ADC pins: PA1, PA2, PC4, PD2, PD3, PD4, PD5, PD6 (8 pins)
  */
@@ -333,15 +353,14 @@ uint16_t _analogRead_impl(uint8_t pin);
  * 
  * float voltage = (value / 1023.0) * 3.3;
  */
-#define analogRead(pin) __builtin_choose_expr( \
-    __builtin_constant_p(pin), \
-    ({ \
+#define analogRead(pin) \
+    (__builtin_constant_p(pin) ? \
+     ({ \
         _Static_assert(IS_ADC_PIN(pin), \
             "analogRead: Pin does not support ADC! Only PA1, PA2, PC4, PD2-PD6 support ADC."); \
         _analogRead_impl(pin); \
-    }), \
-    _analogRead_impl(pin) \
-)
+     }) : \
+     _analogRead_impl(pin))
 
 /**
  * @brief เขียนค่า PWM ไปยัง pin (Arduino-style) - Implementation function
@@ -385,15 +404,14 @@ void _analogWrite_impl(uint8_t pin, uint8_t value);
  * PWM_Start(PWM1_CH3);
  * analogWrite(PC3, 128);      // 50% duty cycle @ 25kHz
  */
-#define analogWrite(pin, value) __builtin_choose_expr( \
-    __builtin_constant_p(pin), \
-    ({ \
+#define analogWrite(pin, value) \
+    (__builtin_constant_p(pin) ? \
+     ({ \
         _Static_assert(IS_PWM_PIN(pin), \
             "analogWrite: Pin does not support PWM! Supported: PA1, PC0, PC3-4, PD2-4, PD7"); \
         _analogWrite_impl(pin, value); \
-    }), \
-    _analogWrite_impl(pin, value) \
-)
+     }) : \
+     _analogWrite_impl(pin, value))
 
 /**
  * @brief เขียนค่า digital ไปหลาย pins พร้อมกัน (internal function)

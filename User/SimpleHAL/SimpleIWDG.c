@@ -6,6 +6,7 @@
  * Description        : Simple Independent Watchdog (IWDG) library for CH32V003
  **********************************************************************************/
 #include "SimpleIWDG.h"
+#include "SimpleArduino.h"
 
 /******************************************************************************/
 /*                              Private Functions                             */
@@ -109,6 +110,9 @@ void IWDG_Init(uint8_t prescaler, uint16_t reload)
     
     // Enable IWDG (cannot be disabled after this!)
     IWDG_Enable();
+
+    // Notify SimpleArduino so yield() will auto-feed the watchdog
+    arduino_SetIWDGActive();
 }
 
 /**

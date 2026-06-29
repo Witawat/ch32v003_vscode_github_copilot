@@ -35,6 +35,7 @@
  * ============================================================
  */
 
+#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include <SimpleHAL.h>
 #include <string.h>
 
@@ -132,7 +133,6 @@ uint32_t W25Q_ReadID(void) {
     txBuf[3] = 0x00;
 
     digitalWrite(W25Q_CS_PIN, LOW);
-    SPI_SimpleInit(SPI_MODE0, SPI_1MHZ, SPI_PINS_DEFAULT);
     SPI_TransferBuffer(txBuf, rxBuf, 4);
     digitalWrite(W25Q_CS_PIN, HIGH);
 
@@ -171,6 +171,7 @@ int main(void) {
 
     Timer_Init();
     I2C_SimpleInit(I2C_100KHZ, I2C_PINS_DEFAULT);
+    SPI_SimpleInit(SPI_MODE0, SPI_1MHZ, SPI_PINS_DEFAULT);
     dsBus = OneWire_Init(DS18B20_PIN);
     pinMode(W25Q_CS_PIN, PIN_MODE_OUTPUT);
     digitalWrite(W25Q_CS_PIN, HIGH);
