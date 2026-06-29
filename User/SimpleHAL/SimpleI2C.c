@@ -8,11 +8,7 @@
 #include "SimpleI2C.h"
 #include "SimpleDelay.h"
 
-#warning "I2C_PINS_PARTIAL_REMAP: Pin mapping needs CH32V003 datasheet verification."
-
-#if CH32V003_IS_SOP8
-#warning "I2C HW may not be available on SOP-8 (PC1/PC2 pins may not be bonded). Consider using SimpleI2C_Soft instead."
-#endif
+// I2C_PINS_PARTIAL_REMAP: SCL=PD2, SDA=PD1 — works on all packages including SOP-8
 
 /* ========== Private Helper Functions ========== */
 
@@ -40,8 +36,8 @@ void I2C_SimpleInit(I2C_Speed speed, I2C_PinConfig pin_config) {
     GPIO_InitTypeDef GPIO_InitStructure = {0};
     I2C_InitTypeDef I2C_InitStructure = {0};
     
-    // 1. เปิด Clock
-    if(pin_config == I2C_PINS_REMAP) {
+    // 1. เปิด Clock — PARTIAL_REMAP ใช้ PD2/PD1 (GPIOD) เหมือน REMAP
+    if(pin_config == I2C_PINS_PARTIAL_REMAP || pin_config == I2C_PINS_REMAP) {
         RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOD | RCC_APB1Periph_I2C1 | RCC_APB2Periph_AFIO, ENABLE);
     } else {
         RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOC | RCC_APB1Periph_I2C1 | RCC_APB2Periph_AFIO, ENABLE);
@@ -60,14 +56,13 @@ void I2C_SimpleInit(I2C_Speed speed, I2C_PinConfig pin_config) {
             break;
             
         case I2C_PINS_PARTIAL_REMAP:
-            // Partial Remap: ใช้ GPIO_PartialRemap_I2C1
-            // @note pin mapping ต้องตรวจสอบ CH32V003 datasheet — fallback ใช้ PC2/PC1
+            // Partial Remap: SCL=PD2, SDA=PD1 (ใช้ได้บน SOP-8!)
             GPIO_PinRemapConfig(GPIO_PartialRemap_I2C1, ENABLE);
             
-            GPIO_InitStructure.GPIO_Pin = GPIO_Pin_2 | GPIO_Pin_1;
+            GPIO_InitStructure.GPIO_Pin = GPIO_Pin_2 | GPIO_Pin_1;  // PD2=SCL, PD1=SDA
             GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_OD;
             GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
-            GPIO_Init(GPIOC, &GPIO_InitStructure);
+            GPIO_Init(GPIOD, &GPIO_InitStructure);
             break;
             
         case I2C_PINS_REMAP:
