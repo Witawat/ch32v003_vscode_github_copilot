@@ -18,11 +18,11 @@
 
 body {
     font-family: 'IBM Plex Sans Thai', 'Sarabun', 'Noto Sans Thai', sans-serif;
-    font-size: clamp(15px, 1.7vw, 18px);
+    font-size: clamp(17px, 2.2vw, 22px);
     line-height: 1.85;
     color: var(--text);
     background: var(--bg);
-    max-width: 860px;
+    max-width: 900px;
     margin: 0 auto;
     padding: 1.5rem 1.2rem;
 }
@@ -62,8 +62,8 @@ section {
 section h2 { margin-top: 0; border-bottom: none; font-size: 1.25em; }
 
 /* Code */
-code { background: var(--code-bg); padding: 0.15em 0.4em; border-radius: 3px; font-size: 0.9em; }
-pre { background: #0d1117; color: #e6edf3; padding: 1.2rem; border-radius: var(--radius); overflow-x: auto; font-size: 0.88em; line-height: 1.6; }
+code { background: var(--code-bg); padding: 0.15em 0.4em; border-radius: 3px; font-size: 0.92em; }
+pre { background: #0d1117; color: #e6edf3; padding: 1.2rem; border-radius: var(--radius); overflow-x: auto; font-size: 0.9em; line-height: 1.6; }
 pre code { background: transparent; padding: 0; color: inherit; }
 
 /* Highlight.js syntax coloring — match dark code blocks */
@@ -80,7 +80,7 @@ p { margin: 0.6rem 0; }
 /* ASCII Circuit — monospace, high contrast, readable */
 pre.ascii-circuit {
     background: #f0f4f8; color: #1e293b;
-    font-size: 0.75em; font-family: 'Courier New', 'Consolas', 'Liberation Mono', monospace;
+    font-size: 0.82em; font-family: 'Courier New', 'Consolas', 'Liberation Mono', monospace;
     border: 2px solid #94a3b8; text-align: center;
     line-height: 1.2; padding: 1rem 0.6rem;
     letter-spacing: 0.03em; overflow-x: auto;
@@ -121,8 +121,8 @@ th { background: var(--code-bg); font-weight: 700; color: var(--accent); }
 
 /* Responsive */
 @media (max-width: 640px) {
-    body { padding: 0.8rem; font-size: 15px; }
-    pre { font-size: 0.78em; padding: 0.8rem; }
+    body { padding: 0.8rem; font-size: 16px; }
+    pre { font-size: 0.82em; padding: 0.8rem; }
     section { padding: 1rem; }
     nav.top-nav, nav.bottom-nav { flex-direction: column; gap: 0.3rem; text-align: center; }
 }
