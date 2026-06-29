@@ -17,28 +17,40 @@
 <span class="level expert">ระดับผู้เชี่ยวชาญ</span>
 
 <section class="flowchart">
-    <h2>🧭 แผนภาพการทำงาน</h2>
+    <h2>🧭 1. การอ้างสิทธิ์ Timer (First-Come-First-Served)</h2>
     <pre class="mermaid">
-flowchart TB
-    subgraph Init["🔌 Init Phase"]
-        A["PWM_Init(TIM1_CH1, 1kHz)"] --> B{"g_tim1_owner == NONE?"}
-        B -->|"✅ Yes — ยังว่าง"| C["Claim: g_tim1_owner = PWM"]
-        B -->|"❌ No — มีคนใช้แล้ว"| D["Return ทันที! PWM ไม่เริ่ม"]
-        C --> E["🎯 PWM ทำงานปกติ"]
-    end
-    subgraph Conflict["⚠️ Conflict Detection"]
-        F["TIM_SimpleInit(TIM_1, 100Hz)"] --> G{"g_tim1_owner == NONE?"}
-        G -->|"❌ No — PWM ใช้อยู่"| H["Return — ไม่เขียนทับ!"]
-        G -->|"✅ Yes"| I["Claim + ทำงาน"]
-    end
-    subgraph Safe["✅ Safe Path"]
-        J["PWM1_CH1 → TIM1"] --> K["Stopwatch → TIM2"]
-        K --> L["ใช้คนละ timer → ไม่ชนกัน!"]
-    end
+flowchart LR
+    A["PWM_Init(TIM1)"] --> B{"g_tim1_owner == 0?"}
+    B -->|"✅ ว่าง"| C["Claim → g_tim1_owner = 1"]
+    B -->|"❌ ไม่ว่าง"| D["Return — ไม่เริ่ม"]
+    C --> E["🎯 PWM ทำงาน"]
     style C fill:#dcfce7,stroke:#22c55e
     style D fill:#fee2e2,stroke:#ef4444
+    style E fill:#dcfce7,stroke:#22c55e
+    </pre>
+</section>
+
+<section class="flowchart">
+    <h2>🧭 2. การตรวจจับ Conflict</h2>
+    <pre class="mermaid">
+flowchart LR
+    F["TIM_SimpleInit(TIM1)"] --> G{"g_tim1_owner == 0?"}
+    G -->|"❌ PWM ใช้อยู่"| H["Return — ไม่เขียนทับ"]
+    G -->|"✅ ว่าง"| I["Claim + ทำงาน"]
     style H fill:#fee2e2,stroke:#ef4444
+    style I fill:#dcfce7,stroke:#22c55e
+    </pre>
+</section>
+
+<section class="flowchart">
+    <h2>🧭 3. Safe Path — ใช้คนละ Timer</h2>
+    <pre class="mermaid">
+flowchart LR
+    J["PWM1_CH1 → TIM1"] --> L["✅ ไม่ชนกัน"]
+    K["Stopwatch → TIM2"] --> L
+    M["Timer_SimpleInit → TIM1"] --> N["❌ ชนกับ PWM"]
     style L fill:#dcfce7,stroke:#22c55e
+    style N fill:#fee2e2,stroke:#ef4444
     </pre>
 </section>
 

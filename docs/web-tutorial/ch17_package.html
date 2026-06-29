@@ -17,33 +17,52 @@
 <span class="level expert">ระดับผู้เชี่ยวชาญ</span>
 
 <section class="flowchart">
-    <h2>🧭 แผนภาพการทำงาน</h2>
+    <h2>🧭 1. ตั้งค่าแพ็กเกจ → Include</h2>
     <pre class="mermaid">
-flowchart TB
-    subgraph Setup["📦 เลือกแพ็กเกจ"]
-        A["#define CH32V003_PACKAGE PACKAGE_xxx"] --> B["#include SimpleHAL.h"]
-    end
-    subgraph Compile["⚙️ ตอน Compile"]
-        B --> C{"analogRead(PD2) → IS_ADC_PIN(PD2)?"}
-        C -->|"SOP8: PD2 ไม่มี → false"| D["❌ Static Assert — COMPILE ERROR"]
-        C -->|"TSSOP20: PD2 มี → true"| E["✅ ผ่าน — analogRead OK"]
-        B --> F{"IS_VALID_PIN(PC0)?"}
-        F -->|"SOP8: false"| G["pinMode → return ทันที (silent)"]
-        F -->|"SOP16: true"| H["pinMode → ตั้งค่า GPIO"]
-    end
-    subgraph Runtime["🔄 ตอน Runtime"]
-        I["IS_PWM_VALID_PACKAGE(ch)"] --> J{"SOP8?"}
-        J -->|"✅ Yes"| K["ใช้ได้แค่ PWM1_CH2 + PWM1_CH4"]
-        J -->|"❌ No"| L["ใช้ได้ทุก channel"]
-    end
-    subgraph Result["🎯 ผลลัพธ์"]
-        M["โค้ดเดียว เปลี่ยนแค่ #define"] --> N["รันบน SOP8 / SOP16 / TSSOP20"]
-        N --> O["Package-aware อัตโนมัติ"]
-    end
-    style D fill:#fee2e2,stroke:#ef4444
-    style E fill:#dcfce7,stroke:#22c55e
-    style K fill:#fef3c7,stroke:#f59e0b
-    style O fill:#dcfce7,stroke:#22c55e
+flowchart LR
+    A["#define CH32V003_PACKAGE PACKAGE_SOP8"] --> B["#include SimpleHAL.h"]
+    B --> C["Package macros พร้อมใช้"]
+    style C fill:#dcfce7,stroke:#22c55e
+    </pre>
+</section>
+
+<section class="flowchart">
+    <h2>🧭 2. Compile-Time Validation</h2>
+    <pre class="mermaid">
+flowchart LR
+    A{"analogRead(PD2) — IS_ADC_PIN?"} -->|"SOP8: false"| B["❌ COMPILE ERROR"]
+    A -->|"TSSOP20: true"| C["✅ OK"]
+    D{"IS_VALID_PIN(PC0) — SOP8?"} -->|"false"| E["pinMode → return เงียบ"]
+    D -->|"true (SOP16)"| F["pinMode → ทำงาน"]
+    style B fill:#fee2e2,stroke:#ef4444
+    style C fill:#dcfce7,stroke:#22c55e
+    style E fill:#fef3c7,stroke:#f59e0b
+    </pre>
+</section>
+
+<section class="flowchart">
+    <h2>🧭 3. Runtime — PWM per Package</h2>
+    <pre class="mermaid">
+flowchart LR
+    A["IS_PWM_VALID_PACKAGE(ch)"] --> B{"SOP8?"}
+    B -->|"✅ Yes"| C["PWM1_CH2(PA1) + PWM1_CH4(PC4)"]
+    B -->|"❌ No"| D["ทุก channel ใช้ได้"]
+    style C fill:#fef3c7,stroke:#f59e0b
+    style D fill:#dcfce7,stroke:#22c55e
+    </pre>
+</section>
+
+<section class="flowchart">
+    <h2>🧭 4. โค้ดเดียว — 3 แพ็กเกจ</h2>
+    <pre class="mermaid">
+flowchart LR
+    A["1 บรรทัด: #define PACKAGE_xxx"] --> B["โค้ดเดิม ไม่เปลี่ยน"]
+    B --> C["SOP8: 6 pins"]
+    B --> D["SOP16: 14 pins"]
+    B --> E["TSSOP20: 18 pins"]
+    style C fill:#fef3c7
+    style D fill:#dbeafe
+    style E fill:#dcfce7
     </pre>
 </section>
 
