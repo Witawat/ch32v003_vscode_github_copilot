@@ -8,6 +8,10 @@
 #include "SimpleTIM_Ext.h"
 #include <stdio.h>
 
+#ifndef TIMEXT_DEFAULT_TIMER
+  #define TIMEXT_DEFAULT_TIMER  TIM_2  /**< Default: TIM2. Change to TIM_1 via #define if TIM2 conflicts with PWM */
+#endif
+
 /* ========== Internal State Variables ========== */
 
 // Stopwatch state
@@ -98,9 +102,9 @@ static void ms_to_time_raw_hhmmss(uint32_t ms, Time_t* time) {
 void Stopwatch_Init(void) {
     static uint8_t init = 0;
     if (!init) {
-        TIM_SimpleInit(TIM_2, 1000);
-        TIM_AttachInterrupt(TIM_2, timer_ext_callback);
-        TIM_Start(TIM_2);
+        TIM_SimpleInit(TIMEXT_DEFAULT_TIMER, 1000);
+        TIM_AttachInterrupt(TIMEXT_DEFAULT_TIMER, timer_ext_callback);
+        TIM_Start(TIMEXT_DEFAULT_TIMER);
         init = 1;
     }
     
@@ -179,9 +183,9 @@ void Countdown_Init(uint16_t hours, uint8_t minutes, uint8_t seconds) {
     // Initialize timer if not already done
     static uint8_t timer_initialized = 0;
     if (!timer_initialized) {
-        TIM_SimpleInit(TIM_2, 1000);
-        TIM_AttachInterrupt(TIM_2, timer_ext_callback);
-        TIM_Start(TIM_2);
+        TIM_SimpleInit(TIMEXT_DEFAULT_TIMER, 1000);
+        TIM_AttachInterrupt(TIMEXT_DEFAULT_TIMER, timer_ext_callback);
+        TIM_Start(TIMEXT_DEFAULT_TIMER);
         timer_initialized = 1;
     }
 }
@@ -195,9 +199,9 @@ void Countdown_InitFromSeconds(uint32_t total_seconds) {
     // Initialize timer if not already done
     static uint8_t timer_initialized = 0;
     if (!timer_initialized) {
-        TIM_SimpleInit(TIM_2, 1000);
-        TIM_AttachInterrupt(TIM_2, timer_ext_callback);
-        TIM_Start(TIM_2);
+        TIM_SimpleInit(TIMEXT_DEFAULT_TIMER, 1000);
+        TIM_AttachInterrupt(TIMEXT_DEFAULT_TIMER, timer_ext_callback);
+        TIM_Start(TIMEXT_DEFAULT_TIMER);
         timer_initialized = 1;
     }
 }

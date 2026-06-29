@@ -7,6 +7,12 @@
 
 #include "SimpleTIM.h"
 
+/* ========== Timer Resource Ownership ========== */
+
+/** @brief Global timer resource tracking — ป้องกันการชนกันระหว่างโมดูล */
+uint8_t g_tim1_owner = TIM_OWNER_NONE;
+uint8_t g_tim2_owner = TIM_OWNER_NONE;
+
 /* ========== Internal Data ========== */
 
 /**
@@ -98,6 +104,12 @@ static void calculateTimerParams(uint32_t frequency_hz, uint16_t* prescaler, uin
 void TIM_SimpleInit(TIM_Instance timer, uint32_t frequency_hz) {
     TIM_TypeDef* TIMx = getTIM(timer);
     if (!TIMx) return;
+    
+    // Guard: prevent conflict with PWM or TIM_Ext
+    uint8_t* owner = (timer == TIM_1) ? &g_tim1_owner : &g_tim2_owner;
+    if (*owner != TIM_OWNER_NONE && *owner != TIM_OWNER_TIMER) {
+        return;  // already used by PWM or TIM_Ext — do not overwrite
+    }
     
     // เปิด clock
     enableTimerClock(timer);
@@ -207,6 +219,10 @@ void TIM_AttachInterrupt(TIM_Instance timer, void (*callback)(void)) {
     
     // เปิด update interrupt
     TIM_ITConfig(TIMx, TIM_IT_Update, ENABLE);
+    
+    // จอง timer resource
+    uint8_t* owner = (timer == TIM_1) ? &g_tim1_owner : &g_tim2_owner;
+    *owner = TIM_OWNER_TIMER;
     
     // ตั้งค่า NVIC
     NVIC_InitTypeDef NVIC_InitStructure = {0};

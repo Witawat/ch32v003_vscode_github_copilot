@@ -51,6 +51,28 @@ extern "C" {
 /* ========== Timer Definitions ========== */
 
 /**
+ * @brief Timer resource ownership — ป้องกันการใช้งาน timer ซ้ำซ้อน
+ *
+ * CH32V003 มี TIM1, TIM2 และ SysTick — โมดูลที่ใช้ hardware timer เดียวกัน
+ * จะถูกป้องกันไม่ให้ชนกันผ่านตัวแปร ownership นี้
+ *
+ * Timer Resource Map:
+ *   SysTick → SimpleDelay (เสมอ)
+ *   TIM1    → SimplePWM (PWM1_CH1-4) หรือ SimpleTIM
+ *   TIM2    → SimplePWM (PWM2_CH1-4) หรือ SimpleTIM หรือ SimpleTIM_Ext
+ *
+ * ⚠️ ห้ามใช้ TIM1/TIM2 ร่วมกันระหว่าง PWM กับ SimpleTIM
+ * ⚠️ ถ้าใช้ Stopwatch/Countdown (TIM2) — ไม่สามารถใช้ PWM2 ได้
+ */
+#define TIM_OWNER_NONE    0  /**< Timer ว่าง ยังไม่มีใครใช้ */
+#define TIM_OWNER_PWM     1  /**< ถูกใช้โดย SimplePWM */
+#define TIM_OWNER_TIMER   2  /**< ถูกใช้โดย SimpleTIM */
+#define TIM_OWNER_TIMEXT  3  /**< ถูกใช้โดย SimpleTIM_Ext (Stopwatch/Countdown) */
+
+extern uint8_t g_tim1_owner;  /**< เจ้าของ TIM1 ปัจจุบัน */
+extern uint8_t g_tim2_owner;  /**< เจ้าของ TIM2 ปัจจุบัน */
+
+/**
  * @brief Timer instance identifiers
  */
 typedef enum {

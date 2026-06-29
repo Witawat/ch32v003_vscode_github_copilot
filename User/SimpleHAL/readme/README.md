@@ -280,11 +280,14 @@ int main(void) {
 
 | Resource | ใช้โดย | หมายเหตุ |
 |----------|--------|---------|
-| SysTick | SimpleDelay | ต้องเรียก `Timer_Init()` หลัง `SystemCoreClockUpdate()` |
-| TIM1 | SimplePWM (PWM1_CH1-4) **หรือ** SimpleTIM | เลือกอย่างใดอย่างหนึ่ง |
-| TIM2 | SimplePWM (PWM2_CH1-4) **หรือ** SimpleTIM **หรือ** SimpleTIM_Ext | เลือกอย่างใดอย่างหนึ่ง |
-| IWDG | SimpleIWDG | LSI clock อิสระ |
-| WWDG | SimpleWWDG | PCLK1 clock |
+| **SysTick** | SimpleDelay | `Timer_Init()`, `Delay_Ms/Us`, `Timer_t` — ใช้ได้เสมอ |
+| **TIM1** | SimplePWM (PWM1_CH1-4) **หรือ** SimpleTIM | เลือกอย่างใดอย่างหนึ่ง — guard ป้องกันชน |
+| **TIM2** | SimplePWM (PWM2_CH1-4) **หรือ** SimpleTIM **หรือ** SimpleTIM_Ext | เลือกอย่างใดอย่างหนึ่ง — guard ป้องกันชน |
+| **IWDG** | SimpleIWDG | LSI clock อิสระ |
+| **WWDG** | SimpleWWDG | PCLK1 clock |
+
+> ⚠️ **Timer Resource Guard:** ถ้า TIM1/TIM2 ถูกใช้โดยโมดูลอื่น — `TIM_SimpleInit()` และ `PWM_InitRemap()` จะ return ทันทีโดยไม่เขียนทับ  
+> 💡 **SimpleTIM_Ext:** เปลี่ยน timer ได้ด้วย `#define TIMEXT_DEFAULT_TIMER TIM_1` (default: TIM2)
 
 ---
 

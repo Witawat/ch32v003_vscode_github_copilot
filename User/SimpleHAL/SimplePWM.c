@@ -301,6 +301,13 @@ void PWM_InitRemap(PWM_Channel channel, uint32_t frequency_hz, PWM_Remap remap) 
     // คำนวณและตั้งค่า timer (เฉพาะครั้งแรกต่อ timer)
     uint8_t tim_idx = (config->timer == TIM1) ? 0 : 1;
     if (!timer_base_init[tim_idx]) {
+        // Guard: prevent conflict with SimpleTIM or TIM_Ext
+        uint8_t* owner = (config->timer == TIM1) ? &g_tim1_owner : &g_tim2_owner;
+        if (*owner != TIM_OWNER_NONE && *owner != TIM_OWNER_PWM) {
+            return;  // timer already owned by SimpleTIM or TIM_Ext
+        }
+        *owner = TIM_OWNER_PWM;
+        
         uint16_t prescaler, period;
         calculatePWMParams(frequency_hz, &prescaler, &period);
         configureTimerBase(config->timer, prescaler, period);
