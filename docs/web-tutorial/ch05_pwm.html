@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>บทที่ 5: PWM — ควบคุมความสว่าง LED และ Servo Motor — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch04_usart.html">บทก่อน</a>
+    <a href="ch06_adc.html">บทถัดไป →</a>
+</nav>
+
+<h1>บทที่ 5: PWM — ควบคุมความสว่าง LED และ Servo Motor</h1>
+<span class="level intermediate">ระดับกลาง</span>
+
+<section class="flowchart">
+    <h2>🧭 แผนภาพการทำงาน</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["PWM_Init(channel, freq)"] --> B["PWM_Start()"]
+    B --> C["Loop วนไป"]
+    C --> D["PWM_SetDutyCycle(ch, %) หรือ analogWrite(pin, 0-255)"]
+    D --> E["Hardware สร้าง PWM อัตโนมัติ"]
+    E --> C
+    </pre>
+</section>
+
+<section>
+    <h2>🔌 การต่อวงจร</h2>
+    <pre class="ascii-circuit">
+    LED Fade (PD2/PWM1_CH1)          Servo SG90 (PD2/PWM1_CH1)
+    ┌──────────────────┐         ┌────────────────────────┐
+    │ MCU               │         │ MCU                    │
+    │ PD2───220Ω──|LED| │         │ PD2────(Signal)───SG90 │
+    │               GND │         │                        │
+    └──────────────────┘         │   +5V ภายนอก───VCC(SG90)│
+                                 │   GND──────GND(SG90)   │
+    TIM1 Channels:               └────────────────────────┘
+      CH1=PD2, CH2=PA1, CH3=PC3, CH4=PC4
+    TIM2 Channels:
+      CH1=PD4, CH2=PD3, CH3=PC0, CH4=PD7
+    </pre>
+    <p><strong>วงจร LED:</strong> R 220Ω จำกัดกระแส (PWM ทำให้ LED สว่างน้อยลงเฉลี่ย แต่วูบที่ความถี่สูงจนตามองไม่เห็น)<br>
+    <strong>วงจร Servo:</strong> สายสัญญาณจาก PD2, <strong>ไฟ 5V ต้องจ่ายแยก!</strong> — CH32V003 จ่าย 3.3V ไม่พอสำหรับ Servo — GND ต้องต่อรวมกัน</p>
+    <p><strong>SOP-8:</strong> PWM pins ที่ใช้ได้: PA1 (PWM1_CH2), PC4 (PWM1_CH4) — 2 channels เท่านั้น</p>
+</section>
+
+<section>
+    <h2>📚 หลักการทำงาน</h2>
+    <p><strong>PWM (Pulse Width Modulation)</strong> — สร้างสัญญาณ digital ที่มี duty cycle เปลี่ยนแปลงได้ เพื่อจำลอง analog output</p>
+    <p><strong>Duty Cycle</strong> — สัดส่วนเวลา HIGH ต่อคาบ — 0% = LOW ตลอด, 50% = ครึ่ง HIGH ครึ่ง LOW, 100% = HIGH ตลอด</p>
+    <p><strong>ความถี่ PWM</strong> — LED: 1kHz พอ (ตามองไม่เห็นการกระพริบ) — Servo: 50Hz (20ms period)</p>
+    <div style="overflow-x:auto">
+    <table>
+        <tr><th>Servo SG90</th><th>Pulse Width</th><th>Duty @50Hz</th></tr>
+        <tr><td>0°</td><td>1.0 ms</td><td>5%</td></tr>
+        <tr><td>90°</td><td>1.5 ms</td><td>7.5%</td></tr>
+        <tr><td>180°</td><td>2.0 ms</td><td>10%</td></tr>
+    </table>
+    </div>
+    <p><strong>CH32V003 มี 2 Timers × 4 Channels = 8 PWM outputs</strong> — แต่ใช้ pin เดียวกันกับ GPIO/ADC ปกติ</p>
+</section>
+
+<section>
+    <h2>💻 เขียน Code ทีละขั้น</h2>
+
+    <div class="step"><h3>ขั้นที่ 1: LED Fade (ง่ายสุด)</h3>
+    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    PWM_Init(PWM1_CH1, 1000);  // 1kHz, auto-start!</code></pre>
+    <p class="explain">🔍 <code>PWM_Init(channel, freq)</code> — ตั้งค่า Timer + GPIO + auto-start! ไม่ต้องเรียก <code>PWM_Start()</code> แยก (ตั้งแต่ SimpleHAL v1.9)</p></div>
+
+    <div class="step"><h3>ขั้นที่ 2: Fade Animation</h3>
+    <pre><code>    int duty = 0, direction = 1;
+    while(1) {
+        PWM_SetDutyCycle(PWM1_CH1, duty);
+        Delay_Ms(10);
+        duty += direction;
+        if(duty >= 100) direction = -1;
+        if(duty <= 0)   direction = 1;
+    }
+}</code></pre>
+    <p class="explain">🔍 <code>PWM_SetDutyCycle(ch, 0-100)</code> — ตั้งค่าเป็นเปอร์เซ็นต์ — 10ms delay × 100 steps = fade 1 วิ</p></div>
+
+    <div class="step"><h3>ขั้นที่ 3: Servo Control</h3>
+    <pre><code>    PWM_Init(PWM1_CH1, 50);  // 50Hz สำหรับ Servo
+    while(1) {
+        PWM_SetDutyCycle(PWM1_CH1, 5);   // 0°
+        Delay_Ms(2000);
+        PWM_SetDutyCycle(PWM1_CH1, 7);   // ~90°
+        Delay_Ms(2000);
+        PWM_SetDutyCycle(PWM1_CH1, 10);  // 180°
+        Delay_Ms(2000);
+    }</code></pre>
+    <p class="explain">🔍 เปลี่ยนจาก 1kHz เป็น 50Hz — duty 5%=1ms, 7%=1.4ms, 10%=2ms</p></div>
+
+    <div class="step"><h3>ขั้นที่ 4: Arduino-Style analogWrite</h3>
+    <pre><code>    analogWrite(PA1, 128);  // 50% duty @ 1kHz on PA1
+    analogWrite(PC3, 64);   // 25% duty @ 1kHz on PC3</code></pre>
+    <p class="explain">🔍 <code>analogWrite(pin, 0-255)</code> — Arduino-style — auto-init ที่ 1kHz — ใช้ pin name โดยตรง (compile-time validation)</p></div>
+</section>
+
+<section>
+    <h2>📋 API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+        <tr><td><code>PWM_Init(ch, freq)</code></td><td>เริ่มต้น PWM channel (auto-start)</td><td><code>PWM_Init(PWM1_CH1, 1000)</code></td></tr>
+        <tr><td><code>PWM_SetDutyCycle(ch, %)</code></td><td>ตั้งค่า Duty 0-100%</td><td><code>PWM_SetDutyCycle(PWM1_CH1, 50)</code></td></tr>
+        <tr><td><code>PWM_SetDutyCycleRaw(ch, val)</code></td><td>ตั้งค่า Duty แบบ raw (0-period)</td><td><code>PWM_SetDutyCycleRaw(PWM1_CH1, 500)</code></td></tr>
+        <tr><td><code>analogWrite(pin, 0-255)</code></td><td>Arduino-style PWM</td><td><code>analogWrite(PD2, 128)</code></td></tr>
+        <tr><td><code>PWM_Write(ch, 0-255)</code></td><td>เขียน PWM โดยใช้ remap ที่ตั้งไว้</td><td><code>PWM_Write(PWM1_CH1, 128)</code></td></tr>
+        <tr><td><code>PWM_Start(ch)</code></td><td>เริ่ม PWM output</td><td><code>PWM_Start(PWM1_CH1)</code> (auto ใน Init)</td></tr>
+        <tr><td><code>PWM_Stop(ch)</code></td><td>หยุด PWM output (pin=LOW)</td><td><code>PWM_Stop(PWM1_CH1)</code></td></tr>
+        <tr><td><code>PWM_SetFrequency(ch, hz)</code></td><td>เปลี่ยนความถี่</td><td><code>PWM_SetFrequency(PWM1_CH1, 2000)</code></td></tr>
+        <tr><td><code>PWM_GetDutyCycle(ch)</code></td><td>อ่าน Duty ปัจจุบัน (0-100%)</td><td><code>uint8_t d = PWM_GetDutyCycle(PWM1_CH1)</code></td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>PWM ไม่มี output</td><td>ใช้ pin ที่ไม่รองรับ PWM</td><td>ตรวจสอบว่า pin เป็น PWM pin (PA1,PC0,PC3-4,PD2-4,PD7)</td></tr>
+        <tr><td>Servo กระตุก/ไม่หมุน</td><td>จ่ายไฟ 3.3V ให้ Servo (กระแสไม่พอ)</td><td>Servo ต้องใช้ไฟ 5V ภายนอก — GND ต้องต่อรวมกัน</td></tr>
+        <tr><td>LED สว่างสูงสุดแต่ PWM=50%</td><td>ตาเห็นค่าเฉลี่ย — อาจคิดว่าสว่างสุดแล้ว</td><td>ลอง 100% เทียบกับ 50% ในที่มืดจะเห็นความต่าง</td></tr>
+        <tr><td>analogWrite compile error</td><td>ใช้ pin ที่ไม่ใช่ PWM pin</td><td>ใช้เฉพาะ PA1,PC0,PC3-4,PD2-4,PD7 (compile-time check)</td></tr>
+        <tr><td>SOP-8: PACKAGE error</td><td>ใช้ PWM channel ที่ pin ไม่มีใน SOP-8</td><td>SOP-8 PWM pins: PA1(PWM1_CH2), PC4(PWM1_CH4)</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>🛠️ สร้าง Product: ไฟ LED Fade + ควบคุม Servo</h2>
+    <p>LED ค่อยๆ สว่างขึ้น-ดับลงที่ PD2 พร้อมกับ Servo กวาด 0°→180° ที่ PA1</p>
+    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    PWM_Init(PWM1_CH1, 1000);  // PD2: LED Fade @1kHz
+    PWM_Init(PWM1_CH2, 50);    // PA1: Servo @50Hz
+
+    int led_duty = 0, led_dir = 1;
+    int servo_angle = 0, servo_dir = 1;
+
+    while(1)
+    {
+        PWM_SetDutyCycle(PWM1_CH1, led_duty);
+        PWM_SetDutyCycle(PWM1_CH2, 5 + servo_angle * 5 / 180);
+
+        Delay_Ms(15);
+
+        led_duty += led_dir;
+        if(led_duty >= 100) led_dir = -1;
+        if(led_duty <= 0)   led_dir = 1;
+
+        servo_angle += servo_dir;
+        if(servo_angle >= 180) servo_dir = -1;
+        if(servo_angle <= 0)   servo_dir = 1;
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>✏️ ลองทำดู</h2>
+    <ol>
+        <li>ใช้ <code>analogWrite()</code> แทน <code>PWM_SetDutyCycle()</code> — ทำ LED fade เหมือนเดิม</li>
+        <li>เพิ่ม Servo ตัวที่ 2 บน PC0 (PWM2_CH3) — ควบคุม independent จากตัวแรก</li>
+        <li>ใช้ <code>PWM_Stop()</code>/<code>PWM_Start()</code> ทำปุ่มกดเปิด-ปิด PWM</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch04_usart.html">บทก่อน</a>
+    <a href="ch06_adc.html">บทถัดไป →</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'neutral'});</script>
+</body>
+</html>

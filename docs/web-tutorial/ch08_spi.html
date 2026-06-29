@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>บทที่ 8: SPI — สื่อสารความเร็วสูง — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch07_i2c.html">บทก่อน</a>
+    <a href="ch09_dma.html">บทถัดไป →</a>
+</nav>
+
+<h1>บทที่ 8: SPI — สื่อสารความเร็วสูง</h1>
+<span class="level intermediate">ระดับกลาง</span>
+
+<section class="flowchart">
+    <h2>🧭 แผนภาพการทำงาน</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["SPI_SimpleInit(mode, speed, pins)"] --> B["pinMode(CS) + SPI_SetCSPin()"]
+    B --> C["SPI_SetCS(0)"]
+    C --> D["SPI_Transfer(tx) / SPI_Write() / SPI_Read()"]
+    D --> E["SPI_SetCS(1)"]
+    E --> F["ประมวลผลข้อมูล"]
+    F --> C
+    </pre>
+</section>
+
+<section>
+    <h2>🔌 การต่อวงจร</h2>
+    <pre class="ascii-circuit">
+    MAX7219 8-Digit LED Driver
+    ┌───────────────────────────────────────┐
+    │  CH32V003            MAX7219          │
+    │  ────────            ───────          │
+    │  PC4(CS)───────────── CS              │
+    │  PC5(SCK)──────────── CLK             │
+    │  PC6(MOSI)─────────── DIN             │
+    │  PC7(MISO)─────────── DOUT (ไม่จำเป็น)│
+    │  3.3V──────────────── VCC            │
+    │  GND───────────────── GND            │
+    └───────────────────────────────────────┘
+
+    W25Qxx Flash Memory
+    ┌───────────────────────────────────────┐
+    │  CH32V003            W25Qxx           │
+    │  ────────            ──────           │
+    │  PC4(CS)───────────── /CS             │
+    │  PC5(SCK)──────────── CLK             │
+    │  PC6(MOSI)─────────── DI              │
+    │  PC7(MISO)─────────── DO              │
+    │  3.3V──────── /WP, /HOLD, VCC        │
+    │  GND───────────────── GND            │
+    └───────────────────────────────────────┘
+
+    Default Pins: SCK=PC5, MISO=PC7, MOSI=PC6, NSS=PC4
+    Remap Pins:   SCK=PD1, MISO=PD2, MOSI=PD3, NSS=PD0 (เฉพาะ TSSOP-20/QFN-20)
+    </pre>
+    <p><strong>SOP-8/SOP-16 ไม่มี Hardware SPI!</strong> — ต้องใช้ <code>shiftOut()</code> / <code>shiftIn()</code> แบบ software แทน</p>
+</section>
+
+<section>
+    <h2>📚 หลักการทำงาน</h2>
+    <p><strong>SPI (Serial Peripheral Interface)</strong> — การสื่อสาร synchronous แบบ full-duplex ผ่าน 4 สาย (SCK, MOSI, MISO, CS)</p>
+    <p><strong>SPI Mode (CPOL/CPHA):</strong></p>
+    <ul>
+        <li><strong>Mode 0:</strong> CPOL=0, CPHA=0 — Clock idle LOW, sample rising edge (ใช้บ่อยสุด)</li>
+        <li><strong>Mode 3:</strong> CPOL=1, CPHA=1 — Clock idle HIGH, sample rising edge</li>
+    </ul>
+    <p><strong>CS (Chip Select)</strong> — แต่ละอุปกรณ์ต้องมี CS แยก — HIGH = ไม่เลือก, LOW = เลือก — ต้องควบคุมเอง</p>
+    <p><strong>SPI vs I2C:</strong> SPI เร็วกว่า (สูงสุด 12MHz vs 400kHz) ใช้ 4 สาย, full-duplex, ไม่มี addressing ในโปรโตคอล</p>
+    <p><strong>Full-Duplex:</strong> ทุกครั้งที่ส่ง 1 byte จะได้รับกลับมา 1 byte พร้อมกัน — <code>SPI_Transfer()</code> ทำทั้งส่งและรับ</p>
+</section>
+
+<section>
+    <h2>💻 เขียน Code ทีละขั้น</h2>
+
+    <div class="step"><h3>ขั้นที่ 1: Init + Setup CS</h3>
+    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    SPI_SimpleInit(SPI_MODE0, SPI_1MHZ, SPI_PINS_DEFAULT);
+
+    pinMode(PC4, PIN_MODE_OUTPUT);       // CS pin
+    SPI_SetCSPin(GPIOC, GPIO_Pin_4);     // บอก SPI ว่าใช้ PC4 เป็น CS</code></pre>
+    <p class="explain">🔍 <code>SPI_SimpleInit(mode, speed, pins)</code> — เริ่มต้น SPI hardware — <strong>CS ต้องตั้งเอง!</strong> — <code>pinMode()</code> + <code>SPI_SetCSPin()</code></p></div>
+
+    <div class="step"><h3>ขั้นที่ 2: Loopback Test</h3>
+    <pre><code>    while(1) {
+        SPI_SetCS(0);                    // LOW = select
+        uint8_t rx = SPI_Transfer(0xAA); // ส่ง 0xAA รับกลับ
+        SPI_SetCS(1);                    // HIGH = deselect
+
+        USART_Print("Sent 0xAA, got 0x");
+        USART_PrintHex(rx, 1);
+        USART_Print("\r\n");
+        Delay_Ms(1000);
+    }
+}</code></pre>
+    <p class="explain">🔍 <code>SPI_SetCS(0)</code> — เลือกอุปกรณ์ (active LOW) — <code>SPI_Transfer(tx)</code> — ส่ง 1 byte พร้อมรับ 1 byte — <code>SPI_SetCS(1)</code> — ปล่อย CS (สำคัญ!)</p></div>
+
+    <div class="step"><h3>ขั้นที่ 3: อ่าน JEDEC ID จาก W25Qxx Flash</h3>
+    <pre><code>    SPI_SetCS(0);
+    SPI_Transfer(0x9F);  // Command: Read JEDEC ID
+    uint8_t mfg = SPI_Transfer(0x00);
+    uint8_t mem = SPI_Transfer(0x00);
+    uint8_t cap = SPI_Transfer(0x00);
+    SPI_SetCS(1);
+
+    USART_Print("JEDEC ID: ");
+    USART_PrintHex(mfg, 1); USART_Print(" ");
+    USART_PrintHex(mem, 1); USART_Print(" ");
+    USART_PrintHex(cap, 1); USART_Print("\r\n");</code></pre>
+    <p class="explain">🔍 ส่ง command 0x9F แล้วอ่าน 3 bytes ตอบกลับ — SPI ให้ส่ง dummy byte (0x00) เพื่อสร้าง clock สำหรับรับข้อมูล</p></div>
+
+    <div class="step"><h3>ขั้นที่ 4: MAX7219 (LED Driver)</h3>
+    <pre><code>    // MAX7219: ส่ง address + data (16-bit)
+    SPI_SetCS(0);
+    SPI_Transfer(0x0C);  // Shutdown register
+    SPI_Transfer(0x01);  // Normal operation
+    SPI_SetCS(1);
+
+    SPI_SetCS(0);
+    SPI_Transfer(0x01);  // Digit 0
+    SPI_Transfer(0x7F);  // Show "8" (7-segment)
+    SPI_SetCS(1);</code></pre>
+    <p class="explain">🔍 MAX7219 รับ 16-bit (address + data) — ส่ง 2 <code>SPI_Transfer()</code> ต่อเนื่อง โดย CS ค้าง LOW ตลอด</p></div>
+</section>
+
+<section>
+    <h2>📋 API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+        <tr><td><code>SPI_SimpleInit(mode, speed, pins)</code></td><td>เริ่มต้น SPI Hardware</td><td><code>SPI_SimpleInit(SPI_MODE0, SPI_1MHZ, SPI_PINS_DEFAULT)</code></td></tr>
+        <tr><td><code>SPI_Transfer(tx)</code></td><td>ส่ง + รับ 1 byte</td><td><code>uint8_t rx = SPI_Transfer(0xAA)</code></td></tr>
+        <tr><td><code>SPI_Write(data, len)</code></td><td>ส่งหลาย bytes (ไม่สนใจรับ)</td><td><code>SPI_Write(buf, 4)</code></td></tr>
+        <tr><td><code>SPI_Read(buf, len, dummy)</code></td><td>รับหลาย bytes (ส่ง dummy)</td><td><code>SPI_Read(buf, 10, 0xFF)</code></td></tr>
+        <tr><td><code>SPI_TransferBuffer(tx, rx, len)</code></td><td>ส่ง+รับหลาย bytes พร้อมกัน</td><td><code>SPI_TransferBuffer(tx, rx, 4)</code></td></tr>
+        <tr><td><code>SPI_SetCS(state)</code></td><td>ควบคุม CS (0=LOW, 1=HIGH)</td><td><code>SPI_SetCS(0)</code></td></tr>
+        <tr><td><code>SPI_SetCSPin(port, pin)</code></td><td>เปลี่ยน CS pin</td><td><code>SPI_SetCSPin(GPIOC, GPIO_Pin_4)</code></td></tr>
+        <tr><td><code>SPI_SetSpeed(speed)</code></td><td>เปลี่ยนความเร็ว</td><td><code>SPI_SetSpeed(SPI_8MHZ)</code></td></tr>
+        <tr><td><code>SPI_SetBitOrder(order)</code></td><td>เปลี่ยนลำดับบิต (MSB/LSB)</td><td><code>SPI_SetBitOrder(SPI_LSB_FIRST)</code></td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>SPI ไม่ทำงานเลย</td><td>ลืมตั้งค่า CS pin</td><td>ต้อง <code>pinMode(CS, OUTPUT)</code> + <code>SPI_SetCSPin()</code></td></tr>
+        <tr><td>รับข้อมูลผิดเพี้ยน</td><td>SPI Mode ไม่ตรงกับอุปกรณ์</td><td>เช็ค datasheet ว่าเป็น Mode 0,1,2,3</td></tr>
+        <tr><td>ข้อมูลส่งไม่ออก</td><td>ลืม <code>SPI_SetCS(0)</code> ก่อน transfer</td><td>CS ต้องเป็น LOW ก่อนเริ่ม transfer</td></tr>
+        <tr><td>SOP-8/SOP-16: SPI compile error</td><td>ไม่มี Hardware SPI</td><td>SOP-8/16 ไม่มี SCK pin — ใช้ <code>shiftOut()</code>/<code>shiftIn()</code></td></tr>
+        <tr><td>MAX7219 แสดงผลผิด</td><td>ลืม init registers (Shutdown, Intensity, Scan Limit)</td><td>ต้อง config MAX7219 registers ก่อนส่งข้อมูล display</td></tr>
+        <tr><td>W25Qxx อ่าน ID ได้ 0xFF</td><td>CS ไม่ถูกปล่อยก่อนส่ง command</td><td>CS HIGH → LOW → command → HIGH (ต้อง reset state machine)</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>🛠️ สร้าง Product: จอ LED 8 หลัก + อ่าน Flash ID</h2>
+    <p>แสดง "12345678" บน MAX7219 8-digit display และแสดง JEDEC ID ของ W25Qxx Flash</p>
+    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+#define CS_FLASH  PC3
+#define CS_MAX    PC4
+
+void max7219_write(uint8_t addr, uint8_t data) {
+    SPI_SetCSPin(GPIOC, GPIO_Pin_4);  // MAX7219 CS = PC4
+    SPI_SetCS(0);
+    SPI_Transfer(addr);
+    SPI_Transfer(data);
+    SPI_SetCS(1);
+}
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    SPI_SimpleInit(SPI_MODE0, SPI_1MHZ, SPI_PINS_DEFAULT);
+
+    pinMode(CS_FLASH, PIN_MODE_OUTPUT);
+    pinMode(CS_MAX, PIN_MODE_OUTPUT);
+
+    // MAX7219 Init
+    max7219_write(0x0C, 0x01);  // Shutdown: Normal
+    max7219_write(0x09, 0x00);  // Decode: no decode
+    max7219_write(0x0B, 0x07);  // Scan Limit: 8 digits
+    max7219_write(0x0A, 0x04);  // Intensity: 9/32
+
+    // Show digits 1-8
+    const uint8_t seg[] = {0x06,0x5B,0x4F,0x66,0x6D,0x7D,0x07,0x7F};
+    for(int i=0; i<8; i++) max7219_write(i+1, seg[i]);
+
+    // Read W25Qxx JEDEC ID
+    SPI_SetCSPin(GPIOC, GPIO_Pin_3);  // Flash CS = PC3
+    SPI_SetCS(0);
+    SPI_Transfer(0x9F);
+    uint8_t id[3] = {SPI_Transfer(0), SPI_Transfer(0), SPI_Transfer(0)};
+    SPI_SetCS(1);
+
+    USART_Print("Flash JEDEC: ");
+    USART_PrintHex(id[0],1); USART_Print(" ");
+    USART_PrintHex(id[1],1); USART_Print(" ");
+    USART_PrintHex(id[2],1); USART_Print("\r\n");
+
+    while(1);
+}</code></pre>
+    <p><strong>SOP-8 Alternative (Software SPI):</strong></p>
+    <pre><code>// SOP-8 ไม่มี Hardware SPI — ใช้ shiftOut แทน
+#define DATA_PIN PC1
+#define CLOCK_PIN PC2
+#define LATCH_PIN PC4
+
+digitalWrite(LATCH_PIN, LOW);
+shiftOut(DATA_PIN, CLOCK_PIN, MSBFIRST, 0xAA);  // 74HC595
+digitalWrite(LATCH_PIN, HIGH);</code></pre>
+</section>
+
+<section>
+    <h2>✏️ ลองทำดู</h2>
+    <ol>
+        <li>เปลี่ยน SPI Mode เป็น Mode 3 (<code>SPI_MODE3</code>) — ทดสอบ loopback ยังได้ผลเหมือนกันหรือไม่</li>
+        <li>ใช้ <code>SPI_TransferBuffer()</code> แทนการเรียก <code>SPI_Transfer()</code> ทีละ byte</li>
+        <li>ถ้าใช้ SOP-8 — ทำวงจร 74HC595 + shiftOut() ควบคุม LED 8 ดวง</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch07_i2c.html">บทก่อน</a>
+    <a href="ch09_dma.html">บทถัดไป →</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'neutral'});</script>
+</body>
+</html>

@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>บทที่ 7: I2C — คุยกับเซ็นเซอร์และ EEPROM — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch06_adc.html">บทก่อน</a>
+    <a href="ch08_spi.html">บทถัดไป →</a>
+</nav>
+
+<h1>บทที่ 7: I2C — คุยกับเซ็นเซอร์และ EEPROM</h1>
+<span class="level intermediate">ระดับกลาง</span>
+
+<section class="flowchart">
+    <h2>🧭 แผนภาพการทำงาน</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["I2C_SimpleInit()"] --> B{"สแกนบัส"}
+    B --> C["I2C_IsDeviceReady(addr)"]
+    C --> D["เจอ Device"]
+    D --> E{"เขียน/อ่าน"}
+    E -->|"Register Write"| F["I2C_WriteReg(addr,reg,data)"]
+    E -->|"Register Read"| G["I2C_ReadReg(addr,reg)"]
+    F --> H["ตรวจสอบ status == I2C_OK?"]
+    G --> H
+    H -->|"OK"| I["อ่านค่าจากเซ็นเซอร์"]
+    H -->|"Error"| J["จัดการ error (retry/log)"]
+    </pre>
+</section>
+
+<section>
+    <h2>🔌 การต่อวงจร</h2>
+    <pre class="ascii-circuit">
+    I2C Bus (SDA + SCL + Pull-up 4.7kΩ)
+    ┌─────────────────────────────────────┐
+    │                  3.3V               │
+    │                   │                 │
+    │               ┌───┴────┐            │
+    │               │        │            │
+    │             4.7kΩ   4.7kΩ           │
+    │               │        │            │
+    │  MCU           │        │           │
+    │  PC1(SDA)──────┴────────┼── SDA ────┤──► BH1750 (0x23)
+    │  PC2(SCL)───────────────┘── SCL ────┤──► MPU6050 (0x68)
+    │                                     │──► AT24Cxx (0x50)
+    │  GND ──── GND ร่วมกันทุกตัว          │
+    └─────────────────────────────────────┘
+
+    Pin Configurations:
+    DEFAULT        : SCL=PC2, SDA=PC1  (ทุกแพ็กเกจ)
+    PARTIAL_REMAP  : SCL=PD2, SDA=PD1  (SOP-8 compatible)
+    FULL_REMAP     : SCL=PD0, SDA=PD1  (เฉพาะ TSSOP-20/QFN-20)
+    </pre>
+    <p><strong>Pull-up 4.7kΩ จำเป็น!</strong> — I2C เป็น open-drain ต้องมี pull-up ถึงจะทำงาน — SOP-8 ใช้ PC1/PC2 หรือ PARTIAL_REMAP (PD1/PD2)<br>
+    สามารถต่อหลายอุปกรณ์บนบัสเดียวกันได้ (แต่ละตัวมี address ไม่ซ้ำกัน)</p>
+</section>
+
+<section>
+    <h2>📚 หลักการทำงาน</h2>
+    <p><strong>I2C (Inter-Integrated Circuit)</strong> — การสื่อสาร 2 สาย (SDA=Data, SCL=Clock) ระหว่าง Master (MCU) และ Slave (เซ็นเซอร์)</p>
+    <p><strong>7-bit Address:</strong> แต่ละอุปกรณ์มี address เฉพาะ (เช่น BH1750=0x23, MPU6050=0x68, AT24Cxx=0x50) — อยู่ในช่วง 0x03-0x77</p>
+    <p><strong>การทำงาน:</strong> Master ส่ง Start → Address+R/W → Slave ตอบ ACK → ส่ง/รับข้อมูล → Master ส่ง Stop</p>
+    <p><strong>Register Access:</strong> เซ็นเซอร์ส่วนใหญ่ใช้โมเดล register — เขียน register address ก่อน แล้วอ่าน/เขียนข้อมูล</p>
+    <p><strong>ความเร็ว:</strong> Standard (100kHz) และ Fast (400kHz) — CH32V003 รองรับทั้งสอง</p>
+    <p><strong>I2C_Soft (Software I2C):</strong> ถ้าต้องการใช้ pin อื่นที่ไม่ใช่ hardware I2C (PC1/PC2) — ใช้ SimpleI2C_Soft.h</p>
+</section>
+
+<section>
+    <h2>💻 เขียน Code ทีละขั้น</h2>
+
+    <div class="step"><h3>ขั้นที่ 1: Init + Scan Bus</h3>
+    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    I2C_SimpleInit(I2C_100KHZ, I2C_PINS_DEFAULT);</code></pre>
+    <p class="explain">🔍 <code>I2C_SimpleInit(speed, pins)</code> — ตั้งค่า hardware I2C — 100kHz ใช้ได้กับอุปกรณ์ส่วนใหญ่ — default pins PC1(SDA)/PC2(SCL)</p></div>
+
+    <div class="step"><h3>ขั้นที่ 2: สแกนหา Devices</h3>
+    <pre><code>    USART_Print("Scanning I2C...\r\n");
+    for(uint8_t addr = 1; addr < 128; addr++) {
+        if(I2C_IsDeviceReady(addr)) {
+            USART_Print("Found: 0x");
+            USART_PrintHex(addr, 1);
+            USART_Print("\r\n");
+        }
+    }</code></pre>
+    <p class="explain">🔍 <code>I2C_IsDeviceReady(addr)</code> — ส่ง address แล้วเช็คว่ามี ACK กลับมาหรือไม่ — วิธีที่เร็วสุดในการเช็คว่าอุปกรณ์ต่ออยู่หรือไม่</p></div>
+
+    <div class="step"><h3>ขั้นที่ 3: เขียน/อ่าน Register (BH1750)</h3>
+    <pre><code>    // BH1750: One-time High-Res Mode
+    I2C_WriteReg(0x23, 0x10, 0x00);  // สั่งวัดแสง 1 ครั้ง
+    Delay_Ms(180);  // รอ measurement time
+
+    uint8_t buf[2];
+    I2C_ReadRegMulti(0x23, 0x00, buf, 2);  // อ่าน 2 bytes
+    uint16_t lux = ((uint16_t)buf[0] << 8) | buf[1];
+    lux = lux / 1.2;  // convert to lux</code></pre>
+    <p class="explain">🔍 <code>I2C_WriteReg(addr, reg, data)</code> — เขียน 1 byte ไปยัง register — <code>I2C_ReadRegMulti()</code> — อ่านหลาย bytes จาก register — BH1750 ต้องรอ measurement time 180ms</p></div>
+
+    <div class="step"><h3>ขั้นที่ 4: ตรวจสอบ Error</h3>
+    <pre><code>    I2C_Status status = I2C_WriteReg(0x50, 0x00, 0x55);
+    if(status != I2C_OK) {
+        USART_Print("Write failed!\r\n");
+    }
+}</code></pre>
+    <p class="explain">🔍 ฟังก์ชัน I2C คืนค่า <code>I2C_Status</code> — เช็ค <code>I2C_OK</code> ก่อนใช้ข้อมูล — <code>I2C_ERROR_TIMEOUT</code>, <code>I2C_ERROR_NACK</code>, <code>I2C_ERROR_BUS_BUSY</code></p></div>
+</section>
+
+<section>
+    <h2>📋 API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+        <tr><td><code>I2C_SimpleInit(speed, pins)</code></td><td>เริ่มต้น I2C Hardware</td><td><code>I2C_SimpleInit(I2C_100KHZ, I2C_PINS_DEFAULT)</code></td></tr>
+        <tr><td><code>I2C_IsDeviceReady(addr)</code></td><td>เช็คว่า device ตอบ ACK หรือไม่</td><td><code>if(I2C_IsDeviceReady(0x68))</code></td></tr>
+        <tr><td><code>I2C_Write(addr, data, len)</code></td><td>เขียน raw bytes</td><td><code>I2C_Write(0x50, buf, 4)</code></td></tr>
+        <tr><td><code>I2C_Read(addr, buf, len)</code></td><td>อ่าน raw bytes</td><td><code>I2C_Read(0x50, buf, 10)</code></td></tr>
+        <tr><td><code>I2C_WriteReg(addr, reg, data)</code></td><td>เขียน 1 byte ไปยัง register</td><td><code>I2C_WriteReg(0x23, 0x10, 0x00)</code></td></tr>
+        <tr><td><code>I2C_ReadReg(addr, reg)</code></td><td>อ่าน 1 byte จาก register</td><td><code>uint8_t v = I2C_ReadReg(0x50, 0x00)</code></td></tr>
+        <tr><td><code>I2C_ReadRegMulti(addr, reg, buf, len)</code></td><td>อ่านหลาย bytes จาก register</td><td><code>I2C_ReadRegMulti(0x23, 0x00, buf, 2)</code></td></tr>
+        <tr><td><code>I2C_WriteRegMulti(addr, reg, buf, len)</code></td><td>เขียนหลาย bytes ไปยัง register</td><td><code>I2C_WriteRegMulti(0x50, 0x00, data, 4)</code></td></tr>
+        <tr><td><code>I2C_Scan(buf, max)</code></td><td>สแกนบัสหาทุก device</td><td><code>uint8_t n = I2C_Scan(devices, 10)</code></td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>I2C ไม่ทำงานเลย</td><td>ลืมต่อ Pull-up resistor 4.7kΩ</td><td>ต่อ R 4.7kΩ จาก SDA/SCL ไป 3.3V — จำเป็น!</td></tr>
+        <tr><td>Scan ไม่เจอ device ใดๆ</td><td>สายสลับ SDA/SCL, หรือ address ผิด</td><td>ตรวจสอบ pin SDA=PC1, SCL=PC2 — ลอง <code>I2C_Scan()</code></td></tr>
+        <tr><td>เขียน/อ่าน Error ตลอด</td><td>ความเร็วไม่ตรง หรือสายยาวเกิน</td><td>ใช้ 100kHz, สาย < 20cm, pull-up ไม่เกิน 10kΩ</td></tr>
+        <tr><td>อ่านค่าได้ 0xFF ตลอด</td><td><code>I2C_ReadReg()</code> คืน 0xFF เมื่อ error</td><td>ตรวจสอบว่าอุปกรณ์ต่ออยู่ ใช้ <code>I2C_IsDeviceReady()</code></td></tr>
+        <tr><td>SOP-8: I2C ใช้ pin อื่นได้ไหม</td><td>Hardware I2C fixed ที่ PC1/PC2 (หรือ PD1/PD2 remap)</td><td>SOP-8 ใช้ PARTIAL_REMAP (SCL=PD2,SDA=PD1) หรือใช้ Software I2C</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>🛠️ สร้าง Product: เครื่องวัดแสง + วัดความเร่ง</h2>
+    <p>สแกน I2C bus → อ่าน BH1750 (แสง lux) และ MPU6050 (ความเร่งแกน Z) → แสดงผล Serial</p>
+    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    I2C_SimpleInit(I2C_100KHZ, I2C_PINS_DEFAULT);
+
+    // สแกนหา sensor
+    USART_Print("Scanning bus...\r\n");
+    for(uint8_t a=1; a<128; a++)
+        if(I2C_IsDeviceReady(a)) {
+            USART_Print("Found: 0x"); USART_PrintHex(a,1); USART_Print("\r\n");
+        }
+
+    while(1)
+    {
+        // BH1750: Continuous High-Res Mode (0x10)
+        I2C_WriteReg(0x23, 0x10, 0x00);
+        Delay_Ms(180);
+        uint8_t buf[2];
+        I2C_ReadRegMulti(0x23, 0x00, buf, 2);
+        uint16_t lux = ((uint16_t)buf[0]<<8 | buf[1]) * 10 / 12;
+
+        // MPU6050: อ่าน Z-axis acceleration
+        uint8_t zh = I2C_ReadReg(0x68, 0x3F);  // ACCEL_ZOUT_H
+        uint8_t zl = I2C_ReadReg(0x68, 0x40);  // ACCEL_ZOUT_L
+        int16_t az = (int16_t)((zh<<8) | zl);
+
+        USART_Print("Lux: "); USART_PrintNum(lux);
+        USART_Print(", AccelZ: "); USART_PrintNum(az);
+        USART_Print("\r\n");
+        Delay_Ms(500);
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>✏️ ลองทำดู</h2>
+    <ol>
+        <li>เปลี่ยนไปใช้ <code>I2C_PINS_PARTIAL_REMAP</code> (SCL=PD2,SDA=PD1) — ทดสอบกับ SOP-8</li>
+        <li>ใช้ <code>I2C_Scan()</code> ฟังก์ชันแทนการวน loop เอง</li>
+        <li>เพิ่ม AHT10 sensor (0x38) — อ่านอุณหภูมิและความชื้น</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch06_adc.html">บทก่อน</a>
+    <a href="ch08_spi.html">บทถัดไป →</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'neutral'});</script>
+</body>
+</html>

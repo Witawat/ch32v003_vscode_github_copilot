@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SimpleHAL Tutorial — เรียนรู้ CH32V003 แบบสร้าง Product จริง</title>
+<link rel="stylesheet" href="css/style.css">
+<style>.hero{text-align:center;padding:3rem 0}.hero h1{font-size:2.4em}.hero p{color:#64748b;font-size:1.1em;margin:1rem 0}.stats{display:flex;gap:1.5rem;justify-content:center;flex-wrap:wrap;margin:2rem 0}.stat{text-align:center;padding:1rem 1.5rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)}.stat-num{font-size:2em;font-weight:800;color:var(--accent)}.stat-label{font-size:.85em;color:#64748b}</style>
+</head>
+<body>
+
+<div class="hero">
+    <h1>🔌 SimpleHAL Tutorial</h1>
+    <p>เรียนรู้การเขียนโปรแกรม CH32V003 แบบทีละขั้น<br>จากศูนย์จนสร้าง Product จริงได้ — ด้วยภาษาไทย</p>
+    <div class="stats">
+        <div class="stat"><div class="stat-num">17</div><div class="stat-label">บทเรียน</div></div>
+        <div class="stat"><div class="stat-num">94</div><div class="stat-label">ตัวอย่างโค้ด</div></div>
+        <div class="stat"><div class="stat-num">4</div><div class="stat-label">แพ็กเกจ</div></div>
+        <div class="stat"><div class="stat-num">18</div><div class="stat-label">โมดูล</div></div>
+    </div>
+</div>
+
+<h2>📚 สารบัญ</h2>
+
+<ul id="toc">
+<li><a href="ch01_getting_started.html">
+    <span class="ch-num">บทที่ 1</span><span class="ch-level level-beginner">เริ่มต้น</span>
+    <span class="ch-desc">เริ่มต้นอย่างถูกต้อง — SystemCoreClockUpdate, Timer_Init, CH32V003_PACKAGE, Debug Print</span>
+</a></li>
+<li><a href="ch02_gpio.html">
+    <span class="ch-num">บทที่ 2</span><span class="ch-level level-beginner">เริ่มต้น</span>
+    <span class="ch-desc">GPIO — Digital Input/Output, Interrupt, Pulse Measurement, Shift Register</span>
+</a></li>
+<li><a href="ch03_delay_timer.html">
+    <span class="ch-num">บทที่ 3</span><span class="ch-level level-beginner">เริ่มต้น</span>
+    <span class="ch-desc">Delay & Timer — จับเวลา Blocking/Non-Blocking, Stopwatch, Countdown</span>
+</a></li>
+<li><a href="ch04_usart.html">
+    <span class="ch-num">บทที่ 4</span><span class="ch-level level-beginner">เริ่มต้น</span>
+    <span class="ch-desc">USART — Serial Communication, Print, Read, Remap, Package-Aware</span>
+</a></li>
+<li><a href="ch05_pwm.html">
+    <span class="ch-num">บทที่ 5</span><span class="ch-level level-intermediate">กลาง</span>
+    <span class="ch-desc">PWM — LED Fade, Servo, Frequency, Auto-Start, Remap</span>
+</a></li>
+<li><a href="ch06_adc.html">
+    <span class="ch-num">บทที่ 6</span><span class="ch-level level-intermediate">กลาง</span>
+    <span class="ch-desc">ADC — Analog Read, Voltage, Battery Monitor, Noise Reduction</span>
+</a></li>
+<li><a href="ch07_i2c.html">
+    <span class="ch-num">บทที่ 7</span><span class="ch-level level-intermediate">กลาง</span>
+    <span class="ch-desc">I2C — Sensor Communication, EEPROM, Bus Scanner, Remap</span>
+</a></li>
+<li><a href="ch08_spi.html">
+    <span class="ch-num">บทที่ 8</span><span class="ch-level level-intermediate">กลาง</span>
+    <span class="ch-desc">SPI — High-Speed Transfer, Flash Memory, Config, Remap</span>
+</a></li>
+<li><a href="ch09_dma.html">
+    <span class="ch-num">บทที่ 9</span><span class="ch-level level-advanced">สูง</span>
+    <span class="ch-desc">DMA — Direct Memory Access, ADC+DMA, USART+DMA, Callbacks</span>
+</a></li>
+<li><a href="ch10_power.html">
+    <span class="ch-num">บทที่ 10</span><span class="ch-level level-advanced">สูง</span>
+    <span class="ch-desc">Power Management — Sleep, Standby, AWU, PVD, Battery Life</span>
+</a></li>
+<li><a href="ch11_flash.html">
+    <span class="ch-num">บทที่ 11</span><span class="ch-level level-advanced">สูง</span>
+    <span class="ch-desc">Flash Storage — Non-Volatile Data, Config+CRC, Wear Leveling</span>
+</a></li>
+<li><a href="ch12_watchdog.html">
+    <span class="ch-num">บทที่ 12</span><span class="ch-level level-advanced">สูง</span>
+    <span class="ch-desc">Watchdog — IWDG, WWDG, System Reliability</span>
+</a></li>
+<li><a href="ch13_opamp.html">
+    <span class="ch-num">บทที่ 13</span><span class="ch-level level-expert">ผู้เชี่ยวชาญ</span>
+    <span class="ch-desc">OPAMP — Internal Op-Amp, Follower, Amplifier, Comparator</span>
+</a></li>
+<li><a href="ch14_onewire.html">
+    <span class="ch-num">บทที่ 14</span><span class="ch-level level-expert">ผู้เชี่ยวชาญ</span>
+    <span class="ch-desc">1-Wire — DS18B20, ROM Commands, Multi-Device</span>
+</a></li>
+<li><a href="ch15_arduino.html">
+    <span class="ch-num">บทที่ 15</span><span class="ch-level level-expert">ผู้เชี่ยวชาญ</span>
+    <span class="ch-desc">Arduino API — millis/delay/random/yield, Code Portability</span>
+</a></li>
+<li><a href="ch16_timer_guard.html">
+    <span class="ch-num">บทที่ 16</span><span class="ch-level level-expert">ผู้เชี่ยวชาญ</span>
+    <span class="ch-desc">Timer Resource Guard — ป้องกัน PWM/Timer/Stopwatch ชนกัน</span>
+</a></li>
+<li><a href="ch17_package.html">
+    <span class="ch-num">บทที่ 17</span><span class="ch-level level-expert">ผู้เชี่ยวชาญ</span>
+    <span class="ch-desc">Package System — เลือก SOP8/SOP16/TSSOP20, Pin Validation</span>
+</a></li>
+</ul>
+
+<div class="callout callout-note" style="margin-top:2rem">
+    <strong>💡 วิธีอ่าน:</strong> เริ่มจากบทที่ 1 ไปตามลำดับ — แต่ละบทมี Flowchart, วงจร, Code ทีละขั้น, และ Product จริงให้ลองทำ
+</div>
+
+<p style="text-align:center;margin:3rem 0;color:#94a3b8;font-size:0.85em">
+    SimpleHAL v2.0 — CH32V003 — MIT License
+</p>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:false,theme:'neutral'});</script>
+</body>
+</html>

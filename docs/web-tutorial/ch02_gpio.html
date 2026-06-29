@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>บทที่ 2: GPIO — Digital Input/Output พื้นฐาน — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch01_getting_started.html">บทก่อน</a>
+    <a href="ch03_delay_timer.html">บทถัดไป →</a>
+</nav>
+
+<h1>บทที่ 2: GPIO — Digital Input/Output พื้นฐาน</h1>
+<span class="level beginner">ระดับเริ่มต้น</span>
+
+<section class="flowchart">
+    <h2>🧭 แผนภาพการทำงาน</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["pinMode()"] --> B{"สิ่งที่ต้องการ"}
+    B -->|Output| C["digitalWrite()"]
+    B -->|Input| D["digitalRead()"]
+    B -->|Toggle| E["digitalToggle()"]
+    B -->|Interrupt| F["attachInterrupt()"]
+    C --> G["while(1)"]
+    D --> G
+    E --> G
+    F --> G
+    </pre>
+</section>
+
+<section>
+    <h2>🔌 การต่อวงจร</h2>
+    <pre class="ascii-circuit">
+                  LED Output                    Button Input + Pull-up
+          ┌─────────────────────┐       ┌─────────────────────┐
+          │ MCU           3.3V  │       │ MCU           3.3V  │
+          │ PC0───220Ω──|LED|───┤       │ PC1───┬──10kΩ───┤  │
+          │                 GND │       │       └──Button──┘  │
+          │                     │       │                 GND │
+          └─────────────────────┘       └─────────────────────┘
+    </pre>
+    <p>ต่อ LED + R 220Ω แบบ Active-HIGH (HIGH = ติด, LOW = ดับ)<br>
+    ต่อปุ่มกด + R 10kΩ Pull-up ภายนอก หรือใช้ <code>PIN_MODE_INPUT_PULLUP</code></p>
+    <p><strong>CH32V003 Pins:</strong> GPIOA (PA1-PA2), GPIOC (PC0-PC7), GPIOD (PD2-PD7) — PD0/PD1 มีเฉพาะ TSSOP-20/QFN-20</p>
+</section>
+
+<section>
+    <h2>📚 หลักการทำงาน</h2>
+    <p>CH32V003 มี 18 I/O pins (TSSOP-20), แบ่งเป็น 3 พอร์ท:</p>
+    <ul>
+        <li><strong>GPIOA</strong> — PA1, PA2 (PA1 รองรับ PWM)</li>
+        <li><strong>GPIOC</strong> — PC0-PC7 (PC0, PC3-4 รองรับ PWM)</li>
+        <li><strong>GPIOD</strong> — PD2-PD7 (ทุก pin รองรับ ADC, PD2-4,PD7 รองรับ PWM; PD0/PD1 = debug pins)</li>
+    </ul>
+    <p>Pin แต่ละ pin มี output drive สูงสุด 8mA, รวมทั้ง MCU ไม่เกิน 120mA<br>
+    โหมดที่ใช้บ่อย: <code>PIN_MODE_OUTPUT</code> (push-pull), <code>PIN_MODE_INPUT_PULLUP</code> (input + internal pull-up)</p>
+</section>
+
+<section>
+    <h2>💻 เขียน Code ทีละขั้น</h2>
+
+    <div class="step"><h3>ขั้นที่ 1: Include + Setup</h3>
+    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();</code></pre>
+    <p class="explain">🔍 เริ่มต้นพื้นฐานเหมือนบทที่ 1 — SystemCoreClockUpdate() + Timer_Init()</p></div>
+
+    <div class="step"><h3>ขั้นที่ 2: ตั้งค่า Pin LED + Button</h3>
+    <pre><code>    pinMode(PC0, PIN_MODE_OUTPUT);       // LED
+    pinMode(PC1, PIN_MODE_INPUT_PULLUP);  // Button (pull-up ภายใน)</code></pre>
+    <p class="explain">🔍 <code>PIN_MODE_INPUT_PULLUP</code> ใช้ pull-up ภายใน (~40kΩ) ไม่ต้องต่อ R ภายนอก — ปุ่มกดต่อลง GND, ปกติอ่าน HIGH, กดแล้วอ่าน LOW (Active LOW)</p></div>
+
+    <div class="step"><h3>ขั้นที่ 3: อ่านค่า + ควบคุม LED</h3>
+    <pre><code>    while(1) {
+        uint8_t btn = digitalRead(PC1);
+        digitalWrite(PC0, !btn);  // กด=LOW → LED=HIGH
+        Delay_Ms(50);
+    }
+}</code></pre>
+    <p class="explain">🔍 <code>digitalRead()</code> คืนค่า HIGH (1) หรือ LOW (0) — ใช้ <code>!</code> เพื่อกลับค่า Active LOW</p></div>
+
+    <div class="step"><h3>ขั้นที่ 4: Interrupt (ทางเลือก)</h3>
+    <pre><code>volatile uint32_t count = 0;
+void btn_isr(void) { count++; }
+
+    attachInterrupt(PC1, btn_isr, FALLING);
+    while(1) {
+        if(count) { digitalToggle(PC0); count = 0; }
+    }</code></pre>
+    <p class="explain">🔍 <code>attachInterrupt(pin, callback, mode)</code> — เรียก callback ทันทีเมื่อมีสัญญาณ (RISING/FALLING/CHANGE) <strong>ห้ามใช้ Delay ใน ISR!</strong></p></div>
+</section>
+
+<section>
+    <h2>📋 API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+        <tr><td><code>pinMode(pin, mode)</code></td><td>ตั้งโหมด pin</td><td><code>pinMode(PC0, PIN_MODE_OUTPUT)</code></td></tr>
+        <tr><td><code>digitalWrite(pin, val)</code></td><td>เขียนค่า HIGH/LOW</td><td><code>digitalWrite(PC0, HIGH)</code></td></tr>
+        <tr><td><code>digitalRead(pin)</code></td><td>อ่านค่า HIGH/LOW</td><td><code>uint8_t v = digitalRead(PC1)</code></td></tr>
+        <tr><td><code>digitalToggle(pin)</code></td><td>สลับสถานะ pin</td><td><code>digitalToggle(PC0)</code></td></tr>
+        <tr><td><code>attachInterrupt(pin, cb, mode)</code></td><td>ติดตั้ง External Interrupt</td><td><code>attachInterrupt(PC1, isr, FALLING)</code></td></tr>
+        <tr><td><code>detachInterrupt(pin)</code></td><td>ยกเลิก Interrupt</td><td><code>detachInterrupt(PC1)</code></td></tr>
+        <tr><td><code>pinModeMultiple(pins, mode)</code></td><td>ตั้งโหมดหลาย pin พร้อมกัน</td><td><code>pinModeMultiple(leds, PIN_MODE_OUTPUT)</code></td></tr>
+        <tr><td><code>pulseIn(pin, state, timeout)</code></td><td>วัดความกว้าง pulse (μs)</td><td><code>pulseIn(ECHO, HIGH, 30000)</code></td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>ปุ่มกดอ่านค่าผิดตลอด</td><td>ไม่ได้ใช้ Pull-up (pin ลอย)</td><td>ใช้ <code>PIN_MODE_INPUT_PULLUP</code> หรือต่อ R 10kΩ ภายนอกไป 3.3V</td></tr>
+        <tr><td>LED ไม่ติดเลย</td><td>ต่อ LED กลับขั้ว หรือไม่มี R จำกัดกระแส</td><td>ตรวจสอบขั้ว (แอโนด→R→MCU, แคโทด→GND) และใช้ R 220Ω</td></tr>
+        <tr><td>MCU รีเซ็ตตอนเปิด LED</td><td>ดึงกระแสเกิน 8mA/pin</td><td>เพิ่มค่าตัวต้านทาน ลด brightness หรือใช้ทรานซิสเตอร์ขับ</td></tr>
+        <tr><td>Interrupt ไม่ทำงาน</td><td>ลืมตั้ง pinMode INPUT ก่อน</td><td>ต้อง <code>pinMode(pin, PIN_MODE_INPUT_PULLUP)</code> ก่อน <code>attachInterrupt()</code></td></tr>
+        <tr><td>Pin not valid compile error</td><td>SOP-8 ไม่มี pin นั้น</td><td>ตรวจสอบ <code>IS_VALID_PIN()</code> macro สำหรับแพ็กเกจที่ใช้</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>🛠️ สร้าง Product: ไฟกระพริบ + ปุ่มกดเปลี่ยนโหมด</h2>
+    <p>LED กระพริบ 3 โหมด: เร็ว / ปานกลาง / ช้า — เปลี่ยนด้วยปุ่มกด (Interrupt)</p>
+    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+volatile uint8_t mode = 0;
+void btn_isr(void) {
+    mode = (mode + 1) % 3;
+}
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    pinMode(PC0, PIN_MODE_OUTPUT);       // LED
+    pinMode(PC1, PIN_MODE_INPUT_PULLUP); // Button
+    attachInterrupt(PC1, btn_isr, FALLING);
+
+    const uint16_t speeds[] = {100, 250, 500};
+
+    while(1)
+    {
+        digitalToggle(PC0);
+        Delay_Ms(speeds[mode]);
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>✏️ ลองทำดู</h2>
+    <ol>
+        <li>เพิ่ม LED ตัวที่ 2 ที่ PA1 — ติดเฉพาะเมื่อกดปุ่มค้าง (ไม่ใช่ toggle)</li>
+        <li>ใช้ <code>pulseIn()</code> วัดระยะห่างของปุ่มกด 2 ครั้ง (double-click detector)</li>
+        <li>ใช้ <code>pinModeMultiple()</code> ตั้ง LED 3 ดวง (PC0,PC1,PC2) เป็น output พร้อมกัน</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch01_getting_started.html">บทก่อน</a>
+    <a href="ch03_delay_timer.html">บทถัดไป →</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'neutral'});</script>
+</body>
+</html>

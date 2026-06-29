@@ -1,0 +1,113 @@
+/* SimpleHAL Tutorial — Light Theme, Responsive, Thai Language */
+:root {
+    --bg: #fefefe;
+    --text: #1a1a2e;
+    --accent: #2563eb;
+    --accent-light: #dbeafe;
+    --code-bg: #f1f5f9;
+    --note-bg: #eff6ff;
+    --warn-bg: #fef3c7;
+    --err-bg: #fee2e2;
+    --good-bg: #dcfce7;
+    --border: #e2e8f0;
+    --shadow: 0 1px 3px rgba(0,0,0,0.08);
+    --radius: 8px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+    font-family: 'IBM Plex Sans Thai', 'Sarabun', 'Noto Sans Thai', sans-serif;
+    font-size: clamp(15px, 1.7vw, 18px);
+    line-height: 1.85;
+    color: var(--text);
+    background: var(--bg);
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 1.5rem 1.2rem;
+}
+
+/* Navigation */
+nav.top-nav, nav.bottom-nav {
+    display: flex; justify-content: space-between; gap: 0.5rem;
+    padding: 0.75rem 0; border-bottom: 2px solid var(--border);
+    margin-bottom: 2rem; flex-wrap: wrap;
+}
+nav.bottom-nav { border-bottom: none; border-top: 2px solid var(--border); margin-top: 3rem; padding-top: 1rem; }
+nav a {
+    color: var(--accent); text-decoration: none;
+    font-weight: 600; font-size: 0.9em; padding: 0.3rem 0.6rem;
+    border-radius: 4px; transition: background 0.2s;
+}
+nav a:hover { background: var(--accent-light); }
+
+/* Headings */
+h1 { font-size: 2em; color: var(--accent); margin: 0.5rem 0 0.3rem; }
+h2 { font-size: 1.4em; margin: 2rem 0 0.8rem; padding-bottom: 0.3rem; border-bottom: 2px solid var(--border); }
+h3 { font-size: 1.15em; margin: 1.2rem 0 0.5rem; color: #334155; }
+
+/* Level badge */
+.level { display: inline-block; padding: 0.2rem 0.8rem; border-radius: 12px; font-size: 0.85em; font-weight: 700; margin-right: 0.5rem; }
+.level-beginner { background: #dcfce7; color: #166534; }
+.level-intermediate { background: #fef3c7; color: #92400e; }
+.level-advanced { background: #fee2e2; color: #991b1b; }
+.level-expert { background: #e0e7ff; color: #3730a3; }
+
+/* Sections */
+section {
+    background: #fff; border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1.5rem;
+    margin: 1.5rem 0; box-shadow: var(--shadow);
+}
+section h2 { margin-top: 0; border-bottom: none; font-size: 1.25em; }
+
+/* Code */
+code { background: var(--code-bg); padding: 0.15em 0.4em; border-radius: 3px; font-size: 0.9em; }
+pre { background: #0d1117; color: #e6edf3; padding: 1.2rem; border-radius: var(--radius); overflow-x: auto; font-size: 0.88em; line-height: 1.6; }
+pre code { background: transparent; padding: 0; color: inherit; }
+
+/* ASCII Circuit */
+pre.ascii-circuit {
+    background: #f8fafc; color: #334155; font-size: 0.82em;
+    border: 2px solid #e2e8f0; text-align: center; line-height: 1.3;
+}
+
+/* Tables */
+table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
+th, td { padding: 0.6rem 0.8rem; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.92em; }
+th { background: var(--code-bg); font-weight: 700; color: var(--accent); }
+
+/* Callout boxes */
+.callout {
+    padding: 1rem 1.2rem; border-radius: var(--radius); margin: 1rem 0;
+    border-left: 4px solid var(--accent);
+}
+.callout-note  { background: var(--note-bg); border-left-color: var(--accent); }
+.callout-warn  { background: var(--warn-bg); border-left-color: #f59e0b; }
+.callout-good  { background: var(--good-bg); border-left-color: #22c55e; }
+.callout-err   { background: var(--err-bg); border-left-color: #ef4444; }
+
+/* Step walkthrough */
+.step { margin: 1.2rem 0; padding-left: 1rem; border-left: 3px solid var(--accent); }
+.step h3 { color: var(--accent); margin-bottom: 0.4rem; }
+.step .explain { color: #64748b; font-size: 0.92em; margin-top: 0.3rem; }
+
+/* Flowchart */
+.flowchart { text-align: center; background: #f8fafc; border-radius: var(--radius); padding: 1rem; }
+
+/* Index page */
+#toc { list-style: none; }
+#toc li { margin: 0.6rem 0; padding: 0.8rem; background: #fff; border: 1px solid var(--border); border-radius: var(--radius); transition: box-shadow 0.2s; }
+#toc li:hover { box-shadow: var(--shadow); }
+#toc a { text-decoration: none; color: var(--text); display: block; }
+#toc .ch-num { color: var(--accent); font-weight: 700; margin-right: 0.5rem; }
+#toc .ch-level { float: right; font-size: 0.8em; padding: 0.15rem 0.5rem; border-radius: 8px; }
+#toc .ch-desc { display: block; font-size: 0.85em; color: #64748b; margin-top: 0.2rem; }
+
+/* Responsive */
+@media (max-width: 640px) {
+    body { padding: 0.8rem; font-size: 15px; }
+    pre { font-size: 0.78em; padding: 0.8rem; }
+    section { padding: 1rem; }
+    nav.top-nav, nav.bottom-nav { flex-direction: column; gap: 0.3rem; text-align: center; }
+}

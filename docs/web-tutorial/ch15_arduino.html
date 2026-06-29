@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>บทที่ 15: Arduino API — เขียนง่ายเหมือน Arduino — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch14_onewire.html">บทก่อน</a>
+    <a href="ch16_timer_guard.html">บทถัดไป →</a>
+</nav>
+
+<h1>บทที่ 15: Arduino API — เขียนง่ายเหมือน Arduino</h1>
+<span class="level expert">ระดับผู้เชี่ยวชาญ</span>
+
+<section class="flowchart">
+    <h2>🧭 แผนภาพการทำงาน</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["Arduino Sketch"] --> B["SimpleHAL Arduino API"]
+    B --> C["millis() / micros() — จับเวลา"]
+    C --> D["delay() — หน่วงเวลา"]
+    D --> E["analogRead() — อ่าน ADC"]
+    E --> F["analogWrite() — PWM output"]
+    F --> G["random() / map() — คำนวณ"]
+    G --> H["Serial.print() — USART output"]
+    H --> C
+    </pre>
+</section>
+
+<section>
+    <h2>🔌 การต่อวงจร</h2>
+    <pre class="ascii-circuit">
+    Arduino API Compatibility — ไม่ต้องเปลี่ยนวงจรจาก Arduino
+    ┌────────────────────────────────────────────┐
+    │  CH32V003 (TSSOP-20)                       │
+    │                                             │
+    │  PC0 ───/\/\/\───|LED|─── GND              │
+    │  PA1 ─── Button ─── GND (pull-up internal)  │
+    │  PD2 ─── Potentiometer (10kΩ) ─── 3.3V     │
+    │  PC4 ─── Servo (PWM)                       │
+    │                                             │
+    │  Arduino-style Pin Mapping:                 │
+    │  ┌──────────┬─────────────┐                 │
+    │  │ Arduino  │  CH32V003   │                 │
+    │  ├──────────┼─────────────┤                 │
+    │  │   D0     │  PC0        │                 │
+    │  │   D1     │  PC1        │                 │
+    │  │   D2     │  PC2        │                 │
+    │  │   A0     │  PD2 (ADC3) │                 │
+    │  │   ~3     │  PC4 (PWM)  │                 │
+    │  └──────────┴─────────────┘                 │
+    │                                             │
+    │  ฟังก์ชันที่เข้ากันได้กับ Arduino:            │
+    │  ├─ pinMode(pin, OUTPUT/INPUT/INPUT_PULLUP) │
+    │  ├─ digitalWrite(pin, HIGH/LOW)             │
+    │  ├─ digitalRead(pin)                        │
+    │  ├─ analogRead(pin)                         │
+    │  ├─ analogWrite(pin, val)                   │
+    │  ├─ delay(ms) / delayMicroseconds(us)       │
+    │  ├─ millis() / micros()                     │
+    │  ├─ random(min, max) / randomSeed(seed)     │
+    │  ├─ map(value, fromLow, fromHigh, toLow, ...) │
+    │  ├─ constrain(x, a, b)                      │
+    │  ├─ attachInterrupt(pin, func, mode)        │
+    │  ├─ Serial.begin(baud) / Serial.print()     │
+    │  ├─ dtostrf(val, width, prec, buf)          │
+    │  └─ yield()                                 │
+    └────────────────────────────────────────────┘
+    </pre>
+    <p><strong>หมายเหตุ:</strong> SimpleHAL รองรับ Arduino API โดยตรง — ไม่ต้องใช้ Arduino core — คอมไพล์ด้วย GCC RISC-V — โค้ดเล็กกว่า Arduino หลายเท่า</p>
+</section>
+
+<section>
+    <h2>📚 หลักการทำงาน</h2>
+    <p><strong>Arduino API</strong> — ชุดฟังก์ชันมาตรฐานที่คุ้นเคย — SimpleHAL รองรับฟังก์ชันหลักทั้งหมด — ทำให้พอร์ตโค้ดจาก Arduino มา CH32V003 ได้ง่าย</p>
+
+    <h3>ฟังก์ชันที่รองรับ</h3>
+    <ul>
+        <li><strong>millis() / micros():</strong> คืนค่าเวลาตั้งแต่เริ่มต้น — ใช้ SysTick 1ms — <code>micros()</code> ใช้ DWT cycle counter — ความละเอียด ~21ns ที่ 48MHz</li>
+        <li><strong>delay() / delayMicroseconds():</strong> หน่วงเวลา — เหมือน Arduino ทุกประการ</li>
+        <li><strong>pinMode() / digitalWrite() / digitalRead():</strong> ควบคุม GPIO — รองรับ INPUT_PULLUP, INPUT_PULLDOWN</li>
+        <li><strong>analogRead():</strong> อ่าน ADC — 10-bit (0-1023) — รองรับเฉพาะ pin ที่เป็น ADC</li>
+        <li><strong>analogWrite():</strong> PWM output — 8-bit (0-255) — ใช้ TIM1/TIM2</li>
+        <li><strong>attachInterrupt():</strong> ผูก interrupt กับ pin — รองรับ RISING, FALLING, CHANGE</li>
+        <li><strong>Serial:</strong> เริ่มด้วย <code>USART_SimpleInit()</code> — ใช้ <code>Serial.print()</code> ได้</li>
+        <li><strong>dtostrf():</strong> แปลง float เป็น string — มีประโยชน์มากบน CH32V003 ที่ไม่มี sprintf float ใน stdlib จิ๋ว</li>
+        <li><strong>yield():</strong> weak function — ถูกเรียกใน delay() — override ได้สำหรับ cooperative multitasking</li>
+        <li><strong>random() / randomSeed():</strong> สุ่มเลข — ใช้ LFSR บน CH32V003</li>
+        <li><strong>map() / constrain():</strong> แมปช่วงค่า — ใช้ int arithmetic (ไม่มี float overhead)</li>
+    </ul>
+
+    <p><strong>ข้อแตกต่างสำคัญ:</strong> Arduino Uno = ATmega328P (8-bit AVR 16MHz), CH32V003 = RISC-V 32-bit 48MHz — เร็วกว่าแต่ไม่มี FPU — float ทำงานช้ากว่า int มาก</p>
+</section>
+
+<section>
+    <h2>💻 เขียน Code ทีละขั้น</h2>
+
+    <div class="step"><h3>ขั้นที่ 1: Blink — Arduino Style</h3>
+    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+// นี่คือโค้ด Arduino มาตรฐาน!
+void setup() {
+    pinMode(PC0, OUTPUT);
+}
+
+void loop() {
+    digitalWrite(PC0, HIGH);
+    delay(500);
+    digitalWrite(PC0, LOW);
+    delay(500);
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();  // จำเป็นสำหรับ delay()/millis()
+    setup();
+    while(1) loop();
+}</code></pre>
+    <p class="explain">🔍 <code>setup()</code> + <code>loop()</code> — แพทเทิร์น Arduino — SimpleHAL ไม่ได้บังคับให้มี <code>setup()</code>/<code>loop()</code> โดยอัตโนมัติ — แต่คุณเขียนแบบนี้ได้ — โค้ดนี้พอร์ตจาก Arduino มาโดยแทบไม่ต้องเปลี่ยนอะไร</p></div>
+
+    <div class="step"><h3>ขั้นที่ 2: Non-blocking Blink (millis)</h3>
+    <pre><code>uint32_t last_toggle = 0;
+bool led_state = false;
+
+void setup() {
+    pinMode(PC0, OUTPUT);
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    Serial.print("Non-blocking blink with millis()\r\n");
+}
+
+void loop() {
+    uint32_t now = millis();
+
+    if(now - last_toggle >= 500) {
+        last_toggle = now;
+        led_state = !led_state;
+        digitalWrite(PC0, led_state ? HIGH : LOW);
+
+        Serial.print("Uptime: ");
+        Serial.print(now);
+        Serial.print(" ms\r\n");
+    }
+
+    // CPU ว่างทำงานอื่นได้ — ไม่ต้อง busy-wait!
+    // เช่น: เช็ค button, อ่าน sensor, สื่อสาร
+}</code></pre>
+    <p class="explain">🔍 <code>millis()</code> — คืนค่า ms ตั้งแต่เริ่ม — ใช้ทำ non-blocking timing — ต่างจาก <code>delay()</code> ที่ block — <code>Serial.print()</code> — พิมพ์ผ่าน USART — ต้องเรียก <code>USART_SimpleInit()</code> ก่อน</p></div>
+
+    <div class="step"><h3>ขั้นที่ 3: analogRead + analogWrite</h3>
+    <pre><code>void setup() {
+    pinMode(PC4, OUTPUT);  // PWM output
+    ADC_SimpleInit();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+}
+
+void loop() {
+    // อ่าน Potentiometer — Arduino style
+    int sensor = analogRead(PD2);  // 0-1023
+
+    // Map ไปเป็นความสว่าง LED 0-255
+    int brightness = map(sensor, 0, 1023, 0, 255);
+
+    // PWM output (Arduino style)
+    analogWrite(PC4, brightness);
+
+    Serial.print("Sensor: ");
+    Serial.print(sensor);
+    Serial.print(" -> PWM: ");
+    Serial.print(brightness);
+    Serial.print("\r\n");
+
+    delay(50);
+}</code></pre>
+    <p class="explain">🔍 <code>analogRead(pin)</code> — Arduino-style ADC — ต้องเรียก <code>ADC_SimpleInit()</code> ก่อน — <code>analogWrite(pin, val)</code> — PWM output 0-255 — <code>map(val, inMin, inMax, outMin, outMax)</code> — แมปช่วงค่า</p></div>
+
+    <div class="step"><h3>ขั้นที่ 4: Interrupt + Button</h3>
+    <pre><code>volatile int button_pressed = 0;
+
+void button_isr(void) {
+    button_pressed = 1;  // ISR: แค่ตั้ง flag
+}
+
+void setup() {
+    pinMode(PC0, OUTPUT);
+    pinMode(PA1, INPUT_PULLUP);
+
+    // Arduino-style interrupt
+    attachInterrupt(digitalPinToInterrupt(PA1),
+                    button_isr, FALLING);
+
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+}
+
+void loop() {
+    if(button_pressed) {
+        button_pressed = 0;
+        digitalWrite(PC0, !digitalRead(PC0));
+        Serial.print("Button pressed!\r\n");
+    }
+
+    // CPU อิสระ — ไม่ต้อง poll button
+    delay(10);
+}</code></pre>
+    <p class="explain">🔍 <code>attachInterrupt(pin, func, mode)</code> — Arduino-style interrupt — <code>digitalPinToInterrupt(pin)</code> — แปลง pin เป็น interrupt number — รองรับ RISING, FALLING, CHANGE, LOW</p></div>
+
+    <div class="step"><h3>ขั้นที่ 5: dtostrf — Float to String</h3>
+    <pre><code>void loop() {
+    float vdd = ADC_GetVDD();
+    float temp = 25.6f;
+
+    char buf[16];
+
+    // แปลง float -> string (ไม่มี sprintf float ใน stdlib จิ๋ว)
+    dtostrf(vdd, 5, 2, buf);  // " 3.28"
+    Serial.print("VDD: "); Serial.print(buf);
+
+    dtostrf(temp, 5, 1, buf);  // " 25.6"
+    Serial.print(" Temp: "); Serial.print(buf);
+    Serial.print("\r\n");
+
+    delay(1000);
+}</code></pre>
+    <p class="explain">🔍 <code>dtostrf(val, width, prec, buf)</code> — แปลง float เป็น string — สำคัญมากเพราะ CH32V003 stdlib แบบ nano ไม่รองรับ sprintf float — width=ความกว้างรวม, prec=จำนวนทศนิยม</p></div>
+
+    <div class="step"><h3>ขั้นที่ 6: yield() — Cooperative Multitasking</h3>
+    <pre><code>// Override yield() — ถูกเรียกใน delay()
+void yield(void) {
+    // ทำงานอื่นขณะ delay
+    // เช่น: เช็ค button, อ่าน sensor, feed watchdog
+    IWDG_Feed();
+}
+
+void loop() {
+    // delay() จะเรียก yield() ระหว่างรอ
+    // ทำให้ CPU ไม่ได้ idle เปล่าๆ
+    digitalWrite(PC0, HIGH);
+    delay(1000);  // yield() ถูกเรียกหลายครั้งในนี้
+    digitalWrite(PC0, LOW);
+    delay(1000);
+}</code></pre>
+    <p class="explain">🔍 <code>yield()</code> — weak function — ถูกเรียกใน <code>delay()</code> — override เพื่อทำงานอื่นระหว่าง delay — ใช้ feed watchdog, process data, check flags ได้</p></div>
+</section>
+
+<section>
+    <h2>📋 API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+        <tr><td><code>millis()</code></td><td>เวลา ms ตั้งแต่เริ่มต้น</td><td><code>uint32_t t = millis()</code></td></tr>
+        <tr><td><code>micros()</code></td><td>เวลา us ตั้งแต่เริ่มต้น</td><td><code>uint32_t t = micros()</code></td></tr>
+        <tr><td><code>delay(ms)</code></td><td>หน่วงเวลา (blocking)</td><td><code>delay(1000)</code></td></tr>
+        <tr><td><code>delayMicroseconds(us)</code></td><td>หน่วงเวลา us (blocking)</td><td><code>delayMicroseconds(500)</code></td></tr>
+        <tr><td><code>analogRead(pin)</code></td><td>อ่าน ADC (0-1023)</td><td><code>int v = analogRead(PD2)</code></td></tr>
+        <tr><td><code>analogWrite(pin, val)</code></td><td>PWM output (0-255)</td><td><code>analogWrite(PC4, 128)</code></td></tr>
+        <tr><td><code>digitalPinToInterrupt(pin)</code></td><td>แปลง pin -> interrupt number</td><td><code>digitalPinToInterrupt(PA1)</code></td></tr>
+        <tr><td><code>attachInterrupt(pin, func, mode)</code></td><td>ผูก interrupt กับ pin</td><td><code>attachInterrupt(irq, isr, FALLING)</code></td></tr>
+        <tr><td><code>detachInterrupt(pin)</code></td><td>ยกเลิก interrupt</td><td><code>detachInterrupt(PA1)</code></td></tr>
+        <tr><td><code>random(max)</code></td><td>สุ่มเลข 0 ถึง max-1</td><td><code>int r = random(100)</code></td></tr>
+        <tr><td><code>random(min, max)</code></td><td>สุ่มเลข min ถึง max-1</td><td><code>int r = random(10, 50)</code></td></tr>
+        <tr><td><code>randomSeed(seed)</code></td><td>ตั้ง seed ให้ random</td><td><code>randomSeed(analogRead(PD4))</code></td></tr>
+        <tr><td><code>map(val, inMin, inMax, outMin, outMax)</code></td><td>แมปช่วงค่า</td><td><code>int pwm = map(adc, 0, 1023, 0, 255)</code></td></tr>
+        <tr><td><code>constrain(x, a, b)</code></td><td>จำกัดค่าให้อยู่ในช่วง</td><td><code>int v = constrain(x, 0, 255)</code></td></tr>
+        <tr><td><code>yield()</code></td><td>Weak function — override ได้</td><td><code>void yield(void) { ... }</code></td></tr>
+        <tr><td><code>dtostrf(val, w, p, buf)</code></td><td>Float -> string</td><td><code>dtostrf(3.14, 5, 2, buf)</code></td></tr>
+        <tr><td><code>Serial.print(val)</code></td><td>พิมพ์ผ่าน USART</td><td><code>Serial.print("Hello\r\n")</code></td></tr>
+        <tr><td><code>Serial.println(val)</code></td><td>พิมพ์ + ขึ้นบรรทัดใหม่</td><td><code>Serial.println("Done")</code></td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>delay() ไม่ทำงาน</td><td>ลืมเรียก <code>Timer_Init()</code></td><td><code>Timer_Init()</code> ต้องอยู่ก่อน <code>delay()</code> หรือ <code>millis()</code></td></tr>
+        <tr><td>analogRead() ได้ค่า 0 ตลอด</td><td>ลืมเรียก <code>ADC_SimpleInit()</code></td><td>ต้อง init ADC ก่อนใช้ analogRead()</td></tr>
+        <tr><td>analogWrite() ไม่ทำงาน</td><td>ใช้ pin ที่ไม่ใช่ PWM</td><td>PWM pins: PC4, PC5, PC6, PA1, PA2, PD3 — เช็คด้วย IS_PWM_VALID_PACKAGE</td></tr>
+        <tr><td>delay(5000) แล้ว IWDG reset</td><td>delay() ไม่ feed watchdog</td><td>Override <code>yield()</code> เพื่อ feed watchdog — หรือใช้ millis() แบบ non-blocking</td></tr>
+        <tr><td>Serial.print() ไม่แสดง</td><td>ลืมเรียก <code>USART_SimpleInit()</code> ก่อน</td><td><code>USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT)</code></td></tr>
+        <tr><td>dtostrf() compile error</td><td>ลืม include SimpleHAL.h</td><td>dtostrf() define ใน SimpleHAL — ไม่ใช่ stdlib</td></tr>
+        <tr><td>attachInterrupt() HardFault</td><td>ใช้ pin ที่ไม่มี interrupt</td><td>ทุก pin ใน CH32V003 มี interrupt — เช็คแค่ว่า pin valid</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>🛠️ สร้าง Product: พอร์ตโค้ด Arduino มาลง CH32V003</h2>
+    <p>ตัวอย่างพอร์ต Arduino sketch — อ่านเซ็นเซอร์ + PWM ควบคุม LED + Serial Monitor</p>
+    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+void setup()
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+    ADC_SimpleInit();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+
+    pinMode(PC0, OUTPUT);      // LED
+    pinMode(PC4, OUTPUT);       // PWM LED
+    pinMode(PA1, INPUT_PULLUP); // Button
+
+    Serial.print("CH32V003 Arduino Compatible\r\n");
+
+    // ใช้ random seed จาก ADC noise
+    randomSeed(analogRead(PD4));
+}
+
+void loop()
+{
+    // อ่าน potentiometer
+    int pot = analogRead(PD2);
+
+    // แมปเป็นความสว่าง LED
+    int brightness = map(pot, 0, 1023, 0, 255);
+    brightness = constrain(brightness, 0, 255);
+
+    analogWrite(PC4, brightness);
+
+    // เช็ค button
+    if(digitalRead(PA1) == LOW) {
+        digitalWrite(PC0, HIGH);
+        Serial.print("Button! Pot=");
+        Serial.print(pot);
+        Serial.print("\r\n");
+    } else {
+        digitalWrite(PC0, LOW);
+    }
+
+    // Non-blocking print ทุก 5 วินาที
+    static uint32_t last = 0;
+    if(millis() - last > 5000) {
+        last = millis();
+        float vdd = ADC_GetVDD();
+        char buf[10];
+        dtostrf(vdd, 4, 2, buf);
+        Serial.print("VDD: ");
+        Serial.print(buf);
+        Serial.print("V Uptime: ");
+        Serial.print(millis() / 1000);
+        Serial.print("s\r\n");
+    }
+
+    delay(50);
+}
+
+int main(void) {
+    setup();
+    while(1) loop();
+}</code></pre>
+    <p><strong>เปรียบเทียบขนาดโค้ด:</strong> Arduino Uno Blink ~924 bytes — SimpleHAL Blink ~400 bytes — เล็กกว่า 57% — เหลือพื้นที่ Flash ให้โปรเจกต์ใหญ่ขึ้น</p>
+</section>
+
+<section>
+    <h2>✏️ ลองทำดู</h2>
+    <ol>
+        <li>พอร์ต Arduino sketch ที่มีอยู่มา CH32V003 — เปลี่ยนเฉพาะ pin definitions — ทดสอบว่าใช้ได้หรือไม่</li>
+        <li>ใช้ <code>attachInterrupt()</code> แทน polling button — วัดว่า CPU ว่างขึ้นกี่ %</li>
+        <li>เขียน <code>yield()</code> ที่ feed IWDG + toggle LED ช้าๆ — สังเกตว่า LED กระพริบแม้อยู่ใน <code>delay(5000)</code></li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch14_onewire.html">บทก่อน</a>
+    <a href="ch16_timer_guard.html">บทถัดไป →</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'neutral'});</script>
+</body>
+</html>

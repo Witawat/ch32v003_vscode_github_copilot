@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>บทที่ 16: Timer Resource Guard — ป้องกัน Timer ชนกัน — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch15_arduino.html">บทก่อน</a>
+    <a href="ch17_package.html">บทถัดไป →</a>
+</nav>
+
+<h1>บทที่ 16: Timer Resource Guard — ป้องกัน Timer ชนกัน</h1>
+<span class="level expert">ระดับผู้เชี่ยวชาญ</span>
+
+<section class="flowchart">
+    <h2>🧭 แผนภาพการทำงาน</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["Library A: PWM_Init()"] --> B{Check g_tim1_owner}
+    B -->|"owner == TIMER_OWNER_NONE"| C["Claim: g_tim1_owner = TIMER_OWNER_PWM"]
+    B -->|"owner != NONE"| D["return 0 (TIM1 already used by Library B)"]
+    C --> E["PWM ทำงานปกติ"]
+    F["Library B: Encoder_Init()"] --> G{Check g_tim1_owner}
+    G -->|"owner == NONE"| H["Claim: g_tim1_owner = TIMER_OWNER_ENCODER"]
+    G -->|"owner == PWM (ไม่ใช่ NONE)"| I["return 0 — Conflict!"]
+    H --> J["Encoder ทำงานปกติ"]
+    </pre>
+</section>
+
+<section>
+    <h2>🔌 การต่อวงจร</h2>
+    <pre class="ascii-circuit">
+    Timer Resource Guard — กลไกภายใน ไม่ต้องต่อวงจร
+
+    CH32V003 Timer Mapping:
+    ┌────────────────────────────────────────────┐
+    │  Timer  │  Channels  │  ใช้กับอะไรได้        │
+    │─────────┼────────────┼──────────────────────│
+    │  TIM1   │  4 CH      │  PWM, Encoder,       │
+    │         │            │  Input Capture,      │
+    │         │            │  Output Compare,     │
+    │         │            │  One-Pulse           │
+    │─────────┼────────────┼──────────────────────│
+    │  TIM2   │  4 CH      │  PWM, Encoder,       │
+    │         │            │  Input Capture,      │
+    │         │            │  Servo               │
+    │─────────┼────────────┼──────────────────────│
+    │  TIM3   │  -         │  (reserved/IR)       │
+    │─────────┼────────────┼──────────────────────│
+    │  SYSTICK│  -         │  Delay, millis()     │
+    └────────────────────────────────────────────┘
+
+    ปัญหา: TIM1 มีแค่ 1 ตัว — ถ้า Library A กับ B ใช้ TIM1
+    โดยไม่รู้ว่าอีกฝ่ายใช้ → ค่าตั้งเสียหาย → PWM เพี้ยน, Encoder ผิด
+
+    Guard System:
+    ┌────────────────────────────────────────────┐
+    │  global variable:                          │
+    │  volatile uint8_t g_tim1_owner = NONE;     │
+    │  volatile uint8_t g_tim2_owner = NONE;     │
+    │                                            │
+    │  Ownership Flag Values:                    │
+    │  ├─ TIMER_OWNER_NONE     = 0               │
+    │  ├─ TIMER_OWNER_PWM      = 1 (Servo, LED)  │
+    │  ├─ TIMER_OWNER_ENCODER  = 2               │
+    │  ├─ TIMER_OWNER_FREQ     = 3               │
+    │  ├─ TIMER_OWNER_CAPTURE  = 4               │
+    │  ├─ TIMER_OWNER_IR       = 5 (IR Remote)   │
+    │  └─ TIMER_OWNER_CUSTOM   = 99 (ผู้ใช้)      │
+    └────────────────────────────────────────────┘
+    </pre>
+    <p><strong>CH32V003 มีแค่ 2 hardware timers (TIM1, TIM2)!</strong> — ต้องใช้ guard system มิฉะนั้น library จะแย่ง timer กัน</p>
+</section>
+
+<section>
+    <h2>📚 หลักการทำงาน</h2>
+    <p><strong>Timer Resource Guard</strong> — ระบบจัดการกรรมสิทธิ์ timer แบบ cooperative — ป้องกันไม่ให้หลาย library ใช้ timer ตัวเดียวกันพร้อมกัน</p>
+
+    <h3>ทำไมต้องมี Resource Guard?</h3>
+    <p>CH32V003 มี hardware timer จำกัด (TIM1, TIM2) — แต่ SimpleHAL มี library หลายตัวที่ต้องการ timer: PWM, Servo, Encoder, Frequency measurement, IR Remote, Input Capture — ถ้าแต่ละ library ตั้งค่า timer โดยไม่เช็คว่าคนอื่นใช้อยู่หรือไม่ → ค่า timer register จะถูกเขียนทับ → ระบบพัง</p>
+
+    <h3>หลักการ</h3>
+    <ol>
+        <li>ทุกครั้งที่ library จะใช้ timer — ต้องเช็ค <code>g_timX_owner</code></li>
+        <li>ถ้า <code>owner == TIMER_OWNER_NONE</code> → จอง timer (ตั้ง owner = ตัวเอง)</li>
+        <li>ถ้า <code>owner != TIMER_OWNER_NONE</code> → คนอื่นใช้อยู่ → คืน error</li>
+        <li>เมื่อเลิกใช้ → คืน timer (ตั้ง owner = <code>TIMER_OWNER_NONE</code>)</li>
+    </ol>
+
+    <h3>TIMEXT_DEFAULT_TIMER</h3>
+    <p>Global config ที่เลือก timer เริ่มต้นสำหรับฟังก์ชันต่างๆ — ถ้าต้องการให้ฟังก์ชันใช้ TIM2 แทน TIM1 → เปลี่ยน <code>TIMEXT_DEFAULT_TIMER</code> ก่อนเรียก init</p>
+
+    <h3>ผลลัพธ์</h3>
+    <ul>
+        <li>ถ้ามี conflict — compile-time หรือ runtime error — ไม่ใช่ silent corruption</li>
+        <li>ผู้ใช้รู้ทันทีว่าต้องใช้ timer คนละตัว — หรือ disable feature ที่ไม่จำเป็น</li>
+        <li>ระบบ fail-safe — ไม่มีทางที่ timer จะถูกแย่งโดยไม่รู้ตัว</li>
+    </ul>
+</section>
+
+<section>
+    <h2>💻 เขียน Code ทีละขั้น</h2>
+
+    <div class="step"><h3>ขั้นที่ 1: ดูตัวอย่าง — TIM1 ถูกใช้โดย PWM</h3>
+    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    // เริ่ม PWM บน PC4 — ใช้ TIM1
+    PWM_SimpleInit(2, PC4);  // success
+    // ตอนนี้ g_tim1_owner = TIMER_OWNER_PWM</code></pre>
+    <p class="explain">🔍 เมื่อ <code>PWM_SimpleInit()</code> ถูกเรียก — มันเช็ค <code>g_tim1_owner</code> — ถ้าเป็น NONE → จอง — ตอนนี้ TIM1 เป็นของ PWM</p></div>
+
+    <div class="step"><h3>ขั้นที่ 2: Conflict — Encoder พยายามใช้ TIM1</h3>
+    <pre><code>    // พยายามใช้ Encoder บน TIM1
+    uint8_t ok = Encoder_Init(TIM1, PA1, PA2);
+    if(!ok) {
+        // Conflict! TIM1 ถูกใช้โดย PWM แล้ว
+        USART_Print("ERROR: TIM1 already used by PWM!\r\n");
+        USART_Print("Use TIM2 instead\r\n");
+
+        // ลองใช้ TIM2 แทน
+        ok = Encoder_Init(TIM2, PC4, PC5);
+        if(ok) {
+            USART_Print("Encoder on TIM2 OK\r\n");
+        }
+    }</code></pre>
+    <p class="explain">🔍 <code>Encoder_Init(TIM1, ...)</code> — จะเช็ค <code>g_tim1_owner</code> — พบว่า != NONE (เป็น PWM) → คืน 0 — ผู้ใช้รู้ทันทีว่ามี conflict — ไม่ใช่เงียบแล้ว PWM เพี้ยน</p></div>
+
+    <div class="step"><h3>ขั้นที่ 3: Release Timer — เปลี่ยนเจ้าของ</h3>
+    <pre><code>    // คืน TIM1 (PWM เลิกใช้)
+    PWM_DeInit(2);  // หรือ Timer_Release(TIM1)
+    // ตอนนี้ g_tim1_owner = TIMER_OWNER_NONE
+
+    // ใช้ Encoder บน TIM1 ได้แล้ว
+    Encoder_Init(TIM1, PA1, PA2);  // success
+    // g_tim1_owner = TIMER_OWNER_ENCODER</code></pre>
+    <p class="explain">🔍 <code>PWM_DeInit()</code> — คืนกรรมสิทธิ์ TIM1 — หลังจากนี้ library อื่นใช้ TIM1 ได้ — หรือใช้ <code>Timer_Release(TIM1)</code> โดยตรง</p></div>
+
+    <div class="step"><h3>ขั้นที่ 4: TIMEXT_DEFAULT_TIMER — เปลี่ยน Timer เริ่มต้น</h3>
+    <pre><code>    // กำหนดให้ library ทั้งหมดใช้ TIM2 เป็น default
+    // (ไม่ต้องระบุ timer ทุกครั้ง)
+    #define TIMEXT_DEFAULT_TIMER TIM2
+
+    // ก่อน include SimpleHAL.h หรือหลัง include ก็ได้
+    // ขึ้นอยู่กับการออกแบบ
+
+    // ต่อจากนี้ — PWM, Servo, Encoder จะพยายามใช้ TIM2
+    // โดยอัตโนมัติ — ยกเว้นระบุ timer เอง
+
+    Servo_SimpleInit(1);  // ใช้ TIM2 (default)
+    Encoder_Init(TIM1, PA1, PA2);  // ใช้ TIM1 (ระบุเอง)</code></pre>
+    <p class="explain">🔍 <code>TIMEXT_DEFAULT_TIMER</code> — กำหนด timer เริ่มต้น — แต่ละ library เคารพค่านี้ — แต่ถ้าระบุ timer เองในการเรียกฟังก์ชัน → ใช้ที่ระบุ</p></div>
+
+    <div class="step"><h3>ขั้นที่ 5: เช็คสถานะ Timer ทั้งระบบ</h3>
+    <pre><code>    // ดูว่าใครใช้ timer อะไรอยู่
+    USART_Print("TIM1 owner: ");
+    switch(g_tim1_owner) {
+        case TIMER_OWNER_NONE:    USART_Print("FREE\r\n"); break;
+        case TIMER_OWNER_PWM:     USART_Print("PWM\r\n"); break;
+        case TIMER_OWNER_ENCODER: USART_Print("Encoder\r\n"); break;
+        case TIMER_OWNER_SERVO:   USART_Print("Servo\r\n"); break;
+        case TIMER_OWNER_FREQ:    USART_Print("Frequency\r\n"); break;
+        case TIMER_OWNER_CAPTURE: USART_Print("Capture\r\n"); break;
+        case TIMER_OWNER_IR:      USART_Print("IR Remote\r\n"); break;
+        default:                  USART_Print("Custom\r\n"); break;
+    }
+
+    // หรือใช้ helper
+    uint8_t t1 = Timer_GetOwner(TIM1);
+    uint8_t t2 = Timer_GetOwner(TIM2);
+    USART_Print("TIM1=");
+    USART_PrintNum(t1);
+    USART_Print(" TIM2=");
+    USART_PrintNum(t2);
+    USART_Print("\r\n");</code></pre>
+    <p class="explain">🔍 <code>Timer_GetOwner(timer)</code> — อ่านค่า owner — ใช้ debug หรือ runtime check — <code>g_timX_owner</code> เป็น global — อ่านได้จากทุกที่</p></div>
+</section>
+
+<section>
+    <h2>📋 API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน/ตัวแปร</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+        <tr><td><code>g_tim1_owner</code></td><td>เจ้าของ TIM1 (global)</td><td><code>if(g_tim1_owner == TIMER_OWNER_NONE)</code></td></tr>
+        <tr><td><code>g_tim2_owner</code></td><td>เจ้าของ TIM2 (global)</td><td><code>if(g_tim2_owner == TIMER_OWNER_NONE)</code></td></tr>
+        <tr><td><code>TIMEXT_DEFAULT_TIMER</code></td><td>Timer default สำหรับ library</td><td><code>#define TIMEXT_DEFAULT_TIMER TIM2</code></td></tr>
+        <tr><td><code>Timer_GetOwner(timer)</code></td><td>อ่าน owner ของ timer</td><td><code>uint8_t o = Timer_GetOwner(TIM1)</code></td></tr>
+        <tr><td><code>Timer_Release(timer)</code></td><td>คืนกรรมสิทธิ์ timer</td><td><code>Timer_Release(TIM1)</code></td></tr>
+        <tr><td><code>Timer_SetOwner(timer, owner)</code></td><td>ตั้ง owner (ถ้าว่าง)</td><td><code>Timer_SetOwner(TIM2, TIMER_OWNER_CUSTOM)</code></td></tr>
+        <tr><td><code>TIMER_OWNER_NONE</code></td><td>ว่าง (0)</td><td>ค่าเริ่มต้นของทุก timer</td></tr>
+        <tr><td><code>TIMER_OWNER_PWM</code></td><td>ใช้โดย PWM/Servo (1)</td><td></td></tr>
+        <tr><td><code>TIMER_OWNER_ENCODER</code></td><td>ใช้โดย Encoder (2)</td><td></td></tr>
+        <tr><td><code>TIMER_OWNER_FREQ</code></td><td>ใช้โดย Frequency measure (3)</td><td></td></tr>
+        <tr><td><code>TIMER_OWNER_CAPTURE</code></td><td>ใช้โดย Input Capture (4)</td><td></td></tr>
+        <tr><td><code>TIMER_OWNER_CUSTOM</code></td><td>ผู้ใช้กำหนดเอง (99)</td><td></td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>Encoder_Init() คืน 0 ตลอด</td><td>TIM1 ถูกใช้โดย library อื่น</td><td>เช็ค <code>g_tim1_owner</code> — ใช้ TIM2 แทน หรือ release TIM1 ก่อน</td></tr>
+        <tr><td>PWM เพี้ยนหลังเรียก Encoder</td><td>ลืมเปิด Timer Guard — library แข่งกันใช้ timer</td><td>Timer Guard ทำงานอัตโนมัติใน SimpleHAL — ไม่ได้เปิด Guard = ใช้ library นอก SimpleHAL</td></tr>
+        <tr><td>Servo กระตุก, LED กระพริบไม่ตรง</td><td>ใช้ TIM1 กับหลาย feature พร้อมกันโดยไม่รู้ตัว</td><td>แยกเป็น TIM1 และ TIM2 — หรือใช้ software PWM แทน hardware PWM</td></tr>
+        <tr><td>ไม่รู้ว่าใครใช้ TIM1 อยู่</td><td>ไม่ได้เช็ค <code>g_tim1_owner</code></td><td>เรียก <code>Timer_GetOwner(TIM1)</code> หรืออ่าน <code>g_tim1_owner</code> โดยตรง</td></tr>
+        <tr><td>Timer ถูกจองแต่ไม่เคยคืน</td><td>ไม่ได้เรียก DeInit เมื่อเลิกใช้</td><td>เรียก <code>PWM_DeInit()</code> / <code>Encoder_DeInit()</code> / <code>Timer_Release()</code></td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>🛠️ สร้าง Product: ระบบหลาย Timer ไม่เคยชน</h2>
+    <p>ระบบที่ใช้ PWM (TIM1) + Encoder (TIM2) + Servo (TIM2 แชร์กับ Encoder) — Guard ป้องกัน conflict</p>
+    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+
+    // ==== Allocate TIM1: PWM LED ====
+    uint8_t pwm_ok = PWM_SimpleInit(2, PC4);
+    if(pwm_ok) {
+        USART_Print("TIM1: PWM on PC4 OK\r\n");
+        PWM_SetDuty(2, 50);  // 50%
+    } else {
+        USART_Print("TIM1: PWM FAILED (in use)\r\n");
+    }
+
+    // ==== Allocate TIM2: Encoder ====
+    uint8_t enc_ok = Encoder_Init(TIM2, PC5, PC6);
+    if(enc_ok) {
+        USART_Print("TIM2: Encoder on PC5/PC6 OK\r\n");
+    } else {
+        USART_Print("TIM2: Encoder FAILED (in use)\r\n");
+    }
+
+    // ==== Try: Servo (default TIM1) — จะชนกับ PWM ====
+    uint8_t servo_ok = Servo_SimpleInit(1);
+    if(!servo_ok) {
+        USART_Print("Servo FAILED: TIM1 owned by PWM\r\n");
+        USART_Print("    Fix: Use Servo_SimpleInitEx(TIM2, 1)\r\n");
+        // ใช้ TIM2 โดยตรง
+        servo_ok = Servo_SimpleInitEx(TIM2, 1);
+        if(servo_ok) {
+            USART_Print("    Servo on TIM2 OK!\r\n");
+        }
+    }
+
+    // ==== Report Timer Status ====
+    USART_Print("--- Timer Status ---\r\n");
+    USART_Print("TIM1 owner: ");
+    USART_PrintNum(Timer_GetOwner(TIM1));
+    USART_Print(" (PWM=");
+    USART_PrintNum(TIMER_OWNER_PWM);
+    USART_Print(")\r\n");
+    USART_Print("TIM2 owner: ");
+    USART_PrintNum(Timer_GetOwner(TIM2));
+    USART_Print("\r\n");
+
+    while(1)
+    {
+        if(enc_ok) {
+            int32_t pos = Encoder_GetCount();
+            USART_Print("Enc: ");
+            USART_PrintNum((int32_t)pos);
+            USART_Print("\r\n");
+        }
+        Delay_Ms(500);
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>✏️ ลองทำดู</h2>
+    <ol>
+        <li>เปิด PWM บน TIM1 แล้วเรียก <code>Servo_SimpleInit()</code> — ดูว่า Servo init ล้มเหลว — เช็ค <code>g_tim1_owner</code> ว่าเป็น PWM</li>
+        <li>เปลี่ยน <code>TIMEXT_DEFAULT_TIMER</code> เป็น TIM2 — สังเกตว่า library ทั้งหมดเปลี่ยนไปใช้ TIM2 โดยอัตโนมัติ</li>
+        <li>เขียน library ของตัวเองที่ใช้ TIM1 — ตั้ง owner ด้วย <code>Timer_SetOwner(TIM1, TIMER_OWNER_CUSTOM)</code> — เช็คว่า library อื่นใช้ TIM1 ไม่ได้</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch15_arduino.html">บทก่อน</a>
+    <a href="ch17_package.html">บทถัดไป →</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'neutral'});</script>
+</body>
+</html>

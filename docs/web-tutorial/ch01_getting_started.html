@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>บทที่ 1: เริ่มต้นอย่างถูกต้อง — ระบบขั้นต่ำที่ใช้ได้ — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <span style="visibility:hidden">บทก่อน</span>
+    <a href="ch02_gpio.html">บทถัดไป →</a>
+</nav>
+
+<h1>บทที่ 1: เริ่มต้นอย่างถูกต้อง — ระบบขั้นต่ำที่ใช้ได้</h1>
+<span class="level beginner">ระดับเริ่มต้น</span>
+
+<section class="flowchart">
+    <h2>🧭 แผนภาพการทำงาน</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["#define CH32V003_PACKAGE"] --> B["SystemCoreClockUpdate()"]
+    B --> C["Timer_Init()"]
+    C --> D["pinMode()"]
+    D --> E["Loop วนไป"]
+    E --> F["digitalWrite() + Delay_Ms()"]
+    F --> E
+    </pre>
+</section>
+
+<section>
+    <h2>🔌 การต่อวงจร</h2>
+    <pre class="ascii-circuit">
+    CH32V003 (TSSOP-20)
+    ┌─────┐
+    │     │ PC0 ──┬──/\/\/\──┬──|LED|── GND
+    │ MCU │         220Ω
+    │     │
+    │     │ VDD ──── 3.3V
+    │     │ GND ──── GND
+    └─────┘
+    </pre>
+    <p>บอร์ด CH32V003 ขั้นต่ำต้องการไฟ 3.3V, GND, และ LED ต่อผ่าน R 220Ω ที่ PC0</p>
+    <p><strong>หมายเหตุ SOP-8:</strong> หากใช้ SOP-8 (CH32V003J4M6) ให้ใช้ <code>PACKAGE_SOP8</code> และใช้ PC1 หรือ PA1 แทน PC0 (PC0 ไม่มีบน SOP-8)</p>
+</section>
+
+<section>
+    <h2>📚 หลักการทำงาน</h2>
+    <p>ทุกโปรแกรม CH32V003 ต้องเริ่มด้วย <strong>3 ขั้นตอนพื้นฐาน</strong>:</p>
+    <ol>
+        <li><strong>SystemCoreClockUpdate()</strong> — อัปเดตตัวแปรความถี่ระบบให้ถูกต้อง (ค่า default: HSI 48MHz) ต้องเรียกก่อนใช้ Delay หรือ USART</li>
+        <li><strong>Timer_Init()</strong> — ตั้งค่า SysTick ให้ทำงานที่ 1ms resolution (จำเป็นสำหรับ <code>Delay_Ms()</code>, <code>Get_CurrentMs()</code>)</li>
+        <li><strong>pinMode()</strong> — ตั้งค่า pin เป็น Input/Output ก่อนใช้งานเสมอ</li>
+    </ol>
+    <p><code>CH32V003_PACKAGE</code> ต้องกำหนดก่อน <code>#include "SimpleHAL.h"</code> มิฉะนั้นจะ default เป็น TSSOP20 (มีคำเตือน)</p>
+</section>
+
+<section>
+    <h2>💻 เขียน Code ทีละขั้น</h2>
+
+    <div class="step"><h3>ขั้นที่ 1: Include + เลือก Package</h3>
+    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"</code></pre>
+    <p class="explain">🔍 <code>CH32V003_PACKAGE</code> บอกคอมไพเลอร์ว่าบอร์ดใช้แพ็กเกจไหน (SOP8, SOP16, TSSOP20, QFN20) ส่งผลต่อว่า pin ไหนใช้ได้บ้าง</p></div>
+
+    <div class="step"><h3>ขั้นที่ 2: เริ่มต้นระบบ</h3>
+    <pre><code>int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();</code></pre>
+    <p class="explain">🔍 <code>SystemCoreClockUpdate()</code> อัปเดต <code>SystemCoreClock</code> จาก HSI 48MHz default <code>Timer_Init()</code> เปิด SysTick ที่ 1ms — ใช้โดยฟังก์ชัน Delay ทั้งหมด</p></div>
+
+    <div class="step"><h3>ขั้นที่ 3: ตั้งค่า Pin + LED Blink</h3>
+    <pre><code>    pinMode(PC0, PIN_MODE_OUTPUT);
+    while(1) {
+        digitalWrite(PC0, HIGH);
+        Delay_Ms(500);
+        digitalWrite(PC0, LOW);
+        Delay_Ms(500);
+    }
+}</code></pre>
+    <p class="explain">🔍 <code>pinMode(PC0, PIN_MODE_OUTPUT)</code> ตั้ง PC0 เป็น output push-pull <code>digitalWrite()</code> เขียน HIGH/LOW ไปยัง pin <code>Delay_Ms()</code> หน่วงเวลาแบบ blocking (โปรแกรมหยุดรอตรงนั้นเลย)</p></div>
+</section>
+
+<section>
+    <h2>📋 API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+        <tr><td><code>SystemCoreClockUpdate()</code></td><td>อัปเดตตัวแปร SystemCoreClock</td><td>เรียกก่อนใช้ Delay/USART</td></tr>
+        <tr><td><code>Timer_Init()</code></td><td>เริ่มต้น SysTick 1ms</td><td>จำเป็นสำหรับ Delay_Ms()</td></tr>
+        <tr><td><code>pinMode(pin, mode)</code></td><td>ตั้งโหมด pin</td><td><code>pinMode(PC0, PIN_MODE_OUTPUT)</code></td></tr>
+        <tr><td><code>digitalWrite(pin, val)</code></td><td>เขียน HIGH/LOW ไปยัง pin</td><td><code>digitalWrite(PC0, HIGH)</code></td></tr>
+        <tr><td><code>Delay_Ms(ms)</code></td><td>หน่วงเวลาแบบ blocking (ms)</td><td><code>Delay_Ms(500)</code></td></tr>
+        <tr><td><code>Delay_Us(us)</code></td><td>หน่วงเวลาแบบ blocking (μs)</td><td><code>Delay_Us(100)</code></td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>LED ไม่กระพริบ ไฟติดค้าง</td><td>ลืมเรียก <code>SystemCoreClockUpdate()</code></td><td>เพิ่ม <code>SystemCoreClockUpdate()</code> บรรทัดแรกใน main()</td></tr>
+        <tr><td>Compile error: pin not valid</td><td>ใช้ pin ที่ไม่มีใน SOP-8 แต่เลือก PACKAGE_TSSOP20</td><td>ตรวจสอบว่า pin มีในแพ็กเกจที่เลือกหรือไม่</td></tr>
+        <tr><td>LED ติดแต่ไม่ดับ</td><td>ลืมเขียน LOW หรือ Delay น้อยเกิน</td><td>ตรวจสอบ <code>digitalWrite(PC0, LOW)</code> และ <code>Delay_Ms()</code></td></tr>
+        <tr><td>warning CH32V003_PACKAGE</td><td>ไม่ได้กำหนด CH32V003_PACKAGE</td><td>เพิ่ม <code>#define CH32V003_PACKAGE PACKAGE_xxx</code> ก่อน include</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>🛠️ สร้าง Product: LED กระพริบบนบอร์ดเปล่า</h2>
+    <p>โปรเจกต์แรกสุด — ทำให้ LED กระพริบด้วย CH32V003 ขั้นต่ำ (MCU + LED + R 220Ω)</p>
+    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+    pinMode(PC0, PIN_MODE_OUTPUT);
+
+    while(1)
+    {
+        digitalWrite(PC0, HIGH);
+        Delay_Ms(250);
+        digitalWrite(PC0, LOW);
+        Delay_Ms(250);
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>✏️ ลองทำดู</h2>
+    <ol>
+        <li>เปลี่ยนความถี่กระพริบ LED จาก 250ms เป็น 100ms (2 รอบ/sec)</li>
+        <li>เปลี่ยน pin LED จาก PC0 ไปเป็น PA1 แล้วทดสอบใหม่</li>
+        <li>ถ้าคุณใช้ SOP-8 — แก้ <code>#define CH32V003_PACKAGE</code> เป็น <code>PACKAGE_SOP8</code> แล้วเลือก pin ที่ใช้ได้ (PA1, PC1, PC2, PC4, PD6)</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <span style="visibility:hidden">บทก่อน</span>
+    <a href="ch02_gpio.html">บทถัดไป →</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'neutral'});</script>
+</body>
+</html>

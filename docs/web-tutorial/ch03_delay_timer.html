@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>บทที่ 3: Delay & Timer — จับเวลา Blocking และ Non-Blocking — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch02_gpio.html">บทก่อน</a>
+    <a href="ch04_usart.html">บทถัดไป →</a>
+</nav>
+
+<h1>บทที่ 3: Delay & Timer — จับเวลา Blocking และ Non-Blocking</h1>
+<span class="level beginner">ระดับเริ่มต้น</span>
+
+<section class="flowchart">
+    <h2>🧭 แผนภาพการทำงาน</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["Timer_Init()"] --> B{"วิธีหน่วงเวลา"}
+    B -->|"Blocking"| C["Delay_Ms() / Delay_Us()"]
+    B -->|"Non-Blocking"| D["Start_Timer()"]
+    C --> E["โปรแกรมหยุดรอตรงนี้"]
+    D --> F["Is_Timer_Expired()?"]
+    F -->|"ยังไม่"| G["ทำงานอื่นต่อ"]
+    G --> F
+    F -->|"หมดเวลา"| H["ทำงานเมื่อครบเวลา"]
+    </pre>
+</section>
+
+<section>
+    <h2>🔌 การต่อวงจร</h2>
+    <pre class="ascii-circuit">
+          LED 2 ดวง (Toggle mode)
+    ┌────────────────────────────────┐
+    │ MCU                      3.3V  │
+    │ PC0───220Ω──|LED1|---GND       │
+    │ PC1───220Ω──|LED2|---GND       │
+    │                                │
+    │ LED1: กระพริบแบบ Non-Blocking  │
+    │ LED2: กระพริบแบบ Blocking     │
+    └────────────────────────────────┘
+    </pre>
+    <p>วงจรเดียวกับบทก่อน — LED 2 ดวงแสดงความแตกต่างระหว่าง Blocking vs Non-Blocking</p>
+</section>
+
+<section>
+    <h2>📚 หลักการทำงาน</h2>
+    <p><strong>Blocking Delay</strong> (<code>Delay_Ms()</code>): โปรแกรมหยุดรอตรงนั้นเลย — CPU ว่างเปล่าในช่วงรอ</p>
+    <p><strong>Non-Blocking Timer</strong> (<code>Timer_t</code> + <code>Is_Timer_Expired()</code>): โปรแกรมตรวจสอบว่าเวลาครบหรือยัง ถ้ายังก็ไปทำงานอื่นต่อ — CPU ไม่เสียเปล่า</p>
+    <p><strong>Timer_t struct</strong> เก็บ start_time, duration, active flag, และ repeat flag — นับด้วย SysTick 1ms</p>
+    <p><strong>เมื่อไรควรใช้ Non-Blocking:</strong></p>
+    <ul>
+        <li>ต้องการทำหลายอย่างพร้อมกัน (LED กระพริบ + อ่านปุ่ม + ส่ง Serial)</li>
+        <li>ไม่อยากให้โปรแกรม "ค้าง" รอ</li>
+        <li>ทำ State Machine</li>
+    </ul>
+</section>
+
+<section>
+    <h2>💻 เขียน Code ทีละขั้น</h2>
+
+    <div class="step"><h3>ขั้นที่ 1: Setup + LED 2 ดวง</h3>
+    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    pinMode(PC0, PIN_MODE_OUTPUT);  // LED1 = Non-Blocking
+    pinMode(PC1, PIN_MODE_OUTPUT);  // LED2 = Blocking</code></pre>
+    <p class="explain">🔍 ตั้งค่า pin ทั้ง 2 ดวง — PC0 จะใช้ Non-Blocking ส่วน PC1 ใช้ Blocking เทียบกัน</p></div>
+
+    <div class="step"><h3>ขั้นที่ 2: Non-Blocking Timer (PC0)</h3>
+    <pre><code>    Timer_t tmr_led1;
+    Start_Timer(&tmr_led1, 500, 1);  // repeat ทุก 500ms</code></pre>
+    <p class="explain">🔍 <code>Start_Timer(timer, ms, repeat)</code> — repeat=1 หมายถึง reset อัตโนมัติหลังหมดเวลา repeat=0 ต้องเรียก Start ใหม่เอง</p></div>
+
+    <div class="step"><h3>ขั้นที่ 3: เปรียบเทียบใน Loop</h3>
+    <pre><code>    while(1) {
+        // Non-Blocking: LED1 toggle ทุก 500ms
+        if(Is_Timer_Expired(&tmr_led1)) {
+            digitalToggle(PC0);
+        }
+
+        // Blocking: LED2 toggle ทุก 500ms
+        digitalToggle(PC1);
+        Delay_Ms(500);
+    }
+}</code></pre>
+    <p class="explain">🔍 <code>Is_Timer_Expired()</code> ตรวจสอบโดยไม่หยุดรอ — LED1 กระพริบได้แม้ LED2 กำลังติด ด้วยวิธีนี้ LED1 toggle ได้อิสระจาก Delay_Ms ของ LED2</p></div>
+</section>
+
+<section>
+    <h2>📋 API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+        <tr><td><code>Timer_Init()</code></td><td>เริ่มต้น SysTick 1ms</td><td>เรียกก่อนใช้ฟังก์ชันเวลาทั้งหมด</td></tr>
+        <tr><td><code>Delay_Ms(n)</code></td><td>หน่วงเวลา blocking (ms)</td><td><code>Delay_Ms(500)</code></td></tr>
+        <tr><td><code>Delay_Us(n)</code></td><td>หน่วงเวลา blocking (μs)</td><td><code>Delay_Us(150)</code></td></tr>
+        <tr><td><code>Start_Timer(tmr, ms, repeat)</code></td><td>เริ่ม Non-Blocking Timer</td><td><code>Start_Timer(&tmr, 1000, 1)</code></td></tr>
+        <tr><td><code>Is_Timer_Expired(tmr)</code></td><td>ตรวจสอบว่าครบเวลาหรือยัง</td><td><code>if(Is_Timer_Expired(&tmr)){...}</code></td></tr>
+        <tr><td><code>Stop_Timer(tmr)</code></td><td>หยุด Timer</td><td><code>Stop_Timer(&tmr)</code></td></tr>
+        <tr><td><code>Reset_Timer(tmr, repeat)</code></td><td>รีเซ็ตเริ่มนับใหม่</td><td><code>Reset_Timer(&tmr, 1)</code></td></tr>
+        <tr><td><code>Get_CurrentMs()</code></td><td>อ่าน milliseconds นับตั้งแต่เริ่ม</td><td><code>uint32_t now = Get_CurrentMs()</code></td></tr>
+        <tr><td><code>Get_CurrentUs()</code></td><td>อ่าน microseconds นับตั้งแต่เริ่ม</td><td><code>uint32_t now = Get_CurrentUs()</code></td></tr>
+        <tr><td><code>ELAPSED_TIME(start, now)</code></td><td>คำนวณเวลาที่ผ่านไป (overflow-safe)</td><td><code>if(ELAPSED_TIME(t,Get_CurrentMs()) >= 100)</code></td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>Timer ไม่ทำงานเลย</td><td>ลืม <code>Start_Timer()</code></td><td>ต้องเรียก Start ก่อนเช็ค <code>Is_Timer_Expired()</code></td></tr>
+        <tr><td>Timer หมดครั้งเดียวแล้วหยุด</td><td>ใช้ repeat=0</td><td>ใช้ repeat=1 ถ้าต้องการ loop, หรือเรียก Start ใหม่</td></tr>
+        <tr><td>LED 2 ดวงกระพริบ sync กัน</td><td>ใช้ Delay แบบ blocking 2 ที่</td><td>ใช้ Non-Blocking Timer แยกกัน 2 ตัว</td></tr>
+        <tr><td>ไม่ควรใช้ timer ค่า 0ms</td><td>Timer 0ms ทำงานไม่ถูกต้อง</td><td>ใช้ค่าอย่างน้อย 1ms</td></tr>
+        <tr><td>เวลาคลาดเคลื่อน</td><td>SysTick 1ms resolution</td><td>ความละเอียดสูงสุด 1ms — ใช้ <code>Delay_Us()</code> สำหรับละเอียดกว่า</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>🛠️ สร้าง Product: นาฬิกาจับเวลาแบบไม่บล็อก + Stopwatch</h2>
+    <p>LED 2 ดวงกระพริบอิสระที่ความถี่ต่างกัน โดย main loop ไม่เคยหยุดรอ</p>
+    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    pinMode(PC0, PIN_MODE_OUTPUT);
+    pinMode(PC1, PIN_MODE_OUTPUT);
+
+    Timer_t tmr_fast, tmr_slow;
+    Start_Timer(&tmr_fast, 200, 1);   // PC0: 200ms (5Hz)
+    Start_Timer(&tmr_slow, 700, 1);   // PC1: 700ms (~1.4Hz)
+
+    while(1)
+    {
+        if(Is_Timer_Expired(&tmr_fast)) {
+            digitalToggle(PC0);
+        }
+        if(Is_Timer_Expired(&tmr_slow)) {
+            digitalToggle(PC1);
+        }
+        // Main loop วนอิสระ ไม่เคยหยุด!
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>✏️ ลองทำดู</h2>
+    <ol>
+        <li>เพิ่มปุ่มกด — หยุด/เริ่ม LED1 โดยใช้ <code>Stop_Timer()</code>/<code>Start_Timer()</code> แบบ Non-Blocking</li>
+        <li>ทำ LED 3 ดวง กระพริบอิสระ 3 ความถี่ (100ms, 300ms, 700ms) ใช้ Non-Blocking ทั้งหมด</li>
+        <li>ใช้ <code>ELAPSED_TIME()</code> macro สร้าง counter ที่เพิ่มค่าเองทุก 1 วิ พิมพ์ผ่าน USART</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch02_gpio.html">บทก่อน</a>
+    <a href="ch04_usart.html">บทถัดไป →</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'neutral'});</script>
+</body>
+</html>

@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>บทที่ 11: Flash Storage — เก็บข้อมูลไม่หายหลังปิดเครื่อง — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch10_power.html">บทก่อน</a>
+    <a href="ch12_watchdog.html">บทถัดไป →</a>
+</nav>
+
+<h1>บทที่ 11: Flash Storage — เก็บข้อมูลไม่หายหลังปิดเครื่อง</h1>
+<span class="level advanced">ระดับสูง</span>
+
+<section class="flowchart">
+    <h2>🧭 แผนภาพการทำงาน</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["Flash_Init()"] --> B["Flash_ErasePage(addr)"]
+    B --> C["Flash_WriteStruct(addr, &data, size)"]
+    C --> D["Verify: Flash_ReadStruct(addr, &data, size)"]
+    D --> E{CRC ตรง?}
+    E -->|ไม่ตรง| B
+    E -->|ตรง| F["ใช้งาน config ได้"]
+    G["Save: Flash_SaveConfig(&cfg, sizeof(cfg))"] --> B
+    H["Load: Flash_LoadConfig(&cfg, sizeof(cfg))"] --> D
+    </pre>
+</section>
+
+<section>
+    <h2>🔌 การต่อวงจร</h2>
+    <pre class="ascii-circuit">
+    Flash เป็นหน่วยความจำภายใน — ไม่ต้องต่อวงจรภายนอก
+
+    CH32V003 Flash Layout (16KB Total)
+    ┌────────────────────────────────────────────┐
+    │ 0x08000000 ┌──────────────────────────────┐│
+    │            │  Application Code (~12KB)    ││
+    │            │                              ││
+    │ 0x08003000 ├──────────────────────────────┤│
+    │            │  User Config Storage (2KB)   ││
+    │            │  Page 60: Settings           ││ 1 page = 1KB
+    │            │  Page 61: Data Log           ││ (CH32V003 fast
+    │ 0x08003FFF └──────────────────────────────┘│ erase mode)
+    └────────────────────────────────────────────┘
+
+    ข้อจำกัดของ Flash:
+    - ต้อง Erase ก่อน Write (Erase ทีละ 1KB page)
+    - Erase ใช้เวลา ~1ms ต่อ page
+    - เขียนได้ทีละ 16-bit (half-word)
+    - เขียนข้าม page boundary ไม่ได้ในครั้งเดียว
+    - Endurance: 10,000+ cycles ต่อ page (WCH spec)
+    - อ่านได้เร็วเท่า RAM (ไม่ต้อง unlock)
+    </pre>
+    <p><strong>สำคัญ:</strong> ห้ามเขียนทับพื้นที่โค้ด (0x08000000-0x08003FFF โดยประมาณ) — ใช้เฉพาะพื้นที่ว่างที่กำหนดไว้</p>
+</section>
+
+<section>
+    <h2>📚 หลักการทำงาน</h2>
+    <p><strong>Flash Memory</strong> — หน่วยความจำแบบ non-volatile — ข้อมูลไม่หายเมื่อไฟดับ — ใช้เก็บค่าคอนฟิก, calibration data, serial number, log ข้อมูล</p>
+    <p><strong>Erase-Before-Write:</strong> หลักการสำคัญของ Flash — บิตใน Flash เปลี่ยนจาก 1 → 0 ได้โดยตรง แต่เปลี่ยน 0 → 1 ต้อง Erase ทั้ง page — Erase คือการคืนค่าทั้งหน้าเป็น 0xFF</p>
+    <p><strong>SimpleHAL API แนว Struct:</strong> แทนที่จะเขียนทีละ byte — ใช้ <code>Flash_WriteStruct()</code> เขียน struct ทั้งก้อน — <code>Flash_ReadStruct()</code> อ่าน struct ทั้งก้อน — ปลอดภัยกว่าเพราะมีการตรวจสอบ size</p>
+    <p><strong>CRC16:</strong> <code>Flash_CalculateCRC16()</code> — คำนวณ checksum 16-bit — ใช้ตรวจสอบความถูกต้องของข้อมูล — ถ้า CRC ไม่ตรง = ข้อมูลเสียหาย (อาจจากไฟดับระหว่างเขียน)</p>
+    <p><strong>CH32V003 specific:</strong> Flash page size = 1KB (fast erase mode) หรือ 128 bytes (standard mode) — SimpleHAL ใช้ 1KB page</p>
+</section>
+
+<section>
+    <h2>💻 เขียน Code ทีละขั้น</h2>
+
+    <div class="step"><h3>ขั้นที่ 1: นิยาม Config Struct</h3>
+    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+#define FLASH_CONFIG_ADDR  0x08003C00   // Page 60
+#define FLASH_MAGIC        0x55AA
+
+typedef struct {
+    uint16_t magic;        // Magic number (ตรวจสอบว่ามีข้อมูล)
+    uint8_t  brightness;   // 0-100
+    uint8_t  volume;       // 0-100
+    uint16_t crc;          // CRC16 checksum
+} Config_t;
+
+Config_t g_config;</code></pre>
+    <p class="explain">🔍 ใช้ <code>struct</code> รวมค่าคอนฟิกทั้งหมด — <code>magic</code> ตรวจสอบว่า Flash มีข้อมูลหรือยัง (0xFFFF = empty) — <code>crc</code> ตรวจสอบความถูกต้องของข้อมูล</p></div>
+
+    <div class="step"><h3>ขั้นที่ 2: Load Config เมื่อเริ่มต้น</h3>
+    <pre><code>int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    Flash_Init();
+
+    if(Flash_LoadConfig((uint8_t*)&g_config, sizeof(g_config)))
+    {
+        USART_Print("Config loaded from Flash!\r\n");
+    }
+    else
+    {
+        // ไม่มี config — ใช้ default
+        USART_Print("No saved config — using defaults\r\n");
+        g_config.magic = FLASH_MAGIC;
+        g_config.brightness = 50;
+        g_config.volume = 80;
+    }</code></pre>
+    <p class="explain">🔍 <code>Flash_LoadConfig(data, size)</code> — อ่าน config จาก Flash — คืนค่า 1 ถ้าสำเร็จ (magic ตรง, CRC ผ่าน) — คืนค่า 0 ถ้าไม่มีข้อมูลหรือเสียหาย</p></div>
+
+    <div class="step"><h3>ขั้นที่ 3: Save Config เมื่อแก้ไข</h3>
+    <pre><code>    // ผู้ใช้เปลี่ยน brightness
+    g_config.brightness = 75;
+
+    // คำนวณ CRC16
+    g_config.crc = Flash_CalculateCRC16((uint8_t*)&g_config,
+                        sizeof(g_config) - sizeof(uint16_t));
+
+    // บันทึกลง Flash
+    if(Flash_SaveConfig(FLASH_CONFIG_ADDR,
+                        (uint8_t*)&g_config,
+                        sizeof(g_config)))
+    {
+        USART_Print("Config saved!\r\n");
+    }
+    else
+    {
+        USART_Print("Save failed!\r\n");
+    }</code></pre>
+    <p class="explain">🔍 <code>Flash_SaveConfig(addr, data, size)</code> — Erase page อัตโนมัติ + เขียนข้อมูล + verify — คืนค่า 1 เมื่อสำเร็จ — <strong>สำคัญ:</strong> Flash_CalculateCRC16() ต้องไม่รวมฟิลด์ crc เอง</p></div>
+
+    <div class="step"><h3>ขั้นที่ 4: อ่าน/เขียน Raw Flash</h3>
+    <pre><code>    // อ่าน raw Flash (เหมือนอ่าน RAM — ไม่ต้อง unlock)
+    uint16_t val = *(uint16_t*)FLASH_CONFIG_ADDR;
+    USART_Print("Raw value at 0x");
+    USART_PrintHex(val >> 8, 1);
+    USART_PrintHex(val & 0xFF, 1);
+    USART_Print("\r\n");
+
+    // เขียน raw (ต้อง erase ก่อน)
+    Flash_ErasePage(FLASH_CONFIG_ADDR);
+    uint16_t data = 0xABCD;
+    Flash_WriteHalfWord(FLASH_CONFIG_ADDR, data);</code></pre>
+    <p class="explain">🔍 <code>Flash_ErasePage(addr)</code> — ลบ 1KB page — <code>Flash_WriteHalfWord(addr, data)</code> — เขียน 16-bit — ใช้เมื่อต้องการควบคุมเอง</p></div>
+
+    <div class="step"><h3>ขั้นที่ 5: Flash Read/Write Struct โดยตรง</h3>
+    <pre><code>    // เก็บ log ง่ายๆ ด้วย struct
+    typedef struct {
+        uint32_t timestamp;
+        uint16_t temperature;
+        uint16_t humidity;
+    } LogEntry_t;
+
+    LogEntry_t log = {.timestamp=Get_CurrentMs(), .temperature=250, .humidity=60};
+
+    Flash_ErasePage(FLASH_LOG_ADDR);
+    Flash_WriteStruct(FLASH_LOG_ADDR, (uint8_t*)&log, sizeof(log));
+
+    // อ่านกลับ
+    LogEntry_t readback;
+    Flash_ReadStruct(FLASH_LOG_ADDR, (uint8_t*)&readback, sizeof(readback));</code></pre>
+    <p class="explain">🔍 <code>Flash_WriteStruct(addr, data, size)</code> — เขียน struct ทั้งก้อน — <code>Flash_ReadStruct(addr, data, size)</code> — อ่าน struct ทั้งก้อน — สะดวกและปลอดภัยกว่าเขียนทีละ byte</p></div>
+</section>
+
+<section>
+    <h2>📋 API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+        <tr><td><code>Flash_Init()</code></td><td>เริ่มต้น Flash (unlock)</td><td><code>Flash_Init()</code></td></tr>
+        <tr><td><code>Flash_ErasePage(addr)</code></td><td>ลบ 1KB page</td><td><code>Flash_ErasePage(0x08003C00)</code></td></tr>
+        <tr><td><code>Flash_WriteHalfWord(addr, data)</code></td><td>เขียน 16-bit ลง Flash</td><td><code>Flash_WriteHalfWord(addr, 0xABCD)</code></td></tr>
+        <tr><td><code>Flash_WriteStruct(addr, data, size)</code></td><td>เขียน struct ทั้งก้อน</td><td><code>Flash_WriteStruct(addr, &cfg, sizeof(cfg))</code></td></tr>
+        <tr><td><code>Flash_ReadStruct(addr, data, size)</code></td><td>อ่าน struct จาก Flash</td><td><code>Flash_ReadStruct(addr, &cfg, sizeof(cfg))</code></td></tr>
+        <tr><td><code>Flash_SaveConfig(addr, data, size)</code></td><td>Erase+Write+Verify config</td><td><code>Flash_SaveConfig(FLASH_CONFIG_ADDR, &cfg, sz)</code></td></tr>
+        <tr><td><code>Flash_LoadConfig(data, size)</code></td><td>อ่าน config (magic+CRC check)</td><td><code>Flash_LoadConfig(&cfg, sizeof(cfg))</code></td></tr>
+        <tr><td><code>Flash_CalculateCRC16(data, size)</code></td><td>คำนวณ CRC16 checksum</td><td><code>uint16_t crc = Flash_CalculateCRC16(buf, len)</code></td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>Flash เขียนไม่ติด</td><td>ลืมเรียก <code>Flash_Init()</code></td><td>Flash ต้อง unlock ก่อนเขียน — เรียก <code>Flash_Init()</code> ก่อน</td></tr>
+        <tr><td>ข้อมูลเก่าไม่หาย</td><td>ลืม Erase ก่อน Write</td><td>Flash ต้อง erase ก่อนเขียน — ใช้ <code>Flash_SaveConfig()</code> ที่จัดการให้อัตโนมัติ</td></tr>
+        <tr><td>Config โหลดไม่สำเร็จ</td><td>Flash ว่างเปล่า (0xFF) — magic ไม่ตรง</td><td>เช็ค magic number — ถ้าไม่ตรงให้ใช้ค่า default</td></tr>
+        <tr><td>HardFault ตอนอ่าน Flash</td><td>อ่าน address ที่ไม่มี Flash (นอก 0x08000000-0x08003FFF)</td><td>เช็ค address — CH32V003 มี Flash 16KB (0x08000000-0x08003FFF)</td></tr>
+        <tr><td>เขียนแล้ว CRC ไม่ตรง</td><td>ไฟดับระหว่างเขียน Flash</td><td>ใช้ dual-page storage — เขียน 2 หน้า ตรวจสอบทั้งคู่</td></tr>
+        <tr><td>Flash เสื่อมเร็ว</td><td>Erase/Write บ่อยเกินไป (ทุก loop)</td><td>เขียนเฉพาะเมื่อค่าปลี่ยน — ใช้ RAM cache ระหว่างรัน</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>🛠️ สร้าง Product: ตั้งค่าผู้ใช้ที่จำได้ตลอด</h2>
+    <p>อุปกรณ์ที่มี brightness/volume config — จำค่าได้แม้ปิดไฟ — มี factory reset</p>
+    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+#define CFG_ADDR   0x08003C00
+#define CFG_MAGIC  0xA5A5
+
+typedef struct {
+    uint16_t magic;
+    uint8_t  brightness;   // 0-100
+    uint8_t  volume;       // 0-100
+    uint8_t  channel;      // 1-10
+    uint8_t  reserved;
+    uint16_t crc;
+} AppConfig_t;
+
+AppConfig_t g_cfg;
+
+void cfg_defaults(void) {
+    g_cfg.magic = CFG_MAGIC;
+    g_cfg.brightness = 50;
+    g_cfg.volume = 80;
+    g_cfg.channel = 1;
+}
+
+void cfg_save(void) {
+    g_cfg.crc = Flash_CalculateCRC16(
+        (uint8_t*)&g_cfg,
+        sizeof(AppConfig_t) - sizeof(uint16_t)
+    );
+    if(Flash_SaveConfig(CFG_ADDR, (uint8_t*)&g_cfg, sizeof(g_cfg))) {
+        USART_Print("Saved OK\r\n");
+    }
+}
+
+void cfg_load(void) {
+    if(!Flash_LoadConfig((uint8_t*)&g_cfg, sizeof(g_cfg))) {
+        USART_Print("No saved config — factory defaults\r\n");
+        cfg_defaults();
+    } else {
+        USART_Print("Config loaded\r\n");
+    }
+}
+
+void cfg_factory_reset(void) {
+    Flash_ErasePage(CFG_ADDR);
+    cfg_defaults();
+    USART_Print("Factory reset!\r\n");
+}
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    Flash_Init();
+
+    cfg_load();
+
+    USART_Print("Brightness: ");
+    USART_PrintNum(g_cfg.brightness);
+    USART_Print("\r\nVolume: ");
+    USART_PrintNum(g_cfg.volume);
+    USART_Print("\r\nChannel: ");
+    USART_PrintNum(g_cfg.channel);
+    USART_Print("\r\n");
+
+    // จำลองการเปลี่ยนค่าแล้ว save
+    g_cfg.brightness = 75;
+    g_cfg.channel = 5;
+    cfg_save();
+
+    // Factory reset (ถ้าต้องการ)
+    // cfg_factory_reset();
+
+    while(1) { Delay_Ms(1000); }
+}</code></pre>
+</section>
+
+<section>
+    <h2>✏️ ลองทำดู</h2>
+    <ol>
+        <li>เพิ่มฟิลด์ <code>device_name[16]</code> ใน struct — เก็บชื่ออุปกรณ์ — ทดสอบ save/load</li>
+        <li>ทำ dual-page storage — เขียน config 2 หน้า (page 60 และ 61) — โหลดหน้าที่ CRC ผ่าน — ป้องกันไฟดับระหว่างเขียน</li>
+        <li>เขียนฟังก์ชัน <code>flash_dump()</code> — แสดงข้อมูล raw ใน Flash ทีละ 16 bytes ผ่าน USART — ใช้ debug ว่า Flash เก็บอะไรอยู่</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch10_power.html">บทก่อน</a>
+    <a href="ch12_watchdog.html">บทถัดไป →</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'neutral'});</script>
+</body>
+</html>

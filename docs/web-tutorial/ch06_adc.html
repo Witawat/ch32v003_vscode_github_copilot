@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>บทที่ 6: ADC — อ่านค่า Analog จากเซ็นเซอร์ — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch05_pwm.html">บทก่อน</a>
+    <a href="ch07_i2c.html">บทถัดไป →</a>
+</nav>
+
+<h1>บทที่ 6: ADC — อ่านค่า Analog จากเซ็นเซอร์</h1>
+<span class="level intermediate">ระดับกลาง</span>
+
+<section class="flowchart">
+    <h2>🧭 แผนภาพการทำงาน</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["ADC_SimpleInit()"] --> B["ADC_Read(channel)"]
+    B --> C["ADC_ToVoltage(value, vref)"]
+    C --> D["แปลงเป็นหน่วยจริง (°C, %, V)"]
+    D --> E["แสดงผลผ่าน USART"]
+    E --> F["Delay แล้ววนใหม่"]
+    F --> B
+    </pre>
+</section>
+
+<section>
+    <h2>🔌 การต่อวงจร</h2>
+    <pre class="ascii-circuit">
+    Potentiometer (PD2)              NTC Thermistor (PD3)
+    ┌───────────────────┐          ┌──────────────────────┐
+    │ 3.3V               │          │ 3.3V                  │
+    │  │                 │          │  │                    │
+    │ [10kΩ POT]         │          │ [10kΩ NTC]            │
+    │  │                 │          │  │                    │
+    │ PD2(ADC_CH3)───|   │          │ PD3(ADC_CH4)───┬──────┤
+    │  │                 │          │  │              │      │
+    │ GND                │          │ [10kΩ R fix]   │      │
+    └───────────────────┘          │  │              │      │
+                                   │ GND             │      │
+    Battery Monitor (PD2)          └──────────────────────┘
+    ┌───────────────────┐
+    │ BAT+(4.2V max)     │
+    │  │                 │
+    │ [10kΩ]             │    ADC Pins (8 channels):
+    │  │                 │    PA1=CH1, PA2=CH0, PC4=CH2,
+    │ PD2───┬───10kΩ───GND    PD2=CH3, PD3=CH4, PD4=CH7,
+    │       │                 PD5=CH5, PD6=CH6
+    └───────┘                 PD7 ไม่รองรับ ADC!
+    </pre>
+    <p><strong>Voltage Divider แบตเตอรี่:</strong> R บน 10k + R ล่าง 10k = ratio 2:1 — 4.2V input → 2.1V ที่ ADC pin (ปลอดภัยสำหรับ 3.3V MCU)</p>
+</section>
+
+<section>
+    <h2>📚 หลักการทำงาน</h2>
+    <p><strong>ADC (Analog-to-Digital Converter)</strong> — แปลงแรงดัน analog (0-3.3V) เป็นค่า digital 0-1023 (10-bit resolution)</p>
+    <p><strong>Step Size:</strong> 3.3V ÷ 1024 = ~3.22mV ต่อ 1 LSB</p>
+    <p><strong>Internal Vref (ADC_CH_VREFINT):</strong> CH32V003 มี internal 1.2V reference — ใช้คำนวณ VDD จริง (มีประโยชน์สำหรับ Battery Monitor)</p>
+    <p><strong>Arduino-style:</strong> <code>analogRead(pin)</code> — ใช้ชื่อ pin (PD2) แทนเลข channel — มี compile-time validation</p>
+    <p><strong>CH32V003 ไม่มี FPU</strong> — การใช้ float ใช้ software emulation (~800 cycles) — พยายามใช้ integer arithmetic ถ้าต้องการความเร็ว</p>
+</section>
+
+<section>
+    <h2>💻 เขียน Code ทีละขั้น</h2>
+
+    <div class="step"><h3>ขั้นที่ 1: Init + Setup</h3>
+    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    ADC_SimpleInit();  // เปิดทุก ADC channels</code></pre>
+    <p class="explain">🔍 <code>ADC_SimpleInit()</code> — เปิดทุก 8 channels พร้อมกัน (หรือใช้ <code>ADC_SimpleInitChannels()</code> เลือกเฉพาะที่ต้องการเพื่อประหยัด)</p></div>
+
+    <div class="step"><h3>ขั้นที่ 2: อ่าน Potentiometer</h3>
+    <pre><code>    while(1) {
+        uint16_t val = ADC_Read(ADC_CH_PD2);  // หรือ analogRead(PD2)
+        float voltage = ADC_ToVoltage(val, 3.3f);
+        uint8_t percent = (uint8_t)ADC_ToPercent(val);</code></pre>
+    <p class="explain">🔍 <code>ADC_Read(channel)</code> — อ่านดิบ 0-1023 — <code>ADC_ToVoltage(val, vref)</code> — แปลงเป็นแรงดัน — <code>ADC_ToPercent()</code> — 0-100% (ใช้กับ pot ได้สวย)</p></div>
+
+    <div class="step"><h3>ขั้นที่ 3: Battery Monitor (VDD จริง)</h3>
+    <pre><code>        float vdd = ADC_GetVDD();  // คำนวณจาก internal Vref
+        float batt = ADC_GetBatteryPercent(vdd, 3.0f, 4.2f);
+        USART_Print("VDD: "); USART_PrintNum((int32_t)vdd);
+        USART_Print("V, Batt: "); USART_PrintNum(batt);
+        USART_Print("%\r\n");</code></pre>
+    <p class="explain">🔍 <code>ADC_GetVDD()</code> — อ่าน internal 1.2V reference แล้วคำนวณ VDD จริง — ไม่ต้องต่ออะไรเพิ่ม! — <code>ADC_GetBatteryPercent(vdd, vmin, vmax)</code> — แปลงเป็น % แบตเตอรี่</p></div>
+
+    <div class="step"><h3>ขั้นที่ 4: Average Reading (ลด Noise)</h3>
+    <pre><code>        uint16_t avg = ADC_ReadAverage(ADC_CH_PD2, 10);  // 10 samples
+        Delay_Ms(500);
+    }
+}</code></pre>
+    <p class="explain">🔍 <code>ADC_ReadAverage(ch, n)</code> — อ่าน n ครั้งแล้วหาค่าเฉลี่ย — ช่วยลด noise จากแหล่งจ่ายไฟ</p></div>
+</section>
+
+<section>
+    <h2>📋 API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+        <tr><td><code>ADC_SimpleInit()</code></td><td>เริ่มต้น ADC (ทุก channels)</td><td><code>ADC_SimpleInit()</code></td></tr>
+        <tr><td><code>ADC_SimpleInitChannels(ch, n)</code></td><td>เริ่มเฉพาะ channels ที่ต้องการ</td><td><code>ADC_SimpleInitChannels(ch, 2)</code></td></tr>
+        <tr><td><code>ADC_Read(ch)</code></td><td>อ่าน ADC (0-1023)</td><td><code>uint16_t v = ADC_Read(ADC_CH_PD2)</code></td></tr>
+        <tr><td><code>analogRead(pin)</code></td><td>Arduino-style อ่าน ADC</td><td><code>uint16_t v = analogRead(PD2)</code></td></tr>
+        <tr><td><code>ADC_ReadVoltage(ch, vref)</code></td><td>อ่านแล้วแปลงเป็น V ทันที</td><td><code>float v = ADC_ReadVoltage(ADC_CH_PD2, 3.3)</code></td></tr>
+        <tr><td><code>ADC_ReadAverage(ch, n)</code></td><td>อ่านเฉลี่ย n ครั้ง</td><td><code>uint16_t a = ADC_ReadAverage(ADC_CH_PD2, 10)</code></td></tr>
+        <tr><td><code>ADC_ToVoltage(val, vref)</code></td><td>แปลง ADC → Voltage</td><td><code>float v = ADC_ToVoltage(512, 3.3)</code></td></tr>
+        <tr><td><code>ADC_ToPercent(val)</code></td><td>แปลง ADC → 0-100%</td><td><code>float p = ADC_ToPercent(512)</code></td></tr>
+        <tr><td><code>ADC_GetVDD()</code></td><td>อ่าน VDD จริงจาก internal Vref</td><td><code>float vdd = ADC_GetVDD()</code></td></tr>
+        <tr><td><code>ADC_GetBatteryPercent(vdd, min, max)</code></td><td>คำนวณ % แบตเตอรี่</td><td><code>ADC_GetBatteryPercent(vdd, 3.0, 4.2)</code></td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>ADC อ่านได้ 0 ตลอด</td><td>ใช้ pin ที่ไม่ใช่ ADC pin</td><td>ADC pins: PA1,PA2,PC4,PD2-PD6 — PD7 ไม่ใช่ ADC!</td></tr>
+        <tr><td>ค่าอ่านกระโดด/ไม่นิ่ง</td><td>Noise จากแหล่งจ่ายไฟ หรือ impedance สูง</td><td>ใช้ <code>ADC_ReadAverage()</code>, ลด R divider, ต่อ cap ที่ ADC pin</td></tr>
+        <tr><td>Voltage อ่านผิด</td><td>ใช้ Vref ผิด (3.3V vs VDD จริง)</td><td>ใช้ <code>ADC_GetVDD()</code> แทนสมมติว่า VDD=3.3V</td></tr>
+        <tr><td>analogRead compile error</td><td>ใช้ pin คงที่ (constant) ที่ไม่ใช่ ADC</td><td>ใช้เฉพาะ PA1,PA2,PC4,PD2-PD6 — compile-time check</td></tr>
+        <tr><td>Float operation ช้ามาก</td><td>CH32V003 ไม่มี FPU</td><td>ใช้ integer math เมื่อทำได้ เช่น mV = (adc*3300)/1023</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>🛠️ สร้าง Product: เครื่องวัดอุณหภูมิ + วัดแรงดันแบตเตอรี่</h2>
+    <p>อ่าน NTC Thermistor (PD3) แปลงเป็น °C พร้อมแสดง VDD และ % แบตเตอรี่</p>
+    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+#define NTC_PIN   ADC_CH_PD3
+#define NTC_RFIX  10000.0f
+#define NTC_R25   10000.0f
+#define NTC_B     3950.0f
+#define T0        298.15f
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    ADC_SimpleInit();
+
+    while(1)
+    {
+        // อ่าน VDD จริง
+        float vdd = ADC_GetVDD();
+
+        // อ่าน NTC
+        uint16_t adc = ADC_ReadAverage(NTC_PIN, 10);
+        float v_ntc = ADC_ToVoltage(adc, vdd);
+        float r_ntc = NTC_RFIX * v_ntc / (vdd - v_ntc);
+
+        // Steinhart-Hart (simplified B-parameter)
+        float temp_k = 1.0f / (1.0f/T0 + logf(r_ntc/NTC_R25)/NTC_B);
+        float temp_c = temp_k - 273.15f;
+
+        USART_Print("Temp: ");
+        USART_PrintNum((int32_t)temp_c);
+        USART_Print("C, VDD: ");
+        USART_PrintNum((int32_t)vdd);
+        USART_Print("V, Batt: ");
+        USART_PrintNum((int32_t)ADC_GetBatteryPercent(vdd, 3.0f, 4.2f));
+        USART_Print("%\r\n");
+
+        Delay_Ms(1000);
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>✏️ ลองทำดู</h2>
+    <ol>
+        <li>ใช้ <code>analogRead()</code> แทน <code>ADC_Read()</code> — เปรียบเทียบผลลัพธ์</li>
+        <li>อ่าน 2 channels พร้อมกัน (PD2 pot + PD5 LDR) แล้วแสดงทั้งคู่ผ่าน USART</li>
+        <li>ใช้ <code>ADC_ReadVoltageCompensated()</code> เพื่อชดเชย VDD ให้ผลลัพธ์แม่นยำกว่า</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch05_pwm.html">บทก่อน</a>
+    <a href="ch07_i2c.html">บทถัดไป →</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'neutral'});</script>
+</body>
+</html>

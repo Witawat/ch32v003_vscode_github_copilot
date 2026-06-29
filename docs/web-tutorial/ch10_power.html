@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>บทที่ 10: จัดการพลังงาน — Sleep, Standby, AWU — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch09_dma.html">บทก่อน</a>
+    <a href="ch11_flash.html">บทถัดไป →</a>
+</nav>
+
+<h1>บทที่ 10: จัดการพลังงาน — Sleep, Standby, AWU</h1>
+<span class="level advanced">ระดับสูง</span>
+
+<section class="flowchart">
+    <h2>🧭 แผนภาพการทำงาน</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["Active: 3-6mA @48MHz"] --> B["Idle: CPU หยุด, Peripheral ทำงานต่อ"]
+    B --> C{เลือกโหมด}
+    C -->|"Sleep (0.5mA)"| D["PWR_Sleep()"]
+    C -->|"Standby (5µA)"| E["PWR_Standby()"]
+    D --> F["Wake: Interrupt/Event ใดๆ"]
+    E --> G["Wake: AWU Timer / Reset pin เท่านั้น"]
+    F --> A
+    G --> A
+    </pre>
+</section>
+
+<section>
+    <h2>🔌 การต่อวงจร</h2>
+    <pre class="ascii-circuit">
+    โหมด Sleep — อุปกรณ์ Wireless Sensor Node (ใช้ถ่าน CR2032)
+    ┌────────────────────────────────────────────┐
+    │  CH32V003 (TSSOP-20)                       │
+    │                                             │
+    │  VDD ────┬─── 3.3V (CR2032 ผ่าน LDO)       │
+    │          └─── [ADC_GetVDD() วัดแบต]        │
+    │  GND ──── GND                              │
+    │                                             │
+    │  PC0 ──── LED (ตื่นแล้วกระพริบ)             │
+    │  PA1 ──── Button (Wake from Sleep)          │
+    │  PD5 ──── Sensor (อ่านเมื่อตื่น)             │
+    │                                             │
+    │  กระแส Sleep:   ~0.5mA (HSI off, SysTick on)│
+    │  กระแส Standby: ~5µA  (ทุกอย่างหยุดหมด)      │
+    │  CR2032 225mAh → Standby 1 wake/min ≈ 2.5yr│
+    └────────────────────────────────────────────┘
+
+    AWU (Auto Wake-Up) — ตื่นทุก 60 วินาที
+    ┌────────────────────────────────────────────┐
+    │  Standby → AWU 60s → Wake → อ่าน Sensor    │
+    │  → ส่งข้อมูล → Sleep/Standby → วน           │
+    │                                             │
+    │  PWR_ConfigureAWU(AWU_60S)                  │
+    │  PWR_Standby()  // หลับ 60s                 │
+    │  // ตื่นอัตโนมัติ → ทำงาน → หลับต่อ           │
+    └────────────────────────────────────────────┘
+    </pre>
+    <p><strong>สำคัญ:</strong> Standby mode รีเซ็ต MCU! — ตัวแปร RAM หายหมด — ต้องเก็บข้อมูลสำคัญใน Flash/BKP register ก่อนเข้า Standby</p>
+</section>
+
+<section>
+    <h2>📚 หลักการทำงาน</h2>
+    <p><strong>Sleep Mode:</strong> CPU หยุดทำงาน แต่ peripheral (UART, Timer, GPIO) ยังทำงานต่อ — ตื่นได้จาก interrupt ใดๆ — ใช้เวลาตื่น ~1µs</p>
+    <p><strong>Standby Mode:</strong> ทุกอย่างหยุดหมด — HSI, HSE, PLL ปิด — ใช้กระแสต่ำมาก (~5µA) — ตื่นได้จาก AWU timer หรือ reset pin เท่านั้น — <strong>RAM สูญหาย!</strong></p>
+    <p><strong>AWU (Auto Wake-Up Unit):</strong> ตัวจับเวลาในโหมด Standby — ตั้งเวลาได้ตั้งแต่ ~16ms ถึง ~30s — เมื่อครบกำหนดจะ reset MCU</p>
+    <table>
+        <tr><th>คุณสมบัติ</th><th>Active</th><th>Sleep</th><th>Standby</th></tr>
+        <tr><td>กระแส (typ)</td><td>3-6mA</td><td>~0.5mA</td><td>~5µA</td></tr>
+        <tr><td>CPU</td><td>ทำงาน</td><td>หยุด</td><td>หยุด</td></tr>
+        <tr><td>Peripheral</td><td>ทำงาน</td><td>ทำงาน</td><td>หยุด</td></tr>
+        <tr><td>RAM คงอยู่</td><td>ใช่</td><td>ใช่</td><td>ไม่</td></tr>
+        <tr><td>Wake Source</td><td>-</td><td>Interrupt ใดๆ</td><td>AWU / Reset pin</td></tr>
+        <tr><td>เวลาตื่น</td><td>-</td><td>~1µs</td><td>~100µs (reset)</td></tr>
+    </table>
+    <p><strong>CH32V003 ไม่มี PFIC (Power Controller) แยก</strong> — ใช้ register PWR_CTLR โดยตรง — SimpleHAL จัดการให้ผ่าน API เรียบง่าย</p>
+</section>
+
+<section>
+    <h2>💻 เขียน Code ทีละขั้น</h2>
+
+    <div class="step"><h3>ขั้นที่ 1: Sleep Mode พื้นฐาน</h3>
+    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    pinMode(PC0, PIN_MODE_OUTPUT);
+
+    while(1) {
+        digitalWrite(PC0, HIGH);
+        Delay_Ms(100);
+        digitalWrite(PC0, LOW);
+
+        // เข้า Sleep: CPU หยุด, Peripheral ยังทำงาน
+        PWR_Sleep();  // ตื่นเมื่อ SysTick interrupt (1ms)
+    }
+}</code></pre>
+    <p class="explain">🔍 <code>PWR_Sleep()</code> — CPU หยุดทำงาน — ตื่นได้จาก interrupt ใดๆ — รวมถึง SysTick — ดังนั้นในตัวอย่างนี้จะตื่นทุก 1ms โดยอัตโนมัติ</p></div>
+
+    <div class="step"><h3>ขั้นที่ 2: Standby + AWU (ตื่นทุกนาที)</h3>
+    <pre><code>    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    ADC_SimpleInit();
+
+    // ตั้งค่า AWU — ตื่นทุก 30 วินาที
+    PWR_ConfigureAWU(AWU_30S);
+
+    // เข้า Standby — RAM หาย! — ตื่นด้วย AWU
+    PWR_Standby();
+
+    // —————— ตื่นจาก Standby (reset) ——————
+    // ต้อง init ทุกอย่างใหม่!
+
+    // อ่านเซ็นเซอร์
+    uint16_t adc = ADC_Read(ADC_CH_PD5);
+    float temp = ADC_ToVoltage(adc, 3.3f);
+
+    USART_Print("Woke up! Sensor: ");
+    USART_PrintNum((int32_t)(temp*100));
+    USART_Print("\r\n");</code></pre>
+    <p class="explain">🔍 <code>PWR_ConfigureAWU(period)</code> — ตั้ง AWU timer — รองรับ AWU_16MS ถึง AWU_30S — <code>PWR_Standby()</code> — เข้าโหมด Standby — MCU จะ reset เมื่อตื่น — ทุกอย่างเริ่มต้นใหม่</p></div>
+
+    <div class="step"><h3>ขั้นที่ 3: ตรวจจับการตื่นจาก Standby</h3>
+    <pre><code>    if(PWR_WasStandbyWakeup()) {
+        // ตื่นจาก Standby — ข้อมูลเก่าหายหมด
+        USART_Print("Woke from Standby!\r\n");
+    } else {
+        // Power-on reset ครั้งแรก
+        USART_Print("Fresh start!\r\n");
+    }
+
+    // เก็บข้อมูลข้าม Standby ด้วย BKP register
+    PWR_WriteBackup(0, wake_count);  // BKP register 0
+    // ... เข้า Standby ...
+    // ตื่น:
+    wake_count = PWR_ReadBackup(0) + 1;</code></pre>
+    <p class="explain">🔍 <code>PWR_WasStandbyWakeup()</code> — เช็คว่าตื่นจาก Standby หรือ power-on จริง — <strong>BKP Registers:</strong> 10 registers (32-bit) ที่คงค่าผ่าน Standby — ใช้เก็บ counter, config</p></div>
+
+    <div class="step"><h3>ขั้นที่ 4: Sensor Node — วัด + ส่ง + หลับ</h3>
+    <pre><code>    // วัด VDD (แบตเตอรี่)
+    float vdd = ADC_GetVDD();
+    uint32_t batt_pct = (uint32_t)PWR_CalculateBatteryLife(vdd, 2.7f, 3.3f);
+
+    // ส่งข้อมูลผ่าน USART
+    USART_Print("Batt: ");
+    USART_PrintNum((int32_t)batt_pct);
+    USART_Print("% VDD: ");
+    USART_PrintNum((int32_t)(vdd*1000));
+    USART_Print("mV\r\n");
+
+    Delay_Ms(50);  // รอ USART ส่งเสร็จ
+
+    // เข้า Standby — ตื่นอีกที 60 วินาที
+    PWR_ConfigureAWU(AWU_60S);
+    PWR_Standby();</code></pre>
+    <p class="explain">🔍 <code>PWR_CalculateBatteryLife(vdd, vmin, vmax)</code> — คำนวณ % แบตเตอรี่จากแรงดัน — ใช้ร่วมกับ <code>ADC_GetVDD()</code></p></div>
+</section>
+
+<section>
+    <h2>📋 API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+        <tr><td><code>PWR_Sleep()</code></td><td>เข้า Sleep mode (CPU หยุด)</td><td><code>PWR_Sleep()</code></td></tr>
+        <tr><td><code>PWR_Standby()</code></td><td>เข้า Standby (ทุกอย่างหยุด, RAM หาย)</td><td><code>PWR_Standby()</code></td></tr>
+        <tr><td><code>PWR_ConfigureAWU(period)</code></td><td>ตั้ง AWU timer สำหรับ Standby</td><td><code>PWR_ConfigureAWU(AWU_60S)</code></td></tr>
+        <tr><td><code>PWR_WasStandbyWakeup()</code></td><td>เช็คว่าตื่นจาก Standby หรือไม่</td><td><code>if(PWR_WasStandbyWakeup())...</code></td></tr>
+        <tr><td><code>PWR_WriteBackup(idx, val)</code></td><td>เขียน BKP register (คงค่าผ่าน Standby)</td><td><code>PWR_WriteBackup(0, count)</code></td></tr>
+        <tr><td><code>PWR_ReadBackup(idx)</code></td><td>อ่าน BKP register</td><td><code>uint32_t c = PWR_ReadBackup(0)</code></td></tr>
+        <tr><td><code>ADC_GetVDD()</code></td><td>วัด VDD จริง</td><td><code>float vdd = ADC_GetVDD()</code></td></tr>
+        <tr><td><code>PWR_CalculateBatteryLife(v, min, max)</code></td><td>คำนวณ % แบตเตอรี่</td><td><code>PWR_CalculateBatteryLife(vdd, 2.7, 3.3)</code></td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>ตื่นจาก Standby แล้วข้อมูลหาย</td><td>RAM ถูกล้างตอน Standby</td><td>ใช้ <code>PWR_WriteBackup()</code> เก็บข้อมูลสำคัญก่อนเข้า Standby</td></tr>
+        <tr><td>Standby แล้วไม่ตื่นเลย</td><td>ไม่ได้ตั้ง AWU หรือไม่มี wake source</td><td>เรียก <code>PWR_ConfigureAWU()</code> ก่อน <code>PWR_Standby()</code></td></tr>
+        <tr><td>Sleep แล้ว USART ส่งข้อมูลไม่หมด</td><td>CPU หยุดก่อน USART shift register ว่าง</td><td>รอ USART TX complete (<code>while(USART_GetFlagStatus(USART1, USART_FLAG_TC) == RESET)</code>) ก่อนเข้า Sleep</td></tr>
+        <tr><td>Batt % เกิน 100 หรือติดลบ</td><td>กำหนด vmin/vmax ไม่ถูกต้อง</td><td>vmin คือแรงดันต่ำสุดที่อุปกรณ์ทำงานได้, vmax คือแรงดันเต็ม</td></tr>
+        <tr><td>AWU ตื่นถี่/ห่างเกินคาด</td><td>ใช้ AWU period ผิด</td><td>เช็คช่วง time: AWU_16MS, AWU_128MS, AWU_1S, AWU_2S, AWU_4S, AWU_8S, AWU_16S, AWU_30S</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>🛠️ สร้าง Product: อุปกรณ์ใช้ถ่านได้ 1 ปี</h2>
+    <p>Wireless Sensor Node — ตื่นทุก 60 วินาที อ่านอุณหภูมิ + แรงดันแบต หลับต่อ — ใช้กระแสเฉลี่ย &lt;10µA</p>
+    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+
+    if(PWR_WasStandbyWakeup())
+    {
+        // ——— ตื่นจาก Standby ———
+        Timer_Init();
+        USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+        ADC_SimpleInit();
+
+        // อ่านแรงดันแบตเตอรี่
+        float vdd = ADC_GetVDD();
+        uint32_t batt = (uint32_t)PWR_CalculateBatteryLife(vdd, 2.7f, 3.3f);
+
+        // อ่าน wake count จาก BKP
+        uint32_t count = PWR_ReadBackup(0) + 1;
+
+        USART_Print("Wake #");
+        USART_PrintNum((int32_t)count);
+        USART_Print(" Batt: ");
+        USART_PrintNum((int32_t)batt);
+        USART_Print("%\r\n");
+
+        Delay_Ms(30);  // รอ USART ส่งเสร็จ
+
+        PWR_WriteBackup(0, count);
+
+        // ถ้าแบตต่ำกว่า 10% — กระพริบ LED เตือน
+        if(batt < 10) {
+            pinMode(PC0, PIN_MODE_OUTPUT);
+            for(int i=0; i<5; i++) {
+                digitalWrite(PC0, HIGH);
+                Delay_Ms(100);
+                digitalWrite(PC0, LOW);
+                Delay_Ms(100);
+            }
+        }
+    }
+    else
+    {
+        // ——— Power-on ครั้งแรก ———
+        Timer_Init();
+        USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+        USART_Print("Cold boot — entering Standby cycle\r\n");
+        PWR_WriteBackup(0, 0);
+        Delay_Ms(30);
+    }
+
+    // เข้า Standby — ตื่นอีกที 60 วินาที
+    PWR_ConfigureAWU(AWU_60S);
+    PWR_Standby();
+
+    // ไม่มีทางมาถึงบรรทัดนี้ (Standby = reset)
+}</code></pre>
+    <p><strong>คำนวณอายุถ่าน CR2032 (225mAh):</strong></p>
+    <ul>
+        <li>Active 50ms @ 4mA = 0.2 mAs ต่อครั้ง</li>
+        <li>Standby 60s @ 5µA = 0.3 mAs ต่อครั้ง</li>
+        <li>รวม 0.5 mAs/รอบ → 225mAh ÷ 0.5mAs × 60s ≈ 27,000,000 รอบ ≈ <strong>51 ปี</strong> (ในทางทฤษฎี)</li>
+        <li>ในทางปฏิบัติ: self-discharge ของถ่าน + LDO quiescent current → ~1-2 ปี</li>
+    </ul>
+</section>
+
+<section>
+    <h2>✏️ ลองทำดู</h2>
+    <ol>
+        <li>เปลี่ยนจาก Standby เป็น Sleep — วัดกระแสด้วยมัลติมิเตอร์ — เปรียบเทียบ Sleep vs Standby</li>
+        <li>ใช้ Button (PA1) เป็น wake source จาก Sleep — กดปุ่มแล้ว LED ติด 2 วินาที แล้วหลับต่อ</li>
+        <li>เก็บข้อมูลหลายชุดใน BKP registers (0-9) — เช่น timestamp, temperature, voltage — แล้วส่งทั้งหมดเมื่อตื่น</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch09_dma.html">บทก่อน</a>
+    <a href="ch11_flash.html">บทถัดไป →</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'neutral'});</script>
+</body>
+</html>

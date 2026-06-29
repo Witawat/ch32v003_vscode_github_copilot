@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>บทที่ 9: DMA — ถ่ายโอนข้อมูลโดยไม่ใช้ CPU — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch08_spi.html">บทก่อน</a>
+    <a href="ch10_power.html">บทถัดไป →</a>
+</nav>
+
+<h1>บทที่ 9: DMA — ถ่ายโอนข้อมูลโดยไม่ใช้ CPU</h1>
+<span class="level advanced">ระดับสูง</span>
+
+<section class="flowchart">
+    <h2>🧭 แผนภาพการทำงาน</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["DMA_SimpleInit(channel, dst, src, size)"] --> B["DMA_Start(channel)"]
+    B --> C["Transfer อัตโนมัติ (CPU ว่าง)"]
+    C --> D{Transfer Complete?}
+    D -->|ยังไม่เสร็จ| C
+    D -->|เสร็จ| E["Callback / DMA_GetStatus()"]
+    E --> F["ประมวลผลข้อมูล"]
+    F --> B
+    </pre>
+</section>
+
+<section>
+    <h2>🔌 การต่อวงจร</h2>
+    <pre class="ascii-circuit">
+    DMA เป็น peripheral ภายใน — ไม่ต้องต่อวงจรภายนอก
+    แต่ใช้ร่วมกับ peripheral อื่นเพื่อย้ายข้อมูล:
+
+    DMA + ADC (Continuous Sampling)
+    ┌─────────────────────────────────────────┐
+    │  CH32V003                               │
+    │                                         │
+    │  ADC (PD2) ←─── [Sensor Signal]         │
+    │     │                                   │
+    │     ▼  DMA Channel 1                    │
+    │  [buffer[128]] ←─── ถ่ายโอนอัตโนมัติ    │
+    │     │                                   │
+    │     ▼  (CPU ทำงานอื่นไปพร้อมกัน)         │
+    │  USART ──────→ PC (แสดงผล)             │
+    └─────────────────────────────────────────┘
+
+    DMA + USART TX (ส่งข้อมูลบล็อกใหญ่)
+    ┌─────────────────────────────────────────┐
+    │  CH32V003                               │
+    │                                         │
+    │  RAM buffer[256] ──→ DMA Ch2 → USART_TX │
+    │     (256 bytes ส่งโดย CPU ไม่ต้องวนลูป)   │
+    └─────────────────────────────────────────┘
+
+    CH32V003 มี 3 DMA Channels:
+    Ch1: ADC, TIM1_CH1/2/3
+    Ch2: USART1_TX, TIM1_CH4, TIM1_COM
+    Ch3: TIM2_CH3/4, (reserved)
+    </pre>
+    <p><strong>สำคัญ:</strong> DMA ทำงานโดยไม่ใช้ CPU — ขณะถ่ายโอน CPU ว่างไปทำอย่างอื่นได้เต็มที่ — เหมาะสำหรับระบบ real-time และ low-power</p>
+</section>
+
+<section>
+    <h2>📚 หลักการทำงาน</h2>
+    <p><strong>DMA (Direct Memory Access)</strong> — ตัวควบคุมที่ถ่ายโอนข้อมูลระหว่าง memory ↔ peripheral โดยอัตโนมัติ โดยไม่ให้ CPU ต้องวนลูปอ่าน/เขียนทีละ byte</p>
+    <ul>
+        <li><strong>Memory-to-Memory:</strong> ก็อปปี้ข้อมูลจาก array หนึ่งไปอีก array — เร็วกว่า <code>memcpy()</code> เพราะ CPU ไม่ต้อง fetch/store ทีละ word</li>
+        <li><strong>Peripheral-to-Memory:</strong> อ่านจาก ADC/USART/SPI ต่อเนื่อง — เหมาะสำหรับการเก็บตัวอย่างข้อมูลความเร็วสูง</li>
+        <li><strong>Memory-to-Peripheral:</strong> ส่งข้อมูลไป USART/SPI — ส่ง buffer ขนาดใหญ่โดย CPU ไม่ต้องรอ</li>
+    </ul>
+    <p><strong>Transfer Size:</strong> DMA ของ CH32V003 รองรับ 8-bit / 16-bit / 32-bit ต่อ transfer</p>
+    <p><strong>Callback:</strong> เมื่อ transfer เสร็จ DMA จะเรียก callback function — ให้คุณประมวลผลข้อมูลต่อได้ทันที</p>
+    <p><strong>ข้อควรระวัง:</strong> DMA channel แต่ละตัวใช้เฉพาะ peripheral บางตัว — เช็คตาราง channel mapping ก่อนใช้</p>
+</section>
+
+<section>
+    <h2>💻 เขียน Code ทีละขั้น</h2>
+
+    <div class="step"><h3>ขั้นที่ 1: Memory Copy ด้วย DMA</h3>
+    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+uint8_t src[64] = {0xAA, 0xBB, 0xCC};
+uint8_t dst[64] = {0};
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+
+    DMA_SimpleInit(DMA_CH1, dst, src, 64);  // 64 bytes
+    DMA_Start(DMA_CH1);</code></pre>
+    <p class="explain">🔍 <code>DMA_SimpleInit(ch, dst, src, size)</code> — กำหนด DMA channel, ปลายทาง, ต้นทาง, ขนาด — รองรับสูงสุด 65535 bytes</p></div>
+
+    <div class="step"><h3>ขั้นที่ 2: รอ Transfer เสร็จ</h3>
+    <pre><code>    while(DMA_GetStatus(DMA_CH1) == 0) {
+        // CPU ว่าง — ทำอย่างอื่นได้!
+        Delay_Ms(1);
+    }
+    USART_Print("DMA copy complete!\r\n");
+
+    // ตรวจสอบผลลัพธ์
+    USART_Print("dst[0]=0x");
+    USART_PrintHex(dst[0], 1);
+    USART_Print(" dst[1]=0x");
+    USART_PrintHex(dst[1], 1);
+    USART_Print("\r\n");</code></pre>
+    <p class="explain">🔍 <code>DMA_GetStatus(ch)</code> — คืนค่า 0=กำลัง transfer, 1=เสร็จ — ในระหว่าง transfer CPU ว่าง 100% — <strong>ไม่ต้อง busy-wait</strong></p></div>
+
+    <div class="step"><h3>ขั้นที่ 3: DMA + ADC Continuous Sampling</h3>
+    <pre><code>    uint16_t adc_buf[128];
+    ADC_SimpleInit();
+
+    DMA_ADC_Init(DMA_CH1, adc_buf, 128);  // ADC → buffer
+    ADC_StartContinuous(ADC_CH_PD2);       // เริ่ม ADC ต่อเนื่อง
+    DMA_Start(DMA_CH1);                    // DMA เริ่มถ่ายโอน
+
+    // CPU อิสระ — ทำงานอื่นได้!
+    while(DMA_GetStatus(DMA_CH1) == 0) {
+        // เช่น: ประมวลผลข้อมูลเก่า, สื่อสาร USART
+    }
+
+    // หาค่าเฉลี่ย
+    uint32_t sum = 0;
+    for(int i=0; i&lt;128; i++) sum += adc_buf[i];
+    uint16_t avg = sum / 128;</code></pre>
+    <p class="explain">🔍 <code>DMA_ADC_Init(ch, buf, n)</code> — ตั้งค่า DMA อ่านจาก ADC ต่อเนื่อง — CPU รับข้อมูลทั้งหมดทีเดียวหลัง transfer เสร็จ</p></div>
+
+    <div class="step"><h3>ขั้นที่ 4: DMA + USART ส่ง Buffer ใหญ่</h3>
+    <pre><code>    const char *msg = "Hello from DMA! 1234567890\r\n";
+    DMA_USART_Transmit(DMA_CH2, (uint8_t*)msg, strlen(msg));
+
+    USART_Print("Sending via DMA...\r\n");
+    // CPU ทำอย่างอื่นต่อได้ — ไม่ต้องรอ USART send complete!</code></pre>
+    <p class="explain">🔍 <code>DMA_USART_Transmit(ch, data, len)</code> — ส่งข้อมูลผ่าน USART โดย DMA — CPU ไม่ต้องวนลูปรอ TXE flag</p></div>
+
+    <div class="step"><h3>ขั้นที่ 5: ใช้ DMA Callback</h3>
+    <pre><code>void on_dma_done(void) {
+    USART_Print("DMA transfer complete!\r\n");
+}
+
+int main(void) {
+    // ...
+    DMA_SetCallback(DMA_CH1, on_dma_done);
+    DMA_SimpleInit(DMA_CH1, dst, src, 64);
+    DMA_Start(DMA_CH1);
+
+    while(1) {
+        // CPU ทำงานปกติ — callback จะถูกเรียกอัตโนมัติ
+        Delay_Ms(100);
+    }
+}</code></pre>
+    <p class="explain">🔍 <code>DMA_SetCallback(ch, func)</code> — ลงทะเบียน callback — ฟังก์ชันจะถูกเรียกเมื่อ DMA transfer เสร็จ — ไม่ต้อง poll</p></div>
+</section>
+
+<section>
+    <h2>📋 API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+        <tr><td><code>DMA_SimpleInit(ch, dst, src, size)</code></td><td>เริ่มต้น DMA transfer</td><td><code>DMA_SimpleInit(DMA_CH1, dst, src, 64)</code></td></tr>
+        <tr><td><code>DMA_Start(ch)</code></td><td>เริ่ม transfer</td><td><code>DMA_Start(DMA_CH1)</code></td></tr>
+        <tr><td><code>DMA_Stop(ch)</code></td><td>หยุด transfer ทันที</td><td><code>DMA_Stop(DMA_CH1)</code></td></tr>
+        <tr><td><code>DMA_GetStatus(ch)</code></td><td>เช็คสถานะ (0=running, 1=done)</td><td><code>if(DMA_GetStatus(DMA_CH1)) ...</code></td></tr>
+        <tr><td><code>DMA_MemCopy(dst, src, size)</code></td><td>Memory copy แบบ DMA</td><td><code>DMA_MemCopy(dst, src, 256)</code></td></tr>
+        <tr><td><code>DMA_ADC_Init(ch, buf, n)</code></td><td>DMA อ่านจาก ADC ต่อเนื่อง</td><td><code>DMA_ADC_Init(DMA_CH1, buf, 128)</code></td></tr>
+        <tr><td><code>DMA_USART_Transmit(ch, data, len)</code></td><td>ส่งข้อมูล USART ผ่าน DMA</td><td><code>DMA_USART_Transmit(DMA_CH2, data, 32)</code></td></tr>
+        <tr><td><code>DMA_SetCallback(ch, func)</code></td><td>ตั้ง callback function</td><td><code>DMA_SetCallback(DMA_CH1, my_callback)</code></td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>DMA transfer ไม่เริ่ม</td><td>ลืมเรียก <code>DMA_Start()</code></td><td>ต้องเรียก <code>DMA_SimpleInit()</code> แล้ว <code>DMA_Start()</code></td></tr>
+        <tr><td>ข้อมูลไม่ครบ/เสียหาย</td><td>Buffer ใน stack ถูก deallocate ก่อน transfer เสร็จ</td><td>ประกาศ buffer เป็น global หรือ static</td></tr>
+        <tr><td>DMA ชนกับ peripheral อื่น</td><td>ใช้ DMA channel ที่ถูกจองแล้ว</td><td>เช็ค channel mapping — แต่ละ channel ใช้ peripheral เฉพาะ</td></tr>
+        <tr><td>ADC DMA รับค่าผิด</td><td>ลืมเรียก <code>ADC_StartContinuous()</code></td><td>ADC ต้องอยู่ใน continuous mode จึงจะ trigger DMA ได้</td></tr>
+        <tr><td>USART DMA ส่งไม่หมด</td><td>เรียก <code>DMA_Stop()</code> ก่อน transfer เสร็จ</td><td>เช็ค <code>DMA_GetStatus()</code> ก่อนเรียก stop</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>🛠️ สร้าง Product: อัดเสียง/ข้อมูลเร็วโดย CPU ว่างทำงานอื่น</h2>
+    <p>ใช้ DMA อ่าน ADC ต่อเนื่อง 128 samples ที่ 8kHz พร้อมกับส่งข้อมูลเก่า USART — CPU ว่างระหว่าง sampling</p>
+    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+#define BUF_SIZE 128
+
+uint16_t adc_buf[BUF_SIZE];  // ต้องเป็น global!
+volatile uint8_t dma_done = 0;
+
+void dma_callback(void) {
+    dma_done = 1;
+}
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    ADC_SimpleInit();
+
+    DMA_ADC_Init(DMA_CH1, adc_buf, BUF_SIZE);
+    DMA_SetCallback(DMA_CH1, dma_callback);
+
+    while(1)
+    {
+        // เริ่ม sampling ชุดใหม่
+        dma_done = 0;
+        ADC_StartContinuous(ADC_CH_PD2);
+        DMA_Start(DMA_CH1);
+
+        // CPU ว่าง — ทำงานอื่นได้!
+        uint32_t t = Get_CurrentMs();
+        while(!dma_done) {
+            // LED Blink แสดงว่า CPU ไม่ได้ busy-wait
+            if(Get_CurrentMs() - t > 50) {
+                // ทำอะไรก็ได้ระหว่างรอ
+                t = Get_CurrentMs();
+            }
+        }
+
+        // ประมวลผลข้อมูล
+        uint32_t sum = 0;
+        for(int i=0; i&lt;BUF_SIZE; i++) sum += adc_buf[i];
+        uint16_t avg = (uint16_t)(sum / BUF_SIZE);
+        float v = ADC_ToVoltage(avg, 3.3f);
+
+        USART_Print("ADC avg: "); USART_PrintNum((int32_t)avg);
+        USART_Print(" ("); USART_PrintNum((int32_t)(v*1000));
+        USART_Print("mV)\r\n");
+
+        Delay_Ms(100);
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>✏️ ลองทำดู</h2>
+    <ol>
+        <li>แก้ไขให้ใช้ <code>DMA_MemCopy()</code> ก็อปปี้ข้อมูล ADC buffer ไปยัง buffer สำรอง แล้วประมวลผล buffer สำรองขณะ DMA กำลัง sampling รอบต่อไป (double-buffering)</li>
+        <li>เปลี่ยนจาก polling <code>DMA_GetStatus()</code> เป็น callback — เปิด LED เมื่อ transfer เสร็จ</li>
+        <li>ใช้ <code>DMA_USART_Transmit()</code> ส่งข้อความยาว 256 ตัวอักษร — วัดว่าเร็วกว่าส่งทีละ byte ด้วย <code>USART_Print()</code> กี่เท่า</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch08_spi.html">บทก่อน</a>
+    <a href="ch10_power.html">บทถัดไป →</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'neutral'});</script>
+</body>
+</html>

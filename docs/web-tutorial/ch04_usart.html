@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>บทที่ 4: USART — สื่อสารผ่าน Serial — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch03_delay_timer.html">บทก่อน</a>
+    <a href="ch05_pwm.html">บทถัดไป →</a>
+</nav>
+
+<h1>บทที่ 4: USART — สื่อสารผ่าน Serial</h1>
+<span class="level beginner">ระดับเริ่มต้น</span>
+
+<section class="flowchart">
+    <h2>🧭 แผนภาพการทำงาน</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["USART_SimpleInit()"] --> B{"ทำงานอะไร?"}
+    B -->|"ส่งข้อมูล"| C["USART_Print() / USART_PrintNum()"]
+    B -->|"รับข้อมูล"| D["USART_Available()?"]
+    C --> E["Serial Monitor"]
+    D -->|"มีข้อมูล"| F["USART_Read()"]
+    D -->|"ไม่มี"| G["ทำงานอื่นต่อ"]
+    F --> H["ประมวลผลคำสั่ง"]
+    H --> B
+    G --> B
+    </pre>
+</section>
+
+<section>
+    <h2>🔌 การต่อวงจร</h2>
+    <pre class="ascii-circuit">
+          USB-to-Serial (CH340G / CP2102)
+    ┌───────────────────────────────────┐
+    │ MCU                          USB  │
+    │ PD5 (TX) ──────────────► RX      │──► PC
+    │ PD6 (RX) ◄────────────── TX      │
+    │ GND ─────────────────── GND      │
+    │                                   │
+    │ LED: PC0───220Ω──|LED|───GND     │
+    └───────────────────────────────────┘
+
+    Pin Configurations:
+    DEFAULT  : TX=PD5, RX=PD6  (ทุกแพ็กเกจ)
+    REMAP2   : TX=PD6, RX=PD5  (สลับขั้ว — มีประโยชน์มาก!)
+    REMAP1   : TX=PD0, RX=PD1  (เฉพาะ TSSOP-20/QFN-20)
+    </pre>
+    <p>CH32V003 มี 1 USART — ใช้ RX/TX แบบ cross-connect: MCU-TX → USB-RX, MCU-RX → USB-TX, GND ต้องต่อร่วมกัน</p>
+</section>
+
+<section>
+    <h2>📚 หลักการทำงาน</h2>
+    <p><strong>USART (Universal Synchronous/Asynchronous Receiver-Transmitter)</strong> — การสื่อสารแบบ asynchronous serial ผ่าน 2 สาย (TX+RX)</p>
+    <p><strong>Baud Rate</strong> — ความเร็วในการส่งข้อมูล, 115200 baud = ~115200 bits/วินาที (แนะนำสำหรับ CH32V003)</p>
+    <p><strong>Frame Format</strong> — 8N1 (8 data bits, No parity, 1 stop bit) — เป็นค่า default ที่ใช้กันทั่วไป</p>
+    <p><strong>SOP-8 note:</strong> USART ใช้ได้ทุกแพ็กเกจ — ใช้ PD5/PD6 (default pins) เหมือนกัน</p>
+    <p><strong>REMAP2 trick:</strong> สลับ TX/RX กลับด้าน (TX=PD6, RX=PD5) — มีประโยชน์เมื่อต้องการ cross-connect โดยไม่ต้องสลับสาย</p>
+</section>
+
+<section>
+    <h2>💻 เขียน Code ทีละขั้น</h2>
+
+    <div class="step"><h3>ขั้นที่ 1: Include + Init</h3>
+    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);</code></pre>
+    <p class="explain">🔍 <code>USART_SimpleInit(baud, pins)</code> — บรรทัดเดียวจบ! เปิด Clock, ตั้งค่า GPIO, ตั้ง USART 8N1, เปิดใช้งาน</p></div>
+
+    <div class="step"><h3>ขั้นที่ 2: ส่งข้อความ</h3>
+    <pre><code>    USART_Print("Hello from CH32V003!\r\n");
+    USART_PrintNum(12345);
+    USART_Print(" 0x");
+    USART_PrintHex(0xAB, 1);  // uppercase hex</code></pre>
+    <p class="explain">🔍 <code>USART_Print()</code> ส่ง string — <code>USART_PrintNum()</code> ส่งตัวเลข signed 32-bit — <code>USART_PrintHex()</code> ส่งเลขฐาน 16</p></div>
+
+    <div class="step"><h3>ขั้นที่ 3: รับข้อมูล</h3>
+    <pre><code>    while(1) {
+        if(USART_Available()) {
+            uint8_t ch = USART_Read();  // blocking — แต่มีข้อมูลแน่
+            USART_WriteByte(ch);         // echo กลับ
+        }
+    }
+}</code></pre>
+    <p class="explain">🔍 <strong>ห้ามเรียก <code>USART_Read()</code> โดยไม่เช็ค <code>USART_Available()</code> ก่อน!</strong> <code>USART_Read()</code> เป็น blocking — จะค้างถ้าไม่มีข้อมูล</p></div>
+</section>
+
+<section>
+    <h2>📋 API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+        <tr><td><code>USART_SimpleInit(baud, pins)</code></td><td>เริ่มต้น USART</td><td><code>USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT)</code></td></tr>
+        <tr><td><code>USART_Print(str)</code></td><td>ส่ง string (null-terminated)</td><td><code>USART_Print("Hello\r\n")</code></td></tr>
+        <tr><td><code>USART_PrintNum(num)</code></td><td>ส่งตัวเลข signed 32-bit</td><td><code>USART_PrintNum(-999)</code></td></tr>
+        <tr><td><code>USART_PrintHex(num, upper)</code></td><td>ส่งเลขฐาน 16</td><td><code>USART_PrintHex(0xFF, 1)</code></td></tr>
+        <tr><td><code>USART_WriteByte(data)</code></td><td>ส่ง 1 byte ดิบ</td><td><code>USART_WriteByte(0x55)</code></td></tr>
+        <tr><td><code>USART_Available()</code></td><td>ตรวจสอบข้อมูลเข้า</td><td><code>if(USART_Available()){...}</code></td></tr>
+        <tr><td><code>USART_Read()</code></td><td>อ่าน 1 byte (blocking)</td><td><code>uint8_t ch = USART_Read()</code></td></tr>
+        <tr><td><code>USART_ReadBytes(buf, len)</code></td><td>อ่านหลาย bytes</td><td><code>USART_ReadBytes(buf, 10)</code></td></tr>
+        <tr><td><code>USART_Flush()</code></td><td>ล้าง receive buffer</td><td><code>USART_Flush()</code></td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>Serial Monitor ไม่แสดงอะไร</td><td>ต่อ TX/RX ผิดด้าน (ไม่ cross-connect)</td><td>MCU-TX → USB-RX, MCU-RX → USB-TX</td></tr>
+        <tr><td>ตัวอักษรเพี้ยน/ขยะ</td><td>Baud Rate ไม่ตรงกัน</td><td>ตั้ง Serial Monitor Baud Rate ให้ตรงกับในโค้ด</td></tr>
+        <tr><td>โปรแกรมค้างตอนรับข้อมูล</td><td>เรียก <code>USART_Read()</code> โดยไม่เช็ค <code>USART_Available()</code></td><td>ใช้ <code>if(USART_Available())</code> ก่อนเสมอ</td></tr>
+        <tr><td>GND ลืมต่อ</td><td>ลืมต่อ GND ระหว่าง MCU กับ USB-Serial</td><td>GND ต้องต่อร่วมกันเสมอ!</td></tr>
+        <tr><td>USART ใช้ไม่ได้บน SOP-8</td><td>— (ไม่จริง)</td><td>USART ใช้ได้ทุกแพ็กเกจ — PD5/PD6 อยู่บน SOP-8</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>🛠️ สร้าง Product: ควบคุม LED ผ่านคอมพิวเตอร์</h2>
+    <p>พิมพ์คำสั่งใน Serial Monitor เพื่อควบคุม LED (ON/OFF/TOGGLE/BLINK)</p>
+    <pre><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    pinMode(PC0, PIN_MODE_OUTPUT);
+
+    char cmd[16]; int idx = 0;
+
+    USART_Print("Commands: ON, OFF, TOGGLE\r\n");
+
+    while(1)
+    {
+        if(USART_Available())
+        {
+            char ch = USART_Read();
+            if(ch == '\r' || ch == '\n') {
+                cmd[idx] = '\0'; idx = 0;
+
+                if(strcmp(cmd, "ON") == 0) {
+                    digitalWrite(PC0, HIGH);
+                    USART_Print("LED ON\r\n");
+                } else if(strcmp(cmd, "OFF") == 0) {
+                    digitalWrite(PC0, LOW);
+                    USART_Print("LED OFF\r\n");
+                } else if(strcmp(cmd, "TOGGLE") == 0) {
+                    digitalToggle(PC0);
+                    USART_Print("LED TOGGLED\r\n");
+                }
+            } else if(idx < 15) {
+                cmd[idx++] = ch;
+            }
+        }
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>✏️ ลองทำดู</h2>
+    <ol>
+        <li>เพิ่มคำสั่ง <code>BLINK N</code> — ทำให้ LED กระพริบ N ครั้ง (parse ตัวเลขจาก string)</li>
+        <li>ใช้ <code>USART_PrintNum()</code> + <code>Get_CurrentMs()</code> ทำ timestamp ทุกข้อความ</li>
+        <li>เปลี่ยนไปใช้ <code>USART_PINS_REMAP2</code> — สลับ TX/RX โดยไม่ต้องเปลี่ยนสาย</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch03_delay_timer.html">บทก่อน</a>
+    <a href="ch05_pwm.html">บทถัดไป →</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'neutral'});</script>
+</body>
+</html>

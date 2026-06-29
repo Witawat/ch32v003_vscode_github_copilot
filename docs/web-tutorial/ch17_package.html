@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>บทที่ 17: ระบบแพ็กเกจ — เขียนโค้ดเดียวใช้ได้ทุกชิป — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch16_timer_guard.html">บทก่อน</a>
+    <span style="visibility:hidden">บทถัดไป</span>
+</nav>
+
+<h1>บทที่ 17: ระบบแพ็กเกจ — เขียนโค้ดเดียวใช้ได้ทุกชิป</h1>
+<span class="level expert">ระดับผู้เชี่ยวชาญ</span>
+
+<section class="flowchart">
+    <h2>🧭 แผนภาพการทำงาน</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["#define CH32V003_PACKAGE PACKAGE_SOP8"] --> B["Compile-time: IS_VALID_PIN(PC0)"]
+    B --> C{PC0 มีใน SOP8?}
+    C -->|ไม่มี| D["#error: PC0 not available on SOP8"]
+    C -->|มี| E["ผ่าน — ใช้ PC0 ได้"]
+    F["#define CH32V003_PACKAGE PACKAGE_TSSOP20"] --> G["IS_ADC_PIN(PD2)"]
+    G -->|"TSSOP20: YES"| H["analogRead(PD2) OK"]
+    I["IS_PWM_VALID_PACKAGE(PC4, SOP8)"] -->|"false"| J["PWM ไม่มีบน SOP8"]
+    K["เปลี่ยน #define แค่บรรทัดเดียว"] --> L["โค้ดเดิม รันบนคนละแพ็กเกจ"]
+    </pre>
+</section>
+
+<section>
+    <h2>🔌 การต่อวงจร</h2>
+    <pre class="ascii-circuit">
+    CH32V003 — 4 แพ็กเกจ ใช้ชิปเดียวกัน คนละขาจำนวน
+
+    ┌───────────────────────────────────────────────────────┐
+    │  PACKAGE_TSSOP20 (20 pins) — Default                  │
+    │  ┌─────U─────┐                                        │
+    │  │ 1 PD7 PD6 20│  Pins: PA1,PA2,PC0-PC7,PD0-PD7     │
+    │  │ 2 PA1 PC7 19│  ADC: PA1,PA2,PC4,PD2-PD6 (8ch)    │
+    │  │ 3 PA2 PD4 18│  USART: PD5(TX),PD6(RX)            │
+    │  │ 4 GND PD3 17│  SPI: PC4-CS,PC5-SCK,PC6-MOSI,PC7-MISO│
+    │  │ 5 VDD PC4 16│  I2C: PC1-SDA,PC2-SCL               │
+    │  │ 6 PD0 PC3 15│  PWM: PC4,PC5,PC6,PA1,PA2,PD3      │
+    │  │ 7 PD1 PC2 14│                                      │
+    │  │ 8 PD5 PC1 13│                                      │
+    │  │ 9 PD6 PC0 12│                                      │
+    │  │10 PD2 PD4 11│                                      │
+    │  └────────────┘                                       │
+    │───────────────────────────────────────────────────────│
+    │  PACKAGE_SOP16 (16 pins)                              │
+    │  ┌──U──┐                                              │
+    │  │ 1 PD7  PD6 16│  Pins: PA1,PA2,PC0-PC7,PD1,PD5-PD7│
+    │  │ 2 PA1  PC7 15│  ADC: PA1,PA2,PC4,PD5,PD6 (5ch)   │
+    │  │ 3 PA2  PD1 14│  SPI: PC4,5,6,7 — YES              │
+    │  │ 4 GND  PC4 13│  I2C: PC1,PC2 — YES                │
+    │  │ 5 VDD  PC3 12│  PWM: PC4,PC5,PC6,PA1,PA2         │
+    │  │ 6 PD5  PC2 11│                                      │
+    │  │ 7 PD6  PC1 10│                                      │
+    │  │ 8 PD7  PC0 9 │                                      │
+    │  └──────────────┘                                     │
+    │───────────────────────────────────────────────────────│
+    │  PACKAGE_SOP8 (8 pins) — เล็กสุด ถูกสุด               │
+    │  ┌──U──┐                                              │
+    │  │ 1 PC1 PC2 8│  Pins: PC1,PC2,PC4,PA1,PA2,PD1,PD4,PD6│
+    │  │ 2 PC4 PD1 7│  ADC: PA1,PC4,PD1,PD4,PD6 (5ch)     │
+    │  │ 3 PA1 PA2 6│  USART: PD1(TX),PA2(RX) — remap     │
+    │  │ 4 GND VDD 5│  I2C: PC1,PC2 — YES                  │
+    │  └────────────┘  SPI: NO (ไม่มี SCK pin!)              │
+    │                   PWM: PA1,PA2,PD1,PD4,PD6 (no PC4-PC6)│
+    │───────────────────────────────────────────────────────│
+    │  PACKAGE_QFN20 (20 pads) — เท่ากับ TSSOP20 ทางไฟฟ้า    │
+    │  แตกต่างแค่ package footprint บน PCB                  │
+    └───────────────────────────────────────────────────────┘
+
+    ข้อแตกต่างสำคัญระหว่างแพ็กเกจ:
+    ├─ SOP8: ถูกสุด (~$0.10), ไม่มี Hardware SPI, ไม่มี USART pins default
+    ├─ SOP16: มี SPI, I2C, USART — แต่ไม่มี PD2-PD4
+    ├─ TSSOP20: ครบทุก pin — ทุก peripheral ใช้ได้
+    └─ QFN20: เท่ากับ TSSOP20 — 3x3mm QFN
+    </pre>
+    <p><strong>สำคัญ:</strong> <code>CH32V003_PACKAGE</code> ต้องกำหนดก่อน <code>#include "SimpleHAL.h"</code> — มิฉะนั้นจะ default เป็น TSSOP20</p>
+</section>
+
+<section>
+    <h2>📚 หลักการทำงาน</h2>
+    <p><strong>ระบบแพ็กเกจ</strong> — กลไกที่ทำให้โค้ด C เดียวกันคอมไพล์และทำงานได้บนทุกแพ็กเกจของ CH32V003 (SOP8, SOP16, TSSOP20, QFN20) — โดยเปลี่ยนแค่ <code>#define</code> บรรทัดเดียว</p>
+
+    <h3>CH32V003_PACKAGE</h3>
+    <p>เป็น macro ที่กำหนดว่า MCU ที่ใช้เป็นแพ็กเกจอะไร — SimpleHAL ใช้ค่านี้เพื่อ:</p>
+    <ul>
+        <li><strong>Validate pins:</strong> เช็คว่า pin ที่ระบุมีอยู่ในแพ็กเกจนั้นหรือไม่ — ถ้าใช้ PC0 บน SOP8 → compile error</li>
+        <li><strong>Validate peripherals:</strong> เช็คว่า peripheral บน pin นั้นมีในแพ็กเกจหรือไม่ — เช่น SPI ไม่มีบน SOP8</li>
+        <li><strong>Enable/Disable remap:</strong> บางแพ็กเกจต้องใช้ pin remap (เช่น USART บน SOP8 ต้อง remap)</li>
+        <li><strong>Select alternate functions:</strong> เลือก AFIO mapping ให้ถูกต้องตามแพ็กเกจ</li>
+    </ul>
+
+    <h3>Macros ที่ใช้ภายใน</h3>
+    <table>
+        <tr><th>Macro</th><th>คำอธิบาย</th></tr>
+        <tr><td><code>IS_VALID_PIN(pin)</code></td><td>true ถ้า pin มีในแพ็กเกจที่เลือก</td></tr>
+        <tr><td><code>IS_ADC_PIN(pin)</code></td><td>true ถ้า pin เป็น ADC input</td></tr>
+        <tr><td><code>IS_PWM_VALID_PACKAGE(pin, pkg)</code></td><td>true ถ้า pin มี PWM output ในแพ็กเกจ</td></tr>
+        <tr><td><code>PACKAGE_SOP8</code></td><td>1 — SOP-8 (CH32V003J4M6)</td></tr>
+        <tr><td><code>PACKAGE_SOP16</code></td><td>2 — SOP-16 (CH32V003F4P6)</td></tr>
+        <tr><td><code>PACKAGE_TSSOP20</code></td><td>3 — TSSOP-20 (CH32V003A4M6)</td></tr>
+        <tr><td><code>PACKAGE_QFN20</code></td><td>4 — QFN-20 (CH32V003A4M6-QFN)</td></tr>
+    </table>
+
+    <h3>ทำไมถึงสำคัญ?</h3>
+    <p>เขียนโค้ดหนึ่งครั้ง → ขายสินค้าแบบ SOP8 (ถูก) และ TSSOP20 (ฟีเจอร์ครบ) โดยเปลี่ยนแค่ compile flag — ไม่ต้อง maintain โค้ด 2 เวอร์ชัน</p>
+</section>
+
+<section>
+    <h2>💻 เขียน Code ทีละขั้น</h2>
+
+    <div class="step"><h3>ขั้นที่ 1: เลือกแพ็กเกจ + Pin Validation</h3>
+    <pre><code>// เปลี่ยนแค่บรรทัดนี้ — โค้ดที่เหลือเหมือนเดิม
+#define CH32V003_PACKAGE PACKAGE_TSSOP20
+// #define CH32V003_PACKAGE PACKAGE_SOP8
+#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    // IS_VALID_PIN — compile-time check
+    #if !IS_VALID_PIN(PC0)
+        #error "PC0 not available on this package!"
+    #endif
+
+    // ถ้าใช้ SOP8 — บรรทัดนี้จะ compile error
+    pinMode(PC0, PIN_MODE_OUTPUT);</code></pre>
+    <p class="explain">🔍 <code>IS_VALID_PIN(pin)</code> — compile-time macro — ใช้กับ <code>#if</code> directive — ถ้า pin ไม่มีในแพ็กเกจ → false → <code>#error</code> แสดงข้อความชัดเจน</p></div>
+
+    <div class="step"><h3>ขั้นที่ 2: IS_ADC_PIN — เช็ค Analog Input</h3>
+    <pre><code>    // เช็คว่า pin นี้เป็น ADC ได้หรือไม่
+    #if IS_ADC_PIN(PD2)
+        ADC_SimpleInit();
+        uint16_t val = analogRead(PD2);
+        USART_Print("PD2 ADC OK\r\n");
+    #else
+        USART_Print("PD2 is NOT ADC on this package\r\n");
+    #endif
+
+    // PD7 ไม่ใช่ ADC ในทุกแพ็กเกจ
+    #if IS_ADC_PIN(PD7)
+        analogRead(PD7);  // ไม่มีทางมาถึง
+    #endif</code></pre>
+    <p class="explain">🔍 <code>IS_ADC_PIN(pin)</code> — false สำหรับ PD7 และ pin ที่ไม่ใช่ ADC — บน SOP16 PD2 ไม่มี → false</p></div>
+
+    <div class="step"><h3>ขั้นที่ 3: IS_PWM_VALID_PACKAGE — PWM Output</h3>
+    <pre><code>    // PWM บน PC4 — มีแค่บน TSSOP20/SOP16/QFN20
+    // บน SOP8: PC4 เป็น I2C เท่านั้น
+
+    #if IS_PWM_VALID_PACKAGE(PC4, CH32V003_PACKAGE)
+        PWM_SimpleInit(2, PC4);
+        PWM_SetDuty(2, 50);
+        USART_Print("PWM on PC4 OK\r\n");
+    #else
+        // SOP8 fallback — ใช้ PA1 หรือ PA2 แทน
+        #if IS_VALID_PIN(PA1)
+            PWM_SimpleInit(2, PA1);
+            PWM_SetDuty(2, 50);
+            USART_Print("PWM on PA1 (SOP8 fallback)\r\n");
+        #endif
+    #endif</code></pre>
+    <p class="explain">🔍 <code>IS_PWM_VALID_PACKAGE(pin, pkg)</code> — ต้องระบุ package — แต่ละแพ็กเกจมี PWM pin ต่างกัน — SOP8: PA1,PA2,PD1,PD4,PD6 — TSSOP20: PC4,PC5,PC6,PA1,PA2,PD3</p></div>
+
+    <div class="step"><h3>ขั้นที่ 4: Multi-Package Code — Fallback Chain</h3>
+    <pre><code>    // เลือก pin LED อัตโนมัติตามแพ็กเกจ
+    #if IS_VALID_PIN(PC0)
+        #define LED_PIN PC0
+    #elif IS_VALID_PIN(PC1)
+        #define LED_PIN PC1
+    #elif IS_VALID_PIN(PA1)
+        #define LED_PIN PA1
+    #else
+        #error "No valid LED pin found"
+    #endif
+
+    pinMode(LED_PIN, PIN_MODE_OUTPUT);
+    digitalWrite(LED_PIN, HIGH);</code></pre>
+    <p class="explain">🔍 Fallback chain — ลอง pin แรก → ถ้าไม่มี → ลอง pin ถัดไป — โค้ดนี้ทำงานบนทุกแพ็กเกจโดยไม่ต้องแก้ — TSSOP20: PC0, SOP16: PC0, SOP8: PC1</p></div>
+
+    <div class="step"><h3>ขั้นที่ 5: ตารางเปรียบเทียบ 4 แพ็กเกจในโค้ด</h3>
+    <pre><code>void print_package_info(void) {
+    USART_Print("Package: ");
+    #if CH32V003_PACKAGE == PACKAGE_SOP8
+        USART_Print("SOP-8\r\n");
+        USART_Print("  Pins: PC1,PC2,PC4,PA1,PA2,PD1,PD4,PD6\r\n");
+    #elif CH32V003_PACKAGE == PACKAGE_SOP16
+        USART_Print("SOP-16\r\n");
+        USART_Print("  Pins: PA1,PA2,PC0-PC7,PD1,PD5-PD7\r\n");
+    #elif CH32V003_PACKAGE == PACKAGE_TSSOP20
+        USART_Print("TSSOP-20\r\n");
+        USART_Print("  Pins: all 20 (full)\r\n");
+    #elif CH32V003_PACKAGE == PACKAGE_QFN20
+        USART_Print("QFN-20\r\n");
+        USART_Print("  Pins: all 20 (same as TSSOP20)\r\n");
+    #endif
+
+    USART_Print("ADC pins: ");
+    USART_PrintNum(IS_ADC_PIN(PD2) ? 8 : 5);
+    USART_Print("\r\n");
+    USART_Print("Hardware SPI: ");
+    USART_Print(IS_VALID_PIN(PC5) ? "YES\r\n" : "NO\r\n");
+}</code></pre>
+    <p class="explain">🔍 ใช้ compile-time condition กับ <code>CH32V003_PACKAGE</code> — แสดงข้อมูลแพ็กเกจ — <code>IS_VALID_PIN(PC5)</code> → false บน SOP8 (ไม่มี SCK)</p></div>
+</section>
+
+<section>
+    <h2>📋 API Reference</h2>
+    <table>
+        <tr><th>Macro / ค่าคงที่</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+        <tr><td><code>CH32V003_PACKAGE</code></td><td>กำหนดแพ็กเกจ (ต้องก่อน include)</td><td><code>#define CH32V003_PACKAGE PACKAGE_TSSOP20</code></td></tr>
+        <tr><td><code>PACKAGE_SOP8</code></td><td>SOP-8 (8 pins)</td><td>CH32V003J4M6</td></tr>
+        <tr><td><code>PACKAGE_SOP16</code></td><td>SOP-16 (16 pins)</td><td>CH32V003F4P6</td></tr>
+        <tr><td><code>PACKAGE_TSSOP20</code></td><td>TSSOP-20 (20 pins)</td><td>CH32V003A4M6</td></tr>
+        <tr><td><code>PACKAGE_QFN20</code></td><td>QFN-20 (20 pads)</td><td>CH32V003A4M6-QFN</td></tr>
+        <tr><td><code>IS_VALID_PIN(pin)</code></td><td>Compile-time: pin มีในแพ็กเกจ?</td><td><code>#if IS_VALID_PIN(PC0)</code></td></tr>
+        <tr><td><code>IS_ADC_PIN(pin)</code></td><td>Compile-time: pin เป็น ADC ได้?</td><td><code>#if IS_ADC_PIN(PD2)</code></td></tr>
+        <tr><td><code>IS_PWM_VALID_PACKAGE(pin, pkg)</code></td><td>Compile-time: pin มี PWM ในแพ็กเกจ?</td><td><code>IS_PWM_VALID_PACKAGE(PC4, PACKAGE_SOP8)</code></td></tr>
+    </table>
+
+    <h3>Quick Reference: Pin Availability</h3>
+    <table>
+        <tr><th>Pin</th><th>SOP8</th><th>SOP16</th><th>TSSOP20</th><th>QFN20</th></tr>
+        <tr><td>PA1</td><td>YES</td><td>YES</td><td>YES</td><td>YES</td></tr>
+        <tr><td>PA2</td><td>YES</td><td>YES</td><td>YES</td><td>YES</td></tr>
+        <tr><td>PC0</td><td>—</td><td>YES</td><td>YES</td><td>YES</td></tr>
+        <tr><td>PC1</td><td>YES</td><td>YES</td><td>YES</td><td>YES</td></tr>
+        <tr><td>PC2</td><td>YES</td><td>YES</td><td>YES</td><td>YES</td></tr>
+        <tr><td>PC3</td><td>—</td><td>YES</td><td>YES</td><td>YES</td></tr>
+        <tr><td>PC4</td><td>YES(I2C)</td><td>YES</td><td>YES</td><td>YES</td></tr>
+        <tr><td>PC5</td><td>—</td><td>—</td><td>YES</td><td>YES</td></tr>
+        <tr><td>PC6</td><td>—</td><td>—</td><td>YES</td><td>YES</td></tr>
+        <tr><td>PC7</td><td>—</td><td>YES</td><td>YES</td><td>YES</td></tr>
+        <tr><td>PD0</td><td>—</td><td>—</td><td>YES</td><td>YES</td></tr>
+        <tr><td>PD1</td><td>YES</td><td>YES</td><td>YES</td><td>YES</td></tr>
+        <tr><td>PD2</td><td>—</td><td>—</td><td>YES</td><td>YES</td></tr>
+        <tr><td>PD3</td><td>—</td><td>—</td><td>YES</td><td>YES</td></tr>
+        <tr><td>PD4</td><td>YES</td><td>—</td><td>YES</td><td>YES</td></tr>
+        <tr><td>PD5</td><td>—</td><td>YES</td><td>YES</td><td>YES</td></tr>
+        <tr><td>PD6</td><td>YES</td><td>YES</td><td>YES</td><td>YES</td></tr>
+        <tr><td>PD7</td><td>—</td><td>YES</td><td>YES</td><td>YES</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>"PD2 not available" compile error</td><td>ใช้ PACKAGE_SOP8 หรือ SOP16 — PD2 ไม่มี</td><td>ใช้ PA1, PA2, PC4, PD1, PD4, PD6 แทน — หรือเปลี่ยนเป็น TSSOP20</td></tr>
+        <tr><td>"SPI not available" compile error</td><td>SOP8 ไม่มี SPI (ไม่มี SCK pin)</td><td>ใช้ <code>shiftOut()</code>/<code>shiftIn()</code> software SPI — หรือเปลี่ยนเป็น SOP16+</td></tr>
+        <tr><td>USART ไม่ทำงานบน SOP8</td><td>Default USART pins (PD5/PD6) ไม่มีบน SOP8</td><td>ใช้ <code>USART_PINS_SOP8</code> (PD1=TX, PA2=RX)</td></tr>
+        <tr><td>PWM เฉพาะบาง pin ไม่ทำงาน</td><td>PWM pin ต่างกันตามแพ็กเกจ</td><td>ใช้ <code>IS_PWM_VALID_PACKAGE(pin, CH32V003_PACKAGE)</code> เช็คก่อน</td></tr>
+        <tr><td>เปลี่ยนแพ็กเกจแต่โค้ดไม่เปลี่ยน</td><td>ลืมแก้ <code>#define CH32V003_PACKAGE</code></td><td>อยู่บรรทัดแรกสุด — ก่อน <code>#include "SimpleHAL.h"</code> เสมอ</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>🛠️ สร้าง Product: โค้ดเดียว รันบน SOP8 SOP16 TSSOP20</h2>
+    <p>ไฟกระพริบ LED + วัดอุณหภูมิ + USART — ทำงานบนทุกแพ็กเกจโดยเปลี่ยนแค่บรรทัดแรก</p>
+    <pre><code>// ====== เปลี่ยนแค่บรรทัดนี้ ======
+#define CH32V003_PACKAGE PACKAGE_TSSOP20
+// #define CH32V003_PACKAGE PACKAGE_SOP16
+// #define CH32V003_PACKAGE PACKAGE_SOP8
+// #define CH32V003_PACKAGE PACKAGE_QFN20
+// ================================
+#include "SimpleHAL.h"
+
+// เลือก LED pin อัตโนมัติ
+#if IS_VALID_PIN(PC0)
+    #define LED_PIN PC0
+#elif IS_VALID_PIN(PC1)
+    #define LED_PIN PC1
+#else
+    #define LED_PIN PA1
+#endif
+
+// เลือก ADC pin อัตโนมัติ
+#if IS_ADC_PIN(PD2) && IS_VALID_PIN(PD2)
+    #define TEMP_PIN ADC_CH_PD2
+#elif IS_ADC_PIN(PD1) && IS_VALID_PIN(PD1)
+    #define TEMP_PIN ADC_CH_PD1
+#else
+    #define TEMP_PIN ADC_CH_PA1
+#endif
+
+// เลือก USART pins อัตโนมัติ
+#if IS_VALID_PIN(PD5) && IS_VALID_PIN(PD6)
+    #define MY_USART_PINS USART_PINS_DEFAULT
+#else
+    #define MY_USART_PINS USART_PINS_SOP8
+#endif
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, MY_USART_PINS);
+    ADC_SimpleInit();
+
+    pinMode(LED_PIN, PIN_MODE_OUTPUT);
+
+    USART_Print("CH32V003 Multi-Package Demo\r\n");
+    USART_Print("Package: ");
+    #if CH32V003_PACKAGE == PACKAGE_SOP8
+        USART_Print("SOP8\r\n");
+    #elif CH32V003_PACKAGE == PACKAGE_SOP16
+        USART_Print("SOP16\r\n");
+    #elif CH32V003_PACKAGE == PACKAGE_TSSOP20
+        USART_Print("TSSOP20\r\n");
+    #else
+        USART_Print("QFN20\r\n");
+    #endif
+
+    while(1)
+    {
+        digitalWrite(LED_PIN, HIGH);
+        Delay_Ms(250);
+        digitalWrite(LED_PIN, LOW);
+        Delay_Ms(250);
+
+        float temp = ADC_ReadVoltage(TEMP_PIN, 3.3f);
+        USART_Print("ADC: ");
+        USART_PrintNum((int32_t)(temp * 1000));
+        USART_Print("mV  LED: ");
+        USART_Print(IS_VALID_PIN(LED_PIN) ? "ON\r\n" : "N/A\r\n");
+    }
+}</code></pre>
+    <p><strong>ผลลัพธ์:</strong> โค้ดเดียวกัน — คอมไพล์ 4 ครั้งด้วย <code>CH32V003_PACKAGE</code> ต่างกัน — ได้ 4 binary — ทำงานบน 4 แพ็กเกจ — ไม่ต้องแก้โค้ด</p>
+</section>
+
+<section>
+    <h2>✏️ ลองทำดู</h2>
+    <ol>
+        <li>คอมไพล์โค้ด "Product" ด้านบนด้วย <code>PACKAGE_SOP8</code> — ดูว่า LED_PIN เป็น PC1, TEMP_PIN เป็น ADC_CH_PD1 — ทดสอบบนบอร์ด SOP8</li>
+        <li>คอมไพล์ใหม่ด้วย <code>PACKAGE_TSSOP20</code> — ดูว่า LED_PIN เป็น PC0, TEMP_PIN เป็น ADC_CH_PD2 — ทดสอบบนบอร์ด TSSOP20</li>
+        <li>ใช้ <code>#error</code> เพื่อป้องกันไม่ให้ใช้ SPI บน SOP8 — เพิ่มโค้ด: <code>#if CH32V003_PACKAGE == PACKAGE_SOP8 && !IS_VALID_PIN(PC5) #error "SPI requires SOP16 or TSSOP20" #endif</code></li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch16_timer_guard.html">บทก่อน</a>
+    <span style="visibility:hidden">บทถัดไป</span>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'neutral'});</script>
+</body>
+</html>
