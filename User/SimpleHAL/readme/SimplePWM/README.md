@@ -310,6 +310,8 @@ int main(void) {
 
 ## ข้อควรระวัง
 
+> **⚠️ Timer Resource Guard 🆕:** ถ้า TIM1/TIM2 ถูก SimpleTIM หรือ Stopwatch/Countdown ใช้อยู่ — `PWM_Init()` จะ return ทันที ไม่เริ่ม PWM (ป้องกันเขียนทับ)
+>
 > **⚠️ Frequency Sharing:** ทุกช่องบน timer เดียวกัน (PWM1_CH1-CH4 บน TIM1, PWM2_CH1-CH4 บน TIM2) **แชร์ความถี่ร่วมกัน** — ความถี่จากช่องแรกที่ init จะเป็นตัวกำหนด ช่องหลังที่ init ด้วยความถี่ต่างกันจะถูกเพิกเฉย
 
 | ปัญหา | สาเหตุ | วิธีแก้ |

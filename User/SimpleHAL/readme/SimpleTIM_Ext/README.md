@@ -4,6 +4,26 @@
 
 ---
 
+## Configurable Timer 🆕
+
+SimpleTIM_Ext ใช้ **TIM2** เป็น default — ถ้า TIM2 ถูกใช้โดย PWM2 หรือ SimpleTIM:
+
+```c
+// ก่อน #include — เปลี่ยนไปใช้ TIM1
+#define TIMEXT_DEFAULT_TIMER  TIM_1
+#include "SimpleHAL.h"
+
+// Stopwatch และ Countdown จะใช้ TIM1 แทน TIM2
+```
+
+| วิธี | TIM ที่ใช้ |
+|------|:---:|
+| Default (ไม่กำหนด) | **TIM2** |
+| `#define TIMEXT_DEFAULT_TIMER TIM_1` | **TIM1** |
+
+> ⚠️ ถ้า TIM1 ถูก PWM1 ใช้อยู่ → Stopwatch จะไม่เริ่ม (guard ป้องกัน)  
+> ⚠️ ถ้า TIM2 ถูก PWM2 ใช้อยู่ → ต้องเปลี่ยนเป็น TIM1
+
 ## ภาพรวม
 
 SimpleTIM_Ext ให้ฟังก์ชัน **Stopwatch** และ **Countdown** สำเร็จรูป โดยใช้ TIM2 ที่ 1000Hz (ความละเอียด 1ms) พร้อมฟังก์ชัน format เวลาเป็น string สำหรับแสดงผล

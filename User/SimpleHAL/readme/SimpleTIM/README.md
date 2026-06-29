@@ -22,6 +22,32 @@ SimpleTIM ให้ใช้งาน TIM1 และ TIM2 เป็น **periodi
 
 ---
 
+## Timer Resource Guard 🆕
+
+CH32V003 มี TIM1 และ TIM2 — **ใช้ร่วมกันระหว่าง PWM, SimpleTIM, และ SimpleTIM_Ext ไม่ได้**
+
+ระบบป้องกันการชนกันผ่าน `g_tim1_owner` และ `g_tim2_owner`:
+
+| Owner | หมายถึง |
+|-------|--------|
+| `TIM_OWNER_NONE` | Timer ว่าง — ใครใช้ก่อนได้ก่อน |
+| `TIM_OWNER_PWM` | ถูก SimplePWM จองแล้ว — SimpleTIM ใช้ไม่ได้ |
+| `TIM_OWNER_TIMER` | ถูก SimpleTIM จองแล้ว — SimplePWM ใช้ไม่ได้ |
+| `TIM_OWNER_TIMEXT` | ถูก Stopwatch/Countdown จองแล้ว |
+
+```c
+// ✅ OK — TIM1 ว่าง ใครใช้ก่อนได้
+PWM_Init(PWM1_CH1, 1000);       // TIM1 → PWM
+// TIM_SimpleInit(TIM_1, 1);    // ← จะ return ทันที! TIM1 ถูก PWM ใช้อยู่
+
+// ✅ ใช้คนละ timer — ไม่มีปัญหา  
+PWM_Init(PWM1_CH1, 1000);       // TIM1 → PWM
+TIM_SimpleInit(TIM_2, 1);       // TIM2 → Timer — OK คนละตัว
+```
+
+> ⚠️ ถ้า `TIM_SimpleInit()` return ทันที — แสดงว่า timer นั้นถูกจองโดยโมดูลอื่นแล้ว  
+> 💡 ดู Timer Resource Map ใน [README หลัก](../README.md)
+
 ## API Reference
 
 ### Initialization
