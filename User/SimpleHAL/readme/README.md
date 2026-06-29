@@ -5,6 +5,8 @@ Simple Hardware Abstraction Layer สำหรับ CH32V003 - ใช้งา�
 > **MCU:** CH32V003 (RISC-V, 48MHz, 16KB Flash, 2KB RAM)
 > **Version:** 2.0.0 | **License:** MIT
 
+> 💡 **มือใหม่?** อ่าน [คู่มือเริ่มต้น (Getting Started)](../../docs/GETTING_STARTED.md) — Quick Start, Debug Print, ข้อผิดพลาดที่พบบ่อย
+
 ---
 
 ## 📚 คู่มือแยกตาม Module
