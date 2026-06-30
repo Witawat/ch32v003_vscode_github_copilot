@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>บทที่ 20: Workshop GPIO — 9 ตัวอย่างจาก Examples — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch19_debug.html">บทก่อน</a>
+    <a href="ch21_delay_timer.html">บทถัดไป →</a>
+</nav>
+
+<h1>บทที่ 20: Workshop GPIO — 9 ตัวอย่างจาก Examples</h1>
+<span class="level beginner">ระดับเริ่มต้น</span>
+
+<section class="flowchart">
+    <h2>🧥 เส้นทางเรียนรู้: 9 ตัวอย่าง GPIO</h2>
+    <pre class="mermaid">
+flowchart LR
+    A["ex01: LED Blink"] --> B["ex02: Button Input"]
+    B --> C["ex03: External Interrupt"]
+    C --> D["ex04: GPIO Multiple"]
+    D --> E["ex05: Port Operations"]
+    E --> F["ex06: Shift Register"]
+    F --> G["ex07: PulseIn"]
+    G --> H["ex08: GPIO Toggle"]
+    H --> I["ex09: Error Handling"]
+    style A fill:#dcfce7
+    style I fill:#fef3c7
+    </pre>
+</section>
+
+<section>
+<h2>ex01_LED_Blink — กระพริบ LED 1Hz</h2>
+<h3>📖 แนวคิด</h3>
+<p>โปรแกรมแรกของ MCU ทุกตัว — ทำให้ LED กระพริบ 1Hz (ติด 500ms / ดับ 500ms) สอนการตั้งค่า pin output และใช้ delay แบบ blocking</p>
+
+<h3>🔌 วงจร</h3>
+<pre class="ascii-circuit">
+    CH32V003                  LED
+    PC0 ----/\/\/\---->|---- GND
+           220 Ohm
+    - ขาแอโนด (+ ยาว) ต่อ R 220Ω → PC0
+    - ขาแคโทด (- สั้น) ต่อ GND
+</pre>
+
+<h3>💻 โค้ด + อธิบายทีละบรรทัด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+int main(void)
+{
+    SystemCoreClockUpdate();   // ★ ต้องเป็นบรรทัดแรก — อัปเดต SystemCoreClock
+    Timer_Init();              // ★ ต้องเรียกก่อน Delay_Ms — เริ่ม SysTick 1ms
+    pinMode(PC0, PIN_MODE_OUTPUT);  // ตั้ง PC0 เป็น output push-pull
+
+    while(1)
+    {
+        digitalWrite(PC0, HIGH);   // LED ติด (3.3V ที่ PC0)
+        Delay_Ms(500);             // ค้าง 500ms
+        digitalWrite(PC0, LOW);    // LED ดับ (0V ที่ PC0)
+        Delay_Ms(500);             // ค้าง 500ms
+    }
+}</code></pre>
+<ul>
+<li><strong>SystemCoreClockUpdate():</strong> ดึงค่าความถี่จริงจาก register — USART, PWM, Timer ทุกตัวใช้ค่านี้ ไม่เรียก = ทุกอย่างเพี้ยน</li>
+<li><strong>Timer_Init():</strong> เปิด SysTick interrupt ทุก 1ms — Delay_Ms, Get_CurrentMs, Timer_t ทุกตัวทำงานไม่ได้ถ้าไม่เรียก</li>
+<li><strong>pinMode:</strong> ทุกครั้งที่ใช้ pin ต้องตั้งค่าก่อน — PIN_MODE_OUTPUT = push-pull output, PIN_MODE_INPUT_PULLUP = input มี pull-up ในตัว</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>ลืม <code>SystemCoreClockUpdate()</code> → Delay_Ms ทำงานผิด (ค่าจริงอาจสั้นกว่าที่ตั้ง)</li>
+<li>ลืม <code>Timer_Init()</code> → Delay_Ms คืนทันที (delay = 0ms)</li>
+<li>LED ต้องมี R 220Ω เสมอ — ต่อตรง = LED + MCU pin พัง, pin output กระแสสูงสุด 8mA</li>
+</ul>
+
+<h3>✅ ตรวจสอบก่อนรัน</h3>
+<ul>
+<li>LED ต่อถูกขั้ว? แอโนด→R→PC0, แคโทด→GND</li>
+<li>R 220Ω อยู่ระหว่าง PC0 กับ LED? (ไม่ใช่ระหว่าง LED กับ GND)</li>
+<li>GND ต่อครบวงจร? MCU GND ต้องต่อร่วมกับ LED GND</li>
+</ul>
+</section>
+
+<section>
+<h2>ex02_Button_Input — อ่านปุ่มกด + Debounce + USART</h2>
+<h3>📖 แนวคิด</h3>
+<p>อ่านปุ่มกดด้วย digitalRead — ใช้ internal pull-up (ACTIVE_LOW) — debounce แบบ non-blocking ด้วย ELAPSED_TIME — แสดงผลผ่าน USART</p>
+
+<h3>🔌 วงจร</h3>
+<pre class="ascii-circuit">
+    PC1 -- Button -- GND    (ใช้ PIN_MODE_INPUT_PULLUP ภายใน ~40kΩ)
+    PD5(TX) -- USB-to-Serial -- PC  (115200 baud)
+    PD6(RX) -- USB-to-Serial -- PC
+</pre>
+
+<h3>💻 โค้ด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+#define BUTTON_PIN   PC1
+#define DEBOUNCE_MS  50
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    pinMode(BUTTON_PIN, PIN_MODE_INPUT_PULLUP);
+
+    uint8_t last_state = HIGH;     // ปกติ HIGH (pull-up)
+    uint32_t last_debounce = 0;
+
+    USART_Print("Button Test Ready!\r\n");
+
+    while(1) {
+        uint8_t reading = digitalRead(BUTTON_PIN);
+        if(reading != last_state) {
+            last_debounce = Get_CurrentMs();
+            last_state = reading;
+        }
+        if(ELAPSED_TIME(last_debounce, Get_CurrentMs()) >= DEBOUNCE_MS) {
+            if(reading == LOW) {
+                USART_Print("Button pressed!\r\n");
+            }
+        }
+        IWDG_Feed();
+    }
+}</code></pre>
+<ul>
+<li><strong>PIN_MODE_INPUT_PULLUP:</strong> เปิด pull-up ~40kΩ ภายใน — ไม่ต้องต่อ R ภายนอก — ปกติอ่านได้ HIGH, กด = LOW</li>
+<li><strong>ELAPSED_TIME:</strong> คำนวณเวลาที่ผ่านไปแบบ overflow-safe ใช้กับ Get_CurrentMs()</li>
+<li><strong>Debounce non-blocking:</strong> บันทึกเวลาที่ state เปลี่ยน → รอ 50ms → อ่านค่าซ้ำ → ถ้ายังเปลี่ยนอยู่ = กดจริง</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>ACTIVE_LOW = กดแล้วอ่าน LOW — ถ้าต้องการ HIGH เมื่อกด ใช้ PIN_MODE_INPUT_PULLDOWN (หรือต่อ R ภายนอก)</li>
+<li>Debounce จำเป็น! — ปุ่มกลไกมี "bounce" ~10-50ms — อ่านตรง ๆ โดยไม่ debounce ได้ค่า bounce หลายร้อยครั้ง</li>
+<li>USART baud 115200 — ต้องตรงกับ serial monitor (Arduino IDE / PuTTY / screen)</li>
+</ul>
+</section>
+
+<section>
+<h2>ex03_External_Interrupt — Interrupt ขอบตก</h2>
+<h3>📖 แนวคิด</h3>
+<p>ใช้ attachInterrupt ให้ MCU หยุด main loop ชั่วครู่เมื่อมีสัญญาณขอบตก (FALLING) ที่ปุ่ม — นับจำนวน interrupt — toggle LED ใน ISR</p>
+
+<h3>💻 โค้ด</h3>
+<pre><code class="language-c">volatile uint32_t interrupt_count = 0;  // ★ volatile — เปลี่ยนใน ISR
+
+void btn_isr(void) {
+    interrupt_count++;                   // นับ interrupt
+    digitalToggle(PC0);                  // สลับ LED
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    pinMode(PC0, PIN_MODE_OUTPUT);
+    pinMode(PC1, PIN_MODE_INPUT_PULLUP);
+    attachInterrupt(PC1, btn_isr, FALLING);
+    USART_Print("Interrupt Test Ready!\r\n");
+
+    while(1) {
+        // แสดงจำนวน interrupt ทุก 1 วิ (non-blocking)
+        static uint32_t last_print = 0;
+        if(ELAPSED_TIME(last_print, Get_CurrentMs()) >= 1000) {
+            last_print = Get_CurrentMs();
+            USART_Print("Count: ");
+            USART_PrintNum(interrupt_count);
+            USART_Print("\r\n");
+        }
+        IWDG_Feed();
+    }
+}</code></pre>
+<ul>
+<li><strong>volatile:</strong> บอกคอมไพเลอร์ว่าตัวแปรนี้เปลี่ยนค่าได้โดยไม่รู้ตัว (ISR) — ห้าม optimization ตัดทิ้ง</li>
+<li><strong>attachInterrupt(pin, cb, mode):</strong> RISING/FALLING/CHANGE — callback ถูกเรียกจาก ISR context — จำกัดเวลา</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li><strong>ห้ามใช้ Delay_Ms() หรือ USART_Print() ใน ISR!</strong> — Delay_Ms รอ SysTick แต่ ISR ขัดจังหวะ priority สูงกว่า →  deadlock</li>
+<li>ตัวแปรที่ใช้ร่วมกัน ISR↔main loop ต้อง <code>volatile</code> เสมอ</li>
+<li>ISR ควรสั้นที่สุด — ตั้ง flag แล้วให้ main loop จัดการ</li>
+</ul>
+</section>
+
+<section>
+<h2>ex04_GPIO_Multiple — Running Light 4 LED</h2>
+<h3>📖 แนวคิด</h3>
+<p>ใช้ pinModeMultiple ตั้งค่า 4 pins พร้อมกัน + digitalWriteMultiple เขียนพร้อมกัน — ทำ running light (ดวงละ 250ms วนไป)</p>
+
+<h3>🔌 วงจร</h3>
+<pre class="ascii-circuit">
+    PC0 ---R---|LED1|---GND
+    PC1 ---R---|LED2|---GND
+    PC2 ---R---|LED3|---GND
+    PC3 ---R---|LED4|---GND
+</pre>
+
+<h3>💻 โค้ด</h3>
+<pre><code class="language-c">uint8_t pins[] = {PC0, PC1, PC2, PC3};
+pinModeMultiple(pins, 4, PIN_MODE_OUTPUT);
+
+while(1) {
+    for(uint8_t i = 0; i < 4; i++) {
+        digitalWriteMultiple(pins, 4, 1 << i);  // เปิดทีละดวง
+        Delay_Ms(250);
+    }
+}</code></pre>
+</section>
+
+<section>
+<h2>ex05_Port_Operations — อ่าน/เขียนทั้งพอร์ต</h2>
+<h3>📖 แนวคิด</h3>
+<p>ใช้ portWrite อ่าน/เขียน 8-bit ทั้งพอร์ตพร้อมกัน — เร็วกว่าเขียนทีละ pin — ใช้อ่าน GPIOD (PD2-PD7 ที่เป็น input)</p>
+
+<h3>💻 โค้ด</h3>
+<pre><code class="language-c">// อ่านทั้งพอร์ต D
+uint8_t port_d = portRead(GPIOD);
+USART_Print("GPIOD: 0x");
+USART_PrintHex(port_d, 2);
+
+// เขียนทั้งพอร์ต C
+portWrite(GPIOC, 0b10101010);  // PC7=HIGH, PC6=LOW, PC5=HIGH, ...
+</code></pre>
+<ul>
+<li><strong>portRead:</strong> อ่าน 8-bit จากพอร์ต — รวมทุก pin — เหมาะกับ sensor 8-bit แบบขนาน</li>
+<li><strong>portWrite:</strong> เขียน 8-bit ทั้งพอร์ต — ส่งทีละ byte — เร็วกว่า digitalWrite 8 ครั้ง x3</li>
+</ul>
+</section>
+
+<section>
+<h2>ex06_Shift_Register — 74HC595 + Knight Rider</h2>
+<h3>📖 แนวคิด</h3>
+<p>ใช้ shiftOut ส่งข้อมูล 8-bit แบบ serial ไปยัง 74HC595 — ขยาย output จาก 3 pins → 8 outputs — ทำเอฟเฟกต์ LED วิ่งไปวิ่งมา (Knight Rider)</p>
+
+<h3>🔌 วงจร</h3>
+<pre class="ascii-circuit">
+    PC0 -- DATA (DS) -- 74HC595
+    PC1 -- CLK  (SH_CP)
+    PC2 -- LATCH (ST_CP)
+    74HC595 outputs Q0-Q7 -- R 220Ω -- LED 8 ดวง -- GND
+</pre>
+
+<h3>💻 โค้ด</h3>
+<pre><code class="language-c">#define DATA_PIN    PC0
+#define CLOCK_PIN   PC1
+#define LATCH_PIN   PC2
+
+pinMode(DATA_PIN, PIN_MODE_OUTPUT);
+pinMode(CLOCK_PIN, PIN_MODE_OUTPUT);
+pinMode(LATCH_PIN, PIN_MODE_OUTPUT);
+
+while(1) {
+    // Knight Rider effect — LED วิ่งไปมา
+    for(uint8_t i = 0; i < 8; i++) {
+        digitalWrite(LATCH_PIN, LOW);
+        shiftOut(DATA_PIN, CLOCK_PIN, LSBFIRST, 1 << i);
+        digitalWrite(LATCH_PIN, HIGH);
+        Delay_Ms(100);
+    }
+    for(uint8_t i = 6; i > 0; i--) {
+        digitalWrite(LATCH_PIN, LOW);
+        shiftOut(DATA_PIN, CLOCK_PIN, LSBFIRST, 1 << i);
+        digitalWrite(LATCH_PIN, HIGH);
+        Delay_Ms(100);
+    }
+}</code></pre>
+<ul>
+<li><strong>shiftOut:</strong> ส่ง 1 byte แบบ MSBFIRST หรือ LSBFIRST — bit ละ 1 CLK pulse — 74HC595 รับ serial → แปลงเป็น parallel</li>
+<li><strong>LATCH:</strong> เมื่อ LATCH HIGH → output เปลี่ยนพร้อมกัน — ตอน LATCH LOW ข้อมูลกำลัง shift ยังไม่แสดงผล</li>
+</ul>
+</section>
+
+<section>
+<h2>ex07_PulseIn_Measurement — วัดระยะ HC-SR04</h2>
+<h3>📖 แนวคิด</h3>
+<p>ใช้ pulseIn วัดความกว้าง pulse จาก HC-SR04 ultrasonic sensor — TRIG 10µs → sensor ส่ง 8 pulse 40kHz → ECHO pulse กว้างตามระยะ</p>
+
+<h3>💻 โค้ด</h3>
+<pre><code class="language-c">pinMode(TRIG, PIN_MODE_OUTPUT);
+pinMode(ECHO, PIN_MODE_INPUT);
+
+while(1) {
+    digitalWrite(TRIG, HIGH);     // ส่ง trigger pulse 10µs
+    Delay_Us(10);
+    digitalWrite(TRIG, LOW);
+
+    uint32_t duration = pulseIn(ECHO, HIGH, 30000);  // จับเวลา pulse (max 30ms)
+    if(duration) {
+        float distance = (float)duration * 0.0343f / 2.0f;  // sound speed / 2
+        USART_Print("Distance: ");
+        USART_PrintFloat(distance, 1);
+        USART_Print(" cm\r\n");
+    }
+    Delay_Ms(60);  // ต้องรอ > 60ms ระหว่างวัด
+}</code></pre>
+<ul>
+<li><strong>pulseIn:</strong> รอ HIGH → จับเวลาจนถึง LOW — timeout 30ms (ถ้าไม่มี echo) — blocking!</li>
+<li><strong>Distance = duration × 0.0343 / 2:</strong> duration = ไป-กลับ → หาร 2, เสียงเดินทาง 343m/s = 0.0343cm/µs</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>ECHO pin ให้ 5V — CH32V003 I/O ทน 5V ได้ แต่ถ้าไม่แน่ใจ ใช้ voltage divider 2:1</li>
+<li>pulseIn เป็น blocking — ถ้าต้อง non-blocking ใช้ interrupt + Timer_t</li>
+<li>วัดถี่เกิน 60ms → echo สะท้อนกัน → ค่าเพี้ยน</li>
+</ul>
+</section>
+
+<section>
+<h2>ex08_GPIO_Toggle — สลับ LED ด้วย digitalToggle</h2>
+<h3>📖 แนวคิด</h3>
+<p>digitalToggle สลับ HIGH↔LOW อัตโนมัติ — ไม่ต้องอ่านค่าปัจจุบัน + คำนวณเอง — เหมาะกับ LED blink</p>
+
+<h3>💻 โค้ด</h3>
+<pre><code class="language-c">while(1) {
+    digitalToggle(PC0);     // สลับ HIGH↔LOW
+    Delay_Ms(500);
+}</code></pre>
+<ul>
+<li><strong>digitalToggle:</strong> อ่าน ODR → XOR → เขียนกลับ — atomic บน CH32V003</li>
+</ul>
+</section>
+
+<section>
+<h2>ex09_Error_Handling — ตรวจสอบ Pin ก่อนใช้</h2>
+<h3>📖 แนวคิด</h3>
+<p>ใช้ IS_VALID_PIN / IS_ADC_PIN / IS_PWM_PIN เช็คก่อนใช้ pin — ป้องกัน SOP-8 ใช้ pin ที่ไม่มีอยู่จริง — ใช้ SOP-8 หรือเปลี่ยน PACKAGE เพื่อดูผลต่าง</p>
+
+<h3>💻 โค้ด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_SOP8     // เลือกแพ็กเกจเพื่อทดสอบ
+#include "SimpleHAL.h"
+
+static uint8_t safe_pinMode(uint8_t pin, GPIO_PinMode mode) {
+    if(!IS_VALID_PIN(pin)) {
+        USART_Print("  [SKIP] pinMode(");
+        USART_PrintNum(pin);
+        USART_Print(") — pin not available\r\n");
+        return 0;
+    }
+    pinMode(pin, mode);
+    return 1;
+}
+
+static uint8_t safe_analogRead(uint8_t pin) {
+    if(!IS_ADC_PIN(pin)) {
+        USART_Print("  [SKIP] analogRead(…)\r\n");
+        return 0;
+    }
+    uint16_t val = _analogRead_impl(pin);
+    USART_Print("  [OK] analogRead = ");
+    USART_PrintNum(val);
+    USART_Print("\r\n");
+    return val;
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+
+    USART_Print("SOP-8 Pin Validation:\r\n");
+    uint8_t test_pins[] = {PA1, PC0, PC1, PC2, PC4, PD6, PD1};
+    for(uint8_t i = 0; i < sizeof(test_pins); i++) {
+        safe_pinMode(test_pins[i], PIN_MODE_OUTPUT);
+    }
+    while(1) { IWDG_Feed(); }
+}</code></pre>
+<ul>
+<li><strong>IS_VALID_PIN(pin):</strong> compile-time macro — ถ้า pin ไม่มีในแพ็กเกจ → false (แต่ compile ผ่าน — runtime เงียบ)</li>
+<li><strong>IS_ADC_PIN(pin):</strong> เช็ค pin นั้นเป็น ADC input ได้ไหม — SOP-8 มี ADC: PA1, PC4, PD1, PD4, PD6</li>
+<li><strong>IS_PWM_PIN(pin):</strong> เช็ค pin นั้นมี PWM output ไหม — SOP-8 มี PWM: PA1, PA2, PD1, PD4, PD6</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>SOP-8 มีแค่ 6 pins: PA1, PA2, PC1, PC2, PC4, PD6 — PC0, PC3, PC5-PC7, PD0, PD2-PD5, PD7 ใช้ไม่ได้!</li>
+<li>pinMode/digitalWrite ผิด pin → เงียบไม่ทำงาน ไม่แจ้ง error — ต้องตรวจสอบเอง</li>
+<li>_analogRead_impl / _analogWrite_impl = runtime validation (ไม่ใช่ compile error เหมือน API ปกติ)</li>
+</ul>
+</section>
+
+<section>
+<h2>✏️ สรุป — 9 ตัวอย่าง GPIO</h2>
+<table>
+<tr><th>ตัวอย่าง</th><th>สอนอะไร</th><th>ฟังก์ชันหลัก</th></tr>
+<tr><td>ex01</td><td>LED blink พื้นฐาน</td><td>pinMode, digitalWrite, Delay_Ms</td></tr>
+<tr><td>ex02</td><td>ปุ่มกด + debounce</td><td>digitalRead, PIN_MODE_INPUT_PULLUP, ELAPSED_TIME</td></tr>
+<tr><td>ex03</td><td>External Interrupt</td><td>attachInterrupt, volatile, FALLING</td></tr>
+<tr><td>ex04</td><td>หลาย pins พร้อมกัน</td><td>pinModeMultiple, digitalWriteMultiple</td></tr>
+<tr><td>ex05</td><td>อ่าน/เขียนทั้งพอร์ต</td><td>portRead, portWrite</td></tr>
+<tr><td>ex06</td><td>74HC595 + shiftOut</td><td>shiftOut, LSBFIRST</td></tr>
+<tr><td>ex07</td><td>PulseIn วัดระยะ HC-SR04</td><td>pulseIn, Delay_Us</td></tr>
+<tr><td>ex08</td><td>digitalToggle</td><td>digitalToggle</td></tr>
+<tr><td>ex09</td><td>ตรวจสอบ pin</td><td>IS_VALID_PIN, IS_ADC_PIN, IS_PWM_PIN</td></tr>
+</table>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch19_debug.html">บทก่อน</a>
+    <a href="ch21_delay_timer.html">บทถัดไป →</a>
+</nav>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

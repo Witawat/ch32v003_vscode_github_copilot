@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>บทที่ 26: Workshop ADC — 6 ตัวอย่างจาก Examples — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch25_spi.html">บทก่อน</a>
+    <a href="ch27_flash.html">บทถัดไป →</a>
+</nav>
+
+<h1>บทที่ 26: Workshop ADC — 6 ตัวอย่างจาก Examples</h1>
+<span class="level intermediate">ระดับกลาง</span>
+
+<section class="flowchart">
+    <h2>🧥 เส้นทางเรียนรู้: 6 ตัวอย่าง ADC</h2>
+    <pre class="mermaid">
+flowchart LR
+    A["ex01: Simple AnalogRead"] --> B["ex02: MultiChannel Average"]
+    B --> C["ex03: Battery Monitor"]
+    C --> D["ex04: Compensated Read"]
+    D --> E["ex05: DMA Continuous ADC"]
+    E --> F["ex06: Voltage Average"]
+    style A fill:#dcfce7
+    style F fill:#fef3c7
+    </pre>
+</section>
+
+<section>
+<h2>ex01_Simple_AnalogRead — อ่านค่า Analog พื้นฐาน</h2>
+<h3>📖 แนวคิด</h3>
+<p>ตัวอย่างแรกของ ADC — ใช้ ADC_SimpleInit เริ่มต้น ADC ความละเอียด 12-bit (0-4095) อ่านค่าด้วย ADC_Read แล้วแปลงเป็นแรงดันจริงด้วย ToVoltage แสดงผลทาง USART</p>
+
+<h3>🔌 วงจร</h3>
+<pre class="ascii-circuit">
+    CH32V003              Potentiometer
+      PA1 ----[ADC_IN1]----┬---- VCC (3.3V)
+                           └---- GND
+    - หรือใช้สายจั้มต่อ PA1 กับจุดแบ่งแรงดันใด ๆ
+</pre>
+
+<h3>💻 โค้ด + อธิบายทีละบรรทัด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    ADC_SimpleInit();              // เริ่มต้น ADC 12-bit, Vref = 3.3V
+
+    while(1)
+    {
+        uint16_t raw = ADC_Read(PA1);        // อ่านค่า raw 0-4095
+        float voltage = ToVoltage(raw);      // แปลง raw → แรงดันจริง (V)
+        USART_Print("Raw: ");
+        USART_PrintNum(raw);
+        USART_Print("  Voltage: ");
+        USART_PrintFloat(voltage, 3);
+        USART_Print(" V\r\n");
+        Delay_Ms(500);
+    }
+}</code></pre>
+<ul>
+<li><strong>ADC_SimpleInit():</strong> กำหนด clock ADC = 6MHz, sample time = 7.5 cycles, continuous conversion mode — พร้อมใช้งานทันที</li>
+<li><strong>ADC_Read(pin):</strong> เลือก channel ตาม pin → เริ่ม conversion → รอจนเสร็จ → คืนค่า 12-bit (0-4095)</li>
+<li><strong>ToVoltage(raw):</strong> raw × (Vref / 4095) — Vref ปกติ = 3.3V (AVCC) — ใช้ ADC_GetVref() ดึงค่า Vref จริง</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>ADC pin ต้องเป็น input เท่านั้น — ห้ามตั้งเป็น output ก่อน ADC_Read</li>
+<li>แรงดัน input ต้องไม่เกิน AVCC (3.3V) — ถ้าเกินต้องใช้ voltage divider</li>
+<li>ADC ความละเอียด 12-bit — 1 LSB = 3.3V / 4095 ≈ 0.8mV</li>
+</ul>
+
+<h3>✅ ตรวจสอบก่อนรัน</h3>
+<ul>
+<li>PA1 ต่อกับสัญญาณ analog ที่ต้องการวัดหรือยัง?</li>
+<li>GND ของสัญญาณต่อร่วมกับ GND ของ MCU?</li>
+<li>สายสัญญาณไม่ยาวเกินไป? (>10cm อาจมี noise ใส่ capacitor 0.1µF)</li>
+</ul>
+</section>
+
+<section>
+<h2>ex02_MultiChannel_Average — อ่านหลาย Channel + ค่าเฉลี่ย</h2>
+<h3>📖 แนวคิด</h3>
+<p>อ่าน ADC จากหลายช่องสัญญาณ (PA1, PC4, PD6) — แต่ละ channel อ่านซ้ำ 16 ครั้งแล้วหาค่าเฉลี่ยด้วย ReadMultiple — แสดงผลเป็นเปอร์เซ็นต์ด้วย ToPercent — ใช้เทคนิค mitigate noise</p>
+
+<h3>🔌 วงจร</h3>
+<pre class="ascii-circuit">
+    PA1 ---- Potentiometer 1 (10kΩ)
+    PC4 ---- Potentiometer 2 (10kΩ)
+    PD6 ---- LDR + 10kΩ pull-down
+</pre>
+
+<h3>💻 โค้ด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+uint8_t adc_pins[] = {PA1, PC4, PD6};
+#define NUM_CH  3
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    ADC_SimpleInit();
+
+    while(1) {
+        for(uint8_t i = 0; i < NUM_CH; i++) {
+            uint16_t avg = ReadMultiple(adc_pins[i], 16);  // อ่าน 16 ครั้ง → ค่าเฉลี่ย
+            uint8_t pct = ToPercent(avg);                  // 0-4095 → 0-100%
+            USART_Print("CH");
+            USART_PrintNum(i + 1);
+            USART_Print(": ");
+            USART_PrintNum(avg);
+            USART_Print(" (");
+            USART_PrintNum(pct);
+            USART_Print("%)\r\n");
+        }
+        USART_Print("---\r\n");
+        Delay_Ms(500);
+        IWDG_Feed();
+    }
+}</code></pre>
+<ul>
+<li><strong>ReadMultiple(pin, samples):</strong> อ่าน ADC ซ้ำ samples ครั้ง — ตัดค่าสูงสุด/ต่ำสุดออก — คืนค่าเฉลี่ย — ช่วยลด noise จากสัญญาณ</li>
+<li><strong>ToPercent(raw):</strong> raw × 100 / 4095 — คืนค่า 0-100% เหมาะกับ sensor analog เช่น LDR, pot, temp sensor</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>ADC channel เปลี่ยนแต่ละครั้งต้องรอ sample time — ReadMultiple จัดการให้อัตโนมัติ</li>
+<li>สัญญาณ noise สูง → เพิ่มจำนวน samples (32, 64) → แต่ใช้เวลานานขึ้น</li>
+<li>ToPercent เหมาะกับ Vref เดียวกัน — ถ้า Vref เปลี่ยน ค่า % ก็เปลี่ยนตาม</li>
+</ul>
+</section>
+
+<section>
+<h2>ex03_Battery_Monitor — มอนิเตอร์แบตเตอรี่</h2>
+<h3>📖 แนวคิด</h3>
+<p>วัดแรงดันแบตเตอรี่ Li-Po ผ่าน voltage divider (2:1) — ใช้ ADC_GetVDD อ่าน Vref จริงจาก internal reference 1.2V (Vrefint) — คำนวณหาระดับแบตเตอรี่ด้วย GetBatteryPercent</p>
+
+<h3>🔌 วงจร</h3>
+<pre class="ascii-circuit">
+    Li-Po 4.2V           CH32V003
+      + ----[ 2kΩ ]----+---- PC4 (ADC_IN4)
+                       └----[ 1kΩ ]---- GND
+    Voltage divider: Vout = Vin × 1k / (2k + 1k) = Vin / 3
+    (4.2V → 1.4V, 3.7V → 1.23V, 3.0V → 1.0V)
+</pre>
+
+<h3>💻 โค้ด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+#define BAT_PIN        PC4
+#define DIVIDER_RATIO  3.0f    // R1+R2 / R2 = (2+1)/1
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    ADC_SimpleInit();
+
+    while(1) {
+        uint16_t vdd_mv = ADC_GetVDD();                      // อ่าน Vrefint → คำนวณ VDD จริง (mV)
+        uint16_t raw = ADC_Read(BAT_PIN);
+        float vbat = ToVoltage(raw) * DIVIDER_RATIO;         // แรงดันแบตจริง (V)
+        uint8_t pct = GetBatteryPercent(raw, DIVIDER_RATIO); // คำนวณ % อัตโนมัติ
+
+        USART_Print("VDD: ");
+        USART_PrintNum(vdd_mv);
+        USART_Print(" mV  Bat: ");
+        USART_PrintFloat(vbat, 2);
+        USART_Print(" V (");
+        USART_PrintNum(pct);
+        USART_Print("%)\r\n");
+        Delay_Ms(1000);
+        IWDG_Feed();
+    }
+}</code></pre>
+<ul>
+<li><strong>ADC_GetVDD():</strong> อ่าน Vrefint (internal 1.2V) → คำนวณ VDD จริงแบบย้อนกลับ — แก้ปัญหา Vref เพี้ยนจากแหล่งจ่าย</li>
+<li><strong>GetBatteryPercent(raw, ratio):</strong> คำนวณ % ตาม curve ของ Li-Po (4.2V=100%, 3.0V=0%) — รับ raw + ratio divider</li>
+<li><strong>voltage divider:</strong> ลดแรงดัน 4.2V → 1.4V (ไม่เกิน AVCC) — เลือก R ให้กระแสไหลน้อย (≈ 1-2mA)</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>แรงดันแบตเตอรี่สูงสุดห้ามเกิน AVCC (3.3V) ที่ขา MCU — ต้องใช้ voltage divider เสมอ!</li>
+<li>R divider มีผลต่อ precision — tolerance 1% ดีกว่า 5% — ค่า Divider_RATIO ต้องตรงกับ R จริง</li>
+<li>Li-Po 3.0V = cutoff — ถ้าต่ำกว่านี้ battery management ควรตัดวงจร</li>
+</ul>
+</section>
+
+<section>
+<h2>ex04_Compensated_Read — อ่านค่าแบบชดเชย Vref</h2>
+<h3>📖 แนวคิด</h3>
+<p>ใช้ ReadVrefInt อ่านค่า Vrefint (internal 1.2V) เพื่อคำนวณ Vref จริง — จากนั้นใช้ ReadVoltageCompensated อ่านแรงดันแบบชดเชย — ให้ค่าถูกต้องแม้ VDD เปลี่ยนแปลง เช่น จากแบตเตอรี่</p>
+
+<h3>💻 โค้ด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    ADC_SimpleInit();
+
+    while(1) {
+        uint16_t vrefint_raw = ReadVrefInt();                     // อ่าน raw ของ Vrefint (คาด ~1480)
+        float actual_vref = 1.2f * 4095.0f / (float)vrefint_raw;  // คำนวณ Vref จริง (V)
+
+        float v_comp = ReadVoltageCompensated(PA1);               // อ่าน voltage ชดเชยแล้ว (V)
+
+        USART_Print("Vrefint raw: ");
+        USART_PrintNum(vrefint_raw);
+        USART_Print("  Actual Vref: ");
+        USART_PrintFloat(actual_vref, 3);
+        USART_Print(" V  PA1: ");
+        USART_PrintFloat(v_comp, 3);
+        USART_Print(" V\r\n");
+        Delay_Ms(500);
+        IWDG_Feed();
+    }
+}</code></pre>
+<ul>
+<li><strong>ReadVrefInt():</strong> อ่าน channel Vrefint ภายใน — ค่า raw ประมาณ 1480 (เมื่อ VDD=3.3V) — ใช้ calibrate Vref</li>
+<li><strong>ReadVoltageCompensated(pin):</strong> อ่าน ADC + ชดเชยด้วย Vrefint จริง — ได้แรงดันที่แม่นยำโดยไม่ต้อง calibrate ล่วงหน้า</li>
+<li><strong>actual_vref = 1.2 × 4095 / vrefint_raw:</strong> ถ้า vrefint_raw = 1500 → actual_vref = 3.276V (ต่างจาก 3.3V ~0.7%)</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>Vrefint ต้องอ่านค่าเฉลี่ยหลายครั้ง (ReadMultiple) เพื่อความแม่นยำ — ตัวอย่างอย่างน้อย 16 ครั้ง</li>
+<li>Vrefint คงที่ในอุณหภูมิคงที่ — ถ้าอุณหภูมิเปลี่ยน ค่า drift ~0.01%/°C</li>
+<li>ReadVoltageCompensated ใช้เวลามากกว่า ADC_Read ปกติเล็กน้อยเพราะต้องอ่าน Vrefint ด้วย</li>
+</ul>
+</section>
+
+<section>
+<h2>ex05_DMA_Continuous_ADC — ADC ต่อเนื่องด้วย DMA</h2>
+<h3>📖 แนวคิด</h3>
+<p>ใช้ DMA (Direct Memory Access) อ่าน ADC แบบต่อเนื่องโดยไม่ต้อง CPU interrupt — ใช้ DMA_analogReadStart เริ่ม DMA และ DMA_analogReadAverage อ่านค่าเฉลี่ยจาก buffer — ลดภาระ CPU สูงสุด</p>
+
+<h3>💻 โค้ด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+#define ADC_PIN     PA1
+#define SAMPLE_BUF  64      // 64 samples ใน DMA buffer
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    ADC_SimpleInit();
+
+    DMA_analogReadStart(ADC_PIN, SAMPLE_BUF);   // เริ่ม DMA — ADC อ่านต่อเนื่อง 64 samples loop
+
+    while(1) {
+        uint16_t avg = DMA_analogReadAverage();   // อ่านค่าเฉลี่ยจาก DMA buffer ล่าสุด
+        float v = ToVoltage(avg);
+        USART_Print("DMA Avg: ");
+        USART_PrintNum(avg);
+        USART_Print("  ");
+        USART_PrintFloat(v, 3);
+        USART_Print(" V\r\n");
+        Delay_Ms(100);
+        IWDG_Feed();
+    }
+}</code></pre>
+<ul>
+<li><strong>DMA_analogReadStart(pin, bufSize):</strong> ตั้งค่า ADC continuous mode + DMA circular buffer — ADC ทำงานตลอดเวลาไม่ต้อง CPU สั่ง</li>
+<li><strong>DMA_analogReadAverage():</strong> อ่านค่าเฉลี่ยของ buffer ปัจจุบัน — DMA อัปเดต buffer ต่อเนื่อง — CPU แค่ดึงค่า</li>
+<li><strong>ข้อดี:</strong> ADC อ่าน 64 samples / วน loop — CPU ไม่เสียเวลารอ — ใช้กับ sensor ที่ต้องการอ่านถี่ ๆ</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>DMA ใช้ buffer ใน RAM — bufSize ยิ่งมากยิ่งแม่นยำแต่ใช้ RAM มากขึ้น (64 sample × 2 byte = 128 bytes)</li>
+<li>ห้ามเปลี่ยน pin ขณะ DMA ทำงาน — ต้อง DMA_analogReadStop() ก่อนเปลี่ยน</li>
+<li>DMA และ ADC ใช้ clock เดียวกัน — ถ้า ADC clock เปลี่ยน DMA ก็เปลี่ยนตาม</li>
+</ul>
+</section>
+
+<section>
+<h2>ex06_Voltage_Average — ค่าแรงดันเฉลี่ยแบบปรับได้</h2>
+<h3>📖 แนวคิด</h3>
+<p>ใช้ ReadVoltage อ่านแรงดันเป็น float โดยตรง — และ ReadAverage ที่ให้ปรับจำนวน samples ได้ — เหมาะกับงานที่ต้องการสมดุลระหว่างความเร็วและความแม่นยำ</p>
+
+<h3>💻 โค้ด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    ADC_SimpleInit();
+
+    while(1) {
+        float v_fast = ReadVoltage(PA1, 1);      // อ่าน 1 ครั้ง — เร็วที่สุด (~12µs)
+        float v_avg4 = ReadVoltage(PA1, 4);      // อ่าน 4 ครั้งเฉลี่ย — เร็วพอควร
+        float v_avg64 = ReadAverage(PA1, 64);    // อ่าน 64 ครั้งเฉลี่ย — แม่นยำที่สุด
+
+        USART_Print("Fast: ");
+        USART_PrintFloat(v_fast, 3);
+        USART_Print("  Avg4: ");
+        USART_PrintFloat(v_avg4, 3);
+        USART_Print("  Avg64: ");
+        USART_PrintFloat(v_avg64, 3);
+        USART_Print(" V\r\n");
+        Delay_Ms(200);
+        IWDG_Feed();
+    }
+}</code></pre>
+<ul>
+<li><strong>ReadVoltage(pin, samples):</strong> อ่าน ADC + คำนวณแรงดัน (V) — samples = 1-255 — คืน float</li>
+<li><strong>ReadAverage(pin, samples):</strong> อ่านและเฉลี่ย samples ครั้ง — ตัด outlier — คืน float</li>
+<li><strong>Trade-off:</strong> 1 sample ≈ 12µs (ADC clock 6MHz) → 64 samples ≈ 768µs + average time</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>ยิ่ง samples มาก → กัน noise ได้ดีขึ้น → แต่ใช้เวลาและกระแสไฟมากขึ้น</li>
+<li>อ่าน 1 sample อาจมี noise ±3 LSB — อ่าน 64 samples ลดเหลือ ±1 LSB</li>
+<li>ถ้าต้องการ non-blocking ให้ใช้ DMA_analogReadStart แทน — ReadVoltage เป็น blocking</li>
+</ul>
+</section>
+
+<section>
+<h2>✏️ สรุป — 6 ตัวอย่าง ADC</h2>
+<table>
+<tr><th>ตัวอย่าง</th><th>สอนอะไร</th><th>ฟังก์ชันหลัก</th></tr>
+<tr><td>ex01</td><td>อ่าน ADC พื้นฐาน</td><td>ADC_SimpleInit, ADC_Read, ToVoltage</td></tr>
+<tr><td>ex02</td><td>หลาย channel + ค่าเฉลี่ย</td><td>ReadMultiple, ToPercent</td></tr>
+<tr><td>ex03</td><td>มอนิเตอร์แบตเตอรี่</td><td>ADC_GetVDD, GetBatteryPercent, voltage divider</td></tr>
+<tr><td>ex04</td><td>อ่านแบบชดเชย Vref</td><td>ReadVrefInt, ReadVoltageCompensated</td></tr>
+<tr><td>ex05</td><td>DMA อ่านต่อเนื่อง</td><td>DMA_analogReadStart, DMA_analogReadAverage</td></tr>
+<tr><td>ex06</td><td>แรงดันเฉลี่ยปรับ samples ได้</td><td>ReadVoltage, ReadAverage</td></tr>
+</table>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch25_spi.html">บทก่อน</a>
+    <a href="ch27_flash.html">บทถัดไป →</a>
+</nav>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

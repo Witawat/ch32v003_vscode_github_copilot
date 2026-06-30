@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>บทที่ 29: Workshop 1-Wire — 4 ตัวอย่างจาก Examples — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch28_watchdog.html">บทก่อน</a>
+    <a href="ch30_dma.html">บทถัดไป →</a>
+</nav>
+
+<h1>บทที่ 29: Workshop 1-Wire — 4 ตัวอย่างจาก Examples</h1>
+<span class="level intermediate">ระดับกลาง</span>
+
+<section class="flowchart">
+    <h2>🧥 เส้นทางเรียนรู้: 4 ตัวอย่าง 1-Wire</h2>
+    <pre class="mermaid">
+flowchart LR
+    A["ex01: DS18B20 Temperature"] --> B["ex02: ROM Search"]
+    B --> C["ex03: Multi Device Select"]
+    C --> D["ex04: MatchROM"]
+    style A fill:#dcfce7
+    style D fill:#fef3c7
+    </pre>
+</section>
+
+<section>
+<h2>ex01_DS18B20_Temperature — อ่านอุณหภูมิจาก DS18B20</h2>
+<h3>📖 แนวคิด</h3>
+<p>DS18B20 เป็นเซ็นเซอร์อุณหภูมิแบบ 1-Wire — สื่อสารด้วยโปรโตคอลเฉพาะ: Reset → SkipROM → Convert → Read Scratchpad ใช้ OneWire_Init, OneWire_WriteByte, OneWire_ReadByte</p>
+
+<h3>🔌 วงจร</h3>
+<pre class="ascii-circuit">
+    CH32V003              DS18B20
+    PC0 ----[4.7kΩ]----+-- DQ (ขา 2)
+                         |
+                        VDD (3.3V)
+                       GND
+    - ต้องมี R pull-up 4.7kΩ เสมอ — 1-Wire ใช้ open-drain
+</pre>
+
+<h3>💻 โค้ด + อธิบายทีละบรรทัด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+#define ONE_WIRE_PIN  PC0
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+
+    OneWire_Init(ONE_WIRE_PIN);                    // ตั้งค่า pin เป็น 1-Wire
+
+    while(1)
+    {
+        if(OneWire_Reset() == 0) {                  // ส่ง reset pulse — รอ presence
+            OneWire_WriteByte(0xCC);                // SkipROM — ข้ามการระบุ ROM
+            OneWire_WriteByte(0x44);                // เริ่ม Convert T
+            Delay_Ms(750);                           // รอ conversion เสร็จ (~750ms)
+
+            OneWire_Reset();
+            OneWire_WriteByte(0xCC);                // SkipROM อีกครั้ง
+            OneWire_WriteByte(0xBE);                // Read Scratchpad
+
+            uint8_t lsb = OneWire_ReadByte();       // อ่าน byte ต่ำ
+            uint8_t msb = OneWire_ReadByte();       // อ่าน byte สูง
+            int16_t raw = (msb << 8) | lsb;
+            float temp = raw * 0.0625f;              // DS18B20: 1 LSB = 0.0625°C
+
+            USART_Print("Temperature: ");
+            USART_PrintFloat(temp, 2);
+            USART_Print(" °C\r\n");
+        }
+        Delay_Ms(1000);
+    }
+}</code></pre>
+<ul>
+<li><strong>OneWire_Init(pin):</strong> ตั้ง pin เป็น open-drain output พร้อม pull-up 4.7kΩ ภายนอก</li>
+<li><strong>OneWire_Reset():</strong> ดึง LOW 480µs → ปล่อย → รอ presence pulse จาก slave (60-240µs) — คืน 0 ถ้าเจออุปกรณ์</li>
+<li><strong>OneWire_WriteByte(byte):</strong> ส่ง 1 byte แบบ serial 1-Wire — bit ละ time slot ~60µs</li>
+<li><strong>OneWire_ReadByte():</strong> อ่าน 1 byte — MCU ดึง LOW 1µs → ปล่อย → อ่าน bit ที่ slave ส่ง</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>ต้องมี R pull-up 4.7kΩ — 1-Wire ใช้ open-drain ขาด R = สื่อสารไม่ได้</li>
+<li>Delay_Ms(750) ระหว่าง Convert — DS18B20 ใช้เวลาแปลงสูงสุด 750ms (12-bit resolution)</li>
+<li>ถ้าไม่เจอ DS18B20 (OneWire_Reset != 0) — เช็คสาย + pull-up + pin</li>
+</ul>
+
+<h3>✅ ตรวจสอบก่อนรัน</h3>
+<ul>
+<li>DS18B20 ต่อ VDD 3.3V? DQ มี R 4.7kΩ ขึ้น VDD?</li>
+<li>ลอง scan ด้วย ex02 เพื่อดูว่าเจอ ROM address ไหม</li>
+</ul>
+</section>
+
+<section>
+<h2>ex02_ROM_Search — ค้นหาอุปกรณ์ 1-Wire ทั้งหมด</h2>
+<h3>📖 แนวคิด</h3>
+<p>ใช้ OneWire_Search เพื่อค้นหา ROM address ของอุปกรณ์ 1-Wire ทุกตัวบนบัส — ใช้ GetAddress ดึง address ที่พบ — ตรวจสอบ CRC8 เพื่อความถูกต้อง</p>
+
+<h3>💻 โค้ด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+#define ONE_WIRE_PIN  PC0
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+
+    OneWire_Init(ONE_WIRE_PIN);
+
+    OneWire_Reset();                                 // รีเซ็ตบัส + รอ presence
+
+    // ค้นหาครั้งแรก — ต้องส่ง ROM command ก่อน
+    OneWire_WriteByte(0xF0);                         // SEARCH ROM
+    uint8_t addr[8];
+    if(OneWire_Search(addr)) {                       // วนค้นหา address
+        USART_Print("Found device:\r\n");
+        for(uint8_t i = 0; i < 8; i++) {
+            USART_PrintHex(addr[i], 2);
+            USART_Print(" ");
+        }
+        USART_Print("\r\n");
+
+        if(OneWire_CRC8(addr, 7) == addr[7]) {      // ตรวจ CRC
+            USART_Print("CRC8 OK\r\n");
+        } else {
+            USART_Print("CRC8 ERROR!\r\n");
+        }
+    } else {
+        USART_Print("No device found\r\n");
+    }
+
+    while(1) { IWDG_Feed(); }
+}</code></pre>
+<ul>
+<li><strong>OneWire_Search(buffer):</strong> อัลกอริทึม ROM search — ส่ง 0xF0 (SEARCH ROM) → อ่าน bit พร้อม inversion → หา ROM ตัวแรก</li>
+<li><strong>OneWire_CRC8(data, len):</strong> คำนวณ CRC-8/Maxim (x⁸ + x⁵ + x⁴ + 1) — ตรวจสอบ byte สุดท้ายของ ROM</li>
+<li><strong>0xF0 SEARCH ROM:</strong> สั่งให้อุปกรณ์ทุกตัวส่ง ROM address — ถ้ามีหลายตัวจะชนกัน ต้องใช้ search algorithm</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>มีหลายอุปกรณ์บนบัส — 1-Wire ใช้ line arbitration — ต้อง SEARCH ROM เพื่อแยก address</li>
+<li>OneWire_Search ค้นหาเจอทีละ device — ถ้าหลายตัว เรียกซ้ำจนกว่าคืน 0</li>
+<li>CRC8 จำเป็น — ROM address ผิด 1 bit = เลือกผิดอุปกรณ์</li>
+</ul>
+</section>
+
+<section>
+<h2>ex03_Multi_Device_Select — เลือกอุปกรณ์หลายตัว</h2>
+<h3>📖 แนวคิด</h3>
+<p>ใช้ OneWire_Select + matchROM เพื่อเลือกอุปกรณ์ 1-Wire ตัวใดตัวหนึ่งจากหลายตัวบนบัส — ส่ง ROM address 8 byte ตามด้วยคำสั่ง</p>
+
+<h3>💻 โค้ด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+#define ONE_WIRE_PIN  PC0
+
+// สมมติ ROM address ที่ค้นพบจาก ex02
+uint8_t sensor1[8] = {0x28, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x12};
+uint8_t sensor2[8] = {0x28, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x98};
+
+static float read_temperature(uint8_t *rom)
+{
+    OneWire_Reset();
+    OneWire_Select(rom);                             // MATCH ROM — เลือก device
+    OneWire_WriteByte(0x44);                         // Convert T
+
+    Delay_Ms(750);
+
+    OneWire_Reset();
+    OneWire_Select(rom);
+    OneWire_WriteByte(0xBE);                         // Read Scratchpad
+
+    uint8_t lsb = OneWire_ReadByte();
+    uint8_t msb = OneWire_ReadByte();
+    int16_t raw = (msb << 8) | lsb;
+    return raw * 0.0625f;
+}
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    OneWire_Init(ONE_WIRE_PIN);
+
+    while(1)
+    {
+        float t1 = read_temperature(sensor1);
+        float t2 = read_temperature(sensor2);
+        USART_Print("Sensor1: "); USART_PrintFloat(t1, 2);
+        USART_Print(" | Sensor2: "); USART_PrintFloat(t2, 2);
+        USART_Print(" °C\r\n");
+        Delay_Ms(1000);
+    }
+}</code></pre>
+<ul>
+<li><strong>OneWire_Select(rom):</strong> ส่ง 0x55 (MATCH ROM) ตามด้วย ROM address 8 byte — เฉพาะ device ที่ match เท่านั้นตอบสนอง</li>
+<li><strong>matchROM:</strong> ส่ง ROM address ทีละ byte — อุปกรณ์ที่ตรงกันจะยอมรับคำสั่งถัดไป</li>
+</ul>
+</section>
+
+<section>
+<h2>ex04_MatchROM — ค้นหา + MatchROM ทีละตัว</h2>
+<h3>📖 แนวคิด</h3>
+<p>รวม OneWire_Search กับ OneWire_Select — ค้นหาอุปกรณ์ก่อน แล้ว MatchROM ทีละตัวเพื่ออ่านค่า — รองรับหลายอุปกรณ์อัตโนมัติ</p>
+
+<h3>💻 โค้ด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+#define ONE_WIRE_PIN  PC0
+#define MAX_DEVICES   10
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    OneWire_Init(ONE_WIRE_PIN);
+
+    // ค้นหาอุปกรณ์ทั้งหมด
+    uint8_t devices[MAX_DEVICES][8];
+    uint8_t count = 0;
+
+    OneWire_Reset();
+    while(OneWire_Search(devices[count]) && count < MAX_DEVICES) {
+        if(OneWire_CRC8(devices[count], 7) != devices[count][7]) {
+            USART_Print("CRC fail on device ");
+            USART_PrintNum(count);
+            USART_Print("\r\n");
+            continue;
+        }
+        count++;
+    }
+    USART_Print("Found ");
+    USART_PrintNum(count);
+    USART_Print(" device(s)\r\n");
+
+    while(1)
+    {
+        for(uint8_t i = 0; i < count; i++) {
+            OneWire_Reset();
+            OneWire_Select(devices[i]);              // MatchROM
+            OneWire_WriteByte(0x44);
+            Delay_Ms(750);
+
+            OneWire_Reset();
+            OneWire_Select(devices[i]);
+            OneWire_WriteByte(0xBE);
+
+            uint8_t lsb = OneWire_ReadByte();
+            uint8_t msb = OneWire_ReadByte();
+            int16_t raw = (msb << 8) | lsb;
+
+            USART_Print("Dev");
+            USART_PrintNum(i);
+            USART_Print(": ");
+            USART_PrintFloat(raw * 0.0625f, 2);
+            USART_Print(" °C\r\n");
+        }
+        Delay_Ms(1000);
+    }
+}</code></pre>
+<ul>
+<li><strong>OneWire_Search ใน loop:</strong> เรียกซ้ำ — แต่ละครั้งเจอ 1 address — คืน 0 เมื่อหาครบทุกตัว</li>
+<li><strong>OneWire_Select + ROM:</strong> ใช้ 0x55 MATCH ROM — ระบุ device ที่จะคุยด้วย</li>
+<li><strong>ค้นหา + MatchROM = โซลูชันสมบูรณ์:</strong> ไม่ต้อง hardcode ROM address — รองรับการเปลี่ยนอุปกรณ์</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>1-Wire timing เป็น µs — ถ้า interrupt มาขัด timing จะเพี้ยน — ปิด global interrupt ขณะสื่อสารหรือใช้ critical section</li>
+<li>OneWire_Search ใช้เวลานานถ้ามีหลายอุปกรณ์ — แต่ละ bit ใช้ 2 time slots ~120µs × 64 bit × จำนวนรอบ</li>
+<li>ถ้าไม่มีอุปกรณ์ — OneWire_Search คืน 0 ทันที</li>
+</ul>
+</section>
+
+<section>
+<h2>✏️ สรุป — 4 ตัวอย่าง 1-Wire</h2>
+<table>
+<tr><th>ตัวอย่าง</th><th>สอนอะไร</th><th>ฟังก์ชันหลัก</th></tr>
+<tr><td>ex01</td><td>อ่านอุณหภูมิ DS18B20</td><td>OneWire_Init, Reset, SkipROM, WriteByte, ReadByte</td></tr>
+<tr><td>ex02</td><td>ค้นหา ROM address</td><td>OneWire_Search, CRC8</td></tr>
+<tr><td>ex03</td><td>เลือกอุปกรณ์หลายตัว</td><td>OneWire_Select, matchROM</td></tr>
+<tr><td>ex04</td><td>Search + MatchROM</td><td>OneWire_Search + OneWire_Select รวมกัน</td></tr>
+</table>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch28_watchdog.html">บทก่อน</a>
+    <a href="ch30_dma.html">บทถัดไป →</a>
+</nav>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

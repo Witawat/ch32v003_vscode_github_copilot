@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>บทที่ 33: Workshop Integrated Applications — 7 ตัวอย่างจาก Examples — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch32_opamp.html">บทก่อน</a>
+    <a href="ch34_arduino_api.html">บทถัดไป →</a>
+</nav>
+
+<h1>บทที่ 33: Workshop Integrated Applications — 7 ตัวอย่างจาก Examples</h1>
+<span class="level expert">ระดับผู้เชี่ยวชาญ</span>
+
+<section class="flowchart">
+    <h2>🧭 เส้นทางเรียนรู้: 7 ตัวอย่าง Integrated Applications</h2>
+    <pre class="mermaid">
+flowchart LR
+    A["ex01: Weather Station"] --> B["ex02: LED Controller USART"]
+    B --> C["ex03: Data Logger Flash"]
+    C --> D["ex04: Smart Countdown"]
+    D --> E["ex05: Sensor Hub DMA"]
+    E --> F["ex06: SOP8 Maximized"]
+    F --> G["ex07: Battery Data Logger"]
+    style A fill:#dcfce7
+    style G fill:#fef3c7
+    </pre>
+</section>
+
+<section>
+<h2>ex01_Weather_Station — DS18B20 + BMP280 + I2C + 1Wire</h2>
+<h3>📖 แนวคิด</h3>
+<p>สถานีวัดอากาศอ่านอุณหภูมิจาก DS18B20 (1-Wire) และ BMP280 (I2C) แสดงผลทาง USART — รวม 2 โปรโตคอลต่างชนิดในโปรแกรมเดียว — อ่านค่า temperature, pressure, humidity</p>
+
+<h3>🔌 วงจร</h3>
+<pre class="ascii-circuit">
+    CH32V003              BMP280
+    PC1 (SCL) ----------- SCL
+    PC2 (SDA) ----------- SDA
+    VDD ----------------- VDD
+    GND ----------------- GND
+
+    CH32V003              DS18B20
+    PD5 -------/\/\/\---- DATA
+              4.7kΩ pull-up
+    VDD ----------------- VDD
+    GND ----------------- GND
+</pre>
+
+<h3>💻 โค้ด + อธิบายทีละบรรทัด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+
+    I2C_Init(I2C_SPEED_STANDARD);
+    BMP280_Init();
+    DS18B20_Init(PD5);
+
+    USART_Print("Weather Station Ready!\r\n");
+
+    while(1)
+    {
+        float temp_ds = DS18B20_GetTemp(PD5);
+        float temp_bmp, press;
+        BMP280_ReadAll(&amp;temp_bmp, &amp;press);
+
+        USART_Print("DS18B20: ");
+        USART_PrintFloat(temp_ds, 1);
+        USART_Print("C | BMP280: ");
+        USART_PrintFloat(temp_bmp, 1);
+        USART_Print("C ");
+        USART_PrintFloat(press / 100.0f, 1);
+        USART_Print(" hPa\r\n");
+        Delay_Ms(2000);
+    }
+}</code></pre>
+<ul>
+<li><strong>DS18B20_Init(pin):</strong> เริ่มต้น 1-Wire บน pin ที่กำหนด — ใช้ pull-up 4.7kΩ ภายนอก</li>
+<li><strong>BMP280_Init():</strong> เริ่มต้น BMP280 ผ่าน I2C — ค่าเริ่มต้น 0x76 หาก SDO LOW, 0x77 หาก HIGH</li>
+<li><strong>BMP280_ReadAll:</strong> อ่านทั้งอุณหภูมิและความดัน — คืนค่าเป็น float — ความดันใน Pa</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>BMP280 I2C address 0x76 หรือ 0x77 — เช็ค SDO pin — ถ้าขัดแย้งกับ device อื่น เปลี่ยน address</li>
+<li>DS18B20 ต้องใช้ pull-up 4.7kΩ ที่ DATA — ไม่ใช้ = สื่อสารไม่ได้</li>
+<li>1-Wire timing ขึ้นกับ SystemCoreClock — ต้องเรียก SystemCoreClockUpdate()</li>
+</ul>
+
+<h3>✅ ตรวจสอบก่อนรัน</h3>
+<ul>
+<li>Pull-up 4.7kΩ ที่ DS18B20 DATA และ BMP280 SCL/SDA</li>
+<li>VDD 3.3V สำหรับ sensor ทั้งคู่ — BMP280 ทน 3.3V เท่านั้น</li>
+<li>Serial monitor 115200 baud</li>
+</ul>
+</section>
+
+<section>
+<h2>ex02_LED_Controller_USART — คำสั่ง USART + PWM + Stopwatch</h2>
+<h3>📖 แนวคิด</h3>
+<p>ควบคุม LED brightness ด้วย PWM ผ่านคำสั่ง USART — ป้อนตัวเลข 0-100 เพื่อปรับ duty cycle — ใช้ Stopwatch จับเวลาทำงาน — แสดงสถานะย้อนกลับ</p>
+
+<h3>🔌 วงจร</h3>
+<pre class="ascii-circuit">
+    CH32V003              LED
+    PA2 (PWM) --/\/\/\---|>|--- GND
+              220 Ohm
+    PD5(TX) ---- USB-to-Serial
+    PD6(RX) ---- USB-to-Serial
+</pre>
+
+<h3>💻 โค้ด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+
+    pinMode(PA2, PIN_MODE_OUTPUT);
+    PWM_Init(PA2, 1000, 0);    // 1kHz, duty 0%
+
+    USART_Print("LED Controller: enter 0-100\r\n");
+    Stopwatch_Start();
+
+    while(1) {
+        if(USART_Available()) {
+            uint8_t cmd = USART_Read();
+            if(cmd >= '0' &amp;&amp; cmd <= '9') {
+                uint8_t duty = cmd - '0';
+                if(duty > 100) duty = 100;
+                PWM_SetDuty(PA2, duty);
+                USART_Print("Duty: ");
+                USART_PrintNum(duty);
+                USART_Print("%\r\n");
+            }
+        }
+        static uint32_t last_report = 0;
+        if(ELAPSED_TIME(last_report, Get_CurrentMs()) >= 10000) {
+            last_report = Get_CurrentMs();
+            USART_Print("Uptime: ");
+            USART_PrintNum(Stopwatch_GetMs() / 1000);
+            USART_Print("s\r\n");
+        }
+    }
+}</code></pre>
+<ul>
+<li><strong>PWM_Init(pin, freq_hz, duty_percent):</strong> เริ่มต้น PWM — freq 1kHz — duty 0-100%</li>
+<li><strong>Stopwatch_Start / Stopwatch_GetMs:</strong> ตัวจับเวลาแบบ 32-bit — ไม่ overflow จนกว่า 49 วัน</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>USART_Read อ่าน 1 byte — ถ้าส่งเลข 2 หลัก (เช่น 99) ต้องสะสม buffer เอง</li>
+<li>PWM resolution ขึ้นกับ frequency — 1kHz ที่ 8-bit = 250 steps</li>
+<li>LED ต้องมี R 220Ω — PWM ที่ 100% = ไฟเต็ม 3.3V ผ่าน LED</li>
+</ul>
+</section>
+
+<section>
+<h2>ex03_Data_Logger_Flash — ADC + Flash + Stopwatch + CRC32</h2>
+<h3>📖 แนวคิด</h3>
+<p>บันทึกข้อมูล ADC ลง Flash ภายในทุก 1 วินาที — ใช้ Stopwatch กำกับเวลา — CRC32 ตรวจสอบความถูกต้องของข้อมูล — อ่านข้อมูลย้อนหลังทาง USART</p>
+
+<h3>💻 โค้ด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+#define LOG_PAGE      31
+#define SAMPLE_COUNT  64
+
+typedef struct {
+    uint32_t timestamp;
+    uint16_t adc_value;
+    uint32_t crc;
+} LogEntry;
+
+LogEntry buffer[SAMPLE_COUNT];
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    ADC_SimpleInit();
+
+    Flash_ErasePage(LOG_PAGE);
+    Stopwatch_Start();
+
+    for(uint8_t i = 0; i < SAMPLE_COUNT; i++) {
+        buffer[i].timestamp = Stopwatch_GetMs();
+        buffer[i].adc_value = ADC_Read(0);
+        buffer[i].crc = CRC32_Calc(&amp;buffer[i], sizeof(LogEntry) - 4);
+        Flash_WritePage(LOG_PAGE, (uint8_t*)&amp;buffer[i], sizeof(LogEntry), i * sizeof(LogEntry));
+        Delay_Ms(1000);
+    }
+
+    USART_Print("Logged ");
+    USART_PrintNum(SAMPLE_COUNT);
+    USART_Print(" samples\r\n");
+    while(1) { IWDG_Feed(); }
+}</code></pre>
+<ul>
+<li><strong>Flash_ErasePage(page):</strong> ลบหน้า Flash ก่อนเขียน — Flash เขียนทับข้อมูลเดิมไม่ได้ ต้องลบก่อน</li>
+<li><strong>CRC32_Calc:</strong> คำนวณ CRC32 สำหรับตรวจสอบข้อมูล — กันข้อมูลเสียหายจาก Flash</li>
+<li><strong>Flash_WritePage:</strong> เขียนข้อมูล 64-byte ลง Flash — ต้อง align</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>Flash endurance ~10,000 ครั้ง — อย่า log ถี่เกินไปใน production</li>
+<li>Erase page ใช้เวลา ~20ms — ไม่ควร interrupt ขณะ erase</li>
+<li>Flash เขียนทีละ 64-byte (1 page) — ต้อง align address</li>
+</ul>
+</section>
+
+<section>
+<h2>ex04_Smart_Countdown — Countdown + I2C OLED + PWM Buzzer + Interrupt</h2>
+<h3>📖 แนวคิด</h3>
+<p>นาฬิกานับถอยหลัง — แสดงบน I2C OLED — เมื่อหมดเวลาสั่ง PWM Buzzer ส่งเสียง — กดปุ่ม interrupt เพื่อรีเซ็ต — รวมหลาย periferals ทำงานร่วมกัน</p>
+
+<h3>💻 โค้ด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+volatile uint8_t reset_flag = 0;
+
+void btn_isr(void) { reset_flag = 1; }
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    I2C_Init(I2C_SPEED_FAST);
+    OLED_Init(128, 64);
+    PWM_Init(PA2, 2000, 0);      // Buzzer 2kHz
+    pinMode(PC1, PIN_MODE_INPUT_PULLUP);
+    attachInterrupt(PC1, btn_isr, FALLING);
+
+    uint32_t countdown = 10000;   // 10 seconds
+
+    while(1) {
+        if(reset_flag) {
+            reset_flag = 0;
+            countdown = 10000;
+            PWM_SetDuty(PA2, 0);  // หยุด buzzer
+            USART_Print("Reset!\r\n");
+        }
+
+        OLED_Clear();
+        OLED_SetCursor(0, 0);
+        OLED_Print("Time: ");
+        OLED_PrintNum(countdown / 1000);
+        OLED_Print("s");
+
+        if(countdown == 0) {
+            PWM_SetDuty(PA2, 50);  // ส่งเสียง 50% duty
+            OLED_Print(" TIME UP!");
+        }
+
+        Delay_Ms(100);
+        countdown = (countdown > 100) ? countdown - 100 : 0;
+    }
+}</code></pre>
+<ul>
+<li><strong>OLED_Init(width, height):</strong> เริ่มต้น OLED SSD1306 ผ่าน I2C — ขนาด 128×64</li>
+<li><strong>PWM_SetDuty(pin, duty):</strong> 0 = ปิด, >0 = ส่งเสียง — buzzer piezoelectric ต้องการ ~2-4kHz</li>
+<li><strong>attachInterrupt:</strong> RISING/FALLING/CHANGE — กดปุ่มรีเซ็ต countdown</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>OLED I2C address default 0x3C — ถ้าไม่เจอเช็ค wiring และ pull-up</li>
+<li>Buzzer ต้องใช้ transistor driver ถ้ากินกระแส > 8mA — pin output จำกัด</li>
+<li>Delay_Ms(100) ใน loop = ความละเอียด countdown 100ms</li>
+</ul>
+</section>
+
+<section>
+<h2>ex05_Sensor_Hub_DMA — I2C + 1Wire + SPI + DMA USART</h2>
+<h3>📖 แนวคิด</h3>
+<p>ฮับรวบรวมข้อมูล sensor 3 โปรโตคอล — I2C (BMP280), 1-Wire (DS18B20), SPI (flash/log) — ส่งข้อมูลผ่าน USART แบบ DMA ไม่ต้องรอ CPU — แสดงประสิทธิภาพการทำงานแบบ multi-protocol</p>
+
+<h3>💻 โค้ด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+uint8_t dma_tx_buf[64];
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    DMA_Init(DMA_CH_USART1_TX, (uint32_t)dma_tx_buf, USART_DATA_SIZE_8B);
+    DMA_Enable(DMA_CH_USART1_TX);
+
+    I2C_Init(I2C_SPEED_STANDARD);
+    BMP280_Init();
+    DS18B20_Init(PD5);
+    SPI_Init(SPI_MODE_MASTER, SPI_SPEED_1MHZ);
+
+    while(1) {
+        float temp_bmp, press;
+        BMP280_ReadAll(&amp;temp_bmp, &amp;press);
+        float temp_ds = DS18B20_GetTemp(PD5);
+
+        int len = sprintf((char*)dma_tx_buf, "BMP:%.1fC %.0fPa DS:%.1fC\r\n",
+                          temp_bmp, press, temp_ds);
+        DMA_SetLength(DMA_CH_USART1_TX, len);
+        DMA_Start(DMA_CH_USART1_TX);
+
+        Delay_Ms(1000);
+    }
+}</code></pre>
+<ul>
+<li><strong>DMA_Init:</strong> กำหนด DMA channel สำหรับ USART1 TX — ส่งข้อมูลอัตโนมัติไม่ต้องใช้ CPU</li>
+<li><strong>DMA_SetLength / DMA_Start:</strong> กำหนดจำนวน byte และเริ่มส่ง — CPU ไปทำงานอื่นต่อได้</li>
+<li><strong>SPI_Init:</strong> เริ่มต้น SPI master — ใช้กับ external flash หรือ SD card</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>DMA buffer ต้องคงที่ (global/static) — stack variable อาจหายเมื่อออก scope</li>
+<li>DMA + USART พร้อมกัน — เช็ค conflict DMA channel</li>
+<li>SPI และ I2C ใช้ pin ต่างกัน — อย่าสลับ SCL/SDA กับ SCK/MOSI/MISO</li>
+</ul>
+</section>
+
+<section>
+<h2>ex06_SOP8_Maximized — ฟังก์ชันครบใน 6 ขา</h2>
+<h3>📖 แนวคิด</h3>
+<p>ใช้ CH32V003 แบบ SOP-8 มีแค่ 6 ขา — จัดการให้ครบทุกฟังก์ชัน: ADC input, PWM output, I2C, USART, interrupt — สอนการเลือก pin ที่เหมาะสมกับ SOP-8 และบริหารขาอย่างคุ้มค่า</p>
+
+<h3>💻 โค้ด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_SOP8
+#include &lt;SimpleHAL.h&gt;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);  // PD6=TX, PD1=RX
+    ADC_SimpleInit();
+    PWM_Init(PA2, 1000, 0);     // PWM output
+    I2C_Init(I2C_SPEED_STANDARD);                    // PC1=SCL, PC2=SDA
+
+    pinMode(PA1, PIN_MODE_INPUT);    // ADC input
+    pinMode(PC4, PIN_MODE_INPUT_PULLUP); // button + interrupt
+
+    attachInterrupt(PC4, btn_isr, FALLING);
+
+    while(1) {
+        uint16_t adc = ADC_Read(0);       // PA1 = ADC ch0
+        float volt = ADC_ReadVoltage(0);
+        PWM_SetDuty(PA2, adc / 40);       // ADC → PWM brightness
+
+        USART_Print("ADC: ");
+        USART_PrintNum(adc);
+        USART_Print("\r\n");
+        Delay_Ms(200);
+    }
+}</code></pre>
+<ul>
+<li><strong>SOP-8 มี 6 pins:</strong> PA1 (ADC/PWM), PA2 (PWM/INT), PC1 (SCL), PC2 (SDA), PC4 (INT), PD6 (TX), PD1 (RX/ADC)</li>
+<li>ทุก pin ใช้งานได้มากกว่า 1 ฟังก์ชัน — ต้องเลือกให้เหมาะสม</li>
+<li>I2C, USART, PWM, ADC, Interrupt ทำงานพร้อมกันใน 6 pins</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>SOP-8 ไม่มี PD5, PD7, PC3, PC5-PC7 — ฟังก์ชันบน pin เหล่านั้นใช้ไม่ได้</li>
+<li>PA1 ใช้เป็น ADC input หรือ PWM output อย่างใดอย่างหนึ่ง — ใช้พร้อมกันไม่ได้</li>
+<li>USART_RX (PD1) แชร์กับ ADC — ถ้าใช้ ADC อย่าลืม disconnect</li>
+</ul>
+</section>
+
+<section>
+<h2>ex07_Battery_Data_Logger — ADC → Flash → Standby → AWU → wake</h2>
+<h3>📖 แนวคิด</h3>
+<p>บันทึกค่าแบตเตอรี่ลง Flash แล้วเข้าสู่ Standby mode — ใช้ AWU (Auto Wake-up) ปลุกทุก 60 วินาที — อ่าน ADC แล้วบันทึก — วนไปเรื่อย ๆ — ประหยัดพลังงานสูงสุดสำหรับ IoT</p>
+
+<h3>💻 โค้ด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+#define LOG_PAGE  30
+static uint16_t log_index = 0;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    ADC_SimpleInit();
+
+    if(log_index == 0) {
+        Flash_ErasePage(LOG_PAGE);
+    }
+
+    uint16_t vbat = ADC_Read(0);          // อ่านแรงดันแบต
+    Flash_WriteHalfWord(LOG_PAGE, log_index * 2, vbat);
+    log_index++;
+
+    // เข้า Standby — AWU ปลุกทุก 60s
+    AWU_Init(AWU_INTERVAL_60S);
+    PWR_EnterSTANDBYMode();
+
+    // เมื่อ wake up — รันจาก main อีกครั้ง (STM32 HAL behavior)
+    // log_index ยังคงค่าเดิมเพราะ SRAM หายใน Standby
+    // ต้อง save index ใน Flash หรือใช้ backup register
+    while(1) { IWDG_Feed(); }
+}</code></pre>
+<ul>
+<li><strong>AWU_Init(interval):</strong> ตั้งค่า Auto Wake-up — 60s = 60 วินาที — ใช้ LSI oscillator (~128kHz)</li>
+<li><strong>PWR_EnterSTANDBYMode():</strong> เข้า Standby — SRAM หาย, GPIO high-Z — กินกระแส ~1µA</li>
+<li><strong>Flash_WriteHalfWord:</strong> เขียน 16-bit ลง Flash — เก็บค่า ADC แต่ละครั้ง</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>Standby mode SRAM หาย — ต้องเก็บ log_index ไว้ใน Flash หรือ backup register</li>
+<li>AWU ใช้ LSI — ความแม่นยำ ±5% — interval อาจคลาดเคลื่อน</li>
+<li>Flash endurance 10,000 ครั้ง — log ทุก 60s = อายุ ~7 วัน ก่อน Flash หมดอายุ</li>
+<li>หลัง Wake up MCU รีเซ็ต — ทำงานตั้งแต่ต้น — ต้องแยก first boot กับ wake</li>
+</ul>
+</section>
+
+<section>
+<h2>✏️ สรุป — 7 ตัวอย่าง Integrated Applications</h2>
+<table>
+<tr><th>ตัวอย่าง</th><th>สอนอะไร</th><th>ฟังก์ชันหลัก</th></tr>
+<tr><td>ex01</td><td>Weather Station</td><td>DS18B20, BMP280, I2C, 1-Wire</td></tr>
+<tr><td>ex02</td><td>LED Controller USART</td><td>PWM, USART command, Stopwatch</td></tr>
+<tr><td>ex03</td><td>Data Logger Flash</td><td>ADC, Flash, Stopwatch, CRC32</td></tr>
+<tr><td>ex04</td><td>Smart Countdown</td><td>I2C OLED, PWM Buzzer, Interrupt</td></tr>
+<tr><td>ex05</td><td>Sensor Hub DMA</td><td>DMA USART, SPI, multi-protocol</td></tr>
+<tr><td>ex06</td><td>SOP8 Maximized</td><td>6 pins, ทุกฟังก์ชัน</td></tr>
+<tr><td>ex07</td><td>Battery Data Logger</td><td>Standby, AWU, ultra-low power</td></tr>
+</table>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch32_opamp.html">บทก่อน</a>
+    <a href="ch34_arduino_api.html">บทถัดไป →</a>
+</nav>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

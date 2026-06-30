@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>บทที่ 27: Workshop Flash — 6 ตัวอย่างจาก Examples — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch26_adc.html">บทก่อน</a>
+    <a href="ch28_watchdog.html">บทถัดไป →</a>
+</nav>
+
+<h1>บทที่ 27: Workshop Flash — 6 ตัวอย่างจาก Examples</h1>
+<span class="level advanced">ระดับสูง</span>
+
+<section class="flowchart">
+    <h2>🧥 เส้นทางเรียนรู้: 6 ตัวอย่าง Flash</h2>
+    <pre class="mermaid">
+flowchart LR
+    A["ex01: Read/Write Basics"] --> B["ex02: Config with CRC"]
+    B --> C["ex03: String and Struct"]
+    C --> D["ex04: AutoErase Operations"]
+    D --> E["ex05: Factory Reset"]
+    E --> F["ex06: CRC16 Checksum"]
+    style A fill:#dcfce7
+    style F fill:#fef3c7
+    </pre>
+</section>
+
+<section>
+<h2>ex01_Read_Write_Basics — อ่าน/เขียน Flash พื้นฐาน</h2>
+<h3>📖 แนวคิด</h3>
+<p>เรียนรู้การเขียนและอ่าน Flash ของ CH32V003 — ขนาดหน้า 64 bytes — ต้องลบ (erase) ก่อนเขียนทุกครั้ง — ใช้ Flash_Init เปิด clock, ErasePage ลบทีละหน้า, WriteByte เขียนทีละ byte, ReadWord อ่าน 32-bit</p>
+
+<h3>💻 โค้ด + อธิบายทีละบรรทัด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+#define STORE_ADDR  0x08006000    // ใช้หน้า Flash ที่ 24 (ปลายๆ, ห่างจาก code)
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    Flash_Init();                      // ★ เปิด clock + unlock Flash
+
+    // ลบหน้าก่อนเขียน
+    Flash_ErasePage(STORE_ADDR);       // ลบ 64 bytes ที่ address นี้ → ค่า = 0xFF
+
+    // เขียนข้อมูล
+    Flash_WriteByte(STORE_ADDR,     0x42);   // เขียน byte แรก
+    Flash_WriteByte(STORE_ADDR + 1, 0xA5);   // เขียน byte ที่สอง
+
+    // อ่านข้อมูล
+    uint32_t word = Flash_ReadWord(STORE_ADDR);  // อ่าน 32-bit
+    USART_Print("Read word: 0x");
+    USART_PrintHex(word, 8);
+    USART_Print("\r\n");
+    USART_Print("Byte0: 0x");
+    USART_PrintHex(Flash_ReadByte(STORE_ADDR), 2);
+    USART_Print("\r\n");
+
+    while(1) { IWDG_Feed(); }
+}</code></pre>
+<ul>
+<li><strong>Flash_Init():</strong> เปิด clock ให้ Flash controller + unlock (เขียน KEY1/KEY2 ไปยัง FLASH_KEYR) — ต้องเรียกก่อนเขียน/ลบ</li>
+<li><strong>Flash_ErasePage(addr):</strong> ลบ 1 page (64 bytes) — addr ต้อง align กับ page boundary (0x0800XX00) — เขียน 0xFF ทุก byte</li>
+<li><strong>Flash_WriteByte(addr, data):</strong> เขียน 1 byte — addr ต้องอยู่ในพื้นที่ที่ถูกลบแล้ว — ลบก่อนเขียน!</li>
+<li><strong>Flash_ReadWord(addr):</strong> อ่าน 32-bit (4 bytes) — ไม่ต้อง unlock — อ่านได้ตลอดเวลา</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>Flash CH32V003 = 16KB — 0x08000000 ถึง 0x08003FFF — ห้ามเขียนทับ code ที่กำลังรัน! (เลือก addr > 0x08002000 ปลอดภัย)</li>
+<li>ลืม ErasePage ก่อนเขียน → เขียนไม่สำเร็จ (Flash บังคับลบก่อนเขียน — bit 1→0 ได้เท่านั้น)</li>
+<li>Flash Write/Erase ใช้กระแสสูง (~5-10mA) — ถ้า VDD ตกขณะเขียนอาจ corrupt</li>
+</ul>
+
+<h3>✅ ตรวจสอบก่อนรัน</h3>
+<ul>
+<li>addr อยู่ในพื้นที่ Flash เปล่า? ใช้ linker script แยกพื้นที่ user data หรือเลือก addr หลัง code</li>
+<li>Flash_Init() เรียกก่อน Write/Erase ทุกครั้ง?</li>
+<li>ไม่มี interrupt ขัดจังหวะระหว่าง Write/Erase? — ต้อง disable interrupt ชั่วคราว</li>
+</ul>
+</section>
+
+<section>
+<h2>ex02_Config_With_CRC — บันทึก/โหลด Config พร้อม CRC</h2>
+<h3>📖 แนวคิด</h3>
+<p>ใช้ Flash_ErasePage + Flash_WriteByte + Flash_ReadWord เพื่อสร้างระบบ Save/Load Config — เพิ่ม CRC-8 ตรวจสอบความถูกต้องตอนโหลด — ใช้ Flash_SaveConfig บันทึก struct config และ Flash_LoadConfig อ่านกลับ — IsConfigValid เช็ค CRC</p>
+
+<h3>💻 โค้ด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+#define CFG_ADDR  0x08006000
+
+typedef struct {
+    uint8_t  brightness;     // 0-100
+    uint8_t  mode;           // 0=auto, 1=manual
+    uint16_t threshold;      // 0-4095
+    uint8_t  crc;            // CRC-8 checksum (คำนวณจาก成员ข้างบน)
+} __attribute__((packed)) DeviceConfig;
+
+static DeviceConfig g_cfg;
+
+// CRC-8 แบบง่าย (XOR)
+static uint8_t calc_crc(const DeviceConfig *cfg) {
+    uint8_t c = 0;
+    const uint8_t *p = (const uint8_t*)cfg;
+    for(uint8_t i = 0; i < sizeof(DeviceConfig) - 1; i++) {  // ไม่รวม crc เอง
+        c ^= p[i];
+    }
+    return c;
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    Flash_Init();
+
+    // ตั้งค่าเริ่มต้น
+    g_cfg.brightness = 75;
+    g_cfg.mode       = 1;
+    g_cfg.threshold  = 2048;
+    g_cfg.crc        = calc_crc(&g_cfg);
+
+    // save
+    Flash_SaveConfig(CFG_ADDR, (uint8_t*)&g_cfg, sizeof(g_cfg));
+    USART_Print("Config saved!\r\n");
+
+    // load
+    DeviceConfig loaded;
+    Flash_LoadConfig(CFG_ADDR, (uint8_t*)&loaded, sizeof(loaded));
+
+    if(IsConfigValid((uint8_t*)&loaded, sizeof(loaded))) {
+        USART_Print("Config valid: brightness=");
+        USART_PrintNum(loaded.brightness);
+        USART_Print("\r\n");
+    } else {
+        USART_Print("Config CORRUPT! Using defaults.\r\n");
+        loaded.brightness = 50;  // fallback
+    }
+
+    while(1) { IWDG_Feed(); }
+}</code></pre>
+<ul>
+<li><strong>Flash_SaveConfig(addr, data, len):</strong> ลบ page → เขียนทีละ byte — len ต้อง ≤ 64</li>
+<li><strong>Flash_LoadConfig(addr, data, len):</strong> อ่านตรง ๆ — ไม่ลบ — ใช้ uint8_t* อ่านทีละ byte</li>
+<li><strong>IsConfigValid(data, len):</strong> ตรวจสอบว่าไม่ใช่ 0xFF ทั้งหมด (uninitialized) + CRC match</li>
+<li><strong>CRC-8:</strong> XOR ทุก byte ยกเว้น byte สุดท้าย — ตรวจจับ data corruption พื้นฐาน</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>Flash_ErasePage ใช้ ~20-40ms — ถ้ามี Watchdog ต้อง IWDG_Feed ก่อน/หลัง</li>
+<li>CRC แบบ XOR กัน corruption เบื้องต้น — ถ้าต้องการ robustness ใช้ CRC-16/CRC-32 (ดู ex06)</li>
+<li>Config struct ต้อง __attribute__((packed)) — กัน padding ที่ทำให้ CRC คำนวณผิด</li>
+</ul>
+</section>
+
+<section>
+<h2>ex03_String_And_Struct — เขียน/อ่าน String และ Struct</h2>
+<h3>📖 แนวคิด</h3>
+<p>ใช้ WriteString และ ReadString สำหรับบันทึกข้อความ, WriteStruct สำหรับ struct ที่ซับซ้อนขึ้น — แสดงวิธีเก็บ device name + calibration data</p>
+
+<h3>💻 โค้ด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+#define DATA_ADDR  0x08006000
+
+typedef struct {
+    float    gain;            // ค่า gain
+    int16_t  offset;          // ค่า offset
+    uint16_t serial_num;      // หมายเลขเครื่อง
+} CalibrationData;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    Flash_Init();
+
+    // เขียน string
+    Flash_ErasePage(DATA_ADDR);
+    Flash_WriteString(DATA_ADDR, "MyDevice v2.1");
+
+    // เขียน struct ต่อจาก string
+    CalibrationData cal = {1.05f, -12, 0x7B};
+    Flash_WriteStruct(DATA_ADDR + 32, &cal, sizeof(cal));  // ใช้ offset 32
+
+    // อ่านกลับ
+    char buf[32];
+    Flash_ReadString(DATA_ADDR, buf, sizeof(buf));
+    USART_Print("Device: ");
+    USART_Print(buf);
+    USART_Print("\r\n");
+
+    CalibrationData loaded;
+    Flash_ReadStruct(DATA_ADDR + 32, &loaded, sizeof(loaded));
+    USART_Print("Gain: ");
+    USART_PrintFloat(loaded.gain, 3);
+    USART_Print("  Offset: ");
+    USART_PrintNum(loaded.offset);
+    USART_Print("\r\n");
+
+    while(1) { IWDG_Feed(); }
+}</code></pre>
+<ul>
+<li><strong>Flash_WriteString(addr, str):</strong> เขียน string พร้อม null-terminator — addr ต้องลบแล้ว</li>
+<li><strong>Flash_ReadString(addr, buf, maxLen):</strong> อ่านจนเจอ '\0' หรือครบ maxLen — ใส่ null-terminator</li>
+<li><strong>Flash_WriteStruct(addr, data, size):</strong> เขียน struct ใด ๆ — ใช้ memcpy ภายใน — size ต้องพอดี</li>
+<li><strong>Flash_ReadStruct(addr, data, size):</strong> อ่าน struct — ไม่ตรวจสอบความถูกต้อง (ใช้ CRC เองถ้าต้องการ)</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>Flash เขียนทีละ byte — ถ้า struct มี padding → เขียน area ที่ยังไม่ลบ → ต้อง ErasePage ก่อนทุกครั้ง</li>
+<li>String ยาวกว่า Flash page (64 bytes) → ต้องเขียนข้ามหลาย page — วางแผน layout</li>
+<li>float ใน struct: CH32V003 รองรับ float ใน RAM แต่ Flash เก็บเป็น byte — อ่านกลับมาได้ปกติ</li>
+</ul>
+</section>
+
+<section>
+<h2>ex04_AutoErase_Operations — เขียนแบบลบอัตโนมัติ</h2>
+<h3>📖 แนวคิด</h3>
+<p>ฟังก์ชัน WriteByteWithErase — รวม erase + write ในคำสั่งเดียว — เช็คว่า addr ถูก erase แล้วหรือยัง ถ้ายัง = ลบก่อนเขียน — ป้องกันการลืม ErasePage</p>
+
+<h3>💻 โค้ด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+#define LOG_ADDR  0x08006000
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    Flash_Init();
+
+    // เขียนโดยไม่ต้อง ErasePage ล่วงหน้า
+    Flash_WriteByteWithErase(LOG_ADDR,      0xAA);
+    Flash_WriteByteWithErase(LOG_ADDR + 1,  0xBB);
+
+    // อ่าน
+    uint8_t b0 = Flash_ReadByte(LOG_ADDR);
+    uint8_t b1 = Flash_ReadByte(LOG_ADDR + 1);
+    USART_Print("Bytes: 0x");
+    USART_PrintHex(b0, 2);
+    USART_Print(" 0x");
+    USART_PrintHex(b1, 2);
+    USART_Print("\r\n");
+
+    // เขียนซ้ำอีกครั้ง — จะ auto-erase อีก (ลบทั้ง page! ข้อมูล byte อื่นหาย)
+    Flash_WriteByteWithErase(LOG_ADDR, 0xCC);
+    uint8_t b2 = Flash_ReadByte(LOG_ADDR);
+    USART_Print("After rewrite: 0x");
+    USART_PrintHex(b2, 2);
+    USART_Print("\r\n");  // b1 หายเพราะถูกลบทั้ง page
+
+    while(1) { IWDG_Feed(); }
+}</code></pre>
+<ul>
+<li><strong>Flash_WriteByteWithErase(addr, data):</strong> ถ้า addr มีค่า != 0xFF → ErasePage ก่อน → แล้ว WriteByte</li>
+<li><strong>ข้อดี:</strong> สะดวก ไม่ต้องคิดเรื่อง erase — เหมาะกับ log ที่เขียน append ต่อ</li>
+<li><strong>ข้อเสีย:</strong> เขียนครั้งแรกโอเค — ครั้งที่ 2 ลบทั้ง page = ข้อมูลข้างเคียงหาย!</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>Flash เขียน bit 1→0 ได้เท่านั้น — ถ้าต้องการเปลี่ยน 0→1 ต้อง ErasePage เสมอ</li>
+<li>WriteByteWithErase ลบทั้ง page (64 bytes) — ถ้ามีข้อมูลสำคัญใน page เดียวกัน → หาย</li>
+<li>สำหรับ data logger ที่เขียนต่อเนื่อง → ใช้หลาย page สลับกัน (ping-pong buffer)</li>
+</ul>
+</section>
+
+<section>
+<h2>ex05_Factory_Reset — กดปุ่ม 3 วินาทีลบ Flash ทั้งหมด</h2>
+<h3>📖 แนวคิด</h3>
+<p>จำลอง factory reset — กดปุ่มค้าง 3 วินาที → ตรวจสอบด้วย ELAPSED_TIME → เรียก EraseAll ลบ Flash ทั้งหมดยกเว้น bootloader — ประโยค: "กดปุ่ม 3 วิ = reset กลับเป็นค่าโรงงาน"</p>
+
+<h3>🔌 วงจร</h3>
+<pre class="ascii-circuit">
+    PC1 -- Button -- GND    (ACTIVE_LOW, internal pull-up)
+    PC0 ---R---|LED|---GND  (LED แสดงสถานะ factory reset)
+</pre>
+
+<h3>💻 โค้ด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+#define BTN_PIN     PC1
+#define LED_PIN     PC0
+#define HOLD_MS     3000    // 3 วินาที
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    Flash_Init();
+    pinMode(BTN_PIN, PIN_MODE_INPUT_PULLUP);
+    pinMode(LED_PIN, PIN_MODE_OUTPUT);
+
+    USART_Print("Hold button 3s for Factory Reset...\r\n");
+
+    while(1) {
+        if(digitalRead(BTN_PIN) == LOW) {
+            uint32_t start = Get_CurrentMs();
+            // กดค้าง
+            while(digitalRead(BTN_PIN) == LOW) {
+                if(ELAPSED_TIME(start, Get_CurrentMs()) >= HOLD_MS) {
+                    digitalWrite(LED_PIN, HIGH);
+                    USART_Print("FACTORY RESET! Erasing all Flash...\r\n");
+
+                    Flash_EraseAll();          // ลบ Flash ทั้งหมด (ยกเว้น bootloader)
+
+                    USART_Print("Done! Restarting...\r\n");
+                    Delay_Ms(100);
+                    NVIC_SystemReset();        // รีสตาร์ท MCU
+                }
+                IWDG_Feed();
+            }
+            digitalWrite(LED_PIN, LOW);
+        }
+        IWDG_Feed();
+    }
+}</code></pre>
+<ul>
+<li><strong>Flash_EraseAll():</strong> ลบทุก page 0x08000000-0x08003FFF — ยกเว้น option bytes และ system memory</li>
+<li><strong>NVIC_SystemReset():</strong> รีเซ็ต MCU โดยทาง software — หลังจากลบเสร็จให้เริ่มต้นใหม่</li>
+<li><strong>button hold:</strong> ใช้ polling + ELAPSED_TIME — ถ้าปล่อยก่อน 3 วิ → ยกเลิก ไม่ลบ</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>EraseAll ใช้เวลา ~200-500ms — ต้อง disable interrupt + IWDG feed ก่อน</li>
+<li>ถ้ามี bootloader ใน Flash — ตรวจสอบว่า EraseAll ลบเฉพาะ user area ไม่ลบ bootloader</li>
+<li>ทดสอบ factory reset ด้วยความระมัดระวัง — ไม่มี undo!</li>
+</ul>
+</section>
+
+<section>
+<h2>ex06_CRC16_Checksum — ตรวจสอบความถูกต้องของ Flash</h2>
+<h3>📖 แนวคิด</h3>
+<p>ใช้ CalculateCRC16 คำนวณ CRC-16 (CCITT) สำหรับข้อมูลใน Flash — ตรวจสอบความถูกต้องด้วย IsAddressValid — เหมาะกับ firmware integrity check หรือ data validation</p>
+
+<h3>💻 โค้ด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+#define DATA_ADDR    0x08006000
+#define DATA_LEN     32
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    Flash_Init();
+
+    // เตรียมข้อมูล
+    Flash_ErasePage(DATA_ADDR);
+    for(uint8_t i = 0; i < DATA_LEN; i++) {
+        Flash_WriteByte(DATA_ADDR + i, i * 3 + 0x10);
+    }
+
+    // คำนวณ CRC-16
+    uint16_t crc = CalculateCRC16((uint16_t*)DATA_ADDR, DATA_LEN / 2);
+    USART_Print("CRC-16: 0x");
+    USART_PrintHex(crc, 4);
+    USART_Print("\r\n");
+
+    // ตรวจสอบว่า address นี้ valid (ไม่ถูกลบ)
+    if(IsAddressValid(DATA_ADDR, DATA_LEN)) {
+        USART_Print("Address valid — data OK\r\n");
+    } else {
+        USART_Print("Address invalid — data corrupted!\r\n");
+    }
+
+    // เขียน CRC ต่อท้าย
+    Flash_WriteByte(DATA_ADDR + DATA_LEN,     (crc >> 8) & 0xFF);
+    Flash_WriteByte(DATA_ADDR + DATA_LEN + 1,  crc & 0xFF);
+
+    // ตรวจสอบอีกครั้ง
+    uint16_t crc2 = CalculateCRC16((uint16_t*)DATA_ADDR, DATA_LEN / 2);
+    uint16_t stored = (Flash_ReadByte(DATA_ADDR + DATA_LEN) << 8) |
+                       Flash_ReadByte(DATA_ADDR + DATA_LEN + 1);
+    if(crc2 == stored) {
+        USART_Print("CRC match! Data intact.\r\n");
+    } else {
+        USART_Print("CRC MISMATCH! Data corrupted.\r\n");
+    }
+
+    while(1) { IWDG_Feed(); }
+}</code></pre>
+<ul>
+<li><strong>CalculateCRC16(data, halfWords):</strong> คำนวณ CRC-16 CCITT (polynomial 0x1021) — รับข้อมูลเป็น uint16_t* — เหมาะกับการตรวจสอบ block ข้อมูล</li>
+<li><strong>IsAddressValid(addr, len):</strong> ตรวจสอบว่า addr อยู่ในช่วง Flash + ข้อมูลไม่เป็น 0xFF ทั้งหมด (unwritten)</li>
+<li><strong>CRC-16:</strong> ดีกว่า CRC-8 (XOR) — ตรวจจับ error ได้ถึง 99.998% — polynomial 0x1021 (CCITT)</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>CalculateCRC16 อ่านทีละ 16-bit — ข้อมูลต้อง align 2 bytes</li>
+<li>เก็บ CRC แยกต่างหากจากข้อมูล — ไม่รวม CRC ใน checksum</li>
+<li>CRC-16 มี collision probability ~0.002% — สำหรับ safety-critical ใช้ CRC-32 หรือ SHA</li>
+</ul>
+</section>
+
+<section>
+<h2>✏️ สรุป — 6 ตัวอย่าง Flash</h2>
+<table>
+<tr><th>ตัวอย่าง</th><th>สอนอะไร</th><th>ฟังก์ชันหลัก</th></tr>
+<tr><td>ex01</td><td>อ่าน/เขียน Flash พื้นฐาน</td><td>Flash_Init, ErasePage, WriteByte, ReadWord</td></tr>
+<tr><td>ex02</td><td>Config + CRC-8</td><td>Flash_SaveConfig, LoadConfig, IsConfigValid</td></tr>
+<tr><td>ex03</td><td>String และ Struct</td><td>WriteString, ReadString, WriteStruct</td></tr>
+<tr><td>ex04</td><td>เขียนแบบลบอัตโนมัติ</td><td>WriteByteWithErase</td></tr>
+<tr><td>ex05</td><td>Factory Reset กดปุ่ม 3 วิ</td><td>Flash_EraseAll, NVIC_SystemReset</td></tr>
+<tr><td>ex06</td><td>CRC-16 Checksum</td><td>CalculateCRC16, IsAddressValid</td></tr>
+</table>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch26_adc.html">บทก่อน</a>
+    <a href="ch28_watchdog.html">บทถัดไป →</a>
+</nav>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

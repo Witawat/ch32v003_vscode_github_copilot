@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>บทที่ 31: Workshop Power Management — 6 ตัวอย่างจาก Examples — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch30_dma.html">บทก่อน</a>
+    <a href="ch32_opamp.html">บทถัดไป →</a>
+</nav>
+
+<h1>บทที่ 31: Workshop Power Management — 6 ตัวอย่างจาก Examples</h1>
+<span class="level advanced">ระดับสูง</span>
+
+<section class="flowchart">
+    <h2>🧥 เส้นทางเรียนรู้: 6 ตัวอย่าง Power Management</h2>
+    <pre class="mermaid">
+flowchart LR
+    A["ex01: Sleep Mode"] --> B["ex02: Standby AWU"]
+    B --> C["ex03: Standby External Wake"]
+    C --> D["ex04: PVD Monitor"]
+    D --> E["ex05: Battery Life Estimation"]
+    E --> F["ex06: Wakeup Pin"]
+    style A fill:#dcfce7
+    style F fill:#fef3c7
+    </pre>
+</section>
+
+<section>
+<h2>ex01_Sleep_Mode — เข้า Sleep + ปลุกด้วย EXTI</h2>
+<h3>📖 แนวคิด</h3>
+<p>Sleep mode ปิด CPU clock แต่ SRAM และ peripheral ยังทำงาน — ใช้ PWR_EnterSleepMode เข้า sleep — ปลุกด้วย EXTI interrupt (ปุ่มกด) — กินกระแส ~mA</p>
+
+<h3>🔌 วงจร</h3>
+<pre class="ascii-circuit">
+    CH32V003              LED
+    PC0 ----/\/\/\---->|---- GND
+           220 Ohm
+
+    PC1 -- Button -- GND     (INPUT_PULLUP, ปลุกด้วย FALLING)
+</pre>
+
+<h3>💻 โค้ด + อธิบายทีละบรรทัด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+volatile uint8_t wake_flag = 0;
+
+void EXTI_Callback(void) {                           // เรียกเมื่อปุ่มกด (FALLING)
+    wake_flag = 1;
+}
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    pinMode(PC0, PIN_MODE_OUTPUT);
+    pinMode(PC1, PIN_MODE_INPUT_PULLUP);
+    attachInterrupt(PC1, EXTI_Callback, FALLING);    // EXTI ขอบตก
+
+    USART_Print("Entering sleep — press button to wake\r\n");
+
+    while(1)
+    {
+        wake_flag = 0;
+        PWR_EnterSleepMode();                        // ★ หยุด CPU — รอ interrupt
+        // กลับมาทำงานต่อหลังจาก EXTI
+        digitalToggle(PC0);                          // LED สลับ = ตื่นแล้ว
+        USART_Print("Woke up!\r\n");
+        Delay_Ms(500);
+    }
+}</code></pre>
+<ul>
+<li><strong>PWR_EnterSleepMode():</strong> WFI (Wait For Interrupt) — หยุด CPU จนกว่า interrupt ใด ๆ เกิดขึ้น</li>
+<li><strong>Sleep = CPU off, peripherals on:</strong> USART, Timer, GPIO ยังทำงาน — กระแส ~2-5mA</li>
+<li><strong>EXTI (FALLING):</strong> ปุ่มกด (pull-up) กด = LOW → EXTI trigger → CPU ตื่น</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>หลัง PWR_EnterSleepMode บรรทัดถัดไปทำงานทันที — CPU เริ่มจากตรงนั้น ไม่ใช่从头</li>
+<li>interrupt ต้อง enable ก่อนเข้า sleep — ถ้าไม่มี interrupt → CPU หลับตลอด</li>
+<li>Sleep mode ตื่นเร็ว (~µs) แต่กระแสยังสูง — ถ้าต้องการประหยัดกว่านี้ใช้ Standby</li>
+</ul>
+
+<h3>✅ ตรวจสอบก่อนรัน</h3>
+<ul>
+<li>ปุ่มกดต่อถูก? PC1-PULLUP → Button → GND (ACTIVE_LOW)</li>
+<li>EXTI ค้าง? กดปุ่มค้างไว้ตอน sleep → ตื่นทันที</li>
+</ul>
+</section>
+
+<section>
+<h2>ex02_Standby_AWU — Standby + ปลุกด้วย Auto Wake-up</h2>
+<h3>📖 แนวคิด</h3>
+<p>Standby mode ปิดเกือบทุกอย่าง — SRAM, register หาย — ใช้ PWR_ConfigureAWU ตั้งเวลาปลุกอัตโนมัติด้วย LSI — ใช้ WasStandbyWakeup เช็คว่าตื่นจาก Standby หรือไม่</p>
+
+<h3>💻 โค้ด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+
+    if(WasStandbyWakeup()) {                         // เช็คว่าตื่นจาก Standby?
+        USART_Print("Woke from Standby!\r\n");
+    } else {
+        USART_Print("Cold boot\r\n");
+    }
+
+    // ตั้ง AWU ปลุกทุก ~2s (LSI 40kHz / 16 / 5000 ≈ 2s)
+    PWR_ConfigureAWU(PWR_AWU_DIVIDER_16, 5000);      // divider=16, counter=5000
+    PWR_EnterStandbyMode();                          // ★ เข้า Standby — ทุกอย่างดับ
+
+    // ไม่ถึงตรงนี้ — MCU รีเซ็ตเมื่อตื่น
+    while(1) { IWDG_Feed(); }
+}</code></pre>
+<ul>
+<li><strong>PWR_ConfigureAWU(divider, counter):</strong> ตั้ง AWU (Auto Wake-up) — ใช้ LSI 40kHz → divider → counter → timeout = counter × divider / LSI</li>
+<li><strong>PWR_EnterStandbyMode():</strong> ปิด Vcore — SRAM/lost register หาย — เมื่อตื่น = เหมือนรีเซ็ต (startup จาก main ใหม่)</li>
+<li><strong>WasStandbyWakeup():</strong> อ่าน RCC flag ว่าตื่นจาก Standby หรือ boot จริง — ใช้ตอน initialization</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>Standby = กระแส ~nA — แต่ข้อมูลหายทั้งหมด — ต้อง reconfigure ทุกอย่างหลังตื่น</li>
+<li>WasStandbyWakeup() คืนค่าได้ครั้งเดียว — ต้อง read แล้ว clear (หรือใช้ครั้งแรกเท่านั้น)</li>
+<li>AWU ใช้ LSI oscillator — LSI มีความแม่นยำ ±50% — เวลาปลุกอาจคลาดเคลื่อน</li>
+</ul>
+
+<h3>✅ ตรวจสอบก่อนรัน</h3>
+<ul>
+<li>หลังจากเข้า Standby แล้ว MCU ควรปลุกทุก ~2s — ดู USART "Woke from Standby!" ซ้ำ ๆ</li>
+<li>ลองกด reset — ควรเห็น "Cold boot" ครั้งแรก</li>
+</ul>
+</section>
+
+<section>
+<h2>ex03_Standby_External_Wake — ปลุก Standby ด้วย External Wakeup Pin</h2>
+<h3>📖 แนวคิด</h3>
+<p>ใช้ PWR_EnableWakeupPin เปิดใช้งานขา wakeup (PA0/PA2/PC1) — MCU อยู่ใน Standby — เมื่อสัญญาณที่ขามา (rising edge) → MCU ตื่น — เหมาะกับ remote sensor ที่กดปุ่มแล้วส่งค่า</p>
+
+<h3>💻 โค้ด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+
+    if(WasStandbyWakeup()) {
+        USART_Print("Woke by external wakeup pin!\r\n");
+    }
+
+    PWR_EnableWakeupPin(PWR_WAKEUP_PIN_PA0, RISING); // PA0 ขอบขึ้น = ปลุก
+    PWR_EnterStandbyMode();
+
+    while(1) { IWDG_Feed(); }
+}</code></pre>
+<ul>
+<li><strong>PWR_EnableWakeupPin(pin, mode):</strong> เปิดใช้งาน wakeup pin — RISING/FALLING — pin ที่เลือกได้: PA0, PA2, PC1</li>
+<li><strong>External wakeup pin:</strong> อุปกรณ์ต่อพ่วง active ต่ำ — พอ active → ส่ง rising edge → MCU ตื่น</li>
+<li><strong>Standby + external wake:</strong> กระแส ~300nA — ตื่นเร็ว ~50µs</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>Wakeup pin บางขาเท่านั้น — PA0, PA2, PC1 ขึ้นกับชิป — เช็ค datasheet</li>
+<li>Rising/Falling edge ตั้งได้ — แต่อุปกรณ์ต้องให้สัญญาณตรงกับที่ตั้ง</li>
+<li>ใน Standby I/O เป็น Hi-Z — pull-up/pull-down ก็ปิด — วงจรภายนอกต้องจัดการ电平</li>
+</ul>
+</section>
+
+<section>
+<h2>ex04_PVD_Monitor — ตรวจสอบแรงดันตกด้วย PVD</h2>
+<h3>📖 แนวคิด</h3>
+<p>Programmable Voltage Detector (PVD) ตรวจสอบ VDD — ถ้าแรงดันต่ำกว่าเกณฑ์ที่ตั้ง (2.2V-2.9V) → interrupt หรือ flag — ใช้ป้องกันข้อมูลเสียหายเมื่อแบตใกล้หมด</p>
+
+<h3>💻 โค้ด</h3>
+<pre><code class="language-c">volatile uint8_t voltage_low = 0;
+
+void PVD_Callback(void) {
+    voltage_low = 1;                                 // แรงดันต่ำกว่าเกณฑ์
+}
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+
+    PWR_SetCallback(PVD_Callback);                   // ลงทะเบียน PVD interrupt
+    PWR_EnablePVD(PWR_PVD_LEVEL_2V7);                // ตั้ง threshold 2.7V
+    // เมื่อ VDD < 2.7V → PVD_Callback ถูกเรียก
+
+    USART_Print("PVD Monitor Ready (threshold=2.7V)\r\n");
+
+    while(1)
+    {
+        if(voltage_low) {
+            USART_Print("⚠ Low voltage detected!\r\n");
+            // บันทึกข้อมูลสำคัญลง Flash ก่อน VDD หมด
+            voltage_low = 0;
+        }
+
+        // เช็ค PVD แบบ polling ด้วย
+        if(PWR_GetPVDStatus()) {
+            USART_Print("PVD active (polling)\r\n");
+        }
+
+        Delay_Ms(500);
+        IWDG_Feed();
+    }
+}</code></pre>
+<ul>
+<li><strong>PWR_EnablePVD(level):</strong> เปิด PVD — ตั้ง threshold 2.2V-2.9V — เมื่อ VDD ต่ำกว่า → PVD flag set + interrupt</li>
+<li><strong>PWR_GetPVDStatus():</strong> อ่าน PVD flag แบบ polling — คืน 1 ถ้า VDD ต่ำกว่า threshold</li>
+<li><strong>PVD level options:</strong> PWR_PVD_LEVEL_2V2, _2V3, _2V4, _2V5, _2V6, _2V7, _2V8, _2V9</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>PVD เปรียบเทียบ VDD กับ threshold — ไม่ใช่ VREF หรือแบต</li>
+<li>PVD level ไม่ละเอียดมาก — เลือกค่าที่ใกล้เคียงกับ VDD_min ของวงจร</li>
+<li>PVD interrupt ใช้ PVD_IRQn — เปิด NVIC ด้วย</li>
+</ul>
+</section>
+
+<section>
+<h2>ex05_Battery_Life_Estimation — ประมาณอายุแบตเตอรี่</h2>
+<h3>📖 แนวคิด</h3>
+<p>ใช้ CalculateBatteryLife คำนวณอายุแบตจากความจุแบตและกระแสที่ใช้ — และ EstimateStandbyCurrent ประมาณกระแส standby จาก configuration ปัจจุบัน — ช่วยออกแบบระบบ battery-powered</p>
+
+<h3>💻 โค้ด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+
+    // ตัวอย่าง: แบต CR2032 220mAh
+    uint32_t active_current_ua = 3200;                // 3.2mA ขณะทำงาน
+    uint32_t standby_current_na = 500;                // 500nA ขณะ standby
+    uint32_t active_time_ms = 50;                     // ทำงาน 50ms
+    uint32_t standby_time_ms = 9950;                  // standby 9950ms (รอบ 10s)
+
+    uint32_t hours = CalculateBatteryLife(
+        220,                                          // แบต 220mAh
+        active_current_ua, standby_current_na,
+        active_time_ms, standby_time_ms
+    );
+
+    USART_Print("Estimated battery life: ");
+    USART_PrintNum(hours);
+    USART_Print(" hours (");
+    USART_PrintNum(hours / 24);
+    USART_Print(" days)\r\n");
+
+    uint32_t estimated_na = EstimateStandbyCurrent();
+    USART_Print("Estimated standby current: ");
+    USART_PrintNum(estimated_na);
+    USART_Print(" nA\r\n");
+
+    while(1) { IWDG_Feed(); }
+}</code></pre>
+<ul>
+<li><strong>CalculateBatteryLife(mAh, active_ua, standby_na, active_ms, standby_ms):</strong> คำนวณอายุแบตเป็นชั่วโมง — ใช้ duty cycle เฉลี่ย</li>
+<li><strong>EstimateStandbyCurrent():</strong> ประมาณกระแส standby จาก peripheral ที่เปิดอยู่ — AWU, PVD, IWDG แต่ละตัวกินกระแสเพิ่ม ~nA</li>
+<li><strong>Duty cycle สำคัญ:</strong> ยิ่ง active time สั้น + standby นาน = แบตยืนยาว</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>EstimateStandbyCurrent เป็นแค่การประมาณ — ค่าจริงขึ้นกับ voltage, temperature</li>
+<li>แบต CR2032 จริง ๆ 220mAh ที่ 25°C — ถ้าหนาว = ความจุลดลง</li>
+<li>คำนวณด้วย active time จริง — รวมเวลาบูต + ADC + ส่งข้อมูล</li>
+</ul>
+</section>
+
+<section>
+<h2>ex06_Wakeup_Pin — AWU + Wakeup Pin ใช้ร่วมกัน</h2>
+<h3>📖 แนวคิด</h3>
+<p>รวม AWU (ปลุกเป็นระยะ) กับ Wakeup Pin (ปลุกเมื่อมีเหตุการณ์) — AWU ปลุกทุก 10s เพื่ออ่าน sensor — Wakeup Pin ปลุกเมื่อมี interrupt จากภายนอก — ยืดหยุ่นและประหยัดพลังงานสูงสุด</p>
+
+<h3>💻 โค้ด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+
+    if(WasStandbyWakeup()) {
+        if(PWR_GetWakeupFlag()) {
+            USART_Print("Woke by AWU timer\r\n");
+        } else {
+            USART_Print("Woke by external wakeup pin\r\n");
+        }
+    }
+
+    // AWU ปลุกทุก ~10s (LSI 40kHz / 128 / 3125 ≈ 10s)
+    PWR_ConfigureAWU(PWR_AWU_DIVIDER_128, 3125);
+
+    // Wakeup pin PA0 — กดปุ่มปลุก
+    PWR_EnableWakeupPin(PWR_WAKEUP_PIN_PA0, RISING);
+
+    PWR_EnterStandbyMode();                          // เข้า standby
+
+    while(1) { IWDG_Feed(); }
+}</code></pre>
+<ul>
+<li><strong>PWR_GetWakeupFlag():</strong> อ่าน flag ว่าตื่นเพราะ AWU (1) หรือ external wakeup pin (0)</li>
+<li><strong>AWU + Wakeup Pin = hybrid:</strong> AWU สำหรับ periodic task, wakeup pin สำหรับ event-driven</li>
+<li><strong>PWR_EnterStandbyMode:</strong> เปิดทั้งสองอย่างก่อนเข้า — อะไรเกิดก่อนก็ตื่น</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>PWR_GetWakeupFlag ต้องอ่านหลัง WasStandbyWakeup — flag จะถูกล้างอัตโนมัติ</li>
+<li>AWU divider/counter = timeout — ถ้าตั้งค่าผิด ปลุกถี่เกินไป = กินแบต</li>
+<li>ทั้ง AWU และ Wakeup Pin ใช้ LSI — ถ้า LSI ไม่ stable ค่าอาจคลาดเคลื่อน</li>
+</ul>
+</section>
+
+<section>
+<h2>✏️ สรุป — 6 ตัวอย่าง Power Management</h2>
+<table>
+<tr><th>ตัวอย่าง</th><th>สอนอะไร</th><th>ฟังก์ชันหลัก</th></tr>
+<tr><td>ex01</td><td>Sleep + EXTI ปลุก</td><td>PWR_EnterSleepMode, attachInterrupt</td></tr>
+<tr><td>ex02</td><td>Standby + AWU ปลุกเป็นระยะ</td><td>PWR_ConfigureAWU, PWR_EnterStandbyMode, WasStandbyWakeup</td></tr>
+<tr><td>ex03</td><td>Standby + External Wakeup</td><td>PWR_EnableWakeupPin</td></tr>
+<tr><td>ex04</td><td>PVD ตรวจสอบแรงดันตก</td><td>PWR_EnablePVD, PWR_GetPVDStatus</td></tr>
+<tr><td>ex05</td><td>ประมาณอายุแบตเตอรี่</td><td>CalculateBatteryLife, EstimateStandbyCurrent</td></tr>
+<tr><td>ex06</td><td>AWU + Wakeup Pin รวมกัน</td><td>PWR_ConfigureAWU + PWR_EnableWakeupPin</td></tr>
+</table>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch30_dma.html">บทก่อน</a>
+    <a href="ch32_opamp.html">บทถัดไป →</a>
+</nav>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

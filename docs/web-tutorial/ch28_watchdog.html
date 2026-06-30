@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>บทที่ 28: Workshop Watchdog — 5 ตัวอย่างจาก Examples — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch27_flash.html">บทก่อน</a>
+    <a href="ch29_onewire.html">บทถัดไป →</a>
+</nav>
+
+<h1>บทที่ 28: Workshop Watchdog — 5 ตัวอย่างจาก Examples</h1>
+<span class="level advanced">ระดับสูง</span>
+
+<section class="flowchart">
+    <h2>🧥 เส้นทางเรียนรู้: 5 ตัวอย่าง Watchdog</h2>
+    <pre class="mermaid">
+flowchart LR
+    A["ex01: IWDG Simple"] --> B["ex02: IWDG Advanced"]
+    B --> C["ex03: WWDG Simple"]
+    C --> D["ex04: WWDG Interrupt"]
+    D --> E["ex05: WWDG Advanced"]
+    style A fill:#dcfce7
+    style E fill:#fef3c7
+    </pre>
+</section>
+
+<section>
+<h2>ex01_IWDG_Simple — ตั้งค่า IWDG + Feed พื้นฐาน</h2>
+<h3>📖 แนวคิด</h3>
+<p>Independent Watchdog (IWDG) ใช้ clock แยก 40kHz ในตัว — ไม่ขึ้นกับ main clock — รีเซ็ต MCU ถ้าไม่ Feed ทันเวลา ตั้งค่า prescaler + reload ง่าย ๆ ด้วยฟังก์ชัน IWDG_SimpleInit</p>
+
+<h3>💻 โค้ด + อธิบายทีละบรรทัด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+
+    IWDG_SimpleInit();               // ใช้ค่าเริ่มต้น: prescaler=4, reload=0xFFF → timeout ~1.6s
+    USART_Print("IWDG Ready — Feeding every 500ms\r\n");
+
+    while(1)
+    {
+        USART_Print("Alive!\r\n");
+        IWDG_Feed();                 // รีเซ็ต counter IWDG — ต้องเรียกก่อน timeout
+        Delay_Ms(500);
+    }
+}</code></pre>
+<ul>
+<li><strong>IWDG_SimpleInit():</strong> เปิด IWDG ด้วย prescaler=4 (LSI/4 = 10kHz), reload=0xFFF → timeout = (reload+1)/10kHz ≈ 1.6s</li>
+<li><strong>IWDG_Feed():</strong> เขียนค่า 0xAAAA ลง IWDG_KR เพื่อ reload counter — ถ้าไม่เรียกก่อน timeout → MCU รีเซ็ต</li>
+<li><strong>Delay_Ms(500):</strong> feed ทุก 500ms ซึ่งน้อยกว่า 1.6s — ถ้า delay > 1.6s โดยไม่ feed จะเกิด watchdog reset</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>IWDG เปิดแล้วปิดไม่ได้ (ยกเว้น reset) — ตั้งค่าผิดต้องกด reset</li>
+<li>ใน debug mode IWDG ยังทำงาน — จะรีเซ็ตขณะ debug ถ้าไม่ feed</li>
+<li>IWDG_SimpleInit เปิด LSI oscillator — รอ LSI stable ~2ms ก่อนเริ่มนับ</li>
+</ul>
+
+<h3>✅ ตรวจสอบก่อนรัน</h3>
+<ul>
+<li>ถ้า MCU รีเซ็ตวน loop → IWDG ทำงาน — ดูจาก USART ที่พิมพ์ซ้ำ ๆ</li>
+<li>ลอง comment IWDG_Feed() → MCU ควรรีเซ็ตทุก ~1.6s</li>
+</ul>
+</section>
+
+<section>
+<h2>ex02_IWDG_Advanced — IWDG กำหนดค่าเอง + ตรวจสอบสาเหตุ Reset</h2>
+<h3>📖 แนวคิด</h3>
+<p>ปรับ prescaler และ reload register ด้วยตัวเองเพื่อให้ได้ timeout ตามต้องการ — ใช้ WasResetCauseIWDG ตรวจสอบว่าครั้งก่อน reset เพราะ IWDG หรือไม่</p>
+
+<h3>💻 โค้ด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+
+    if(WasResetCauseIWDG()) {                    // เช็ค RCC_FLAG_IWDGRST
+        USART_Print("[WARN] Previous reset was caused by IWDG!\r\n");
+    }
+
+    // prescaler = 64 (LSI/64 = 625Hz), reload = 1249 → timeout = 1250/625 ≈ 2.0s
+    IWDG_DisableWriteProtect();                  // เปิดเขียน IWDG registers
+    IWDG_SetPrescaler(IWDG_PRESCALER_64);        // 64: /64 → 625Hz
+    IWDG_SetReload(1249);                        // reload = 1249
+    IWDG_ReloadCounter();                        // โหลดค่า reload
+    IWDG_Enable();                               // เปิด IWDG
+    USART_Print("IWDG Advanced: timeout ~2s\r\n");
+
+    while(1)
+    {
+        USART_Print("Feed!\r\n");
+        IWDG_Feed();
+        Delay_Ms(900);                           // Feed ทุก 900ms
+    }
+}</code></pre>
+<ul>
+<li><strong>WasResetCauseIWDG():</strong> อ่าน RCC ว่า IWDG reset flag ค้างอยู่ไหม — ใช้ตอน boot เพื่อแจ้งเตือน</li>
+<li><strong>IWDG_DisableWriteProtect():</strong> ปลดล็อก IWDG_KR โดยเขียน 0x5555 — ต้องเรียกก่อน SetPrescaler/SetReload</li>
+<li><strong>IWDG_SetPrescaler / IWDG_SetReload:</strong> กำหนด divider (4/8/16/32/64/128/256) และค่า reload 12-bit</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>IWDG_PRESCALER_256 + reload 0xFFF → timeout ~26.2s — นานมาก!</li>
+<li>IWDG_ReloadCounter() ≠ IWDG_Feed() — reload counter เตรียมค่า, feed คือเขียน 0xAAAA</li>
+<li>อ่าน RCC reset flag แล้วต้อง clear ด้วยตัวเอง</li>
+</ul>
+</section>
+
+<section>
+<h2>ex03_WWDG_Simple — Window Watchdog พื้นฐาน</h2>
+<h3>📖 แนวคิด</h3>
+<p>Window Watchdog (WWDG) ใช้ clock จาก APB (PCLK) — รีเซ็ตเมื่อ counter ต่ำกว่าค่า window หรือ overflow — ต้อง Refresh ก่อนถึง window</p>
+
+<h3>💻 โค้ด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+
+    WWDG_SimpleInit();               // ใช้ค่าเริ่มต้น: counter=0x7F, window=0x50, prescaler=1
+    USART_Print("WWDG Ready — Refresh every 200ms\r\n");
+
+    while(1)
+    {
+        USART_Print("Alive!\r\n");
+        WWDG_Refresh();              // รีเฟรช counter WWDG ก่อนถึง window
+        Delay_Ms(200);
+    }
+}</code></pre>
+<ul>
+<li><strong>WWDG_SimpleInit():</strong> เปิด WWDG ด้วย counter=127, window=80, prescaler=1 (PCLK/4096) → timeout ~5ms-40ms แล้วแต่ PCLK</li>
+<li><strong>WWDG_Refresh():</strong> โหลด counter กลับไปที่ค่าเริ่มต้น — ต้องเรียกเมื่อ counter > window เท่านั้น</li>
+<li>WWDG เร็วกว่า IWDG มาก — ใช้กับงานที่ต้องการ timing แม่นยำ</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>WWDG รีเซ็ตเฉพาะเวลาที่ถูกต้อง — ก่อน window หรือหลัง overflow ก็รีเซ็ตทั้งคู่</li>
+<li>WWDG ทำงานบน PCLK — ถ้า PCLK เปลี่ยน WWDG timing เปลี่ยนตาม</li>
+<li>WWDG_SimpleInit ใช้ค่าเริ่มต้นอาจ timeout ไวเกินไปสำหรับ main loop ที่ซับซ้อน</li>
+</ul>
+</section>
+
+<section>
+<h2>ex04_WWDG_Interrupt — WWDG พร้อม Early Wakeup Interrupt</h2>
+<h3>📖 แนวคิด</h3>
+<p>ใช้ WWDG_SetCallback + WWDG_InitWithInterrupt เพื่อให้ WWDG แจ้งเตือนก่อนรีเซ็ตผ่าน EWI (Early Wakeup Interrupt) — ทำความสะอาดหรือบันทึกข้อมูลก่อน MCU รีเซ็ต</p>
+
+<h3>💻 โค้ด</h3>
+<pre><code class="language-c">volatile uint32_t wwdg_warning = 0;
+
+void WWDG_EWI_Callback(void) {      // เรียกเมื่อ counter ต่ำกว่า 0x40
+    wwdg_warning = 1;
+    digitalToggle(PC0);              // สัญญาณเตือน — สลับ LED
+}
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    pinMode(PC0, PIN_MODE_OUTPUT);
+
+    WWDG_SetCallback(WWDG_EWI_Callback);           // ลงทะเบียน callback EWI
+    WWDG_InitWithInterrupt(127, 80, WWDG_PRESCALER_1);  // counter, window, prescaler
+    USART_Print("WWDG Interrupt Ready\r\n");
+
+    while(1)
+    {
+        if(wwdg_warning) {
+            USART_Print("WWDG warning — about to reset!\r\n");
+            wwdg_warning = 0;
+        }
+        USART_Print("Loop...\r\n");
+        WWDG_Refresh();
+        Delay_Ms(100);
+    }
+}</code></pre>
+<ul>
+<li><strong>WWDG_SetCallback(cb):</strong> กำหนดฟังก์ชันที่จะเรียกเมื่อ EWI เกิด (counter ต่ำกว่า 0x40) — เรียกใน ISR context</li>
+<li><strong>WWDG_InitWithInterrupt:</strong> เปิด WWDG พร้อม EWI interrupt — callback ทำงานก่อนรีเซ็ตจริง ~64 clock</li>
+<li><strong>WWDG_EWI_Callback:</strong> ทำงานใน interrupt — สั้น! ใช้ตั้ง flag เท่านั้น</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>WWDG_Refresh ใน callback ไม่ได้ช่วย — WWDG_Refresh ต้องเรียกใน main loop</li>
+<li>EWI interrupt มี priority สูง — อย่าทำงานหนักใน callback</li>
+<li>ต้องตั้ง WWDG_SetCallback ก่อน WWDG_InitWithInterrupt เสมอ</li>
+</ul>
+</section>
+
+<section>
+<h2>ex05_WWDG_Advanced — กำหนด Prescaler และ Window เอง</h2>
+<h3>📖 แนวคิด</h3>
+<p>ใช้ WWDG_Init ตั้งค่า prescaler (1/2/4/8) และ window register ด้วยตัวเอง — ทำให้ timeout ปรับได้ตามต้องการ — เหมาะกับงานที่ต้องการ timing แน่นอน</p>
+
+<h3>💻 โค้ด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+
+    // Prescaler = 8 → PCLK/4096/8, counter=0x7F, window=0x5F
+    // timeout = (counter - window) * (4096 * prescaler) / PCLK
+    // ≈ (127-95) * 32768 / 48MHz ≈ 21.8ms
+    WWDG_Init(127, 95, WWDG_PRESCALER_8);
+    USART_Print("WWDG Advanced: prescaler=8, window=0x5F\r\n");
+
+    while(1)
+    {
+        USART_Print("Alive!\r\n");
+        // ต้อง refresh เมื่อ counter > window (95) — refresh ถี่กว่า 21ms
+        WWDG_Refresh();
+        Delay_Ms(10);
+    }
+}</code></pre>
+<ul>
+<li><strong>WWDG_Init(counter, window, prescaler):</strong> counter 6-bit (0-63 จริง ๆ คือ 7-bit 0x3F-0x7F), window = ขอบล่าง, prescaler = /1 /2 /4 /8</li>
+<li><strong>Refresh timing:</strong> ต้องเรียกเมื่อ counter > window — ถ้า counter < window แล้ว refresh → reset</li>
+<li><strong>Timeout:</strong> ((counter - window) + 1) × (4096 × prescaler) / PCLK — ยิ่ง prescaler สูง ยิ่ง timeout นาน</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>WWDG counter ลดลงทุก 4096×prescaler PCLK cycles — ยิ่ง prescaler น้อย ยิ่งไว</li>
+<li>ห้าม refresh ช้าเกินไป (counter ≤ window) และห้าม refresh เร็วเกินไป (หลัง counter reload รอบก่อน)</li>
+<li>WWDG กับ IWDG ใช้พร้อมกันได้ — แต่ต้องคำนวณ timing ให้ consistent</li>
+</ul>
+</section>
+
+<section>
+<h2>✏️ สรุป — 5 ตัวอย่าง Watchdog</h2>
+<table>
+<tr><th>ตัวอย่าง</th><th>สอนอะไร</th><th>ฟังก์ชันหลัก</th></tr>
+<tr><td>ex01</td><td>IWDG พื้นฐาน Feed</td><td>IWDG_SimpleInit, IWDG_Feed</td></tr>
+<tr><td>ex02</td><td>IWDG กำหนดค่าเอง</td><td>IWDG_SetPrescaler, IWDG_SetReload, WasResetCauseIWDG</td></tr>
+<tr><td>ex03</td><td>WWDG พื้นฐาน Refresh</td><td>WWDG_SimpleInit, WWDG_Refresh</td></tr>
+<tr><td>ex04</td><td>WWDG + EWI Interrupt</td><td>WWDG_SetCallback, WWDG_InitWithInterrupt</td></tr>
+<tr><td>ex05</td><td>WWDG กำหนดค่าเอง</td><td>WWDG_Init, prescaler/window</td></tr>
+</table>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch27_flash.html">บทก่อน</a>
+    <a href="ch29_onewire.html">บทถัดไป →</a>
+</nav>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

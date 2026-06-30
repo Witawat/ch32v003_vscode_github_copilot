@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>บทที่ 32: Workshop OPAMP — 6 ตัวอย่างจาก Examples — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch31_power.html">บทก่อน</a>
+    <a href="ch33_integrated.html">บทถัดไป →</a>
+</nav>
+
+<h1>บทที่ 32: Workshop OPAMP — 6 ตัวอย่างจาก Examples</h1>
+<span class="level expert">ระดับผู้เชี่ยวชาญ</span>
+
+<section class="flowchart">
+    <h2>🧭 เส้นทางเรียนรู้: 6 ตัวอย่าง OPAMP</h2>
+    <pre class="mermaid">
+flowchart LR
+    A["ex01: Voltage Follower"] --> B["ex02: Non-Inverting Amp"]
+    B --> C["ex03: Inverting Amp"]
+    C --> D["ex04: Comparator"]
+    D --> E["ex05: OPAMP+ADC"]
+    E --> F["ex06: Advanced Control"]
+    style A fill:#dcfce7
+    style F fill:#fef3c7
+    </pre>
+</section>
+
+<section>
+<h2>ex01_Voltage_Follower — OPAMP SimpleInit + Follower + ADC</h2>
+<h3>📖 แนวคิด</h3>
+<p>ใช้ OPAMP ในโหมด Voltage Follower (บัฟเฟอร์) ผ่าน OPAMP_SimpleInit — ขาเข้าผ่าน OPAMP แล้วต่อเข้ากับ ADC ภายใน — อ่านค่าแรงดันแบบไม่สูญเสียกระแส</p>
+
+<h3>🔌 วงจร</h3>
+<pre class="ascii-circuit">
+    CH32V003
+    OPAMP1_IN (PD5) --- สัญญาณอนาล็อกเข้า
+    OPAMP1_OUT ------------ ต่อกับ ADC IN ภายในอัตโนมัติ
+    ADC_IN (PA1) ---------- อ่านค่าแรงดันจาก OPAMP
+
+    - PD5: OPAMP1 input (non-inverting)
+    - OPAMP output เชื่อม ADC ภายใน — ไม่ต้องต่อสายภายนอก
+</pre>
+
+<h3>💻 โค้ด + อธิบายทีละบรรทัด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    ADC_SimpleInit();
+    OPAMP_SimpleInit(OPAMP1, VOLTAGE_FOLLOWER);
+    OPAMP_Enable(OPAMP1);
+    USART_Print("OPAMP Voltage Follower Ready!\r\n");
+
+    while(1)
+    {
+        uint16_t adc_val = ADC_Read(7);       // ADC ch7 = OPAMP1 output
+        float voltage = ADC_ReadVoltage(7);
+        USART_Print("ADC: ");
+        USART_PrintNum(adc_val);
+        USART_Print(" = ");
+        USART_PrintFloat(voltage, 2);
+        USART_Print("V\r\n");
+        Delay_Ms(500);
+    }
+}</code></pre>
+<ul>
+<li><strong>OPAMP_SimpleInit(ch, mode):</strong> เริ่มต้น OPAMP1 หรือ OPAMP2 — โหมด VOLTAGE_FOLLOWER = output ตาม input แบบไม่ขยาย</li>
+<li><strong>OPAMP_Enable(ch):</strong> เปิด OPAMP — ต้องเรียกก่อน ADC อ่านค่า — กินกระแส ~1mA</li>
+<li><strong>ADC_Read(7):</strong> ช่อง 7 = OPAMP1 output ที่ต่อภายในกับ ADC — ไม่ต้องใช้ pin ภายนอก</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>ต้องเปิด ADC_SimpleInit ก่อน OPAMP_SimpleInit — OPAMP output ต้องมี ADC เป็นปลายทาง</li>
+<li>OPAMP กินกระแส ~1mA — ถ้าใช้ battery ควรปิดเมื่อไม่ใช้ (OPAMP_Disable)</li>
+<li>แรงดัน input ต้องอยู่ในช่วง 0V~VDD — OPAMP rail-to-rail</li>
+</ul>
+
+<h3>✅ ตรวจสอบก่อนรัน</h3>
+<ul>
+<li>เลือก PACKAGE_TSSOP20 (SOP-8 มีแค่ OPAMP1 เท่านั้น)</li>
+<li>ADC และ OPAMP ต้องใช้ VREF เดียวกัน — ปกติ VDD = 3.3V</li>
+<li>Serial monitor ตั้ง baud 115200</li>
+</ul>
+</section>
+
+<section>
+<h2>ex02_NonInverting_Amp — ConfigNonInverting ขยาย 2 เท่า</h2>
+<h3>📖 แนวคิด</h3>
+<p>ใช้ OPAMP ในโหมด Non-Inverting ขยายสัญญาณด้วย ConfigNonInverting — gain = 2 — ใช้ R ภายนอก 2 ตัวกำหนดอัตราขยาย — อ่านค่าผ่าน ADC</p>
+
+<h3>🔌 วงจร</h3>
+<pre class="ascii-circuit">
+    CH32V003
+    OPAMP1_IN (PD5) --- สัญญาณเข้า (non-inverting)
+    OPAMP1_OUT ----+---- R1=10kΩ ---- GND
+                   |
+                   +---- R2=10kΩ ---- PA1 (ADC in)
+    - Gain = 1 + R2/R1 = 1 + 10k/10k = 2
+</pre>
+
+<h3>💻 โค้ด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    ADC_SimpleInit();
+    OPAMP_SimpleInit(OPAMP1, VOLTAGE_FOLLOWER);
+    OPAMP_ConfigNonInverting(OPAMP1, 2);  // gain = 2
+    OPAMP_Enable(OPAMP1);
+
+    while(1) {
+        float vin = ADC_ReadVoltage(7) / 2.0f;
+        USART_Print("Vin = ");
+        USART_PrintFloat(vin, 3);
+        USART_Print("V\r\n");
+        Delay_Ms(500);
+    }
+}</code></pre>
+<ul>
+<li><strong>OPAMP_ConfigNonInverting(ch, gain):</strong> ตั้งอัตราขยายแบบ non-inverting — gain = 1 + Rf/Rg — ภายในใช้ resistor ladder</li>
+<li>แรงดัน output = Vin × gain — จากนั้น ADC อ่านค่า output → คำนวณย้อนกลับหา Vin</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>gain สูงสุดที่ recommend = 8 — เกินนี้อาจมี noise และ offset สูง</li>
+<li>Input signal + output × gain ต้องไม่เกิน VDD — ถ้าเกิน output จะคลิป</li>
+<li>ADC ch7 (PA1) รับ output จาก OPAMP — ถ้าใช้ ch อื่นต้องเช็ค datasheet</li>
+</ul>
+</section>
+
+<section>
+<h2>ex03_Inverting_Amp — ConfigInverting ขยาย -2 เท่า</h2>
+<h3>📖 แนวคิด</h3>
+<p>ใช้ OPAMP แบบ Inverting ขยายสัญญาณกลับเฟส — ConfigInverting gain = -2 — output = -2 × Vin — ต่อ R ภายนอกแบบ inverting topology</p>
+
+<h3>💻 โค้ด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    ADC_SimpleInit();
+    OPAMP_SimpleInit(OPAMP1, VOLTAGE_FOLLOWER);
+    OPAMP_ConfigInverting(OPAMP1, 2);   // gain = -2 (absolute)
+    OPAMP_Enable(OPAMP1);
+
+    while(1) {
+        uint16_t adc = ADC_Read(7);
+        float vout = (adc * 3.3f) / 4095.0f;
+        float vin = vout / -2.0f;        // vin = vout / gain
+        USART_Print("Vout: ");
+        USART_PrintFloat(vout, 3);
+        USART_Print("V, Vin: ");
+        USART_PrintFloat(vin, 3);
+        USART_Print("V\r\n");
+        Delay_Ms(500);
+    }
+}</code></pre>
+<ul>
+<li><strong>OPAMP_ConfigInverting(ch, gain):</strong> ตั้งค่า inverting — output = -gain × input — gain สัมบูรณ์</li>
+<li>สัญญาณกลับเฟส 180° — ถ้า input สูงขึ้น output จะลดลง</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>Output เป็นลบไม่ได้ (GND = 0V ต่ำสุด) — ถ้า Vin × -2 ตกต่ำกว่า GND output จะคลิปที่ 0V</li>
+<li>ต้องต่อ R ภายนอกตาม topology inverting — CH32V003 OPAMP ใช้ internal resistor matrix</li>
+</ul>
+</section>
+
+<section>
+<h2>ex04_Comparator — ConfigComparator HIGH/LOW</h2>
+<h3>📖 แนวคิด</h3>
+<p>ตั้ง OPAMP เป็น Comparator — เปรียบเทียบสัญญาณอนาล็อกกับ threshold — ConfigComparator HIGH = output HIGH เมื่อ Vin > Vref — LOW = LOW เมื่อ Vin < Vref — อ่านผลด้วย digitalRead</p>
+
+<h3>💻 โค้ด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    ADC_SimpleInit();
+    OPAMP_SimpleInit(OPAMP1, VOLTAGE_FOLLOWER);
+    OPAMP_ConfigComparator(OPAMP1, COMP_HIGH);  // output HIGH when Vin > 1.65V
+    OPAMP_Enable(OPAMP1);
+
+    while(1) {
+        uint8_t cmp_out = digitalRead(OPAMP_OUT_PIN);
+        USART_Print("Comparator: ");
+        USART_Print(cmp_out ? "HIGH\r\n" : "LOW\r\n");
+        Delay_Ms(200);
+    }
+}</code></pre>
+<ul>
+<li><strong>COMP_HIGH:</strong> threshold ที่ VDD/2 (≈1.65V) — Vin > 1.65V → output HIGH</li>
+<li><strong>COMP_LOW:</strong> threshold ที่ VDD/4 — ใช้กับสัญญาณต่ำ</li>
+<li>output ของ comparator อ่านผ่าน OPAMP_OUT_PIN (digital pin)</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>Comparator output เป็น digital (HIGH/LOW) ไม่ใช่อนาล็อก — ถ้าต้องการค่าอนาล็อกใช้ ADC หลัง OPAMP</li>
+<li>มี hysteresis ในตัว ~20mV — ป้องกัน oscillation ที่ threshold</li>
+<li>delay ~1µs จาก input เปลี่ยนถึง output เปลี่ยน</li>
+</ul>
+</section>
+
+<section>
+<h2>ex05_OPAMP_with_ADC — Follower + ADC Read</h2>
+<h3>📖 แนวคิด</h3>
+<p>รวม OPAMP follower + ADC — ใช้ OPAMP เป็นบัฟเฟอร์ลด impedance ของสัญญาณก่อนเข้า ADC — อ่านค่าแรงดันและแปลงเป็นค่าจริง — แสดงทาง USART</p>
+
+<h3>💻 โค้ด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    ADC_SimpleInit();
+    OPAMP_SimpleInit(OPAMP1, VOLTAGE_FOLLOWER);
+    OPAMP_Enable(OPAMP1);
+
+    USART_Print("OPAMP + ADC Ready\r\n");
+
+    while(1) {
+        uint16_t raw = ADC_Read(7);
+        float volt = ADC_ReadVoltage(7);
+        USART_Print("Raw: ");
+        USART_PrintNum(raw);
+        USART_Print(" (");
+        USART_PrintFloat(volt, 2);
+        USART_Print("V)\r\n");
+        Delay_Ms(250);
+    }
+}</code></pre>
+<ul>
+<li><strong>ADC_ReadVoltage(ch):</strong> แปลง raw ADC (0-4095) เป็นแรงดัน (0-VDD) โดยอัตโนมัติ</li>
+<li>OPAMP follower ทำให้ ADC อ่านค่าได้แม่นยำขึ้น — source impedance ต่ำลง</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>ADC resolution 12-bit (0-4095) — VDD = 3.3V → 0.8mV/step</li>
+<li>OPAMP มี offset ~5mV — ค่า ADC จะคลาดเคลื่อนเล็กน้อย</li>
+</ul>
+</section>
+
+<section>
+<h2>ex06_Advanced_Control — เปลี่ยนช่อง + Power Save</h2>
+<h3>📖 แนวคิด</h3>
+<p>ควบคุม OPAMP ขั้นสูง — เปลี่ยน channel ระหว่าง OPAMP1↔OPAMP2 ขณะรัน — เปิด/ปิด Power Save mode — อ่านค่าสัญญาณต่างช่องและเปรียบเทียบ</p>
+
+<h3>💻 โค้ด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    ADC_SimpleInit();
+
+    OPAMP_SimpleInit(OPAMP1, VOLTAGE_FOLLOWER);
+    OPAMP_SimpleInit(OPAMP2, VOLTAGE_FOLLOWER);
+
+    uint8_t active_ch = OPAMP1;
+
+    while(1) {
+        static uint32_t last_switch = 0;
+        if(ELAPSED_TIME(last_switch, Get_CurrentMs()) >= 3000) {
+            last_switch = Get_CurrentMs();
+            OPAMP_Disable(active_ch);
+            if(active_ch == OPAMP1) {
+                active_ch = OPAMP2;
+                OPAMP_EnablePowerSave(OPAMP1);   // OPAMP1 เข้า power save
+            } else {
+                active_ch = OPAMP1;
+                OPAMP_EnablePowerSave(OPAMP2);
+            }
+            OPAMP_Enable(active_ch);
+            USART_Print("Switched to ");
+            USART_PrintNum(active_ch);
+            USART_Print("\r\n");
+        }
+
+        uint8_t adc_ch = (active_ch == OPAMP1) ? 7 : 6;
+        uint16_t val = ADC_Read(adc_ch);
+        USART_Print("CH");
+        USART_PrintNum(adc_ch);
+        USART_Print(": ");
+        USART_PrintNum(val);
+        USART_Print("\r\n");
+        Delay_Ms(200);
+    }
+}</code></pre>
+<ul>
+<li><strong>OPAMP_EnablePowerSave(ch):</strong> ลดกระแส OPAMP เหลือ ~0.1mA — output ไม่แม่นยำเท่าเต็มที่</li>
+<li><strong>OPAMP_Disable(ch):</strong> ปิด OPAMP จริง — ประหยัดพลังงานสูงสุด</li>
+<li>OPAMP1 → ADC ch7 (PA1), OPAMP2 → ADC ch6 (PC1) — ไม่เหมือนกัน</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>Power Save mode = output มี offset มากขึ้น (~20mV) — ใช้เมื่อไม่ต้องการ precision สูง</li>
+<li>Stabilization time หลังจากเปิด OPAMP ~10µs — รอเล็กน้อยก่อน ADC read</li>
+<li>TSSOP20 มี 2 OPAMP — SOP-8 มีแค่ OPAMP1</li>
+</ul>
+</section>
+
+<section>
+<h2>✏️ สรุป — 6 ตัวอย่าง OPAMP</h2>
+<table>
+<tr><th>ตัวอย่าง</th><th>สอนอะไร</th><th>ฟังก์ชันหลัก</th></tr>
+<tr><td>ex01</td><td>Voltage Follower + ADC</td><td>OPAMP_SimpleInit, OPAMP_Enable, ADC_Read</td></tr>
+<tr><td>ex02</td><td>Non-Inverting Amp</td><td>OPAMP_ConfigNonInverting, gain</td></tr>
+<tr><td>ex03</td><td>Inverting Amp</td><td>OPAMP_ConfigInverting, gain ลบ</td></tr>
+<tr><td>ex04</td><td>Comparator</td><td>OPAMP_ConfigComparator, COMP_HIGH/LOW</td></tr>
+<tr><td>ex05</td><td>OPAMP + ADC</td><td>ADC_ReadVoltage, OPAMP buffer</td></tr>
+<tr><td>ex06</td><td>Advanced Control</td><td>OPAMP_EnablePowerSave, เปลี่ยน channel</td></tr>
+</table>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch31_power.html">บทก่อน</a>
+    <a href="ch33_integrated.html">บทถัดไป →</a>
+</nav>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

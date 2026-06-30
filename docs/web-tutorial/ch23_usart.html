@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>บทที่ 23: Workshop USART — 7 ตัวอย่างจาก Examples — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch22_pwm.html">บทก่อน</a>
+    <a href="ch24_i2c.html">บทถัดไป →</a>
+</nav>
+
+<h1>บทที่ 23: Workshop USART — 7 ตัวอย่างจาก Examples</h1>
+<span class="level beginner">ระดับเริ่มต้น</span>
+
+<section class="flowchart">
+    <h2>🧥 เส้นทางเรียนรู้: 7 ตัวอย่าง USART</h2>
+    <pre class="mermaid">
+flowchart LR
+    A["ex01: Hello World"] --> B["ex02: Print Formatted"]
+    B --> C["ex03: Echo Command"]
+    C --> D["ex04: Read Bytes"]
+    D --> E["ex05: DMA Transmit"]
+    E --> F["ex06: USART Remap"]
+    F --> G["ex07: Package Aware"]
+    style A fill:#dcfce7
+    style G fill:#fef3c7
+    </pre>
+</section>
+
+<section>
+<h2>ex01_Hello_World — ส่งข้อความ Hello World</h2>
+<h3>📖 แนวคิด</h3>
+<p>โปรแกรมแรกของ USART — ใช้ USART_SimpleInit กำหนด Baud Rate 115200 — ส่งข้อความ "Hello from CH32V003!" ผ่าน USART_Print — ต้องต่อ USB-to-Serial แบบ Cross-connect</p>
+
+<h3>🔌 วงจร</h3>
+<pre class="ascii-circuit">
+    CH32V003              USB-Serial (CH340G/CP2102/FT232)
+    PD5 (TX) ------------> RX
+    PD6 (RX) <------------ TX
+    GND ------------------ GND
+
+    - Cross-connect: MCU-TX → USB-RX, MCU-RX → USB-TX
+    - Baud Rate 115200 ใน Serial Monitor
+    - GND ต้องต่อร่วมกันเสมอ!
+</pre>
+
+<h3>💻 โค้ด + อธิบายทีละบรรทัด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+
+    while (1)
+    {
+        USART_Print("Hello from CH32V003!\r\n");
+        Delay_Ms(1000);
+    }
+}</code></pre>
+<ul>
+<li><strong>USART_SimpleInit(baud, pinConfig):</strong> เริ่ม USART 1 ช็อต — ตั้ง Baud Rate, pin TX/RX, 8N1 — USART_PINS_DEFAULT = TX=PD5, RX=PD6</li>
+<li><strong>USART_Print(str):</strong> ส่ง string (\r\n = ขึ้นบรรทัดใหม่ + carriage return)</li>
+<li><strong>BAUD_115200:</strong> ความเร็ว 115200 bps — ต้องตรงกับ serial monitor ทุกประการ</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>ลืม SystemCoreClockUpdate() → USART baud rate คำนวณผิด → ข้อความเพี้ยน</li>
+<li>ต่อสายผิด: TX→TX, RX→RX = ไม่มีข้อมูล — ต้อง Cross-connect เสมอ</li>
+<li>Baud Rate ใน serial monitor ต้องตรงกับ BAUD_115200</li>
+</ul>
+
+<h3>✅ ตรวจสอบก่อนรัน</h3>
+<ul>
+<li>ต่อสาย Cross-connect ถูกต้อง? MCU-TX → USB-RX, MCU-RX → USB-TX</li>
+<li>GND ต่อร่วมกัน? (MCU GND ↔ USB-Serial GND)</li>
+<li>Serial monitor ตั้ง Baud 115200, 8N1 หรือไม่</li>
+</ul>
+</section>
+
+<section>
+<h2>ex02_Print_Formatted — พิมพ์เลข ฐานสิบ ฐานสิบหก และไบต์</h2>
+<h3>📖 แนวคิด</h3>
+<p>ใช้ USART_PrintNum แสดงเลขจำนวนเต็ม int32_t — USART_PrintHex แสดงเลขฐานสิบหก — USART_WriteByte ส่ง 1 ไบต์ — ใช้ \r\n ขึ้นบรรทัดใหม่</p>
+
+<h3>🔌 วงจร</h3>
+<pre class="ascii-circuit">
+    CH32V003              USB-Serial
+    PD5 (TX) ------------> RX
+    PD6 (RX) <------------ TX
+    GND ------------------ GND
+    (เหมือน ex01 — ต่อแบบ Cross-connect, Baud 115200)
+</pre>
+
+<h3>💻 โค้ด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+
+    while (1)
+    {
+        USART_Print("Decimal: ");
+        USART_PrintNum(12345);
+        USART_Print("\r\n");
+
+        USART_Print("Hex: 0x");
+        USART_PrintHex(12345, 1);
+        USART_Print("\r\n");
+
+        USART_Print("Negative: ");
+        USART_PrintNum(-999);
+        USART_Print("\r\n");
+
+        USART_Print("Byte: 0x");
+        USART_WriteByte(0x55);
+        USART_Print("\r\n");
+
+        Delay_Ms(2000);
+    }
+}</code></pre>
+<ul>
+<li><strong>USART_PrintNum(int32_t):</strong> พิมพ์จำนวนเต็มมีเครื่องหมาย — แสดงเลขลบได้</li>
+<li><strong>USART_PrintHex(value, showPrefix):</strong> แสดงเลขฐานสิบหก — showPrefix=1 ต่อ "0x" อัตโนมัติ (แต่ ex02 ใช้เอง)</li>
+<li><strong>USART_WriteByte(byte):</strong> ส่ง 1 ไบต์ดิบ ๆ — ไม่แปลงเป็นข้อความ — ดูบน serial เป็นอักขระตาม ASCII</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>USART_PrintNum รับ int32_t — ส่ง uint32_t ที่มีค่ามากกว่า 2^31-1 → แสดงเป็นลบ</li>
+<li>USART_PrintHex รับ uint32_t — ค่า 0-FFFF แสดงถูก แต่ 100000 ก็แสดงได้</li>
+<li>USART_WriteByte(0x55) = 'U' ใน ASCII — ถ้าต้องการดูเลข ต้อง PrintHex แทน</li>
+</ul>
+</section>
+
+<section>
+<h2>ex03_Echo_Command — สั่งงาน LED ผ่าน Serial</h2>
+<h3>📖 แนวคิด</h3>
+<p>ใช้ USART_Available ตรวจสอบข้อมูลขาเข้า — USART_Read อ่าน 1 ไบต์ — สะสมเป็นคำสั่งจนเจอ \r\n — ใช้ strcmp เปรียบเทียบ — สั่ง LED=ON / LED=OFF</p>
+
+<h3>🔌 วงจร</h3>
+<pre class="ascii-circuit">
+    CH32V003              USB-Serial
+    PD5 (TX) ------------> RX
+    PD6 (RX) <------------ TX
+    GND ------------------ GND
+
+    PC0 --- 220Ω ---|>|--- GND    (LED เอาต์พุต)
+</pre>
+
+<h3>💻 โค้ด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    pinMode(PC0, PIN_MODE_OUTPUT);
+
+    char cmd[16];
+    int  idx = 0;
+    char ch;
+
+    while (1)
+    {
+        if (USART_Available() > 0)
+        {
+            ch = USART_Read();
+
+            if ((ch == '\r') || (ch == '\n'))
+            {
+                cmd[idx] = '\0';
+
+                if (strcmp(cmd, "LED=ON") == 0)
+                {
+                    digitalWrite(PC0, HIGH);
+                    USART_Print("LED ON\r\n");
+                }
+                else if (strcmp(cmd, "LED=OFF") == 0)
+                {
+                    digitalWrite(PC0, LOW);
+                    USART_Print("LED OFF\r\n");
+                }
+                else
+                {
+                    USART_Print("You said: ");
+                    USART_Print(cmd);
+                    USART_Print("\r\n");
+                }
+                idx = 0;
+            }
+            else
+            {
+                if (idx < 15) { cmd[idx] = ch; idx++; }
+            }
+        }
+    }
+}</code></pre>
+<ul>
+<li><strong>USART_Available():</strong> คืนจำนวนไบต์ที่รออ่านใน RX buffer — ใช้ตรวจสอบก่อน USART_Read</li>
+<li><strong>USART_Read():</strong> อ่าน 1 ไบต์ (blocking!) — ต้อง Ensure Available() > 0 ก่อน</li>
+<li><strong>strcmp:</strong> เปรียบเทียบ string — case-sensitive — "LED=ON" กับ "led=on" ไม่ตรงกัน</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>บัฟเฟอร์ cmd[16] — พิมพ์เกิน 15 ตัวอักษร → buffer overflow — ต้องเพิ่มขนาดหรือ truncate</li>
+<li>Serial Monitor ต้องตั้ง Line Ending เป็น "\r\n" หรือ "Both NL & CR" — ไม่ตั้ง = ไม่เจอ delimiter</li>
+<li>USART_Read blocking — ถ้าไม่ตรวจ Available ก่อน โปรแกรมค้างรอ</li>
+</ul>
+</section>
+
+<section>
+<h2>ex04_USART_Read_Bytes — อ่านข้อมูลตามจำนวนที่กำหนด</h2>
+<h3>📖 แนวคิด</h3>
+<p>ใช้ USART_ReadBytes(buffer, length) อ่านข้อมูลตามจำนวนไบต์ที่ต้องการ — blocking จนกว่าจะครบ — แสดงผลเป็น hex ทีละไบต์ — ใช้ print "0"+PrintHex สำหรับ Padding</p>
+
+<h3>💻 โค้ด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+
+    uint8_t buffer[5];
+    int i;
+
+    while (1)
+    {
+        USART_Print("Send 5 bytes:\r\n");
+        USART_ReadBytes(buffer, 5);
+
+        USART_Print("Received: ");
+        for (i = 0; i < 5; i++)
+        {
+            if (buffer[i] < 16) USART_Print("0");
+            USART_PrintHex(buffer[i], 1);
+            if (i < 4) USART_Print(" ");
+        }
+        USART_Print("\r\n");
+    }
+}</code></pre>
+<ul>
+<li><strong>USART_ReadBytes(buf, len):</strong> blocking read รอจนครบ len ไบต์ — เหมาะกับโปรโตคอลที่รู้ขนาดแน่นอน</li>
+<li><strong>Padding ด้วย "0":</strong> buffer[i] < 16 → เพิ่ม "0" ข้างหน้าให้เป็น 2 หลัก (0F แทน F)</li>
+<li><strong>USART_PrintHex(byte, 1):</strong> แสดงค่า hex ไม่มี prefix "0x" — ex04 จัดการ prefix เอง</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>USART_ReadBytes blocking จนกว่าครบ — ถ้าส่งไม่ครบ 5 ไบต์ โปรแกรมค้างตลอด</li>
+<li>ควรผสม USART_Available + USART_Read ถ้าต้องการ non-blocking หรือ timeout</li>
+<li>buffer[5] เล็กเกินไปสำหรับข้อมูลเยอะ — ต้องปรับขนาดตาม use case</li>
+</ul>
+</section>
+
+<section>
+<h2>ex05_DMA_USART_Transmit — ส่งข้อมูลแบบไม่รอ CPU</h2>
+<h3>📖 แนวคิด</h3>
+<p>ใช้ DMA_USART_Send ส่งข้อมูลผ่าน DMA โดย CPU ไม่ต้องรอ — ข้อความต้องเป็น global/static array — DMA_CH2 → USART — CPU สามารถทำงานอื่นระหว่างส่ง</p>
+
+<h3>💻 โค้ด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+static const char msg[] = "Hello from DMA!\r\n";
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+
+    while (1)
+    {
+        DMA_USART_Send(DMA_CH2, msg, sizeof(msg) - 1);
+        Delay_Ms(2000);
+    }
+}</code></pre>
+<ul>
+<li><strong>DMA_USART_SEND(chan, data, len):</strong> เริ่ม DMA transfer — return ทันที — CPU ทำงานต่อได้</li>
+<li><strong>ข้อความต้องเป็น global/static:</strong> DMA อ่านจาก RAM โดยตรง — ถ้าเป็น local variable หายเมื่อฟังก์ชันจบ → ส่งข้อมูลผิด</li>
+<li><strong>sizeof(msg)-1:</strong> ไม่ส่ง null terminator — ส่งแค่ "Hello from DMA!\r\n" 16 ตัว</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>DMA channel ชนกับผู้ใช้รายอื่น — CH32V003 มี DMA 1 ชุด แชร์ระหว่าง USART, SPI, ADC</li>
+<li>DMA_USART_Send return ทันที — ต้องมั่นใจว่าข้อมูลไม่ถูกเขียนทับก่อนส่งเสร็จ</li>
+<li>global array ต้องคงอยู่ตลอด — ถ้าเปลี่ยนค่าขณะ DMA กำลังส่ง → ส่งผิด</li>
+</ul>
+</section>
+
+<section>
+<h2>ex06_USART_Remap — เปลี่ยนขา TX/RX</h2>
+<h3>📖 แนวคิด</h3>
+<p>CH32V003 มี 4 pin configs สำหรับ USART: DEFAULT (PD5/PD6), REMAP1 (PD0/PD1), REMAP2 (PD6/PD5 สลับ), FULL_REMAP (PD6/PD5 รวมบิต) — ใช้ test_pin_config เพื่อลองทุกแบบ</p>
+
+<h3>💻 โค้ด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+static void test_pin_config(USART_PinConfig config, const char* name) {
+    USART_SimpleInit(BAUD_115200, config);
+    USART_Print("\r\n=== ");
+    USART_Print(name);
+    USART_Print(" ===\r\n");
+    USART_Print("CH32V003 USART Remap Test - OK\r\n");
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    pinMode(PC0, PIN_MODE_OUTPUT);
+
+    test_pin_config(USART_PINS_DEFAULT, "DEFAULT  TX=PD5 RX=PD6");
+    Delay_Ms(500);
+
+    test_pin_config(USART_PINS_REMAP2, "REMAP2   TX=PD6 RX=PD5");
+    Delay_Ms(500);
+
+#if CH32V003_HAS_PD0
+    test_pin_config(USART_PINS_REMAP1, "REMAP1   TX=PD0 RX=PD1");
+    Delay_Ms(500);
+#endif
+
+    test_pin_config(USART_PINS_FULL_REMAP, "FULL     TX=PD6 RX=PD5");
+    Delay_Ms(500);
+
+    USART_Print("\r\n\r\nAll remap tests complete!\r\n");
+
+    while (1) {
+        digitalToggle(PC0);
+        Delay_Ms(1000);
+    }
+}</code></pre>
+<ul>
+<li><strong>USART_PINS_DEFAULT:</strong> TX=PD5, RX=PD6 — ใช้ได้ทุกแพ็กเกจ</li>
+<li><strong>USART_PINS_REMAP2:</strong> TX=PD6, RX=PD5 — สลับขั้ว — ใช้ได้ทุกแพ็กเกจ</li>
+<li><strong>USART_PINS_REMAP1:</strong> TX=PD0, RX=PD1 — ต้องมี PD0 — มีเฉพาะ TSSOP-20/QFN-20 — ใช้ CH32V003_HAS_PD0 ตรวจสอบ</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>REMAP1 ใช้ PD0 — SOP-8/SOP-16 ไม่มี PD0 → compile error (#error) ถ้าไม่ใช้ #if guard</li>
+<li>REMAP1 กับ FULL_REMAP ต่างกันที่ bit remap register — ดู datasheet</li>
+<li>เปลี่ยน pin config แล้ว USART_SimpleInit ใหม่ — ไม่ต้อง power cycle</li>
+</ul>
+</section>
+
+<section>
+<h2>ex07_USART_Package_Aware — รองรับทุกแพ็กเกจ</h2>
+<h3>📖 แนวคิด</h3>
+<p>ใช้ CH32V003_HAS_PD0, CH32V003_IS_SOP8, CH32V003_IS_SOP16 ปรับการทำงานตามแพ็กเกจ — SOP-8/SOP-16 ใช้ USART_PINS_DEFAULT หรือ REMAP2 เท่านั้น — TSSOP-20/QFN-20 ใช้ทุกแบบ</p>
+
+<h3>💻 โค้ด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+// #define CH32V003_PACKAGE  PACKAGE_SOP16
+// #define CH32V003_PACKAGE  PACKAGE_SOP8
+
+#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+#if CH32V003_HAS_PD0
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    USART_Print("Package: TSSOP20/QFN20 — all pin configs available\r\n");
+    USART_Print("USART_PINS_DEFAULT : TX=PD5 RX=PD6\r\n");
+    USART_Print("USART_PINS_REMAP1  : TX=PD0 RX=PD1\r\n");
+    USART_Print("USART_PINS_REMAP2  : TX=PD6 RX=PD5\r\n");
+    USART_Print("USART_FULL_REMAP   : TX=PD6 RX=PD5\r\n");
+#else
+    USART_SimpleInit(BAUD_115200, USART_PINS_REMAP2);
+    USART_Print("Package: SOP8/SOP16 — no PD0, using REMAP2\r\n");
+    USART_Print("USART_PINS_DEFAULT : TX=PD5 RX=PD6\r\n");
+    USART_Print("USART_PINS_REMAP2  : TX=PD6 RX=PD5\r\n");
+    USART_Print("(REMAP1 requires PD0 — not available)\r\n");
+#endif
+
+#if CH32V003_IS_SOP8
+    USART_Print("\r\nNote: SPI HW and I2C HW not available on SOP-8.\r\n");
+    USART_Print("Use shiftOut/shiftIn and SimpleI2C_Soft instead.\r\n");
+#elif CH32V003_IS_SOP16
+    USART_Print("\r\nNote: SPI HW and I2C HW available with DEFAULT pins only.\r\n");
+#endif
+
+    pinMode(PC0, PIN_MODE_OUTPUT);
+    while (1) {
+        USART_Print(".");
+        digitalToggle(PC0);
+        Delay_Ms(1000);
+    }
+}</code></pre>
+<ul>
+<li><strong>CH32V003_HAS_PD0:</strong> TRUE สำหรับ TSSOP-20/QFN-20 เท่านั้น — SOP-8/SOP-16 FALSE</li>
+<li><strong>CH32V003_IS_SOP8 / _IS_SOP16:</strong> macros ตรวจสอบแพ็กเกจ — ใช้ปรับข้อความและฟีเจอร์</li>
+<li><strong>SOP-8:</strong> ไม่มี SPI HW, I2C HW — ต้องใช้ Software bit-bang</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>เปลี่ยนแค่ #define CH32V003_PACKAGE — rebuild — โค้ดปรับอัตโนมัติ ไม่ต้องแก้ไขส่วนอื่น</li>
+<li>USART_PINS_REMAP1 ใน SOP-8 → #error ตอน compile — ต้องใช้ #if guard</li>
+<li>ข้อความ "using REMAP2" ใน SOP-8/SOP-16 — REMAP2 ใช้ได้ทุกแพ็กเกจจริง</li>
+</ul>
+</section>
+
+<section>
+<h2>✏️ สรุป — 7 ตัวอย่าง USART</h2>
+<table>
+<tr><th>ตัวอย่าง</th><th>สอนอะไร</th><th>ฟังก์ชันหลัก</th></tr>
+<tr><td>ex01</td><td>Hello World</td><td>USART_SimpleInit, USART_Print</td></tr>
+<tr><td>ex02</td><td>พิมพ์เลขและ hex</td><td>USART_PrintNum, USART_PrintHex, USART_WriteByte</td></tr>
+<tr><td>ex03</td><td>รับคำสั่ง serial</td><td>USART_Available, USART_Read, strcmp</td></tr>
+<tr><td>ex04</td><td>อ่านหลายไบต์</td><td>USART_ReadBytes, padding hex</td></tr>
+<tr><td>ex05</td><td>DMA USART</td><td>DMA_USART_Send, global buffer</td></tr>
+<tr><td>ex06</td><td>เปลี่ยนขา TX/RX</td><td>USART_PinConfig, USART_PINS_REMAP</td></tr>
+<tr><td>ex07</td><td>รองรับทุกแพ็กเกจ</td><td>CH32V003_HAS_PD0, CH32V003_IS_SOP8</td></tr>
+</table>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch22_pwm.html">บทก่อน</a>
+    <a href="ch24_i2c.html">บทถัดไป →</a>
+</nav>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

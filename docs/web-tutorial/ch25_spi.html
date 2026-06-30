@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>บทที่ 25: Workshop SPI — 4 ตัวอย่างจาก Examples — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch24_i2c.html">บทก่อน</a>
+    <a href="ch26_adc.html">บทถัดไป →</a>
+</nav>
+
+<h1>บทที่ 25: Workshop SPI — 4 ตัวอย่างจาก Examples</h1>
+<span class="level intermediate">ระดับกลาง</span>
+
+<section class="flowchart">
+    <h2>🧥 เส้นทางเรียนรู้: 4 ตัวอย่าง SPI</h2>
+    <pre class="mermaid">
+flowchart LR
+    A["ex01: Basic Transfer"] --> B["ex02: Buffer Transfer W25Qxx"]
+    B --> C["ex03: SPI Configuration"]
+    C --> D["ex04: Pin Remap"]
+    style A fill:#dcfce7
+    style D fill:#fef3c7
+    </pre>
+</section>
+
+<section>
+<h2>ex01_SPI_Basic_Transfer — ส่งข้อมูล SPI 1 byte</h2>
+<h3>📖 แนวคิด</h3>
+<p>ใช้ SPI_SimpleInit + SPI_Transfer ส่ง-รับ 1 byte ผ่าน SPI — ทดสอบ loopback (ต่อ MISO กับ MOSI เข้าหากัน) หรืออ่าน JEDEC ID จาก W25Qxx Flash — พื้นฐาน SPI: SCK, MOSI, MISO, CS</p>
+
+<h3>🔌 วงจร</h3>
+<pre class="ascii-circuit">
+    Loopback Test:          W25Qxx Flash:
+    PC6(MOSI) ----+---- PC7(MISO)    PC4 --[CS]-------- CS
+                                           PC5 --[SCK]------- SCK
+                                           PC6 --[MOSI]------ MOSI
+                                           PC7 --[MISO]------ MISO
+                                           /WP=/HOLD=3.3V
+
+    SPI_PINS_DEFAULT: SCK=PC5, MISO=PC7, MOSI=PC6, NSS=PC4
+</pre>
+
+<h3>💻 โค้ด + อธิบายทีละบรรทัด</h3>
+<pre><code class="language-c">#if CH32V003_IS_SOP8
+#error "Hardware SPI not available on SOP-8. Use shiftOut/shiftIn instead."
+#endif
+#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+#define CS_PIN PC4
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    SPI_SimpleInit(SPI_MODE0, SPI_1MHZ, SPI_PINS_DEFAULT);
+
+    pinMode(CS_PIN, PIN_MODE_OUTPUT);
+    SPI_SetCSPin(GPIOC, GPIO_Pin_4);
+
+    while(1)
+    {
+        SPI_SetCS(0);
+        uint8_t rx = SPI_Transfer(0xAA);
+        SPI_SetCS(1);
+
+        USART_Print("Loopback: sent 0xAA, received 0x");
+        USART_PrintHex(rx, 1);
+        USART_Print("\r\n");
+
+        Delay_Ms(2000);
+    }
+    return 0;
+}</code></pre>
+<ul>
+<li><strong>SPI_SimpleInit(mode, speed, pinConfig):</strong> ตั้งค่า SPI — MODE0/MODE1/MODE2/MODE3 — ความเร็ว 125kHz-8MHz — pin mapping</li>
+<li><strong>SPI_Transfer(tx):</strong> ส่ง 1 byte พร้อมรับ 1 byte พร้อมกัน — half-duplex (shift register แบบ duplex)</li>
+<li><strong>SPI_SetCSPin(port, pin):</strong> กำหนด pin CS ที่จะใช้กับ SPI_SetCS — เรียกก่อน SPI_SetCS</li>
+<li><strong>SPI_SetCS(val):</strong> 0 = CS LOW (select), 1 = CS HIGH (deselect) — ต้อง pinMode + SPI_SetCSPin ก่อน</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>SPI_SimpleInit ไม่ได้ตั้งค่า CS pin อัตโนมัติ — ต้อง pinMode + SPI_SetCSPin เอง</li>
+<li>SOP-8 ใช้ Hardware SPI ไม่ได้ — ใช้ shiftOut/shiftIn แทน</li>
+<li>Loopback: ต้องต่อ MISO(PC7) กับ MOSI(PC6) ด้วย jumper — ถ้าไม่ต่อจะได้ 0xFF</li>
+</ul>
+
+<h3>✅ ตรวจสอบก่อนรัน</h3>
+<ul>
+<li>SOP-8? เปลี่ยนไปใช้ shiftOut/shiftIn หรือ Software SPI</li>
+<li>ใน loopback: MISO ต่อกับ MOSI หรือยัง?</li>
+<li>ใน W25Qxx: /WP และ /HOLD ต่อ 3.3V หรือยัง? (ลอย = สัญญาณรบกวน)</li>
+</ul>
+</section>
+
+<section>
+<h2>ex02_SPI_Buffer_Transfer — อ่าน W25Qxx Flash</h2>
+<h3>📖 แนวคิด</h3>
+<p>ใช้ SPI_Write, SPI_Read, SPI_TransferBuffer สื่อสารกับ W25Qxx Flash — อ่าน Status Register, JEDEC ID, และ hex dump 32 bytes — สอนการใช้ buffer-based transfer สำหรับ multi-byte communication</p>
+
+<h3>🔌 วงจร</h3>
+<pre class="ascii-circuit">
+    CH32V003          W25Qxx Flash
+    --------          -------------
+    PC4 --[CS]-------- CS
+    PC5 --[SCK]------- SCK
+    PC6 --[MOSI]------ MOSI
+    PC7 --[MISO]------ MISO
+                      /WP=3.3V, /HOLD=3.3V
+    3.3V              VCC=3.3V
+    GND               GND
+</pre>
+
+<h3>💻 โค้ด + อธิบายทีละบรรทัด</h3>
+<pre><code class="language-c">#if CH32V003_IS_SOP8
+#error "Hardware SPI not available on SOP-8."
+#endif
+#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+#define CS_PIN      PC4
+#define CMD_RDSR    0x05
+#define CMD_JEDEC   0x9F
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    SPI_SimpleInit(SPI_MODE0, SPI_1MHZ, SPI_PINS_DEFAULT);
+
+    pinMode(CS_PIN, PIN_MODE_OUTPUT);
+    SPI_SetCSPin(GPIOC, GPIO_Pin_4);
+
+    while(1)
+    {
+        uint8_t buf[32];
+        uint8_t jedec[3];
+        uint8_t status;
+        uint8_t cmd;
+
+        // --- Read Status Register ---
+        SPI_SetCS(0);
+        cmd = CMD_RDSR;
+        SPI_Write(&cmd, 1);
+        SPI_Read(&status, 1, 0xFF);
+        SPI_SetCS(1);
+        USART_Print("Status Reg: 0x");
+        USART_PrintHex(status, 1);
+        USART_Print("\r\n");
+
+        // --- Read JEDEC ID ---
+        SPI_SetCS(0);
+        cmd = CMD_JEDEC;
+        SPI_Write(&cmd, 1);
+        SPI_TransferBuffer(NULL, jedec, 3);
+        SPI_SetCS(1);
+        USART_Print("JEDEC ID: ");
+        USART_PrintHex(jedec[0], 1);
+        USART_Print(" ");
+        USART_PrintHex(jedec[1], 1);
+        USART_Print(" ");
+        USART_PrintHex(jedec[2], 1);
+        USART_Print("\r\n");
+
+        // --- Read 32 bytes from address 0x00 ---
+        SPI_SetCS(0);
+        cmd = 0x03;
+        uint8_t addrBytes[3] = {0x00, 0x00, 0x00};
+        SPI_Write(&cmd, 1);
+        SPI_Write(addrBytes, 3);
+        SPI_TransferBuffer(NULL, buf, 32);
+        SPI_SetCS(1);
+
+        USART_Print("Hex dump: ");
+        for (uint8_t i = 0; i &lt; 32; i++)
+        {
+            USART_PrintHex(buf[i], 1);
+            USART_Print(" ");
+        }
+        USART_Print("\r\n");
+
+        Delay_Ms(3000);
+    }
+    return 0;
+}</code></pre>
+<ul>
+<li><strong>SPI_Write(buf, len):</strong> ส่งข้อมูล len byte — ไม่รับข้อมูลขากลับ (discard MISO)</li>
+<li><strong>SPI_Read(buf, len, fill):</strong> รับข้อมูล len byte — ส่ง fill byte ไปพร้อมกัน (มัก 0xFF)</li>
+<li><strong>SPI_TransferBuffer(tx, rx, len):</strong> ส่ง tx buffer + รับ rx buffer พร้อมกัน — tx=NULL = ส่ง 0xFF</li>
+<li><strong>W25Qxx commands:</strong> 0x05=Read Status, 0x9F=JEDEC ID, 0x03=Read Data — ต้องส่ง command byte ก่อนทุกครั้ง</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>W25Qxx command set ต้องตาม datasheet — ส่ง byte ผิด = ไม่ได้ค่าหรือค่าเพี้ยน</li>
+<li>อ่าน Read Data (0x03) ต้องส่ง 3-byte address ตามหลัง command</li>
+<li>SPI_TransferBuffer ใช้กับ tx+rx พร้อมกัน — tx=NULL = ส่ง 0xFF (เพื่อรับ clock)</li>
+</ul>
+
+<h3>✅ ตรวจสอบก่อนรัน</h3>
+<ul>
+<li>CS pin เป็น output? pinMode(PC4, OUTPUT) เรียกแล้ว?</li>
+<li>/WP และ /HOLD ของ W25Qxx ต่อ 3.3V? (ลอย = กันเขียน/ unspecific)</li>
+<li>VCC W25Qxx 3.3V เท่ากับ MCU? (W25Qxx ไม่ทน 5V บน VCC)</li>
+</ul>
+</section>
+
+<section>
+<h2>ex03_SPI_Configuration — ปรับแต่งความเร็ว + Bit Order</h2>
+<h3>📖 แนวคิด</h3>
+<p>ใช้ SPI_SetSpeed + SPI_SetBitOrder ปรับแต่ง SPI runtime — ทดสอบ JEDEC ID ที่ 125kHz vs 8MHz — เปรียบเทียบ MSB_FIRST vs LSB_FIRST (bit-reversed) — device แต่ละตัวต้องการ speed/mode เฉพาะ</p>
+
+<h3>💻 โค้ด + อธิบายทีละบรรทัด</h3>
+<pre><code class="language-c">#if CH32V003_IS_SOP8
+#error "Hardware SPI not available on SOP-8."
+#endif
+#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+#define CS_PIN      PC4
+#define CMD_JEDEC   0x9F
+
+void readJedec(void);
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+
+    pinMode(CS_PIN, PIN_MODE_OUTPUT);
+    SPI_SetCSPin(GPIOC, GPIO_Pin_4);
+
+    while(1)
+    {
+        // Test at 125 kHz
+        SPI_SimpleInit(SPI_MODE0, SPI_125KHZ, SPI_PINS_DEFAULT);
+        USART_Print("JEDEC @125kHz: ");
+        readJedec();
+
+        // Test at 8 MHz
+        SPI_SetSpeed(SPI_8MHZ);
+        USART_Print("JEDEC @8MHz  : ");
+        readJedec();
+
+        // Test MSB first
+        uint8_t msbVal, lsbVal;
+        SPI_SetBitOrder(SPI_MSB_FIRST);
+        SPI_SetCS(0);
+        SPI_Write(&(uint8_t){CMD_JEDEC}, 1);
+        SPI_Read(&msbVal, 1, 0xFF);
+        SPI_SetCS(1);
+        USART_Print("MSB first: ");
+        USART_PrintHex(msbVal, 1);
+        USART_Print("\r\n");
+
+        // Test LSB first
+        SPI_SetBitOrder(SPI_LSB_FIRST);
+        SPI_SetCS(0);
+        SPI_Write(&(uint8_t){CMD_JEDEC}, 1);
+        SPI_Read(&lsbVal, 1, 0xFF);
+        SPI_SetCS(1);
+        USART_Print("LSB first: ");
+        USART_PrintHex(lsbVal, 1);
+        USART_Print("\r\n");
+
+        Delay_Ms(5000);
+    }
+    return 0;
+}
+
+void readJedec()
+{
+    uint8_t cmd = CMD_JEDEC;
+    uint8_t b0, b1, b2;
+    SPI_SetCS(0);
+    SPI_Write(&cmd, 1);
+    SPI_Read(&b0, 1, 0xFF);
+    SPI_Read(&b1, 1, 0xFF);
+    SPI_Read(&b2, 1, 0xFF);
+    SPI_SetCS(1);
+    USART_PrintHex(b0, 1);
+    USART_Print(" ");
+    USART_PrintHex(b1, 1);
+    USART_Print(" ");
+    USART_PrintHex(b2, 1);
+    USART_Print("\r\n");
+}</code></pre>
+<ul>
+<li><strong>SPI_SetSpeed(speed):</strong> เปลี่ยนความเร็ว SPI โดยไม่ต้อง init ใหม่ทั้งหมด — ค่า: SPI_125KHZ / SPI_250KHZ / SPI_500KHZ / SPI_1MHZ / SPI_2MHZ / SPI_4MHZ / SPI_8MHZ</li>
+<li><strong>SPI_SetBitOrder(order):</strong> SPI_MSB_FIRST (ส่ง bit 7 ก่อน) หรือ SPI_LSB_FIRST (ส่ง bit 0 ก่อน) — device ส่วนใหญ่ใช้ MSB first</li>
+<li><strong>SPI_125KHZ vs SPI_8MHZ:</strong> ความถี่ต่ำกันน้ำ — เหมาะกับสายยาวหรือ breadboard — อุปกรณ์บางตัวจำกัดความเร็วสูงสุด</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>LSB_FIRST: ค่า 0xEF (MSB) จะกลายเป็น 0xF7 (LSB = bit-reversed) — device ส่วนใหญ่ใช้ MSB first</li>
+<li>SPI_MODE ต้องตรงกับ device — W25Qxx ใช้ MODE0 หรือ MODE3 — MODE1/MODE2 อาจไม่ work</li>
+<li>ความเร็วสูง (8MHz) อาจมีสัญญาณรบกวนบน breadboard — ใช้สายสั้น หรือลด speed</li>
+</ul>
+</section>
+
+<section>
+<h2>ex04_SPI_Remap — สลับ Pin Configuration SPI</h2>
+<h3>📖 แนวคิด</h3>
+<p>ใช้ SPI_PinConfig เปลี่ยน pin SPI ระหว่าง DEFAULT (PC5=SCK/PC6=MOSI/PC7=MISO/PC4=NSS) กับ REMAP (PD1=SCK/PD3=MOSI/PD2=MISO/PD0=NSS) — ทดสอบ loopback ในแต่ละ config — SOP-8 ใช้ไม่ได้, SOP-16 ใช้ได้เฉพาะ DEFAULT</p>
+
+<h3>💻 โค้ด + อธิบายทีละบรรทัด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+static void test_spi_config(SPI_PinConfig config, const char* name) {
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    SPI_SimpleInit(SPI_MODE0, SPI_1MHZ, config);
+
+    USART_Print("\r\n=== SPI [");
+    USART_Print(name);
+    USART_Print("] ===\r\n");
+
+    // Loopback test
+    SPI_SetCS(0);
+    uint8_t rx = SPI_Transfer(0x55);
+    SPI_SetCS(1);
+
+    USART_Print("  Sent: 0x55, Received: 0x");
+    USART_PrintHex(rx, 1);
+    if (rx == 0x55) {
+        USART_Print("\r\n  Loopback OK!\r\n");
+    } else {
+        USART_Print("\r\n  Loopback FAIL (connect MISO-MOSI?)\r\n");
+    }
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    pinMode(PC0, PIN_MODE_OUTPUT);
+
+    test_spi_config(SPI_PINS_DEFAULT, "DEFAULT PC5-7");
+    Delay_Ms(500);
+
+#if CH32V003_HAS_PD0
+    test_spi_config(SPI_PINS_REMAP, "REMAP  PD0-3");
+    Delay_Ms(500);
+#else
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    USART_Print("\r\n=== SPI REMAP [SKIP - PD0 not available] ===\r\n");
+#endif
+
+    USART_Print("\r\nSPI remap test complete!\r\n");
+
+    while (1) {
+        digitalToggle(PC0);
+        Delay_Ms(1000);
+    }
+}</code></pre>
+<ul>
+<li><strong>SPI_PinConfig:</strong> SPI_PINS_DEFAULT (PC4-7) และ SPI_PINS_REMAP (PD0-3) — SOP-8 ใช้ไม่ได้, SOP-16 ใช้ได้เฉพาะ DEFAULT</li>
+<li><strong>CH32V003_HAS_PD0:</strong> เช็ค compile-time ว่า PD0 มีในแพ็กเกจนี้ไหม — TSSOP-20/QFN-20 มี, SOP-8/SOP-16 ไม่มี</li>
+<li><strong>การ loopback:</strong> ต้องต่อ MISO ↔ MOSI ด้วย jumper — ถ้าได้ค่า 0x55 = OK, ถ้า 0xFF = ไม่ได้ต่อ</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>SOP-8: Hardware SPI ใช้ไม่ได้เลย — #if CH32V003_IS_SOP8 ปิดทั้งไฟล์ — ใช้ shiftOut/shiftIn แทน</li>
+<li>SOP-16: REMAP ใช้ไม่ได้ (ไม่มี PD0) — ถ้าฝืน compile จะ error</li>
+<li>การเปลี่ยน pin config ต้อง re-init SPI_SimpleInit ใหม่ — SPI_SetCSPin ก็ต้องตั้งใหม่</li>
+</ul>
+
+<h3>✅ ตรวจสอบก่อนรัน</h3>
+<ul>
+<li>ต่อ MISO(PC7 หรือ PD2) กับ MOSI(PC6 หรือ PD3) ด้วย jumper</li>
+<li>เลือก PACKAGE ให้ตรง — REMAP ใช้ได้เฉพาะ TSSOP-20/QFN-20</li>
+<li>ถ้าใช้ SOP-16: REMAP จะถูก skip — ต้องมี device SPI จริงมิฉะนั้นผล loopback จะ FAIL</li>
+</ul>
+</section>
+
+<section>
+<h2>✏️ สรุป — 4 ตัวอย่าง SPI</h2>
+<table>
+<tr><th>ตัวอย่าง</th><th>สอนอะไร</th><th>ฟังก์ชันหลัก</th></tr>
+<tr><td>ex01</td><td>SPI พื้นฐาน + Loopback</td><td>SPI_SimpleInit, SPI_Transfer</td></tr>
+<tr><td>ex02</td><td>W25Qxx Flash</td><td>SPI_Write, SPI_Read, SPI_TransferBuffer</td></tr>
+<tr><td>ex03</td><td>ปรับแต่ง SPI</td><td>SPI_SetSpeed, SPI_SetBitOrder</td></tr>
+<tr><td>ex04</td><td>SPI Pin Remap</td><td>SPI_PinConfig, SPI_PINS_DEFAULT/REMAP</td></tr>
+</table>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch24_i2c.html">บทก่อน</a>
+    <a href="ch26_adc.html">บทถัดไป →</a>
+</nav>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

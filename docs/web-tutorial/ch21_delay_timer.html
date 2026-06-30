@@ -1,0 +1,979 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>บทที่ 21: Workshop Delay &amp; Timer — 8 ตัวอย่างจาก Examples — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch20_gpio.html">บทก่อน</a>
+    <a href="ch22_pwm.html">บทถัดไป →</a>
+</nav>
+
+<h1>บทที่ 21: Workshop Delay &amp; Timer — 8 ตัวอย่างจาก Examples</h1>
+<span class="level beginner">ระดับเริ่มต้น</span>
+
+<section class="flowchart">
+    <h2>🧥 เส้นทางเรียนรู้: 8 ตัวอย่าง Delay &amp; Timer</h2>
+    <pre class="mermaid">
+    flowchart LR
+        A["ex01: NonBlocking Timer"] --> B["ex02: Blocking Delay"]
+        B --> C["ex03: Time Reading"]
+        C --> D["ex04: Timer Interrupt"]
+        D --> E["ex05: Timer Advanced"]
+        E --> F["ex06: Stopwatch"]
+        F --> G["ex07: Countdown"]
+        G --> H["ex08: Timer Resource Management"]
+        style A fill:#dcfce7
+        style H fill:#fef3c7
+    </pre>
+</section>
+
+<section>
+<h2>ex01_NonBlocking_Timer — Non-blocking Timer ควบคุม LED</h2>
+<h3>📖 แนวคิด</h3>
+<p>ใช้ <code>Timer_t</code> + <code>Start_Timer</code> + <code>Is_Timer_Expired</code> ควบคุม LED blink โดยไม่บล็อก main loop — ใช้ SysTick millis counter (ไม่ใช่ hardware timer) — main loop ยังทำงานอื่นได้ระหว่างรอ</p>
+
+<h3>🔌 วงจร</h3>
+<pre class="ascii-circuit">
+                        +3.3V
+                         |
+                        [ ] 220Ω
+                         |
+     PC0 (Output) ----+----->| LED (Green)
+                       |
+                      GND
+
+     PC1 (Input) ----[ ]----> GND
+                    Button
+                    (Pull-up external)
+</pre>
+
+<h3>💻 โค้ด + อธิบายทีละบรรทัด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+static Timer_t led_timer;          // ตัวแปร timer สำหรับควบคุม LED
+static Timer_t debounce_timer;     // ตัวแปร timer สำหรับ debounce ปุ่ม
+static uint8_t led_state = 0;      // สถานะ LED (0=OFF, 1=ON)
+static uint8_t timer_running = 1;  // สถานะการทำงานของ timer
+static uint8_t btn_pending = 0;    // flag: มีปุ่มกดรอประมวลผล
+
+int main(void)
+{
+    SystemCoreClockUpdate();            // อัปเดตความถี่ระบบ
+    Timer_Init();                       // เริ่ม SysTick timer (1ms resolution)
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);  // USART 115200 baud
+
+    pinMode(PC0, PIN_MODE_OUTPUT);      // PC0 output → LED
+    pinMode(PC1, PIN_MODE_INPUT_PULLUP);  // PC1 input pull-up → ปุ่มกด
+
+    Start_Timer(&led_timer, 500, 1);    // เริ่ม timer 500ms, repeat=1 (วนซ้ำ)
+    timer_running = 1;
+
+    uint32_t last_print = 0;
+
+    while (1)
+    {
+        // === อ่านปุ่ม non-blocking debounce ===
+        if (digitalRead(PC1) == LOW) {
+            if (!debounce_timer.active) {
+                Start_Timer(&debounce_timer, 50, 0);  // debounce 50ms
+            }
+            if (Is_Timer_Expired(&debounce_timer) && !btn_pending) {
+                btn_pending = 1;
+            }
+        } else {
+            if (btn_pending) {
+                btn_pending = 0;
+                if (timer_running) {
+                    Stop_Timer(&led_timer);
+                    timer_running = 0;
+                    digitalWrite(PC0, LOW);
+                    USART_Print("Timer Stopped\r\n");
+                } else {
+                    Start_Timer(&led_timer, 500, 1);
+                    timer_running = 1;
+                    USART_Print("Timer Started\r\n");
+                }
+            }
+            if (debounce_timer.active) {
+                Stop_Timer(&debounce_timer);
+            }
+        }
+
+        // === ตรวจสอบ Timer หมดเวลาหรือยัง ===
+        if (timer_running) {
+            if (Is_Timer_Expired(&led_timer))  // ไม่บล็อก — คืนทันที
+            {
+                led_state = !led_state;
+                digitalWrite(PC0, led_state);
+                USART_Print(led_state ? "LED ON\r\n" : "LED OFF\r\n");
+            }
+        }
+
+        // === แสดงว่า main loop ยังทำงาน ===
+        if (ELAPSED_TIME(last_print, Get_CurrentMs()) >= 100)
+        {
+            last_print = Get_CurrentMs();
+            USART_Print("loop\r\n");  // พิมพ์ทุก 100ms แสดงว่าไม่ถูกบล็อก
+        }
+    }
+}</code></pre>
+<ul>
+<li><strong>Timer_t:</strong> struct ที่เก็บเวลาที่ตั้ง + สถานะ — ใช้ร่วมกับ Start_Timer / Is_Timer_Expired / Stop_Timer</li>
+<li><strong>Is_Timer_Expired:</strong> คืนค่า 1 ทันทีเมื่อ timer หมดเวลา — ไม่บล็อก — ใช้ SysTick millis เปรียบเทียบ</li>
+<li><strong>repeat=1:</strong> timer restart อัตโนมัติ — repeat=0 ต้อง Start_Timer ใหม่ทุกครั้ง</li>
+<li><strong>debounce_timer.active:</strong> เช็คว่า timer กำลังทำงานอยู่ — ใช้เช็คสถานะแทนตัวแปรแยก</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>ต้องเรียก <code>Start_Timer()</code> ก่อน <code>Is_Timer_Expired()</code> เสมอ — ค่าเริ่มต้นของ Timer_t ไม่แน่นอน</li>
+<li>Timer นี้ใช้ SysTick counter ไม่ใช่ hardware timer — แม่นยำ ±1ms</li>
+<li>ห้ามใช้ timer ค่า 0ms — จะทำงานไม่ถูกต้อง (expired ทันที)</li>
+<li>repeat=0 หมดแล้วไม่ restart — ต้อง Start_Timer ใหม่</li>
+</ul>
+
+<h3>✅ ตรวจสอบก่อนรัน</h3>
+<ul>
+<li>LED ต่อ R 220Ω ระหว่าง PC0 กับแอโนด? แคโทด→GND?</li>
+<li>ปุ่มต่อ PC1→GND ใช้ internal pull-up? (กด=LOW, ปล่อย=HIGH)</li>
+<li>Serial monitor 115200 baud? แสดง "loop" ทุก 100ms?</li>
+</ul>
+</section>
+
+<section>
+<h2>ex02_Blocking_Delay — Blocking Delay ควบคุม LED Sequence</h2>
+<h3>📖 แนวคิด</h3>
+<p>ใช้ <code>Delay_Ms()</code> และ <code>Delay_Us()</code> แบบ blocking — หน่วงเวลาแม่นยำแต่ CPU หยุดรอ — แสดง sequence ON/OFF หลายช่วง รวมถึงทดสอบ Delay_Us 1µs</p>
+
+<h3>🔌 วงจร</h3>
+<pre class="ascii-circuit">
+                        +3.3V
+                         |
+                        [ ] 220Ω
+                         |
+     PC0 (Output) ----+----->| LED (Red)
+                       |
+                      GND
+</pre>
+
+<h3>💻 โค้ด + อธิบายทีละบรรทัด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+static uint8_t led_pin = PC0;
+
+int main(void)
+{
+    SystemCoreClockUpdate();            // อัปเดตความถี่ระบบ
+    Timer_Init();                       // เริ่ม SysTick (จำเป็นสำหรับ Delay)
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+
+    pinMode(led_pin, PIN_MODE_OUTPUT);
+
+    USART_Print("Blocking Delay Example\r\n");
+
+    while (1)
+    {
+        // Sequence 1: ON 200ms, OFF 100ms
+        USART_Print("Sequence: ON 200ms\r\n");
+        digitalWrite(led_pin, HIGH);
+        Delay_Ms(200);                  // บล็อก 200ms
+
+        USART_Print("Sequence: OFF 100ms\r\n");
+        digitalWrite(led_pin, LOW);
+        Delay_Ms(100);                  // บล็อก 100ms
+
+        // Sequence 2: ON 300ms, OFF 1000ms
+        USART_Print("Sequence: ON 300ms\r\n");
+        digitalWrite(led_pin, HIGH);
+        Delay_Ms(300);                  // บล็อก 300ms
+
+        USART_Print("Sequence: OFF 1000ms\r\n");
+        digitalWrite(led_pin, LOW);
+        Delay_Ms(1000);                 // บล็อก 1 วินาที
+
+        // ทดสอบ Delay_Us แม่นยำระดับ microseconds
+        USART_Print("Testing Delay_Us 1us for 10 cycles\r\n");
+        for (uint8_t i = 0; i &lt; 10; i++)
+        {
+            digitalWrite(led_pin, HIGH);
+            Delay_Us(1);                // บล็อก 1µs
+            digitalWrite(led_pin, LOW);
+            Delay_Us(1);                // บล็อก 1µs
+        }
+        USART_Print("Delay_Us precision test complete!\r\n\r\n");
+    }
+}</code></pre>
+<ul>
+<li><strong>Delay_Ms(ms):</strong> blocking delay ระดับ millisecond — ใช้ SysTick busy-wait — แม่นยำ ±1ms</li>
+<li><strong>Delay_Us(us):</strong> blocking delay ระดับ microsecond — ใช้ instruction cycle counting — แม่นยำ ±2-3 cycles</li>
+<li><strong>Sequence:</strong> ควบคุม LED ON/OFF หลายช่วงเวลา — 200ms, 100ms, 300ms, 1000ms</li>
+<li><strong>Delay_Us(1):</strong> เร็วเกินตาเห็น แต่พิสูจน์ความสามารถระดับ µs ของ MCU</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>Delay_Ms / Delay_Us BLOCKING — CPU ยุ่งรออยู่ ไม่ทำงานอื่น</li>
+<li>ระหว่าง delay interrupt อื่นยังทำงานได้ (SysTick, TIM) แต่ main loop หยุด</li>
+<li>Delay_Us(0) หรือ Delay_Ms(0) → return ทันที</li>
+<li>ไม่เหมาะกับงาน real-time ที่ต้องตอบสนองตลอด — ใช้ non-blocking timer แทน</li>
+</ul>
+
+<h3>✅ ตรวจสอบก่อนรัน</h3>
+<ul>
+<li>LED ต่อ R 220Ω ถูกต้อง?</li>
+<li>Serial monitor แสดง sequence ตามที่ตั้ง?</li>
+<li>สังเกตว่า main loop ถูกบล็อก — กดปุ่มระหว่าง delay ไม่มีผล</li>
+</ul>
+</section>
+
+<section>
+<h2>ex03_Time_Reading — อ่านค่าเวลา Millis/Micros + ELAPSED_TIME</h2>
+<h3>📖 แนวคิด</h3>
+<p>ใช้ <code>Get_CurrentMs()</code>, <code>Get_CurrentUs()</code>, <code>Get_TickMicros()</code> และ <code>ELAPSED_TIME</code> macro — อ่านเวลา ณ ปัจจุบัน คำนวณ elapsed time แบบ overflow-safe — วัดเวลาที่โค้ดแต่ละส่วนใช้</p>
+
+<h3>🔌 วงจร</h3>
+<pre class="ascii-circuit">
+     PC ---[USB-Serial]--- PD5 (TX)
+                          PD6 (RX)
+
+                        +3.3V
+                         |
+                        [ ] 220Ω
+                         |
+     PC0 (Output) ----+----->| LED (Yellow)
+                       |
+                      GND
+</pre>
+
+<h3>💻 โค้ด + อธิบายทีละบรรทัด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+static uint8_t led_pin = PC0;
+static uint32_t loop_count = 0;
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();                       // เริ่ม SysTick (1ms resolution)
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+
+    pinMode(led_pin, PIN_MODE_OUTPUT);
+
+    USART_Print("Time Reading Example\r\n");
+    USART_Print("========================\r\n");
+
+    uint32_t last_report = 0;
+    uint32_t start_time = Get_CurrentMs();   // จับเวลาเริ่มต้น
+    uint32_t start_us = Get_CurrentUs();     // จับเวลาเริ่มต้น (µs)
+
+    while (1)
+    {
+        uint32_t current_ms = Get_CurrentMs();
+        uint32_t current_us = Get_CurrentUs();
+        uint32_t tick_us = Get_TickMicros();     // 0-999 ใน tick ปัจจุบัน
+
+        if (ELAPSED_TIME(last_report, current_ms) >= 1000)
+        {
+            last_report = current_ms;
+
+            digitalWrite(led_pin, HIGH);
+            Delay_Ms(50);
+            digitalWrite(led_pin, LOW);
+
+            // แสดงค่าปัจจุบัน
+            USART_Print("Milliseconds: ");
+            USART_PrintNum(current_ms);
+            USART_Print(", Microseconds: ");
+            USART_PrintNum(current_us);
+            USART_Print("\r\n");
+
+            // แสดง Tick Micros
+            USART_Print("TickMicros: ");
+            USART_PrintNum(tick_us);
+            USART_Print(" (within current SysTick)\r\n");
+
+            // Elapsed time แบบ overflow-safe
+            uint32_t elapsed = ELAPSED_TIME(start_time, current_ms);
+            USART_Print("Elapsed since start: ");
+            USART_PrintNum(elapsed);
+            USART_Print(" ms\r\n");
+
+            // Elapsed microseconds
+            uint32_t elapsed_us = current_us - start_us;
+            USART_Print("Elapsed micros: ");
+            USART_PrintNum(elapsed_us);
+            USART_Print(" us\r\n");
+
+            loop_count++;
+            USART_Print("Loop count: ");
+            USART_PrintNum(loop_count);
+            USART_Print("\r\n\r\n");
+        }
+
+        // วัดเวลา USART_Print
+        uint32_t t1 = Get_CurrentUs();
+        USART_Print("");
+        uint32_t t2 = Get_CurrentUs();
+        uint32_t usart_time = t2 - t1;
+        if (usart_time &gt; 100) {
+            USART_Print("Note: USART took ");
+            USART_PrintNum(usart_time);
+            USART_Print(" us\r\n");
+        }
+    }
+}</code></pre>
+<ul>
+<li><strong>Get_CurrentMs():</strong> คืนค่า millisecond ปัจจุบัน (SysTick counter) — uint32_t — overflow ~49 วัน</li>
+<li><strong>Get_CurrentUs():</strong> คืนค่า microsecond ปัจจุบัน — uint32_t — overflow ~71 นาที</li>
+<li><strong>ELAPSED_TIME(start, now):</strong> คำนวณ elapsed time แบบ overflow-safe — ใช้ unsigned arithmetic wrap-around</li>
+<li><strong>Get_TickMicros():</strong> คืนค่า 0-999 — microsecond ใน SysTick ปัจจุบัน</li>
+<li><strong>วัดเวลา USART:</strong> จับ t1 ก่อน → USART_Print → t2 หลัง = เวลาที่ใช้</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li><code>Get_CurrentUs()</code> overflow หลังจาก ~71 นาที — <code>Get_CurrentMs()</code> overflow หลังจาก ~49 วัน</li>
+<li>ห้ามลบค่า millis/micros โดยตรง — ใช้ <code>ELAPSED_TIME</code> macro ป้องกัน overflow error</li>
+<li><code>Get_CurrentUs()</code> ปิด interrupt ชั่วคราวเพื่ออ่านค่า atomic — อาจกระทบ timing เล็กน้อย</li>
+<li>ค่าเวลามีไว้เปรียบเทียบ — ไม่ใช่เวลาจริงของโลก (อาจคลาดเคลื่อนจาก crystal)</li>
+</ul>
+
+<h3>✅ ตรวจสอบก่อนรัน</h3>
+<ul>
+<li>Serial monitor แสดง millis, micros, tick micros เพิ่มขึ้นเรื่อย ๆ?</li>
+<li>Elapsed time ตรงกับเวลาจริง? (นาฬิกาจับเวลา 10 วิ → แสดง ~10000 ms)</li>
+<li>LED กระพริบทุกครั้งที่รายงาน?</li>
+</ul>
+</section>
+
+<section>
+<h2>ex04_Timer_Interrupt — Timer2 Interrupt ควบคุม LED</h2>
+<h3>📖 แนวคิด</h3>
+<p>ใช้ <code>TIM_SimpleInit</code> + <code>TIM_AttachInterrupt</code> + <code>TIM_Start</code>/<code>TIM_Stop</code> — ใช้ hardware timer interrupt (TIM2) เรียก callback ทุก 500ms — สลับ LED ใน ISR — ปุ่ม PC1 ควบคุม start/stop</p>
+
+<h3>🔌 วงจร</h3>
+<pre class="ascii-circuit">
+                        +3.3V
+                         |
+                        [ ] 220Ω
+                         |
+     PC0 (Output) ----+----->| LED (Blue)
+                       |
+                      GND
+
+     PC1 (Input) ----[ ]----> GND
+                    Button
+                    (Pull-up external)
+</pre>
+
+<h3>💻 โค้ด + อธิบายทีละบรรทัด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+static volatile uint8_t led_state = 0;   // volatile — เปลี่ยนใน ISR
+static uint8_t led_pin = PC0;
+static uint8_t button_pin = PC1;
+
+void timer_isr_callback(void)
+{
+    led_state = !led_state;              // สลับสถานะ
+    digitalWrite(led_pin, led_state);    // เขียนค่า LED (register-level)
+}
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+
+    pinMode(led_pin, PIN_MODE_OUTPUT);
+    pinMode(button_pin, PIN_MODE_INPUT_PULLUP);
+
+    // ใช้ TIM2 (TIM1 สงวนให้ SimplePWM)
+    TIM_SimpleInit(TIM_2, 2);                  // TIM2 2Hz = 500ms period
+    TIM_AttachInterrupt(TIM_2, timer_isr_callback);  // กำหนด callback
+    TIM_Start(TIM_2);                          // เริ่ม timer
+
+    USART_Print("Timer Interrupt Example\r\n");
+    USART_Print("TIM2 configured at 2Hz (500ms)\r\n");
+    USART_Print("Press PC1 button to start/stop\r\n");
+
+    uint32_t last_print = 0;
+
+    while (1)
+    {
+        // === Non-blocking button state machine ===
+        static uint8_t timer_running = 1;
+        static uint8_t btn_state = 0;
+        static Timer_t btn_timer;
+
+        if (btn_state == 0 && digitalRead(button_pin) == LOW) {
+            btn_state = 1;
+            Start_Timer(&btn_timer, 50, 0);
+        }
+        if (btn_state == 1 && Is_Timer_Expired(&btn_timer)) {
+            if (digitalRead(button_pin) == LOW) {
+                btn_state = 2;
+                timer_running = !timer_running;
+                if (timer_running) {
+                    TIM_Start(TIM_2);
+                    USART_Print("Timer Started\r\n");
+                } else {
+                    TIM_Stop(TIM_2);
+                    digitalWrite(led_pin, LOW);
+                    USART_Print("Timer Stopped\r\n");
+                }
+            } else {
+                btn_state = 0;
+            }
+        }
+        if (btn_state == 2 && digitalRead(button_pin) == HIGH) {
+            btn_state = 0;
+        }
+
+        // === Main loop ทุก 2 วิ ===
+        if (ELAPSED_TIME(last_print, Get_CurrentMs()) >= 2000)
+        {
+            last_print = Get_CurrentMs();
+            USART_Print("Main loop running, LED state: ");
+            USART_Print(led_state ? "ON\r\n" : "OFF\r\n");
+
+            uint16_t counter = Simple_TIM_GetCounter(TIM_2);
+            USART_Print("TIM2 Counter: ");
+            USART_PrintNum(counter);
+            USART_Print("\r\n");
+        }
+    }
+}</code></pre>
+<ul>
+<li><strong>TIM_SimpleInit(TIM_2, freq_hz):</strong> ตั้งค่า timer ที่ความถี่ Hz — 2Hz = 500ms ต่อรอบ</li>
+<li><strong>TIM_AttachInterrupt:</strong> กำหนด callback ที่จะถูกเรียกใน ISR ทุกครั้งที่ timer overflow</li>
+<li><strong>TIM_Start / TIM_Stop:</strong> เริ่ม/หยุด timer — ใช้ปุ่มกด toggle</li>
+<li><strong>volatile:</strong> จำเป็นสำหรับตัวแปรที่เปลี่ยนค่าใน ISR — ป้องกัน optimization</li>
+<li><strong>Non-blocking button:</strong> state machine 3 state (wait → debounce → confirm) ใช้ Timer_t debounce</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li><strong>TIM1 สงวนสำหรับ SimplePWM!</strong> — ใช้ TIM2 สำหรับ timer interrupt เสมอ</li>
+<li>ห้าม <code>Delay_Ms()</code> หรือ <code>USART_Print()</code> ใน ISR — blocking + priority inversion → deadlock</li>
+<li>ISR ควรสั้นที่สุด — ตั้ง flag แล้วให้ main loop จัดการ</li>
+<li>ตัวแปร共用 ISR↔main loop ต้อง <code>volatile</code></li>
+</ul>
+
+<h3>✅ ตรวจสอบก่อนรัน</h3>
+<ul>
+<li>LED กระพริบ 500ms โดยอัตโนมัติ (ISR จัดการ)?</li>
+<li>กด PC1 → LED หยุดกระพริบ (TIM_Stop)? กดอีก → กลับมากระพริบ?</li>
+<li>Serial monitor แสดง LED state และ counter ทุก 2 วิ?</li>
+</ul>
+</section>
+
+<section>
+<h2>ex05_Timer_Advanced — Timer แบบปรับ Prescaler/Period/Mode</h2>
+<h3>📖 แนวคิด</h3>
+<p>ใช้ <code>TIM_AdvancedInit</code> + <code>TIM_SetPrescaler</code> + <code>TIM_SetMode</code> + <code>TIM_GenerateUpdate</code> — ตั้งค่า timer แบบละเอียด — เปลี่ยน prescaler และ mode (UP/DOWN) ขณะรัน — อ่าน counter จับ wrap</p>
+
+<h3>🔌 วงจร</h3>
+<pre class="ascii-circuit">
+                        +3.3V
+                         |
+                        [ ] 220Ω
+                         |
+     PC0 (Output) ----+----->| LED (Green)
+                       |
+                      GND
+
+     USART (TX=PD5, RX=PD6) เชื่อมต่อ PC ผ่าน USB-Serial
+</pre>
+
+<h3>💻 โค้ด + อธิบายทีละบรรทัด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+static uint8_t led_pin = PC0;
+static uint16_t last_counter = 0;        // ค่า counter ก่อนหน้า (ตรวจจับ wrap)
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+
+    pinMode(led_pin, PIN_MODE_OUTPUT);
+
+    // ตั้งค่า: 10kHz ด้วย PSC=239, Period=9 @24MHz
+    // Frequency = 24000000 / ((239+1)*(9+1)) = 24000000/2400 = 10000 Hz
+    uint16_t prescaler = 239;
+    uint16_t period = 9;
+    TIM_Mode mode = TIM_MODE_UP;
+
+    TIM_AdvancedInit(TIM_1, prescaler, period, mode);
+    TIM_Start(TIM_1);
+
+    uint32_t last_report = 0;
+    uint8_t freq_changed = 0;
+
+    while (1)
+    {
+        // อ่าน counter และ period ปัจจุบัน
+        uint16_t counter = Simple_TIM_GetCounter(TIM_1);
+        uint16_t current_period = TIM_GetPeriod(TIM_1);
+
+        // ตรวจจับ counter wrap (overflow)
+        if (counter &lt; last_counter)
+        {
+            USART_Print("Counter wrapped! Period=");
+            USART_PrintNum(current_period);
+            USART_Print(", Counter=");
+            USART_PrintNum(counter);
+            USART_Print("\r\n");
+            digitalWrite(led_pin, !digitalRead(led_pin));  // toggle LED ทุก wrap
+        }
+        last_counter = counter;
+
+        // รายงานทุก 2 วิ
+        if (ELAPSED_TIME(last_report, Get_CurrentMs()) >= 2000)
+        {
+            last_report = Get_CurrentMs();
+            USART_Print("Counter=");
+            USART_PrintNum(counter);
+            USART_Print(", Period=");
+            USART_PrintNum(current_period);
+            USART_Print(", PSC=");
+            USART_PrintNum(Simple_TIM_GetPrescaler(TIM_1));
+            USART_Print("\r\n");
+
+            // เปลี่ยน prescaler หลังจาก 5 วิ
+            if (!freq_changed && (Get_CurrentMs() > 5000))
+            {
+                freq_changed = 1;
+                uint16_t new_psc = 119;  // ความถี่ใหม่ 20kHz
+
+                TIM_SetPrescaler(TIM_1, new_psc);
+                TIM_SetMode(TIM_1, TIM_MODE_DOWN);  // เปลี่ยนเป็น DOWN mode
+                TIM_GenerateUpdate(TIM_1);  // บังคับ reload ทันที
+
+                uint32_t new_freq = SystemCoreClock / ((uint32_t)(new_psc + 1) * (period + 1));
+                USART_Print("New Frequency: ");
+                USART_PrintNum(new_freq);
+                USART_Print(" Hz, Mode=DOWN\r\n");
+            }
+        }
+    }
+}</code></pre>
+<ul>
+<li><strong>TIM_AdvancedInit(tim, psc, period, mode):</strong> ตั้งค่า timer ครบทุกพารามิเตอร์ — PSC, ARR, Mode</li>
+<li><strong>TIM_SetPrescaler:</strong> เปลี่ยน prescaler ขณะรัน — มีผลหลังจาก next update event</li>
+<li><strong>TIM_SetMode:</strong> เปลี่ยน UP/DOWN mode — ส่งผลทันทีหลังจาก GenerateUpdate</li>
+<li><strong>TIM_GenerateUpdate:</strong> บังคับให้ register reload ทันที — prescaler ใหม่生效</li>
+<li><strong>Frequency = SystemCoreClock / ((PSC+1) * (Period+1))</strong> — สูตรคำนวณความถี่ timer</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>16-bit timer: PSC และ Period มีค่าสูงสุด 65535</li>
+<li>ที่ 24MHz: ความถี่ต่ำสุด ~0.366Hz (PSC=65535, Period=65535), สูงสุด 24MHz (PSC=0, Period=0)</li>
+<li><code>TIM_SetPrescaler()</code> รอจนถึง next update event — ถ้าต้องการ生效ทันที เรียก <code>TIM_GenerateUpdate()</code></li>
+<li>ที่ 48MHz (HSE) ค่า PSC/Period ต้องปรับตาม</li>
+</ul>
+
+<h3>✅ ตรวจสอบก่อนรัน</h3>
+<ul>
+<li>Serial แสดง Counter, Period, PSC ทุก 2 วิ? หลังจาก 5 วิ PSC เปลี่ยน?</li>
+<li>LED กระพริบทุกครั้งที่ counter wrap? (toggle)</li>
+<li>Mode เปลี่ยนจาก UP เป็น DOWN หลัง 5 วิ?</li>
+</ul>
+</section>
+
+<section>
+<h2>ex06_Stopwatch — จับเวลาแบบ Stopwatch ด้วย 2 ปุ่ม</h2>
+<h3>📖 แนวคิด</h3>
+<p>ใช้ <code>Stopwatch_Init</code> + <code>Stopwatch_Start</code>/<code>Stop</code> + <code>Stopwatch_GetTimeString</code> — จับเวลาแบบ HH:MM:SS — ปุ่ม PC0 = Start/Stop, PC1 = Reset — ใช้ TIM2 เป็น base timer 1000Hz</p>
+
+<h3>🔌 วงจร</h3>
+<pre class="ascii-circuit">
+     Button1 (PC0) ----[ ]----> GND    (Start/Stop)
+
+     Button2 (PC1) ----[ ]----> GND    (Reset)
+
+     USART (TX=PD5, RX=PD6) เชื่อมต่อ PC ผ่าน USB-Serial
+
+     (Pull-up ในตัว CH32V003 — ใช้ PIN_MODE_INPUT_PULLUP)
+</pre>
+
+<h3>💻 โค้ด + อธิบายทีละบรรทัด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+static uint8_t btn_start_stop = PC0;
+static uint8_t btn_reset = PC1;
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+
+    pinMode(btn_start_stop, PIN_MODE_INPUT_PULLUP);
+    pinMode(btn_reset, PIN_MODE_INPUT_PULLUP);
+
+    Stopwatch_Init();                   // เริ่ม Stopwatch (TIM2 1000Hz)
+
+    USART_Print("Stopwatch Example\r\n");
+    USART_Print("PC0: Start/Stop\r\n");
+    USART_Print("PC1: Reset\r\n");
+    USART_Print("Status: Stopped\r\n");
+    USART_Print("Time: 00:00:00\r\n");
+
+    uint32_t last_display = 0;
+    uint8_t button1_prev = HIGH;
+    uint8_t button2_prev = HIGH;
+
+    while (1)
+    {
+        uint8_t btn1_current = digitalRead(btn_start_stop);
+        uint8_t btn2_current = digitalRead(btn_reset);
+
+        // === Button1: Start/Stop state machine ===
+        static uint8_t btn1_state = 0;
+        static Timer_t btn1_timer;
+
+        if (btn1_state == 0 && button1_prev == HIGH && btn1_current == LOW) {
+            Start_Timer(&btn1_timer, 50, 0);
+            btn1_state = 1;
+        }
+        if (btn1_state == 1 && Is_Timer_Expired(&btn1_timer)) {
+            if (digitalRead(btn_start_stop) == LOW) {
+                btn1_state = 2;
+                if (Stopwatch_IsRunning()) {
+                    Stopwatch_Stop();
+                    USART_Print("Status: Paused\r\n");
+                } else {
+                    Stopwatch_Start();
+                    USART_Print("Status: Running\r\n");
+                }
+            } else {
+                btn1_state = 0;
+            }
+        }
+        if (btn1_state == 2 && digitalRead(btn_start_stop) == HIGH) {
+            btn1_state = 0;
+        }
+
+        // Button2: Reset (falling edge)
+        if (button2_prev == HIGH && btn2_current == LOW) {
+            Delay_Ms(50);  // blocking debounce
+            if (digitalRead(btn_reset) == LOW) {
+                Stopwatch_Reset();
+                USART_Print("Status: Reset\r\n");
+            }
+        }
+
+        button1_prev = btn1_current;
+        button2_prev = btn2_current;
+
+        // แสดงเวลาทุก 100ms
+        if (ELAPSED_TIME(last_display, Get_CurrentMs()) >= 100)
+        {
+            last_display = Get_CurrentMs();
+            char time_buf[32];
+            Stopwatch_GetTimeString(time_buf, TIME_FORMAT_HHMMSS, TIME_DISPLAY_NORMALIZED);
+            USART_Print("Time: ");
+            USART_Print(time_buf);
+            uint32_t total_sec = Stopwatch_GetTotalSeconds();
+            USART_Print(" (");
+            USART_PrintNum(total_sec);
+            USART_Print(" sec)\r\n");
+        }
+    }
+}</code></pre>
+<ul>
+<li><strong>Stopwatch_Init():</strong> เริ่มต้น stopwatch subsystem — ใช้ TIM2 ที่ 1000Hz (resolution 1ms)</li>
+<li><strong>Stopwatch_Start/Stop:</strong> เริ่ม/หยุดจับเวลา — ทำงานแบบ accumulate (ไม่ reset เมื่อ start ใหม่)</li>
+<li><strong>Stopwatch_Reset:</strong> ตั้งเวลาเป็น 00:00:00 — หยุดก่อน reset</li>
+<li><strong>Stopwatch_GetTimeString(buf, format, display):</strong> แปลงเวลาเป็น string — HH:MM:SS หรือ MM:SS.ms</li>
+<li><strong>Stopwatch_IsRunning():</strong> เช็คสถานะ — ใช้ตัดสินใจ Start vs Stop</li>
+<li><strong>Stopwatch_GetTotalSeconds():</strong> คืนค่า elapsed time เป็นวินาที (uint32_t)</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>Stopwatch ใช้ TIM2 — ถ้ากำลังใช้ TIM2 กับ PWM หรือ timer interrupt อื่น → conflict</li>
+<li>ไม่สามารถใช้ Stopwatch + Countdown (ex07) พร้อมกัน (ใช้ TIM2 ทั้งคู่)</li>
+<li>ความละเอียด 1ms — เวลาสูงสุด ~49 วัน (overflow uint32_t ms)</li>
+<li>ต้องเรียก <code>Stopwatch_Init()</code> ก่อนใช้ฟังก์ชันอื่น</li>
+</ul>
+
+<h3>✅ ตรวจสอบก่อนรัน</h3>
+<ul>
+<li>กด PC0 → "Running" → เวลาเพิ่มขึ้น?</li>
+<li>กด PC0 อีกครั้ง → "Paused" → เวลาหยุด?</li>
+<li>กด PC1 → "Reset" → เวลา 00:00:00?</li>
+</ul>
+</section>
+
+<section>
+<h2>ex07_Countdown — นับถอยหลัง 10 วินาที + Alarm</h2>
+<h3>📖 แนวคิด</h3>
+<p>ใช้ <code>Countdown_Init</code> + <code>Countdown_Start</code>/<code>Stop</code> + <code>Countdown_SetAlarmCallback</code> — ตั้งเวลา 10 วินาที — ปุ่ม PC1 ควบคุม Start/Pause — เมื่อหมดเวลาเรียก callback (flag) → LED กระพริบ + USART แจ้ง</p>
+
+<h3>🔌 วงจร</h3>
+<pre class="ascii-circuit">
+                        +3.3V
+                         |
+                        [ ] 220Ω
+                         |
+     PC0 (Output) ----+----->| LED (Red) - Alarm Indicator
+                       |
+                      GND
+
+     PC1 (Input) ----[ ]----> GND    (Start/Pause)
+                    Button
+
+     USART (TX=PD5, RX=PD6) เชื่อมต่อ PC ผ่าน USB-Serial
+</pre>
+
+<h3>💻 โค้ด + อธิบายทีละบรรทัด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+static uint8_t led_alarm = PC0;
+static uint8_t btn_start_pause = PC1;
+static volatile uint8_t alarm_triggered = 0;  // flag alarm
+
+void alarm_callback(void)
+{
+    alarm_triggered = 1;        // ตั้ง flag — main loop จะจัดการ
+}
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+
+    pinMode(led_alarm, PIN_MODE_OUTPUT);
+    pinMode(btn_start_pause, PIN_MODE_INPUT_PULLUP);
+
+    Countdown_Init(0, 0, 10);               // ตั้งเวลา 10 วินาที
+    Countdown_SetAlarmCallback(alarm_callback);  // กำหนด callback
+
+    USART_Print("Countdown Example\r\n");
+    USART_Print("Countdown: 10 seconds\r\n");
+    USART_Print("Press PC1 to Start/Pause\r\n");
+    USART_Print("Status: Stopped\r\n");
+
+    uint32_t last_report = 0;
+    uint8_t button_prev = HIGH;
+
+    while (1)
+    {
+        uint8_t btn_current = digitalRead(btn_start_pause);
+
+        // Edge detection: HIGH → LOW
+        if (button_prev == HIGH && btn_current == LOW)
+        {
+            Delay_Ms(50);  // blocking debounce
+            if (digitalRead(btn_start_pause) == LOW)
+            {
+                if (Countdown_IsRunning()) {
+                    Countdown_Stop();
+                    USART_Print("Status: Paused\r\n");
+                } else {
+                    if (Countdown_IsFinished()) {
+                        Countdown_Reset();       // reset เป็น 10s
+                        alarm_triggered = 0;
+                        digitalWrite(led_alarm, LOW);
+                        USART_Print("Countdown Reset to 10s\r\n");
+                    }
+                    Countdown_Start();
+                    USART_Print("Status: Running\r\n");
+                }
+            }
+        }
+        button_prev = btn_current;
+
+        // รายงานทุก 1 วินาที
+        if (Countdown_IsRunning()) {
+            if (ELAPSED_TIME(last_report, Get_CurrentMs()) >= 1000) {
+                last_report = Get_CurrentMs();
+                uint32_t remaining = Countdown_GetRemainingSeconds();
+                USART_Print("Remaining: ");
+                USART_PrintNum(remaining);
+                USART_Print(" seconds\r\n");
+            }
+        }
+
+        // จัดการ alarm
+        if (alarm_triggered) {
+            alarm_triggered = 0;
+            USART_Print("\r\n*** Time's up! ***\r\n");
+            USART_Print("Countdown finished!\r\n");
+            for (uint8_t i = 0; i &lt; 10; i++) {  // LED กระพริบ 10 รอบ
+                digitalWrite(led_alarm, HIGH);
+                Delay_Ms(100);
+                digitalWrite(led_alarm, LOW);
+                Delay_Ms(100);
+            }
+            USART_Print("Press PC1 to reset and start again\r\n");
+        }
+    }
+}</code></pre>
+<ul>
+<li><strong>Countdown_Init(h, m, s):</strong> ตั้งเวลาเริ่มต้น — ชั่วโมง, นาที, วินาที</li>
+<li><strong>Countdown_Start/Stop:</strong> เริ่ม/หยุดนับถอยหลัง — Stop = Pause (เวลาเหลือ)</li>
+<li><strong>Countdown_IsRunning():</strong> เช็คว่ากำลังนับถอยหลัง</li>
+<li><strong>Countdown_IsFinished():</strong> เช็คว่านับถึง 0 แล้วหรือยัง</li>
+<li><strong>Countdown_Reset():</strong> ตั้งเวลากลับเป็นค่า Init เดิม</li>
+<li><strong>Countdown_SetAlarmCallback:</strong> callback ถูกเรียกใน main loop context (ไม่ใช่ ISR) — ปลอดภัยกว่า</li>
+<li><strong>Countdown_GetRemainingSeconds():</strong> คืนค่าวินาทีที่เหลือ</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>Countdown ใช้ TIM2 (base timer) — conflict กับ Stopwatch (ex06) และ PWM2</li>
+<li>Alarm callback ทำงานใน main loop context (ไม่ใช่ ISR) — ใช้ Delay_Ms ได้ แต่ไม่ควรนานเกิน</li>
+<li><code>Countdown_Stop()</code> = pause (เวลาเหลือ) — <code>Countdown_Reset()</code> ตั้งเวลาใหม่</li>
+<li>เมื่อ countdown หมดแล้วกด Start → จะไม่เริ่ม ต้อง Reset ก่อน</li>
+</ul>
+
+<h3>✅ ตรวจสอบก่อนรัน</h3>
+<ul>
+<li>กด PC1 → "Running" → เวลาลดลงทุก 1 วิ?</li>
+<ul>
+<li>10 → 9 → 8 ... → 0 "Time's up!"</li>
+</ul>
+<li>LED กระพริบ 10 รอบเมื่อหมดเวลา?</li>
+<li>กด PC1 ขณะนับ → "Paused"? กดอีก → ต่อ?</li>
+<li>กด PC1 หลังจาก alarm → Reset → 10s พร้อมเริ่มใหม่?</li>
+</ul>
+</section>
+
+<section>
+<h2>ex08_Timer_Resource_Management — หลีกเลี่ยง TIM1/TIM2 Conflict</h2>
+<h3>📖 แนวคิด</h3>
+<p>CH32V003 มี 2 hardware timers: TIM1 (ใช้โดย PWM1) และ TIM2 (ใช้โดย PWM2/Stopwatch/Countdown) — ถ้า TIM1 ถูก PWM ใช้แล้ว ต้องใช้ SysTick-based timer (Timer_t) แทน — ตัวอย่างนี้ TIM1 → PWM fade, SysTick → 3 non-blocking timers, TIM2 = ว่าง</p>
+
+<h3>🔌 วงจร</h3>
+<pre class="ascii-circuit">
+     TIM1 → PD2 (PWM1_CH1) → LED fade (hardware PWM)
+
+     PC0 → LED toggle (software — SysTick timer)
+
+     USART (TX=PD5, RX=PD6) → แสดงสถานะ
+
+     (ไม่ใช้ TIM2 เลย — หลีกเลี่ยง conflict)
+</pre>
+
+<h3>💻 โค้ด + อธิบายทีละบรรทัด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    pinMode(PC0, PIN_MODE_OUTPUT);
+
+    // TIM1 → PWM LED fade (ใช้ TIM1 hardware)
+    PWM_Init(PWM1_CH1, 1000);  // PD2, 1kHz
+    PWM_Start(PWM1_CH1);
+
+    // SysTick → Non-blocking timers (ไม่ใช้ TIM1/TIM2 เลย!)
+    Timer_t print_timer;
+    Timer_t led_timer;
+    Timer_t pwm_timer;
+
+    Start_Timer(&print_timer, 2000, 1);  // ทุก 2 วิ — แจ้งสถานะ
+    Start_Timer(&led_timer, 500, 1);     // ทุก 0.5 วิ — LED toggle
+    Start_Timer(&pwm_timer, 50, 1);      // ทุก 50ms — PWM step
+
+    uint8_t pwm_val = 0;
+    int8_t pwm_dir = 5;
+
+    USART_Print("\r\n=== Timer Resource Management ===\r\n");
+    USART_Print("TIM1 = PWM (PD2 fade)\r\n");
+    USART_Print("SysTick = 3 non-blocking timers\r\n");
+    USART_Print("TIM2 = free (available for user)\r\n\r\n");
+
+    while (1) {
+        // PWM fade — ใช้ SysTick timing แทน TIM2 interrupt
+        if (Is_Timer_Expired(&pwm_timer)) {
+            pwm_val += pwm_dir;
+            if (pwm_val >= 100 || pwm_val <= 0) pwm_dir = -pwm_dir;
+            PWM_SetDutyCycle(PWM1_CH1, pwm_val);
+        }
+
+        // LED toggle
+        if (Is_Timer_Expired(&led_timer)) {
+            digitalToggle(PC0);
+        }
+
+        // Status print
+        if (Is_Timer_Expired(&print_timer)) {
+            USART_Print("PWM=");
+            USART_PrintNum(pwm_val);
+            USART_Print("%  TIM2=free  SysTick=OK\r\n");
+        }
+
+        // yield() — เรียก IWDG feed ถ้าใช้ IWDG
+        yield();
+    }
+}</code></pre>
+<ul>
+<li><strong>Timer allocation:</strong> TIM1 → PWM, SysTick → general timing, TIM2 = free</li>
+<li><strong>3 Timer_t instances:</strong> print_timer (2s), led_timer (500ms), pwm_timer (50ms) — ทั้งหมดใช้ SysTick</li>
+<li><strong>PWM fade:</strong> ปรับ duty cycle ทุก 50ms — เพิ่ม 5% → 100% → ลด → 0% วนไป</li>
+<li><strong>digitalToggle(PC0):</strong> สลับ LED ทุก 500ms — โชว์ว่า SysTick timer ทำงานปกติ</li>
+<li><strong>yield():</strong> เรียก IWDG_Feed ถ้าเปิด IWDG ไว้ — ป้องกัน watchdog reset</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li><strong>TIM1 สงวนสำหรับ SimplePWM (PWM1_CH1-CH4)</strong> — ใช้ TIM2 สำหรับ user timer ถ้าต้องการ hardware timer</li>
+<li><strong>TIM2 สงวนสำหรับ SimplePWM (PWM2_CH1-CH4), Stopwatch และ Countdown</strong> — ใช้พร้อมกันไม่ได้</li>
+<li>SysTick-based timer (Timer_t) แม่นยำ ±1ms — ไม่มี hardware timer drift</li>
+<li>Timer_t อาศัย SysTick interrupt — ถ้า SysTick ถูก Disable → timer หยุดทำงาน</li>
+</ul>
+
+<h3>✅ ตรวจสอบก่อนรัน</h3>
+<ul>
+<li>PD2 (PWM1_CH1) ต่อ LED — สว่าง fade ขึ้นลง?</li>
+<li>PC0 กระพริบทุก 500ms?</li>
+<li>Serial แสดง "PWM=xx% TIM2=free SysTick=OK" ทุก 2 วิ?</li>
+<li>TIM2 ไม่ถูกใช้ — ว่างให้ผู้ใช้</li>
+</ul>
+</section>
+
+<section>
+<h2>✏️ สรุป — 8 ตัวอย่าง Delay &amp; Timer</h2>
+<table>
+<tr><th>ตัวอย่าง</th><th>สอนอะไร</th><th>ฟังก์ชันหลัก</th></tr>
+<tr><td>ex01</td><td>Non-blocking timer ด้วย Timer_t</td><td>Start_Timer, Is_Timer_Expired, Stop_Timer</td></tr>
+<tr><td>ex02</td><td>Blocking delay Ms/Us</td><td>Delay_Ms, Delay_Us</td></tr>
+<tr><td>ex03</td><td>อ่านค่าเวลา millis/micros</td><td>Get_CurrentMs, Get_CurrentUs, ELAPSED_TIME</td></tr>
+<tr><td>ex04</td><td>Hardware timer interrupt</td><td>TIM_SimpleInit, TIM_AttachInterrupt, TIM_Start/Stop</td></tr>
+<tr><td>ex05</td><td>ปรับแต่ง timer ขั้นสูง</td><td>TIM_AdvancedInit, TIM_SetPrescaler, TIM_SetMode</td></tr>
+<tr><td>ex06</td><td>Stopwatch จับเวลา 2 ปุ่ม</td><td>Stopwatch_Init, Stopwatch_Start/Stop, Stopwatch_GetTimeString</td></tr>
+<tr><td>ex07</td><td>Countdown นับถอยหลัง + Alarm</td><td>Countdown_Init, Countdown_Start/Stop, Countdown_SetAlarmCallback</td></tr>
+<tr><td>ex08</td><td>หลีกเลี่ยง resource conflict</td><td>Timer_t + PWM ร่วมกัน, yield()</td></tr>
+</table>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch20_gpio.html">บทก่อน</a>
+    <a href="ch22_pwm.html">บทถัดไป →</a>
+</nav>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>
