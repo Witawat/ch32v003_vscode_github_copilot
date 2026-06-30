@@ -45,6 +45,19 @@ flowchart LR
     - ขาแคโทด (- สั้น) ต่อ GND
 </pre>
 
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["PWM_Init(PWM1_CH1, 1000Hz)"] --> B["while(1)"]
+    B --> C["PWM_SetDutyCycle(ch, duty)"]
+    C --> D["Delay_Ms(10)"]
+    D --> E["duty += direction"]
+    E --> F{"duty ≥ 100 หรือ ≤ 0?"}
+    F -->|"Yes"| G["กลับ direction"]
+    F -->|"No"| B
+    G --> B
+</pre>
+
 <h3>💻 โค้ด + อธิบายทีละบรรทัด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include &lt;SimpleHAL.h&gt;
@@ -105,6 +118,22 @@ int main(void)
     - GND Servo + MCU ต่อรวมกัน (common ground)
 </pre>
 
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["PWM_Init(PWM1_CH1, 50Hz)"] --> B["PWM_Start()"]
+    B --> C["while(1)"]
+    C --> D["PWM_SetDutyCycle(5%) = 0°"]
+    D --> E["Delay_Ms(2000)"]
+    E --> F["PWM_SetDutyCycle(7%) ≈ 90°"]
+    F --> G["Delay_Ms(2000)"]
+    G --> H["PWM_SetDutyCycle(10%) = 180°"]
+    H --> I["Delay_Ms(2000)"]
+    I --> J["PWM_SetDutyCycle(7%) กลับ"]
+    J --> K["Delay_Ms(2000)"]
+    K --> C
+</pre>
+
 <h3>💻 โค้ด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include &lt;SimpleHAL.h&gt;
@@ -155,6 +184,20 @@ int main(void)
     PD2 ---R---|LED1|---GND    (PWM1_CH1, TIM1, 50Hz)
     PA1 ---(Signal)-- Servo    (PWM1_CH2, TIM1, 50Hz)
     PC0 ---R---|LED2|---GND    (PWM2_CH3, TIM2, 1kHz)
+</pre>
+
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["PWM_Init(PWM1_CH1, 50Hz)"] --> B["PWM_Init(PWM1_CH2, 50Hz)"]
+    B --> C["PWM_Init(PWM2_CH3, 1000Hz)"]
+    C --> D["PWM_Start() ทั้ง 3"]
+    D --> E["while(1)"]
+    E --> F["PWM1_CH1 fade 0-100%"]
+    F --> G["PWM2_CH3 blink 0-50%"]
+    G --> H["PWM1_CH2 servo 5-10%"]
+    H --> I["Delay_Ms(20)"]
+    I --> E
 </pre>
 
 <h3>💻 โค้ด</h3>
@@ -219,6 +262,21 @@ int main(void)
 <h2>ex04_PWM_Advanced — Polarity + Read Back</h2>
 <h3>📖 แนวคิด</h3>
 <p>ใช้ PWM_AdvancedInit กำหนด prescaler, period, duty_value โดยตรง — PWM_SetPolarity กลับขั้วสัญญาณ (active LOW) — อ่านค่าปัจจุบันด้วย PWM_GetDutyCycle / PWM_GetPeriod</p>
+
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["PWM_AdvancedInit(PWM1_CH1, PSC=239, Period=99, Duty=50)"] --> B["PWM_SetPolarity(inverted)"]
+    B --> C["PWM_Start()"]
+    C --> D["while(1)"]
+    D --> E["PWM_SetDutyCycle(current_duty)"]
+    E --> F["Delay_Ms(50)"]
+    F --> G["current_duty ++ / --"]
+    G --> H{"≥ 100 หรือ ≤ 0?"}
+    H -->|"Yes"| I["กลับทิศ"]
+    H -->|"No"| D
+    I --> D
+</pre>
 
 <h3>💻 โค้ด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
@@ -287,6 +345,20 @@ int main(void)
     - ใช้ทรานซิสเตอร์ขับ Buzzer เพราะกระแสเกิน MCU จ่าย
 </pre>
 
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["PWM_Init(PWM1_CH1, 500Hz)"] --> B["PWM_SetDutyCycle(50%)"]
+    B --> C["PWM_Start()"]
+    C --> D["while(1)"]
+    D --> E["PWM_SetFrequency(500Hz) → 1s"]
+    E --> F["PWM_SetFrequency(1000Hz) → 1s"]
+    F --> G["PWM_SetFrequency(2000Hz) → 1s"]
+    G --> H["PWM_SetFrequency(4000Hz) → 1s"]
+    H --> I["ย้อนกลับ 2000 → 1000 → 500 Hz"]
+    I --> D
+</pre>
+
 <h3>💻 โค้ด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include &lt;SimpleHAL.h&gt;
@@ -328,6 +400,19 @@ int main(void)
 <h2>ex06_PWM_Remap — เปลี่ยน Pin PWM</h2>
 <h3>📖 แนวคิด</h3>
 <p>ใช้ PWM_SetRemap / PWM_InitRemap ย้าย PWM output ไป pin อื่น — เช่น PWM1_CH1 ปกติ PD2 → remap PARTIAL1 ไป pin อื่น — PWM_Write auto-init พร้อม remap</p>
+
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["PWM_SetRemap(PWM1_CH1, PARTIAL1)"] --> B["PWM_Write(PWM1_CH1, 128)"]
+    B --> C["PWM_Start() → duty 25% → Stop"]
+    C --> D["PWM_InitRemap(PWM2_CH1, 1000, PARTIAL2)"]
+    D --> E["PWM_Start() → duty 75% → 0% → Stop"]
+    E --> F["Package-safe: IS_PWM_VALID_PACKAGE"]
+    F --> G["while(1): fade PWM1↑ PWM2↓"]
+    G --> H["Delay_Ms(50)"]
+    H --> G
+</pre>
 
 <h3>💻 โค้ด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
@@ -397,6 +482,22 @@ int main(void) {
 <h2>ex07_PWM_SOP8_Guard — ตรวจสอบแพ็กเกจก่อนใช้ PWM</h2>
 <h3>📖 แนวคิด</h3>
 <p>SOP-8 มีแค่ 6 user pins — PWM channels ที่ใช้ได้: PWM1_CH1 (PD2) และ PWM2_CH1 (PD4) เท่านั้น — ใช้ IS_PWM_VALID_PACKAGE(ch) เช็คก่อน — เปลี่ยน CH32V003_PACKAGE เพื่อทดสอบ</p>
+
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
+    B --> C["USART_SimpleInit()"]
+    C --> D["try_pwm(PWM1_CH1)"]
+    D --> E["try_pwm(PWM1_CH2)"]
+    E --> F["try_pwm(…) ทุก channel"]
+    F --> G["while(1) → Delay_Ms(1000)"]
+    H["try_pwm(ch, name)"] --> I{"IS_PWM_VALID_PACKAGE?"}
+    I -->|"Yes"| J["PWM_Init → Start → duty 30%"]
+    I -->|"No"| K["ข้าม (SKIP)"]
+    J --> L["พิมพ์ [OK] name"]
+    K --> L
+</pre>
 
 <h3>💻 โค้ด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_SOP8     // ลองเปลี่ยน SOP16/TSSOP20
@@ -468,6 +569,19 @@ int main(void) {
     Potentiometer: VCC --- POT --- GND, wiper --- PD2
     LED: PC0 --- 220Ω ---|>|--- GND
     USART: PD5=TX, PD6=RX
+</pre>
+
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["PWM_Init(PWM2_CH3, 1000Hz)"] --> B["ADC_SimpleInit()"]
+    B --> C["while(1)"]
+    C --> D["analogRead(PD2) → 0-1023"]
+    D --> E["แปลงเป็น duty 0-100%"]
+    E --> F["PWM_SetDutyCycle(PWM2_CH3, duty)"]
+    F --> G["พิมพ์ ADC, Duty"]
+    G --> H["Delay_Ms(100)"]
+    H --> C
 </pre>
 
 <h3>💻 โค้ด</h3>

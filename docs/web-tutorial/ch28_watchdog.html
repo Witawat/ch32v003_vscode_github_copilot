@@ -31,7 +31,20 @@ flowchart LR
 <section>
 <h2>ex01_IWDG_Simple — ตั้งค่า IWDG + Feed พื้นฐาน</h2>
 <h3>📖 แนวคิด</h3>
-<p>Independent Watchdog (IWDG) ใช้ clock แยก 40kHz ในตัว — ไม่ขึ้นกับ main clock — รีเซ็ต MCU ถ้าไม่ Feed ทันเวลา ตั้งค่า prescaler + reload ง่าย ๆ ด้วยฟังก์ชัน IWDG_SimpleInit</p>
+    <p>Independent Watchdog (IWDG) ใช้ clock แยก 40kHz ในตัว — ไม่ขึ้นกับ main clock — รีเซ็ต MCU ถ้าไม่ Feed ทันเวลา ตั้งค่า prescaler + reload ง่าย ๆ ด้วยฟังก์ชัน IWDG_SimpleInit</p>
+
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["IWDG_SimpleInit(4000)"] --> B["count = 0"]
+    B --> C["while(1)"]
+    C --> D["count++"]
+    D --> E{"count &lt; 3?"}
+    E -->|"Yes"| F["IWDG_Feed()"]
+    F --> C
+    E -->|"No"| G["⚠ รอ IWDG Reset"]
+    G --> G
+</pre>
 
 <h3>💻 โค้ด + อธิบายทีละบรรทัด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
@@ -76,7 +89,22 @@ int main(void)
 <section>
 <h2>ex02_IWDG_Advanced — IWDG กำหนดค่าเอง + ตรวจสอบสาเหตุ Reset</h2>
 <h3>📖 แนวคิด</h3>
-<p>ปรับ prescaler และ reload register ด้วยตัวเองเพื่อให้ได้ timeout ตามต้องการ — ใช้ WasResetCauseIWDG ตรวจสอบว่าครั้งก่อน reset เพราะ IWDG หรือไม่</p>
+    <p>ปรับ prescaler และ reload register ด้วยตัวเองเพื่อให้ได้ timeout ตามต้องการ — ใช้ WasResetCauseIWDG ตรวจสอบว่าครั้งก่อน reset เพราะ IWDG หรือไม่</p>
+
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["WasResetCauseIWDG()?"] -->|"Yes"| B["Print WARN"]
+    A -->|"No"| C["IWDG_DisableWriteProtect()"]
+    B --> C
+    C --> D["IWDG_SetPrescaler(64)"]
+    D --> E["IWDG_SetReload(1249)"]
+    E --> F["IWDG_ReloadCounter()"]
+    F --> G["IWDG_Enable()"]
+    G --> H["loop every 900ms"]
+    H --> I["IWDG_Feed()"]
+    I --> H
+</pre>
 
 <h3>💻 โค้ด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
@@ -124,7 +152,17 @@ int main(void)
 <section>
 <h2>ex03_WWDG_Simple — Window Watchdog พื้นฐาน</h2>
 <h3>📖 แนวคิด</h3>
-<p>Window Watchdog (WWDG) ใช้ clock จาก APB (PCLK) — รีเซ็ตเมื่อ counter ต่ำกว่าค่า window หรือ overflow — ต้อง Refresh ก่อนถึง window</p>
+    <p>Window Watchdog (WWDG) ใช้ clock จาก APB (PCLK) — รีเซ็ตเมื่อ counter ต่ำกว่าค่า window หรือ overflow — ต้อง Refresh ก่อนถึง window</p>
+
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["WWDG_SimpleInit()"] --> B["counter=0x7F, window=0x50"]
+    B --> C["while(1)"]
+    C --> D["WWDG_Refresh()"]
+    D --> E["Delay_Ms(200)"]
+    E --> C
+</pre>
 
 <h3>💻 โค้ด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
@@ -163,7 +201,21 @@ int main(void)
 <section>
 <h2>ex04_WWDG_Interrupt — WWDG พร้อม Early Wakeup Interrupt</h2>
 <h3>📖 แนวคิด</h3>
-<p>ใช้ WWDG_SetCallback + WWDG_InitWithInterrupt เพื่อให้ WWDG แจ้งเตือนก่อนรีเซ็ตผ่าน EWI (Early Wakeup Interrupt) — ทำความสะอาดหรือบันทึกข้อมูลก่อน MCU รีเซ็ต</p>
+    <p>ใช้ WWDG_SetCallback + WWDG_InitWithInterrupt เพื่อให้ WWDG แจ้งเตือนก่อนรีเซ็ตผ่าน EWI (Early Wakeup Interrupt) — ทำความสะอาดหรือบันทึกข้อมูลก่อน MCU รีเซ็ต</p>
+
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["WWDG_SetCallback(EWI_Cb)"] --> B["WWDG_InitWithInterrupt(127,80,1)"]
+    B --> C["while(1)"]
+    C --> D{"wwdg_warning?"}
+    D -->|"Yes"| E["Print warning"]
+    D -->|"No"| F["WWDG_Refresh()"]
+    E --> F
+    F --> G["Delay_Ms(100)"]
+    G --> C
+    H["EWI Interrupt"] --> I["Toggle PC0\nSet wwdg_warning=1"]
+</pre>
 
 <h3>💻 โค้ด</h3>
 <pre><code class="language-c">volatile uint32_t wwdg_warning = 0;
@@ -212,7 +264,17 @@ int main(void)
 <section>
 <h2>ex05_WWDG_Advanced — กำหนด Prescaler และ Window เอง</h2>
 <h3>📖 แนวคิด</h3>
-<p>ใช้ WWDG_Init ตั้งค่า prescaler (1/2/4/8) และ window register ด้วยตัวเอง — ทำให้ timeout ปรับได้ตามต้องการ — เหมาะกับงานที่ต้องการ timing แน่นอน</p>
+    <p>ใช้ WWDG_Init ตั้งค่า prescaler (1/2/4/8) และ window register ด้วยตัวเอง — ทำให้ timeout ปรับได้ตามต้องการ — เหมาะกับงานที่ต้องการ timing แน่นอน</p>
+
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["WWDG_Init(127,95,PRESCALER_8)"] --> B["timeout ≈ 21.8ms"]
+    B --> C["while(1)"]
+    C --> D["WWDG_Refresh()"]
+    D --> E["Delay_Ms(10)"]
+    E --> C
+</pre>
 
 <h3>💻 โค้ด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20

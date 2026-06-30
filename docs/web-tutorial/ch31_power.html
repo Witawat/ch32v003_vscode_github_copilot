@@ -43,6 +43,16 @@ flowchart LR
     PC1 -- Button -- GND     (INPUT_PULLUP, ปลุกด้วย FALLING)
 </pre>
 
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["Init + attachInterrupt()"] --> B["while(1)"]
+    B --> C["digitalToggle(LED)"]
+    C --> D["PWR_EnterSleepMode()"]
+    D --> E["⏰ Wake by EXTI"]
+    E --> B
+</pre>
+
 <h3>💻 โค้ด + อธิบายทีละบรรทัด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include &lt;SimpleHAL.h&gt;
@@ -99,6 +109,17 @@ int main(void)
 <h3>📖 แนวคิด</h3>
 <p>Standby mode ปิดเกือบทุกอย่าง — SRAM, register หาย — ใช้ PWR_ConfigureAWU ตั้งเวลาปลุกอัตโนมัติด้วย LSI — ใช้ WasStandbyWakeup เช็คว่าตื่นจาก Standby หรือไม่</p>
 
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["PWR_ConfigureAWU(5s)"] --> B{"PWR_WasStandbyWakeup?"}
+    B -->|"Yes"| C["Print Woke up"]
+    B -->|"No"| D["Print First boot"]
+    C --> E["PWR_EnterStandbyMode()"]
+    D --> E
+    E --> A
+</pre>
+
 <h3>💻 โค้ด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include &lt;SimpleHAL.h&gt;
@@ -147,6 +168,18 @@ int main(void)
 <h3>📖 แนวคิด</h3>
 <p>ใช้ PWR_EnableWakeupPin เปิดใช้งานขา wakeup (PA0/PA2/PC1) — MCU อยู่ใน Standby — เมื่อสัญญาณที่ขามา (rising edge) → MCU ตื่น — เหมาะกับ remote sensor ที่กดปุ่มแล้วส่งค่า</p>
 
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["PWR_EnableWakeupPin(PA0, RISING)"] --> B["PWR_EnterStandbyMode()"]
+    B --> C["⏰ Wake by PA0 rising edge"]
+    C --> D{"WasStandbyWakeup?"}
+    D -->|"Yes"| E["Print Woke by pin"]
+    D -->|"No"| F["Cold boot"]
+    E --> A
+    F --> A
+</pre>
+
 <h3>💻 โค้ด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include &lt;SimpleHAL.h&gt;
@@ -184,6 +217,19 @@ int main(void)
 <h2>ex04_PVD_Monitor — ตรวจสอบแรงดันตกด้วย PVD</h2>
 <h3>📖 แนวคิด</h3>
 <p>Programmable Voltage Detector (PVD) ตรวจสอบ VDD — ถ้าแรงดันต่ำกว่าเกณฑ์ที่ตั้ง (2.2V-2.9V) → interrupt หรือ flag — ใช้ป้องกันข้อมูลเสียหายเมื่อแบตใกล้หมด</p>
+
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["PWR_SetCallback(PVD_Callback)"] --> B["PWR_EnablePVD(2.7V)"]
+    B --> C["while(1)"]
+    C --> D{"VDD < 2.7V?"}
+    D -->|"Yes"| E["PVD interrupt → flag"]
+    E --> F["Print Low voltage"]
+    D -->|"No"| G["Poll PWR_GetPVDStatus()"]
+    F --> C
+    G --> C
+</pre>
 
 <h3>💻 โค้ด</h3>
 <pre><code class="language-c">volatile uint8_t voltage_low = 0;
@@ -240,6 +286,16 @@ int main(void)
 <h3>📖 แนวคิด</h3>
 <p>ใช้ CalculateBatteryLife คำนวณอายุแบตจากความจุแบตและกระแสที่ใช้ — และ EstimateStandbyCurrent ประมาณกระแส standby จาก configuration ปัจจุบัน — ช่วยออกแบบระบบ battery-powered</p>
 
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["Define battery params"] --> B["CalculateBatteryLife(220mAh, ...)"]
+    B --> C["Print estimated hours/days"]
+    C --> D["EstimateStandbyCurrent()"]
+    D --> E["Print estimated nA"]
+    E --> F["while(1)"]
+</pre>
+
 <h3>💻 โค้ด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include &lt;SimpleHAL.h&gt;
@@ -293,6 +349,20 @@ int main(void)
 <h2>ex06_Wakeup_Pin — AWU + Wakeup Pin ใช้ร่วมกัน</h2>
 <h3>📖 แนวคิด</h3>
 <p>รวม AWU (ปลุกเป็นระยะ) กับ Wakeup Pin (ปลุกเมื่อมีเหตุการณ์) — AWU ปลุกทุก 10s เพื่ออ่าน sensor — Wakeup Pin ปลุกเมื่อมี interrupt จากภายนอก — ยืดหยุ่นและประหยัดพลังงานสูงสุด</p>
+
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A{"WasStandbyWakeup?"} -->|"Yes"| B{"PWR_GetWakeupFlag?"}
+    B -->|"1 (AWU)"| C["Print Woke by AWU"]
+    B -->|"0 (Pin)"| D["Print Woke by ext pin"]
+    C --> E["PWR_ConfigureAWU(10s)"]
+    D --> E
+    E --> F["PWR_EnableWakeupPin(PA0, RISING)"]
+    F --> G["PWR_EnterStandbyMode()"]
+    G --> A
+    A -->|"No"| E
+</pre>
 
 <h3>💻 โค้ด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20

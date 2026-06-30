@@ -42,13 +42,28 @@
                          |
                         [ ] 220Ω
                          |
-     PC0 (Output) ----+----->| LED (Green)
+      PC0 (Output) ----+----->| LED (Green)
                        |
                       GND
 
      PC1 (Input) ----[ ]----> GND
                     Button
-                    (Pull-up external)
+                     (Pull-up external)
+</pre>
+
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
+    B --> C["Start_Timer(&tmr, 500, 1)"]
+    C --> D["while(1)"]
+    D --> E{"Is_Timer_Expired?"}
+    E -->|"Yes"| F["digitalToggle(PC0)"]
+    E -->|"No"| G["ทำงานอื่นต่อ"]
+    F --> H{"Button Stop?"}
+    H -->|"Yes"| I["Stop_Timer()"]
+    H -->|"No"| D
+    I --> D
 </pre>
 
 <h3>💻 โค้ด + อธิบายทีละบรรทัด</h3>
@@ -156,9 +171,22 @@ int main(void)
                          |
                         [ ] 220Ω
                          |
-     PC0 (Output) ----+----->| LED (Red)
+      PC0 (Output) ----+----->| LED (Red)
                        |
                       GND
+</pre>
+
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
+    B --> C["while(1)"]
+    C --> D["digitalWrite HIGH → Delay_Ms(200)"]
+    D --> E["digitalWrite LOW → Delay_Ms(100)"]
+    E --> F["digitalWrite HIGH → Delay_Ms(300)"]
+    F --> G["digitalWrite LOW → Delay_Ms(1000)"]
+    G --> H["Delay_Us(1) 10 รอบ"]
+    H --> C
 </pre>
 
 <h3>💻 โค้ด + อธิบายทีละบรรทัด</h3>
@@ -246,9 +274,25 @@ int main(void)
                          |
                         [ ] 220Ω
                          |
-     PC0 (Output) ----+----->| LED (Yellow)
+      PC0 (Output) ----+----->| LED (Yellow)
                        |
                       GND
+</pre>
+
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
+    B --> C["Get_CurrentMs(), Get_CurrentUs()"]
+    C --> D["while(1)"]
+    D --> E{"ELAPSED_TIME ≥ 1000ms?"}
+    E -->|"Yes"| F["digitalToggle(PC0) 50ms"]
+    F --> G["พิมพ์ Millis, Micros, TickMicros"]
+    G --> H["คำนวณ Elapsed Time"]
+    H --> I["loop_count++"]
+    I --> D
+    E -->|"No"| J["วัดเวลา USART_Print"]
+    J --> D
 </pre>
 
 <h3>💻 โค้ด + อธิบายทีละบรรทัด</h3>
@@ -364,13 +408,32 @@ int main(void)
                          |
                         [ ] 220Ω
                          |
-     PC0 (Output) ----+----->| LED (Blue)
+      PC0 (Output) ----+----->| LED (Blue)
                        |
                       GND
 
      PC1 (Input) ----[ ]----> GND
                     Button
-                    (Pull-up external)
+                     (Pull-up external)
+</pre>
+
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
+    B --> C["TIM_SimpleInit(TIM2, 2Hz)"]
+    C --> D["TIM_AttachInterrupt(callback)"]
+    D --> E["TIM_Start(TIM2)"]
+    E --> F["while(1)"]
+    F --> G{"ปุ่มกด Start/Stop?"}
+    G -->|"Yes"| H["TIM_Start / TIM_Stop"]
+    H --> I{"พิมพ์ทุก 2 วิ?"}
+    G -->|"No"| I
+    I -->|"Yes"| J["พิมพ์ LED state + Counter"]
+    I -->|"No"| F
+    J --> F
+    K["ISR: timer_isr_callback"] --> L["led_state = !led_state"]
+    L --> M["digitalWrite(PC0, led_state)"]
 </pre>
 
 <h3>💻 โค้ด + อธิบายทีละบรรทัด</h3>
@@ -487,11 +550,32 @@ int main(void)
                          |
                         [ ] 220Ω
                          |
-     PC0 (Output) ----+----->| LED (Green)
+      PC0 (Output) ----+----->| LED (Green)
                        |
                       GND
 
      USART (TX=PD5, RX=PD6) เชื่อมต่อ PC ผ่าน USB-Serial
+</pre>
+
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["SystemCoreClockUpdate()"] --> B["TIM_AdvancedInit(TIM1, PSC=239, Period=9, UP)"]
+    B --> C["TIM_Start(TIM1)"]
+    C --> D["while(1)"]
+    D --> E["อ่าน Counter"]
+    E --> F{"Counter < last_counter?"}
+    F -->|"Yes"| G["digitalToggle(PC0)"]
+    F -->|"No"| H{"≥ 2000ms?"}
+    G --> H
+    H -->|"Yes"| I["พิมพ์ Counter, Period, PSC"]
+    I --> J{"≥ 5000ms?"}
+    J -->|"Yes"| K["TIM_SetPrescaler(119)"]
+    K --> L["TIM_SetMode(DOWN)"]
+    L --> M["TIM_GenerateUpdate()"]
+    J -->|"No"| D
+    H -->|"No"| D
+    M --> D
 </pre>
 
 <h3>💻 โค้ด + อธิบายทีละบรรทัด</h3>
@@ -607,6 +691,27 @@ int main(void)
      USART (TX=PD5, RX=PD6) เชื่อมต่อ PC ผ่าน USB-Serial
 
      (Pull-up ในตัว CH32V003 — ใช้ PIN_MODE_INPUT_PULLUP)
+</pre>
+
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
+    B --> C["Stopwatch_Init()"]
+    C --> D["while(1)"]
+    D --> E{"ปุ่ม PC0?"}
+    E -->|"Yes"| F{"Stopwatch_IsRunning?"}
+    F -->|"Yes"| G["Stopwatch_Stop()"]
+    F -->|"No"| H["Stopwatch_Start()"]
+    E -->|"No"| I{"ปุ่ม PC1?"}
+    G --> I
+    H --> I
+    I -->|"Yes"| J["Stopwatch_Reset()"]
+    I -->|"No"| K{"≥ 100ms?"}
+    J --> K
+    K -->|"Yes"| L["แสดง Stopwatch_GetTimeString()"]
+    K -->|"No"| D
+    L --> D
 </pre>
 
 <h3>💻 โค้ด + อธิบายทีละบรรทัด</h3>
@@ -741,6 +846,30 @@ int main(void)
      USART (TX=PD5, RX=PD6) เชื่อมต่อ PC ผ่าน USB-Serial
 </pre>
 
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
+    B --> C["Countdown_Init(0,0,10)"]
+    C --> D["Countdown_SetAlarmCallback()"]
+    D --> E["while(1)"]
+    E --> F{"ปุ่ม PC1 Start/Pause?"}
+    F -->|"Yes"| G{"Countdown_IsRunning?"}
+    G -->|"Yes"| H["Countdown_Stop()"]
+    G -->|"No"| I["Reset ถ้าหมด → Start()"]
+    F -->|"No"| J{"กำลังนับถอยหลัง?"}
+    H --> J
+    I --> J
+    J -->|"Yes"| K{"≥ 1000ms?"}
+    K -->|"Yes"| L["พิมพ์เวลาที่เหลือ"]
+    J -->|"No"| M{"alarm_triggered?"}
+    K -->|"No"| E
+    L --> E
+    M -->|"Yes"| N["LED กระพริบ 10 รอบ"]
+    M -->|"No"| E
+    N --> E
+</pre>
+
 <h3>💻 โค้ด + อธิบายทีละบรรทัด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include &lt;SimpleHAL.h&gt;
@@ -871,6 +1000,26 @@ int main(void)
      USART (TX=PD5, RX=PD6) → แสดงสถานะ
 
      (ไม่ใช้ TIM2 เลย — หลีกเลี่ยง conflict)
+</pre>
+
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
+    B --> C["PWM_Init(PWM1_CH1, 1kHz)"]
+    C --> D["Start_Timer 3 ตัว (2s, 500ms, 50ms)"]
+    D --> E["while(1)"]
+    E --> F{"pwm_timer expired?"}
+    F -->|"Yes"| G["PWM duty += dir → fade"]
+    F -->|"No"| H{"led_timer expired?"}
+    G --> H
+    H -->|"Yes"| I["digitalToggle(PC0)"]
+    H -->|"No"| J{"print_timer expired?"}
+    I --> J
+    J -->|"Yes"| K["พิมพ์ PWM%, Status"]
+    J -->|"No"| L["yield()"]
+    K --> L
+    L --> E
 </pre>
 
 <h3>💻 โค้ด + อธิบายทีละบรรทัด</h3>

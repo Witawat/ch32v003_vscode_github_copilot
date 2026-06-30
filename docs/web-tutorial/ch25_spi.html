@@ -44,6 +44,18 @@ flowchart LR
     SPI_PINS_DEFAULT: SCK=PC5, MISO=PC7, MOSI=PC6, NSS=PC4
 </pre>
 
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["SPI_SimpleInit(1MHz)"] --> B["while(1)"]
+    B --> C["CS LOW"]
+    C --> D["SPI_Transfer(0xAA)"]
+    D --> E["CS HIGH"]
+    E --> F["Print Loopback result"]
+    F --> G["Delay_Ms(2000)"]
+    G --> B
+</pre>
+
 <h3>💻 โค้ด + อธิบายทีละบรรทัด</h3>
 <pre><code class="language-c">#if CH32V003_IS_SOP8
 #error "Hardware SPI not available on SOP-8. Use shiftOut/shiftIn instead."
@@ -115,6 +127,17 @@ int main(void)
                       /WP=3.3V, /HOLD=3.3V
     3.3V              VCC=3.3V
     GND               GND
+</pre>
+
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["SPI_SimpleInit(1MHz)"] --> B["while(1)"]
+    B --> C["Read Status Reg"]
+    C --> D["Read JEDEC ID"]
+    D --> E["Read 32 bytes + Hex dump"]
+    E --> F["Delay 3000ms"]
+    F --> B
 </pre>
 
 <h3>💻 โค้ด + อธิบายทีละบรรทัด</h3>
@@ -217,6 +240,22 @@ int main(void)
 <h3>📖 แนวคิด</h3>
 <p>ใช้ SPI_SetSpeed + SPI_SetBitOrder ปรับแต่ง SPI runtime — ทดสอบ JEDEC ID ที่ 125kHz vs 8MHz — เปรียบเทียบ MSB_FIRST vs LSB_FIRST (bit-reversed) — device แต่ละตัวต้องการ speed/mode เฉพาะ</p>
 
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["SPI_SimpleInit(125kHz)"] --> B["while(1)"]
+    B --> C["readJedec() @125kHz"]
+    C --> D["SPI_SetSpeed(8MHz)"]
+    D --> E["readJedec() @8MHz"]
+    E --> F["SPI_SetBitOrder(MSB_FIRST)"]
+    F --> G["Read JEDEC 1st byte"]
+    G --> H["SPI_SetBitOrder(LSB_FIRST)"]
+    H --> I["Read JEDEC 1st byte"]
+    I --> J["Print MSB vs LSB"]
+    J --> K["Delay 5000ms"]
+    K --> B
+</pre>
+
 <h3>💻 โค้ด + อธิบายทีละบรรทัด</h3>
 <pre><code class="language-c">#if CH32V003_IS_SOP8
 #error "Hardware SPI not available on SOP-8."
@@ -311,6 +350,20 @@ void readJedec()
 <h2>ex04_SPI_Remap — สลับ Pin Configuration SPI</h2>
 <h3>📖 แนวคิด</h3>
 <p>ใช้ SPI_PinConfig เปลี่ยน pin SPI ระหว่าง DEFAULT (PC5=SCK/PC6=MOSI/PC7=MISO/PC4=NSS) กับ REMAP (PD1=SCK/PD3=MOSI/PD2=MISO/PD0=NSS) — ทดสอบ loopback ในแต่ละ config — SOP-8 ใช้ไม่ได้, SOP-16 ใช้ได้เฉพาะ DEFAULT</p>
+
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["Init system"] --> B["test_spi_config(DEFAULT)"]
+    B --> C["Delay 500ms"]
+    C --> D{"CH32V003_HAS_PD0?"}
+    D -->|"Yes"| E["test_spi_config(REMAP)"]
+    E --> F["Delay 500ms"]
+    D -->|"No"| G["Print SKIP"]
+    F --> H["Print complete"]
+    G --> H
+    H --> I["while(1) toggle LED"]
+</pre>
 
 <h3>💻 โค้ด + อธิบายทีละบรรทัด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20

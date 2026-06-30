@@ -50,6 +50,19 @@ flowchart LR
     GND ----------------- GND
 </pre>
 
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["Init I2C+1Wire+USART"] --> B["Init BMP280+DS18B20"]
+    B --> C["Timer_t every 5s"]
+    C --> D{"Timer expired?"}
+    D -->|"Yes"| E["BMP280_Read(temp+press)"]
+    E --> F["DS18B20_Read(temp)"]
+    F --> G["Print all data"]
+    G --> C
+    D -->|"No"| C
+</pre>
+
 <h3>💻 โค้ด + อธิบายทีละบรรทัด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include &lt;SimpleHAL.h&gt;
@@ -117,6 +130,23 @@ int main(void)
     PD6(RX) ---- USB-to-Serial
 </pre>
 
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["Init PWM+USART+Stopwatch"] --> B["Stopwatch_Start()"]
+    B --> C["while(1)"]
+    C --> D{"USART data?"}
+    D -->|"Yes"| E["Read cmd char"]
+    E --> F["Parse 0-9 → duty"]
+    F --> G["PWM_SetDuty()"]
+    G --> H["Print duty %"]
+    H --> C
+    D -->|"No"| I{"10s elapsed?"}
+    I -->|"Yes"| J["Print uptime"]
+    J --> C
+    I -->|"No"| C
+</pre>
+
 <h3>💻 โค้ด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include &lt;SimpleHAL.h&gt;
@@ -170,6 +200,21 @@ int main(void) {
 <h2>ex03_Data_Logger_Flash — ADC + Flash + Stopwatch + CRC32</h2>
 <h3>📖 แนวคิด</h3>
 <p>บันทึกข้อมูล ADC ลง Flash ภายในทุก 1 วินาที — ใช้ Stopwatch กำกับเวลา — CRC32 ตรวจสอบความถูกต้องของข้อมูล — อ่านข้อมูลย้อนหลังทาง USART</p>
+
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["Init ADC+Flash+Stopwatch"] --> B["Erase Flash page 31"]
+    B --> C["Stopwatch_Start()"]
+    C --> D["for i=0 to 63"]
+    D --> E["Read timestamp + ADC"]
+    E --> F["CRC32_Calc entry"]
+    F --> G["Flash_WritePage"]
+    G --> H["Delay_Ms(1000)"]
+    H --> D
+    D --> I["Print sample count"]
+    I --> J["while(1) IWDG_Feed"]
+</pre>
 
 <h3>💻 โค้ด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
@@ -226,6 +271,23 @@ int main(void) {
 <h2>ex04_Smart_Countdown — Countdown + I2C OLED + PWM Buzzer + Interrupt</h2>
 <h3>📖 แนวคิด</h3>
 <p>นาฬิกานับถอยหลัง — แสดงบน I2C OLED — เมื่อหมดเวลาสั่ง PWM Buzzer ส่งเสียง — กดปุ่ม interrupt เพื่อรีเซ็ต — รวมหลาย periferals ทำงานร่วมกัน</p>
+
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["Init OLED+PWM+I2C+INT"] --> B["countdown = 10000"]
+    B --> C["while(1)"]
+    C --> D{"reset_flag?"}
+    D -->|"Yes"|     E["countdown = 10000&lt;br/&gt;PWM off"]
+    E --> F["Print Reset!"]
+    F --> C
+    D -->|"No"| G["OLED display time"]
+    G --> H{"countdown = 0?"}
+    H -->|"Yes"|     I["PWM buzzer 50%&lt;br/&gt;OLED TIME UP!"]
+    I --> C
+    H -->|"No"|     J["Delay_Ms(100)&lt;br/&gt;countdown -= 100"]
+    J --> C
+</pre>
 
 <h3>💻 โค้ด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
@@ -288,6 +350,19 @@ int main(void) {
 <h3>📖 แนวคิด</h3>
 <p>ฮับรวบรวมข้อมูล sensor 3 โปรโตคอล — I2C (BMP280), 1-Wire (DS18B20), SPI (flash/log) — ส่งข้อมูลผ่าน USART แบบ DMA ไม่ต้องรอ CPU — แสดงประสิทธิภาพการทำงานแบบ multi-protocol</p>
 
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["Init I2C+1Wire+SPI+USART"] --> B["Init DMA USART1 TX"]
+    B --> C["while(1)"]
+    C --> D["BMP280_ReadAll()"]
+    D --> E["DS18B20_GetTemp()"]
+    E --> F["sprintf DMA buffer"]
+    F --> G["DMA_Start TX"]
+    G --> H["Delay_Ms(1000)"]
+    H --> C
+</pre>
+
 <h3>💻 โค้ด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include &lt;SimpleHAL.h&gt;
@@ -339,6 +414,19 @@ int main(void) {
 <h3>📖 แนวคิด</h3>
 <p>ใช้ CH32V003 แบบ SOP-8 มีแค่ 6 ขา — จัดการให้ครบทุกฟังก์ชัน: ADC input, PWM output, I2C, USART, interrupt — สอนการเลือก pin ที่เหมาะสมกับ SOP-8 และบริหารขาอย่างคุ้มค่า</p>
 
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["Configure 6 pins:&lt;br/&gt;PA1 PA2 PC1 PC2 PC4 PD6 PD1"] --> B["Init ADC+PWM+I2C+USART"]
+    B --> C["attachInterrupt PC4"]
+    C --> D["while(1)"]
+    D --> E["ADC_Read(0)"]
+    E --> F["PWM duty = ADC / 40"]
+    F --> G["Print ADC value"]
+    G --> H["Delay_Ms(200)"]
+    H --> D
+</pre>
+
 <h3>💻 โค้ด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_SOP8
 #include &lt;SimpleHAL.h&gt;
@@ -385,6 +473,18 @@ int main(void) {
 <h2>ex07_Battery_Data_Logger — ADC → Flash → Standby → AWU → wake</h2>
 <h3>📖 แนวคิด</h3>
 <p>บันทึกค่าแบตเตอรี่ลง Flash แล้วเข้าสู่ Standby mode — ใช้ AWU (Auto Wake-up) ปลุกทุก 60 วินาที — อ่าน ADC แล้วบันทึก — วนไปเรื่อย ๆ — ประหยัดพลังงานสูงสุดสำหรับ IoT</p>
+
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["Init ADC"] --> B["Erase Flash page 30"]
+    B --> C["ADC_Read battery voltage"]
+    C --> D["Flash_WriteHalfWord"]
+    D --> E["AWU_Init(60s)"]
+    E --> F["PWR_EnterSTANDBY()"]
+    F --> G["Wake → Reset&lt;br/&gt;restart from main"]
+    G --> B
+</pre>
 
 <h3>💻 โค้ด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20

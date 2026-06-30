@@ -45,6 +45,19 @@ flowchart LR
     - OPAMP output เชื่อม ADC ภายใน — ไม่ต้องต่อสายภายนอก
 </pre>
 
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["OPAMP_SimpleInit(FOLLOWER)"] --> B["OPAMP_Enable()"]
+    B --> C["ADC_SimpleInit()"]
+    C --> D["while(1)"]
+    D --> E["ADC_Read(ch)"]
+    E --> F["ADC_ToVoltage(val)"]
+    F --> G["Print voltage"]
+    G --> H["Delay_Ms(500)"]
+    H --> D
+</pre>
+
 <h3>💻 โค้ด + อธิบายทีละบรรทัด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include &lt;SimpleHAL.h&gt;
@@ -107,6 +120,19 @@ int main(void)
     - Gain = 1 + R2/R1 = 1 + 10k/10k = 2
 </pre>
 
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["OPAMP_SimpleInit(FOLLOWER)"] --> B["OPAMP_ConfigNonInverting(gain=2)"]
+    B --> C["OPAMP_Enable()"]
+    C --> D["while(1)"]
+    D --> E["ADC_ReadVoltage(7)"]
+    E --> F["Vin = Vout / 2"]
+    F --> G["Print Vin"]
+    G --> H["Delay_Ms(500)"]
+    H --> D
+</pre>
+
 <h3>💻 โค้ด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include &lt;SimpleHAL.h&gt;
@@ -145,6 +171,20 @@ int main(void) {
 <h2>ex03_Inverting_Amp — ConfigInverting ขยาย -2 เท่า</h2>
 <h3>📖 แนวคิด</h3>
 <p>ใช้ OPAMP แบบ Inverting ขยายสัญญาณกลับเฟส — ConfigInverting gain = -2 — output = -2 × Vin — ต่อ R ภายนอกแบบ inverting topology</p>
+
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["SystemInit + ADC_SimpleInit"] --> B["OPAMP_ConfigInverting(gain=2)"]
+    B --> C["OPAMP_Enable()"]
+    C --> D["while(1)"]
+    D --> E["ADC_Read(7)"]
+    E --> F["Calculate Vout"]
+    F --> G["Vin = Vout / -2"]
+    G --> H["Print Vout &amp; Vin"]
+    H --> I["Delay_Ms(500)"]
+    I --> D
+</pre>
 
 <h3>💻 โค้ด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
@@ -187,6 +227,17 @@ int main(void) {
 <h3>📖 แนวคิด</h3>
 <p>ตั้ง OPAMP เป็น Comparator — เปรียบเทียบสัญญาณอนาล็อกกับ threshold — ConfigComparator HIGH = output HIGH เมื่อ Vin > Vref — LOW = LOW เมื่อ Vin < Vref — อ่านผลด้วย digitalRead</p>
 
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["OPAMP_ConfigComparator(HIGH)"] --> B["OPAMP_Enable()"]
+    B --> C["while(1)"]
+    C --> D["digitalRead(OPAMP_OUT_PIN)"]
+    D --> E["Print HIGH or LOW"]
+    E --> F["Delay_Ms(200)"]
+    F --> C
+</pre>
+
 <h3>💻 โค้ด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include &lt;SimpleHAL.h&gt;
@@ -225,6 +276,18 @@ int main(void) {
 <h2>ex05_OPAMP_with_ADC — Follower + ADC Read</h2>
 <h3>📖 แนวคิด</h3>
 <p>รวม OPAMP follower + ADC — ใช้ OPAMP เป็นบัฟเฟอร์ลด impedance ของสัญญาณก่อนเข้า ADC — อ่านค่าแรงดันและแปลงเป็นค่าจริง — แสดงทาง USART</p>
+
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["OPAMP_SimpleInit(FOLLOWER)"] --> B["OPAMP_Enable()"]
+    B --> C["while(1)"]
+    C --> D["ADC_Read(7)"]
+    D --> E["ADC_ReadVoltage(7)"]
+    E --> F["Print Raw &amp; Voltage"]
+    F --> G["Delay_Ms(250)"]
+    G --> C
+</pre>
 
 <h3>💻 โค้ด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
@@ -267,6 +330,24 @@ int main(void) {
 <h2>ex06_Advanced_Control — เปลี่ยนช่อง + Power Save</h2>
 <h3>📖 แนวคิด</h3>
 <p>ควบคุม OPAMP ขั้นสูง — เปลี่ยน channel ระหว่าง OPAMP1↔OPAMP2 ขณะรัน — เปิด/ปิด Power Save mode — อ่านค่าสัญญาณต่างช่องและเปรียบเทียบ</p>
+
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["Init OPAMP1+OPAMP2&lt;br/&gt;(VOLTAGE_FOLLOWER)"] --> B["active_ch = OPAMP1"]
+    B --> C["while(1)"]
+    C --> D{"3s elapsed?"}
+    D -->|"No"| E["ADC_Read(active_ch)"]
+    E --> F["Print ADC value"]
+    F --> G["Delay_Ms(200)"]
+    G --> C
+    D -->|"Yes"| H["OPAMP_Disable(active_ch)"]
+    H --> I["Toggle active_ch"]
+    I --> J["PowerSave inactive ch"]
+    J --> K["OPAMP_Enable(active_ch)"]
+    K --> L["Print switched"]
+    L --> C
+</pre>
 
 <h3>💻 โค้ด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20

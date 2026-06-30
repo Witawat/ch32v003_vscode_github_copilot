@@ -42,6 +42,17 @@ flowchart LR
     - หรือใช้สายจั้มต่อ PA1 กับจุดแบ่งแรงดันใด ๆ
 </pre>
 
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["ADC_SimpleInit()"] --> B["while(1)"]
+    B --> C["ADC_Read(ch)"]
+    C --> D["ADC_ToVoltage(val, VDD)"]
+    D --> E["Print voltage"]
+    E --> F["Delay_Ms(500)"]
+    F --> B
+</pre>
+
 <h3>💻 โค้ด + อธิบายทีละบรรทัด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include &lt;SimpleHAL.h&gt;
@@ -96,6 +107,17 @@ int main(void)
     PA1 ---- Potentiometer 1 (10kΩ)
     PC4 ---- Potentiometer 2 (10kΩ)
     PD6 ---- LDR + 10kΩ pull-down
+</pre>
+
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["ADC_SimpleInit()"] --> B["while(1)"]
+    B --> C["ADC_ReadMultiple(3ch)"]
+    C --> D["ADC_ToPercent(val)"]
+    D --> E["Print values %"]
+    E --> F["Delay_Ms(500)"]
+    F --> B
 </pre>
 
 <h3>💻 โค้ด</h3>
@@ -155,6 +177,19 @@ int main(void) {
     (4.2V → 1.4V, 3.7V → 1.23V, 3.0V → 1.0V)
 </pre>
 
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["ADC_SimpleInit()"] --> B["while(1)"]
+    B --> C["ADC_GetVDD()"]
+    C --> D["ADC_Read(BAT_PIN)"]
+    D --> E["voltage = ToVoltage(raw) × DIVIDER_RATIO"]
+    E --> F["GetBatteryPercent(raw, ratio)"]
+    F --> G["Print VDD, Vbat, %"]
+    G --> H["Delay_Ms(1000)"]
+    H --> B
+</pre>
+
 <h3>💻 โค้ด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include &lt;SimpleHAL.h&gt;
@@ -204,6 +239,18 @@ int main(void) {
 <h3>📖 แนวคิด</h3>
 <p>ใช้ ReadVrefInt อ่านค่า Vrefint (internal 1.2V) เพื่อคำนวณ Vref จริง — จากนั้นใช้ ReadVoltageCompensated อ่านแรงดันแบบชดเชย — ให้ค่าถูกต้องแม้ VDD เปลี่ยนแปลง เช่น จากแบตเตอรี่</p>
 
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["ADC_SimpleInit()"] --> B["while(1)"]
+    B --> C["ReadVrefInt()"]
+    C --> D["actual_vref = 1.2 × 4095 / vrefint_raw"]
+    D --> E["ReadVoltageCompensated(PA1)"]
+    E --> F["Print Vrefint + Vcomp"]
+    F --> G["Delay_Ms(500)"]
+    G --> B
+</pre>
+
 <h3>💻 โค้ด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include &lt;SimpleHAL.h&gt;
@@ -250,6 +297,18 @@ int main(void) {
 <h3>📖 แนวคิด</h3>
 <p>ใช้ DMA (Direct Memory Access) อ่าน ADC แบบต่อเนื่องโดยไม่ต้อง CPU interrupt — ใช้ DMA_analogReadStart เริ่ม DMA และ DMA_analogReadAverage อ่านค่าเฉลี่ยจาก buffer — ลดภาระ CPU สูงสุด</p>
 
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["ADC_SimpleInit()"] --> B["DMA_analogReadStart(pin, buf)"]
+    B --> C["while(1)"]
+    C --> D["DMA_analogReadAverage()"]
+    D --> E["ToVoltage(avg)"]
+    E --> F["Print voltage"]
+    F --> G["Delay_Ms(100)"]
+    G --> C
+</pre>
+
 <h3>💻 โค้ด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include &lt;SimpleHAL.h&gt;
@@ -295,6 +354,18 @@ int main(void) {
 <h2>ex06_Voltage_Average — ค่าแรงดันเฉลี่ยแบบปรับได้</h2>
 <h3>📖 แนวคิด</h3>
 <p>ใช้ ReadVoltage อ่านแรงดันเป็น float โดยตรง — และ ReadAverage ที่ให้ปรับจำนวน samples ได้ — เหมาะกับงานที่ต้องการสมดุลระหว่างความเร็วและความแม่นยำ</p>
+
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["ADC_SimpleInit()"] --> B["while(1)"]
+    B --> C["ReadVoltage(PA1, 1)"]
+    C --> D["ReadVoltage(PA1, 4)"]
+    D --> E["ReadAverage(PA1, 64)"]
+    E --> F["Print Fast, Avg4, Avg64"]
+    F --> G["Delay_Ms(200)"]
+    G --> B
+</pre>
 
 <h3>💻 โค้ด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20

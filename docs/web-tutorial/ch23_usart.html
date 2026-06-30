@@ -47,6 +47,15 @@ flowchart LR
     - GND ต้องต่อร่วมกันเสมอ!
 </pre>
 
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["USART_SimpleInit(115200)"] --> B["while(1)"]
+    B --> C["USART_Print(Hello)"]
+    C --> D["Delay_Ms(1000)"]
+    D --> B
+</pre>
+
 <h3>💻 โค้ด + อธิบายทีละบรรทัด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include &lt;SimpleHAL.h&gt;
@@ -96,6 +105,18 @@ int main(void)
     PD6 (RX) <------------ TX
     GND ------------------ GND
     (เหมือน ex01 — ต่อแบบ Cross-connect, Baud 115200)
+</pre>
+
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["USART_SimpleInit(115200)"] --> B["while(1)"]
+    B --> C["USART_PrintNum(12345)"]
+    C --> D["USART_PrintHex(12345)"]
+    D --> E["USART_PrintNum(-999)"]
+    E --> F["USART_WriteByte(0x55)"]
+    F --> G["Delay_Ms(2000)"]
+    G --> B
 </pre>
 
 <h3>💻 โค้ด</h3>
@@ -156,6 +177,26 @@ int main(void)
     GND ------------------ GND
 
     PC0 --- 220Ω ---|>|--- GND    (LED เอาต์พุต)
+</pre>
+
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["USART_SimpleInit(115200)"] --> B["while(1)"]
+    B --> C{"USART_Available > 0?"}
+    C -->|"No"| B
+    C -->|"Yes"| D["Read ch into buffer"]
+    D --> E{"ch == CR or LF?"}
+    E -->|"No"| B
+    E -->|"Yes"| F{"strcmp 'LED=ON'?"}
+    F -->|"Yes"| G["LED ON"]
+    F -->|"No"| H{"strcmp 'LED=OFF'?"}
+    H -->|"Yes"| I["LED OFF"]
+    H -->|"No"| J["Echo cmd"]
+    G --> K["Reset buffer"]
+    I --> K
+    J --> K
+    K --> B
 </pre>
 
 <h3>💻 โค้ด</h3>
@@ -227,6 +268,19 @@ int main(void)
 <h3>📖 แนวคิด</h3>
 <p>ใช้ USART_ReadBytes(buffer, length) อ่านข้อมูลตามจำนวนไบต์ที่ต้องการ — blocking จนกว่าจะครบ — แสดงผลเป็น hex ทีละไบต์ — ใช้ print "0"+PrintHex สำหรับ Padding</p>
 
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["USART_SimpleInit(115200)"] --> B["while(1)"]
+    B --> C["Print 'Send 5 bytes:'"]
+    C --> D["USART_ReadBytes(buffer, 5)"]
+    D --> E["for i = 0 to 4"]
+    E --> F["If < 16 pad '0', PrintHex"]
+    F --> E
+    E --> G["Print newline"]
+    G --> B
+</pre>
+
 <h3>💻 โค้ด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include &lt;SimpleHAL.h&gt;
@@ -274,6 +328,15 @@ int main(void)
 <h3>📖 แนวคิด</h3>
 <p>ใช้ DMA_USART_Send ส่งข้อมูลผ่าน DMA โดย CPU ไม่ต้องรอ — ข้อความต้องเป็น global/static array — DMA_CH2 → USART — CPU สามารถทำงานอื่นระหว่างส่ง</p>
 
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["USART_SimpleInit(115200)"] --> B["while(1)"]
+    B --> C["DMA_USART_Send(msg, 16)"]
+    C --> D["Delay_Ms(2000)"]
+    D --> B
+</pre>
+
 <h3>💻 โค้ด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include &lt;SimpleHAL.h&gt;
@@ -310,6 +373,23 @@ int main(void)
 <h2>ex06_USART_Remap — เปลี่ยนขา TX/RX</h2>
 <h3>📖 แนวคิด</h3>
 <p>CH32V003 มี 4 pin configs สำหรับ USART: DEFAULT (PD5/PD6), REMAP1 (PD0/PD1), REMAP2 (PD6/PD5 สลับ), FULL_REMAP (PD6/PD5 รวมบิต) — ใช้ test_pin_config เพื่อลองทุกแบบ</p>
+
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["Init USART, Timer"] --> B["test_pin_config(DEFAULT)"]
+    B --> C["Delay 500ms"]
+    C --> D["test_pin_config(REMAP2)"]
+    D --> E["Delay 500ms"]
+    E --> F{"CH32V003_HAS_PD0?"}
+    F -->|"Yes"| G["test_pin_config(REMAP1)"]
+    G --> H["Delay 500ms"]
+    F -->|"No"| I["Skip REMAP1"]
+    H --> J["test_pin_config(FULL_REMAP)"]
+    I --> J
+    J --> K["Delay 500ms"]
+    K --> L["while(1) toggle LED"]
+</pre>
 
 <h3>💻 โค้ด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
@@ -367,6 +447,24 @@ int main(void) {
 <h2>ex07_USART_Package_Aware — รองรับทุกแพ็กเกจ</h2>
 <h3>📖 แนวคิด</h3>
 <p>ใช้ CH32V003_HAS_PD0, CH32V003_IS_SOP8, CH32V003_IS_SOP16 ปรับการทำงานตามแพ็กเกจ — SOP-8/SOP-16 ใช้ USART_PINS_DEFAULT หรือ REMAP2 เท่านั้น — TSSOP-20/QFN-20 ใช้ทุกแบบ</p>
+
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["Init system"] --> B{"CH32V003_HAS_PD0?"}
+    B -->|"Yes"| C["USART_SimpleInit(DEFAULT)"]
+    C --> D["Print all 4 configs"]
+    B -->|"No"| E["USART_SimpleInit(REMAP2)"]
+    E --> F["Print 2 configs + note"]
+    D --> G{"CH32V003_IS_SOP8?"}
+    F --> G
+    G -->|"Yes"| H["Note: No SPI/I2C HW"]
+    G -->|"No"| I{"CH32V003_IS_SOP16?"}
+    H --> J["while(1) toggle LED"]
+    I -->|"Yes"| K["Note: DEFAULT only"]
+    I -->|"No"| J
+    K --> J
+</pre>
 
 <h3>💻 โค้ด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20

@@ -46,6 +46,16 @@ flowchart LR
     ใช้ I2C_PINS_PARTIAL_REMAP → PD2=SCL, PD1=SDA (SOP-8 compatible)
 </pre>
 
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["I2C_SimpleInit(100kHz)"] --> B["for addr=1 to 127"]
+    B --> C{"I2C_IsDeviceReady?"}
+    C -->|"Yes"| D["Print addr"]
+    C -->|"No"| B
+    D --> B
+</pre>
+
 <h3>💻 โค้ด + อธิบายทีละบรรทัด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include &lt;SimpleHAL.h&gt;
@@ -114,9 +124,22 @@ int main(void)
     PC1 --[SDA]--/\/\/\---+-- SDA
                  4.7kΩ    |
                           +-- WP=GND
-                          +-- A0/A1/A2=GND
-                          +-- VCC=3.3V
+                           +-- A0/A1/A2=GND
+                           +-- VCC=3.3V
     GND                   +-- GND
+</pre>
+
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["I2C_SimpleInit(100kHz)"] --> B["while(1)"]
+    B --> C["I2C_WriteRegMulti('Hello')"]
+    C --> D["Delay 10ms"]
+    D --> E["Print 'Written Hello'"]
+    E --> F["I2C_ReadRegMulti → readBuf"]
+    F --> G["Print readBuf"]
+    G --> H["Delay 3000ms"]
+    H --> B
 </pre>
 
 <h3>💻 โค้ด + อธิบายทีละบรรทัด</h3>
@@ -186,9 +209,24 @@ int main(void)
                  4.7kΩ    |
     PC1 --[SDA]--/\/\/\---+-- SDA
                  4.7kΩ    |
-                          +-- ADDR=GND → 0x23
-                          +-- VCC=3.3V
+                           +-- ADDR=GND → 0x23
+                           +-- VCC=3.3V
     GND                   +-- GND
+</pre>
+
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["I2C_SimpleInit(100kHz)"] --> B["I2C_Write(CMD_PWR_ON)"]
+    B --> C["Delay 10ms"]
+    C --> D["I2C_Write(CMD_HRES)"]
+    D --> E["Delay 180ms"]
+    E --> F["while(1)"]
+    F --> G["I2C_Read(raw, 2)"]
+    G --> H["lux = (raw[0]<<8|raw[1])/1.2"]
+    H --> I["Print lux"]
+    I --> J["Delay 500ms"]
+    J --> F
 </pre>
 
 <h3>💻 โค้ด + อธิบายทีละบรรทัด</h3>
@@ -262,6 +300,20 @@ int main(void)
     ใช้ PD2, PD3 — แต่เลือก pin GPIO ไหนก็ได้!
 </pre>
 
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["I2C_Soft_Init(PD2, PD3)"] --> B["while(1)"]
+    B --> C["for addr=1 to 127"]
+    C --> D{"I2C_Soft_Write(addr) == OK?"}
+    D -->|"Yes"| E["Print addr, count++"]
+    D -->|"No"| C
+    E --> C
+    C --> F["Print count"]
+    F --> G["Delay 3000ms"]
+    G --> B
+</pre>
+
 <h3>💻 โค้ด + อธิบายทีละบรรทัด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include "SimpleI2C_Soft.h"
@@ -317,6 +369,22 @@ int main(void)
 <h2>ex05_I2C_Remap — สลับ Pin Configuration</h2>
 <h3>📖 แนวคิด</h3>
 <p>ใช้ I2C_SimpleInit + I2C_Scan ร่วมกับ I2C_PINConfig 3 แบบ: DEFAULT (PC2/PC1), PARTIAL_REMAP (PD2/PD1), REMAP (PD0/PD1) — ทดสอบสแกนบัสในแต่ละ config — ใช้ I2C_Scan แบบ batch (คืน array)</p>
+
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["Init system"] --> B["scan_bus(DEFAULT PC2/PC1)"]
+    B --> C["Delay 500ms"]
+    C --> D["scan_bus(PARTIAL PD2/PD1)"]
+    D --> E["Delay 500ms"]
+    E --> F{"CH32V003_HAS_PD0?"}
+    F -->|"Yes"| G["scan_bus(FULL PD0/PD1)"]
+    G --> H["Delay 500ms"]
+    F -->|"No"| I["Skip REMAP"]
+    H --> J["Print complete"]
+    I --> J
+    J --> K["while(1) toggle LED"]
+</pre>
 
 <h3>💻 โค้ด + อธิบายทีละบรรทัด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20

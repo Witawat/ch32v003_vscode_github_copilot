@@ -36,6 +36,18 @@ flowchart LR
 <h3>📖 แนวคิด</h3>
 <p>ใช้ DMA_MemCopy คัดลอกข้อมูลจาก buffer หนึ่งไปอีก buffer หนึ่งด้วย DMA — รอจนกว่าจะเสร็จ (blocking) — ใช้ MemSet เติมค่าให้ buffer ด้วย DMA เช่นกัน</p>
 
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["DMA_MemSet(src, 0xFF, 256)"] --> B["DMA_MemCopy(src, dst, 256)"]
+    B --> C["Verify memcmp(src, dst)"]
+    C --> D{"Match?"}
+    D -->|"Yes"| E["Print PASS"]
+    D -->|"No"| F["Print FAIL"]
+    E --> G["while(1)"]
+    F --> G
+</pre>
+
 <h3>💻 โค้ด + อธิบายทีละบรรทัด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include &lt;SimpleHAL.h&gt;
@@ -89,6 +101,18 @@ int main(void)
 <h3>📖 แนวคิด</h3>
 <p>ใช้ MemCopyAsync เริ่ม DMA แล้วคืนทันที — CPU ทำงานต่อ — เมื่อ DMA เสร็จจะเรียก callback — เหมาะกับงานที่ต้องการทำต่อเนื่องโดยไม่รอ</p>
 
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["DMA_SetCallback(Copy_Callback)"] --> B["MemCopyAsync(dst, src, 128)"]
+    B --> C["CPU continues working"]
+    C --> D{"DMA complete?"}
+    D -->|"No"| C
+    D -->|"Yes"| E["Callback → dma_done = 1"]
+    E --> F["Print DMA complete!"]
+    F --> C
+</pre>
+
 <h3>💻 โค้ด</h3>
 <pre><code class="language-c">volatile uint8_t dma_done = 0;
 
@@ -140,6 +164,16 @@ int main(void)
 <h3>📖 แนวคิด</h3>
 <p>ใช้ DMA_USART_InitTx ตั้งค่า USART TX DMA — ส่งข้อมูลยาว ๆ โดย CPU ไม่ต้องรอทีละ byte — เหมาะกับ logging, file transfer</p>
 
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["DMA_USART_InitTx()"] --> B["while(1)"]
+    B --> C["DMA_USART_Transmit(msg, len)"]
+    C --> D["DMA sends via USART\n(CPU free)"]
+    D --> E["Delay_Ms(1000)"]
+    E --> B
+</pre>
+
 <h3>💻 โค้ด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include &lt;SimpleHAL.h&gt;
@@ -176,6 +210,17 @@ int main(void)
 <h2>ex04_DMA_SPI_Transfer — โอนข้อมูล SPI ผ่าน DMA</h2>
 <h3>📖 แนวคิด</h3>
 <p>ใช้ DMA_SPI_Init + DMA_SPI_TransferBuffer ส่ง/รับข้อมูล SPI แบบไม่ต้อง CPU รอทีละ byte — เหมาะกับ display, SD card, sensor</p>
+
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["SPI_SimpleInit()"] --> B["DMA_SPI_Init()"]
+    B --> C["CS = LOW"]
+    C --> D["DMA_SPI_TransferBuffer(tx, rx, 256)"]
+    D --> E["CS = HIGH"]
+    E --> F["Print SPI DMA done"]
+    F --> G["while(1)"]
+</pre>
 
 <h3>💻 โค้ด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
@@ -218,6 +263,17 @@ int main(void)
 <h2>ex05_DMA_PWM_Waveform — สร้างรูปคลื่น PWM ด้วย DMA + Sine Table</h2>
 <h3>📖 แนวคิด</h3>
 <p>ใช้ TIM update event trigger DMA — DMA อ่านค่า sine table → เขียน CCR — สร้างสัญญาณ sine wave บน PWM output โดย CPU ไม่ต้องจัดการ</p>
+
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["build_sine_table()"] --> B["TIM1_SimpleInit(PWM)"]
+    B --> C["DMA_PWM_Waveform(TIM1, table)"]
+    C --> D["TIM update →\nDMA trigger"]
+    D --> E["DMA reads sine_table\n→ writes CCR1"]
+    E --> F["PWM output = sine wave"]
+    F --> D
+</pre>
 
 <h3>💻 โค้ด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
@@ -267,6 +323,17 @@ int main(void)
 <h2>ex06_DMA_I2C_Transfer — โอนข้อมูล I2C ผ่าน DMA</h2>
 <h3>📖 แนวคิด</h3>
 <p>ใช้ DMA_I2C_InitTx/Rx ส่ง/รับข้อมูล I2C ด้วย DMA — เหมาะกับ sensor ที่อ่านค่าต่อเนื่องหลาย byte</p>
+
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["I2C_SimpleInit()"] --> B["DMA_I2C_InitTx()"]
+    B --> C["DMA_I2C_InitRx()"]
+    C --> D["I2C write reg address\n(DMA TX)"]
+    D --> E["I2C read data\n(DMA RX)"]
+    E --> F["Print I2C DMA done"]
+    F --> G["while(1)"]
+</pre>
 
 <h3>💻 โค้ด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
@@ -320,6 +387,20 @@ int main(void)
 <h2>ex07_DMA_Advanced — DMA_SimpleInit + Half/Complete Callbacks</h2>
 <h3>📖 แนวคิด</h3>
 <p>ใช้ DMA_SimpleInit ตั้งค่า DMA ด้วยตัวเอง — กำหนด peripheral address, memory address, direction, data size — ใช้ half-transfer และ complete-transfer callbacks</p>
+
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["SetCallbackHalf(HalfCplt)"] --> B["SetCallback(Cplt)"]
+    B --> C["DMA_SimpleInit(MEM_TO_MEM, ...)"]
+    C --> D["DMA starts"]
+    D --> E{"Half transfer?"}
+    E -->|"Yes"| F["Print Half done"]
+    F --> G{"Full transfer?"}
+    E -->|"No"| G
+    G -->|"Yes"| H["Print Full done"]
+    G -->|"No"| D
+</pre>
 
 <h3>💻 โค้ด</h3>
 <pre><code class="language-c">volatile uint8_t half_done = 0;
@@ -384,6 +465,18 @@ int main(void)
 <h2>ex08_DMA_ADC_Init — อ่าน ADC แบบต่อเนื่องด้วย DMA + Circular Buffer</h2>
 <h3>📖 แนวคิด</h3>
 <p>ใช้ DMA_ADC_Init ตั้งค่า DMA ให้รับข้อมูล ADC อัตโนมัติเมื่อ ADC conversion เสร็จ — ใช้ circular buffer เพื่อเก็บค่าล่าสุดตลอดเวลา</p>
+
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["ADC_SimpleInit()"] --> B["DMA_ADC_Init(buf, size)"]
+    B --> C["ADC_Start()"]
+    C --> D["DMA_ADC_Enable()"]
+    D --> E["ADC ready → DMA\nwrites to buffer"]
+    E --> F["while(1): read latest"]
+    F --> G["DMA_ADC_GetLatest()"]
+    G --> E
+</pre>
 
 <h3>💻 โค้ด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20

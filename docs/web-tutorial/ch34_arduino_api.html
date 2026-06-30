@@ -33,6 +33,18 @@ flowchart LR
 <h3>📖 แนวคิด</h3>
 <p>ทดสอบ Arduino API alias ทั้งหมด — millis(), micros(), delay(), delayMicroseconds(), interrupts(), noInterrupts() — เปรียบเทียบกับ SimpleHAL ดั้งเดิม — แสดงว่าชื่อคุ้นเคยทำงานเหมือน Arduino ทุกประการ</p>
 
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["pinMode(LED, OUTPUT)"] --> B["while(1)"]
+    B --> C["digitalToggle(LED)"]
+    C --> D["delay(500)"]
+    D --> E["USART_Print(millis())"]
+    E --> F["USART_Print(micros())"]
+    F --> G["delay(500)"]
+    G --> B
+</pre>
+
 <h3>💻 โค้ด + อธิบายทีละบรรทัด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include &lt;SimpleHAL.h&gt;
@@ -88,6 +100,18 @@ int main(void)
 <h3>📖 แนวคิด</h3>
 <p>สร้างตัวเลขสุ่มด้วย random() และ randomRange() — ใช้ randomSeed() กำหนด seed จาก ADC noise — เปรียบเทียบการสุ่มแบบมีช่วงและไม่มีช่วง</p>
 
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["ADC_Read(0) as seed"] --> B["randomSeed(seed)"]
+    B --> C["while(1)"]
+    C --> D["random() = 0..RANDOM_MAX"]
+    D --> E["randomRange(1,7) = dice"]
+    E --> F["Print rand &amp; dice"]
+    F --> G["delay(500)"]
+    G --> C
+</pre>
+
 <h3>💻 โค้ด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include &lt;SimpleHAL.h&gt;
@@ -133,6 +157,18 @@ int main(void) {
 <h2>ex03_Interrupt_yield — digitalPinToInterrupt + attachInterrupt + yield + IWDG</h2>
 <h3>📖 แนวคิด</h3>
 <p>ใช้ digitalPinToInterrupt แปลง pin number เป็น interrupt number — attachInterrupt กับ callback — ใช้ yield() คืนเวลาให้ CPU ใน busy loop — IWDG ป้องกันค้าง</p>
+
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["pinMode(PC1, INPUT_PULLUP)"] --> B["digitalPinToInterrupt(PC1)"]
+    B --> C["attachInterrupt(irq, ISR, FALLING)"]
+    C --> D["while(1)"]
+    D --> E["Print isr_count"]
+    E --> F["Busy loop + yield()"]
+    F --> G["IWDG_Feed()"]
+    G --> D
+</pre>
 
 <h3>💻 โค้ด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
@@ -185,6 +221,16 @@ int main(void) {
 <h3>📖 แนวคิด</h3>
 <p>พิมพ์ float เป็น string ด้วย dtostrf — ใช้ USART_Println, USART_PrintFloat, USART_PrintlnHex — เปรียบเทียบรูปแบบการแสดงผลเลขทศนิยมและเลขฐาน 16</p>
 
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["Init System+Timer+USART"] --> B["dtostrf(pi, 6, 4, buf)"]
+    B --> C["USART_Println(buf)"]
+    C --> D["USART_PrintFloat(pi, 2)"]
+    D --> E["USART_PrintlnHex(0xDEADBEEF)"]
+    E --> F["while(1) IWDG_Feed"]
+</pre>
+
 <h3>💻 โค้ด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include &lt;SimpleHAL.h&gt;
@@ -227,6 +273,20 @@ int main(void) {
 <h2>ex05_Advanced_Scheduler — 3-task millis scheduler + yield + random</h2>
 <h3>📖 แนวคิด</h3>
 <p>สร้าง scheduler อย่างง่าย 3 งาน — ใช้ millis() จับเวลาแต่ละ task — yield() คืนเวลา — random() สร้างค่าสุ่มแสดง — จำลองการทำงานแบบ cooperative multitasking</p>
+
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["Init System+Timer+USART"] --> B["randomSeed(ADC)"]
+    B --> C["USART_Print Started"]
+    C --> D["while(1)"]
+    D --> E["task1(): 1s tick"]
+    E --> F["task2(): 3s tick + random"]
+    F --> G["task3(): 5s tick"]
+    G --> H["yield()"]
+    H --> I["IWDG_Feed()"]
+    I --> D
+</pre>
 
 <h3>💻 โค้ด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20

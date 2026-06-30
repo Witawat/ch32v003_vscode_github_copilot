@@ -42,6 +42,24 @@ flowchart LR
     - ต้องมี R pull-up 4.7kΩ เสมอ — 1-Wire ใช้ open-drain
 </pre>
 
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["OneWire_Init(pin)"] --> B["while(1)"]
+    B --> C["OneWire_Reset()"]
+    C --> D{"Presence?"}
+    D -->|"No"| E["Print Error"]
+    D -->|"Yes"| F["SkipROM + 0x44 Convert"]
+    F --> G["Delay_Ms(750)"]
+    G --> H["OneWire_Reset()"]
+    H --> I["SkipROM + 0xBE Read"]
+    I --> J["Read 9 bytes"]
+    J --> K["คำนวณอุณหภูมิ"]
+    K --> L["Print temp"]
+    L --> M["Delay_Ms(1000)"]
+    M --> B
+</pre>
+
 <h3>💻 โค้ด + อธิบายทีละบรรทัด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include &lt;SimpleHAL.h&gt;
@@ -103,7 +121,25 @@ int main(void)
 <section>
 <h2>ex02_ROM_Search — ค้นหาอุปกรณ์ 1-Wire ทั้งหมด</h2>
 <h3>📖 แนวคิด</h3>
-<p>ใช้ OneWire_Search เพื่อค้นหา ROM address ของอุปกรณ์ 1-Wire ทุกตัวบนบัส — ใช้ GetAddress ดึง address ที่พบ — ตรวจสอบ CRC8 เพื่อความถูกต้อง</p>
+    <p>ใช้ OneWire_Search เพื่อค้นหา ROM address ของอุปกรณ์ 1-Wire ทุกตัวบนบัส — ใช้ GetAddress ดึง address ที่พบ — ตรวจสอบ CRC8 เพื่อความถูกต้อง</p>
+
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["OneWire_Init(PC0)"] --> B["OneWire_Reset()"]
+    B --> C["WriteByte(0xF0)\nSEARCH ROM"]
+    C --> D["OneWire_Search(addr)"]
+    D --> E{"Found device?"}
+    E -->|"Yes"| F["Print ROM address"]
+    F --> G["OneWire_CRC8(addr,7)"]
+    G --> H{"CRC == addr[7]?"}
+    H -->|"OK"| I["Print CRC8 OK"]
+    H -->|"Fail"| J["Print CRC8 ERROR"]
+    E -->|"No"| K["Print No device"]
+    I --> L["while(1) IWDG_Feed()"]
+    J --> L
+    K --> L
+</pre>
 
 <h3>💻 โค้ด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
@@ -160,7 +196,27 @@ int main(void)
 <section>
 <h2>ex03_Multi_Device_Select — เลือกอุปกรณ์หลายตัว</h2>
 <h3>📖 แนวคิด</h3>
-<p>ใช้ OneWire_Select + matchROM เพื่อเลือกอุปกรณ์ 1-Wire ตัวใดตัวหนึ่งจากหลายตัวบนบัส — ส่ง ROM address 8 byte ตามด้วยคำสั่ง</p>
+    <p>ใช้ OneWire_Select + matchROM เพื่อเลือกอุปกรณ์ 1-Wire ตัวใดตัวหนึ่งจากหลายตัวบนบัส — ส่ง ROM address 8 byte ตามด้วยคำสั่ง</p>
+
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["OneWire_Init(PC0)"] --> B["while(1)"]
+    B --> C["read_temp(sensor1)"]
+    C --> D["read_temp(sensor2)"]
+    D --> E["Print both temps"]
+    E --> F["Delay_Ms(1000)"]
+    F --> B
+    G["read_temp(rom)\nฟังก์ชัน"] --> H["OneWire_Reset()"]
+    H --> I["OneWire_Select(rom)\nMATCH ROM"]
+    I --> J["WriteByte(0x44)\nConvert T"]
+    J --> K["Delay_Ms(750)"]
+    K --> L["OneWire_Reset()"]
+    L --> M["OneWire_Select(rom)"]
+    M --> N["WriteByte(0xBE)\nRead Scratchpad"]
+    N --> O["Read LSB+MSB"]
+    O --> P["return raw*0.0625"]
+</pre>
 
 <h3>💻 โค้ด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
@@ -216,7 +272,30 @@ int main(void)
 <section>
 <h2>ex04_MatchROM — ค้นหา + MatchROM ทีละตัว</h2>
 <h3>📖 แนวคิด</h3>
-<p>รวม OneWire_Search กับ OneWire_Select — ค้นหาอุปกรณ์ก่อน แล้ว MatchROM ทีละตัวเพื่ออ่านค่า — รองรับหลายอุปกรณ์อัตโนมัติ</p>
+    <p>รวม OneWire_Search กับ OneWire_Select — ค้นหาอุปกรณ์ก่อน แล้ว MatchROM ทีละตัวเพื่ออ่านค่า — รองรับหลายอุปกรณ์อัตโนมัติ</p>
+
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["OneWire_Init(PC0)"] --> B["ค้นหาอุปกรณ์ทั้งหมด"]
+    B --> C{"OneWire_Search\nพบ?"}
+    C -->|"Yes"| D["Verify CRC8"]
+    D --> E["Store address\ncount++"]
+    E --> F{"count&lt;MAX\n&& found?"}
+    F -->|"Yes"| C
+    F -->|"No"| G["Print count"]
+    G --> H["while(1)"]
+    H --> I["for i=0 to count"]
+    I --> J["OneWire_Reset()"]
+    J --> K["OneWire_Select(dev[i])\nMatchROM"]
+    K --> L["Convert T\nDelay 750ms"]
+    L --> M["Read Scratchpad"]
+    M --> N["Print temp"]
+    N --> O["Next device?"]
+    O -->|"more"| J
+    O -->|"done"| P["Delay_Ms(1000)"]
+    P --> H
+</pre>
 
 <h3>💻 โค้ด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20

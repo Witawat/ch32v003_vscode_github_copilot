@@ -34,6 +34,18 @@ flowchart LR
 <h3>📖 แนวคิด</h3>
 <p>เรียนรู้การเขียนและอ่าน Flash ของ CH32V003 — ขนาดหน้า 64 bytes — ต้องลบ (erase) ก่อนเขียนทุกครั้ง — ใช้ Flash_Init เปิด clock, ErasePage ลบทีละหน้า, WriteByte เขียนทีละ byte, ReadWord อ่าน 32-bit</p>
 
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["Flash_Init()"] --> B["Flash_ErasePage(0)"]
+    B --> C["Flash_WriteByte(addr, 0x42)"]
+    C --> D["Flash_WriteWord(addr, 0x12345678)"]
+    D --> E["Flash_ReadByte(addr)"]
+    E --> F["Flash_ReadWord(addr)"]
+    F --> G["Print values + verify"]
+    G --> H["while(1)"]
+</pre>
+
 <h3>💻 โค้ด + อธิบายทีละบรรทัด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include &lt;SimpleHAL.h&gt;
@@ -91,6 +103,20 @@ int main(void)
 <h2>ex02_Config_With_CRC — บันทึก/โหลด Config พร้อม CRC</h2>
 <h3>📖 แนวคิด</h3>
 <p>ใช้ Flash_ErasePage + Flash_WriteByte + Flash_ReadWord เพื่อสร้างระบบ Save/Load Config — เพิ่ม CRC-8 ตรวจสอบความถูกต้องตอนโหลด — ใช้ Flash_SaveConfig บันทึก struct config และ Flash_LoadConfig อ่านกลับ — IsConfigValid เช็ค CRC</p>
+
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["Flash_Init()"] --> B{"Flash_IsConfigValid?"}
+    B -->|"No"| C["Flash_SaveConfig(default)"]
+    B -->|"Yes"| D["Flash_LoadConfig(&cfg)"]
+    C --> E["Load default"]
+    D --> E
+    E --> F["while(1)"]
+    F --> G{"Button?"}
+    G -->|"Yes"| H["Update + Save"]
+    G -->|"No"| F
+</pre>
 
 <h3>💻 โค้ด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
@@ -168,6 +194,18 @@ int main(void) {
 <h3>📖 แนวคิด</h3>
 <p>ใช้ WriteString และ ReadString สำหรับบันทึกข้อความ, WriteStruct สำหรับ struct ที่ซับซ้อนขึ้น — แสดงวิธีเก็บ device name + calibration data</p>
 
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["Flash_Init()"] --> B["Flash_ErasePage(DATA_ADDR)"]
+    B --> C["Flash_WriteString(DATA_ADDR, str)"]
+    C --> D["Flash_WriteStruct(DATA_ADDR+32, &cal)"]
+    D --> E["Flash_ReadString(DATA_ADDR, buf)"]
+    E --> F["Flash_ReadStruct(DATA_ADDR+32, &loaded)"]
+    F --> G["Print device + calibration"]
+    G --> H["while(1)"]
+</pre>
+
 <h3>💻 โค้ด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include &lt;SimpleHAL.h&gt;
@@ -231,6 +269,19 @@ int main(void) {
 <h3>📖 แนวคิด</h3>
 <p>ฟังก์ชัน WriteByteWithErase — รวม erase + write ในคำสั่งเดียว — เช็คว่า addr ถูก erase แล้วหรือยัง ถ้ายัง = ลบก่อนเขียน — ป้องกันการลืม ErasePage</p>
 
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["Flash_Init()"] --> B["Flash_WriteByteWithErase(addr, 0xAA)"]
+    B --> C["Flash_WriteByteWithErase(addr+1, 0xBB)"]
+    C --> D["Flash_ReadByte(addr)"]
+    D --> E["Flash_ReadByte(addr+1)"]
+    E --> F["Print bytes"]
+    F --> G["Flash_WriteByteWithErase(addr, 0xCC)"]
+    G --> H["Print after rewrite"]
+    H --> I["while(1)"]
+</pre>
+
 <h3>💻 โค้ด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include &lt;SimpleHAL.h&gt;
@@ -288,6 +339,20 @@ int main(void) {
 <pre class="ascii-circuit">
     PC1 -- Button -- GND    (ACTIVE_LOW, internal pull-up)
     PC0 ---R---|LED|---GND  (LED แสดงสถานะ factory reset)
+</pre>
+
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["Flash_Init()"] --> B["while(1)"]
+    B --> C{"Button pressed?"}
+    C -->|"No"| B
+    C -->|"Yes"| D["Start timer"]
+    D --> E{"Still held ≥ 3s?"}
+    E -->|"No"| B
+    E -->|"Yes"| F["Flash_EraseAll()"]
+    F --> G["Print 'Factory Reset Done'"]
+    G --> H["NVIC_SystemReset()"]
 </pre>
 
 <h3>💻 โค้ด</h3>
@@ -348,6 +413,20 @@ int main(void) {
 <h2>ex06_CRC16_Checksum — ตรวจสอบความถูกต้องของ Flash</h2>
 <h3>📖 แนวคิด</h3>
 <p>ใช้ CalculateCRC16 คำนวณ CRC-16 (CCITT) สำหรับข้อมูลใน Flash — ตรวจสอบความถูกต้องด้วย IsAddressValid — เหมาะกับ firmware integrity check หรือ data validation</p>
+
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["Flash_Init()"] --> B["Flash_ErasePage(DATA_ADDR)"]
+    B --> C["Write data bytes"]
+    C --> D["CalculateCRC16(data, len)"]
+    D --> E["IsAddressValid(addr, len)"]
+    E --> F["Print CRC + validity"]
+    F --> G["Write CRC to Flash"]
+    G --> H["Verify CRC match"]
+    H --> I["Print result"]
+    I --> J["while(1)"]
+</pre>
 
 <h3>💻 โค้ด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20

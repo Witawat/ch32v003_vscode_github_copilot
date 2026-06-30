@@ -46,6 +46,19 @@ flowchart LR
     - ขาแคโทด (- สั้น) ต่อ GND
 </pre>
 
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
+    B --> C["pinMode(PC0, OUTPUT)"]
+    C --> D["while(1)"]
+    D --> E["digitalWrite(PC0, HIGH)"]
+    E --> F["Delay_Ms(500)"]
+    F --> G["digitalWrite(PC0, LOW)"]
+    G --> H["Delay_Ms(500)"]
+    H --> D
+</pre>
+
 <h3>💻 โค้ด + อธิบายทีละบรรทัด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include &lt;SimpleHAL.h&gt;
@@ -95,6 +108,23 @@ int main(void)
     PC1 -- Button -- GND    (ใช้ PIN_MODE_INPUT_PULLUP ภายใน ~40kΩ)
     PD5(TX) -- USB-to-Serial -- PC  (115200 baud)
     PD6(RX) -- USB-to-Serial -- PC
+</pre>
+
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
+    B --> C["USART_SimpleInit()"]
+    C --> D["pinMode(BUTTON, INPUT_PULLUP)"]
+    D --> E["while(1)"]
+    E --> F["digitalRead(BUTTON)"]
+    F --> G{"State changed?"}
+    G -->|"Yes"| H["บันทึกเวลา"]
+    G -->|"No"| E
+    H --> I{"Debounce 50ms?"}
+    I -->|"Yes"| J["USART_Print(Press)"]
+    I -->|"No"| E
+    J --> E
 </pre>
 
 <h3>💻 โค้ด</h3>
@@ -147,6 +177,21 @@ int main(void) {
 <h2>ex03_External_Interrupt — Interrupt ขอบตก</h2>
 <h3>📖 แนวคิด</h3>
 <p>ใช้ attachInterrupt ให้ MCU หยุด main loop ชั่วครู่เมื่อมีสัญญาณขอบตก (FALLING) ที่ปุ่ม — นับจำนวน interrupt — toggle LED ใน ISR</p>
+
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
+    B --> C["pinMode(PC0, OUTPUT)"]
+    C --> D["pinMode(PC1, INPUT)"]
+    D --> E["attachInterrupt(FALLING)"]
+    E --> F["ISR: interrupt_count++; digitalToggle(PC0)"]
+    F --> G["while(1)"]
+    G --> H{"1s elapsed?"}
+    H -->|"Yes"| I["Print interrupt_count"]
+    H -->|"No"| G
+    I --> G
+</pre>
 
 <h3>💻 โค้ด</h3>
 <pre><code class="language-c">volatile uint32_t interrupt_count = 0;  // ★ volatile — เปลี่ยนใน ISR
@@ -203,6 +248,16 @@ int main(void) {
     PC3 ---R---|LED4|---GND
 </pre>
 
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["pinModeMultiple(4 pins, OUTPUT)"] --> B["while(1)"]
+    B --> C["for i = 0 to 3"]
+    C --> D["digitalWriteMultiple(1 << i)"]
+    D --> E["Delay_Ms(250)"]
+    E --> C
+</pre>
+
 <h3>💻 โค้ด</h3>
 <pre><code class="language-c">uint8_t pins[] = {PC0, PC1, PC2, PC3};
 pinModeMultiple(pins, 4, PIN_MODE_OUTPUT);
@@ -219,6 +274,17 @@ while(1) {
 <h2>ex05_Port_Operations — อ่าน/เขียนทั้งพอร์ต</h2>
 <h3>📖 แนวคิด</h3>
 <p>ใช้ portWrite อ่าน/เขียน 8-bit ทั้งพอร์ตพร้อมกัน — เร็วกว่าเขียนทีละ pin — ใช้อ่าน GPIOD (PD2-PD7 ที่เป็น input)</p>
+
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
+    B --> C["USART_SimpleInit()"]
+    C --> D["portRead(GPIOD)"]
+    D --> E["USART_PrintHex(portD)"]
+    E --> F["portWrite(GPIOC, 0xAA)"]
+    F --> G["while(1)"]
+</pre>
 
 <h3>💻 โค้ด</h3>
 <pre><code class="language-c">// อ่านทั้งพอร์ต D
@@ -246,6 +312,18 @@ portWrite(GPIOC, 0b10101010);  // PC7=HIGH, PC6=LOW, PC5=HIGH, ...
     PC1 -- CLK  (SH_CP)
     PC2 -- LATCH (ST_CP)
     74HC595 outputs Q0-Q7 -- R 220Ω -- LED 8 ดวง -- GND
+</pre>
+
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["pinMode(DATA,CLK,LATCH, OUT)"] --> B["while(1)"]
+    B --> C["for i = 0 to 7"]
+    C --> D["LATCH LOW"]
+    D --> E["shiftOut(, 1 << i)"]
+    E --> F["LATCH HIGH"]
+    F --> G["Delay_Ms(100)"]
+    G --> C
 </pre>
 
 <h3>💻 โค้ด</h3>
@@ -283,6 +361,23 @@ while(1) {
 <h3>📖 แนวคิด</h3>
 <p>ใช้ pulseIn วัดความกว้าง pulse จาก HC-SR04 ultrasonic sensor — TRIG 10µs → sensor ส่ง 8 pulse 40kHz → ECHO pulse กว้างตามระยะ</p>
 
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["pinMode(TRIG, OUT; ECHO, IN)"] --> B["while(1)"]
+    B --> C["digitalWrite(TRIG, HIGH)"]
+    C --> D["Delay_Us(10)"]
+    D --> E["digitalWrite(TRIG, LOW)"]
+    E --> F["pulseIn(ECHO, HIGH, 30000)"]
+    F --> G{"duration > 0?"}
+    G -->|"Yes"| H["distance = duration × 0.0343 / 2"]
+    G -->|"No"| I["Print Error"]
+    H --> J["USART_Print(distance)"]
+    I --> J
+    J --> K["Delay_Ms(60)"]
+    K --> B
+</pre>
+
 <h3>💻 โค้ด</h3>
 <pre><code class="language-c">pinMode(TRIG, PIN_MODE_OUTPUT);
 pinMode(ECHO, PIN_MODE_INPUT);
@@ -319,6 +414,15 @@ while(1) {
 <h3>📖 แนวคิด</h3>
 <p>digitalToggle สลับ HIGH↔LOW อัตโนมัติ — ไม่ต้องอ่านค่าปัจจุบัน + คำนวณเอง — เหมาะกับ LED blink</p>
 
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["pinMode(PC0, OUTPUT)"] --> B["while(1)"]
+    B --> C["digitalToggle(PC0)"]
+    C --> D["Delay_Ms(500)"]
+    D --> B
+</pre>
+
 <h3>💻 โค้ด</h3>
 <pre><code class="language-c">while(1) {
     digitalToggle(PC0);     // สลับ HIGH↔LOW
@@ -333,6 +437,22 @@ while(1) {
 <h2>ex09_Error_Handling — ตรวจสอบ Pin ก่อนใช้</h2>
 <h3>📖 แนวคิด</h3>
 <p>ใช้ IS_VALID_PIN / IS_ADC_PIN / IS_PWM_PIN เช็คก่อนใช้ pin — ป้องกัน SOP-8 ใช้ pin ที่ไม่มีอยู่จริง — ใช้ SOP-8 หรือเปลี่ยน PACKAGE เพื่อดูผลต่าง</p>
+
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["USART_SimpleInit()"] --> B["for each test pin"]
+    B --> C{"IS_VALID_PIN?"}
+    C -->|"Yes"| D["pinMode OK"]
+    C -->|"No"| E["Print SKIP"]
+    D --> F{"IS_ADC_PIN?"}
+    F -->|"Yes"| G["analogRead OK"]
+    F -->|"No"| H["Print SKIP"]
+    G --> I["next pin"]
+    E --> I
+    H --> I
+    I --> B
+</pre>
 
 <h3>💻 โค้ด</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_SOP8     // เลือกแพ็กเกจเพื่อทดสอบ
