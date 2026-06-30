@@ -4,7 +4,7 @@
 
 <div class="answer">
 <h2>ข้อ 1: Nixie Tube Emulation (ตัวเลขเปลี่ยนแบบมี animation)</h2>
-<pre><code class="language-c">#include "simple_tm1650.h"
+<pre><code class="language-c">#include "TM1650.h"
 
 // Nixie-style digit transition — ไล่เลข 0-9 ขึ้นก่อนหยุด
 void nixie_transition(uint8_t pos, uint8_t target) {
@@ -44,8 +44,7 @@ int main(void) {
 
 <div class="answer">
 <h2>ข้อ 2: Voltmeter — อ่าน ADC แสดงแรงดัน</h2>
-<pre><code class="language-c">#include "simple_tm1650.h"
-#include "simple_adc.h"
+<pre><code class="language-c">#include "TM1650.h"
 
 int main(void) {
     SystemCoreClockUpdate();
@@ -83,9 +82,7 @@ int main(void) {
 
 <div class="answer">
 <h2>ข้อ 3: 2-Channel Display — สลับแสดง Volt/Amp</h2>
-<pre><code class="language-c">#include "simple_tm1650.h"
-#include "simple_adc.h"
-#include "simple_gpio.h"
+<pre><code class="language-c">#include "TM1650.h"
 
 #define BTN_PIN  PC1
 

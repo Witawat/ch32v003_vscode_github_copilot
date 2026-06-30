@@ -4,7 +4,7 @@
 
 <div class="answer">
 <h2>ข้อ 1: เปรียบเทียบ Microstepping — Full vs Half vs 1/4 vs 1/8</h2>
-<pre><code class="language-c">#include "simple_drv8825.h"
+<pre><code class="language-c">#include "DRV8825.h"
 
 DRV8825_Instance motor;
 
@@ -43,8 +43,7 @@ int main(void) {
 
 <div class="answer">
 <h2>ข้อ 2: ตั้งกระแสสูงสุดผ่าน Vref และ Current Limit</h2>
-<pre><code class="language-c">#include "simple_drv8825.h"
-#include "simple_adc.h"
+<pre><code class="language-c">#include "DRV8825.h"
 
 DRV8825_Instance motor;
 
@@ -91,7 +90,7 @@ int main(void) {
 
 <div class="answer">
 <h2>ข้อ 3: CNC Linear Slide — ควบคุมแกนเดียวด้วย Limit Switch สองข้าง</h2>
-<pre><code class="language-c">#include "simple_drv8825.h"
+<pre><code class="language-c">#include "DRV8825.h"
 
 DRV8825_Instance axis;
 

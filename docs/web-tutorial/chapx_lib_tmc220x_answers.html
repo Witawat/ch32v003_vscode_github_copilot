@@ -4,7 +4,7 @@
 
 <div class="answer">
 <h2>ข้อ 1: Sensorless Homing ด้วย StallGuard</h2>
-<pre><code class="language-c">#include "simple_tmc220x.h"
+<pre><code class="language-c">#include "TMC220x.h"
 
 TMC220X_t motor;
 
@@ -52,7 +52,7 @@ int main(void) {
 
 <div class="answer">
 <h2>ข้อ 2: StealthChop vs SpreadCycle — เปรียบเทียบเสียงและแรงบิด</h2>
-<pre><code class="language-c">#include "simple_tmc220x.h"
+<pre><code class="language-c">#include "TMC220x.h"
 
 TMC220X_t motor;
 
@@ -101,8 +101,7 @@ int main(void) {
 
 <div class="answer">
 <h2>ข้อ 3: UART Configuration — ปรับค่าผ่าน Serial</h2>
-<pre><code class="language-c">#include "simple_tmc220x.h"
-#include "simple_uart.h"
+<pre><code class="language-c">#include "TMC220x.h"
 
 TMC220X_t motor;
 

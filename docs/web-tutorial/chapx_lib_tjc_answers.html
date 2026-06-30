@@ -4,8 +4,7 @@
 
 <div class="answer">
 <h2>ข้อ 1: 2-Page UI — สลับหน้าด้วยปุ่ม</h2>
-<pre><code class="language-c">#include "simple_tjc.h"
-#include "simple_gpio.h"
+<pre><code class="language-c">#include "TJC.h"
 
 #define BTN_PAGE  PC1
 
@@ -56,8 +55,7 @@ int main(void) {
 
 <div class="answer">
 <h2>ข้อ 2: Graph แบบ Real-time จากเซ็นเซอร์</h2>
-<pre><code class="language-c">#include "simple_tjc.h"
-#include "simple_adc.h"
+<pre><code class="language-c">#include "TJC.h"
 
 int main(void) {
     SystemCoreClockUpdate();
@@ -103,8 +101,7 @@ int main(void) {
 
 <div class="answer">
 <h2>ข้อ 3: รับ Touch Event จาก TJC</h2>
-<pre><code class="language-c">#include "simple_tjc.h"
-#include "simple_gpio.h"
+<pre><code class="language-c">#include "TJC.h"
 
 #define LED_PIN  PC0
 

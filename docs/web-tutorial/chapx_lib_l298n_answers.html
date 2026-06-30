@@ -4,7 +4,7 @@
 
 <div class="answer">
 <h2>ข้อ 1: Differential Drive — 2-Wheel Robot เลี้ยวซ้าย-ขวา</h2>
-<pre><code class="language-c">#include "simple_l298n.h"
+<pre><code class="language-c">#include "L298N.h"
 
 L298N_Instance motor_left, motor_right;
 
@@ -53,7 +53,7 @@ int main(void) {
 
 <div class="answer">
 <h2>ข้อ 2: Speed Control ด้วย PWM แบบ Smooth Ramp</h2>
-<pre><code class="language-c">#include "simple_l298n.h"
+<pre><code class="language-c">#include "L298N.h"
 
 L298N_Instance motor;
 
@@ -84,8 +84,8 @@ int main(void) {
 
 <div class="answer">
 <h2>ข้อ 3: Obstacle Avoidance ด้วย HC-SR04</h2>
-<pre><code class="language-c">#include "simple_l298n.h"
-#include "simple_hcsr04.h"
+<pre><code class="language-c">#include "L298N.h"
+#include "HCSR04.h"
 
 L298N_Instance left, right;
 

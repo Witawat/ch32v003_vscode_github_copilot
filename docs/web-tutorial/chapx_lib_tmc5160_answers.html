@@ -4,7 +4,7 @@
 
 <div class="answer">
 <h2>ข้อ 1: Multi-Axis Coordinated Move — 2 แกนเคลื่อนที่พร้อมกัน</h2>
-<pre><code class="language-c">#include "simple_tmc5160.h"
+<pre><code class="language-c">#include "TMC5160.h"
 
 TMC5160_t axis_x, axis_y;
 
@@ -52,7 +52,7 @@ int main(void) {
 
 <div class="answer">
 <h2>ข้อ 2: 6-Point Ramp Tuning — ปรับ Acceleration Profile</h2>
-<pre><code class="language-c">#include "simple_tmc5160.h"
+<pre><code class="language-c">#include "TMC5160.h"
 
 TMC5160_t motor;
 
@@ -105,8 +105,8 @@ int main(void) {
 
 <div class="answer">
 <h2>ข้อ 3: CoolStep Energy Comparison — เปิด vs ปิด</h2>
-<pre><code class="language-c">#include "simple_tmc5160.h"
-#include "simple_ina219.h"
+<pre><code class="language-c">#include "TMC5160.h"
+#include "INA219.h"
 
 TMC5160_t motor;
 INA219_t   ina;

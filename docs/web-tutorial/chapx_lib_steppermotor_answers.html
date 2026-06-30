@@ -4,7 +4,7 @@
 
 <div class="answer">
 <h2>ข้อ 1: Absolute Positioning ด้วย Limit Switch</h2>
-<pre><code class="language-c">#include "simple_stepper.h"
+<pre><code class="language-c">#include "StepperMotor.h"
 
 StepperMotor_Instance motor;
 
@@ -63,7 +63,7 @@ int main(void) {
 
 <div class="answer">
 <h2>ข้อ 2: Acceleration Ramp — ค่อย ๆ เพิ่มความเร็ว</h2>
-<pre><code class="language-c">#include "simple_stepper.h"
+<pre><code class="language-c">#include "StepperMotor.h"
 
 StepperMotor_Instance motor;
 
@@ -106,7 +106,7 @@ int main(void) {
 
 <div class="answer">
 <h2>ข้อ 3: Conveyor Sequence — ทำซ้ำ N รอบ</h2>
-<pre><code class="language-c">#include "simple_stepper.h"
+<pre><code class="language-c">#include "StepperMotor.h"
 
 StepperMotor_Instance motor;
 #define CONVEYOR_STEPS 800   // ต่อ 1 รอบของสายพาน

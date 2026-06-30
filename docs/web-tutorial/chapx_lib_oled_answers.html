@@ -4,7 +4,7 @@
 
 <div class="answer">
 <h2>ข้อ 1: แสดงข้อความ 2 ภาษา (ไทย+อังกฤษ) สลับบรรทัด</h2>
-<pre><code class="language-c">#include "simple_oled.h"
+<pre><code class="language-c">#include "oled_i2c.h"
 
 int main(void) {
     SystemCoreClockUpdate();
@@ -30,8 +30,7 @@ int main(void) {
 
 <div class="answer">
 <h2>ข้อ 2: วาดกราฟแท่งแสดงค่า ADC</h2>
-<pre><code class="language-c">#include "simple_oled.h"
-#include "simple_adc.h"
+<pre><code class="language-c">#include "oled_i2c.h"
 
 int main(void) {
     SystemCoreClockUpdate();
@@ -61,7 +60,7 @@ int main(void) {
 
 <div class="answer">
 <h2>ข้อ 3: Animation ลูกบอลกระเด้ง</h2>
-<pre><code class="language-c">#include "simple_oled.h"
+<pre><code class="language-c">#include "oled_i2c.h"
 
 #define BALL_R  3
 
@@ -104,7 +103,7 @@ int main(void) {
 
 <div class="answer">
 <h2>ข้อ 4: แสดง QR Code ด้วย DrawPixel</h2>
-<pre><code class="language-c">#include "simple_oled.h"
+<pre><code class="language-c">#include "oled_i2c.h"
 
 const uint8_t qr[29][29] = {
     {1,1,1,1,1,1,1,0,0,0,1,0,0,1,0,1,0,0,1,0,1,0,1,1,1,1,1,1,1},

@@ -4,7 +4,7 @@
 
 <div class="answer">
 <h2>ข้อ 1: Large Digit 16px (2×2 blocks)</h2>
-<pre><code class="language-c">#include "simple_p10.h"
+<pre><code class="language-c">#include "P10.h"
 
 // Digit patterns 8x16 (2 blocks wide, 1 block tall)
 const uint8_t big_digit[10][16] = {
@@ -44,7 +44,7 @@ int main(void) {
 
 <div class="answer">
 <h2>ข้อ 2: Scrolling Text บน P10</h2>
-<pre><code class="language-c">#include "simple_p10.h"
+<pre><code class="language-c">#include "P10.h"
 #include "string.h"
 
 const uint8_t font_5x7[][5] = {
@@ -114,8 +114,7 @@ int main(void) {
 
 <div class="answer">
 <h2>ข้อ 3: Clock แสดงเวลา พร้อม Colon Blink</h2>
-<pre><code class="language-c">#include "simple_p10.h"
-#include "simple_timer.h"
+<pre><code class="language-c">#include "P10.h"
 
 volatile uint8_t hours = 12, minutes = 34, seconds = 56;
 volatile uint8_t blink_colon = 1;

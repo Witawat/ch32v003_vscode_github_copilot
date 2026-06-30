@@ -4,7 +4,7 @@
 
 <div class="answer">
 <h2>ข้อ 1: Timer Switch — เปิด 5 นาที / ปิด 5 นาที</h2>
-<pre><code class="language-c">#include "simple_relay.h"
+<pre><code class="language-c">#include "Relay.h"
 
 Relay_Instance relay;
 
@@ -46,8 +46,8 @@ int main(void) {
 
 <div class="answer">
 <h2>ข้อ 2: Button Toggle — กดเปิด กดซ้ำปิด</h2>
-<pre><code class="language-c">#include "simple_relay.h"
-#include "simple_button.h"
+<pre><code class="language-c">#include "Relay.h"
+#include "Button.h"
 
 Relay_Instance relay;
 Button_Instance btn;
@@ -80,8 +80,8 @@ int main(void) {
 
 <div class="answer">
 <h2>ข้อ 3: Countdown Timer พร้อม Relay — นับถอยหลังแล้วตัด</h2>
-<pre><code class="language-c">#include "simple_relay.h"
-#include "simple_oled.h"
+<pre><code class="language-c">#include "Relay.h"
+#include "oled_i2c.h"
 
 Relay_Instance relay;
 

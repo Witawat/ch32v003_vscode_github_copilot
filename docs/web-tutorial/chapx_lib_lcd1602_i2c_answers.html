@@ -4,7 +4,7 @@
 
 <div class="answer">
 <h2>ข้อ 1: Scrolling Text เลื่อนซ้ายทุก 500ms</h2>
-<pre><code class="language-c">#include "simple_lcd1602_i2c.h"
+<pre><code class="language-c">#include "lcd1602_i2c.h"
 
 int main(void) {
     SystemCoreClockUpdate();
@@ -31,7 +31,7 @@ int main(void) {
 
 <div class="answer">
 <h2>ข้อ 2: Custom Character ตัวเลข 0-9 แบบพิเศษ</h2>
-<pre><code class="language-c">#include "simple_lcd1602_i2c.h"
+<pre><code class="language-c">#include "lcd1602_i2c.h"
 
 const uint8_t big_digits[10][8] = {
     {0x0E,0x11,0x11,0x11,0x11,0x11,0x0E,0x00}, // 0
@@ -71,8 +71,7 @@ int main(void) {
 
 <div class="answer">
 <h2>ข้อ 3: Toggle 2 ภาษา เมื่อกดปุ่ม</h2>
-<pre><code class="language-c">#include "simple_lcd1602_i2c.h"
-#include "simple_gpio.h"
+<pre><code class="language-c">#include "lcd1602_i2c.h"
 
 #define BTN_PIN  PC1
 

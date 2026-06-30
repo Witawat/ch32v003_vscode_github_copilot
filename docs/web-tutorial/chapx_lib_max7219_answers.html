@@ -4,7 +4,7 @@
 
 <div class="answer">
 <h2>ข้อ 1: Custom Font ภาษาไทย 8×8</h2>
-<pre><code class="language-c">#include "simple_max7219.h"
+<pre><code class="language-c">#include "MAX7219.h"
 
 // ฟอนต์ไทย 8x8 — ตัวอย่างอักษร ก ข ค
 const uint8_t thai_font[3][8] = {
@@ -44,7 +44,7 @@ int main(void) {
 
 <div class="answer">
 <h2>ข้อ 2: Scroll Text ข้าม 2 Modules</h2>
-<pre><code class="language-c">#include "simple_max7219.h"
+<pre><code class="language-c">#include "MAX7219.h"
 
 const uint8_t msg[] = {
     0x7C,0x12,0x11,0x12,0x7C,0x00, // A
@@ -86,7 +86,7 @@ int main(void) {
 
 <div class="answer">
 <h2>ข้อ 3: Snake Game บน MAX7219</h2>
-<pre><code class="language-c">#include "simple_max7219.h"
+<pre><code class="language-c">#include "MAX7219.h"
 
 #define SNAKE_MAX 64
 int8_t snake_x[SNAKE_MAX], snake_y[SNAKE_MAX];

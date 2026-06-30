@@ -4,8 +4,7 @@
 
 <div class="answer">
 <h2>ข้อ 1: Pan-Tilt Tracker ด้วยปุ่ม ADC 2 ตัว</h2>
-<pre><code class="language-c">#include "simple_servo.h"
-#include "simple_adc.h"
+<pre><code class="language-c">#include "Servo.h"
 
 Servo_Instance pan, tilt;
 
@@ -35,7 +34,7 @@ int main(void) {
 
 <div class="answer">
 <h2>ข้อ 2: Servo Sweep 0→180→0 อัตโนมัติ</h2>
-<pre><code class="language-c">#include "simple_servo.h"
+<pre><code class="language-c">#include "Servo.h"
 
 Servo_Instance servo;
 
@@ -63,7 +62,7 @@ int main(void) {
 
 <div class="answer">
 <h2>ข้อ 3: ควบคุม Laser Pointer ด้วย Servo</h2>
-<pre><code class="language-c">#include "simple_servo.h"
+<pre><code class="language-c">#include "Servo.h"
 
 #define LASER_PIN  GPIO_Pin_2
 #define LASER_PORT GPIOA
@@ -103,7 +102,7 @@ int main(void) {
 
 <div class="answer">
 <h2>ข้อ 4: ควบคุม 2 Servo พร้อมกันด้วย Sweep แบบ Phase-Shift</h2>
-<pre><code class="language-c">#include "simple_servo.h"
+<pre><code class="language-c">#include "Servo.h"
 #include &lt;math.h&gt;
 
 Servo_Instance s1, s2;

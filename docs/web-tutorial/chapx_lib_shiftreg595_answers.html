@@ -4,7 +4,7 @@
 
 <div class="answer">
 <h2>ข้อ 1: Binary Counter 8-bit พร้อม LED</h2>
-<pre><code class="language-c">#include "simple_shiftreg.h"
+<pre><code class="language-c">#include "ShiftReg595.h"
 
 int main(void) {
     SystemCoreClockUpdate();
@@ -37,7 +37,7 @@ int main(void) {
 
 <div class="answer">
 <h2>ข้อ 2: Knight Rider (ไฟวิ่งกลับไปกลับมา)</h2>
-<pre><code class="language-c">#include "simple_shiftreg.h"
+<pre><code class="language-c">#include "ShiftReg595.h"
 
 int main(void) {
     SystemCoreClockUpdate();
@@ -65,7 +65,7 @@ int main(void) {
 
 <div class="answer">
 <h2>ข้อ 3: Chain 2 Chips — ขับ 16 Outputs</h2>
-<pre><code class="language-c">#include "simple_shiftreg.h"
+<pre><code class="language-c">#include "ShiftReg595.h"
 
 // เขียนข้อมูล 16 บิต ผ่าน 74HC595 2 ตัวแบบ daisy-chain
 void ShiftReg_Write16(uint16_t data) {

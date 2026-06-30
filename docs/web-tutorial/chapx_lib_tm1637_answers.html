@@ -4,8 +4,7 @@
 
 <div class="answer">
 <h2>ข้อ 1: Countdown Timer 99:59</h2>
-<pre><code class="language-c">#include "simple_tm1637.h"
-#include "simple_timer.h"
+<pre><code class="language-c">#include "TM1637.h"
 
 volatile uint16_t total_seconds = 99 * 60 + 59;  // 99:59
 volatile uint8_t tick = 0;
@@ -56,8 +55,7 @@ int main(void) {
 
 <div class="answer">
 <h2>ข้อ 2: แสดงอุณหภูมิจาก ADC</h2>
-<pre><code class="language-c">#include "simple_tm1637.h"
-#include "simple_adc.h"
+<pre><code class="language-c">#include "TM1637.h"
 
 // NTC 10K + 10K divider, B=3950
 float adc_to_temp(uint16_t adc) {
@@ -102,9 +100,7 @@ int main(void) {
 
 <div class="answer">
 <h2>ข้อ 3: RPM Counter จาก Pulse Input</h2>
-<pre><code class="language-c">#include "simple_tm1637.h"
-#include "simple_gpio.h"
-#include "simple_timer.h"
+<pre><code class="language-c">#include "TM1637.h"
 
 #define PULSE_PIN  PC0
 

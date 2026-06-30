@@ -4,7 +4,7 @@
 
 <div class="answer">
 <h2>ข้อ 1: Thrust Test Ramp — ค่อย ๆ เพิ่มกำลังวัดแรงขับ</h2>
-<pre><code class="language-c">#include "simple_esc.h"
+<pre><code class="language-c">#include "ESC.h"
 
 ESC_Instance esc;
 
@@ -44,8 +44,7 @@ int main(void) {
 
 <div class="answer">
 <h2>ข้อ 2: Battery Voltage Monitor ระหว่างรันมอเตอร์</h2>
-<pre><code class="language-c">#include "simple_esc.h"
-#include "simple_adc.h"
+<pre><code class="language-c">#include "ESC.h"
 
 ESC_Instance esc;
 
@@ -89,9 +88,7 @@ int main(void) {
 
 <div class="answer">
 <h2>ข้อ 3: Automated Thrust Curve Logger — ส่งข้อมูลความเร็วผ่าน UART</h2>
-<pre><code class="language-c">#include "simple_esc.h"
-#include "simple_adc.h"
-#include "simple_uart.h"
+<pre><code class="language-c">#include "ESC.h"
 
 ESC_Instance esc;
 
