@@ -36,6 +36,31 @@
  *   - ต้องตั้ง Serial Monitor เป็น Line Ending mode: "Newline" หรือ "\r\n"
  *   - LED ต้องต่อตัวต้านทาน 220 Ohm เสมอ
  * ============================================================
+ * ผังการทำงาน (Flowchart):
+ *
+ * flowchart TD
+ *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
+ *     B --> C["USART_SimpleInit(115200)"]
+ *     C --> D["pinMode(PC0, PIN_MODE_OUTPUT)"]
+ *     D --> E["while(1)"]
+ *     E --> F{"USART_Available() > 0?"}
+ *     F -->|"No"| E
+ *     F -->|"Yes"| G["USART_Read()"]
+ *     G --> H{"ch == \\\\r or \\\\n?"}
+ *     H -->|"No"| I["Store char in cmd[idx]"]
+ *     I --> J["idx = idx + 1"]
+ *     J --> E
+ *     H -->|"Yes"| K["Null-terminate cmd"]
+ *     K --> L{"cmd == LED=ON?"}
+ *     L -->|"Yes"| M["digitalWrite(PC0, HIGH)"]
+ *     L -->|"No"| N{"cmd == LED=OFF?"}
+ *     N -->|"Yes"| O["digitalWrite(PC0, LOW)"]
+ *     N -->|"No"| P["Echo cmd back"]
+ *     M --> Q["idx = 0"]
+ *     O --> Q
+ *     P --> Q
+ *     Q --> E
+ * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20

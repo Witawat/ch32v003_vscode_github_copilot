@@ -34,10 +34,26 @@
  * - BH1750 ต้องใช้คำสั่ง 0x10 (Continuous High Resolution Mode) เพื่อเริ่มวัด
  * - ค่า lux = (H_byte << 8 | L_byte) / 1.2
  * ============================================================
+ * ผังการทำงาน (Flowchart):
+ *
+ * flowchart TD
+ *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
+ *     B --> C["USART_SimpleInit()"]
+ *     C --> D["I2C_SimpleInit(100kHz)"]
+ *     D --> E["DMA_I2C_InitTx(DMA_CH4)"]
+ *     E --> F["DMA_I2C_InitRx(DMA_CH5)"]
+ *     F --> G["I2C_WriteReg(BH1750, PWR_ON)"]
+ *     G --> H["I2C_WriteReg(BH1750, HRES)"]
+ *     H --> I["Delay_Ms(180)"]
+ *     I --> J["I2C_ReadRegMulti(BH1750, lux_data, 2)"]
+ *     J --> K["Calculate lux = raw / 1.2"]
+ *     K --> L["USART_Print(DMA I2C: X lux)"]
+ *     L --> M["while(1)"]
+ * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20
-/* CH32V003 has no hardware FPU � float/double use software emulation (~800 cycles) */
+/* CH32V003 has no hardware FPU � float/double use software emulation (~800 cycles) */
 #include <SimpleHAL.h>
 
 #define BH1750_ADDR    0x23

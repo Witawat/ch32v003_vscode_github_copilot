@@ -20,6 +20,24 @@
  *   - ควรเพิ่ม wear leveling สำหรับ production
  *   - Flash struct ต้องมี CRC เพื่อตรวจสอบความถูกต้อง
  * ============================================================
+ * ผังการทำงาน (Flowchart):
+ *
+ * flowchart TD
+ *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
+ *     B --> C["ADC + USART + pinMode"]
+ *     C --> D["while(1)"]
+ *     D --> E{"5s elapsed?"}
+ *     E -->|"Yes"| F["ADC_Read()"]
+ *     F --> G["Create LogEntry + CRC"]
+ *     G --> H["SaveLogToFlash()"]
+ *     H --> I["Print log"]
+ *     I --> J["seconds += 5"]
+ *     J --> D
+ *     E -->|"No"| K{"Button pressed?"}
+ *     K -->|"Yes"| L["DumpAllLogs()"]
+ *     L --> D
+ *     K -->|"No"| D
+ * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20

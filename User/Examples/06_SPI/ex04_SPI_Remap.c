@@ -17,6 +17,25 @@
  * และสาธิตการสลับระหว่าง pin config
  *
  * @note ปิดการทำงานทั้งหมดบน SOP-8
+ * ============================================================
+ * ผังการทำงาน (Flowchart):
+ *
+ * flowchart TD
+ *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
+ *     B --> C["pinMode(PC0, PIN_MODE_OUTPUT)"]
+ *     C --> D["test_spi_config(DEFAULT)"]
+ *     D --> E["Delay_Ms(500)"]
+ *     E --> F{"CH32V003_HAS_PD0?"}
+ *     F -->|"Yes"| G["test_spi_config(REMAP)"]
+ *     F -->|"No"| H["Skip REMAP"]
+ *     G --> I["Delay_Ms(500)"]
+ *     H --> I
+ *     I --> J["Print complete"]
+ *     J --> K["while(1)"]
+ *     K --> L["digitalToggle(PC0)"]
+ *     L --> M["Delay_Ms(1000)"]
+ *     M --> K
+ * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20

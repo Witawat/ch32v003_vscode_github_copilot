@@ -33,6 +33,26 @@
  *   4. เลือกค่า R1, R2 ให้เหมาะสม (โดยทั่วไป 1kΩ - 100kΩ)
  *      ค่าต่ำเกินไปกินกระแสมาก ค่าสูงเกินไปมีสัญญาณรบกวน
  * ============================================================
+ * ผังการทำงาน (Flowchart):
+ *
+ * flowchart TD
+ *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
+ *     B --> C["USART_SimpleInit()"]
+ *     C --> D["pinMode(PD2, INPUT)"]
+ *     D --> E["ADC_SimpleInit()"]
+ *     E --> F["OPAMP_ConfigNonInverting(CHP0, CHN0)"]
+ *     F --> G["OPAMP_Enable()"]
+ *     G --> H{"OPAMP_IsEnabled()?"}
+ *     H -->|"No"| I["USART_Print(OPAMP not enabled)"]
+ *     I --> J["while(1)"]
+ *     H -->|"Yes"| K["while(1)"]
+ *     K --> L["ADC_Read(ADC_CH_PD2)"]
+ *     L --> M["Calculate Vout(mV) = adcVal * 3300 / 1023"]
+ *     M --> N["Calculate Vin(mV) = Vout / 2"]
+ *     N --> O["USART_Print(Vin, Vout, ADC)"]
+ *     O --> P["Delay_Ms(500)"]
+ *     P --> K
+ * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20

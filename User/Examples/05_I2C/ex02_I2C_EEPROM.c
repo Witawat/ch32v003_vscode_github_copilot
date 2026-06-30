@@ -25,6 +25,21 @@
  * EEPROM has write cycle time (~5 ms). Delay after
  *          every write operation!
  * ============================================================
+ * ผังการทำงาน (Flowchart):
+ *
+ * flowchart TD
+ *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
+ *     B --> C["USART_SimpleInit(115200)"]
+ *     C --> D["I2C_SimpleInit(100kHz)"]
+ *     D --> E["while(1)"]
+ *     E --> F["I2C_WriteRegMulti(0x50, 0x00, Hello)"]
+ *     F --> G["Delay_Ms(10)"]
+ *     G --> H["Print Written"]
+ *     H --> I["I2C_ReadRegMulti(0x50, 0x00, readBuf)"]
+ *     I --> J["Print Read back"]
+ *     J --> K["Delay_Ms(3000)"]
+ *     K --> E
+ * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20
@@ -38,7 +53,7 @@ int main(void)
     SystemCoreClockUpdate();
     Timer_Init();
     USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
-    I2C_SimpleInit(I2C_100KHZ, I2C_PINS_PARTIAL_REMAP);  // PD2=SCL, PD1=SDA � SOP-8 compatible
+    I2C_SimpleInit(I2C_100KHZ, I2C_PINS_PARTIAL_REMAP);  // PD2=SCL, PD1=SDA � SOP-8 compatible
 
     while(1)
     {

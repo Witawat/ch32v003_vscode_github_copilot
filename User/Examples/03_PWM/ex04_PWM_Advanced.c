@@ -28,7 +28,30 @@
  * คำเตือน (WARNINGS):
  *   - PWM_AdvancedInit ต้องการ prescaler, period, duty_value ที่คำนวณเอง
  *   - การกลับขั้ว (inverted polarity): duty 0% = LED ติด, duty 100% = LED ดับ
- *   - ค่า duty_value เป็นค่าจริง (0 ถึง period) ไม่ใช่เปอร์เซ็นต์
+ * - ค่า duty_value เป็นค่าจริง (0 ถึง period) ไม่ใช่เปอร์เซ็นต์
+ * ============================================================
+ * แผนผังการทำงาน (Flowchart):
+ *
+ * flowchart TD
+ *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
+ *     B --> C["PWM_AdvancedInit(PWM1_CH1, 239, 99, 50)"]
+ *     C --> D["PWM_SetPolarity(PWM1_CH1, 1)"]
+ *     D --> E["PWM_Start(PWM1_CH1)"]
+ *     E --> F["(void)PWM_GetDutyCycle / GetPeriod"]
+ *     F --> G["while(1)"]
+ *     G --> H["PWM_SetDutyCycle(current_duty)"]
+ *     H --> I["Delay_Ms(50)"]
+ *     I --> J{"direction == 1?"}
+ *     J -->|"Yes"| K["current_duty++"]
+ *     J -->|"No"| L["current_duty--"]
+ *     K --> M{"current_duty >= 100?"}
+ *     L --> M
+ *     M -->|"Yes"| N["direction = -1"]
+ *     N --> O{"current_duty <= 0?"}
+ *     M -->|"No"| O
+ *     O -->|"Yes"| P["direction = 1"]
+ *     O -->|"No"| G
+ *     P --> G
  * ============================================================
  */
 

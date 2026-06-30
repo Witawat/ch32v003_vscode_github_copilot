@@ -20,11 +20,25 @@
  *   ก่อน include SimpleHAL.h
  * - dtostrf() ใช้ integer arithmetic ล้วน ไม่ต้องใช้ FPU
  *   ประหยัด flash ~2KB เมื่อเทียบกับ sprintf
+ * ============================================================
+ * ผังการทำงาน (Flowchart):
+ *
+ * flowchart TD
+ *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
+ *     B --> C["USART_SimpleInit()"]
+ *     C --> D["Print dtostrf demos"]
+ *     D --> E["Print USART_PrintFloat demos"]
+ *     E --> F["Print Println demos"]
+ *     F --> G["while(1)"]
+ *     G --> H["Delay_Ms(5000)"]
+ *     H --> I["Print 'Still alive...'"]
+ *     I --> G
+ * ============================================================
  */
 #define ENABLE_USART_PRINTLN  1
 #define ENABLE_USART_PRINTFLOAT 1
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20
-/* CH32V003 has no hardware FPU � float/double use software emulation (~800 cycles) */
+/* CH32V003 has no hardware FPU � float/double use software emulation (~800 cycles) */
 #include <SimpleHAL.h>
 
 int main(void) {

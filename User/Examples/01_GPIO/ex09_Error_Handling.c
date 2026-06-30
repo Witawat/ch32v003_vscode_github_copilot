@@ -116,3 +116,23 @@ int main(void) {
 
     while (1) { Delay_Ms(1000); }
 }
+
+/**
+ * ============================================================
+ * แผนผังการทำงาน (Flowchart):
+ *
+ * flowchart TD
+ *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
+ *     B --> C["USART_SimpleInit(115200)"]
+ *     C --> D["Print header"]
+ *     D --> E["safe_pinMode tests (5 pins)"]
+ *     E --> F["ADC_SimpleInit()"]
+ *     F --> G["safe_analogRead tests (3 pins)"]
+ *     G --> H["PWM validation checks"]
+ *     H --> I["safe_analogWrite tests (4 pins)"]
+ *     I --> J["Print Done"]
+ *     J --> K["while(1)"]
+ *     K --> L["Delay_Ms(1000)"]
+ *     L --> K
+ * ============================================================
+ */

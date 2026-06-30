@@ -1,9 +1,9 @@
 /**
  * ============================================================
- * ตัวอย่างที่ 3: ส่งข้อมูลผ่าน USART ด้วย DMA (DMA USART Transmit)
+ * ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝาง๏ฟฝ๏ฟฝ๏ฟฝ 3: ๏ฟฝ่งข๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝลผ๏ฟฝาน USART ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ DMA (DMA USART Transmit)
  * ============================================================
  *
- * แผนผังวงจร (Circuit Diagram):
+ * แผน๏ฟฝังวง๏ฟฝ๏ฟฝ (Circuit Diagram):
  *
  *     CH32V003              USB-Serial          LED
  *     --------              ----------          ---
@@ -13,64 +13,79 @@
  *     PC0 ----/\/\/\---->|---- GND
  *            220 Ohm
  * 
- *     LED ที่ PC0 แสดงว่า main loop ยังทำงานระหว่าง DMA ถ่ายโอนข้อมูล
+ *     LED ๏ฟฝ๏ฟฝ๏ฟฝ PC0 ๏ฟฝสด๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ main loop ๏ฟฝัง๏ฟฝำงาน๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝาง DMA ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝอน๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ
  *
  * ============================================================
- * ผลลัพธ์ที่คาดหวัง (Expected Results):
- * - "Hello from DMA!" ปรากฏบน Serial Monitor
- * - LED ที่ PC0 กระพริบขณะ DMA กำลังถ่ายโอนข้อมูล (non-blocking)
- * - main loop ทำงานต่อเนื่องไม่ต้องรอ DMA
+ * ๏ฟฝ๏ฟฝ๏ฟฝัพ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝาด๏ฟฝ๏ฟฝัง (Expected Results):
+ * - "Hello from DMA!" ๏ฟฝ๏ฟฝาก๏ฟฝ๏ฟฝ๏ฟฝ Serial Monitor
+ * - LED ๏ฟฝ๏ฟฝ๏ฟฝ PC0 ๏ฟฝ๏ฟฝะพ๏ฟฝิบ๏ฟฝ๏ฟฝ๏ฟฝ DMA ๏ฟฝ๏ฟฝ๏ฟฝัง๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝอน๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ (non-blocking)
+ * - main loop ๏ฟฝำงาน๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝอง๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝอง๏ฟฝ๏ฟฝ DMA
  * ============================================================
- * คำเตือน (WARNINGS):
- * - DMA_USART_Send() เป็นแบบ blocking (รอจนเสร็จ)
- * - DMA_USART_Transmit() เป็นแบบ non-blocking
- * - ต้องเรียก USART_SimpleInit() ก่อนใช้ DMA_USART functions
- * - DMA_USART_InitTx() ต้องเรียกก่อน DMA_USART_Transmit() เสมอ
+ * ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝอน (WARNINGS):
+ * - DMA_USART_Send() ๏ฟฝ๏ฟฝแบบ blocking (๏ฟฝอจ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ)
+ * - DMA_USART_Transmit() ๏ฟฝ๏ฟฝแบบ non-blocking
+ * - ๏ฟฝ๏ฟฝอง๏ฟฝ๏ฟฝ๏ฟฝยก USART_SimpleInit() ๏ฟฝ๏ฟฝอน๏ฟฝ๏ฟฝ DMA_USART functions
+ * - DMA_USART_InitTx() ๏ฟฝ๏ฟฝอง๏ฟฝ๏ฟฝ๏ฟฝยก๏ฟฝ๏ฟฝอน DMA_USART_Transmit() ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ
+ * ============================================================
+ * เธเธฑเธเธเธฒเธฃเธ—เธณเธเธฒเธ (Flowchart):
+ *
+ * flowchart TD
+ *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
+ *     B --> C["USART_SimpleInit()"]
+ *     C --> D["pinMode(PC0, OUTPUT)"]
+ *     D --> E["DMA_USART_InitTx(DMA_CH2, tx_buffer, 64)"]
+ *     E --> F["DMA_USART_Transmit(DMA_CH2, message, len)"]
+ *     F --> G{"DMA complete within 5s?"}
+ *     G -->|"No"| H["USART_Print(DMA timeout)"]
+ *     G -->|"Yes"| I["DMA_USART_Send(DMA_CH2, blocking, 22)"]
+ *     H --> J["USART_Print(example complete)"]
+ *     I --> J
+ *     J --> K["while(1) toggle LED every 500ms"]
  * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20
-#include <SimpleHAL.h>    // รวมไลบรารี SimpleHAL ทั้งหมด
-#include <string.h>       // รวมไลบรารี string.h สำหรับ strlen
+#include <SimpleHAL.h>    // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝลบ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ SimpleHAL ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ
+#include <string.h>       // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝลบ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ string.h ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝับ strlen
 
-int main(void)            // ฟังก์ชันหลัก จุดเริ่มต้นโปรแกรม
+int main(void)            // ๏ฟฝัง๏ฟฝ๏ฟฝัน๏ฟฝ๏ฟฝัก ๏ฟฝุด๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ
 {
     SystemCoreClockUpdate();
     Timer_Init();
-    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT); // เริ่มต้น USART ที่ 115200 baud
-    pinMode(PC0, PIN_MODE_OUTPUT); // ตั้งค่า PC0 เป็น output สำหรับ LED แสดงสถานะ
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT); // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ USART ๏ฟฝ๏ฟฝ๏ฟฝ 115200 baud
+    pinMode(PC0, PIN_MODE_OUTPUT); // ๏ฟฝ๏ฟฝ้งค๏ฟฝ๏ฟฝ PC0 ๏ฟฝ๏ฟฝ output ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝับ LED ๏ฟฝสด๏ฟฝสถาน๏ฟฝ
 
-    uint8_t tx_buffer[64]; // Buffer สำหรับ DMA TX (ขนาดพอเหมาะ)
-    DMA_USART_InitTx(DMA_CH2, tx_buffer, sizeof(tx_buffer)); // เริ่มต้น DMA USART TX บน DMA_CH2
+    uint8_t tx_buffer[64]; // Buffer ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝับ DMA TX (๏ฟฝ๏ฟฝาด๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ)
+    DMA_USART_InitTx(DMA_CH2, tx_buffer, sizeof(tx_buffer)); // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ DMA USART TX ๏ฟฝ๏ฟฝ DMA_CH2
 
-    const char* message = "Hello from DMA!\r\n"; // ข้อความที่ต้องการส่งผ่าน DMA
-    uint16_t msg_len = strlen(message); // คำนวณความยาวข้อความ
+    const char* message = "Hello from DMA!\r\n"; // ๏ฟฝ๏ฟฝอค๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝอง๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ่งผ๏ฟฝาน DMA
+    uint16_t msg_len = strlen(message); // ๏ฟฝำนวณ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝวข๏ฟฝอค๏ฟฝ๏ฟฝ๏ฟฝ
 
-    DMA_USART_Transmit(DMA_CH2, (const uint8_t*)message, msg_len); // ส่งข้อความแบบ non-blocking
+    DMA_USART_Transmit(DMA_CH2, (const uint8_t*)message, msg_len); // ๏ฟฝ่งข๏ฟฝอค๏ฟฝ๏ฟฝ๏ฟฝแบบ non-blocking
 
-    uint32_t blink_count = 0; // ตัวนับรอบการกระพริบ LED
+    uint32_t blink_count = 0; // ๏ฟฝ๏ฟฝวนับ๏ฟฝอบ๏ฟฝ๏ฟฝรก๏ฟฝะพ๏ฟฝิบ LED
 
-    uint32_t timeout = 5000;  // 5s timeout (กัน DMA ติดค้าง)
+    uint32_t timeout = 5000;  // 5s timeout (๏ฟฝัน DMA ๏ฟฝิด๏ฟฝ๏ฟฝาง)
     while (DMA_GetStatus(DMA_CH2) != DMA_STATUS_COMPLETE && timeout > 0)
     {
-        blink_count++;       // เพิ่มจำนวนรอบ
-        digitalWrite(PC0, blink_count % 2); // กระพริบ LED ด้วยการหาร modulo 2
-        Delay_Ms(50);        // หน่วง 50ms ให้เห็นการกระพริบชัดเจน
+        blink_count++;       // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝำนวน๏ฟฝอบ
+        digitalWrite(PC0, blink_count % 2); // ๏ฟฝ๏ฟฝะพ๏ฟฝิบ LED ๏ฟฝ๏ฟฝ๏ฟฝยก๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ modulo 2
+        Delay_Ms(50);        // หน๏ฟฝวง 50ms ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ็นก๏ฟฝรก๏ฟฝะพ๏ฟฝิบ๏ฟฝัดเจน
         timeout -= 50;
     }
     if (timeout == 0) {
         USART_Print("DMA timeout!\r\n");
     }
 
-    Delay_Ms(500);           // หน่วง 500ms ก่อนทดสอบแบบ blocking
+    Delay_Ms(500);           // หน๏ฟฝวง 500ms ๏ฟฝ๏ฟฝอน๏ฟฝ๏ฟฝ๏ฟฝอบแบบ blocking
 
-    DMA_USART_Send(DMA_CH2, (const uint8_t*)"Blocking send done!\r\n", 22); // ส่งแบบ blocking รอจนเสร็จ
+    DMA_USART_Send(DMA_CH2, (const uint8_t*)"Blocking send done!\r\n", 22); // ๏ฟฝ๏ฟฝแบบ blocking ๏ฟฝอจ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ
 
-    USART_Print("DMA USART example complete\r\n"); // พิมพ์ข้อความสิ้นสุดด้วย USART ปกติ
+    USART_Print("DMA USART example complete\r\n"); // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝอค๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝุด๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ USART ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ
 
-    while (1)                // วนลูปอนันต์
+    while (1)                // วน๏ฟฝูปอนัน๏ฟฝ๏ฟฝ
     {
-        digitalWrite(PC0, !digitalRead(PC0)); // สลับสถานะ LED (toggle)
-        Delay_Ms(500);       // หน่วง 500ms ต่อรอบ
-    }                        // สิ้นสุด while loop
-}                            // สิ้นสุดฟังก์ชัน main
+        digitalWrite(PC0, !digitalRead(PC0)); // ๏ฟฝ๏ฟฝับสถาน๏ฟฝ LED (toggle)
+        Delay_Ms(500);       // หน๏ฟฝวง 500ms ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝอบ
+    }                        // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝุด while loop
+}                            // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝุด๏ฟฝัง๏ฟฝ๏ฟฝัน main

@@ -18,6 +18,20 @@
  * - digitalPinToInterrupt(PC1) = EXTI line 1
  * - CH32V003 มี EXTI 8 lines แชร์กับทุกพินใน line เดียวกัน
  * - IWDG ต้อง init ก่อนถึงจะใช้ yield() ได้
+ * ============================================================
+ * ผังการทำงาน (Flowchart):
+ *
+ * flowchart TD
+ *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
+ *     B --> C["USART + IWDG_SimpleInit"]
+ *     C --> D["pinMode + attachInterrupt"]
+ *     D --> E["while(1)"]
+ *     E --> F{"intr_flag set?"}
+ *     F -->|"Yes"| G["Clear flag + print"]
+ *     G --> H["yield()"]
+ *     F -->|"No"| H
+ *     H --> E
+ * ============================================================
  */
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include <SimpleHAL.h>

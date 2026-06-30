@@ -27,6 +27,26 @@
  *   2. ระบบจะรีเซ็ตหลังจาก Standby - นี่คือการเริ่มต้นใหม่ทั้งหมด ไม่ใช่การกลับมาทำงานต่อ
  *   3. RAM และ register ทั้งหมดถูกรีเซ็ต ไม่มีการคงค่าตัวแปรใดๆ ไว้
  * ============================================================
+ * ผังการทำงาน (Flowchart):
+ *
+ * flowchart TD
+ *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
+ *     B --> C["pinMode(PC0, OUTPUT)"]
+ *     C --> D["USART_SimpleInit()"]
+ *     D --> E{"PWR_WasStandbyWakeup()?"}
+ *     E -->|"Yes"| F["USART_Print(Woke by external wakeup pin)"]
+ *     F --> G["Blink LED 3 times"]
+ *     E -->|"No"| H["USART_Print(Entering standby. Press PA0 to wake)"]
+ *     H --> I["Delay_Ms(100)"]
+ *     G --> J["digitalWrite(PC0, HIGH)"]
+ *     I --> J
+ *     J --> K["Delay_Ms(500)"]
+ *     K --> L["digitalWrite(PC0, LOW)"]
+ *     L --> M["PWR_EnableWakeupPin()"]
+ *     M --> N["PWR_EnterStandbyMode(PWR_ENTRY_WFI)"]
+ *     N --> O["⏰ กด PA0 ปลุก → รีสตาร์ท"]
+ *     O --> A
+ * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20

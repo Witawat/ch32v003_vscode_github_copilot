@@ -34,6 +34,33 @@
  * - ����������ش��� 24MHz: ~0.366Hz (PSC=65535, Period=65535)
  * - ��������٧�ش��� 24MHz: 24MHz (PSC=0, Period=0)
  * ============================================================
+ * แผนผังการทำงาน (Flowchart):
+ *
+ * flowchart TD
+ *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
+ *     B --> C["USART_SimpleInit(115200)"]
+ *     C --> D["pinMode(PC0, OUTPUT)"]
+ *     D --> E["Print SystemCoreClock"]
+ *     E --> F["TIM_AdvancedInit(TIM1, PSC=239, PER=9, UP)"]
+ *     F --> G["TIM_Start(TIM1)"]
+ *     G --> H["while(1)"]
+ *     H --> I["LED blink state machine"]
+ *     I --> J["Simple_TIM_GetCounter + TIM_GetPeriod"]
+ *     J --> K{"counter < last_counter?"}
+ *     K -->|"Yes"| L["Print wrapped + toggle LED"]
+ *     L --> M["update last_counter"]
+ *     K -->|"No"| M
+ *     M --> N{"ELAPSED_TIME >= 2000?"}
+ *     N -->|"Yes"| O["Print counter, period, PSC"]
+ *     O --> P{"after 5s && !freq_changed?"}
+ *     P -->|"Yes"| Q["TIM_SetPrescaler(119)"]
+ *     Q --> R["TIM_SetMode(DOWN)"]
+ *     R --> S["TIM_GenerateUpdate()"]
+ *     S --> T["LED blink 5 times"]
+ *     T --> H
+ *     P -->|"No"| H
+ *     N -->|"No"| H
+ * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20

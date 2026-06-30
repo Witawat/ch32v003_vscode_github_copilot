@@ -30,6 +30,16 @@
  *   - ตั้ง Baud Rate ใน Serial Monitor ให้ตรงกัน (115200)
  *   - ตรวจสอบให้ GND ต่อร่วมกัน
  * ============================================================
+ * ผังการทำงาน (Flowchart):
+ *
+ * flowchart TD
+ *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
+ *     B --> C["USART_SimpleInit(115200)"]
+ *     C --> D["while(1)"]
+ *     D --> E["USART_Print(Hello from CH32V003!\\r\\n)"]
+ *     E --> F["Delay_Ms(1000)"]
+ *     F --> D
+ * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20

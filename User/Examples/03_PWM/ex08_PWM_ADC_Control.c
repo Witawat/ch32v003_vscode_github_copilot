@@ -49,3 +49,24 @@ int main(void) {
         Delay_Ms(100);  // 10Hz update
     }
 }
+
+/**
+ * ============================================================
+ * แผนผังการทำงาน (Flowchart):
+ *
+ * flowchart TD
+ *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
+ *     B --> C["USART_SimpleInit(115200)"]
+ *     C --> D["PWM_Init(PWM2_CH3, 1000)"]
+ *     D --> E["PWM_Start(PWM2_CH3)"]
+ *     E --> F["ADC_SimpleInit()"]
+ *     F --> G["Print header"]
+ *     G --> H["while(1)"]
+ *     H --> I["analogRead(PD2)"]
+ *     I --> J["แปลง ADC 0-1023 -> duty 0-100%"]
+ *     J --> K["PWM_SetDutyCycle(duty)"]
+ *     K --> L["Print ADC + Duty"]
+ *     L --> M["Delay_Ms(100)"]
+ *     M --> H
+ * ============================================================
+ */

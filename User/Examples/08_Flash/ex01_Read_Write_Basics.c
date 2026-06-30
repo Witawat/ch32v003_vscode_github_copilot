@@ -28,6 +28,21 @@
  *     การเปลี่ยน 0→1 ต้องลบทั้งหน้าก่อน
  *   ⚠ Flash มีอายุการเขียนประมาณ 10,000 รอบต่อหน้า
  * ============================================================
+ * ผังการทำงาน (Flowchart):
+ *
+ * flowchart TD
+ *     A["SystemCoreClockUpdate()"] --> B["USART_SimpleInit()"]
+ *     B --> C["Flash_Init()"]
+ *     C --> D["Flash_ErasePage(255)"]
+ *     D --> E["Flash_WriteByte(0x55)"]
+ *     E --> F["Flash_ReadByte()"]
+ *     F --> G["Flash_WriteHalfWord(0x1234)"]
+ *     G --> H["Flash_ReadHalfWord()"]
+ *     H --> I["Flash_WriteWord(0x12345678)"]
+ *     I --> J["Flash_ReadWord()"]
+ *     J --> K["USART_Print(results)"]
+ *     K --> L["while(1)"]
+ * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20

@@ -24,6 +24,23 @@
  * MUST have 4.7kΩ pull-up resistors or I2C won't work!
  * Address is 7-bit (0x03-0x77 range typically)
  * ============================================================
+ * ผังการทำงาน (Flowchart):
+ *
+ * flowchart TD
+ *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
+ *     B --> C["USART_SimpleInit(115200)"]
+ *     C --> D["I2C_SimpleInit(100kHz)"]
+ *     D --> E["while(1)"]
+ *     E --> F["for addr = 1 to 127"]
+ *     F --> G{"I2C_IsDeviceReady(addr)?"}
+ *     G -->|"Yes"| H["Print Found addr"]
+ *     G -->|"No"| I["Continue"]
+ *     H --> I
+ *     I --> F
+ *     F --> J["Print device count"]
+ *     J --> K["Delay_Ms(2000)"]
+ *     K --> E
+ * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20
@@ -34,7 +51,7 @@ int main(void)
     SystemCoreClockUpdate();
     Timer_Init();
     USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
-    I2C_SimpleInit(I2C_100KHZ, I2C_PINS_PARTIAL_REMAP);  // PD2=SCL, PD1=SDA � SOP-8 compatible
+    I2C_SimpleInit(I2C_100KHZ, I2C_PINS_PARTIAL_REMAP);  // PD2=SCL, PD1=SDA � SOP-8 compatible
 
     while(1)
     {

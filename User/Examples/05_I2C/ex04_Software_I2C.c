@@ -26,6 +26,23 @@
  * - ต้องมี Pull-up resistor (4.7kΩ) บนทั้ง SCL และ SDA
  * - ความเร็วสูงสุดประมาณ 100kHz ขึ้นอยู่กับความถี่ CPU
  * ============================================================
+ * ผังการทำงาน (Flowchart):
+ *
+ * flowchart TD
+ *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
+ *     B --> C["USART_SimpleInit(115200)"]
+ *     C --> D["I2C_Soft_Init(PD2, PD3, 100kHz)"]
+ *     D --> E["while(1)"]
+ *     E --> F["for addr = 1 to 127"]
+ *     F --> G{"I2C_Soft_Write(addr) OK?"}
+ *     G -->|"Yes"| H["Print Found addr"]
+ *     G -->|"No"| I["Continue"]
+ *     H --> I
+ *     I --> F
+ *     F --> J["Print device count"]
+ *     J --> K["Delay_Ms(3000)"]
+ *     K --> E
+ * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20

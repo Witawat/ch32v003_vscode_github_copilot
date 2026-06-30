@@ -32,6 +32,30 @@
  * - Stopwatch_Reset() ��ش��ùѺ��������� 0
  * - �����٧�ش ~49 �ѹ (overflow �ͧ uint32_t milliseconds)
  * ============================================================
+ * แผนผังการทำงาน (Flowchart):
+ *
+ * flowchart TD
+ *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
+ *     B --> C["USART_SimpleInit(115200)"]
+ *     C --> D["pinMode(PC0, INPUT_PULLUP)"]
+ *     D --> E["pinMode(PC1, INPUT_PULLUP)"]
+ *     E --> F["Stopwatch_Init()"]
+ *     F --> G["Print instructions"]
+ *     G --> H["while(1)"]
+ *     H --> I["อ่าน btn1, btn2"]
+ *     I --> J["Button1 state machine (debounce)"]
+ *     J --> K{"press valid?"}
+ *     K -->|"Yes"| L{"Stopwatch_IsRunning?"}
+ *     L -->|"Yes"| M["Stopwatch_Stop + Print Paused"]
+ *     L -->|"No"| N["Stopwatch_Start + Print Running"]
+ *     M --> O{"ELAPSED_TIME >= 100?"}
+ *     N --> O
+ *     K -->|"No"| O
+ *     O -->|"Yes"| P["Stopwatch_GetTimeString"]
+ *     P --> Q["Print Time + total seconds"]
+ *     Q --> H
+ *     O -->|"No"| H
+ * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20

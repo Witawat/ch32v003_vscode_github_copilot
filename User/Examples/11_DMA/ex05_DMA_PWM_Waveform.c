@@ -26,10 +26,23 @@
  * - DMA_CH5 ใช้สำหรับ TIM1 Update (แก้ไข CCR ทุกครั้งที่ timer อัปเดต)
  * - ถ้า LED ไม่เห็น fade ชัด อาจต้องปรับความถี่ PWM หรือขนาด sine table
  * ============================================================
+ * ผังการทำงาน (Flowchart):
+ *
+ * flowchart TD
+ *     A["SystemCoreClockUpdate()"] --> B["PWM_Init(PWM1_CH1, 1000Hz)"]
+ *     B --> C["PWM_GetPeriod()"]
+ *     C --> D["generate_sine_table(period)"]
+ *     D --> E["DMA_TIM_GetCCRAddress(TIM1, CH1)"]
+ *     E --> F["DMA_TIM_UpdatePWM(DMA_CH5, TIM1, ccr_addr, sine_table, 64, circular)"]
+ *     F --> G["TIM_DMACmd(TIM1, TIM_DMA_Update, ENABLE)"]
+ *     G --> H["PWM_Start(PWM1_CH1)"]
+ *     H --> I["DMA_Start(DMA_CH5)"]
+ *     I --> J["while(1) __NOP() — DMA สร้าง sine wave อัตโนมัติ"]
+ * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20
-/* CH32V003 has no hardware FPU � float/double use software emulation (~800 cycles) */
+/* CH32V003 has no hardware FPU � float/double use software emulation (~800 cycles) */
 #include <SimpleHAL.h>    // รวมไลบรารี SimpleHAL ทั้งหมด
 #include <math.h>         // รวมไลบรารี math.h สำหรับฟังก์ชัน sin()
 

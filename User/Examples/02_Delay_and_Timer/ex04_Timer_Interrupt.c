@@ -34,6 +34,27 @@
  * - ����� volatile ����Ѻ����÷�����Ѻ ISR
  * - TIM2 �� shared resource - ���ѧ�����ҹ�����Ѻ module ���
  * ============================================================
+ * แผนผังการทำงาน (Flowchart):
+ *
+ * flowchart TD
+ *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
+ *     B --> C["USART_SimpleInit(115200)"]
+ *     C --> D["pinMode(PC0, OUTPUT)"]
+ *     D --> E["pinMode(PC1, INPUT_PULLUP)"]
+ *     E --> F["TIM_SimpleInit(TIM2, 2Hz)"]
+ *     F --> G["TIM_AttachInterrupt(TIM2, callback)"]
+ *     G --> H["TIM_Start(TIM2)"]
+ *     H --> I["while(1)"]
+ *     I --> J["Button state machine (Start/Stop)"]
+ *     J --> K{"ELAPSED_TIME >= 2000?"}
+ *     K -->|"Yes"| L["Print LED state + TIM2 Counter"]
+ *     L --> I
+ *     K -->|"No"| I
+ *     subgraph ISR["ISR (timer_isr_callback)"]
+ *         M["led_state = !led_state"]
+ *         M --> N["digitalWrite(led_pin, led_state)"]
+ *     end
+ * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20

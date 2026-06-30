@@ -33,10 +33,25 @@
  *   - DMA channels: USART=CH2, SPI=CH4/CH5 - ตรวจสอบไม่ให้ชนกัน
  *   - ต้องแน่ใจว่า DMA ไม่ค้างจากการส่งก่อนเริ่มครั้งใหม่
  * ============================================================
+ * ผังการทำงาน (Flowchart):
+ *
+ * flowchart TD
+ *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
+ *     B --> C["I2C + SPI + 1-Wire init"]
+ *     C --> D["USART + DMA init"]
+ *     D --> E["BMP280_ReadCal() + W25Q_ReadID()"]
+ *     E --> F["while(1)"]
+ *     F --> G["BMP280_GetTemp() + GetPressure()"]
+ *     G --> H["DS18B20_ReadTemp()"]
+ *     H --> I["sprintf output buffer"]
+ *     I --> J["DMA_SendString()"]
+ *     J --> K["Delay_Ms(3000)"]
+ *     K --> F
+ * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20
-/* CH32V003 has no hardware FPU � float/double use software emulation (~800 cycles) */
+/* CH32V003 has no hardware FPU � float/double use software emulation (~800 cycles) */
 #include <SimpleHAL.h>
 #include <string.h>
 

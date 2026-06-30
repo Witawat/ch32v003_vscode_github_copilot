@@ -30,6 +30,25 @@
  *   - ควรใช้ร่วมกับ USART_Available() ถ้าต้องการไม่ให้ blocking
  *   - แสดงผลเป็นเลขฐานสิบหก 2 หลัก
  * ============================================================
+ * ผังการทำงาน (Flowchart):
+ *
+ * flowchart TD
+ *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
+ *     B --> C["USART_SimpleInit(115200)"]
+ *     C --> D["while(1)"]
+ *     D --> E["USART_Print(Send 5 bytes: )"]
+ *     E --> F["USART_ReadBytes(buffer, 5)"]
+ *     F --> G["USART_Print(Received: )"]
+ *     G --> H["for i = 0 to 4"]
+ *     H --> I{"buffer[i] < 16?"}
+ *     I -->|"Yes"| J["Print leading 0"]
+ *     I -->|"No"| K["USART_PrintHex(buffer[i])"]
+ *     J --> K
+ *     K --> L["Print space if not last"]
+ *     L --> H
+ *     H --> M["USART_Print(\\r\\n)"]
+ *     M --> D
+ * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20

@@ -25,6 +25,24 @@
  * W25Qxx commands need specific byte sequences —
  *          always follow the datasheet command set.
  * ============================================================
+ * ผังการทำงาน (Flowchart):
+ *
+ * flowchart TD
+ *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
+ *     B --> C["USART_SimpleInit(115200)"]
+ *     C --> D["SPI_SimpleInit(MODE0, 1MHz)"]
+ *     D --> E["pinMode(CS, OUTPUT)"]
+ *     E --> F["SPI_SetCSPin(PC4)"]
+ *     F --> G["while(1)"]
+ *     G --> H["Read Status Register"]
+ *     H --> I["Print Status Reg"]
+ *     I --> J["Read JEDEC ID"]
+ *     J --> K["Print JEDEC ID"]
+ *     K --> L["Read 32 bytes from addr 0x00"]
+ *     L --> M["Print hex dump"]
+ *     M --> N["Delay_Ms(3000)"]
+ *     N --> G
+ * ============================================================
  */
 
 #if CH32V003_IS_SOP8

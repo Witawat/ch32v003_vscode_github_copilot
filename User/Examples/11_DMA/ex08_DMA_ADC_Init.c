@@ -3,6 +3,23 @@
  * @brief DMA_ADC_Init — ใช้ DMA กับ ADC ต่อเนื่อง
  *
  * ADC continuous conversion → DMA เก็บลง buffer → อ่านค่าเฉลี่ย
+ *
+ * ============================================================
+ * ผังการทำงาน (Flowchart):
+ *
+ * flowchart TD
+ *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
+ *     B --> C["USART_SimpleInit()"]
+ *     C --> D["ADC_SimpleInit()"]
+ *     D --> E["DMA_ADC_Init(DMA_CH1, adc_buf, 32, circular)"]
+ *     E --> F["ADC_Cmd(ADC1, ENABLE)"]
+ *     F --> G["while(1)"]
+ *     G --> H["latest = adc_buf[31]"]
+ *     H --> I["sum = average of 32 samples"]
+ *     I --> J["USART_Print(Latest= X Avg= Y)"]
+ *     J --> K["Delay_Ms(500)"]
+ *     K --> G
+ * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20

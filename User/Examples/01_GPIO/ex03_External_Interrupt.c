@@ -1,79 +1,98 @@
 /**
  * ============================================================
- * ตัวอยางที่ 3: External Interrupt (อินเทอรรับตภายนอก)
+ * ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝาง๏ฟฝ๏ฟฝ๏ฟฝ 3: External Interrupt (๏ฟฝิน๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝับ๏ฟฝ๏ฟฝ๏ฟฝยนอก)
  * ============================================================
  *
- * แผนผังวงจร (Circuit Diagram):
+ * แผน๏ฟฝังวง๏ฟฝ๏ฟฝ (Circuit Diagram):
  *
- *     CH32V003                  ปุมกด (Button)
+ *     CH32V003                  ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ (Button)
  *     --------                  -------------
  *     PC1 ---+----/\/\/\---- 3.3V
  *            |      10k Ohm    (Pull-up)
  *            |
- *            +---- ปุมกด ---- GND
+ *            +---- ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ ---- GND
  *
  *     PC0 ----/\/\/\---->|---- GND
  *            220 Ohm
  *
  * ============================================================
- * ผลลัพธที่คาดหวัง (Expected Results):
- * - ทุกครั้งที่กดปุม LED ที่ PC0 จะเปลี่ยนสถานะ (ติดดับ)
- * - Serial Monitor แสดง "Interrupt #1", "#2", "#3"...
- * - ใชการทำงานแบบ Interrupt (ไมตอง Polling)
+ * ๏ฟฝ๏ฟฝ๏ฟฝัพ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝาด๏ฟฝ๏ฟฝัง (Expected Results):
+ * - ๏ฟฝุก๏ฟฝ๏ฟฝ๏ฟฝ้งท๏ฟฝ่กด๏ฟฝ๏ฟฝ๏ฟฝ LED ๏ฟฝ๏ฟฝ๏ฟฝ PC0 ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝยนสถาน๏ฟฝ (๏ฟฝิด๏ฟฝับ)
+ * - Serial Monitor ๏ฟฝสด๏ฟฝ "Interrupt #1", "#2", "#3"...
+ * - ใชก๏ฟฝรทำงานแบบ Interrupt (๏ฟฝ๏ฟฝ๏ฟฝอง Polling)
  * ============================================================
- * คำเตือน (WARNINGS):
- * - ฟงกชัน callback ใน interrupt ตองสั้นและทำงานเร็วที่สุด
- * - ไมควรเรียก Delay_Ms() หรือฟงกชันที่ blocking ใน ISR
- * - ตองประกาศตัวแปรที่แชรกับ ISR ดวยคําสําคัญ volatile
- * - CH32V003 รองรับ EXTI สูงสุด 8 lines เทานั้น
- * - ถากดปุมเร็วเกินไป อาจเกิด interrupt ซ้ำ (debounce)
+ * ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝอน (WARNINGS):
+ * - ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝัน callback ๏ฟฝ interrupt ๏ฟฝอง๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝะทำงาน๏ฟฝ๏ฟฝ๏ฟฝวท๏ฟฝ๏ฟฝ๏ฟฝุด
+ * - ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝยก Delay_Ms() ๏ฟฝ๏ฟฝ๏ฟฝอฟ๏ฟฝ๏ฟฝ๏ฟฝัน๏ฟฝ๏ฟฝ๏ฟฝ blocking ๏ฟฝ ISR
+ * - ๏ฟฝอง๏ฟฝ๏ฟฝะก๏ฟฝศต๏ฟฝ๏ฟฝ๏ฟฝรท๏ฟฝ๏ฟฝ๏ฟฝรกับ ISR ๏ฟฝ๏ฟฝยค๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝาคัญ volatile
+ * - CH32V003 ๏ฟฝอง๏ฟฝับ EXTI ๏ฟฝูง๏ฟฝุด 8 lines ๏ฟฝาน๏ฟฝ๏ฟฝ
+ * - ๏ฟฝาก๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝิน๏ฟฝ ๏ฟฝาจ๏ฟฝิด interrupt ๏ฟฝ๏ฟฝ๏ฟฝ (debounce)
+ * ============================================================
+ * เนเธเธเธเธฑเธเธเธฒเธฃเธ—เธณเธเธฒเธ (Flowchart):
+ *
+ * flowchart TD
+ *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
+ *     B --> C["pinMode(PC0, OUTPUT)"]
+ *     C --> D["pinMode(PC1, INPUT_PULLUP)"]
+ *     D --> E["attachInterrupt(PC1, Button_ISR, FALLING)"]
+ *     E --> F["USART_SimpleInit(115200)"]
+ *     F --> G["while(1)"]
+ *     G --> H{"interruptCounter != lastCount?"}
+ *     H -->|"Yes"| I["digitalToggle(PC0)"]
+ *     I --> J["update lastCount"]
+ *     J --> K["USART_Print('Interrupt #...')"]
+ *     K --> G
+ *     H -->|"No"| G
+ *     subgraph ISR["ISR Context"]
+ *         L["interruptCounter++"] --> M["return"]
+ *     end
  * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20
-#include <SimpleHAL.h>   // รวมไลบรารี SimpleHAL ทั้งหมด
+#include <SimpleHAL.h>   // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝลบ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ SimpleHAL ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ
 
-volatile uint32_t interruptCounter = 0; // ตัวแปรนับจำนวน interrupt ที่เกิดซึ้น
-                                         // volatile ปองกัน compiler optimize คา
-                                         // เพราะมีการเปลี่ยนแปลงจาก ISR
+volatile uint32_t interruptCounter = 0; // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝรนับ๏ฟฝำนวน interrupt ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝิด๏ฟฝ๏ฟฝ๏ฟฝ
+                                         // volatile ๏ฟฝอง๏ฟฝัน compiler optimize ๏ฟฝ๏ฟฝ
+                                         // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝีก๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝยน๏ฟฝลง๏ฟฝาก ISR
 
-void Button_ISR(void)    // ฟงกชัน Interrupt Service Routine สำหรับปุมกด
-{                        // ฟงกชันนี้จะถูกเรียกอัตโนมัติเมื่อเกิด interrupt ที่ PC1
-    interruptCounter++;  // เพิ่มคานับ interrupt ทีละ 1
-                         // (ทำงานเร็ว ไมมีการ Delay หรือ USART ใน ISR)
-}                        // สิ้นสุด ISR
+void Button_ISR(void)    // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝัน Interrupt Service Routine ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝับ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ
+{                        // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝัน๏ฟฝ๏ฟฝ๏ฟฝะถูก๏ฟฝ๏ฟฝ๏ฟฝยก๏ฟฝัต๏ฟฝ๏ฟฝัต๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝิด interrupt ๏ฟฝ๏ฟฝ๏ฟฝ PC1
+    interruptCounter++;  // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝานับ interrupt ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ 1
+                         // (๏ฟฝำงาน๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ ๏ฟฝ๏ฟฝ๏ฟฝีก๏ฟฝ๏ฟฝ Delay ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ USART ๏ฟฝ ISR)
+}                        // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝุด ISR
 
-int main(void)           // ฟงกชันหลักของโปรแกรม
+int main(void)           // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝัน๏ฟฝ๏ฟฝัก๏ฟฝอง๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ
 {
     SystemCoreClockUpdate();
     Timer_Init();
-    pinMode(PC0, PIN_MODE_OUTPUT);       // ตั้งคาขา PC0 เปนเอาตพุต (LED)
-    pinMode(PC1, PIN_MODE_INPUT_PULLUP); // ตั้งคาขา PC1 เปนอินพุต Pull-up (ปุมกด)
+    pinMode(PC0, PIN_MODE_OUTPUT);       // ๏ฟฝ๏ฟฝ้งคาข๏ฟฝ PC0 เปน๏ฟฝ๏ฟฝาต๏ฟฝุต (LED)
+    pinMode(PC1, PIN_MODE_INPUT_PULLUP); // ๏ฟฝ๏ฟฝ้งคาข๏ฟฝ PC1 เปน๏ฟฝิน๏ฟฝุต Pull-up (๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ)
 
-    attachInterrupt(PC1, Button_ISR, FALLING); // ลงทะเบียน interrupt สำหรับขา PC1
-                                         // โหมด FALLING: เกิด interrupt เมื่อสัญญาณ
-                                         // เปลี่ยนจาก HIGH  LOW (ตอนกดปุม)
-                                         // ฟงกชัน Button_ISR จะถูกเรียกทุกครั้ง
+    attachInterrupt(PC1, Button_ISR, FALLING); // ลง๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝยน interrupt ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝับ๏ฟฝ๏ฟฝ PC1
+                                         // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ FALLING: ๏ฟฝิด interrupt ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝัญ๏ฟฝาณ
+                                         // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝยน๏ฟฝาก HIGH  LOW (๏ฟฝอน๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ)
+                                         // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝัน Button_ISR ๏ฟฝะถูก๏ฟฝ๏ฟฝ๏ฟฝยก๏ฟฝุก๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ
 
-    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT); // เริ่มตน USART ที่ 115200 baud
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT); // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ USART ๏ฟฝ๏ฟฝ๏ฟฝ 115200 baud
 
-    uint32_t lastCount = 0;  // ตัวแปรเก็บคานับครั้งกอนหนา เพื่อตรวจสอบการเปลี่ยนแปลง
+    uint32_t lastCount = 0;  // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ็บคานับ๏ฟฝ๏ฟฝ๏ฟฝ้งกอนหน๏ฟฝ ๏ฟฝ๏ฟฝ๏ฟฝอต๏ฟฝวจ๏ฟฝอบ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝยน๏ฟฝลง
 
-    while(1)                 // วนลูปอนันต์
+    while(1)                 // วน๏ฟฝูปอนัน๏ฟฝ๏ฟฝ
     {
-        if (interruptCounter != lastCount)  // ตรวจสอบวาคานับ interrupt เปลี่ยนแปลง
-        {                                    // (มีการเกิด interrupt ใหม)
-            digitalToggle(PC0);              // สลับสถานะ LED ที่ PC0 (ติดดับ)
-                                             // ไมตองอานคากอน เปลี่ยนทันที
+        if (interruptCounter != lastCount)  // ๏ฟฝ๏ฟฝวจ๏ฟฝอบ๏ฟฝาคานับ interrupt ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝยน๏ฟฝลง
+        {                                    // (๏ฟฝีก๏ฟฝ๏ฟฝ๏ฟฝิด interrupt ๏ฟฝ๏ฟฝ๏ฟฝ)
+            digitalToggle(PC0);              // ๏ฟฝ๏ฟฝับสถาน๏ฟฝ LED ๏ฟฝ๏ฟฝ๏ฟฝ PC0 (๏ฟฝิด๏ฟฝับ)
+                                             // ๏ฟฝ๏ฟฝ๏ฟฝอง๏ฟฝาน๏ฟฝากอน ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝยน๏ฟฝัน๏ฟฝ๏ฟฝ
 
-            lastCount = interruptCounter;    // อัปเดตคานับลาสุด
+            lastCount = interruptCounter;    // ๏ฟฝัปเดต๏ฟฝานับ๏ฟฝ๏ฟฝ๏ฟฝุด
 
-            USART_Print("Interrupt #");      // สงขอความ "Interrupt #" ไป Serial
-            USART_PrintNum((int32_t)interruptCounter); // สงตัวเลขนับ interrupt
-            USART_Print("\r\n");             // ขึ้นบรรทัดใหม
+            USART_Print("Interrupt #");      // สง๏ฟฝอค๏ฟฝ๏ฟฝ๏ฟฝ "Interrupt #" ๏ฟฝ Serial
+            USART_PrintNum((int32_t)interruptCounter); // สง๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝลข๏ฟฝับ interrupt
+            USART_Print("\r\n");             // ๏ฟฝ๏ฟฝ้นบ๏ฟฝรทัด๏ฟฝ๏ฟฝ๏ฟฝ
         }
 
-        // ไมมี Delay_Ms ในลูปหลัก เพราะตองการใหตอบสนองเร็ว
-        // การรอแบบ Busy-wait ชวยประหยัดพลังงานไดในบางกรณี
-    }                            // สิ้นสุด while loop
-}                                // สิ้นสุดฟงกชัน main
+        // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ Delay_Ms ๏ฟฝ๏ฟฝูป๏ฟฝ๏ฟฝัก ๏ฟฝ๏ฟฝ๏ฟฝะตอง๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝหตอบสนอง๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ
+        // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝแบบ Busy-wait ๏ฟฝ๏ฟฝยป๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝัด๏ฟฝ๏ฟฝัง๏ฟฝาน๏ฟฝในบาง๏ฟฝรณ๏ฟฝ
+    }                            // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝุด while loop
+}                                // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝุด๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝัน main

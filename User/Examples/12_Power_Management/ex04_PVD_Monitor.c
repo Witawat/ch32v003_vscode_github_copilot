@@ -24,6 +24,25 @@
  *   2. ต้องปรับแรงดันให้ต่ำกว่า VDD ปกติเพื่อทดสอบ ควรใช้ Power Supply แบบปรับค่าได้
  *   3. PVD Threshold มีความคลาดเคลื่อน ±5% ตาม datasheet
  * ============================================================
+ * ผังการทำงาน (Flowchart):
+ *
+ * flowchart TD
+ *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
+ *     B --> C["USART_SimpleInit()"]
+ *     C --> D["PWR_EnablePVD(PVD_3V3)"]
+ *     D --> E["USART_Print(PVD set at 3.3V)"]
+ *     E --> F["while(1)"]
+ *     F --> G["PWR_GetPVDStatus()"]
+ *     G --> H{"pvdStatus && !lastState?"}
+ *     H -->|"Yes"| I["USART_Print(LOW VOLTAGE DETECTED)"]
+ *     H -->|"No"| J{"!pvdStatus && lastState?"}
+ *     J -->|"Yes"| K["USART_Print(Voltage restored to normal)"]
+ *     J -->|"No"| L["lastState = pvdStatus"]
+ *     I --> L
+ *     K --> L
+ *     L --> M["Delay_Ms(200)"]
+ *     M --> F
+ * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20

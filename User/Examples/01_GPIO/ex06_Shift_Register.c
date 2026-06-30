@@ -1,9 +1,9 @@
 /**
  * ============================================================
- * ตัวอยางที่ 6: Shift Register (74HC595 + Knight Rider)
+ * ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝาง๏ฟฝ๏ฟฝ๏ฟฝ 6: Shift Register (74HC595 + Knight Rider)
  * ============================================================
  *
- * แผนผังวงจร (Circuit Diagram):
+ * แผน๏ฟฝังวง๏ฟฝ๏ฟฝ (Circuit Diagram):
  *
  *     CH32V003              74HC595                LEDs
  *     --------              --------               ----
@@ -15,75 +15,97 @@
  *                            GND (8)   Q5 (5)  ---/\/\---|>|--- GND
  *                            MR (10)   Q6 (6)  ---/\/\---|>|--- GND
  *                            OE (13)   Q7 (7)  ---/\/\---|>|--- GND
- *                                          (ทุกตัว 220 Ohm)
+ *                                          (๏ฟฝุก๏ฟฝ๏ฟฝ๏ฟฝ 220 Ohm)
  *
  *     MR (10) ---> 3.3V (reset disable)
  *     OE (13) ---> GND (output enable  = active LOW)
  *
  * ============================================================
- * ผลลัพธที่คาดหวัง (Expected Results):
- * - LEDs 8 ดวงแสดงรูปแบบ Knight Rider (ไลไฟกลับไปกลับมา)
- * - เหมือนไฟ KITT ในรถ Knight Rider
- * - LED วิ่งจากซายไปขวา แลวกลับจากขวามาซาย วนไปเรื่อยๆ
+ * ๏ฟฝ๏ฟฝ๏ฟฝัพ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝาด๏ฟฝ๏ฟฝัง (Expected Results):
+ * - LEDs 8 ๏ฟฝวง๏ฟฝสด๏ฟฝ๏ฟฝูปแบบ Knight Rider (๏ฟฝ๏ฟฝไฟก๏ฟฝับไปก๏ฟฝับ๏ฟฝ๏ฟฝ)
+ * - ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝอน๏ฟฝ KITT ๏ฟฝรถ Knight Rider
+ * - LED ๏ฟฝ๏ฟฝ่งจาก๏ฟฝ๏ฟฝ๏ฟฝไปข๏ฟฝ๏ฟฝ ๏ฟฝ๏ฟฝวก๏ฟฝับ๏ฟฝาก๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝาซ๏ฟฝ๏ฟฝ วน๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ
  * ============================================================
- * คำเตือน (WARNINGS):
- * - 74HC595 รองรับไฟ 5V แต CH32V003 เปน 3.3V ซึ่ง OK สำหรับลอจิก
- * - 74HC595 รับ Vih ขั้นต่ำ ~3.15V ที่ 5V VCC - ควรใช VCC=3.3V หรือ 5V
- * - ตองตอ MR (pin 10) ไป VCC เพื่อไมใหรีเซต
- * - ตองตอ OE (pin 13) ไป GND เพื่อเปดใชงานเอาตพุต
- * - อยาลืม C 100nF ระหวาง VCC-GND ใกลๆ 74HC595
+ * ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝอน (WARNINGS):
+ * - 74HC595 ๏ฟฝอง๏ฟฝับ๏ฟฝ 5V ๏ฟฝ CH32V003 เปน 3.3V ๏ฟฝ๏ฟฝ๏ฟฝ OK ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝับ๏ฟฝอจิก
+ * - 74HC595 ๏ฟฝับ Vih ๏ฟฝ๏ฟฝ้นต๏ฟฝ๏ฟฝ ~3.15V ๏ฟฝ๏ฟฝ๏ฟฝ 5V VCC - ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ VCC=3.3V ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ 5V
+ * - ๏ฟฝอง๏ฟฝ๏ฟฝ MR (pin 10) ๏ฟฝ VCC ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝเซต
+ * - ๏ฟฝอง๏ฟฝ๏ฟฝ OE (pin 13) ๏ฟฝ GND ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝเปดใชงาน๏ฟฝ๏ฟฝาต๏ฟฝุต
+ * - ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ C 100nF ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝาง VCC-GND ๏ฟฝ๏ฟฝ๏ฟฝ 74HC595
+ * ============================================================
+ * เนเธเธเธเธฑเธเธเธฒเธฃเธ—เธณเธเธฒเธ (Flowchart):
+ *
+ * flowchart TD
+ *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
+ *     B --> C["pinMode(DATA, CLOCK, LATCH, OUTPUT)"]
+ *     C --> D["while(1)"]
+ *     D --> E["for i = 0 to 7"]
+ *     E --> F["digitalWrite(LATCH, LOW)"]
+ *     F --> G["shiftOut(MSBFIRST, 1<<i)"]
+ *     G --> H["digitalWrite(LATCH, HIGH)"]
+ *     H --> I["Delay_Ms(100)"]
+ *     I --> J{"i < 8?"}
+ *     J -->|"Yes"| E
+ *     J -->|"No"| K["for i = 7 to 0"]
+ *     K --> L["digitalWrite(LATCH, LOW)"]
+ *     L --> M["shiftOut(MSBFIRST, 1<<i)"]
+ *     M --> N["digitalWrite(LATCH, HIGH)"]
+ *     N --> O["Delay_Ms(100)"]
+ *     O --> P{"i >= 0?"}
+ *     P -->|"Yes"| K
+ *     P -->|"No"| D
  * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20
-#include <SimpleHAL.h>   // รวมไลบรารี SimpleHAL ทั้งหมด
+#include <SimpleHAL.h>   // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝลบ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ SimpleHAL ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ
 
-// กำหนดชื่อขาสำหรับตอ 74HC595 เพื่องายตอการเขาใจ
-#define DATA_PIN   PC0   // ขาสงขอมูล (Serial Data Input - DS)
-#define CLOCK_PIN  PC1   // ขาสัญญาณนาฬิกา (Shift Clock - SH_CP)
-#define LATCH_PIN  PC2   // ขาล็อคขอมูล (Storage/Latch Clock - ST_CP)
+// ๏ฟฝ๏ฟฝหน๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝอข๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝับ๏ฟฝ๏ฟฝ 74HC595 ๏ฟฝ๏ฟฝ๏ฟฝอง๏ฟฝยตอก๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ
+#define DATA_PIN   PC0   // ๏ฟฝ๏ฟฝสง๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ (Serial Data Input - DS)
+#define CLOCK_PIN  PC1   // ๏ฟฝ๏ฟฝ๏ฟฝัญ๏ฟฝาณ๏ฟฝ๏ฟฝ๏ฟฝิก๏ฟฝ (Shift Clock - SH_CP)
+#define LATCH_PIN  PC2   // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝอค๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ (Storage/Latch Clock - ST_CP)
 
-int main(void)           // ฟงกชันหลักของโปรแกรม
+int main(void)           // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝัน๏ฟฝ๏ฟฝัก๏ฟฝอง๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ
 {
     SystemCoreClockUpdate();
     Timer_Init();
-    // ตั้งคาขาที่ตอ 74HC595 ทั้ง 3 ขาเปนเอาตพุต
+    // ๏ฟฝ๏ฟฝ้งคาขาท๏ฟฝ๏ฟฝ๏ฟฝ 74HC595 ๏ฟฝ๏ฟฝ๏ฟฝ 3 ๏ฟฝ๏ฟฝเปน๏ฟฝ๏ฟฝาต๏ฟฝุต
     pinMode(DATA_PIN,  PIN_MODE_OUTPUT);  // DATA (DS) output
     pinMode(CLOCK_PIN, PIN_MODE_OUTPUT);  // CLOCK (SH_CP) output
     pinMode(LATCH_PIN, PIN_MODE_OUTPUT);  // LATCH (ST_CP) output
 
-    while(1)                 // วนลูปอนันต์
+    while(1)                 // วน๏ฟฝูปอนัน๏ฟฝ๏ฟฝ
     {
-        // Knight Rider Pattern: วิ่งจากซายไปขวา (PC0  PC7)
-        // LED ที่ 0 = QA, LED ที่ 7 = QH
-        for (int i = 0; i < 8; i++)   // i = 0 ถึง 7 (ซายไปขวา)
+        // Knight Rider Pattern: ๏ฟฝ๏ฟฝ่งจาก๏ฟฝ๏ฟฝ๏ฟฝไปข๏ฟฝ๏ฟฝ (PC0  PC7)
+        // LED ๏ฟฝ๏ฟฝ๏ฟฝ 0 = QA, LED ๏ฟฝ๏ฟฝ๏ฟฝ 7 = QH
+        for (int i = 0; i < 8; i++)   // i = 0 ๏ฟฝึง 7 (๏ฟฝ๏ฟฝ๏ฟฝไปข๏ฟฝ๏ฟฝ)
         {
-            digitalWrite(LATCH_PIN, LOW);  // ตั้ง LATCH เปน LOW เพือเริ่มสงขอมูล
-                                           // (ไมตอง latch จนกวาจะสงขอมูลครบ)
+            digitalWrite(LATCH_PIN, LOW);  // ๏ฟฝ๏ฟฝ๏ฟฝ LATCH เปน LOW ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝสง๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ
+                                           // (๏ฟฝ๏ฟฝ๏ฟฝอง latch ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝาจ๏ฟฝสง๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝลครบ)
 
             shiftOut(DATA_PIN, CLOCK_PIN, MSBFIRST, (1 << i));
-            // shiftOut: สงขอมูล 1 byte แบบ MSB กอน
-            // (1 << i) = สราง bit pattern เชน i=0  00000001, i=1  00000010
-            // bit ที่ i จะเปน 1 (LED ดวงนั้นติด) ที่เหลือเปน 0 (ดับ)
+            // shiftOut: สง๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ 1 byte แบบ MSB ๏ฟฝอน
+            // (1 << i) = ๏ฟฝ๏ฟฝาง bit pattern เชน i=0  00000001, i=1  00000010
+            // bit ๏ฟฝ๏ฟฝ๏ฟฝ i ๏ฟฝ๏ฟฝเปน 1 (LED ๏ฟฝวง๏ฟฝ๏ฟฝ้นติด) ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝเปน 0 (๏ฟฝับ)
 
-            digitalWrite(LATCH_PIN, HIGH); // ตั้ง LATCH เปน HIGH เพือล็อคขอมูล
-                                           // ขอมูลจะปรากฏที่ Q0-Q7 ทันที
+            digitalWrite(LATCH_PIN, HIGH); // ๏ฟฝ๏ฟฝ๏ฟฝ LATCH เปน HIGH ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝอค๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ
+                                           // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝลจะป๏ฟฝาก๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ Q0-Q7 ๏ฟฝัน๏ฟฝ๏ฟฝ
 
-            Delay_Ms(100);                  // หนวงเวลา 100ms กอนขยับ LED ถัดไป
+            Delay_Ms(100);                  // หนวง๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ 100ms ๏ฟฝอน๏ฟฝ๏ฟฝับ LED ๏ฟฝัด๏ฟฝ
         }
 
-        // Knight Rider Pattern: วิ่งจากขวามาซาย (PC7  PC0)
-        for (int i = 7; i >= 0; i--)  // i = 7 ถึง 0 (ขวามาซาย)
+        // Knight Rider Pattern: ๏ฟฝ๏ฟฝ่งจาก๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝาซ๏ฟฝ๏ฟฝ (PC7  PC0)
+        for (int i = 7; i >= 0; i--)  // i = 7 ๏ฟฝึง 0 (๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝาซ๏ฟฝ๏ฟฝ)
         {
-            digitalWrite(LATCH_PIN, LOW);  // เริ่มสงขอมูลไปยัง shift register
+            digitalWrite(LATCH_PIN, LOW);  // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝสง๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝัง shift register
 
             shiftOut(DATA_PIN, CLOCK_PIN, MSBFIRST, (1 << i));
-            // (1 << i) = สราง bit pattern เชน i=7  10000000, i=6  01000000
+            // (1 << i) = ๏ฟฝ๏ฟฝาง bit pattern เชน i=7  10000000, i=6  01000000
 
-            digitalWrite(LATCH_PIN, HIGH); // ล็อคขอมูลใหปรากฏที่เอาตพุต
+            digitalWrite(LATCH_PIN, HIGH); // ๏ฟฝ๏ฟฝอค๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝหป๏ฟฝาก๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝาต๏ฟฝุต
 
-            Delay_Ms(100);                  // หนวงเวลา 100ms
+            Delay_Ms(100);                  // หนวง๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ 100ms
         }
-        // เมื่อจบ 2 loops จะกลับไปทำซ้ำอีก (วิ่งไป-มาวนไปเรื่อยๆ)
-    }                            // สิ้นสุด while loop
-}                                // สิ้นสุดฟงกชัน main
+        // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝอจ๏ฟฝ 2 loops ๏ฟฝะก๏ฟฝับไปทำซ๏ฟฝ๏ฟฝ๏ฟฝีก (๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ-๏ฟฝ๏ฟฝวน๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ)
+    }                            // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝุด while loop
+}                                // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝุด๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝัน main

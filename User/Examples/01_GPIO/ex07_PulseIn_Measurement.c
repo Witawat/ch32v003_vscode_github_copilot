@@ -1,14 +1,14 @@
 /**
  * ============================================================
- * ตัวอยางที่ 7: PulseIn Measurement (วัดระยะดวย HC-SR04)
+ * ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝาง๏ฟฝ๏ฟฝ๏ฟฝ 7: PulseIn Measurement (๏ฟฝัด๏ฟฝ๏ฟฝ๏ฟฝะด๏ฟฝ๏ฟฝ HC-SR04)
  * ============================================================
  *
- * แผนผังวงจร (Circuit Diagram):
+ * แผน๏ฟฝังวง๏ฟฝ๏ฟฝ (Circuit Diagram):
  *
  *     HC-SR04                  CH32V003
  *     -------                  --------
  *     VCC (5V) ----> 5V Supply (External)
- *     GND ---------> GND (รวม)
+ *     GND ---------> GND (๏ฟฝ๏ฟฝ๏ฟฝ)
  *     TRIG --------> PC3 (Digital Output)
  *     ECHO ---+----> PC4 (Digital Input)
  *             |
@@ -18,81 +18,103 @@
  *
  *     Voltage Divider: ECHO (5V)  2k?  PC4  3.3k?  GND
  *     Vout = 5V ? (3.3k / (2k + 3.3k)) = 5V ? 0.623 = 3.11V
- *     (ปลอดภัยสำหรับ CH32V003 ที่ 3.3V)
+ *     (๏ฟฝ๏ฟฝอด๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝับ CH32V003 ๏ฟฝ๏ฟฝ๏ฟฝ 3.3V)
  *
  * ============================================================
- * ผลลัพธที่คาดหวัง (Expected Results):
- * - Serial Monitor แสดงระยะทางทุก 500ms
+ * ๏ฟฝ๏ฟฝ๏ฟฝัพ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝาด๏ฟฝ๏ฟฝัง (Expected Results):
+ * - Serial Monitor ๏ฟฝสด๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝะทาง๏ฟฝุก 500ms
  * - "Distance: XX.X cm"
- * - วัดระยะไดประมาณ 2cm - 400cm
- * - ความละเอียด ?0.3cm
+ * - ๏ฟฝัด๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝไดป๏ฟฝ๏ฟฝ๏ฟฝาณ 2cm - 400cm
+ * - ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝยด ?0.3cm
  * ============================================================
- * คำเตือน (WARNINGS):
- * - HC-SR04 ใช ECHO ที่ 5V ซึ่งอันตรายตอ CH32V003 (3.3V เทานั้น)
- * - ตองใช Voltage Divider (2k? ตออนุกรม + 3.3k? ตอลง GND) เสมอ!
- * - โดยไมตอ Voltage Divider จะทำให MCU เสียหายถาวร
- * - ระยะทางสูงสุดประมาณ 400cm ตองตั้ง timeout 30ms
- * - สูตร: ระยะทาง (cm) = pulse (us) ? 0.034 / 2
- * - 0.034 = ความเร็วเสียง (cm/us), หาร 2 เพราะไป-กลับ
+ * ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝอน (WARNINGS):
+ * - HC-SR04 ๏ฟฝ ECHO ๏ฟฝ๏ฟฝ๏ฟฝ 5V ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝัน๏ฟฝ๏ฟฝ๏ฟฝยต๏ฟฝ CH32V003 (3.3V ๏ฟฝาน๏ฟฝ๏ฟฝ)
+ * - ๏ฟฝอง๏ฟฝ Voltage Divider (2k? ๏ฟฝ๏ฟฝอนุก๏ฟฝ๏ฟฝ + 3.3k? ๏ฟฝ๏ฟฝลง GND) ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ!
+ * - ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ Voltage Divider ๏ฟฝะท๏ฟฝ๏ฟฝ๏ฟฝ MCU ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝยถ๏ฟฝ๏ฟฝ๏ฟฝ
+ * - ๏ฟฝ๏ฟฝ๏ฟฝะทาง๏ฟฝูง๏ฟฝุด๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝาณ 400cm ๏ฟฝอง๏ฟฝ๏ฟฝ๏ฟฝ timeout 30ms
+ * - ๏ฟฝูต๏ฟฝ: ๏ฟฝ๏ฟฝ๏ฟฝะทาง (cm) = pulse (us) ? 0.034 / 2
+ * - 0.034 = ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝยง (cm/us), ๏ฟฝ๏ฟฝ๏ฟฝ 2 ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ-๏ฟฝ๏ฟฝับ
+ * ============================================================
+ * เนเธเธเธเธฑเธเธเธฒเธฃเธ—เธณเธเธฒเธ (Flowchart):
+ *
+ * flowchart TD
+ *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
+ *     B --> C["pinMode(TRIG, OUTPUT)"]
+ *     C --> D["pinMode(ECHO, INPUT)"]
+ *     D --> E["USART_SimpleInit(115200)"]
+ *     E --> F["while(1)"]
+ *     F --> G["digitalWrite(TRIG, LOW)"]
+ *     G --> H["Delay_Us(2)"]
+ *     H --> I["digitalWrite(TRIG, HIGH)"]
+ *     I --> J["Delay_Us(10)"]
+ *     J --> K["digitalWrite(TRIG, LOW)"]
+ *     K --> L["pulseIn(ECHO, HIGH, 30000)"]
+ *     L --> M["เธเธณเธเธงเธ“ distanceCm"]
+ *     M --> N{"pulseWidth > 0?"}
+ *     N -->|"Yes"| O["USART_Print('Distance: XX cm')"]
+ *     N -->|"No"| P["USART_Print('Out of range!')"]
+ *     O --> Q["Delay_Ms(500)"]
+ *     P --> Q
+ *     Q --> F
  * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20
-/* CH32V003 has no hardware FPU — float/double use software emulation (~800 cycles) */
-#include <SimpleHAL.h>   // รวมไลบรารี SimpleHAL ทั้งหมด
+/* CH32V003 has no hardware FPU ๏ฟฝ float/double use software emulation (~800 cycles) */
+#include <SimpleHAL.h>   // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝลบ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ SimpleHAL ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ
 
-// กำหนดชื่อขา HC-SR04
-#define TRIG_PIN  PC3   // ขาสงสัญญาณ Trigger (Output)
-#define ECHO_PIN  PC4   // ขารับสัญญาณ Echo (Input - ผาน Voltage Divider)
+// ๏ฟฝ๏ฟฝหน๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝอข๏ฟฝ HC-SR04
+#define TRIG_PIN  PC3   // ๏ฟฝ๏ฟฝสง๏ฟฝัญ๏ฟฝาณ Trigger (Output)
+#define ECHO_PIN  PC4   // ๏ฟฝ๏ฟฝ๏ฟฝับ๏ฟฝัญ๏ฟฝาณ Echo (Input - ๏ฟฝาน Voltage Divider)
 
-int main(void)           // ฟงกชันหลักของโปรแกรม
+int main(void)           // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝัน๏ฟฝ๏ฟฝัก๏ฟฝอง๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ
 {
     SystemCoreClockUpdate();
     Timer_Init();
-    pinMode(TRIG_PIN, PIN_MODE_OUTPUT); // ตั้งคาขา TRIG เปนเอาตพุต (สงพัลส)
-    pinMode(ECHO_PIN, PIN_MODE_INPUT);  // ตั้งคาขา ECHO เปนอินพุต (รับพัลส)
+    pinMode(TRIG_PIN, PIN_MODE_OUTPUT); // ๏ฟฝ๏ฟฝ้งคาข๏ฟฝ TRIG เปน๏ฟฝ๏ฟฝาต๏ฟฝุต (สง๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ)
+    pinMode(ECHO_PIN, PIN_MODE_INPUT);  // ๏ฟฝ๏ฟฝ้งคาข๏ฟฝ ECHO เปน๏ฟฝิน๏ฟฝุต (๏ฟฝับ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ)
 
-    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT); // เริ่มตน USART ที่ 115200 baud
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT); // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ USART ๏ฟฝ๏ฟฝ๏ฟฝ 115200 baud
 
-    while(1)                 // วนลูปอนันต์
+    while(1)                 // วน๏ฟฝูปอนัน๏ฟฝ๏ฟฝ
     {
-        // --- สงพัลส Trigger ไปยัง HC-SR04 ---
-        digitalWrite(TRIG_PIN, LOW);       // ตั้ง TRIG เปน LOW กอน
-        Delay_Us(2);                       // รอ 2 microseconds (ใหสัญญาณคงที่)
+        // --- สง๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ Trigger ๏ฟฝ๏ฟฝัง HC-SR04 ---
+        digitalWrite(TRIG_PIN, LOW);       // ๏ฟฝ๏ฟฝ๏ฟฝ TRIG เปน LOW ๏ฟฝอน
+        Delay_Us(2);                       // ๏ฟฝ๏ฟฝ 2 microseconds (๏ฟฝ๏ฟฝ๏ฟฝัญ๏ฟฝาณ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ)
 
-        digitalWrite(TRIG_PIN, HIGH);      // สง HIGH ไปที่ TRIG เปนเวลา 10us
-        Delay_Us(10);                      // HC-SR04 ตองการพัลส HIGH อยางนอย 10us
+        digitalWrite(TRIG_PIN, HIGH);      // สง HIGH ไปท๏ฟฝ๏ฟฝ TRIG เปน๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ 10us
+        Delay_Us(10);                      // HC-SR04 ๏ฟฝอง๏ฟฝ๏ฟฝรพ๏ฟฝ๏ฟฝ๏ฟฝ HIGH ๏ฟฝ๏ฟฝาง๏ฟฝ๏ฟฝ๏ฟฝ 10us
 
-        digitalWrite(TRIG_PIN, LOW);       // ตั้ง TRIG กลับมาเปน LOW พรอมวัดระยะ
-        // --- จบการสง Trigger ---
+        digitalWrite(TRIG_PIN, LOW);       // ๏ฟฝ๏ฟฝ๏ฟฝ TRIG ๏ฟฝ๏ฟฝับ๏ฟฝ๏ฟฝเปน LOW ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝัด๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ
+        // --- ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝสง Trigger ---
 
-        // --- วัดความกวางของพัลส Echo ---
+        // --- ๏ฟฝัด๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝาง๏ฟฝอง๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ Echo ---
         uint32_t pulseWidth = pulseIn(ECHO_PIN, HIGH, 30000);
-        // pulseIn: วัดความกวางของสัญญาณ HIGH ที่ ECHO_PIN
+        // pulseIn: ๏ฟฝัด๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝาง๏ฟฝอง๏ฟฝัญ๏ฟฝาณ HIGH ๏ฟฝ๏ฟฝ๏ฟฝ ECHO_PIN
         // timeout = 30000 microseconds (30ms)
-        // คืนคาความกวางเปน microseconds หรือ 0 ถา timeout
+        // ๏ฟฝืน๏ฟฝาค๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝางเปน microseconds ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ 0 ๏ฟฝ๏ฟฝ timeout
 
-        // --- คำนวณระยะทาง ---
-        // สูตร: distance (cm) = time (us) ? 0.034 / 2
-        // pulseWidth = เวลาที่เสียงเดินทางไป-กลับ
-        // 0.034 cm/us = ความเร็วเสียงในอากาศ
+        // --- ๏ฟฝำนวณ๏ฟฝ๏ฟฝ๏ฟฝะทาง ---
+        // ๏ฟฝูต๏ฟฝ: distance (cm) = time (us) ? 0.034 / 2
+        // pulseWidth = ๏ฟฝ๏ฟฝ๏ฟฝาท๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝยง๏ฟฝิน๏ฟฝาง๏ฟฝ-๏ฟฝ๏ฟฝับ
+        // 0.034 cm/us = ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝยง๏ฟฝ๏ฟฝาก๏ฟฝ๏ฟฝ
         float distanceCm = (float)pulseWidth * 0.034f / 2.0f;
-        // หาร 2 เพราะ pulseWidth คือเวลาไป-กลับ ตองการแคเที่ยวเดียว
+        // ๏ฟฝ๏ฟฝ๏ฟฝ 2 ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ pulseWidth ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ-๏ฟฝ๏ฟฝับ ๏ฟฝอง๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ
 
-        // --- แสดงผลทาง Serial ---
-        if (pulseWidth > 0)                // ตรวจสอบวาไมได timeout
+        // --- ๏ฟฝสด๏ฟฝ๏ฟฝลทาง Serial ---
+        if (pulseWidth > 0)                // ๏ฟฝ๏ฟฝวจ๏ฟฝอบ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ timeout
         {
-            USART_Print("Distance: ");     // สงขอความ "Distance: "
-            USART_PrintNum((int32_t)(distanceCm * 10));  // สงเลข (x10 เพื่อใหมีทศนิยม)
-            USART_Print(" cm\r\n");        // สงหนวย " cm" พรอมขึ้นบรรทัดใหม
-            // ตัวอยาง: 150  "150" cm ควรปรับปรุงใหแสดงทศนิยมโดยแบงเปนสวน Integer/Fraction
+            USART_Print("Distance: ");     // สง๏ฟฝอค๏ฟฝ๏ฟฝ๏ฟฝ "Distance: "
+            USART_PrintNum((int32_t)(distanceCm * 10));  // สง๏ฟฝลข (x10 ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝีทศน๏ฟฝ๏ฟฝ๏ฟฝ)
+            USART_Print(" cm\r\n");        // สงหน๏ฟฝ๏ฟฝ " cm" ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ้นบ๏ฟฝรทัด๏ฟฝ๏ฟฝ๏ฟฝ
+            // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝาง: 150  "150" cm ๏ฟฝ๏ฟฝรป๏ฟฝับ๏ฟฝ๏ฟฝุง๏ฟฝ๏ฟฝ๏ฟฝสด๏ฟฝ๏ฟฝศน๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝแบงเปน๏ฟฝวน Integer/Fraction
         }
-        else                               // ถา timeout (pulseWidth == 0)
+        else                               // ๏ฟฝ๏ฟฝ timeout (pulseWidth == 0)
         {
-            USART_Print("Out of range!\r\n"); // แจงวาเกินระยะที่วัดได
+            USART_Print("Out of range!\r\n"); // แจง๏ฟฝ๏ฟฝ๏ฟฝิน๏ฟฝ๏ฟฝ๏ฟฝะท๏ฟฝ๏ฟฝ๏ฟฝัด๏ฟฝ
         }
 
-        Delay_Ms(500);         // หนวง 500ms กอนวัดครั้งถัดไป
-                               // ลดความถี่เพือให HC-SR04 ทำงานไดคงที่
-    }                            // สิ้นสุด while loop
-}                                // สิ้นสุดฟงกชัน main
+        Delay_Ms(500);         // หนวง 500ms ๏ฟฝอน๏ฟฝัด๏ฟฝ๏ฟฝ๏ฟฝ้งถัด๏ฟฝ
+                               // ลด๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ HC-SR04 ๏ฟฝำงานไดค๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ
+    }                            // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝุด while loop
+}                                // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝุด๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝัน main

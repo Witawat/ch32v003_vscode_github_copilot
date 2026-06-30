@@ -26,6 +26,27 @@
  * Some devices require specific SPI mode. W25Qxx
  *          works with MODE0 or MODE3.
  * ============================================================
+ * ผังการทำงาน (Flowchart):
+ *
+ * flowchart TD
+ *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
+ *     B --> C["USART_SimpleInit(115200)"]
+ *     C --> D["pinMode(CS, OUTPUT)"]
+ *     D --> E["SPI_SetCSPin(PC4)"]
+ *     E --> F["while(1)"]
+ *     F --> G["SPI_SimpleInit(125kHz)"]
+ *     G --> H["readJedec()"]
+ *     H --> I["Print JEDEC @125kHz"]
+ *     I --> J["SPI_SetSpeed(8MHz)"]
+ *     J --> K["readJedec()"]
+ *     K --> L["Print JEDEC @8MHz"]
+ *     L --> M["SPI_SetBitOrder(MSB_FIRST)"]
+ *     M --> N["Read and print MSB"]
+ *     N --> O["SPI_SetBitOrder(LSB_FIRST)"]
+ *     O --> P["Read and print LSB"]
+ *     P --> Q["Delay_Ms(5000)"]
+ *     Q --> F
+ * ============================================================
  */
 
 #if CH32V003_IS_SOP8

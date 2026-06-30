@@ -31,10 +31,29 @@
  *   3. OPAMP Buffer Mode มีข้อจำกัดเรื่อง Input Common Mode Range
  *      โดยทั่วไป 0V ถึง VDD-0.7V
  * ============================================================
+ * ผังการทำงาน (Flowchart):
+ *
+ * flowchart TD
+ *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
+ *     B --> C["USART_SimpleInit()"]
+ *     C --> D["pinMode(PD2, INPUT)"]
+ *     D --> E["ADC_SimpleInit()"]
+ *     E --> F["OPAMP_SimpleInit(VOLTAGE_FOLLOWER)"]
+ *     F --> G["OPAMP_Enable()"]
+ *     G --> H{"OPAMP_IsEnabled()?"}
+ *     H -->|"No"| I["USART_Print(OPAMP init failed)"]
+ *     I --> J["while(1)"]
+ *     H -->|"Yes"| K["while(1)"]
+ *     K --> L["ADC_Read(ADC_CH_PD2)"]
+ *     L --> M["Calculate voltage = adcVal * 3.3 / 4095"]
+ *     M --> N["USART_Print(OPAMP out via ADC: X.XXV)"]
+ *     N --> O["Delay_Ms(300)"]
+ *     O --> K
+ * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20
-/* CH32V003 has no hardware FPU � float/double use software emulation (~800 cycles) */
+/* CH32V003 has no hardware FPU � float/double use software emulation (~800 cycles) */
 #include <SimpleHAL.h>
 
 int main(void)

@@ -26,6 +26,23 @@
  * - ต้องแน่ใจว่า src และ dst ไม่ทับซ้อนกัน (overlap) เพราะ DMA M2M อาจไม่รองรับ
  * - DMA_MemSet ใช้ DMA ในโหมด M2P (เขียนค่าเดียวกันทั้งหมด)
  * ============================================================
+ * ผังการทำงาน (Flowchart):
+ *
+ * flowchart TD
+ *     A["SystemCoreClockUpdate()"] --> B["USART_SimpleInit()"]
+ *     B --> C["for(src[i] = i + 1)"]
+ *     C --> D["DMA_MemCopy(dst, src, 100)"]
+ *     D --> E["Verify dst[i] == src[i]"]
+ *     E --> F{"copy_ok?"}
+ *     F -->|"Yes"| G["USART_Print(MemCopy OK)"]
+ *     F -->|"No"| H["DMA_MemSet(dst, 0xFF, 100)"]
+ *     G --> H
+ *     H --> I["Verify dst[i] == 0xFF"]
+ *     I --> J{"set_ok?"}
+ *     J -->|"Yes"| K["USART_Print(MemSet OK)"]
+ *     J -->|"No"| L["while(1)"]
+ *     K --> L
+ * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20

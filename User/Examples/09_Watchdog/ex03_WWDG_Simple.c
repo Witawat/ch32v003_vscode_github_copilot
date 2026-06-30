@@ -1,11 +1,11 @@
 /**
  * ============================================================
  * ex03_WWDG_Simple.c
- * โปรแกรมสาธิต WWDG (Window Watchdog) แบบง่าย
+ * ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝาธิต WWDG (Window Watchdog) แบบ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ
  * (Simple WWDG demonstration)
  * ============================================================
  *
- * แผนผังวงจร (Circuit Diagram):
+ * แผน๏ฟฝังวง๏ฟฝ๏ฟฝ (Circuit Diagram):
  *
  *   CH32V003
  *   ------
@@ -14,12 +14,12 @@
  *   PD5 (TX)  ----> USB-UART (RX)
  *   PD6 (RX)  <---- USB-UART (TX)
  *
- *   ไม่ต้องใช้อุปกรณ์อื่นเพิ่ม
+ *   ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝอง๏ฟฝ๏ฟฝ๏ฟฝุป๏ฟฝรณ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ
  *
  * ============================================================
- * ผลลัพธ์ที่คาดหวัง (Expected Results):
- *   LED ติดค้าง  WWDG รีเฟรช 5 ครั้ง  หยุดรีเฟรช  MCU รีเซ็ต  เริ่มใหม่
- *   USART แสดง:
+ * ๏ฟฝ๏ฟฝ๏ฟฝัพ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝาด๏ฟฝ๏ฟฝัง (Expected Results):
+ *   LED ๏ฟฝิด๏ฟฝ๏ฟฝาง  WWDG ๏ฟฝ๏ฟฝ๏ฟฝรช 5 ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ  ๏ฟฝ๏ฟฝุด๏ฟฝ๏ฟฝ๏ฟฝรช  MCU ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ  ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ
+ *   USART ๏ฟฝสด๏ฟฝ:
  *   "--- WWDG Simple ---"
  *   "Refresh #1: feeding WWDG"
  *   "Refresh #2: feeding WWDG"
@@ -27,63 +27,79 @@
  *   "Refresh #4: feeding WWDG"
  *   "Refresh #5: feeding WWDG"
  *   "Stop refreshing! Reset in ~5.4ms..."
- *   (MCU reset  ข้อความซ้ำอีกครั้ง)
+ *   (MCU reset  ๏ฟฝ๏ฟฝอค๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝีก๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ)
  * ============================================================
- * คำเตือน (WARNINGS):
- *   WWDG มีข้อจำกัดเรื่อง Window: รีเฟรชเร็วเกินไป (counter > window)
- *     ก็ทำให้รีเซ็ตเช่นกัน! ต้องรีเฟรชเมื่อ window < counter < 0x40
+ * ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝอน (WARNINGS):
+ *   WWDG ๏ฟฝีข๏ฟฝอจำกัด๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝอง Window: ๏ฟฝ๏ฟฝ๏ฟฝรช๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝิน๏ฟฝ (counter > window)
+ *     ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ่นกัน! ๏ฟฝ๏ฟฝอง๏ฟฝ๏ฟฝ๏ฟฝรช๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ window < counter < 0x40
  *     (WWDG has WINDOW constraint: refresh too EARLY also causes reset!)
- *   เวลา timeout สูงสุด ~87ms ที่ prescaler = 8
+ *   ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ timeout ๏ฟฝูง๏ฟฝุด ~87ms ๏ฟฝ๏ฟฝ๏ฟฝ prescaler = 8
  *     (Max timeout ~87ms at prescaler 8)
+ * ============================================================
+ * เธเธฑเธเธเธฒเธฃเธ—เธณเธเธฒเธ (Flowchart):
+ *
+ * flowchart TD
+ *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
+ *     B --> C["USART_SimpleInit()"]
+ *     C --> D["pinMode(PC0, OUTPUT)"]
+ *     D --> E["WWDG_SimpleInit(127, 80)"]
+ *     E --> F["digitalWrite(PC0, HIGH)"]
+ *     F --> G["for refreshCount=1 to 5"]
+ *     G --> H["Delay_Ms(1)"]
+ *     H --> I["WWDG_Refresh(127)"]
+ *     I --> J{"refreshCount <= 5?"}
+ *     J -->|"Yes"| G
+ *     J -->|"No"| K["Stop refreshing"]
+ *     K --> L["while(1) เธฃเธญ WWDG reset"]
  * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20
-#include <SimpleHAL.h>                      // รวมไลบรารี SimpleHAL (Include SimpleHAL library)
+#include <SimpleHAL.h>                      // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝลบ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ SimpleHAL (Include SimpleHAL library)
 
 // --------------------------------------------------------------------------
-// ฟังก์ชันหลัก (Main function)
+// ๏ฟฝัง๏ฟฝ๏ฟฝัน๏ฟฝ๏ฟฝัก (Main function)
 // --------------------------------------------------------------------------
 
 int main(void)
 {
     SystemCoreClockUpdate();
     Timer_Init();
-    // ตัวแปรนับรอบรีเฟรช (Refresh counter)
-    uint8_t refreshCount = 0;                // จำนวนครั้งที่รีเฟรช WWDG (Number of WWDG refreshes)
+    // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝรนับ๏ฟฝอบ๏ฟฝ๏ฟฝ๏ฟฝรช (Refresh counter)
+    uint8_t refreshCount = 0;                // ๏ฟฝำนวน๏ฟฝ๏ฟฝ๏ฟฝ้งท๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝรช WWDG (Number of WWDG refreshes)
 
-    // ---- ส่วนเริ่มต้น (Initialization) ----
-    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);                      // เริ่มต้นพอร์ตอนุกรม (Initialize USART)
-    pinMode(PC0, PIN_MODE_OUTPUT);          // กำหนด PC0 เป็นเอาต์พุต (Set PC0 as PIN_MODE_OUTPUT)
-    digitalWrite(PC0, LOW);                 // เริ่มต้น LED ดับ (Initialize LED off)
+    // ---- ๏ฟฝ๏ฟฝวน๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ (Initialization) ----
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);                      // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ้นพ๏ฟฝ๏ฟฝ๏ฟฝอนุก๏ฟฝ๏ฟฝ (Initialize USART)
+    pinMode(PC0, PIN_MODE_OUTPUT);          // ๏ฟฝ๏ฟฝหน๏ฟฝ PC0 ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝาต๏ฟฝุต (Set PC0 as PIN_MODE_OUTPUT)
+    digitalWrite(PC0, LOW);                 // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ LED ๏ฟฝับ (Initialize LED off)
 
-    USART_Print("--- WWDG Simple ---\r\n"); // แสดงหัวข้อ (Display title)
+    USART_Print("--- WWDG Simple ---\r\n"); // ๏ฟฝสด๏ฟฝ๏ฟฝ๏ฟฝวข๏ฟฝ๏ฟฝ (Display title)
 
-    // ---- เริ่มต้น WWDG (Initialize WWDG) ----
+    // ---- ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ WWDG (Initialize WWDG) ----
     // WWDG_SimpleInit(127, 80)
-    // counter = 127 (ค่าเริ่มต้น สูงสุด)  (initial counter, max value)
-    // window  = 80  (ต้องรีเฟรชเมื่อ counter < 80)  (must refresh when counter < 80)
-    // prescaler ใช้ค่าเริ่มต้น = 8
-    WWDG_SimpleInit(0x7F, 80);               // เริ่ม WWDG: counter=127, window=80 (Init WWDG)
+    // counter = 127 (๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ ๏ฟฝูง๏ฟฝุด)  (initial counter, max value)
+    // window  = 80  (๏ฟฝ๏ฟฝอง๏ฟฝ๏ฟฝ๏ฟฝรช๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ counter < 80)  (must refresh when counter < 80)
+    // prescaler ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ = 8
+    WWDG_SimpleInit(0x7F, 80);               // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ WWDG: counter=127, window=80 (Init WWDG)
 
-    digitalWrite(PC0, HIGH);                // ติด LED แสดงว่าทำงาน (Turn LED on to indicate active)
+    digitalWrite(PC0, HIGH);                // ๏ฟฝิด LED ๏ฟฝสด๏ฟฝ๏ฟฝ๏ฟฝาทำงาน (Turn LED on to indicate active)
 
-    USART_Print("WWDG started: counter=127, window=80\r\n");  // แจ้งค่าเริ่มต้น (Notify init values)
+    USART_Print("WWDG started: counter=127, window=80\r\n");  // ๏ฟฝ้งค๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ (Notify init values)
 
-    // ---- รีเฟรช WWDG 5 ครั้ง (Refresh WWDG 5 times) ----
-    for (refreshCount = 1; refreshCount <= 5; refreshCount++) {  // วน 5 รอบ (Loop 5 times)
-        // หน่วงเวลาเล็กน้อยเพื่อให้ counter ลดลงถึงช่วง window (Small delay to let counter enter window range)
-        Delay_Ms(1);                         // หน่วง 1ms ให้ counter ลดลง (Delay 1ms for counter to decrease)
+    // ---- ๏ฟฝ๏ฟฝ๏ฟฝรช WWDG 5 ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ (Refresh WWDG 5 times) ----
+    for (refreshCount = 1; refreshCount <= 5; refreshCount++) {  // วน 5 ๏ฟฝอบ (Loop 5 times)
+        // หน๏ฟฝวง๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ็กน๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ counter ลดลง๏ฟฝึง๏ฟฝ๏ฟฝวง window (Small delay to let counter enter window range)
+        Delay_Ms(1);                         // หน๏ฟฝวง 1ms ๏ฟฝ๏ฟฝ๏ฟฝ counter ลดลง (Delay 1ms for counter to decrease)
 
-        WWDG_Refresh(0x7F);                  // รีเฟรช WWDG (Refresh WWDG)
-        USART_Print("Refresh #"); USART_PrintNum(refreshCount); USART_Print(": feeding WWDG\r\n");  // แจ้งรอบที่รีเฟรช (Notify refresh round)
+        WWDG_Refresh(0x7F);                  // ๏ฟฝ๏ฟฝ๏ฟฝรช WWDG (Refresh WWDG)
+        USART_Print("Refresh #"); USART_PrintNum(refreshCount); USART_Print(": feeding WWDG\r\n");  // ๏ฟฝ๏ฟฝ๏ฟฝอบ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝรช (Notify refresh round)
     }
 
-    // ---- หยุดรีเฟรช — WWDG จะรีเซ็ต MCU (Stop refreshing — WWDG will reset MCU) ----
-    USART_Print("Stop refreshing! Reset in ~5.4ms...\r\n");  // แจ้งว่าหยุดรีเฟรช (Notify stop refreshing)
+    // ---- ๏ฟฝ๏ฟฝุด๏ฟฝ๏ฟฝ๏ฟฝรช ๏ฟฝ WWDG ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ MCU (Stop refreshing ๏ฟฝ WWDG will reset MCU) ----
+    USART_Print("Stop refreshing! Reset in ~5.4ms...\r\n");  // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝุด๏ฟฝ๏ฟฝ๏ฟฝรช (Notify stop refreshing)
 
-    // WWDG จะลดค่าลงเรื่อย ๆ เมื่อถึง 0x3F (63) จะรีเซ็ต (WWDG decrements; when reaching 0x3F (63), resets)
-    while (1) {                              // รอ WWDG รีเซ็ต (Wait for WWDG reset)
-        // ไม่มีการ WWDG_Feed() อีก (No more WWDG_Feed() calls)
+    // WWDG ๏ฟฝ๏ฟฝลด๏ฟฝ๏ฟฝ๏ฟฝลง๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ ๏ฟฝ ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝอถึง 0x3F (63) ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ (WWDG decrements; when reaching 0x3F (63), resets)
+    while (1) {                              // ๏ฟฝ๏ฟฝ WWDG ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ (Wait for WWDG reset)
+        // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝีก๏ฟฝ๏ฟฝ WWDG_Feed() ๏ฟฝีก (No more WWDG_Feed() calls)
     }
 }

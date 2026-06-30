@@ -33,6 +33,30 @@
  * - ไม่ควรใช้ timer ค่า 0ms (จะทำงานไม่ถูกต้อง)
  * - ถ้าใช้ repeat=0 ต้อง Start_Timer ใหม่ทุกครั้งที่หมดเวลา
  * ============================================================
+ * แผนผังการทำงาน (Flowchart):
+ *
+ * flowchart TD
+ *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
+ *     B --> C["USART_SimpleInit(115200)"]
+ *     C --> D["pinMode(PC0, OUTPUT), pinMode(PC1, INPUT_PULLUP)"]
+ *     D --> E["Start_Timer(led_timer, 500, 1)"]
+ *     E --> F["while(1)"]
+ *     F --> G{"digitalRead(PC1) == LOW?"}
+ *     G -->|"Yes"| H{"debounce expired && btn_pending?"}
+ *     H -->|"Yes"| I["toggle timer start/stop + Print"]
+ *     I --> F
+ *     H -->|"No"| F
+ *     G -->|"No"| J["check + reset debounce"]
+ *     J --> K{"timer_running?"}
+ *     K -->|"Yes"| L{"Is_Timer_Expired(led_timer)?"}
+ *     L -->|"Yes"| M["toggle LED + Print"]
+ *     M --> F
+ *     L -->|"No"| F
+ *     K -->|"No"| N{"ELAPSED_TIME >= 100?"}
+ *     N -->|"Yes"| O["Print 'loop'"]
+ *     O --> F
+ *     N -->|"No"| F
+ * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20

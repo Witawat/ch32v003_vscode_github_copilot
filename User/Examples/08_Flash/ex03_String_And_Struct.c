@@ -28,6 +28,28 @@
  *   ⚠ ความยาวสตริงสูงสุด = FLASH_MAX_STRING_LENGTH (60 ตัวอักษร รวม null)
  *     (Max string length = FLASH_MAX_STRING_LENGTH (60 chars including null))
  * ============================================================
+ * ผังการทำงาน (Flowchart):
+ *
+ * flowchart TD
+ *     A["SystemCoreClockUpdate()"] --> B["USART_SimpleInit()"]
+ *     B --> C["Flash_Init()"]
+ *     C --> D["Flash_ErasePage(255)"]
+ *     D --> E["Flash_WriteString(Hello World)"]
+ *     E --> F{"result == 0?"}
+ *     F -->|"No"| G["ERROR: halt"]
+ *     F -->|"Yes"| H["Flash_ReadString(strRead)"]
+ *     H --> I{"result == 0?"}
+ *     I -->|"No"| G
+ *     I -->|"Yes"| J["USART_Print(strRead)"]
+ *     J --> K["Flash_WriteStruct(dataWrite)"]
+ *     K --> L{"result == 0?"}
+ *     L -->|"No"| G
+ *     L -->|"Yes"| M["Flash_ReadStruct(dataRead)"]
+ *     M --> N{"result == 0?"}
+ *     N -->|"No"| G
+ *     N -->|"Yes"| O["USART_Print(dataRead)"]
+ *     O --> P["while(1)"]
+ * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20

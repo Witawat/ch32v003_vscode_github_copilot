@@ -33,6 +33,24 @@
  *   - ตรวจสอบให้ Baud Rate ตรงกัน (115200)
  *   - ต่อสาย Cross-connect เหมือน ex01
  * ============================================================
+ * ผังการทำงาน (Flowchart):
+ *
+ * flowchart TD
+ *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
+ *     B --> C["USART_SimpleInit(115200)"]
+ *     C --> D["while(1)"]
+ *     D --> E["USART_Print(Decimal: )"]
+ *     E --> F["USART_PrintNum(12345)"]
+ *     F --> G["USART_Print(Hex: 0x)"]
+ *     G --> H["USART_PrintHex(12345)"]
+ *     H --> I["USART_Print(Negative: )"]
+ *     I --> J["USART_PrintNum(-999)"]
+ *     J --> K["USART_Print(Byte: 0x)"]
+ *     K --> L["USART_WriteByte(0x55)"]
+ *     L --> M["USART_Print(\\r\\n)"]
+ *     M --> N["Delay_Ms(2000)"]
+ *     N --> D
+ * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20

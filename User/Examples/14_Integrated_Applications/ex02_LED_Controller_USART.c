@@ -22,6 +22,29 @@
  *   - ไม่ใช้ standard library string functions
  *   - Timer ต้องไม่ blocking การรับ USART
  * ============================================================
+ * ผังการทำงาน (Flowchart):
+ *
+ * flowchart TD
+ *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
+ *     B --> C["PWM_Init + pinMode + USART_Init"]
+ *     C --> D["while(1)"]
+ *     D --> E{"USART_Available()"}
+ *     E -->|"Yes"| F["Read char"]
+ *     F --> G{"CR or LF?"}
+ *     G -->|"No"| H["Buffer char"]
+ *     H --> E
+ *     G -->|"Yes"| I["ProcessCommand()"]
+ *     I --> J{"Command?"}
+ *     J -->|"LED1=x"| K["PWM_Write duty"]
+ *     J -->|"LED2=x"| L["digitalWrite ON/OFF"]
+ *     J -->|"BLINK=x"| M["Set interval"]
+ *     J -->|"STATUS"| N["Print status"]
+ *     D --> O{"blinkInterval > 0?"}
+ *     O -->|"Yes"| P{"Timer expired?"}
+ *     P -->|"Yes"| Q["Toggle LED2"]
+ *     D --> R["Button debounce state machine"]
+ *     R --> D
+ * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20

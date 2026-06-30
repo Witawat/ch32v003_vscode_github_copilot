@@ -28,6 +28,24 @@
  * - อย่าเรียก DMA_WaitComplete() ใน callback เพราะจะ deadlock
  * - DMA_CH1 ถูกใช้ในตัวอย่างนี้ สามารถเปลี่ยนเป็น channel อื่นได้
  * ============================================================
+ * ผังการทำงาน (Flowchart):
+ *
+ * flowchart TD
+ *     A["SystemCoreClockUpdate()"] --> B["USART_SimpleInit()"]
+ *     B --> C["pinMode(PC0, OUTPUT)"]
+ *     C --> D["for(src[i] = i & 0xFF)"]
+ *     D --> E["DMA_SetTransferCompleteCallback(DMA_CH1, callback)"]
+ *     E --> F["digitalWrite(PC0, HIGH)"]
+ *     F --> G["USART_Print(Copy started)"]
+ *     G --> H["DMA_MemCopyAsync(DMA_CH1, dst, src, 256)"]
+ *     H --> I["while(!transfer_done) __NOP()"]
+ *     I --> J["Callback: digitalWrite(PC0, LOW)"]
+ *     J --> K["Verify dst[i] == src[i]"]
+ *     K --> L{"Match?"}
+ *     L -->|"Yes"| M["USART_Print(Async MemCopy verified)"]
+ *     L -->|"No"| N["while(1)"]
+ *     M --> N
+ * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20

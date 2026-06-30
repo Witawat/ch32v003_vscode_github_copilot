@@ -32,6 +32,24 @@
  * - ใช้ PIN_MODE_INPUT_PULLUP หาก ไม่ต้องการใช้ตัวต้านทานภายนอก
  * - ตรวจสอบ Debounce ด้วย ELAPSED_TIME แบบ non-blocking
  * ============================================================
+ * แผนผังการทำงาน (Flowchart):
+ *
+ * flowchart TD
+ *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
+ *     B --> C["pinMode(PC0, OUTPUT)"]
+ *     C --> D["pinMode(PC1, INPUT_PULLUP)"]
+ *     D --> E["USART_SimpleInit(115200)"]
+ *     E --> F["while(1)"]
+ *     F --> G{"ELAPSED_TIME >= 50?"}
+ *     G -->|"Yes"| H["digitalRead(PC1)"]
+ *     H --> I["digitalWrite(PC0, !buttonState)"]
+ *     I --> J{"buttonState == LOW?"}
+ *     J -->|"Yes"| K["USART_Print('Pressed!')"]
+ *     J -->|"No"| L["USART_Print('Released!')"]
+ *     K --> F
+ *     L --> F
+ *     G -->|"No"| F
+ * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20

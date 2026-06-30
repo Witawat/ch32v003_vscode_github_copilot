@@ -33,6 +33,22 @@
  * - ต้องเรียก SPI_SimpleInit() ก่อน DMA_SPI_Init()
  * - ถ้าใช้ loopback ต้องต่อ jumper ระหว่าง MOSI และ MISO
  * ============================================================
+ * ผังการทำงาน (Flowchart):
+ *
+ * flowchart TD
+ *     A["SystemCoreClockUpdate()"] --> B["USART_SimpleInit()"]
+ *     B --> C["SPI_SimpleInit(SPI_MODE0, 1MHz)"]
+ *     C --> D["DMA_SPI_Init(DMA_CH4, DMA_CH5)"]
+ *     D --> E["SPI_SetCS(0)"]
+ *     E --> F["DMA_SPI_TransferBuffer(jedec_cmd, jedec_rx, 4)"]
+ *     F --> G["SPI_SetCS(1)"]
+ *     G --> H["USART_Print(JEDEC ID)"]
+ *     H --> I["SPI_SetCS(0)"]
+ *     I --> J["DMA_SPI_TransferBuffer(lb_tx, lb_rx, 4)"]
+ *     J --> K["SPI_SetCS(1)"]
+ *     K --> L["USART_Print(loopback data)"]
+ *     L --> M["while(1)"]
+ * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20

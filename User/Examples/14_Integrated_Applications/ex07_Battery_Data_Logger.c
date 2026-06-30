@@ -16,10 +16,31 @@
  *   - PWR_WasStandbyWakeup() — รู้ว่าตื่นจาก standby
  *
  * @note ต้องต่อ VDD เข้ากับแบตเตอรี่ (ไม่ใช่ USB) ถึงจะเห็นผล Standby
+ * ============================================================
+ * ผังการทำงาน (Flowchart):
+ *
+ * flowchart TD
+ *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
+ *     B --> C["Flash_Init + ADC_Init"]
+ *     C --> D{"Standby wakeup?"}
+ *     D -->|"Yes"| E["Clear flag + print"]
+ *     D -->|"No"| F["Cold start print"]
+ *     E --> G["ADC_GetVDD()"]
+ *     F --> G
+ *     G --> H["ADC_Read() sensor"]
+ *     H --> I["Flash_LoadConfig()"]
+ *     I --> J["Update + Save log"]
+ *     J --> K["Print sample info"]
+ *     K --> L{"Battery < 20%?"}
+ *     L -->|"Yes"| M["Print warning"]
+ *     M --> N["PWR_Standby(60000)"]
+ *     L -->|"No"| N
+ *     N --> O["System reset on wake"]
+ * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20
-/* CH32V003 has no hardware FPU � float/double use software emulation (~800 cycles) */
+/* CH32V003 has no hardware FPU � float/double use software emulation (~800 cycles) */
 #include "SimpleHAL.h"
 
 typedef struct {

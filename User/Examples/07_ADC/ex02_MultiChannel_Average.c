@@ -26,6 +26,19 @@
  * ADC_ReadMultiple reads channels sequentially, not
  *          simultaneously — time skew between channels exists.
  * ============================================================
+ * ผังการทำงาน (Flowchart):
+ *
+ * flowchart TD
+ *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
+ *     B --> C["USART_SimpleInit(115200)"]
+ *     C --> D["ADC_SimpleInit()"]
+ *     D --> E["while(1)"]
+ *     E --> F["ADC_ReadMultiple(ch, values, 3)"]
+ *     F --> G["Print CH0/CH1/CH2 values"]
+ *     G --> H["Print Percent for each"]
+ *     H --> I["Delay_Ms(500)"]
+ *     I --> E
+ * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20

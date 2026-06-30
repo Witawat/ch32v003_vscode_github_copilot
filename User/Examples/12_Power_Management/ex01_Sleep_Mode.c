@@ -27,6 +27,24 @@
  *   2. Interrupt ทั้งหมดสามารถปลุก CPU จากโหมด Sleep ได้
  *   3. ต้องกำหนดค่า EXTI บนขา PC1 ก่อนเข้าสู่โหมด Sleep เพื่อให้สามารถปลุกได้
  * ============================================================
+ * ผังการทำงาน (Flowchart):
+ *
+ * flowchart TD
+ *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
+ *     B --> C["pinMode(PC0, OUTPUT)"]
+ *     C --> D["pinMode(PC1, INPUT_PULLUP)"]
+ *     D --> E["USART_SimpleInit()"]
+ *     E --> F["attachInterrupt(PC1, WakeupCallback, RISING)"]
+ *     F --> G["digitalWrite(PC0, HIGH)"]
+ *     G --> H["USART_Print(Entering sleep)"]
+ *     H --> I["while(1)"]
+ *     I --> J["PWR_EnterSleepMode(PWR_ENTRY_WFI)"]
+ *     J --> K["USART_Print(Woke up)"]
+ *     K --> L["Blink LED 3 times"]
+ *     L --> M["USART_Print(Entering sleep)"]
+ *     M --> N["Delay_Ms(100)"]
+ *     N --> I
+ * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20

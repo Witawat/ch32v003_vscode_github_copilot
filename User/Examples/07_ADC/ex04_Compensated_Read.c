@@ -30,10 +30,24 @@
  * Compensated read uses Vrefint — requires external
  *          Vref measurement for calibration.
  * ============================================================
+ * ผังการทำงาน (Flowchart):
+ *
+ * flowchart TD
+ *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
+ *     B --> C["USART_SimpleInit(115200)"]
+ *     C --> D["ADC_SimpleInit()"]
+ *     D --> E["while(1)"]
+ *     E --> F["ADC_Read(ADC_CH_PD2)"]
+ *     F --> G["ADC_ReadVrefInt()"]
+ *     G --> H["ADC_ReadVoltageCompensated(PD2)"]
+ *     H --> I["Print Raw and Compensated"]
+ *     I --> J["Delay_Ms(500)"]
+ *     J --> E
+ * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20
-/* CH32V003 has no hardware FPU � float/double use software emulation (~800 cycles) */
+/* CH32V003 has no hardware FPU � float/double use software emulation (~800 cycles) */
 #include <SimpleHAL.h>
 
 #define ADC_PIN PD2

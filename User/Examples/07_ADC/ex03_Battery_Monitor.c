@@ -26,10 +26,26 @@
  * ADC_GetVDD() calculates VDD from internal Vref
  *          (≈1.2V). This method only works on CH32V003.
  * ============================================================
+ * ผังการทำงาน (Flowchart):
+ *
+ * flowchart TD
+ *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
+ *     B --> C["USART_SimpleInit(115200)"]
+ *     C --> D["ADC_SimpleInit()"]
+ *     D --> E["while(1)"]
+ *     E --> F["ADC_Read(ADC_CH_PD2)"]
+ *     F --> G["ADC_GetVDD()"]
+ *     G --> H["ADC_ToVoltage(adcVal, vDD)"]
+ *     H --> I["battVoltage = vDivOut * 2"]
+ *     I --> J["ADC_GetBatteryPercent(vBatt, 3.0, 4.2)"]
+ *     J --> K["Print VDD and Battery %"]
+ *     K --> L["Delay_Ms(1000)"]
+ *     L --> E
+ * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20
-/* CH32V003 has no hardware FPU � float/double use software emulation (~800 cycles) */
+/* CH32V003 has no hardware FPU � float/double use software emulation (~800 cycles) */
 #include <SimpleHAL.h>
 
 #define BAT_PIN     PD2

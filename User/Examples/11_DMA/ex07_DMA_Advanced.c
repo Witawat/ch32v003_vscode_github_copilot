@@ -3,6 +3,33 @@
  * @brief DMA_SimpleInit + DMA_Stop + DMA_Reset + ErrorCallback + HalfTransferCallback
  *
  * สาธิต: Memory-to-Memory DMA พร้อม custom config, callbacks, และ lifecycle control
+ *
+ * ============================================================
+ * ผังการทำงาน (Flowchart):
+ *
+ * flowchart TD
+ *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
+ *     B --> C["USART_SimpleInit()"]
+ *     C --> D["for(src[i] = i)"]
+ *     D --> E["DMA_SimpleInit(&cfg) custom config"]
+ *     E --> F["DMA_SetTransferCompleteCallback(DMA_CH1, on_complete)"]
+ *     F --> G["DMA_SetHalfTransferCallback(DMA_CH1, on_half)"]
+ *     G --> H["DMA_EnableInterrupt(DMA_CH1, 1)"]
+ *     H --> I["DMA_Start(DMA_CH1)"]
+ *     I --> J["while(!transfer_done) wait"]
+ *     J --> K{"half_done?"}
+ *     K -->|"Yes"| L["USART_Print(Half-transfer triggered)"]
+ *     K -->|"No"| M["USART_Print(Half NOT triggered)"]
+ *     L --> N["Verify dst[i] == i"]
+ *     M --> N
+ *     N --> O{"Data OK?"}
+ *     O -->|"Yes"| P["USART_Print(Data OK)"]
+ *     O -->|"No"| Q["USART_Print(Data MISMATCH)"]
+ *     P --> R["DMA_Stop(DMA_CH1)"]
+ *     Q --> R
+ *     R --> S["DMA_Reset(DMA_CH1)"]
+ *     S --> T["while(1) Delay_Ms(1000)"]
+ * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20

@@ -33,6 +33,34 @@
  *   3. เมื่อสัญญาณใกล้เคียง Threshold อาจเกิดการสั่น (Oscillation)
  *      แนะนำให้เพิ่ม Positive Feedback (Hysteresis) ด้วย R เพิ่ม
  * ============================================================
+ * ผังการทำงาน (Flowchart):
+ *
+ * flowchart TD
+ *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
+ *     B --> C["USART_SimpleInit()"]
+ *     C --> D["pinMode(PD2, INPUT)"]
+ *     D --> E["ADC_SimpleInit()"]
+ *     E --> F["OPAMP_ConfigComparator(CHP0, CHN0)"]
+ *     F --> G["OPAMP_Enable()"]
+ *     G --> H{"OPAMP_IsEnabled()?"}
+ *     H -->|"No"| I["USART_Print(OPAMP not available)"]
+ *     I --> J["while(1)"]
+ *     H -->|"Yes"| K["while(1)"]
+ *     K --> L["ADC_Read(ADC_CH_PD2)"]
+ *     L --> M{"adcVal > 2047?"}
+ *     M -->|"Yes"| N["compOutput = 1"]
+ *     M -->|"No"| O["compOutput = 0"]
+ *     N --> P{"compOutput && !lastOutput?"}
+ *     O --> P
+ *     P -->|"Yes"| Q["USART_Print(Signal > Threshold -> HIGH)"]
+ *     P -->|"No"| R{"!compOutput && lastOutput?"}
+ *     R -->|"Yes"| S["USART_Print(Signal < Threshold -> LOW)"]
+ *     Q --> T["lastOutput = compOutput"]
+ *     S --> T
+ *     R -->|"No"| T
+ *     T --> U["Delay_Ms(100)"]
+ *     U --> K
+ * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20
