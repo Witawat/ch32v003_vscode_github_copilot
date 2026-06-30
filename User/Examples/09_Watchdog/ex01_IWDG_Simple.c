@@ -1,11 +1,11 @@
 /**
  * ============================================================
  * ex01_IWDG_Simple.c
- * ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ò¸Ôµ IWDG (Independent Watchdog) áººï¿½ï¿½ï¿½ï¿½
+ * â»Ãá¡ÃÁÊÒ¸Ôµ IWDG (Independent Watchdog) áºº§èÒÂ
  * (Simple IWDG demonstration)
  * ============================================================
  *
- * á¼¹ï¿½Ñ§Ç§ï¿½ï¿½ (Circuit Diagram):
+ * á¼¹¼Ñ§Ç§¨Ã (Circuit Diagram):
  *
  *   CH32V003
  *   ------
@@ -14,92 +14,74 @@
  *   PD5 (TX)  ----> USB-UART (RX)
  *   PD6 (RX)  <---- USB-UART (TX)
  *
- *   ï¿½ï¿½ï¿½ï¿½Í§ï¿½ï¿½ï¿½Ø»ï¿½Ã³ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+ *   äÁèµéÍ§ãªéÍØ»¡Ã³ìÍ×è¹à¾ÔèÁ
  *
  * ============================================================
- * ï¿½ï¿½ï¿½Ñ¾ï¿½ï¿½ï¿½ï¿½Ò´ï¿½ï¿½Ñ§ (Expected Results):
- *   LED ï¿½ï¿½Ð¾ï¿½Ôº 3 ï¿½ï¿½ï¿½ï¿½ (IWDG ï¿½Ù¡ feed ï¿½Ø¡ï¿½ï¿½ï¿½ï¿½)
- *    ï¿½ï¿½Ø´ feed  MCU ï¿½ï¿½ï¿½ï¿½  ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½  ï¿½ï¿½Ð¾ï¿½Ôº 3 ï¿½ï¿½ï¿½ï¿½  Ç¹ï¿½ï¿½ï¿½
- *   USART ï¿½Ê´ï¿½:
+ * ¼ÅÅÑ¾¸ì·Õè¤Ò´ËÇÑ§ (Expected Results):
+ *   LED ¡ÃÐ¾ÃÔº 3 ¤ÃÑé§ (IWDG ¶Ù¡ feed ·Ø¡¤ÃÑé§)
+ *    ËÂØ´ feed  MCU ÃÕà«çµ  àÃÔèÁµé¹ãËÁè  ¡ÃÐ¾ÃÔº 3 ¤ÃÑé§  Ç¹«éÓ
+ *   USART áÊ´§:
  *   "--- IWDG Simple ---"
  *   "Blink 1: feeding watchdog"
  *   "Blink 2: feeding watchdog"
  *   "Blink 3: feeding watchdog"
  *   "Stop feeding! Reset in ~1.6s..."
- *   (MCU reset  ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Í¤ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Õ¡ï¿½ï¿½ï¿½ï¿½)
+ *   (MCU reset  àÃÔèÁ¢éÍ¤ÇÒÁãËÁèÍÕ¡¤ÃÑé§)
  * ============================================================
- * ï¿½ï¿½ï¿½ï¿½Í¹ (WARNINGS):
- *   ï¿½ï¿½ï¿½ï¿½ï¿½ IWDG ï¿½Ù¡ï¿½Ô´ï¿½ï¿½Ò¹ï¿½ï¿½ï¿½ï¿½ ï¿½Ð»Ô´ï¿½ï¿½ï¿½ï¿½é¨¹ï¿½ï¿½ï¿½ï¿½ MCU ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+ * ¤Óàµ×Í¹ (WARNINGS):
+ *   àÁ×èÍ IWDG ¶Ù¡à»Ô´ãªé§Ò¹áÅéÇ ¨Ð»Ô´äÁèä´é¨¹¡ÇèÒ MCU ¨ÐÃÕà«çµ
  *     (Once IWDG is enabled, it cannot be stopped except by reset)
- *   ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ LSI ï¿½Ã¼Ñ¹ (30-60kHz ï¿½ï¿½ï¿½ï¿½ 40kHz) ï¿½ï¿½ï¿½Ò¨ï¿½Ô§ï¿½Ò¨ï¿½ï¿½Ò´ï¿½ï¿½ï¿½ï¿½Í¹ ?25%
- *     (LSI frequency varies 30-60kHz, typical 40kHz ï¿½ actual timeout may differ ?25%)
- * ============================================================
- * à¸œà¸±à¸‡à¸à¸²à¸£à¸—à¸³à¸‡à¸²à¸™ (Flowchart):
- *
- * flowchart TD
- *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
- *     B --> C["USART_SimpleInit()"]
- *     C --> D["IWDG_SimpleInit(1600)"]
- *     D --> E["for blinkCount=1 to 3"]
- *     E --> F["LED ON"]
- *     F --> G["IWDG_Feed()"]
- *     G --> H["Delay_Ms(200)"]
- *     H --> I["LED OFF"]
- *     I --> J["IWDG_Feed()"]
- *     J --> K["Delay_Ms(200)"]
- *     K --> L{"blinkCount <= 3?"}
- *     L -->|"Yes"| E
- *     L -->|"No"| M["USART_Print(Stop feeding)"]
- *     M --> N["while(1) à¸£à¸­ IWDG reset"]
+ *   ¤ÇÒÁ¶Õè LSI á»Ã¼Ñ¹ (30-60kHz »¡µÔ 40kHz) àÇÅÒ¨ÃÔ§ÍÒ¨¤ÅÒ´à¤Å×èÍ¹ ?25%
+ *     (LSI frequency varies 30-60kHz, typical 40kHz — actual timeout may differ ?25%)
  * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20
-#include <SimpleHAL.h>                      // ï¿½ï¿½ï¿½ï¿½Åºï¿½ï¿½ï¿½ï¿½ SimpleHAL (Include SimpleHAL library)
+#include <SimpleHAL.h>                      // ÃÇÁäÅºÃÒÃÕ SimpleHAL (Include SimpleHAL library)
 
 // --------------------------------------------------------------------------
-// ï¿½Ñ§ï¿½ï¿½Ñ¹ï¿½ï¿½Ñ¡ (Main function)
+// ¿Ñ§¡ìªÑ¹ËÅÑ¡ (Main function)
 // --------------------------------------------------------------------------
 
 int main(void)
 {
     SystemCoreClockUpdate();
     Timer_Init();
-    // ï¿½ï¿½ï¿½ï¿½Ã¹Ñºï¿½Íº (Loop counter)
-    uint8_t blinkCount = 0;                  // ï¿½Ó¹Ç¹ï¿½ï¿½ï¿½é§·ï¿½ï¿½ LED ï¿½ï¿½Ð¾ï¿½Ôº (Number of LED blinks)
+    // µÑÇá»Ã¹ÑºÃÍº (Loop counter)
+    uint8_t blinkCount = 0;                  // ¨Ó¹Ç¹¤ÃÑé§·Õè LED ¡ÃÐ¾ÃÔº (Number of LED blinks)
 
-    // ---- ï¿½ï¿½Ç¹ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ (Initialization) ----
-    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);                      // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½é¹¾ï¿½ï¿½ï¿½Í¹Ø¡ï¿½ï¿½ (Initialize USART)
-    pinMode(PC0, PIN_MODE_OUTPUT);          // ï¿½ï¿½Ë¹ï¿½ PC0 ï¿½ï¿½ï¿½ï¿½Òµï¿½Øµ (Set PC0 as PIN_MODE_OUTPUT)
-    digitalWrite(PC0, LOW);                 // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ LED ï¿½Ñº (Initialize LED off)
+    // ---- ÊèÇ¹àÃÔèÁµé¹ (Initialization) ----
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);                      // àÃÔèÁµé¹¾ÍÃìµÍ¹Ø¡ÃÁ (Initialize USART)
+    pinMode(PC0, PIN_MODE_OUTPUT);          // ¡ÓË¹´ PC0 à»ç¹àÍÒµì¾Øµ (Set PC0 as PIN_MODE_OUTPUT)
+    digitalWrite(PC0, LOW);                 // àÃÔèÁµé¹ LED ´Ñº (Initialize LED off)
 
-    USART_Print("--- IWDG Simple ---\r\n"); // ï¿½Ê´ï¿½ï¿½ï¿½Ç¢ï¿½ï¿½ (Display title)
+    USART_Print("--- IWDG Simple ---\r\n"); // áÊ´§ËÑÇ¢éÍ (Display title)
 
-    // ---- ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ IWDG (Initialize IWDG) ----
-    // IWDG_SimpleInit ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½: prescaler=40, reload=255  timeout ~1.6s
+    // ---- àÃÔèÁµé¹ IWDG (Initialize IWDG) ----
+    // IWDG_SimpleInit ãªé¤èÒàÃÔèÁµé¹: prescaler=40, reload=255  timeout ~1.6s
     // (IWDG_SimpleInit uses defaults: prescaler=40, reload=255  timeout ~1.6s)
-    IWDG_SimpleInit(1600);                       // ï¿½ï¿½ï¿½ï¿½ï¿½ IWDG ï¿½ï¿½ï¿½Â¤ï¿½Òµï¿½é§µï¿½ (Initialize IWDG with defaults)
-    USART_Print("IWDG started, timeout ~1.6s\r\n");  // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ IWDG (Notify IWDG start)
+    IWDG_SimpleInit(1600);                       // àÃÔèÁ IWDG ´éÇÂ¤èÒµÑé§µé¹ (Initialize IWDG with defaults)
+    USART_Print("IWDG started, timeout ~1.6s\r\n");  // á¨é§àÃÔèÁ IWDG (Notify IWDG start)
 
-    // ---- ï¿½ï¿½Ð¾ï¿½Ôº LED 3 ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ feed IWDG (Blink LED 3 times while feeding IWDG) ----
-    for (blinkCount = 1; blinkCount <= 3; blinkCount++) {  // Ç¹ 3 ï¿½Íº (Loop 3 times)
-        digitalWrite(PC0, HIGH);            // ï¿½Ô´ LED (LED on)
-        USART_Print("Blink "); USART_PrintNum(blinkCount); USART_Print(": feeding watchdog\r\n");  // ï¿½ï¿½ï¿½Íºï¿½ï¿½ï¿½ feed watchdog (Notify feeding)
-        IWDG_Feed();                         // ï¿½ï¿½ï¿½çµµï¿½Ç¹Ñº IWDG (Reset IWDG counter) ï¿½ ï¿½ï¿½Í§ï¿½Ñ¹ï¿½ï¿½ï¿½ï¿½ (prevents reset)
-        Delay_Ms(200);                       // Ë¹ï¿½Ç§ 200ms (Delay 200ms)
+    // ---- ¡ÃÐ¾ÃÔº LED 3 ¤ÃÑé§ ¾ÃéÍÁ feed IWDG (Blink LED 3 times while feeding IWDG) ----
+    for (blinkCount = 1; blinkCount <= 3; blinkCount++) {  // Ç¹ 3 ÃÍº (Loop 3 times)
+        digitalWrite(PC0, HIGH);            // µÔ´ LED (LED on)
+        USART_Print("Blink "); USART_PrintNum(blinkCount); USART_Print(": feeding watchdog\r\n");  // á¨é§ÃÍº·Õè feed watchdog (Notify feeding)
+        IWDG_Feed();                         // ÃÕà«çµµÑÇ¹Ñº IWDG (Reset IWDG counter) — »éÍ§¡Ñ¹ÃÕà«çµ (prevents reset)
+        Delay_Ms(200);                       // Ë¹èÇ§ 200ms (Delay 200ms)
 
-        digitalWrite(PC0, LOW);             // ï¿½Ñº LED (LED off)
-        IWDG_Feed();                         // feed ï¿½Õ¡ï¿½ï¿½ï¿½ï¿½ (Feed again)
-        Delay_Ms(200);                       // Ë¹ï¿½Ç§ 200ms (Delay 200ms)
+        digitalWrite(PC0, LOW);             // ´Ñº LED (LED off)
+        IWDG_Feed();                         // feed ÍÕ¡¤ÃÑé§ (Feed again)
+        Delay_Ms(200);                       // Ë¹èÇ§ 200ms (Delay 200ms)
     }
 
-    // ---- ï¿½ï¿½Ø´ feed ï¿½ IWDG ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ MCU ï¿½ï¿½Ñ§ï¿½Ò¡ timeout (Stop feeding ï¿½ IWDG will reset MCU after timeout) ----
-    USART_Print("Stop feeding! Reset in ~1.6s...\r\n");  // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ø´ feed (Notify stop feeding)
-    // ï¿½ï¿½ï¿½ï¿½Í§ IWDG_Feed() ï¿½Õ¡ (No more IWDG_Feed() calls)
+    // ---- ËÂØ´ feed — IWDG ¨ÐÃÕà«çµ MCU ËÅÑ§¨Ò¡ timeout (Stop feeding — IWDG will reset MCU after timeout) ----
+    USART_Print("Stop feeding! Reset in ~1.6s...\r\n");  // á¨é§ÇèÒËÂØ´ feed (Notify stop feeding)
+    // äÁèµéÍ§ IWDG_Feed() ÍÕ¡ (No more IWDG_Feed() calls)
 
-    // IWDG ï¿½Ð¹Ñºï¿½ï¿½ï¿½ï¿½ï¿½Ñ§ ï¿½ï¿½ï¿½ï¿½Í¶Ö§ 0 ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ MCU (IWDG counts down; when it hits 0, MCU resets)
-    while (1) {                              // ï¿½ï¿½ IWDG ï¿½ï¿½ï¿½ï¿½ (Wait for IWDG reset)
-        // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ Watchdog ï¿½ï¿½ï¿½ï¿½ (Do nothing, let watchdog reset)
-        // __NOP(); ï¿½ç¹¤ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ (NOP ï¿½ no operation)
+    // IWDG ¨Ð¹Ñº¶ÍÂËÅÑ§ àÁ×èÍ¶Ö§ 0 ¨ÐÃÕà«çµ MCU (IWDG counts down; when it hits 0, MCU resets)
+    while (1) {                              // ÃÍ IWDG ÃÕà«çµ (Wait for IWDG reset)
+        // äÁè·ÓÍÐäÃ ãËé Watchdog ÃÕà«çµ (Do nothing, let watchdog reset)
+        // __NOP(); à»ç¹¤ÓÊÑè§à»ÅèÒ (NOP — no operation)
     }
 }

@@ -24,32 +24,6 @@
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 
-/**
- * ============================================================
- * แผนผังการทำงาน (Flowchart):
- *
- * flowchart TD
- *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
- *     B --> C["pinMode(PC0, OUTPUT)"]
- *     C --> D{"Not SOP8?"}
- *     D -->|"Yes"| E["Method1: PWM_SetRemap + PWM_Write"]
- *     E --> F["Delay_Ms(2000) + SetDuty(25)"]
- *     F --> G["Delay_Ms(2000) + PWM_Stop"]
- *     G --> H["Method2: PWM_InitRemap + SetDuty(75)"]
- *     H --> I["Delay_Ms(2000) + SetDuty(0) + Stop"]
- *     I --> J["Package-safe PWM1 & PWM2 init"]
- *     D -->|"No"| J
- *     J --> K["while(1)"]
- *     K --> L["digitalToggle(PC0)"]
- *     L --> M["for i = 0 to 100 step 5"]
- *     M --> N["PWM_SetDutyCycle available ch"]
- *     N --> O["Delay_Ms(50)"]
- *     O --> P{"i <= 100?"}
- *     P -->|"Yes"| M
- *     P -->|"No"| K
- * ============================================================
- */
-
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();

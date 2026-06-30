@@ -29,16 +29,6 @@
  *   - ตรวจสอบ DMA transfer complete flag ก่อนส่งครั้งถัดไป
  *   - บัฟเฟอร์ที่ส่งต้องคงอยู่จนกว่า DMA จะส่งเสร็จ (ใช้ global หรือ static array)
  * ============================================================
- * ผังการทำงาน (Flowchart):
- *
- * flowchart TD
- *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
- *     B --> C["USART_SimpleInit(115200)"]
- *     C --> D["while(1)"]
- *     D --> E["DMA_USART_Send(DMA_CH2, msg, len)"]
- *     E --> F["Delay_Ms(2000)"]
- *     F --> D
- * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20

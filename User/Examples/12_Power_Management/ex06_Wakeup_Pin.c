@@ -30,23 +30,6 @@
  *      ร่วมกับการตรวจสอบ PWR_GetWakeupFlag() เพิ่มเติม
  *   3. Wakeup Pin PA0 ต้องต่อ Pull-up หรือ Pull-down ภายนอกตามความเหมาะสม
  * ============================================================
- * ผังการทำงาน (Flowchart):
- *
- * flowchart TD
- *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
- *     B --> C["pinMode(PC0, OUTPUT)"]
- *     C --> D["USART_SimpleInit()"]
- *     D --> E{"PWR_WasStandbyWakeup()?"}
- *     E -->|"Yes"| F["USART_Print(Woke from standby)"]
- *     F --> G["Blink LED 3 times"]
- *     E -->|"No"| H["USART_Print(System start. Configuring...)"]
- *     G --> I["PWR_ConfigureAWU(prescaler=1024, 31)"]
- *     H --> I
- *     I --> J["PWR_EnableWakeupPin()"]
- *     J --> K["PWR_EnterStandbyMode(PWR_ENTRY_WFI)"]
- *     K --> L["⏰ AWU 3s หรือกด PA0 → รีสตาร์ท"]
- *     L --> A
- * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20

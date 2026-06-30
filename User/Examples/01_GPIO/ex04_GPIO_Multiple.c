@@ -34,20 +34,6 @@
  * - digitalWriteMultiple() ตองใช 2 arrays ขนาดเทากัน
  * - ขาม PC2 ถูกละเวนเพราะไมมีในแผนผัง ใช PC3 แทน
  * ============================================================
- * แผนผังการทำงาน (Flowchart):
- *
- * flowchart TD
- *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
- *     B --> C["pinModeMultiple(ledPins, OUTPUT)"]
- *     C --> D["while(1)"]
- *     D --> E["for i = 0 to 3"]
- *     E --> F["set ledStates[i] = HIGH"]
- *     F --> G["digitalWriteMultiple(ledPins, ledStates)"]
- *     G --> H["Delay_Ms(200)"]
- *     H --> I{"i < 4?"}
- *     I -->|"Yes"| E
- *     I -->|"No"| D
- * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20

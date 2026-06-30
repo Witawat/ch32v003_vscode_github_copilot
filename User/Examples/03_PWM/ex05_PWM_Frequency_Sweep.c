@@ -36,31 +36,7 @@
  *   - Duty = 50% ให้สัญญาณ Square Wave ที่ดีที่สุดสำหรับ Buzzer
  *   - PWM_SetFrequency() เปลี่ยนความถี่ทุกช่องใน TIMER เดียวกัน!
  *     (PWM1_CH1 และ PWM1_CH2 อยู่บน TIM1 ดังนั้นจะเปลี่ยนทั้งคู่)
- * - ความถี่ที่มนุษย์ได้ยินประมาณ 20Hz - 20kHz
- * ============================================================
- * แผนผังการทำงาน (Flowchart):
- *
- * flowchart TD
- *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
- *     B --> C["PWM_Init(PWM1_CH1, 500)"]
- *     C --> D["PWM_SetDutyCycle(50)"]
- *     D --> E["PWM_Start(PWM1_CH1)"]
- *     E --> F["while(1)"]
- *     F --> G["PWM_SetFrequency(500)"]
- *     G --> H["Delay_Ms(1000)"]
- *     H --> I["PWM_SetFrequency(1000)"]
- *     I --> J["Delay_Ms(1000)"]
- *     J --> K["PWM_SetFrequency(2000)"]
- *     K --> L["Delay_Ms(1000)"]
- *     L --> M["PWM_SetFrequency(4000)"]
- *     M --> N["Delay_Ms(1000)"]
- *     N --> O["PWM_SetFrequency(2000)"]
- *     O --> P["Delay_Ms(1000)"]
- *     P --> Q["PWM_SetFrequency(1000)"]
- *     Q --> R["Delay_Ms(1000)"]
- *     R --> S["PWM_SetFrequency(500)"]
- *     S --> T["Delay_Ms(1000)"]
- *     T --> F
+ *   - ความถี่ที่มนุษย์ได้ยินประมาณ 20Hz - 20kHz
  * ============================================================
  */
 

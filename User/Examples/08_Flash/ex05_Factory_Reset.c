@@ -1,117 +1,96 @@
 /**
  * ============================================================
  * ex05_Factory_Reset.c
- * ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½çµ¤ï¿½ï¿½ï¿½Ã§ï¿½Ò¹ ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ 3 ï¿½Ô¹Ò·ï¿½ï¿½ï¿½ï¿½ï¿½Åº Flash ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
- * (Factory reset ï¿½ hold button 3 seconds to erase entire Flash)
+ * â»Ãá¡ÃÁÃÕà«çµ¤èÒâÃ§§Ò¹ — ¡´»ØèÁ 3 ÇÔ¹Ò·Õà¾×èÍÅº Flash ·Ñé§ËÁ´
+ * (Factory reset — hold button 3 seconds to erase entire Flash)
  * ============================================================
  *
- * á¼¹ï¿½Ñ§Ç§ï¿½ï¿½ (Circuit Diagram):
+ * á¼¹¼Ñ§Ç§¨Ã (Circuit Diagram):
  *
  *   CH32V003
  *   ------
  *   PA1 (OUT) ----[220?]----+---- LED (á´§) ---- GND
  *                            |
- *   PC0 (IN)  ----[10k?]----+---- GND  (ï¿½Ö§Å§)
+ *   PC0 (IN)  ----[10k?]----+---- GND  (´Ö§Å§)
  *                  |
- *                  +---- ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ---- VCC (3.3V)
+ *                  +---- »ØèÁ¡´ ---- VCC (3.3V)
  *
  *   PD5 (TX) ----> USB-UART (RX)
  *   PD6 (RX) <---- USB-UART (TX)
  *
- *   ï¿½ï¿½ï¿½ï¿½Í¡ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ò§ 3 ï¿½Ô¹Ò·ï¿½: Factory reset
- *   LED ï¿½ï¿½Ð¾ï¿½Ôºï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ò§ reset
+ *   àÁ×èÍ¡´»ØèÁ¤éÒ§ 3 ÇÔ¹Ò·Õ: Factory reset
+ *   LED ¡ÃÐ¾ÃÔºàÃçÇÃÐËÇèÒ§ reset
  *
  * ============================================================
- * ï¿½ï¿½ï¿½Ñ¾ï¿½ï¿½ï¿½ï¿½Ò´ï¿½ï¿½Ñ§ (Expected Results):
+ * ¼ÅÅÑ¾¸ì·Õè¤Ò´ËÇÑ§ (Expected Results):
  *   "--- Flash Factory Reset ---"
  *   "System running. Hold button PC0 for 3s to factory reset..."
- *   (ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ò§ 3 ï¿½Ô¹Ò·ï¿½  LED ï¿½ï¿½Ð¾ï¿½Ôºï¿½ï¿½ï¿½ï¿½)
+ *   (¡´»ØèÁ¤éÒ§ 3 ÇÔ¹Ò·Õ  LED ¡ÃÐ¾ÃÔºàÃçÇ)
  *   "Factory reset: 2 pages erased"
- *   (LED ï¿½Ñº)
+ *   (LED ´Ñº)
  *   "--- Done ---"
  * ============================================================
- * ï¿½ï¿½ï¿½ï¿½Í¹ (WARNINGS):
- *   ? Flash_EraseAll() ï¿½ï¿½Åºï¿½ï¿½é§¤Í¹ï¿½Ô¡ï¿½ï¿½Ð¢ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ã¶ï¿½ï¿½ï¿½×¹ï¿½ï¿½!
+ * ¤Óàµ×Í¹ (WARNINGS):
+ *   ? Flash_EraseAll() ¨ÐÅº·Ñé§¤Í¹¿Ô¡áÅÐ¢éÍÁÙÅ — äÁèÊÒÁÒÃ¶¡Ùé¤×¹ä´é!
  *     (Flash_EraseAll erases BOTH config and data pages irreversibly!)
- * ============================================================
- * à¸œà¸±à¸‡à¸à¸²à¸£à¸—à¸³à¸‡à¸²à¸™ (Flowchart):
- *
- * flowchart TD
- *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
- *     B --> C["USART_SimpleInit()"]
- *     C --> D["pinMode(PC0, INPUT_PULLUP)"]
- *     D --> E["pinMode(PA1, OUTPUT)"]
- *     E --> F["Flash_Init()"]
- *     F --> G["while(1)"]
- *     G --> H{"button pressed?"}
- *     H -->|"No"| I["pressCount = 0"]
- *     I --> J["Delay_Ms(10)"]
- *     J --> G
- *     H -->|"Yes"| K["pressCount++"]
- *     K --> L{"pressCount >= 300?"}
- *     L -->|"No"| J
- *     L -->|"Yes"| M["Blink LED 10 times"]
- *     M --> N["Flash_EraseAll()"]
- *     N --> O["pressCount = 0"]
- *     O --> J
  * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20
-#include <SimpleHAL.h>                      // ï¿½ï¿½ï¿½ï¿½Åºï¿½ï¿½ï¿½ï¿½ SimpleHAL (Include SimpleHAL library)
+#include <SimpleHAL.h>                      // ÃÇÁäÅºÃÒÃÕ SimpleHAL (Include SimpleHAL library)
 
 // --------------------------------------------------------------------------
-// ï¿½Ñ§ï¿½ï¿½Ñ¹ï¿½ï¿½Ñ¡ (Main function)
+// ¿Ñ§¡ìªÑ¹ËÅÑ¡ (Main function)
 // --------------------------------------------------------------------------
 
 int main(void)
 {
     SystemCoreClockUpdate();
     Timer_Init();
-    // ï¿½ï¿½ï¿½ï¿½Ã¹Ñºï¿½ï¿½ï¿½ï¿½ (Timing variables)
-    uint32_t pressCount = 0;                 // ï¿½ï¿½Ç¹Ñºï¿½Ó¹Ç¹ï¿½Íºï¿½ï¿½è¡´ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ò§ (Counter for button hold duration)
-    uint8_t  buttonState = 0;                // Ê¶Ò¹Ð»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ø´ (Latest button state)
+    // µÑÇá»Ã¹ÑºàÇÅÒ (Timing variables)
+    uint32_t pressCount = 0;                 // µÑÇ¹Ñº¨Ó¹Ç¹ÃÍº·Õè¡´»ØèÁ¤éÒ§ (Counter for button hold duration)
+    uint8_t  buttonState = 0;                // Ê¶Ò¹Ð»ØèÁÅèÒÊØ´ (Latest button state)
 
-    // ---- ï¿½ï¿½Ç¹ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ (Initialization) ----
-    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);                      // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½é¹¾ï¿½ï¿½ï¿½Í¹Ø¡ï¿½ï¿½ (Initialize USART)
-    pinMode(PC0, PIN_MODE_INPUT_PULLUP);    // ï¿½ï¿½Ë¹ï¿½ PC0 ï¿½ï¿½ï¿½Ô¹ï¿½Øµï¿½Ö§ï¿½ï¿½ï¿½ (Set PC0 as input with pull-up)
-    pinMode(PA1, PIN_MODE_OUTPUT);          // ï¿½ï¿½Ë¹ï¿½ PA1 ï¿½ï¿½ï¿½ï¿½Òµï¿½Øµ (Set PA1 as output)
-    digitalWrite(PA1, LOW);                 // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ LED ï¿½Ñº (Initialize LED off)
+    // ---- ÊèÇ¹àÃÔèÁµé¹ (Initialization) ----
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);                      // àÃÔèÁµé¹¾ÍÃìµÍ¹Ø¡ÃÁ (Initialize USART)
+    pinMode(PC0, PIN_MODE_INPUT_PULLUP);    // ¡ÓË¹´ PC0 à»ç¹ÍÔ¹¾Øµ´Ö§¢Öé¹ (Set PC0 as input with pull-up)
+    pinMode(PA1, PIN_MODE_OUTPUT);          // ¡ÓË¹´ PA1 à»ç¹àÍÒµì¾Øµ (Set PA1 as output)
+    digitalWrite(PA1, LOW);                 // àÃÔèÁµé¹ LED ´Ñº (Initialize LED off)
 
-    USART_Print("--- Flash Factory Reset ---\r\n");  // ï¿½Ê´ï¿½ï¿½ï¿½Ç¢ï¿½ï¿½ (Display title)
-    Flash_Init();                            // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ Flash (Initialize Flash module)
+    USART_Print("--- Flash Factory Reset ---\r\n");  // áÊ´§ËÑÇ¢éÍ (Display title)
+    Flash_Init();                            // àÃÔèÁµé¹âÁ´ÙÅ Flash (Initialize Flash module)
 
-    USART_Print("System running. Hold button PC0 for 3s to factory reset...\r\n");  // ï¿½é§¼ï¿½ï¿½ï¿½ï¿½ (Prompt user)
+    USART_Print("System running. Hold button PC0 for 3s to factory reset...\r\n");  // á¨é§¼Ùéãªé (Prompt user)
 
-    // ---- ï¿½Ñ§Ç¹ï¿½ï¿½Ñ¡ (Main loop) ----
-    while (1) {                              // Ç¹ï¿½Íºï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ø´ (Infinite loop)
-        buttonState = digitalRead(PC0);     // ï¿½ï¿½Ò¹Ê¶Ò¹Ð»ï¿½ï¿½ï¿½ï¿½ï¿½ (Read button state)
+    // ---- ÇÑ§Ç¹ËÅÑ¡ (Main loop) ----
+    while (1) {                              // Ç¹ÃÍºäÁèÊÔé¹ÊØ´ (Infinite loop)
+        buttonState = digitalRead(PC0);     // ÍèÒ¹Ê¶Ò¹Ð»ØèÁ¡´ (Read button state)
 
-        if (buttonState == 0) {              // ï¿½ï¿½Ò¡ï¿½ï¿½ï¿½ï¿½ï¿½ (ï¿½Ö§Å§, Active Low) (If button is pressed, active low)
-            pressCount++;                    // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ç¹Ñº (Increment counter)
+        if (buttonState == 0) {              // ¶éÒ¡´»ØèÁ (´Ö§Å§, Active Low) (If button is pressed, active low)
+            pressCount++;                    // à¾ÔèÁµÑÇ¹Ñº (Increment counter)
             if (pressCount >= 300) {         // 300 ? ~10ms = ~3000ms (3 seconds)
-                USART_Print("Factory reset initiated!\r\n");  // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ (Notify factory reset start)
+                USART_Print("Factory reset initiated!\r\n");  // á¨é§àÃÔèÁÃÕà«çµ (Notify factory reset start)
 
-                // ï¿½ï¿½Ð¾ï¿½Ôº LED ï¿½ï¿½ï¿½ï¿½ ï¿½ (Fast LED blink)
-                for (uint8_t i = 0; i < 10; i++) {  // ï¿½ï¿½Ð¾ï¿½Ôº 10 ï¿½ï¿½ï¿½ï¿½ (Blink 10 times)
-                    digitalWrite(PA1, HIGH);  // ï¿½Ô´ LED (LED on)
-                    Delay_Ms(50);            // Ë¹ï¿½Ç§ 50ms (Delay 50ms)
-                    digitalWrite(PA1, LOW);  // ï¿½Ñº LED (LED off)
-                    Delay_Ms(50);            // Ë¹ï¿½Ç§ 50ms (Delay 50ms)
+                // ¡ÃÐ¾ÃÔº LED àÃçÇ æ (Fast LED blink)
+                for (uint8_t i = 0; i < 10; i++) {  // ¡ÃÐ¾ÃÔº 10 ¤ÃÑé§ (Blink 10 times)
+                    digitalWrite(PA1, HIGH);  // µÔ´ LED (LED on)
+                    Delay_Ms(50);            // Ë¹èÇ§ 50ms (Delay 50ms)
+                    digitalWrite(PA1, LOW);  // ´Ñº LED (LED off)
+                    Delay_Ms(50);            // Ë¹èÇ§ 50ms (Delay 50ms)
                 }
 
-                // Åº Flash ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ (Erase all Flash)
-                Flash_EraseAll();            // Åºï¿½ï¿½ï¿½ï¿½ï¿½Å·ï¿½ï¿½ï¿½ï¿½ï¿½ (Erase all data)
+                // Åº Flash ·Ñé§ËÁ´ (Erase all Flash)
+                Flash_EraseAll();            // Åº¢éÍÁÙÅ·Ñé§ËÁ´ (Erase all data)
 
-                USART_Print("Factory reset: 2 pages erased\r\n");  // ï¿½ï¿½Åºï¿½ï¿½ï¿½ï¿½ï¿½ (Notify erase complete)
-                digitalWrite(PA1, LOW);     // ï¿½Ñº LED (LED off)
+                USART_Print("Factory reset: 2 pages erased\r\n");  // á¨é§ÅºÊÓàÃç¨ (Notify erase complete)
+                digitalWrite(PA1, LOW);     // ´Ñº LED (LED off)
 
-                pressCount = 0;              // ï¿½ï¿½ï¿½çµµï¿½Ç¹Ñº (Reset counter)
+                pressCount = 0;              // ÃÕà«çµµÑÇ¹Ñº (Reset counter)
             }
-        } else {                             // ï¿½ï¿½Ò»ï¿½ï¿½ï¿½Â»ï¿½ï¿½ï¿½ (If button is released)
-            pressCount = 0;                  // ï¿½ï¿½ï¿½çµµï¿½Ç¹Ñº (Reset counter)
+        } else {                             // ¶éÒ»ÅèÍÂ»ØèÁ (If button is released)
+            pressCount = 0;                  // ÃÕà«çµµÑÇ¹Ñº (Reset counter)
         }
 
-        Delay_Ms(10);                        // Ë¹ï¿½Ç§ 10ms ï¿½ï¿½ï¿½ï¿½Å´ï¿½ï¿½ï¿½ï¿½ï¿½Õ¾ï¿½ï¿½ï¿½ (Delay 10ms to reduce CPU usage)
+        Delay_Ms(10);                        // Ë¹èÇ§ 10ms à¾×èÍÅ´¡ÒÃãªé«Õ¾ÕÂÙ (Delay 10ms to reduce CPU usage)
     }
 }

@@ -31,23 +31,6 @@
  * - ต้องใช้ OneWire_ResetSearch() ก่อนเริ่มค้นหาทุกครั้ง
  * - ถ้าไม่มีอุปกรณ์ต่อ จะขึ้น "Found 0 device(s)"
  * ============================================================
- * ผังการทำงาน (Flowchart):
- *
- * flowchart TD
- *     A["SystemCoreClockUpdate()"] --> B["USART_SimpleInit()"]
- *     B --> C["OneWire_Init(PD2)"]
- *     C --> D["OneWire_ResetSearch()"]
- *     D --> E{"OneWire_Search()"}
- *     E -->|"Yes"| F["OneWire_GetAddress(rom)"]
- *     F --> G["OneWire_CRC8(rom, 7)"]
- *     G --> H{"CRC matches?"}
- *     H -->|"Yes"| I["device_count++"]
- *     I --> J["USART_Print(ROM)"]
- *     J --> E
- *     H -->|"No"| E
- *     E -->|"No"| K["USART_Print(count)"]
- *     K --> L["while(1)"]
- * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20

@@ -13,27 +13,6 @@
  * @note I2C_PINS_REMAP ต้องใช้ PD0 ซึ่งไม่มีใน SOP-8/SOP-16 → #error
  *       ถ้าใช้แพ็กเกจเล็ก ให้ใช้ SimpleI2C_Soft แทน
  * @note ต้องต่อ pull-up resistor 4.7kΩ ที่ SDA และ SCL
- * ============================================================
- * ผังการทำงาน (Flowchart):
- *
- * flowchart TD
- *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
- *     B --> C["pinMode(PC0, PIN_MODE_OUTPUT)"]
- *     C --> D["scan_bus(DEFAULT)"]
- *     D --> E["Delay_Ms(500)"]
- *     E --> F["scan_bus(PARTIAL_REMAP)"]
- *     F --> G["Delay_Ms(500)"]
- *     G --> H{"CH32V003_HAS_PD0?"}
- *     H -->|"Yes"| I["scan_bus(FULL_REMAP)"]
- *     H -->|"No"| J["Skip FULL_REMAP"]
- *     I --> K["Delay_Ms(500)"]
- *     J --> K
- *     K --> L["Print complete"]
- *     L --> M["while(1)"]
- *     M --> N["digitalToggle(PC0)"]
- *     N --> O["Delay_Ms(1000)"]
- *     O --> M
- * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20

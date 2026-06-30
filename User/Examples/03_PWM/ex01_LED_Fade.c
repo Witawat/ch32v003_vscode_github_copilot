@@ -26,24 +26,7 @@
  * คำเตือน (WARNINGS):
  *   - PWM_Init() auto-starts output — no need to call PWM_Start() separately
  *   - ต่อ LED ถูกขั้ว (ขั้วบวกต่อกับตัวต้านทาน)
- * - ค่าตัวต้านทาน 220 Ohm เหมาะสำหรับ LED ทั่วไปที่ 3.3V
- * ============================================================
- * แผนผังการทำงาน (Flowchart):
- *
- * flowchart TD
- *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
- *     B --> C["PWM_Init(PWM1_CH1, 1000)"]
- *     C --> D["while(1)"]
- *     D --> E["PWM_SetDutyCycle(duty)"]
- *     E --> F["Delay_Ms(10)"]
- *     F --> G["duty = duty + direction"]
- *     G --> H{"duty >= 100?"}
- *     H -->|"Yes"| I["direction = -1"]
- *     I --> J{"duty <= 0?"}
- *     H -->|"No"| J
- *     J -->|"Yes"| K["direction = 1"]
- *     J -->|"No"| D
- *     K --> D
+ *   - ค่าตัวต้านทาน 220 Ohm เหมาะสำหรับ LED ทั่วไปที่ 3.3V
  * ============================================================
  */
 

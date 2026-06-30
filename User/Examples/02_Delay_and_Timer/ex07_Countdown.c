@@ -1,11 +1,11 @@
 /**
  * ============================================================
- * ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝาง๏ฟฝ๏ฟฝ๏ฟฝ 7: ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝาง๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝาน Countdown Timer (Countdown_Init, Countdown_Start, Countdown_Stop, Countdown_Reset, Countdown_IsFinished, Countdown_SetAlarmCallback, Countdown_GetRemainingSeconds)
+ * ตัวอย่างที่ 7: ตัวอย่างการใช้งาน Countdown Timer (Countdown_Init, Countdown_Start, Countdown_Stop, Countdown_Reset, Countdown_IsFinished, Countdown_SetAlarmCallback, Countdown_GetRemainingSeconds)
  * ============================================================
  *
- * ๏ฟฝสด๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝาน Countdown Timer ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝับ๏ฟฝับ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝัง
+ * แสดงการใช้งาน Countdown Timer สำหรับนับถอยหลัง
  *
- * แผน๏ฟฝังวง๏ฟฝ๏ฟฝ (Circuit Diagram):
+ * แผนผังวงจร (Circuit Diagram):
  *
  *                        +3.3V
  *                         |
@@ -20,205 +20,172 @@
  *
  *     (Optional) Buzzer on PWM pin (PA1 or PC3)
  *
- *     USART (TX=PD5, RX=PD6) ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ PC ๏ฟฝ๏ฟฝาน USB-Serial
+ *     USART (TX=PD5, RX=PD6) เชื่อมต่อ PC ผ่าน USB-Serial
  *
- *     (Pull-up ๏ฟฝ๏ฟฝ๏ฟฝในของ CH32V003 ๏ฟฝูก๏ฟฝ๏ฟฝาน๏ฟฝ๏ฟฝาน PIN_MODE_INPUT_PULLUP)
+ *     (Pull-up ภายในของ CH32V003 ถูกใช้งานผ่าน PIN_MODE_INPUT_PULLUP)
  *
  * ============================================================
- * ๏ฟฝ๏ฟฝ๏ฟฝัพ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝาด๏ฟฝ๏ฟฝัง (Expected Results):
- * - ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ countdown 10 ๏ฟฝินาท๏ฟฝ
- * - ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ PC1  ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝับ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝัง
- * - USART ๏ฟฝสด๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝาท๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝอทุก 1 ๏ฟฝินาท๏ฟฝ
- * - ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ  Alarm callback ๏ฟฝำงาน  LED ๏ฟฝ๏ฟฝะพ๏ฟฝิบ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ
- * - USART ๏ฟฝสด๏ฟฝ "Time's up!"
+ * ผลลัพธ์ที่คาดหวัง (Expected Results):
+ * - ตั้งเวลา countdown 10 วินาที
+ * - กดปุ่ม PC1  เริ่มนับถอยหลัง
+ * - USART แสดงเวลาที่เหลือทุก 1 วินาที
+ * - เมื่อหมดเวลา  Alarm callback ทำงาน  LED กระพริบเร็ว
+ * - USART แสดง "Time's up!"
  * ============================================================
- * ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝอน (WARNINGS):
- * - Countdown ๏ฟฝ๏ฟฝ TIM2 ๏ฟฝ๏ฟฝ base timer ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ (๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝวกับ Stopwatch)!
- * - ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ Countdown ๏ฟฝ๏ฟฝ๏ฟฝ Stopwatch ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝัน (๏ฟฝ๏ฟฝ้งค๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ TIM2)
- * - ๏ฟฝ๏ฟฝอง๏ฟฝ๏ฟฝ๏ฟฝยก Countdown_Init() ๏ฟฝ๏ฟฝอน๏ฟฝ๏ฟฝาน๏ฟฝัง๏ฟฝ๏ฟฝัน๏ฟฝ๏ฟฝ๏ฟฝ
- * - Callback (AlarmCallback) ๏ฟฝำงาน๏ฟฝ main loop context (๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ ISR)
- * - Countdown_Stop() ๏ฟฝ๏ฟฝุด๏ฟฝ๏ฟฝ๏ฟฝวค๏ฟฝ๏ฟฝ๏ฟฝ (pause) - ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ Countdown_Start()
- * - Countdown_Reset() ๏ฟฝ๏ฟฝ๏ฟฝ็ตก๏ฟฝับ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝุด๏ฟฝ๏ฟฝรนับ
- * - ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝำท๏ฟฝ๏ฟฝ๏ฟฝะดับ milliseconds (resolution 1ms ๏ฟฝาก TIM2)
- * ============================================================
- * เนเธเธเธเธฑเธเธเธฒเธฃเธ—เธณเธเธฒเธ (Flowchart):
- *
- * flowchart TD
- *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
- *     B --> C["USART_SimpleInit(115200)"]
- *     C --> D["pinMode(PC0, OUTPUT)"]
- *     D --> E["pinMode(PC1, INPUT_PULLUP)"]
- *     E --> F["Countdown_Init(0, 0, 10)"]
- *     F --> G["Countdown_SetAlarmCallback()"]
- *     G --> H["Print instructions"]
- *     H --> I["while(1)"]
- *     I --> J["เธญเนเธฒเธ button"]
- *     J --> K{"falling edge?"}
- *     K -->|"Yes"| L["Delay_Ms(50) debounce"]
- *     L --> M{"still LOW?"}
- *     M -->|"Yes"| N{"Countdown_IsRunning?"}
- *     N -->|"Yes"| O["Countdown_Stop + Print Paused"]
- *     N -->|"No"| P{"Countdown_IsFinished?"}
- *     P -->|"Yes"| Q["Countdown_Reset + clear alarm"]
- *     Q --> R["Countdown_Start + Print Running"]
- *     P -->|"No"| R
- *     O --> I
- *     R --> S{"Countdown_IsRunning?"}
- *     S -->|"Yes"| T{"ELAPSED_TIME >= 1000?"}
- *     T -->|"Yes"| U["Print remaining seconds"]
- *     U --> V{"alarm_triggered?"}
- *     T -->|"No"| V
- *     V -->|"Yes"| W["Print Time's up"]
- *     W --> X["LED blink 10 times"]
- *     X --> I
- *     V -->|"No"| I
- *     K -->|"No"| S
+ * คำเตือน (WARNINGS):
+ * - Countdown ใช้ TIM2 เป็น base timer ภายใน (เช่นเดียวกับ Stopwatch)!
+ * - ห้ามใช้ Countdown และ Stopwatch พร้อมกัน (ทั้งคู่ใช้ TIM2)
+ * - ต้องเรียก Countdown_Init() ก่อนใช้งานฟังก์ชันอื่น
+ * - Callback (AlarmCallback) ทำงานใน main loop context (ไม่ใช่ ISR)
+ * - Countdown_Stop() หยุดชั่วคราว (pause) - เริ่มต่อได้ด้วย Countdown_Start()
+ * - Countdown_Reset() รีเซ็ตกลับเป็นเวลาเริ่มต้นและหยุดการนับ
+ * - แม่นยำที่ระดับ milliseconds (resolution 1ms จาก TIM2)
  * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include <SimpleHAL.h>
 
-// === ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ Global ===
+// === ตัวแปร Global ===
 
-static uint8_t led_alarm = PC0;          // pin PC0 ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝับ LED alarm indicator
-static uint8_t btn_start_pause = PC1;    // pin PC1 ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝับ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ Start/Pause
-static volatile uint8_t alarm_triggered = 0;  // สถาน๏ฟฝ alarm (1=๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ)
+static uint8_t led_alarm = PC0;          // pin PC0 สำหรับ LED alarm indicator
+static uint8_t btn_start_pause = PC1;    // pin PC1 สำหรับปุ่ม Start/Pause
+static volatile uint8_t alarm_triggered = 0;  // สถานะ alarm (1=หมดเวลาแล้ว)
 
 /**
  * @brief Alarm Callback
- * @details ๏ฟฝัง๏ฟฝ๏ฟฝัน๏ฟฝ๏ฟฝ๏ฟฝูก๏ฟฝ๏ฟฝ๏ฟฝยก๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ countdown ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ
- *          ๏ฟฝ๏ฟฝ้งค๏ฟฝ๏ฟฝ flag ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ main loop ๏ฟฝัด๏ฟฝ๏ฟฝรต๏ฟฝ๏ฟฝ๏ฟฝ
+ * @details ฟังก์ชันนี้ถูกเรียกเมื่อ countdown หมดเวลา
+ *          ตั้งค่า flag เพื่อให้ main loop จัดการต่อไป
  */
 void alarm_callback(void)
 {
-    // === Alarm ๏ฟฝูก๏ฟฝ๏ฟฝ๏ฟฝยก๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ ===
+    // === Alarm ถูกเรียกเมื่อหมดเวลา ===
 
-    alarm_triggered = 1;                 // ๏ฟฝ๏ฟฝ๏ฟฝ flag ๏ฟฝ๏ฟฝ main loop ๏ฟฝ๏ฟฝ๏ฟฝ alarm ๏ฟฝำงาน
+    alarm_triggered = 1;                 // ตั้ง flag แจ้ง main loop ว่า alarm ทำงาน
 
-    // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝหต๏ฟฝ: callback ๏ฟฝ๏ฟฝ๏ฟฝำงาน๏ฟฝ context ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ (๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ ISR)
-    // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝรทำงาน๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝวท๏ฟฝ๏ฟฝ๏ฟฝุด
+    // หมายเหตุ: callback นี้ทำงานใน context ปกติ (ไม่ใช่ ISR)
+    // แต่ก็ควรทำงานให้ไวที่สุด
 }
 
 /**
- * @brief ๏ฟฝัง๏ฟฝ๏ฟฝัน๏ฟฝ๏ฟฝัก
- * @return ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ return (loop ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝีท๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝุด)
+ * @brief ฟังก์ชันหลัก
+ * @return ไม่มี return (loop ไม่มีที่สิ้นสุด)
  */
 int main(void)
 {
-    // === ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝะบ๏ฟฝ ===
+    // === เริ่มต้นระบบ ===
 
     SystemCoreClockUpdate();
     Timer_Init();
-    // === ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ USART ===
+    // === เริ่มต้น USART ===
 
-    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);  // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ USART ๏ฟฝ๏ฟฝ๏ฟฝ 115200 baud
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);  // เริ่มต้น USART ที่ 115200 baud
 
-    // === ๏ฟฝ๏ฟฝ้งค๏ฟฝ๏ฟฝ GPIO ===
+    // === ตั้งค่า GPIO ===
 
-    pinMode(led_alarm, PIN_MODE_OUTPUT);       // ๏ฟฝ๏ฟฝ๏ฟฝ PC0 ๏ฟฝ๏ฟฝ output ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝับ LED alarm
-    pinMode(btn_start_pause, PIN_MODE_INPUT_PULLUP);  // ๏ฟฝ๏ฟฝ๏ฟฝ PC1 ๏ฟฝ๏ฟฝ input pull-up ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝับ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ
+    pinMode(led_alarm, PIN_MODE_OUTPUT);       // ตั้ง PC0 เป็น output สำหรับ LED alarm
+    pinMode(btn_start_pause, PIN_MODE_INPUT_PULLUP);  // ตั้ง PC1 เป็น input pull-up สำหรับปุ่ม
 
-    // === ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ Countdown ===
+    // === เริ่มต้น Countdown ===
 
-    // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ countdown 0 ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ, 0 ๏ฟฝาท๏ฟฝ, 10 ๏ฟฝินาท๏ฟฝ
-    Countdown_Init(0, 0, 10);            // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ countdown ๏ฟฝ๏ฟฝ๏ฟฝ 10 ๏ฟฝินาท๏ฟฝ
-    Countdown_SetAlarmCallback(alarm_callback);  // ๏ฟฝ๏ฟฝ๏ฟฝ callback ๏ฟฝ๏ฟฝ๏ฟฝะถูก๏ฟฝ๏ฟฝ๏ฟฝยก๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ
+    // ตั้งเวลา countdown 0 ชั่วโมง, 0 นาที, 10 วินาที
+    Countdown_Init(0, 0, 10);            // เริ่มต้น countdown ที่ 10 วินาที
+    Countdown_SetAlarmCallback(alarm_callback);  // ตั้ง callback ที่จะถูกเรียกเมื่อหมดเวลา
 
-    // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝหต๏ฟฝ: countdown ๏ฟฝัง๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝับ ๏ฟฝ๏ฟฝอง๏ฟฝ๏ฟฝ๏ฟฝยก Countdown_Start() ๏ฟฝ๏ฟฝอน
+    // หมายเหตุ: countdown ยังไม่เริ่มนับ ต้องเรียก Countdown_Start() ก่อน
 
-    // === ๏ฟฝสด๏ฟฝ๏ฟฝ๏ฟฝอค๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ ===
+    // === แสดงข้อความเริ่มต้น ===
 
-    USART_Print("Countdown Example\r\n");           // ๏ฟฝสด๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝอต๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝาง
-    USART_Print("===================\r\n");         // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ
-    USART_Print("Countdown: 10 seconds\r\n");       // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝาท๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ
-    USART_Print("Press PC1 to Start/Pause\r\n");    // ๏ฟฝ๏ฟฝ๏ฟฝิธ๏ฟฝ๏ฟฝ๏ฟฝาน
-    USART_Print("Status: Stopped\r\n");             // สถาน๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ
+    USART_Print("Countdown Example\r\n");           // แสดงชื่อตัวอย่าง
+    USART_Print("===================\r\n");         // เส้นแบ่ง
+    USART_Print("Countdown: 10 seconds\r\n");       // แจ้งเวลาที่ตั้ง
+    USART_Print("Press PC1 to Start/Pause\r\n");    // แจ้งวิธีใช้งาน
+    USART_Print("Status: Stopped\r\n");             // สถานะเริ่มต้น
 
-    // === ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝับ๏ฟฝ๏ฟฝรทำงาน ===
+    // === ตัวแปรสำหรับการทำงาน ===
 
-    uint32_t last_report = 0;            // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝาค๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝุด๏ฟฝ๏ฟฝ๏ฟฝยท๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝยงาน
-    uint8_t button_prev = HIGH;          // สถานะก๏ฟฝอนหน๏ฟฝาของ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ (๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝับ edge detection)
+    uint32_t last_report = 0;            // เก็บเวลาครั้งสุดท้ายที่รายงาน
+    uint8_t button_prev = HIGH;          // สถานะก่อนหน้าของปุ่ม (สำหรับ edge detection)
 
-    // === Main Loop (๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝุด) ===
+    // === Main Loop (ไม่สิ้นสุด) ===
 
     while (1)
     {
-        // === ๏ฟฝ๏ฟฝานสถานะป๏ฟฝ๏ฟฝ๏ฟฝ (Edge Detection) ===
+        // === อ่านสถานะปุ่ม (Edge Detection) ===
 
-        uint8_t btn_current = digitalRead(btn_start_pause);  // ๏ฟฝ๏ฟฝานสถานะป๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝัจ๏ฟฝุบัน
+        uint8_t btn_current = digitalRead(btn_start_pause);  // อ่านสถานะปุ่มปัจจุบัน
 
-        // === Button: Start/Pause (๏ฟฝ๏ฟฝวจ๏ฟฝับ Falling Edge) ===
+        // === Button: Start/Pause (ตรวจจับ Falling Edge) ===
 
-        if (button_prev == HIGH && btn_current == LOW)  // ๏ฟฝ๏ฟฝาป๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ่งถูก๏ฟฝ๏ฟฝ (HIGHLOW)
+        if (button_prev == HIGH && btn_current == LOW)  // ถ้าปุ่มเพิ่งถูกกด (HIGHLOW)
         {
-            Delay_Ms(50);                    // หน๏ฟฝวง 50ms ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ debounce
-            if (digitalRead(btn_start_pause) == LOW)  // ๏ฟฝ็คซ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝาก๏ฟฝ๏ฟฝ๏ฟฝิง
+            Delay_Ms(50);                    // หน่วง 50ms เพื่อ debounce
+            if (digitalRead(btn_start_pause) == LOW)  // เช็คซ้ำว่ากดจริง
             {
-                if (Countdown_IsRunning())   // ๏ฟฝ๏ฟฝ๏ฟฝ countdown ๏ฟฝ๏ฟฝ๏ฟฝัง๏ฟฝำงาน
+                if (Countdown_IsRunning())   // ถ้า countdown กำลังทำงาน
                 {
-                    Countdown_Stop();        // ๏ฟฝ๏ฟฝุด countdown ๏ฟฝ๏ฟฝ๏ฟฝวค๏ฟฝ๏ฟฝ๏ฟฝ (pause)
-                    USART_Print("Status: Paused\r\n");  // ๏ฟฝ๏ฟฝสถาน๏ฟฝ pause
+                    Countdown_Stop();        // หยุด countdown ชั่วคราว (pause)
+                    USART_Print("Status: Paused\r\n");  // แจ้งสถานะ pause
                 }
-                else                         // ๏ฟฝ๏ฟฝ๏ฟฝ countdown ๏ฟฝ๏ฟฝุด๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ
+                else                         // ถ้า countdown หยุดอยู่
                 {
-                    // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ ๏ฟฝ๏ฟฝ๏ฟฝ reset ๏ฟฝ๏ฟฝอน๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ
-                    if (Countdown_IsFinished())  // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ
+                    // ถ้าหมดเวลาแล้ว ให้ reset ก่อนเริ่มใหม่
+                    if (Countdown_IsFinished())  // ถ้าหมดเวลาแล้ว
                     {
-                        Countdown_Reset();   // ๏ฟฝ๏ฟฝ๏ฟฝ็ตก๏ฟฝับ๏ฟฝ๏ฟฝ 10 ๏ฟฝินาท๏ฟฝ
-                        alarm_triggered = 0; // ๏ฟฝ๏ฟฝางสถาน๏ฟฝ alarm
-                        digitalWrite(led_alarm, LOW);  // ๏ฟฝิด LED alarm
-                        USART_Print("Countdown Reset to 10s\r\n");  // ๏ฟฝ๏ฟฝ reset
+                        Countdown_Reset();   // รีเซ็ตกลับเป็น 10 วินาที
+                        alarm_triggered = 0; // ล้างสถานะ alarm
+                        digitalWrite(led_alarm, LOW);  // ปิด LED alarm
+                        USART_Print("Countdown Reset to 10s\r\n");  // แจ้ง reset
                     }
 
-                    Countdown_Start();       // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ countdown
-                    USART_Print("Status: Running\r\n");  // ๏ฟฝ๏ฟฝสถาน๏ฟฝ running
+                    Countdown_Start();       // เริ่ม countdown
+                    USART_Print("Status: Running\r\n");  // แจ้งสถานะ running
                 }
             }
         }
 
-        // === ๏ฟฝัปเดตสถานะป๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝับ๏ฟฝอบ๏ฟฝัด๏ฟฝ ===
+        // === อัปเดตสถานะปุ่มสำหรับรอบถัดไป ===
 
-        button_prev = btn_current;          // ๏ฟฝัปเดตสถานะป๏ฟฝ๏ฟฝ๏ฟฝ
+        button_prev = btn_current;          // อัปเดตสถานะปุ่ม
 
-        // === ๏ฟฝ๏ฟฝยงาน๏ฟฝ๏ฟฝ๏ฟฝาท๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝอทุก 1 ๏ฟฝินาท๏ฟฝ ===
+        // === รายงานเวลาที่เหลือทุก 1 วินาที ===
 
-        if (Countdown_IsRunning())           // ๏ฟฝ๏ฟฝ๏ฟฝ countdown ๏ฟฝ๏ฟฝ๏ฟฝัง๏ฟฝำงาน
+        if (Countdown_IsRunning())           // ถ้า countdown กำลังทำงาน
         {
-            if (ELAPSED_TIME(last_report, Get_CurrentMs()) >= 1000)  // ๏ฟฝุก 1 ๏ฟฝินาท๏ฟฝ
+            if (ELAPSED_TIME(last_report, Get_CurrentMs()) >= 1000)  // ทุก 1 วินาที
             {
-                last_report = Get_CurrentMs();  // ๏ฟฝัปเดต๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ
+                last_report = Get_CurrentMs();  // อัปเดตเวลา
 
-                // ๏ฟฝสด๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝาท๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝินาท๏ฟฝ
-                uint32_t remaining = Countdown_GetRemainingSeconds();  // ๏ฟฝ๏ฟฝาน๏ฟฝินาทีท๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ
-                USART_Print("Remaining: ");      // ๏ฟฝสด๏ฟฝ๏ฟฝ๏ฟฝอค๏ฟฝ๏ฟฝ๏ฟฝ
-                USART_PrintNum(remaining);        // ๏ฟฝสด๏ฟฝ๏ฟฝ๏ฟฝาท๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ
-                USART_Print(" seconds\r\n");      // หน๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝินาท๏ฟฝ
+                // แสดงเวลาที่เหลือเป็นวินาที
+                uint32_t remaining = Countdown_GetRemainingSeconds();  // อ่านวินาทีที่เหลือ
+                USART_Print("Remaining: ");      // แสดงข้อความ
+                USART_PrintNum(remaining);        // แสดงค่าที่เหลือ
+                USART_Print(" seconds\r\n");      // หน่วยวินาที
             }
         }
 
-        // === ๏ฟฝ๏ฟฝวจ๏ฟฝอบ Alarm ===
+        // === ตรวจสอบ Alarm ===
 
-        if (alarm_triggered)                 // ๏ฟฝ๏ฟฝ๏ฟฝ alarm ๏ฟฝูก trigger
+        if (alarm_triggered)                 // ถ้า alarm ถูก trigger
         {
-            alarm_triggered = 0;             // ๏ฟฝ๏ฟฝาง flag
+            alarm_triggered = 0;             // ล้าง flag
 
-            USART_Print("\r\n*** Time's up! ***\r\n");  // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ
-            USART_Print("Countdown finished!\r\n");     // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ
+            USART_Print("\r\n*** Time's up! ***\r\n");  // แจ้งหมดเวลา
+            USART_Print("Countdown finished!\r\n");     // แจ้งเสร็จสิ้น
 
-            // LED ๏ฟฝ๏ฟฝะพ๏ฟฝิบ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ 10 ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ
-            for (uint8_t i = 0; i < 10; i++)  // ๏ฟฝ๏ฟฝะพ๏ฟฝิบ 10 ๏ฟฝอบ
+            // LED กระพริบเร็ว 10 ครั้ง
+            for (uint8_t i = 0; i < 10; i++)  // กระพริบ 10 รอบ
             {
-                digitalWrite(led_alarm, HIGH);  // ๏ฟฝิด LED
-                Delay_Ms(100);                  // หน๏ฟฝวง 100ms
-                digitalWrite(led_alarm, LOW);   // ๏ฟฝิด LED
-                Delay_Ms(100);                  // หน๏ฟฝวง 100ms
+                digitalWrite(led_alarm, HIGH);  // เปิด LED
+                Delay_Ms(100);                  // หน่วง 100ms
+                digitalWrite(led_alarm, LOW);   // ปิด LED
+                Delay_Ms(100);                  // หน่วง 100ms
             }
 
-            USART_Print("Press PC1 to reset and start again\r\n");  // ๏ฟฝ๏ฟฝ๏ฟฝิธ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ
+            USART_Print("Press PC1 to reset and start again\r\n");  // แจ้งวิธีเริ่มใหม่
         }
     }
 
-    // ๏ฟฝ๏ฟฝ่งน๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝัน๏ฟฝึง
+    // สิ่งนี้จะไม่มีวันถึง
     // return 0;
 }

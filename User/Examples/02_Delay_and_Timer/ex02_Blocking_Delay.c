@@ -30,26 +30,6 @@
  * - การใช้ delay นานๆ จะทำให้ CPU ทำงานว่างเปล่า (waste cycles)
  * - ไม่เหมาะสำหรับงานที่ต้องการ real-time response
  * ============================================================
- * แผนผังการทำงาน (Flowchart):
- *
- * flowchart TD
- *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
- *     B --> C["USART_SimpleInit(115200)"]
- *     C --> D["pinMode(PC0, OUTPUT)"]
- *     D --> E["Print header"]
- *     E --> F["while(1)"]
- *     F --> G["digitalWrite(HIGH) + Delay_Ms(200)"]
- *     G --> H["digitalWrite(LOW) + Delay_Ms(100)"]
- *     H --> I["digitalWrite(HIGH) + Delay_Ms(300)"]
- *     I --> J["digitalWrite(LOW) + Delay_Ms(1000)"]
- *     J --> K["Print 'Testing Delay_Us'"]
- *     K --> L["for i = 0 to 9"]
- *     L --> M["digitalWrite(HIGH) + Delay_Us(1)"]
- *     M --> N["digitalWrite(LOW) + Delay_Us(1)"]
- *     N --> O{"i < 10?"}
- *     O -->|"Yes"| L
- *     O -->|"No"| F
- * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20

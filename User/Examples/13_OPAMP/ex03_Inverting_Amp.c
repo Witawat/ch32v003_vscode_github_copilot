@@ -27,29 +27,10 @@
  *   3. ข้อจำกัด: ด้วย R1=10k, R2=20k Gain=-2 แต่ Vin ไม่ควรเกิน 1.65V
  *      เพราะ Vout จะพยายามไป -3.3V ซึ่งต่ำกว่า GND
  * ============================================================
- * ผังการทำงาน (Flowchart):
- *
- * flowchart TD
- *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
- *     B --> C["USART_SimpleInit()"]
- *     C --> D["pinMode(PD2, INPUT)"]
- *     D --> E["ADC_SimpleInit()"]
- *     E --> F["OPAMP_ConfigInverting(CHP0, CHN0)"]
- *     F --> G["OPAMP_Enable()"]
- *     G --> H{"OPAMP_IsEnabled()?"}
- *     H -->|"No"| I["USART_Print(OPAMP init failed)"]
- *     I --> J["while(1)"]
- *     H -->|"Yes"| K["while(1)"]
- *     K --> L["ADC_Read(ADC_CH_PD2)"]
- *     L --> M["Calculate Vout = adcVal * 3.3 / 4095"]
- *     M --> N["USART_Print(Vin=1.0V, Vout=XV)"]
- *     N --> O["Delay_Ms(500)"]
- *     O --> K
- * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20
-/* CH32V003 has no hardware FPU � float/double use software emulation (~800 cycles) */
+/* CH32V003 has no hardware FPU � float/double use software emulation (~800 cycles) */
 #include <SimpleHAL.h>
 
 int main(void)

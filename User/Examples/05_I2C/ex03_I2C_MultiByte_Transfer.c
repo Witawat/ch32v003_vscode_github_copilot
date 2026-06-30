@@ -24,24 +24,6 @@
  * BH1750 needs time after power-on (~10 ms) before
  *          first command. Resolution set via command byte.
  * ============================================================
- * ผังการทำงาน (Flowchart):
- *
- * flowchart TD
- *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
- *     B --> C["USART_SimpleInit(115200)"]
- *     C --> D["I2C_SimpleInit(100kHz)"]
- *     D --> E["I2C_Write(BH1750, PWR_ON)"]
- *     E --> F["Delay_Ms(10)"]
- *     F --> G["I2C_Write(BH1750, HRES)"]
- *     G --> H["Delay_Ms(180)"]
- *     H --> I["while(1)"]
- *     I --> J["I2C_Read(BH1750, raw, 2)"]
- *     J --> K["lux = (raw[0]<<8)|raw[1]"]
- *     K --> L["lux = lux/1.2"]
- *     L --> M["Print Light lux"]
- *     M --> N["Delay_Ms(500)"]
- *     N --> I
- * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20
@@ -56,7 +38,7 @@ int main(void)
     SystemCoreClockUpdate();
     Timer_Init();
     USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
-    I2C_SimpleInit(I2C_100KHZ, I2C_PINS_PARTIAL_REMAP);  // PD2=SCL, PD1=SDA � SOP-8 compatible
+    I2C_SimpleInit(I2C_100KHZ, I2C_PINS_PARTIAL_REMAP);  // PD2=SCL, PD1=SDA � SOP-8 compatible
 
     uint8_t cmd = CMD_PWR_ON;
     I2C_Write(BH1750_ADDR, &cmd, 1);

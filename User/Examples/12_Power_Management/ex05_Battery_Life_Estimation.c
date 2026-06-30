@@ -5,19 +5,6 @@
  *
  * Circuit: USART: TX=PD5, RX=PD6
  * ============================================================
- * ผังการทำงาน (Flowchart):
- *
- * flowchart TD
- *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
- *     B --> C["USART_SimpleInit()"]
- *     C --> D["Set battery_mAh=1000, active_pct=1, active_mA=20, standby_uA=5"]
- *     D --> E["PWR_CalculateBatteryLife()"]
- *     E --> F["hours / 24 = days"]
- *     F --> G["USART_Print(battery parameters)"]
- *     G --> H["PWR_EstimateStandbyCurrent(PVD=off, AWU=on)"]
- *     H --> I["USART_Print(standby current)"]
- *     I --> J["while(1) Delay_Ms(1000)"]
- * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20

@@ -23,30 +23,6 @@
  *   - Countdown ใช้ TIM2 - อาจขัดแย้งกับ PWM ถ้าใช้ TIM2 channels
  *   - Buzzer ต้องใช้ transistor ขยายกระแส
  * ============================================================
- * ผังการทำงาน (Flowchart):
- *
- * flowchart TD
- *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
- *     B --> C["I2C + PWM + Interrupts init"]
- *     C --> D["USART + Countdown_Init"]
- *     D --> E["while(1)"]
- *     E --> F{"Button1 pressed?"}
- *     F -->|"Yes"| G{"Running?"}
- *     G -->|"No"| H["Countdown_Start()"]
- *     G -->|"Yes"| I{"Paused?"}
- *     I -->|"No"| J["Countdown_Stop()"]
- *     I -->|"Yes"| K["Countdown_Start()"]
- *     E --> L{"Button2 pressed?"}
- *     L -->|"Yes"| M["Countdown_Reset()"]
- *     E --> N{"Running & !Paused?"}
- *     N -->|"Yes"| O{"Time changed?"}
- *     O -->|"Yes"| P["PrintTime()"]
- *     E --> Q{"Alarm triggered?"}
- *     Q -->|"Yes"| R["Buzzer ON 1s"]
- *     R --> S["Print Time's Up"]
- *     S --> T["Buzzer OFF"]
- *     T --> E
- * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20

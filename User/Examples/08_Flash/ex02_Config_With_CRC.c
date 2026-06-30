@@ -29,22 +29,6 @@
  *   ⚠ ใช้ FLASH_CONFIG_SIZE_NO_CRC หรือ FLASH_SAVE_CONFIG macro
  *     เพื่อให้สะดวกและป้องกันข้อผิดพลาด
  * ============================================================
- * ผังการทำงาน (Flowchart):
- *
- * flowchart TD
- *     A["SystemCoreClockUpdate()"] --> B["USART_SimpleInit()"]
- *     B --> C["Prepare cfgSave"]
- *     C --> D["Flash_SaveConfig(&cfgSave)"]
- *     D --> E{"result == 0?"}
- *     E -->|"No"| F["ERROR: halt"]
- *     E -->|"Yes"| G["Flash_LoadConfig(&cfgLoad)"]
- *     G --> H{"load success?"}
- *     H -->|"No"| F
- *     H -->|"Yes"| I{"CRC valid?"}
- *     I -->|"No"| F
- *     I -->|"Yes"| J["USART_Print(Config OK)"]
- *     J --> K["while(1)"]
- * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20

@@ -18,23 +18,6 @@
  * - PRNG ใช้ LCG glibc-style (1103515245 * seed + 12345) mod 2^31
  * - ใช้ _randomMax() / _randomRange() แทน random() เพราะ stdlib.h
  *   มี long random(void) อยู่แล้ว C จึงใช้ชื่อ random โดยตรงไม่ได้
- * ============================================================
- * ผังการทำงาน (Flowchart):
- *
- * flowchart TD
- *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
- *     B --> C["USART + pinMode x2"]
- *     C --> D["randomSeed()"]
- *     D --> E["while(1)"]
- *     E --> F["_randomMax(10)"]
- *     F --> G{"r1 < 5?"}
- *     G -->|"Yes"| H["LED1 ON, LED2 OFF"]
- *     G -->|"No"| I["LED1 OFF, LED2 ON"]
- *     H --> J["_randomRange(100, 500)"]
- *     I --> J
- *     J --> K["Delay_Ms(delay_ms)"]
- *     K --> E
- * ============================================================
  */
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include <SimpleHAL.h>

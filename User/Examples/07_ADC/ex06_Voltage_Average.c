@@ -4,24 +4,6 @@
  *
  * ADC_ReadVoltage: อ่าน ADC พร้อมแปลงเป็น voltage (V)
  * ADC_ReadAverage: อ่านหลายครั้งหาค่าเฉลี่ย ลด noise
- * ============================================================
- * ผังการทำงาน (Flowchart):
- *
- * flowchart TD
- *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
- *     B --> C["USART_SimpleInit(115200)"]
- *     C --> D["ADC_SimpleInit()"]
- *     D --> E["while(1)"]
- *     E --> F["ADC_ReadVoltage(PD2, 3.3f)"]
- *     F --> G["Print Voltage (mV)"]
- *     G --> H["ADC_ReadAverage(PD2, 16)"]
- *     H --> I["ADC_ToVoltage(avg, 3.3f)"]
- *     I --> J["Print Avg (mV) with 16 samples"]
- *     J --> K["ADC_ToPercent(avg)"]
- *     K --> L["Print Percent"]
- *     L --> M["Delay_Ms(500)"]
- *     M --> E
- * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20

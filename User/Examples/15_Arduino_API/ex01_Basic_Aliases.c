@@ -19,19 +19,6 @@
  *
  * คำเตือน:
  * - ต้องเรียก SystemCoreClockUpdate() ก่อนใช้ millis/micros/delay
- * ============================================================
- * ผังการทำงาน (Flowchart):
- *
- * flowchart TD
- *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
- *     B --> C["pinMode(LED, OUTPUT)"]
- *     C --> D["while(1)"]
- *     D --> E["digitalToggle(LED)"]
- *     E --> F["delay(500)"]
- *     F --> G["USART_Print(millis())"]
- *     G --> H["delay(500)"]
- *     H --> D
- * ============================================================
  */
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include <SimpleHAL.h>

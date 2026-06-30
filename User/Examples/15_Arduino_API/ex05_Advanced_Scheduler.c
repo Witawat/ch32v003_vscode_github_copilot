@@ -21,35 +21,11 @@
  * หมายเหตุ:
  * - IWDG ต้อง init ก่อนใช้ yield()
  * - ทุก task ใช้ millis() แทน delay() เพื่อไม่บล็อก task อื่น
- * ============================================================
- * ผังการทำงาน (Flowchart):
- *
- * flowchart TD
- *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
- *     B --> C["USART + IWDG + pinMode x3"]
- *     C --> D["randomSeed()"]
- *     D --> E["while(1)"]
- *     E --> F{"now - t1 >= 1000?"}
- *     F -->|"Yes"| G["Toggle LED1"]
- *     G --> H{"now - t2 >= task2_int?"}
- *     F -->|"No"| H
- *     H -->|"Yes"| I["Toggle LED2"]
- *     I --> J{"now - t3 >= 100?"}
- *     H -->|"No"| J
- *     J -->|"Yes"| K["Toggle LED3"]
- *     K --> L{"now - t_log >= 2000?"}
- *     J -->|"No"| L
- *     L -->|"Yes"| M["Print status report"]
- *     M --> N["Update task2_interval"]
- *     N --> O["yield()"]
- *     L -->|"No"| O
- *     O --> E
- * ============================================================
  */
 #define ENABLE_USART_PRINTLN  1
 #define ENABLE_USART_PRINTFLOAT 1
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20
-/* CH32V003 has no hardware FPU � float/double use software emulation (~800 cycles) */
+/* CH32V003 has no hardware FPU � float/double use software emulation (~800 cycles) */
 #include <SimpleHAL.h>
 
 #define LED1  PC0

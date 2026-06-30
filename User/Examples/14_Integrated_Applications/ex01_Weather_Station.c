@@ -32,25 +32,10 @@
  *   - สูตรคำนวณ Pressure ต้องใช้ค่า calibration coefficient จากโรงงาน
  *   - 1-Wire ใช้ pin แยกจาก I2C ไม่แชร์ bus
  * ============================================================
- * ผังการทำงาน (Flowchart):
- *
- * flowchart TD
- *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
- *     B --> C["init I2C + 1-Wire + USART"]
- *     C --> D["init BMP280 + DS18B20"]
- *     D --> E["Timer_t every 5s"]
- *     E --> F{"Timer expired?"}
- *     F -->|"Yes"| G["read BMP280(temp+pressure)"]
- *     G --> H["read DS18B20(temp)"]
- *     H --> I["USART_Print(all data)"]
- *     I --> F
- *     F -->|"No"| J["IWDG_Feed()"]
- *     J --> F
- * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20
-/* CH32V003 has no hardware FPU � float/double use software emulation (~800 cycles) */
+/* CH32V003 has no hardware FPU � float/double use software emulation (~800 cycles) */
 #include <SimpleHAL.h>
 
 #define DS18B20_PIN PD2

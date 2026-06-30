@@ -18,20 +18,6 @@
  * - PWM channels เกิน PWM2_CH1 (PD2,PD3,PD7,PC0,PC3,PC4,PA1 ไม่มี)
  *
  * @note เปลี่ยน CH32V003_PACKAGE เป็น PACKAGE_TSSOP20 เพื่อใช้ฟีเจอร์ครบ
- * ============================================================
- * ผังการทำงาน (Flowchart):
- *
- * flowchart TD
- *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
- *     B --> C["USART + ADC + PWM init"]
- *     C --> D["I2C_Soft_Init()"]
- *     D --> E["while(1)"]
- *     E --> F["PWM brightness fade"]
- *     F --> G["ADC temperature read"]
- *     G --> H["USART print"]
- *     H --> I["Delay_Ms(200)"]
- *     I --> E
- * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_SOP8

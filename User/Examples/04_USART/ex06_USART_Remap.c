@@ -13,29 +13,6 @@
  *
  * @note USART_PINS_REMAP1 ต้องใช้ PD0 ซึ่งไม่มีใน SOP-8/SOP-16
  *       ถ้าใช้แพ็กเกจ SOP-8/SOP-16 จะเกิด #error ตอนคอมไพล์
- * ============================================================
- * ผังการทำงาน (Flowchart):
- *
- * flowchart TD
- *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
- *     B --> C["pinMode(PC0, PIN_MODE_OUTPUT)"]
- *     C --> D["test_pin_config(DEFAULT)"]
- *     D --> E["Delay_Ms(500)"]
- *     E --> F["test_pin_config(REMAP2)"]
- *     F --> G["Delay_Ms(500)"]
- *     G --> H{"CH32V003_HAS_PD0?"}
- *     H -->|"Yes"| I["test_pin_config(REMAP1)"]
- *     H -->|"No"| J["Skip REMAP1"]
- *     I --> K["Delay_Ms(500)"]
- *     J --> K
- *     K --> L["test_pin_config(FULL_REMAP)"]
- *     L --> M["Delay_Ms(500)"]
- *     M --> N["Print complete"]
- *     N --> O["while(1)"]
- *     O --> P["digitalToggle(PC0)"]
- *     P --> Q["Delay_Ms(1000)"]
- *     Q --> O
- * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20

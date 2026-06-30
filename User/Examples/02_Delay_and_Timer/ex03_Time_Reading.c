@@ -35,26 +35,6 @@
  * - Get_CurrentUs() ปิด interrupt ชั่วคราวเพื่อความแม่นยำ
  * - ค่าเวลามีไว้สำหรับเปรียบเทียบ ไม่ใช่เวลาจริงของโลก
  * ============================================================
- * แผนผังการทำงาน (Flowchart):
- *
- * flowchart TD
- *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
- *     B --> C["USART_SimpleInit(115200)"]
- *     C --> D["pinMode(PC0, OUTPUT)"]
- *     D --> E["start_time = Get_CurrentMs()"]
- *     E --> F["while(1)"]
- *     F --> G["อ่าน current_ms, current_us, tick_us"]
- *     G --> H{"ELAPSED_TIME >= 1000?"}
- *     H -->|"Yes"| I["digitalWrite(HIGH) + Delay_Ms(50) + digitalWrite(LOW)"]
- *     I --> J["Print ms, us, tick, elapsed"]
- *     J --> K["loop_count++, Print"]
- *     K --> L["วัด USART timing"]
- *     L --> M{"usart_time > 100?"}
- *     M -->|"Yes"| N["Print warning"]
- *     N --> F
- *     M -->|"No"| F
- *     H -->|"No"| F
- * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20

@@ -1,11 +1,11 @@
 /**
  * ============================================================
  * ex02_IWDG_Advanced.c
- * ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ò¸Ôµ IWDG áººï¿½ï¿½Ë¹ï¿½ï¿½ï¿½ï¿½ï¿½Í§ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ç¨ï¿½Íºï¿½ï¿½ï¿½Ëµï¿½ï¿½ï¿½ï¿½ï¿½
+ * â»Ãá¡ÃÁÊÒ¸Ôµ IWDG áºº¡ÓË¹´¤èÒàÍ§ ¾ÃéÍÁµÃÇ¨ÊÍºÊÒàËµØÃÕà«çµ
  * (Advanced IWDG with custom config and reset cause detection)
  * ============================================================
  *
- * á¼¹ï¿½Ñ§Ç§ï¿½ï¿½ (Circuit Diagram):
+ * á¼¹¼Ñ§Ç§¨Ã (Circuit Diagram):
  *
  *   CH32V003
  *   ------
@@ -15,101 +15,79 @@
  *   PD6 (RX)  <---- USB-UART (TX)
  *
  * ============================================================
- * ï¿½ï¿½ï¿½Ñ¾ï¿½ï¿½ï¿½ï¿½Ò´ï¿½ï¿½Ñ§ (Expected Results):
- *   ï¿½Ùµï¿½ï¿½ï¿½ï¿½ï¿½Ã¡: "Clean boot"  feed IWDG 5 ï¿½Ô¹Ò·ï¿½  ï¿½ï¿½Ø´ feed  ï¿½ï¿½ï¿½ï¿½
- *   ï¿½Ùµï¿½ï¿½ï¿½é§·ï¿½ï¿½ï¿½Í§: "Watchdog reset! Last timeout: 2000ms"
+ * ¼ÅÅÑ¾¸ì·Õè¤Ò´ËÇÑ§ (Expected Results):
+ *   ºÙµ¤ÃÑé§áÃ¡: "Clean boot"  feed IWDG 5 ÇÔ¹Ò·Õ  ËÂØ´ feed  ÃÕà«çµ
+ *   ºÙµ¤ÃÑé§·ÕèÊÍ§: "Watchdog reset! Last timeout: 2000ms"
  *   (First boot: "Clean boot"  feed 5s  stop  reset)
  *   (Second boot: "Watchdog reset! Last timeout: 2000ms")
  * ============================================================
- * ï¿½ï¿½ï¿½ï¿½Í¹ (WARNINGS):
- *   IWDG_WasResetCause() ï¿½ï¿½Ç¨ï¿½Íº RCC flag ï¿½ ï¿½ï¿½Í§Åºï¿½ï¿½Ñ§ï¿½ï¿½Ò¹
- *     ï¿½ï¿½ï¿½Í»ï¿½Í§ï¿½Ñ¹ï¿½ï¿½Ãµï¿½Ç¨ï¿½Ñºï¿½ï¿½ï¿½ã¹ºÙµï¿½Ñ´ï¿½
+ * ¤Óàµ×Í¹ (WARNINGS):
+ *   IWDG_WasResetCause() µÃÇ¨ÊÍº RCC flag — µéÍ§ÅºËÅÑ§ÍèÒ¹
+ *     à¾×èÍ»éÍ§¡Ñ¹¡ÒÃµÃÇ¨¨Ñº«éÓã¹ºÙµ¶Ñ´ä»
  *     (Clear flag after reading to avoid false detection on next boot)
- * ============================================================
- * à¸œà¸±à¸‡à¸à¸²à¸£à¸—à¸³à¸‡à¸²à¸™ (Flowchart):
- *
- * flowchart TD
- *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
- *     B --> C["USART_SimpleInit()"]
- *     C --> D["IWDG_WasResetCause()"]
- *     D --> E{"IWDG reset?"}
- *     E -->|"Yes"| F["USART_Print(Watchdog reset)"]
- *     E -->|"No"| G["USART_Print(Clean boot)"]
- *     F --> H["IWDG_ClearResetFlag()"]
- *     G --> H
- *     H --> I["IWDG_Init(64, 1249)"]
- *     I --> J["IWDG_GetTimeout()"]
- *     J --> K["IWDG_IsBusy()"]
- *     K --> L["for feedCount=0 to 24"]
- *     L --> M["Toggle LED + IWDG_Feed()"]
- *     M --> N["Delay_Ms(200)"]
- *     N --> O{"feedCount < 25?"}
- *     O -->|"Yes"| L
- *     O -->|"No"| P["Stop feeding"]
- *     P --> Q["while(1) à¸£à¸­ IWDG reset"]
  * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20
-#include <SimpleHAL.h>                      // ï¿½ï¿½ï¿½ï¿½Åºï¿½ï¿½ï¿½ï¿½ SimpleHAL (Include SimpleHAL library)
+#include <SimpleHAL.h>                      // ÃÇÁäÅºÃÒÃÕ SimpleHAL (Include SimpleHAL library)
 
 // --------------------------------------------------------------------------
-// ï¿½Ñ§ï¿½ï¿½Ñ¹ï¿½ï¿½Ñ¡ (Main function)
+// ¿Ñ§¡ìªÑ¹ËÅÑ¡ (Main function)
 // --------------------------------------------------------------------------
 
 int main(void)
 {
     SystemCoreClockUpdate();
     Timer_Init();
-    // ï¿½ï¿½ï¿½ï¿½Ãµï¿½Ò§ ï¿½ (Variables)
-    uint8_t  resetCause = 0;                 // ï¿½ï¿½ï¿½ËµØ¡ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ (Reset cause flag)
-    uint32_t timeoutMs   = 0;                // ï¿½ï¿½ï¿½ timeout ï¿½ï¿½ï¿½Ó¹Ç³ï¿½ï¿½ (Calculated timeout in ms)
-    uint8_t  feedCount   = 0;                // ï¿½ï¿½Ç¹Ñºï¿½Íºï¿½ï¿½ï¿½ feed (Feed counter)
-    uint8_t  isBusy      = 0;                // Ê¶Ò¹ï¿½ IWDG ï¿½ï¿½ï¿½Ñ§ï¿½Ó§Ò¹ (IWDG busy flag)
+    // µÑÇá»ÃµèÒ§ æ (Variables)
+    uint8_t  resetCause = 0;                 // ÊÒàËµØ¡ÒÃÃÕà«çµ (Reset cause flag)
+    uint32_t timeoutMs   = 0;                // ¤èÒ timeout ·Õè¤Ó¹Ç³ä´é (Calculated timeout in ms)
+    uint8_t  feedCount   = 0;                // µÑÇ¹ÑºÃÍº¡ÒÃ feed (Feed counter)
+    uint8_t  isBusy      = 0;                // Ê¶Ò¹Ð IWDG ¡ÓÅÑ§·Ó§Ò¹ (IWDG busy flag)
 
-    // ---- ï¿½ï¿½Ç¹ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ (Initialization) ----
-    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);                      // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½é¹¾ï¿½ï¿½ï¿½Í¹Ø¡ï¿½ï¿½ (Initialize USART)
-    pinMode(PC0, PIN_MODE_OUTPUT);          // ï¿½ï¿½Ë¹ï¿½ PC0 ï¿½ï¿½ï¿½ï¿½Òµï¿½Øµ (Set PC0 as PIN_MODE_OUTPUT)
-    digitalWrite(PC0, LOW);                 // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ LED ï¿½Ñº (Initialize LED off)
+    // ---- ÊèÇ¹àÃÔèÁµé¹ (Initialization) ----
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);                      // àÃÔèÁµé¹¾ÍÃìµÍ¹Ø¡ÃÁ (Initialize USART)
+    pinMode(PC0, PIN_MODE_OUTPUT);          // ¡ÓË¹´ PC0 à»ç¹àÍÒµì¾Øµ (Set PC0 as PIN_MODE_OUTPUT)
+    digitalWrite(PC0, LOW);                 // àÃÔèÁµé¹ LED ´Ñº (Initialize LED off)
 
-    USART_Print("--- IWDG Advanced ---\r\n");  // ï¿½Ê´ï¿½ï¿½ï¿½Ç¢ï¿½ï¿½ (Display title)
+    USART_Print("--- IWDG Advanced ---\r\n");  // áÊ´§ËÑÇ¢éÍ (Display title)
 
-    // ---- ï¿½ï¿½Ç¨ï¿½Íºï¿½ï¿½ï¿½ËµØ¡ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ (Check reset cause) ----
-    resetCause = IWDG_WasResetCause();       // ï¿½ï¿½Ç¨ï¿½Íºï¿½ï¿½ï¿½ï¿½ï¿½ï¿½çµ¨Ò¡ IWDG ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ (Check if IWDG caused reset)
-    if (resetCause == 1) {                   // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½çµ¨Ò¡ IWDG (If reset from IWDG)
-        USART_Print("Watchdog reset! Last timeout: "); USART_PrintNum((int32_t)IWDG_GetTimeout(IWDG_PRESCALER_64, 1249)); USART_Print("ms\r\n");  // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½çµ¨Ò¡ IWDG ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ timeout (Notify IWDG reset with timeout)
-        IWDG_ClearResetFlag();               // Åº flag ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ç¨ï¿½Ñºï¿½ï¿½ï¿½ã¹ºÙµË¹ï¿½ï¿½ (Clear flag to avoid false detection)
-    } else {                                 // ï¿½ï¿½ï¿½ï¿½ç¹¡ï¿½ÃºÙµï¿½ï¿½ï¿½ï¿½ (If normal boot)
-        USART_Print("Clean boot\r\n");      // ï¿½ï¿½ï¿½ï¿½ÒºÙµï¿½ï¿½ï¿½ï¿½ (Notify clean boot)
+    // ---- µÃÇ¨ÊÍºÊÒàËµØ¡ÒÃÃÕà«çµ (Check reset cause) ----
+    resetCause = IWDG_WasResetCause();       // µÃÇ¨ÊÍºÇèÒÃÕà«çµ¨Ò¡ IWDG ËÃ×ÍäÁè (Check if IWDG caused reset)
+    if (resetCause == 1) {                   // ¶éÒÃÕà«çµ¨Ò¡ IWDG (If reset from IWDG)
+        USART_Print("Watchdog reset! Last timeout: "); USART_PrintNum((int32_t)IWDG_GetTimeout(IWDG_PRESCALER_64, 1249)); USART_Print("ms\r\n");  // á¨é§ÇèÒÃÕà«çµ¨Ò¡ IWDG ¾ÃéÍÁ¤èÒ timeout (Notify IWDG reset with timeout)
+        IWDG_ClearResetFlag();               // Åº flag à¾×èÍäÁèãËéµÃÇ¨¨Ñº«éÓã¹ºÙµË¹éÒ (Clear flag to avoid false detection)
+    } else {                                 // ¶éÒà»ç¹¡ÒÃºÙµ»¡µÔ (If normal boot)
+        USART_Print("Clean boot\r\n");      // á¨é§ÇèÒºÙµ»¡µÔ (Notify clean boot)
     }
 
-    // ---- ï¿½ï¿½ï¿½ï¿½ï¿½ IWDG ï¿½ï¿½ï¿½Â¤ï¿½Ò·ï¿½ï¿½ï¿½Ë¹ï¿½ï¿½Í§ (Initialize IWDG with custom config) ----
+    // ---- àÃÔèÁ IWDG ´éÇÂ¤èÒ·Õè¡ÓË¹´àÍ§ (Initialize IWDG with custom config) ----
     // prescaler=32, reload=1249  timeout ? (32*1249)/40000 = 0.9992s ? 1000ms
-    // ï¿½ï¿½ï¿½ï¿½ 2000ms (prescaler=64, reload=1249)
-    IWDG_Init(64, 1249);                     // ï¿½ï¿½ï¿½ï¿½ï¿½ IWDG: prescaler=64, reload=1249  ~2000ms (Init IWDG)
-    USART_Print("IWDG initialized: prescaler=64, reload=1249\r\n");  // ï¿½é§¤ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ (Notify init params)
+    // áµèãªé 2000ms (prescaler=64, reload=1249)
+    IWDG_Init(64, 1249);                     // àÃÔèÁ IWDG: prescaler=64, reload=1249  ~2000ms (Init IWDG)
+    USART_Print("IWDG initialized: prescaler=64, reload=1249\r\n");  // á¨é§¤èÒàÃÔèÁµé¹ (Notify init params)
 
-    timeoutMs = IWDG_GetTimeout(IWDG_PRESCALER_64, 1249);           // ï¿½Ö§ï¿½ï¿½ï¿½ timeout ï¿½ï¿½ï¿½Ó¹Ç³ï¿½ï¿½ (Get calculated timeout)
-    USART_Print("Calculated timeout: "); USART_PrintNum((int32_t)timeoutMs); USART_Print("ms\r\n");  // ï¿½Ê´ï¿½ï¿½ï¿½ï¿½ timeout (Display timeout)
+    timeoutMs = IWDG_GetTimeout(IWDG_PRESCALER_64, 1249);           // ´Ö§¤èÒ timeout ·Õè¤Ó¹Ç³ä´é (Get calculated timeout)
+    USART_Print("Calculated timeout: "); USART_PrintNum((int32_t)timeoutMs); USART_Print("ms\r\n");  // áÊ´§¤èÒ timeout (Display timeout)
 
-    // ---- ï¿½ï¿½Ç¨ï¿½ÍºÊ¶Ò¹ï¿½ IWDG (Check IWDG status) ----
-    isBusy = IWDG_IsBusy();                  // ï¿½ï¿½Ç¨ï¿½Íºï¿½ï¿½ï¿½ IWDG ï¿½ï¿½ï¿½Ñ§ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ (Check if IWDG is busy)
-    USART_Print("IWDG busy status: "); USART_PrintNum(isBusy); USART_Print("\r\n");  // ï¿½Ê´ï¿½Ê¶Ò¹ï¿½ busy (Display busy status)
+    // ---- µÃÇ¨ÊÍºÊ¶Ò¹Ð IWDG (Check IWDG status) ----
+    isBusy = IWDG_IsBusy();                  // µÃÇ¨ÊÍºÇèÒ IWDG ¡ÓÅÑ§ÂØè§ËÃ×ÍäÁè (Check if IWDG is busy)
+    USART_Print("IWDG busy status: "); USART_PrintNum(isBusy); USART_Print("\r\n");  // áÊ´§Ê¶Ò¹Ð busy (Display busy status)
 
-    // ---- Feed IWDG 5 ï¿½Ô¹Ò·ï¿½ (Feed IWDG for 5 seconds) ----
-    USART_Print("Feeding watchdog for 5s...\r\n");  // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ feed 5 ï¿½Ô¹Ò·ï¿½ (Notify feeding for 5s)
-    for (feedCount = 0; feedCount < 25; feedCount++) {  // 25 ï¿½Íº ? 200ms = 5 ï¿½Ô¹Ò·ï¿½ (25 cycles ? 200ms = 5s)
-        digitalWrite(PC0, !digitalRead(PC0));  // ï¿½ï¿½ÑºÊ¶Ò¹ï¿½ LED (Toggle LED)
-        IWDG_Feed();                         // ï¿½ï¿½ï¿½çµµï¿½Ç¹Ñº IWDG (Reset IWDG counter)
-        Delay_Ms(200);                       // Ë¹ï¿½Ç§ 200ms (Delay 200ms)
+    // ---- Feed IWDG 5 ÇÔ¹Ò·Õ (Feed IWDG for 5 seconds) ----
+    USART_Print("Feeding watchdog for 5s...\r\n");  // á¨é§ÇèÒàÃÔèÁ feed 5 ÇÔ¹Ò·Õ (Notify feeding for 5s)
+    for (feedCount = 0; feedCount < 25; feedCount++) {  // 25 ÃÍº ? 200ms = 5 ÇÔ¹Ò·Õ (25 cycles ? 200ms = 5s)
+        digitalWrite(PC0, !digitalRead(PC0));  // ¡ÅÑºÊ¶Ò¹Ð LED (Toggle LED)
+        IWDG_Feed();                         // ÃÕà«çµµÑÇ¹Ñº IWDG (Reset IWDG counter)
+        Delay_Ms(200);                       // Ë¹èÇ§ 200ms (Delay 200ms)
     }
 
-    // ---- ï¿½ï¿½Ø´ feed ï¿½ ï¿½ï¿½ IWDG ï¿½ï¿½ï¿½ï¿½ (Stop feeding ï¿½ wait for IWDG reset) ----
-    USART_Print("Stop feeding! IWDG will reset in ~"); USART_PrintNum((int32_t)timeoutMs); USART_Print("ms...\r\n");  // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ø´ feed ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ (Notify stop feeding, reset pending)
-    digitalWrite(PC0, LOW);                 // ï¿½Ñº LED (Turn LED off)
+    // ---- ËÂØ´ feed — ÃÍ IWDG ÃÕà«çµ (Stop feeding — wait for IWDG reset) ----
+    USART_Print("Stop feeding! IWDG will reset in ~"); USART_PrintNum((int32_t)timeoutMs); USART_Print("ms...\r\n");  // á¨é§ÇèÒËÂØ´ feed ¨ÐÃÕà«çµ (Notify stop feeding, reset pending)
+    digitalWrite(PC0, LOW);                 // ´Ñº LED (Turn LED off)
 
-    // IWDG ï¿½Ð¹Ñºï¿½ï¿½ï¿½ï¿½ï¿½Ñ§ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ MCU (IWDG counts down and resets MCU)
-    while (1) {                              // ï¿½Ñ§Ç¹ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ (Wait for reset)
-        // ï¿½ï¿½ï¿½ï¿½Õ¡ï¿½ï¿½ feed ï¿½Õ¡ ï¿½ IWDG ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ MCU (No more feeding ï¿½ IWDG will reset MCU)
+    // IWDG ¨Ð¹Ñº¶ÍÂËÅÑ§áÅÐÃÕà«çµ MCU (IWDG counts down and resets MCU)
+    while (1) {                              // ÇÑ§Ç¹ÃÍÃÕà«çµ (Wait for reset)
+        // äÁèÁÕ¡ÒÃ feed ÍÕ¡ — IWDG ¨ÐÃÕà«çµ MCU (No more feeding — IWDG will reset MCU)
     }
 }

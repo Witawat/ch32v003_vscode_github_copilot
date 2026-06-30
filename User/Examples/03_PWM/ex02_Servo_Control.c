@@ -37,26 +37,7 @@
  *   - SG90 ต้องใช้ไฟ 5V ภายนอกเท่านั้น! ห้ามจ่ายจาก CH32V003 3.3V เพราะกระแสไม่พอ
  *   - ต่อ GND ของ Servo และ MCU เข้าด้วยกัน (common ground)
  *   - สายสัญญาณจาก MCU เท่านั้นที่ต่อเข้าขา Signal ของ Servo
- * - ตรวจสอบ Duty Cycle ให้ถูกต้อง: 1ms=5%, 1.5ms=7.5%, 2ms=10%
- * ============================================================
- * แผนผังการทำงาน (Flowchart):
- *
- * flowchart TD
- *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
- *     B --> C["PWM_Init(PWM1_CH1, 50)"]
- *     C --> D["PWM_Start(PWM1_CH1)"]
- *     D --> E["while(1)"]
- *     E --> F["PWM_SetDutyCycle(5)"]
- *     F --> G["Delay_Ms(2000)"]
- *     G --> H["PWM_SetDutyCycle(7)"]
- *     H --> I["Delay_Ms(2000)"]
- *     I --> J["PWM_SetDutyCycle(10)"]
- *     J --> K["Delay_Ms(2000)"]
- *     K --> L["PWM_SetDutyCycle(7)"]
- *     L --> M["Delay_Ms(2000)"]
- *     M --> N["PWM_SetDutyCycle(5)"]
- *     N --> O["Delay_Ms(2000)"]
- *     O --> E
+ *   - ตรวจสอบ Duty Cycle ให้ถูกต้อง: 1ms=5%, 1.5ms=7.5%, 2ms=10%
  * ============================================================
  */
 

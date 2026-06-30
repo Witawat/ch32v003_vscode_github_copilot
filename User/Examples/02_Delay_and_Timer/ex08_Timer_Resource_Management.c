@@ -17,31 +17,6 @@
  *   SysTick → Non-blocking timer สำหรับ LED toggle ทุก 0.5 วิ
  *
  * ไม่มีการใช้ TIM2 เลย — หลีกเลี่ยง conflict 100%
- *
- * ============================================================
- * แผนผังการทำงาน (Flowchart):
- *
- * flowchart TD
- *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
- *     B --> C["USART_SimpleInit(115200)"]
- *     C --> D["pinMode(PC0, OUTPUT)"]
- *     D --> E["PWM_Init(PWM1_CH1, 1000)"]
- *     E --> F["PWM_Start(PWM1_CH1)"]
- *     F --> G["Start_Timer x3 (print, led, pwm)"]
- *     G --> H["while(1)"]
- *     H --> I{"Is_Timer_Expired(pwm)?"}
- *     I -->|"Yes"| J["pwm_val += dir, check bounds"]
- *     J --> K["PWM_SetDutyCycle(pwm_val)"]
- *     I -->|"No"| L{"Is_Timer_Expired(led)?"}
- *     K --> L
- *     L -->|"Yes"| M["digitalToggle(PC0)"]
- *     L -->|"No"| N{"Is_Timer_Expired(print)?"}
- *     M --> N
- *     N -->|"Yes"| O["Print PWM% status"]
- *     N -->|"No"| P["yield()"]
- *     O --> P
- *     P --> H
- * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20

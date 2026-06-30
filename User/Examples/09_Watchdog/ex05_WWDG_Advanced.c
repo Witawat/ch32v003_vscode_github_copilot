@@ -1,11 +1,11 @@
 /**
  * ============================================================
  * ex05_WWDG_Advanced.c
- * ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝาธิต WWDG ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝูง: ๏ฟฝ๏ฟฝหน๏ฟฝ prescaler, ๏ฟฝำนวณ timeout, ๏ฟฝิด WWDG
+ * โปรแกรมสาธิต WWDG ขั้นสูง: กำหนด prescaler, คำนวณ timeout, ปิด WWDG
  * (Advanced WWDG: custom prescaler, timeout calculation, disable)
  * ============================================================
  *
- * แผน๏ฟฝังวง๏ฟฝ๏ฟฝ (Circuit Diagram):
+ * แผนผังวงจร (Circuit Diagram):
  *
  *   CH32V003
  *   ------
@@ -14,107 +14,88 @@
  *   PD5 (TX)  ----> USB-UART (RX)
  *   PD6 (RX)  <---- USB-UART (TX)
  *
- *   ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝอง๏ฟฝ๏ฟฝ๏ฟฝุป๏ฟฝรณ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ
+ *   ไม่ต้องใช้อุปกรณ์อื่นเพิ่ม
  *
  * ============================================================
- * ๏ฟฝ๏ฟฝ๏ฟฝัพ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝาด๏ฟฝ๏ฟฝัง (Expected Results):
+ * ผลลัพธ์ที่คาดหวัง (Expected Results):
  *   "--- WWDG Advanced ---"
  *   "WWDG init: counter=120, window=60, prescaler=4"
  *   "Window refresh OK"
- *   "LED blinking freely ๏ฟฝ no watchdog"
- *   (LED ๏ฟฝ๏ฟฝะพ๏ฟฝิบ๏ฟฝ๏ฟฝ๏ฟฝาง๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ watchdog ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ)
+ *   "LED blinking freely — no watchdog"
+ *   (LED กระพริบอย่างอิสระ ไม่มี watchdog รีเซ็ต)
  * ============================================================
- * ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝอน (WARNINGS):
- *   WWDG ๏ฟฝีข๏ฟฝอจำกัด๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝอง Window: ๏ฟฝ๏ฟฝ๏ฟฝรช๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝิน๏ฟฝ (counter > window)
- *     ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ่นกัน! ๏ฟฝ๏ฟฝอง๏ฟฝ๏ฟฝ๏ฟฝรช๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ counter < window
+ * คำเตือน (WARNINGS):
+ *   WWDG มีข้อจำกัดเรื่อง Window: รีเฟรชเร็วเกินไป (counter > window)
+ *     ก็ทำให้รีเซ็ตเช่นกัน! ต้องรีเฟรชเมื่อ counter < window
  *     (WWDG has WINDOW constraint: refresh too EARLY also causes reset!)
- * ============================================================
- * เธเธฑเธเธเธฒเธฃเธ—เธณเธเธฒเธ (Flowchart):
- *
- * flowchart TD
- *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
- *     B --> C["USART_SimpleInit()"]
- *     C --> D["pinMode(PC0, OUTPUT)"]
- *     D --> E["WWDG_Init(4, 60, 120)"]
- *     E --> F["Delay_Ms(1)"]
- *     F --> G["WWDG_Refresh(127)"]
- *     G --> H["Disable WWDG"]
- *     H --> I["for i=0 to 9"]
- *     I --> J["LED ON + Delay_Ms(300)"]
- *     J --> K["LED OFF + Delay_Ms(300)"]
- *     K --> L{"i < 10?"}
- *     L -->|"Yes"| I
- *     L -->|"No"| M["while(1)"]
- *     M --> N["Toggle LED + Delay_Ms(500)"]
- *     N --> M
  * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20
-#include <SimpleHAL.h>                      // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝลบ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ SimpleHAL (Include SimpleHAL library)
+#include <SimpleHAL.h>                      // รวมไลบรารี SimpleHAL (Include SimpleHAL library)
 
 // --------------------------------------------------------------------------
-// ๏ฟฝัง๏ฟฝ๏ฟฝัน๏ฟฝ๏ฟฝัก (Main function)
+// ฟังก์ชันหลัก (Main function)
 // --------------------------------------------------------------------------
 
 int main(void)
 {
     SystemCoreClockUpdate();
     Timer_Init();
-    // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝับ๏ฟฝ็บค๏ฟฝ๏ฟฝ (Variables)
-    uint32_t i = 0;                          // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝวน๏ฟฝอบ (Loop variable)
+    // ตัวแปรสำหรับเก็บค่า (Variables)
+    uint32_t i = 0;                          // ตัวแปรวนรอบ (Loop variable)
 
-    // ---- ๏ฟฝ๏ฟฝวน๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ (Initialization) ----
-    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);                      // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ้นพ๏ฟฝ๏ฟฝ๏ฟฝอนุก๏ฟฝ๏ฟฝ (Initialize USART)
-    pinMode(PC0, PIN_MODE_OUTPUT);          // ๏ฟฝ๏ฟฝหน๏ฟฝ PC0 ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝาต๏ฟฝุต (Set PC0 as PIN_MODE_OUTPUT)
-    digitalWrite(PC0, LOW);                 // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ LED ๏ฟฝับ (Initialize LED off)
+    // ---- ส่วนเริ่มต้น (Initialization) ----
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);                      // เริ่มต้นพอร์ตอนุกรม (Initialize USART)
+    pinMode(PC0, PIN_MODE_OUTPUT);          // กำหนด PC0 เป็นเอาต์พุต (Set PC0 as PIN_MODE_OUTPUT)
+    digitalWrite(PC0, LOW);                 // เริ่มต้น LED ดับ (Initialize LED off)
 
-    USART_Print("--- WWDG Advanced ---\r\n");  // ๏ฟฝสด๏ฟฝ๏ฟฝ๏ฟฝวข๏ฟฝ๏ฟฝ (Display title)
+    USART_Print("--- WWDG Advanced ---\r\n");  // แสดงหัวข้อ (Display title)
 
-    // ---- ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ WWDG ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ prescaler=4 (faster timeout) (Initialize WWDG with prescaler=4) ----
+    // ---- เริ่ม WWDG ด้วย prescaler=4 (faster timeout) (Initialize WWDG with prescaler=4) ----
     // WWDG_Init(prescaler, window, counter)
-    // counter   = 120 (๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ) (initial counter)
-    // window    = 60  (๏ฟฝ๏ฟฝ๏ฟฝรช๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ counter < 60) (refresh allowed when counter < 60)
-    // prescaler = 4   (PCLK/4) ๏ฟฝ ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ timeout ๏ฟฝ๏ฟฝ๏ฟฝลง (shorter timeout)
-    WWDG_Init(4, 60, 120);                   // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ WWDG: prescaler=4, window=60, counter=120 (Init WWDG)
-    USART_Print("WWDG init: counter=120, window=60, prescaler=4\r\n");  // ๏ฟฝ้งค๏ฟฝาท๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ (Notify init values)
+    // counter   = 120 (ค่าเริ่มต้น) (initial counter)
+    // window    = 60  (รีเฟรชได้เมื่อ counter < 60) (refresh allowed when counter < 60)
+    // prescaler = 4   (PCLK/4) — ทำให้ timeout สั้นลง (shorter timeout)
+    WWDG_Init(4, 60, 120);                   // เริ่ม WWDG: prescaler=4, window=60, counter=120 (Init WWDG)
+    USART_Print("WWDG init: counter=120, window=60, prescaler=4\r\n");  // แจ้งค่าที่ตั้ง (Notify init values)
 
-    // ---- ๏ฟฝ๏ฟฝ๏ฟฝอบ Window Refresh ๏ฟฝ ๏ฟฝ๏ฟฝ๏ฟฝรช๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ window (Test window refresh) ----
-    // หน๏ฟฝวง๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ็กน๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ counter ลดลง๏ฟฝึง๏ฟฝ๏ฟฝวง window (Delay slightly for counter to enter window range)
-    // counter ลดลง๏ฟฝุก PCLK/prescaler cycles (counter decrements every PCLK/prescaler cycles)
+    // ---- ทดสอบ Window Refresh — รีเฟรชภายใน window (Test window refresh) ----
+    // หน่วงเวลาเล็กน้อยให้ counter ลดลงถึงช่วง window (Delay slightly for counter to enter window range)
+    // counter ลดลงทุก PCLK/prescaler cycles (counter decrements every PCLK/prescaler cycles)
     // PCLK = 48MHz  one cycle ~20.83ns, prescaler=4  decrement every ~83.33ns
-    Delay_Ms(1);                             // หน๏ฟฝวง ~1ms  counter ลดลง๏ฟฝึง๏ฟฝ๏ฟฝวง window (Delay for counter to enter window range)
+    Delay_Ms(1);                             // หน่วง ~1ms  counter ลดลงถึงช่วง window (Delay for counter to enter window range)
 
-    WWDG_Refresh(0x7F);                      // ๏ฟฝ๏ฟฝ๏ฟฝรช WWDG ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ window (Refresh WWDG within window)
-    USART_Print("Window refresh OK\r\n");  // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝรช๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ (Notify refresh success)
+    WWDG_Refresh(0x7F);                      // รีเฟรช WWDG ภายใน window (Refresh WWDG within window)
+    USART_Print("Window refresh OK\r\n");  // แจ้งว่ารีเฟรชสำเร็จ (Notify refresh success)
 
-    // ---- ๏ฟฝ๏ฟฝ๏ฟฝอบ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝรช๏ฟฝอก window (Test out-of-window refresh ๏ฟฝ ๏ฟฝะท๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ) ----
-    // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝรช๏ฟฝัน๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝัง๏ฟฝาก WWDG_Init (counter=120 > window=60) ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ
+    // ---- ทดสอบการรีเฟรชนอก window (Test out-of-window refresh — จะทำให้รีเซ็ต) ----
+    // ถ้ารีเฟรชทันทีหลังจาก WWDG_Init (counter=120 > window=60) จะรีเซ็ต
     // (If refresh immediately after Init (counter=120 > window=60), it resets)
-    // ๏ฟฝึง๏ฟฝ๏ฟฝองหน๏ฟฝวง๏ฟฝ๏ฟฝอน (So we delay first)
-    // ๏ฟฝ๏ฟฝรทัด๏ฟฝ๏ฟฝ๏ฟฝูก๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝอค๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝอด๏ฟฝ๏ฟฝ๏ฟฝ (Commented out for safety):
-    // WWDG_Feed();  // ? ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝยก๏ฟฝรง๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ็ตทัน๏ฟฝ๏ฟฝ! (Would reset immediately!)
+    // จึงต้องหน่วงก่อน (So we delay first)
+    // บรรทัดนี้ถูกคอมเมนต์ไว้เพื่อความปลอดภัย (Commented out for safety):
+    // WWDG_Feed();  // ? ถ้าเรียกตรงนี้จะรีเซ็ตทันที! (Would reset immediately!)
 
-    // ---- ๏ฟฝิด๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝาน WWDG (Disable WWDG) ----
-    USART_Print("Disabling WWDG...\r\n");   // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝาก๏ฟฝ๏ฟฝัง๏ฟฝิด WWDG (Notify disabling WWDG)
-    USART_Print("WWDG disabled\r\n");       // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝาปิด๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ (Notify disable success)
+    // ---- ปิดการใช้งาน WWDG (Disable WWDG) ----
+    USART_Print("Disabling WWDG...\r\n");   // แจ้งว่ากำลังปิด WWDG (Notify disabling WWDG)
+    USART_Print("WWDG disabled\r\n");       // แจ้งว่าปิดสำเร็จ (Notify disable success)
 
-    // ---- ๏ฟฝ๏ฟฝัง๏ฟฝาก๏ฟฝิด WWDG, LED ๏ฟฝ๏ฟฝะพ๏ฟฝิบ๏ฟฝ๏ฟฝ๏ฟฝาง๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ (After WWDG disabled, LED blinks freely) ----
-    USART_Print("LED blinking freely ๏ฟฝ no watchdog\r\n");  // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ watchdog (Notify watchdog-free)
+    // ---- หลังจากปิด WWDG, LED กระพริบอย่างอิสระ (After WWDG disabled, LED blinks freely) ----
+    USART_Print("LED blinking freely — no watchdog\r\n");  // แจ้งว่าไม่มี watchdog (Notify watchdog-free)
 
-    // ๏ฟฝ๏ฟฝะพ๏ฟฝิบ LED 10 ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ watchdog รบ๏ฟฝวน (Blink LED 10 times, no watchdog interference)
-    for (i = 0; i < 10; i++) {               // วน 10 ๏ฟฝอบ (Loop 10 times)
-        digitalWrite(PC0, HIGH);            // ๏ฟฝิด LED (LED on)
-        Delay_Ms(300);                       // หน๏ฟฝวง 300ms (Delay 300ms)
-        digitalWrite(PC0, LOW);             // ๏ฟฝับ LED (LED off)
-        Delay_Ms(300);                       // หน๏ฟฝวง 300ms (Delay 300ms)
-        USART_Print("Blink "); USART_PrintNum((int32_t)(i + 1)); USART_Print(" (no WWDG)\r\n");  // ๏ฟฝสด๏ฟฝ๏ฟฝอบ๏ฟฝ๏ฟฝะพ๏ฟฝิบ (Display blink count)
+    // กระพริบ LED 10 ครั้ง ไม่มี watchdog รบกวน (Blink LED 10 times, no watchdog interference)
+    for (i = 0; i < 10; i++) {               // วน 10 รอบ (Loop 10 times)
+        digitalWrite(PC0, HIGH);            // ติด LED (LED on)
+        Delay_Ms(300);                       // หน่วง 300ms (Delay 300ms)
+        digitalWrite(PC0, LOW);             // ดับ LED (LED off)
+        Delay_Ms(300);                       // หน่วง 300ms (Delay 300ms)
+        USART_Print("Blink "); USART_PrintNum((int32_t)(i + 1)); USART_Print(" (no WWDG)\r\n");  // แสดงรอบกระพริบ (Display blink count)
     }
 
-    USART_Print("--- Done ---\r\n");        // ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝุด (Notify end)
+    USART_Print("--- Done ---\r\n");        // แจ้งสิ้นสุด (Notify end)
 
-    while (1) {                              // ๏ฟฝังวน๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ้จบ (Infinite loop)
-        digitalWrite(PC0, !digitalRead(PC0));  // ๏ฟฝ๏ฟฝะพ๏ฟฝิบ LED ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝ๏ฟฝอง (Continue blinking LED)
-        Delay_Ms(500);                       // หน๏ฟฝวง 500ms (Delay 500ms)
+    while (1) {                              // วังวนไม่รู้จบ (Infinite loop)
+        digitalWrite(PC0, !digitalRead(PC0));  // กระพริบ LED ต่อเนื่อง (Continue blinking LED)
+        Delay_Ms(500);                       // หน่วง 500ms (Delay 500ms)
     }
 }

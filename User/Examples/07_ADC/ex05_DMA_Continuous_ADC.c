@@ -28,21 +28,6 @@
  * DMA uses channel DMA_CH1 by default. Can change
  *          with DMA_SetAnalogReadChannel().
  * ============================================================
- * ผังการทำงาน (Flowchart):
- *
- * flowchart TD
- *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
- *     B --> C["USART_SimpleInit(115200)"]
- *     C --> D["ADC_SimpleInit()"]
- *     D --> E["DMA_analogReadStart(PD2, buf, 64)"]
- *     E --> F["while(1)"]
- *     F --> G{"DMA_analogReadBusy() == 0?"}
- *     G -->|"No"| H["Delay_Ms(500)"]
- *     G -->|"Yes"| I["DMA_analogReadAverage(buf, 64)"]
- *     I --> J["Print DMA ADC Avg"]
- *     J --> H
- *     H --> F
- * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20

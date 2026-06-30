@@ -3,30 +3,6 @@
  * @brief Flash_CalculateCRC16 — คำนวณ CRC16-CCITT checksum
  *
  * ใช้ CRC16 ตรวจสอบความถูกต้องของข้อมูล ก่อน/หลังบันทึกลง Flash
- *
- * ============================================================
- * คำเตือน (WARNINGS):
- *   ⚠ CRC16-CCITT ใช้ polynomial 0x1021
- * ============================================================
- * ผังการทำงาน (Flowchart):
- *
- * flowchart TD
- *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
- *     B --> C["USART_SimpleInit()"]
- *     C --> D["Flash_Init()"]
- *     D --> E["Flash_CalculateCRC16(data)"]
- *     E --> F["USART_Print(CRC16)"]
- *     F --> G["Flash_ErasePage(DATA_PAGE)"]
- *     G --> H["Flash_WriteStruct(data)"]
- *     H --> I["Flash_ReadStruct(readback)"]
- *     I --> J["Flash_CalculateCRC16(readback)"]
- *     J --> K{"CRC match?"}
- *     K -->|"Yes"| L["USART_Print(CRC OK)"]
- *     K -->|"No"| M["USART_Print(CRC FAIL)"]
- *     L --> N["Flash_IsAddressValid()"]
- *     M --> N
- *     N --> O["while(1)"]
- * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20

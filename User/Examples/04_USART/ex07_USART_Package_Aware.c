@@ -11,31 +11,6 @@
  * - TSSOP-20/QFN-20:          ใช้ได้ทุก pin config
  *
  * SOP-8/SOP-16 ไม่มี PD0 → USART_PINS_REMAP1 จะเกิด #error ตอนคอมไพล์
- * ============================================================
- * ผังการทำงาน (Flowchart):
- *
- * flowchart TD
- *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
- *     B --> C{"CH32V003_HAS_PD0?"}
- *     C -->|"Yes"| D["USART_SimpleInit(DEFAULT)"]
- *     C -->|"No"| E["USART_SimpleInit(REMAP2)"]
- *     D --> F["Print all pin configs available"]
- *     E --> G["Print limited pin configs"]
- *     F --> H{"CH32V003_IS_SOP8?"}
- *     G --> H
- *     H -->|"Yes"| I["Print SOP8 note"]
- *     H -->|"No"| J{"CH32V003_IS_SOP16?"}
- *     J -->|"Yes"| K["Print SOP16 note"]
- *     J -->|"No"| L["Skip notes"]
- *     I --> M["pinMode(PC0, OUTPUT)"]
- *     K --> M
- *     L --> M
- *     M --> N["while(1)"]
- *     N --> O["USART_Print(.)"]
- *     O --> P["digitalToggle(PC0)"]
- *     P --> Q["Delay_Ms(1000)"]
- *     Q --> N
- * ============================================================
  */
 
 // เปลี่ยนบรรทัดนี้เป็นแพ็กเกจที่คุณใช้:

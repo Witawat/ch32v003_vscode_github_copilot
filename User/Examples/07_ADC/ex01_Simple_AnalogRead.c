@@ -25,24 +25,10 @@
  *          PD7 does NOT support ADC.
  * analogRead() macro has compile-time pin validation.
  * ============================================================
- * ผังการทำงาน (Flowchart):
- *
- * flowchart TD
- *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
- *     B --> C["USART_SimpleInit(115200)"]
- *     C --> D["ADC_SimpleInit()"]
- *     D --> E["while(1)"]
- *     E --> F["ADC_Read(ADC_CH_PD2)"]
- *     F --> G["ADC_ToVoltage(val, 3.3f)"]
- *     G --> H["Print ADC value"]
- *     H --> I["Print Voltage"]
- *     I --> J["Delay_Ms(500)"]
- *     J --> E
- * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20
-/* CH32V003 has no hardware FPU � float/double use software emulation (~800 cycles) */
+/* CH32V003 has no hardware FPU � float/double use software emulation (~800 cycles) */
 #include <SimpleHAL.h>
 
 #define ADC_PIN PD2

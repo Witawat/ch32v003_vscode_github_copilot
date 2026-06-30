@@ -4,30 +4,6 @@
  *
  * OPAMP_ConfigVoltageFollower: ตั้งค่า buffer แบบระบุ channel เอง (ไม่ใช้ SimpleInit default)
  * OPAMP_Disable: ปิด OPAMP ชั่วคราวเพื่อประหยัดพลังงาน (~10µA)
- *
- * ============================================================
- * ผังการทำงาน (Flowchart):
- *
- * flowchart TD
- *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
- *     B --> C["ADC_SimpleInit()"]
- *     C --> D["USART_SimpleInit()"]
- *     D --> E["pinMode(PC0, OUTPUT)"]
- *     E --> F["OPAMP_ConfigVoltageFollower(CHP1)"]
- *     F --> G["OPAMP_Enable()"]
- *     G --> H["for i=0 to 4"]
- *     H --> I["ADC_Read(ADC_CH_PC4)"]
- *     I --> J["ADC_ToVoltage(raw, 3.3f)"]
- *     J --> K["USART_Print(ADC & V)"]
- *     K --> L["Delay_Ms(300)"]
- *     L --> H
- *     H --> M["OPAMP_Disable()"]
- *     M --> N["digitalWrite(PC0, HIGH)"]
- *     N --> O["Delay_Ms(2000)"]
- *     O --> P["OPAMP_Enable()"]
- *     P --> Q["digitalWrite(PC0, LOW)"]
- *     Q --> R["while(1) Delay_Ms(1000)"]
- * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20

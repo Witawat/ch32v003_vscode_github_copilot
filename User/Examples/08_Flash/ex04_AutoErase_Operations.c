@@ -30,20 +30,6 @@
  *   ⚠ ไม่ควรใช้ Auto-erase หากต้องเขียนบ่อย ๆ เพราะเปลืองรอบการลบ/เขียน
  *     (Do NOT use for frequent writes — wastes erase/write cycles)
  * ============================================================
- * ผังการทำงาน (Flowchart):
- *
- * flowchart TD
- *     A["SystemCoreClockUpdate()"] --> B["USART_SimpleInit()"]
- *     B --> C["Flash_Init()"]
- *     C --> D["Flash_WriteByteWithErase(0x55)"]
- *     D --> E["Flash_WriteHalfWord(0xABCD)"]
- *     E --> F["Flash_WriteWord(0xDEADBEEF)"]
- *     F --> G["Flash_ReadByte()"]
- *     G --> H["Flash_ReadHalfWord()"]
- *     H --> I["Flash_ReadWord()"]
- *     I --> J["USART_Print(results)"]
- *     J --> K["while(1)"]
- * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20

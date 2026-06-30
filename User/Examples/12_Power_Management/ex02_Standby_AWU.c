@@ -24,25 +24,6 @@
  *      เวลาจริงอาจคลาดเคลื่อนได้ถึง ±25%
  *   3. หลังปลุกจาก Standby ระบบจะรีเซ็ตเหมือนกดปุ่มรีเซ็ต
  * ============================================================
- * ผังการทำงาน (Flowchart):
- *
- * flowchart TD
- *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
- *     B --> C["USART_SimpleInit()"]
- *     C --> D["pinMode(PC0, OUTPUT)"]
- *     D --> E{"PWR_WasStandbyWakeup()?"}
- *     E -->|"Yes"| F["USART_Print(Woke from standby)"]
- *     F --> G["Blink LED 5 times"]
- *     E -->|"No"| H["USART_Print(System starting)"]
- *     G --> I["digitalWrite(PC0, HIGH)"]
- *     H --> I
- *     I --> J["Delay_Ms(500)"]
- *     J --> K["digitalWrite(PC0, LOW)"]
- *     K --> L["PWR_ConfigureAWU(prescaler=1024, 31)"]
- *     L --> M["PWR_EnterStandbyMode(PWR_ENTRY_WFI)"]
- *     M --> N["⏰ AWU ปลุกทุก ~5 วินาที → รีสตาร์ท"]
- *     N --> A
- * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20

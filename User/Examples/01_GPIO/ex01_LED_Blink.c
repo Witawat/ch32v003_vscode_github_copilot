@@ -24,18 +24,6 @@
  * - การตอ LED โดยไมมีตัวตานทานจะทำให LED และ MCU เสียหาย
  * - ไมควรดึงกระแสรวมเกิน 120mA จาก VDD
  * ============================================================
- * แผนผังการทำงาน (Flowchart):
- *
- * flowchart TD
- *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
- *     B --> C["pinMode(PC0, OUTPUT)"]
- *     C --> D["while(1)"]
- *     D --> E["digitalWrite(PC0, HIGH)"]
- *     E --> F["Delay_Ms(500)"]
- *     F --> G["digitalWrite(PC0, LOW)"]
- *     G --> H["Delay_Ms(500)"]
- *     H --> D
- * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20

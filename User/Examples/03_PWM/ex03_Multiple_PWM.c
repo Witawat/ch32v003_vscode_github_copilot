@@ -38,22 +38,7 @@
  *   - TIM1 channels (PD2, PA1, PC3, PC4) แชร์ความถี่เดียวกัน!
  *   - TIM2 channels (PD4, PD3, PC0, PD7) แชร์ความถี่อีกกลุ่ม!
  *   - PD2 และ PA1 อยู่บน TIM1 ดังนั้นความถี่ต้องเท่ากัน
- * - PC0 อยู่บน TIM2 จึงกำหนดความถี่ต่างหากได้
- * ============================================================
- * แผนผังการทำงาน (Flowchart):
- *
- * flowchart TD
- *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
- *     B --> C["PWM_Init(PWM1_CH1, 50)"]
- *     C --> D["PWM_Init(PWM1_CH2, 50)"]
- *     D --> E["PWM_Init(PWM2_CH3, 1000)"]
- *     E --> F["PWM_Start ทั้ง 3 ช่อง"]
- *     F --> G["while(1)"]
- *     G --> H["PWM_SetDutyCycle LED1 fade 0-100%"]
- *     H --> I["PWM_SetDutyCycle LED2 blink 0-50%"]
- *     I --> J["PWM_SetDutyCycle Servo sweep 5-10%"]
- *     J --> K["Delay_Ms(20)"]
- *     K --> G
+ *   - PC0 อยู่บน TIM2 จึงกำหนดความถี่ต่างหากได้
  * ============================================================
  */
 

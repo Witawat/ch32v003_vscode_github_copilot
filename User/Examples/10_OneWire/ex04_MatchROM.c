@@ -4,37 +4,6 @@
  *
  * ค้นหา devices ทั้งหมดด้วย OneWire_Search → เลือกทีละตัวด้วย MatchROM → อ่านข้อมูล
  * ใช้กับ DS18B20 หลายตัวบน bus เดียวกัน
- *
- * ============================================================
- * คำเตือน (WARNINGS):
- *   ⚠ ต้องมีอุปกรณ์ 1-Wire อย่างน้อย 1 ตัวบน bus
- * ============================================================
- * ผังการทำงาน (Flowchart):
- *
- * flowchart TD
- *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
- *     B --> C["USART_SimpleInit()"]
- *     C --> D{"OneWire_Init(PD2)"}
- *     D -->|"NULL"| E["ERROR: halt"]
- *     D -->|"OK"| F["OneWire_ResetSearch()"]
- *     F --> G{"OneWire_Search() && count<4"}
- *     G -->|"Yes"| H["Save ROM to array"]
- *     H --> I["count++"]
- *     I --> G
- *     G -->|"No"| J["USART_Print(ROMs)"]
- *     J --> K["for d=0 to count-1"]
- *     K --> L["OneWire_Select(roms[d])"]
- *     L --> M["Convert T (0x44)"]
- *     M --> N["Delay_Ms(800)"]
- *     N --> O["OneWire_Reset()"]
- *     O --> P["OneWire_Select(roms[d])"]
- *     P --> Q["Read Scratchpad (0xBE)"]
- *     Q --> R["คำนวณอุณหภูมิ"]
- *     R --> S["USART_Print(temp)"]
- *     S --> T{"More devices?"}
- *     T -->|"Yes"| K
- *     T -->|"No"| U["while(1)"]
- * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20

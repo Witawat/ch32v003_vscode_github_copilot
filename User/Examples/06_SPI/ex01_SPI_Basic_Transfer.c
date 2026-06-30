@@ -29,22 +29,6 @@
  * SPI_SimpleInit does NOT configure CS pin — call
  *          pinMode(CS, PIN_MODE_OUTPUT) and SPI_SetCSPin() yourself.
  * ============================================================
- * ผังการทำงาน (Flowchart):
- *
- * flowchart TD
- *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
- *     B --> C["USART_SimpleInit(115200)"]
- *     C --> D["SPI_SimpleInit(MODE0, 1MHz)"]
- *     D --> E["pinMode(CS, OUTPUT)"]
- *     E --> F["SPI_SetCSPin(PC4)"]
- *     F --> G["while(1)"]
- *     G --> H["SPI_SetCS(0)"]
- *     H --> I["SPI_Transfer(0xAA)"]
- *     I --> J["SPI_SetCS(1)"]
- *     J --> K["Print Loopback result"]
- *     K --> L["Delay_Ms(2000)"]
- *     L --> G
- * ============================================================
  */
 
 #if CH32V003_IS_SOP8

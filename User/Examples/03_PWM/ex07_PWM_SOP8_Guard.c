@@ -59,36 +59,3 @@ int main(void) {
         Delay_Ms(1000);
     }
 }
-
-/**
- * ============================================================
- * แผนผังการทำงาน (Flowchart):
- *
- * flowchart TD
- *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
- *     B --> C["USART_SimpleInit(115200)"]
- *     C --> D{"CH32V003_IS_SOP8?"}
- *     D -->|"Yes"| E["Print SOP-8 header"]
- *     D -->|"No"| F["Print all channels header"]
- *     E --> G["try_pwm(PWM1_CH1)"]
- *     F --> G
- *     G --> H["try_pwm(PWM1_CH2)"]
- *     H --> I["try_pwm(PWM1_CH3)"]
- *     I --> J["try_pwm(PWM1_CH4)"]
- *     J --> K["try_pwm(PWM2_CH1)"]
- *     K --> L["try_pwm(PWM2_CH2)"]
- *     L --> M["try_pwm(PWM2_CH3)"]
- *     M --> N["try_pwm(PWM2_CH4)"]
- *     N --> O["Print Done"]
- *     O --> P["while(1)"]
- *     P --> Q["Delay_Ms(1000)"]
- *     Q --> P
- *     subgraph try_pwm["try_pwm(ch)"]
- *         R{"IS_PWM_VALID_PACKAGE(ch)?"}
- *         R -->|"Yes"| S["PWM_Init + Start + SetDuty(30) + Print [OK]"]
- *         R -->|"No"| T["Print [SKIP]"]
- *         S --> U["Print name"]
- *         T --> U
- *     end
- * ============================================================
- */

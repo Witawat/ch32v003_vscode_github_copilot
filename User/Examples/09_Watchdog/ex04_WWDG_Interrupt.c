@@ -1,11 +1,11 @@
 /**
  * ============================================================
  * ex04_WWDG_Interrupt.c
- * ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ò¸Ôµ WWDG Interrupt (Early Wakeup Interrupt ï¿½ EWI)
+ * â»Ãá¡ÃÁÊÒ¸Ôµ WWDG Interrupt (Early Wakeup Interrupt — EWI)
  * (WWDG Early Wakeup Interrupt demonstration)
  * ============================================================
  *
- * á¼¹ï¿½Ñ§Ç§ï¿½ï¿½ (Circuit Diagram):
+ * á¼¹¼Ñ§Ç§¨Ã (Circuit Diagram):
  *
  *   CH32V003
  *   ------
@@ -14,101 +14,80 @@
  *   PD5 (TX)  ----> USB-UART (RX)
  *   PD6 (RX)  <---- USB-UART (TX)
  *
- *   ï¿½ï¿½ï¿½ï¿½Í§ï¿½ï¿½ï¿½Ø»ï¿½Ã³ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+ *   äÁèµéÍ§ãªéÍØ»¡Ã³ìÍ×è¹à¾ÔèÁ
  *
  * ============================================================
- * ï¿½ï¿½ï¿½Ñ¾ï¿½ï¿½ï¿½ï¿½Ò´ï¿½ï¿½Ñ§ (Expected Results):
- *   ï¿½ï¿½ï¿½ï¿½ï¿½ counter ï¿½Ö§ 0x40, EWI fires  callback ï¿½ï¿½ï¿½ï¿½ï¿½:
+ * ¼ÅÅÑ¾¸ì·Õè¤Ò´ËÇÑ§ (Expected Results):
+ *   àÁ×èÍ counter ¶Ö§ 0x40, EWI fires  callback ¾ÔÁ¾ì:
  *     "Early warning! Refreshing..."
- *    ï¿½ï¿½ï¿½Ãª WWDG  ï¿½ï¿½ï¿½ï¿½Õ¡ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
- *   USART ï¿½Ê´ï¿½Ç¹ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½:
+ *    ÃÕà¿Ãª WWDG  äÁèÁÕ¡ÒÃÃÕà«çµ
+ *   USART áÊ´§Ç¹ä»àÃ×èÍÂ æ:
  *   "--- WWDG Interrupt ---"
  *   "WWDG with interrupt started"
  *   "Early warning! Refreshing..."
  *   "Early warning! Refreshing..."
  *   ...
  * ============================================================
- * ï¿½ï¿½ï¿½ï¿½Í¹ (WARNINGS):
- *   Interrupt ï¿½ï¿½ï¿½ï¿½Í¹ ï¿½ ï¿½Ñ§ï¿½ï¿½Í§ï¿½ï¿½ï¿½Ãª WWDG ã¹ªï¿½Ç§ window ï¿½ï¿½ï¿½Í»ï¿½Í§ï¿½Ñ¹ï¿½ï¿½ï¿½ï¿½
- *     (The interrupt only warns ï¿½ must still refresh within window to avoid reset)
- *   ï¿½ï¿½Í§ï¿½ï¿½ï¿½ï¿½ WWDG_IRQHandler ï¿½ ch32v00x_it.c
- *     ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Â¡ WWDG_IRQHandler_Callback()
+ * ¤Óàµ×Í¹ (WARNINGS):
+ *   Interrupt á¤èàµ×Í¹ — ÂÑ§µéÍ§ÃÕà¿Ãª WWDG ã¹ªèÇ§ window à¾×èÍ»éÍ§¡Ñ¹ÃÕà«çµ
+ *     (The interrupt only warns — must still refresh within window to avoid reset)
+ *   µéÍ§à¾ÔèÁ WWDG_IRQHandler ã¹ ch32v00x_it.c
+ *     â´ÂãËéàÃÕÂ¡ WWDG_IRQHandler_Callback()
  *     (Must add WWDG_IRQHandler in ch32v00x_it.c calling WWDG_IRQHandler_Callback())
- * ============================================================
- * à¸œà¸±à¸‡à¸à¸²à¸£à¸—à¸³à¸‡à¸²à¸™ (Flowchart):
- *
- * flowchart TD
- *     A["SystemCoreClockUpdate()"] --> B["Timer_Init()"]
- *     B --> C["USART_SimpleInit()"]
- *     C --> D["pinMode(PC0, OUTPUT)"]
- *     D --> E["WWDG_SetCallback()"]
- *     E --> F["WWDG_InitWithInterrupt(127, 80, 8)"]
- *     F --> G["digitalWrite(PC0, HIGH)"]
- *     G --> H["while(1)"]
- *     H --> I{"earlyWarningFired?"}
- *     I -->|"Yes"| J["Reset flag"]
- *     I -->|"No"| K["Toggle LED"]
- *     J --> K
- *     K --> L["Delay_Ms(500)"]
- *     L --> H
- *     F --> M["EWI fires (counter=0x40)"]
- *     M --> N["WWDG_EarlyWarningCallback()"]
- *     N --> O["Set flag + WWDG_Refresh(127)"]
- *     O --> H
  * ============================================================
  */
 
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20
-#include <SimpleHAL.h>                      // ï¿½ï¿½ï¿½ï¿½Åºï¿½ï¿½ï¿½ï¿½ SimpleHAL (Include SimpleHAL library)
+#include <SimpleHAL.h>                      // ÃÇÁäÅºÃÒÃÕ SimpleHAL (Include SimpleHAL library)
 
 // --------------------------------------------------------------------------
-// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ð¤ï¿½Ò¤ï¿½ï¿½ï¿½ï¿½ (Variables and constants)
+// µÑÇá»ÃáÅÐ¤èÒ¤§·Õè (Variables and constants)
 // --------------------------------------------------------------------------
 
-static volatile uint8_t earlyWarningFired = 0;  // ï¿½ï¿½ï¿½ï¿½ÃºÍ¡ï¿½ï¿½ï¿½ EWI ï¿½Ô´ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ (Flag for EWI occurrence)
+static volatile uint8_t earlyWarningFired = 0;  // µÑÇá»ÃºÍ¡ÇèÒ EWI à¡Ô´¢Öé¹áÅéÇ (Flag for EWI occurrence)
 
 // --------------------------------------------------------------------------
-// ï¿½Ñ§ï¿½ï¿½Ñ¹ callback ï¿½ï¿½ï¿½ï¿½Ñº WWDG interrupt (Callback function for WWDG interrupt)
+// ¿Ñ§¡ìªÑ¹ callback ÊÓËÃÑº WWDG interrupt (Callback function for WWDG interrupt)
 // --------------------------------------------------------------------------
 
-void WWDG_EarlyWarningCallback(void)         // ï¿½Ñ§ï¿½ï¿½Ñ¹ï¿½ï¿½ï¿½Ù¡ï¿½ï¿½ï¿½Â¡ï¿½ï¿½ï¿½ï¿½ï¿½ EWI ï¿½Ô´ï¿½ï¿½ï¿½ (Called when EWI fires)
+void WWDG_EarlyWarningCallback(void)         // ¿Ñ§¡ìªÑ¹¹Õé¶Ù¡àÃÕÂ¡àÁ×èÍ EWI à¡Ô´¢Öé¹ (Called when EWI fires)
 {
-    earlyWarningFired = 1;                   // ï¿½ï¿½ï¿½ flag ï¿½ï¿½ï¿½ï¿½Ô´ EWI (Set flag that EWI occurred)
-    USART_Print("Early warning! Refreshing...\r\n");  // ï¿½Ê´ï¿½ï¿½ï¿½Í¤ï¿½ï¿½ï¿½ï¿½ï¿½Í¹ (Display warning message)
+    earlyWarningFired = 1;                   // µÑé§ flag ÇèÒà¡Ô´ EWI (Set flag that EWI occurred)
+    USART_Print("Early warning! Refreshing...\r\n");  // áÊ´§¢éÍ¤ÇÒÁàµ×Í¹ (Display warning message)
 
-    // ï¿½ï¿½ï¿½Ãª WWDG ï¿½ï¿½ï¿½Í»ï¿½Í§ï¿½Ñ¹ï¿½ï¿½ï¿½ï¿½ (Refresh WWDG to prevent reset)
-    WWDG_Refresh(0x7F);                      // ï¿½ï¿½ï¿½Ãª WWDG (Refresh WWDG)
+    // ÃÕà¿Ãª WWDG à¾×èÍ»éÍ§¡Ñ¹ÃÕà«çµ (Refresh WWDG to prevent reset)
+    WWDG_Refresh(0x7F);                      // ÃÕà¿Ãª WWDG (Refresh WWDG)
 }
 
 // --------------------------------------------------------------------------
-// ï¿½Ñ§ï¿½ï¿½Ñ¹ï¿½ï¿½Ñ¡ (Main function)
+// ¿Ñ§¡ìªÑ¹ËÅÑ¡ (Main function)
 // --------------------------------------------------------------------------
 
 int main(void)
 {
     SystemCoreClockUpdate();
     Timer_Init();
-    // ---- ï¿½ï¿½Ç¹ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ (Initialization) ----
-    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);                      // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½é¹¾ï¿½ï¿½ï¿½Í¹Ø¡ï¿½ï¿½ (Initialize USART)
-    pinMode(PC0, PIN_MODE_OUTPUT);          // ï¿½ï¿½Ë¹ï¿½ PC0 ï¿½ï¿½ï¿½ï¿½Òµï¿½Øµ (Set PC0 as PIN_MODE_OUTPUT)
-    digitalWrite(PC0, HIGH);                // ï¿½Ô´ LED ï¿½Ê´ï¿½ï¿½ï¿½Ò·Ó§Ò¹ (Turn LED on to indicate active)
+    // ---- ÊèÇ¹àÃÔèÁµé¹ (Initialization) ----
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);                      // àÃÔèÁµé¹¾ÍÃìµÍ¹Ø¡ÃÁ (Initialize USART)
+    pinMode(PC0, PIN_MODE_OUTPUT);          // ¡ÓË¹´ PC0 à»ç¹àÍÒµì¾Øµ (Set PC0 as PIN_MODE_OUTPUT)
+    digitalWrite(PC0, HIGH);                // µÔ´ LED áÊ´§ÇèÒ·Ó§Ò¹ (Turn LED on to indicate active)
 
-    USART_Print("--- WWDG Interrupt ---\r\n");  // ï¿½Ê´ï¿½ï¿½ï¿½Ç¢ï¿½ï¿½ (Display title)
+    USART_Print("--- WWDG Interrupt ---\r\n");  // áÊ´§ËÑÇ¢éÍ (Display title)
 
-    // ---- ï¿½ï¿½ï¿½ï¿½ï¿½ WWDG ï¿½ï¿½ï¿½ï¿½ï¿½ Interrupt (Initialize WWDG with Interrupt) ----
-    WWDG_SetCallback(WWDG_EarlyWarningCallback);      // ï¿½ï¿½ï¿½ callback ï¿½ï¿½ï¿½ï¿½Ñº Early Wakeup (Set callback for EWI)
-    WWDG_InitWithInterrupt(0x7F, 0x50, 8);            // ï¿½ï¿½ï¿½ï¿½ï¿½ WWDG: counter=127, window=80, prescaler=8
+    // ---- àÃÔèÁ WWDG ¾ÃéÍÁ Interrupt (Initialize WWDG with Interrupt) ----
+    WWDG_SetCallback(WWDG_EarlyWarningCallback);      // µÑé§ callback ÊÓËÃÑº Early Wakeup (Set callback for EWI)
+    WWDG_InitWithInterrupt(0x7F, 0x50, 8);            // àÃÔèÁ WWDG: counter=127, window=80, prescaler=8
 
-    USART_Print("WWDG with interrupt started\r\n");  // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ WWDG áººï¿½ï¿½ Interrupt (Notify interrupt mode started)
+    USART_Print("WWDG with interrupt started\r\n");  // á¨é§ÇèÒàÃÔèÁ WWDG áººÁÕ Interrupt (Notify interrupt mode started)
 
-    // ---- ï¿½Ñ§Ç¹ï¿½ï¿½Ñ¡ (Main loop) ----
-    while (1) {                              // Ç¹ï¿½Íºï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ø´ (Infinite loop)
-        if (earlyWarningFired == 1) {        // ï¿½ï¿½ï¿½ï¿½Ô´ EWI (If EWI occurred)
-            earlyWarningFired = 0;           // ï¿½ï¿½ï¿½ï¿½ flag (Reset flag)
+    // ---- ÇÑ§Ç¹ËÅÑ¡ (Main loop) ----
+    while (1) {                              // Ç¹ÃÍºäÁèÊÔé¹ÊØ´ (Infinite loop)
+        if (earlyWarningFired == 1) {        // ¶éÒà¡Ô´ EWI (If EWI occurred)
+            earlyWarningFired = 0;           // ÃÕà«çµ flag (Reset flag)
         }
 
-        // ï¿½ï¿½Ð¾ï¿½Ôº LED ï¿½ï¿½ï¿½ ï¿½ ï¿½Ê´ï¿½ï¿½ï¿½ï¿½ MCU ï¿½Ñ§ï¿½Ó§Ò¹ (Slow blink to show MCU is alive)
-        digitalWrite(PC0, !digitalRead(PC0));  // ï¿½ï¿½ÑºÊ¶Ò¹ï¿½ LED (Toggle LED)
-        Delay_Ms(500);                       // Ë¹ï¿½Ç§ 500ms (Delay 500ms)
+        // ¡ÃÐ¾ÃÔº LED ªéÒ æ áÊ´§ÇèÒ MCU ÂÑ§·Ó§Ò¹ (Slow blink to show MCU is alive)
+        digitalWrite(PC0, !digitalRead(PC0));  // ¡ÅÑºÊ¶Ò¹Ð LED (Toggle LED)
+        Delay_Ms(500);                       // Ë¹èÇ§ 500ms (Delay 500ms)
     }
 }
