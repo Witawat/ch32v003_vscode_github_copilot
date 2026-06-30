@@ -1,0 +1,193 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>LCDMenu — ระบบเมนูบน LCD1602 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head><body>
+
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_pid.html">บทก่อน</a><a href="chapx_lib_circularbuffer.html">บทถัดไป →</a></nav>
+
+<h1>LCDMenu — ระบบเมนูบน LCD1602</h1><span class="level-expert">ระดับผู้เชี่ยวชาญ</span>
+
+<section class="flowchart"><h2>🧭 แผนภาพการทำงาน</h2><pre class="mermaid">
+flowchart TD
+    A["LCDMenu_Init(addr,cols,rows)"] --> B["LCDMenu_AddItem(&amp;m,name,type,cb)"]
+    B --> C["User presses UP/DOWN/ENTER/BACK"]
+    C --> D{"Action Type?"}
+    D -->|"SUBMENU"| E["Navigate into submenu"]
+    D -->|"EDIT"| F["Edit numeric value"]
+    D -->|"TOGGLE"| G["Toggle ON/OFF → cb(val)"]
+    D -->|"ACTION"| H["Execute callback"]
+    D -->|"BACK"| I["Return to parent"]
+    E --> C
+    F --> C
+    G --> C
+    H --> C
+    I --> C
+</pre></section>
+
+<section><h2>🔌 การต่อวงจร</h2><pre class="ascii-circuit">
+   LCD1602 I2C + 4 Push Buttons
+┌────────────────────────────────────┐
+│ MCU                         CH32V003│
+│                                    │
+│ LCD1602 I2C (0x27):                │
+│  PC1 ─── SDA                       │
+│  PC2 ─── SCL                       │
+│  5V  ─── VCC                       │
+│  GND ─── GND                       │
+│                                    │
+│ Buttons (Active LOW, pull-up):     │
+│  PC3 ─── UP     ─── GND            │
+│  PC4 ─── DOWN   ─── GND            │
+│  PC5 ─── ENTER  ─── GND            │
+│  PC6 ─── BACK   ─── GND            │
+└────────────────────────────────────┘
+</pre><p>LCD 16×2 ตัวอักษรผ่าน I2C (ลด pin usage) — 4 ปุ่มสำหรับนำทางเมนู — ทุกปุ่มใช้ internal pull-up (ACTIVE_LOW)</p></section>
+
+<section><h2>📚 หลักการทำงาน</h2>
+<p><strong>LCDMenu</strong>: ไลบรารีเมนูแบบลำดับชั้น (hierarchical) สำหรับ LCD1602 16×2 — ใช้ร่วมกับ LCD1602_I2C และ Button — ออกแบบมาสำหรับ MCU หน่วยความจำจำกัดด้วย static memory pool</p>
+<p><strong>Menu Tree</strong>: สร้างเมนูเป็นลำดับชั้น — เพิ่ม item ด้วย <code>LCDMenu_AddItem()</code> — แต่ละ item มีชื่อ, ประเภท, และ callback — เปลี่ยนหน้าโดย UP/DOWN, เข้าด้วย ENTER, กลับด้วย BACK</p>
+<p><strong>4 Callback Types:</strong></p>
+<ul>
+<li><strong>SUBMENU</strong> — เข้าไปยังเมนูย่อย — เหมือน folder — ไม่มี callback แทนที่ด้วยการเปลี่ยนหน้า</li>
+<li><strong>EDIT</strong> — แก้ไขค่าตัวเลข (int/float) — UP/DOWN เปลี่ยนค่า, ENTER ยืนยัน — callback จะได้รับค่าใหม่</li>
+<li><strong>TOGGLE</strong> — เปิด/ปิด — ENTER สลับสถานะ — callback ได้รับ 0 หรือ 1</li>
+<li><strong>ACTION</strong> — เรียก callback ทันทีที่กด ENTER — เหมือนปุ่ม execute</li>
+<li><strong>BACK</strong> — กลับไปเมนูก่อนหน้า — ไม่ต้องมี callback</li>
+</ul>
+<p><strong>Static Memory Pool</strong>: ทุกอย่างจัดสรรตอน compile — ไม่มี malloc — ปลอดภัยสำหรับ MCU RAM 2KB — กำหนดจำนวน item สูงสุดใน header</p>
+</section>
+
+<section><h2>💻 เขียน Code ทีละขั้น</h2>
+
+<div class="step"><h3>ขั้นที่ 1: Init LCD + Menu + ปุ่ม</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "LCDMenu.h"
+#include "LCD1602_I2C.h"
+
+LCDMenu_Handle menu;
+uint8_t setpoint = 40;
+float pid_kp = 2.0f;
+uint8_t wifi_enabled = 0;
+
+void on_setpoint(void) { USART_Print("Setpoint: "); USART_PrintNum(setpoint); }
+void on_toggle_wifi(LCDMenu_Handle *m, uint8_t val) {
+    wifi_enabled = val; USART_Println(val ? "WiFi ON" : "WiFi OFF");
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_Init(115200);
+
+    LCD1602_I2C_Init(0x27);
+    LCDMenu_Init(&menu, 0x27, 16, 2);  // LCD addr, 16 chars, 2 rows
+    pinMode(PC3, PIN_MODE_INPUT_PULLUP);  // UP
+    pinMode(PC4, PIN_MODE_INPUT_PULLUP);  // DOWN
+    pinMode(PC5, PIN_MODE_INPUT_PULLUP);  // ENTER
+    pinMode(PC6, PIN_MODE_INPUT_PULLUP);  // BACK</code></pre>
+<p class="explain">🔍 <code>LCDMenu_Init(&menu, addr, cols, rows)</code> — ต้อง Init LCD1602_I2C ก่อน — ใช้ addr เดียวกัน — ปุ่มทั้ง 4 ตัวต้องตั้งเป็น INPUT_PULLUP เพื่อใช้ internal pull-up</p></div>
+
+<div class="step"><h3>ขั้นที่ 2: สร้าง Menu Tree + Callbacks</h3>
+<pre><code class="language-c">    LCDMenu_AddItem(&menu, "Temperature",   LCDMENU_SUBMENU, NULL);
+    LCDMenu_AddItem(&menu, "  Set Max",     LCDMENU_EDIT,    on_setpoint);
+    LCDMenu_AddItem(&menu, "  Set Min",     LCDMENU_EDIT,    NULL);
+    LCDMenu_AddItem(&menu, "  Back",        LCDMENU_BACK,    NULL);
+    LCDMenu_AddItem(&menu, "WiFi Control",  LCDMENU_TOGGLE,  on_toggle_wifi);
+    LCDMenu_AddItem(&menu, "PID Tuning",    LCDMENU_SUBMENU, NULL);
+    LCDMenu_AddItem(&menu, "  Kp=",         LCDMENU_EDIT,    NULL);
+    LCDMenu_AddItem(&menu, "  Ki=",         LCDMENU_EDIT,    NULL);
+    LCDMenu_AddItem(&menu, "  Back",        LCDMENU_BACK,    NULL);
+    LCDMenu_AddItem(&menu, "Save & Exit",   LCDMENU_ACTION,  on_save);
+    USART_Println("Menu Ready!");</code></pre>
+<p class="explain">🔍 <code>LCDMenu_AddItem(&menu, name, type, callback)</code> — ชื่อที่มีเว้นวรรคนำหน้า ("  ") คือ item ใน submenu — ต้องมี BACK ทุก submenu — callback เป็น optional สำหรับ SUBMENU/BACK</p></div>
+
+<div class="step"><h3>ขั้นที่ 3: Loop + ปุ่ม Navigate</h3>
+<pre><code class="language-c">    while(1) {
+        uint8_t up    = !digitalRead(PC3);  // Active LOW → invert
+        uint8_t down  = !digitalRead(PC4);
+        uint8_t enter = !digitalRead(PC5);
+        uint8_t back  = !digitalRead(PC6);
+
+        LCDMenu_Update(&menu, up, down, enter, back);
+        Delay_Ms(50);  // 20Hz refresh — ลด CPU load
+        IWDG_Feed();
+    }
+}</code></pre>
+<p class="explain">🔍 <code>LCDMenu_Update(&menu, up, down, enter, back)</code> — ส่งสถานะปุ่ม 4 ตัวเป็น 0/1 — Active LOW ต้อง invert ก่อนส่ง — refresh 50ms พอดีสำหรับการตอบสนองของมนุษย์ — อย่าลืม IWDG_Feed เพื่อกัน MCU รีเซ็ต</p></div>
+</section>
+
+<section><h2>📋 API Reference</h2><table><tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+<tr><td><code>LCDMenu_Init(&menu, addr, cols, rows)</code></td><td>เริ่มต้นระบบเมนู — addr=0x27, cols=16, rows=2</td><td><code>LCDMenu_Init(&menu, 0x27, 16, 2)</code></td></tr>
+<tr><td><code>LCDMenu_AddItem(&menu, name, type, cb)</code></td><td>เพิ่ม item — SUBMENU/EDIT/TOGGLE/ACTION/BACK</td><td><code>LCDMenu_AddItem(&menu, "LED", LCDMENU_TOGGLE, cb)</code></td></tr>
+<tr><td><code>LCDMenu_Update(&menu, up, dn, enter, back)</code></td><td>อัปเดตเมนู — ส่งสถานะปุ่ม 0/1</td><td><code>LCDMenu_Update(&menu, u, d, e, b)</code></td></tr>
+<tr><td><code>LCDMenu_SetValue(&menu, val)</code></td><td>ตั้งค่าเริ่มต้นให้ EDIT item ปัจจุบัน</td><td><code>LCDMenu_SetValue(&menu, 40)</code></td></tr>
+<tr><td><code>LCDMenu_GetValue(&menu)</code></td><td>อ่านค่าจาก EDIT item</td><td><code>uint8_t v = LCDMenu_GetValue(&menu)</code></td></tr>
+<tr><td><code>LCDMenu_GoHome(&menu)</code></td><td>กลับไปเมนูหลัก (root)</td><td><code>LCDMenu_GoHome(&menu)</code></td></tr>
+</table></section>
+
+<section><h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2><table><tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+<tr><td>จอไม่แสดงอะไรเลย</td><td>ลืม <code>LCD1602_I2C_Init()</code> ก่อน <code>LCDMenu_Init()</code></td><td>ต้อง Init LCD ก่อน — <code>LCD1602_I2C_Init(0x27)</code> แล้วตามด้วย <code>LCDMenu_Init()</code></td></tr>
+<tr><td>กด UP/DOWN แล้วกระโดดหลายช่อง</td><td>Refresh rate เร็วเกินไป + ไม่มี debounce</td><td>เพิ่ม Delay_Ms เป็น 80-100ms — หรือใช้ Button library สำหรับ debounce</td></tr>
+<tr><td>SUBMENU ไม่ยอมเข้า</td><td>ลืม BACK item — หรือลูกศรไม่ตรงกับ ENTER</td><td>ทุก SUBMENU ต้องมี BACK เป็น item สุดท้าย — เช็ค pin mapping ปุ่ม</td></tr>
+<tr><td>TOGGLE ค่าไม่เปลี่ยน</td><td>Callback signature ไม่ตรง — ต้องรับ (LCDMenu_Handle*, uint8_t)</td><td>Callback TOGGLE ต้องเป็น <code>void cb(LCDMenu_Handle *m, uint8_t val)</code></td></tr>
+<tr><td>EDIT item ไม่เซฟค่า</td><td>ไม่ได้ใช้ <code>LCDMenu_GetValue()</code> ใน callback</td><td>ใน callback ของ EDIT ให้เรียก <code>LCDMenu_GetValue(&menu)</code> เพื่อดึงค่าที่แก้ไข</td></tr>
+<tr><td>RAM หมด — menu item หาย</td><td>เกิน MAX_ITEMS ที่ตั้งใน header</td><td>เพิ่ม <code>#define LCDMENU_MAX_ITEMS 32</code> ก่อน include — หรือลดจำนวน item</td></tr>
+</table></section>
+
+<section><h2>🛠️ สร้าง Product: Settings Menu</h2><p>เมนูปรับแต่งระบบ: WiFi SSID, Temperature Setpoint, Fan Toggle — บันทึกค่าลง Flash เมื่อกด Save</p>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "LCDMenu.h"
+#include "LCD1602_I2C.h"
+#include "Flash.h"
+
+LCDMenu_Handle menu;
+uint8_t setpoint = 40;
+uint8_t fan_on = 0;
+
+void on_setpoint(void) { setpoint = LCDMenu_GetValue(&menu); }
+void on_fan(LCDMenu_Handle *m, uint8_t val) {
+    fan_on = val;
+    pinMode(PC0, PIN_MODE_OUTPUT); digitalWrite(PC0, val);
+}
+void on_save(void) {
+    Flash_Unlock();
+    Flash_WriteByte(0x0800FC00, setpoint);
+    Flash_WriteByte(0x0800FC01, fan_on);
+    Flash_Lock();
+    USART_Println("Settings Saved!");
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_Init(115200);
+    LCD1602_I2C_Init(0x27);
+    LCDMenu_Init(&menu, 0x27, 16, 2);
+    pinMode(PC3, PIN_MODE_INPUT_PULLUP);
+    pinMode(PC4, PIN_MODE_INPUT_PULLUP);
+    pinMode(PC5, PIN_MODE_INPUT_PULLUP);
+    pinMode(PC6, PIN_MODE_INPUT_PULLUP);
+
+    LCDMenu_AddItem(&menu, "Temperature",  LCDMENU_SUBMENU, NULL);
+    LCDMenu_AddItem(&menu, "  Setpoint",   LCDMENU_EDIT,    on_setpoint);
+    LCDMenu_AddItem(&menu, "  Back",       LCDMENU_BACK,    NULL);
+    LCDMenu_AddItem(&menu, "Fan Control",  LCDMENU_TOGGLE,  on_fan);
+    LCDMenu_AddItem(&menu, "Save & Exit",  LCDMENU_ACTION,  on_save);
+
+    while(1) {
+        LCDMenu_Update(&menu, !digitalRead(PC3), !digitalRead(PC4),
+                       !digitalRead(PC5), !digitalRead(PC6));
+        Delay_Ms(50);
+        IWDG_Feed();
+    }
+}</code></pre></section>
+
+<section><h2>✏️ ลองทำดู</h2><ol>
+<li>เพิ่ม Password Protect — ก่อนเข้า Settings Menu ต้องพิมพ์รหัส 4 หลักด้วย KeyMatrix</li>
+<li>Rotary Encoder Navigation — ใช้ Rotary Encoder แทนปุ่ม UP/DOWN — หมุน=เลื่อน, กด=Enter — ใช้ <code>RotaryEncoder_OnRotate()</code> + <code>LCDMenu_MoveCursor()</code></li>
+<li>Dynamic Menu — เพิ่ม Wi-Fi network list ที่ scan แล้วแสดงแบบ realtime — ใช้ <code>LCDMenu_AddItem()</code> ใน runtime</li>
+</ol></section>
+
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_pid.html">บทก่อน</a><a href="chapx_lib_circularbuffer.html">บทถัดไป →</a></nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script><script>mermaid.initialize({startOnLoad:true,theme:'base'});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

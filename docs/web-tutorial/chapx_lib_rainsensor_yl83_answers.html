@@ -1,0 +1,275 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย YL-83 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_rainsensor_yl83.html">กลับบท</a><a href="chapx_lib_waterflow_yfs201_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — YL-83 Rain Sensor</h1>
+
+<div class="answer">
+<h2>ข้อ 1: Rain Alert — แจ้งเตือนเมื่อฝนตกด้วย Buzzer + LED</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "OLED.h"
+
+#define RAIN_VCC PC0
+#define RAIN_ADC PD2
+#define RAIN_DIG PC3
+#define BUZZER   PC1
+#define LED_WARN PC2
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    I2C_Init(PC1, PC2, I2C_SPEED_STANDARD);
+    ADC_Init(RAIN_ADC, ADC_CH0);
+    pinMode(RAIN_VCC, PIN_MODE_OUTPUT);
+    pinMode(RAIN_DIG, PIN_MODE_INPUT);
+    pinMode(BUZZER, PIN_MODE_OUTPUT);
+    pinMode(LED_WARN, PIN_MODE_OUTPUT);
+    USART_Init(115200);
+
+    digitalWrite(RAIN_VCC, LOW);
+    digitalWrite(BUZZER, LOW);
+    digitalWrite(LED_WARN, LOW);
+
+    OLED_t oled;
+    OLED_Init(&oled, 0x3C, OLED_128x64);
+    OLED_SetFont(&oled, FONT_8x16);
+
+    uint8_t rain_streak = 0;
+    uint8_t alert_active = 0;
+    uint8_t last_dry_streak = 0;
+    Timer_t tmr;
+    Start_Timer(&tmr, 5000, 1);
+
+    USART_Print("Rain Alert System Ready\r\n");
+
+    while(1) {
+        if(Is_Timer_Expired(&tmr)) {
+            digitalWrite(RAIN_VCC, HIGH);
+            Delay_Ms(50);
+            uint16_t adc = ADC_Read(RAIN_ADC);
+            uint8_t dig = GPIO_Read(RAIN_DIG);
+            digitalWrite(RAIN_VCC, LOW);
+
+            const char* status;
+            if(dig && adc > 800) {
+                rain_streak++;
+                last_dry_streak = 0;
+                status = "HEAVY RAIN!";
+
+                if(rain_streak >= 3 && !alert_active) {
+                    alert_active = 1;
+                    digitalWrite(BUZZER, HIGH);
+                    digitalWrite(LED_WARN, HIGH);
+                    USART_Print("RAIN ALERT! Bring laundry in!\r\n");
+                }
+            } else if(adc > 500) {
+                rain_streak++;
+                last_dry_streak = 0;
+                status = "Rain";
+            } else if(adc > 300) {
+                status = "Drizzle";
+                rain_streak = 0;
+                last_dry_streak++;
+            } else {
+                status = "Dry";
+                rain_streak = 0;
+                last_dry_streak++;
+            }
+
+            if(last_dry_streak >= 6 && alert_active) {
+                alert_active = 0;
+                digitalWrite(BUZZER, LOW);
+                digitalWrite(LED_WARN, LOW);
+                USART_Print("Rain stopped, alert cleared\r\n");
+            }
+
+            OLED_Clear(&oled);
+            OLED_SetCursor(&oled, 0, 0);
+            OLED_Print(&oled, "Rain Alert");
+
+            OLED_SetCursor(&oled, 0, 2);
+            OLED_Print(&oled, status);
+            OLED_Print(&oled, "  ADC:");
+            OLED_PrintDec(&oled, adc);
+
+            OLED_SetCursor(&oled, 0, 4);
+            OLED_Print(&oled, "Streak: ");
+            OLED_PrintDec(&oled, rain_streak);
+            OLED_Print(&oled, "/3");
+
+            OLED_SetCursor(&oled, 0, 6);
+            OLED_Print(alert_active ? "<< ALERT >>" : "Status: OK");
+            OLED_Display(&oled);
+
+            USART_Print(status); USART_Print(" ADC:");
+            USART_PrintDec(adc); USART_Print(" D:");
+            USART_PrintDec(dig); USART_Print(" S:");
+            USART_PrintDec(rain_streak); USART_Print("\r\n");
+        }
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> วัดทุก 5 วิ — 3 ระดับ: Heavy Rain (dig+adc>800), Rain (>500), Drizzle (>300), Dry (<300) — debounce 3 ครั้ง (15 วิ) ยืนยันฝนตก — last_dry_streak 6 ครั้ง (30 วิ) ยืนยันฝนหยุด → reset alert — VCC เปิดเฉพาะตอนวัด + ปิดทันที — OLED แสดงสถานะแบบ real-time — ใช้เตือนให้เก็บผ้า, ปิดหน้าต่าง, หรือแจ้งเตือนทั่วไป</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: Smart Garden Combo — Rain Sensor + Soil Moisture</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+#define RAIN_VCC   PC0
+#define RAIN_ADC   PD2
+#define RAIN_DIG   PC3
+#define SOIL_VCC   PC4
+#define SOIL_ADC   PD4
+#define SOIL_CH    ADC_CH1
+#define PUMP_PIN   PC5
+#define ALERT_LED  PC1
+
+uint16_t read_sensor(uint8_t vcc_pin, uint8_t adc_pin) {
+    digitalWrite(vcc_pin, HIGH);
+    Delay_Ms(60);
+    uint16_t val = ADC_Read(adc_pin);
+    digitalWrite(vcc_pin, LOW);
+    return val;
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    ADC_Init(RAIN_ADC, ADC_CH0);
+    ADC_Init(SOIL_ADC, SOIL_CH);
+    pinMode(RAIN_VCC, PIN_MODE_OUTPUT);
+    pinMode(RAIN_DIG, PIN_MODE_INPUT);
+    pinMode(SOIL_VCC, PIN_MODE_OUTPUT);
+    pinMode(PUMP_PIN, PIN_MODE_OUTPUT);
+    pinMode(ALERT_LED, PIN_MODE_OUTPUT);
+    USART_Init(115200);
+
+    digitalWrite(RAIN_VCC, LOW);
+    digitalWrite(SOIL_VCC, LOW);
+    digitalWrite(PUMP_PIN, LOW);
+    digitalWrite(ALERT_LED, LOW);
+
+    Timer_t tmr;
+    Start_Timer(&tmr, 30000, 1);
+
+    uint8_t pump_blocked = 0;
+    uint8_t rain_today = 0;
+
+    USART_Print("Smart Garden: Rain+Soil Combo\r\n");
+
+    while(1) {
+        if(Is_Timer_Expired(&tmr)) {
+            uint16_t rain_adc = read_sensor(RAIN_VCC, RAIN_ADC);
+            uint8_t  rain_dig = GPIO_Read(RAIN_DIG);
+            uint16_t soil_adc = read_sensor(SOIL_VCC, SOIL_ADC);
+
+            uint8_t is_raining = (rain_dig || rain_adc > 400);
+            if(is_raining) rain_today = 1;
+
+            float soil_moisture = 100.0f - ((float)(soil_adc - 200) /
+                                  (float)(950 - 200)) * 100.0f;
+            if(soil_moisture < 0) soil_moisture = 0;
+            if(soil_moisture > 100) soil_moisture = 100;
+
+            USART_Print("Rain:"); USART_PrintDec(rain_adc);
+            USART_Print("/"); USART_PrintDec(rain_dig);
+            USART_Print(" Soil:"); USART_PrintFloat(soil_moisture, 1);
+            USART_Print("%");
+
+            if(is_raining && !pump_blocked) {
+                pump_blocked = 1;
+                USART_Print(" RAIN - Pump blocked\r\n");
+                digitalWrite(ALERT_LED, HIGH);
+            } else if(!is_raining && pump_blocked && !rain_today) {
+                pump_blocked = 0;
+                USART_Print(" Dry - Pump unblocked\r\n");
+                digitalWrite(ALERT_LED, LOW);
+            }
+
+            if(!is_raining && soil_moisture < 30.0f && !pump_blocked) {
+                USART_Print(" WATERING\r\n");
+                digitalWrite(PUMP_PIN, HIGH);
+                Delay_Ms(5000);
+                digitalWrite(PUMP_PIN, LOW);
+            } else {
+                USART_Print("\r\n");
+            }
+        }
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> รวม Rain Sensor + Soil Moisture — ตรรกะอัจฉริยะ: ถ้าฝนตก → ห้ามรดน้ำ (pump_blocked) แม้ดินจะแห้ง — rain_today flag บอกว่าวันนี้ฝนตกแล้ว — ฝนหยุด + ไม่มีฝนตกวันนี้ → ปลดล็อกปั๊ม — ฟังก์ชัน <code>read_sensor()</code> reuse สำหรับทั้งสองเซนเซอร์ (เปิด VCC→อ่าน→ปิด) — ลดการใช้น้ำเปลืองเมื่อฝนตก — ถ้าดินเปียกจากฝน → ไม่ต้องรดน้ำ → ประหยัดน้ำ</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: Rain Gauge — วัดปริมาณน้ำฝนสะสม</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+#define RAIN_VCC  PC0
+#define RAIN_ADC  PD2
+#define RAIN_DIG  PC3
+
+/*
+  การวัดปริมาณน้ำฝนโดยประมาณ:
+  - ADC เพิ่มขึ้น 1 หน่วย ≈ 0.01mm (ต้อง calibrate)
+  - สะสมค่าต่างตั้งแต่เริ่ม
+*/
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    ADC_Init(RAIN_ADC, ADC_CH0);
+    pinMode(RAIN_VCC, PIN_MODE_OUTPUT);
+    pinMode(RAIN_DIG, PIN_MODE_INPUT);
+    USART_Init(115200);
+
+    digitalWrite(RAIN_VCC, LOW);
+
+    digitalWrite(RAIN_VCC, HIGH);
+    Delay_Ms(50);
+    uint16_t baseline_adc = ADC_Read(RAIN_ADC);
+    digitalWrite(RAIN_VCC, LOW);
+
+    float total_rain_mm = 0;
+    uint16_t prev_adc = baseline_adc;
+    Timer_t tmr;
+    Start_Timer(&tmr, 10000, 1);
+
+    USART_Print("Rain Gauge Ready\r\n");
+    USART_Print("Baseline ADC: ");
+    USART_PrintDec(baseline_adc);
+    USART_Print("\r\n");
+
+    while(1) {
+        if(Is_Timer_Expired(&tmr)) {
+            digitalWrite(RAIN_VCC, HIGH);
+            Delay_Ms(50);
+            uint16_t adc = ADC_Read(RAIN_ADC);
+            uint8_t dig = GPIO_Read(RAIN_DIG);
+            digitalWrite(RAIN_VCC, LOW);
+
+            if(adc > prev_adc + 5) {
+                float rain_added = (adc - prev_adc) * 0.015f;
+                total_rain_mm += rain_added;
+            }
+            prev_adc = adc;
+
+            USART_Print("ADC:"); USART_PrintDec(adc);
+            USART_Print(" Rain:"); USART_PrintFloat(total_rain_mm, 2);
+            USART_Print("mm D:"); USART_PrintDec(dig);
+
+            if(dig) USART_Print(" HEAVY");
+
+            if(total_rain_mm > 50.0f) {
+                USART_Print(" FLOOD RISK!");
+            }
+
+            USART_Print("\r\n");
+        }
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> วัด baseline ADC ตอนแห้ง — เมื่อ ADC เพิ่มขึ้น → มีน้ำฝน — สะสมส่วนต่าง ADC × conversion factor (0.015mm/unit) — ต้อง calibrate จริงด้วยการเทน้ำปริมาตรที่ทราบบนแผ่น — ใช้ prev_adc ติดตามการเปลี่ยนแปลง — threshold +5 ป้องกัน noise — แจ้งเตือนเมื่อฝนสะสม >50mm (flood risk) — ปิด VCC ระหว่างวัดเพื่อลด corrosion</div>
+</div>
+
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_rainsensor_yl83.html">กลับบท</a><a href="chapx_lib_waterflow_yfs201_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

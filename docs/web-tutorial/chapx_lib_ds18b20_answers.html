@@ -1,0 +1,130 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย DS18B20 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_ds18b20.html">กลับบท</a><a href="chapx_lib_bmp280_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — DS18B20</h1>
+<div class="answer"><h2>ข้อ 1: แสดง ROM ID ทั้งหมดของทุกเซนเซอร์</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "DS18B20.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_Init(115200);
+    DS18B20_Init(PC0);
+
+    uint8_t n = DS18B20_GetDeviceCount();
+    USART_Print("Found "); USART_PrintNum(n);
+    USART_Println(" device(s)");
+
+    for(uint8_t i = 0; i < n; i++) {
+        DS18B20_ROM_t rom;
+        DS18B20_GetROM(i, &rom);
+        USART_Print("ROM["); USART_PrintNum(i);
+        USART_Print("]: ");
+        for(uint8_t j = 0; j < 8; j++) {
+            USART_PrintHex(rom.bytes[j]);
+            USART_Print(" ");
+        }
+        USART_Println("");
+
+        if(rom.family == 0x28) USART_Println("  → DS18B20");
+        else if(rom.family == 0x22) USART_Println("  → DS1822");
+        else USART_Println("  → Unknown");
+    }
+
+    while(1);
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>DS18B20_GetDeviceCount()</code> นับจำนวนเซนเซอร์บนบัส — วน loop ตามจำนวน device — <code>DS18B20_GetROM(i, &rom)</code> ดึง 8-byte ROM ID ของแต่ละตัว — <code>USART_PrintHex()</code> พิมพ์ทีละ byte — เช็ค <code>rom.family</code> เพื่อระบุรุ่น — ใช้ <code>DS18B20_GetTempCByROM()</code> ด้วย ROM ได้ถ้าต้องการอ่านเฉพาะตัว</div></div>
+<div class="answer"><h2>ข้อ 2: Parasite Power Mode (2-wire)</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "DS18B20.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_Init(115200);
+    DS18B20_Init(PC0);
+
+    DS18B20_SetParasiteMode(1);   // เปิด parasite (2-wire)
+    USART_Println("Parasite Power Mode Enabled");
+    USART_Println("Wiring: DQ+PC0, VCC+GND tied to GND");
+
+    Timer_t tmr;
+    Start_Timer(&tmr, 2000, 1);
+
+    while(1) {
+        if(Is_Timer_Expired(&tmr)) {
+            DS18B20_RequestTemperatures();
+            Delay_Ms(1000);  // parasite ต้องรอนานกว่า เพราะใช้ capacitor charge
+
+            uint8_t n = DS18B20_GetDeviceCount();
+            for(uint8_t i = 0; i < n; i++) {
+                DS18B20_ROM_t rom;
+                DS18B20_GetROM(i, &rom);
+                float t = DS18B20_GetTempC(&rom);
+                USART_Print("T"); USART_PrintNum(i+1);
+                USART_Print(": "); USART_PrintFloat(t, 1);
+                USART_Println("C");
+            }
+        }
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> Parasite mode ใช้แค่ 2 เส้น (DQ+GND) — VCC ต้องต่อ GND — <code>DS18B20_SetParasiteMode(1)</code> เปิด strong pull-up บน pin DQ ระหว่าง convert — ต้องต่อ MOSFET หรือใช้ GPIO push-pull strong pull-up ถ้าบัสไม่มี pull-up ในตัว — <code>Delay_Ms(1000)</code> นานกว่าปกติ (750ms) เพราะ parasite ต้องชาร์จ capacitor ภายในชิป — ถ้าอ่านไม่ขึ้น ให้เพิ่มเวลา หรือกลับไปใช้ 3-wire</div></div>
+<div class="answer"><h2>ข้อ 3: Data Logger + Flash บันทึกอุณหภูมิ 3 จุด</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "SimpleFlash.h"
+#include "DS18B20.h"
+
+#define LOG_ADDR    0x0800F800
+#define MAX_ENTRIES 144
+
+typedef struct {
+    uint32_t timestamp;
+    float temps[3];
+    uint8_t count;
+} LogEntry_t;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_Init(115200);
+    DS18B20_Init(PC0);
+
+    uint8_t n = DS18B20_GetDeviceCount();
+    USART_Print("Found "); USART_PrintNum(n);
+    USART_Println(" sensor(s)");
+
+    Timer_t tmr;
+    Start_Timer(&tmr, 60000, 1);  // ทุก 1 นาที
+    uint8_t idx = 0;
+
+    while(1) {
+        if(Is_Timer_Expired(&tmr)) {
+            DS18B20_RequestTemperatures();
+            Delay_Ms(750);
+
+            LogEntry_t entry;
+            entry.timestamp = Timer_GetMs();
+            entry.count = (n > 3) ? 3 : n;
+
+            for(uint8_t i = 0; i < entry.count; i++) {
+                DS18B20_ROM_t rom;
+                DS18B20_GetROM(i, &rom);
+                entry.temps[i] = DS18B20_GetTempC(&rom);
+                USART_Print("#"); USART_PrintNum(i+1);
+                USART_Print(":"); USART_PrintFloat(entry.temps[i], 1);
+                USART_Print("C ");
+            }
+            USART_Println("");
+
+            Flash_WriteLog(&entry, sizeof(LogEntry_t), idx);
+            idx = (idx + 1) % MAX_ENTRIES;
+        }
+        IWDG_Feed();
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> รองรับ 3 จุดวัด — <code>RequestTemperatures</code> สั่ง convert พร้อมกันทุกตัว — <code>Flash_WriteLog</code> บันทึก struct ที่มี timestamp + array อุณหภูมิ — เลือกอ่านเฉพาะ ROM 3 ตัวแรก (หรือใช้ <code>DS18B20_GetTempCByIndex</code>) — อ่านกลับด้วย <code>Flash_ReadLog</code> เมื่อต้องการ dump ข้อมูลผ่าน USART</div></div>
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_ds18b20.html">กลับบท</a><a href="chapx_lib_bmp280_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MPU6050 — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_vl53l0x.html">บทก่อน</a>
+    <a href="chapx_lib_as5600.html">บทถัดไป →</a>
+</nav>
+<h1>MPU6050 — Gyroscope + Accelerometer I2C</h1>
+<span class="level advanced">ระดับสูง</span>
+
+<section class="flowchart">
+    <h2>🧭 แผนภาพการทำงาน</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["MPU6050_Init(fsGyro, fsAccel)"] --> B["MPU6050_ReadAll(&a, &g, &t)"]
+    B --> C["Raw → Real Units"]
+    C --> D["Complementary Filter<br/>angle = 0.98*(angle+gyro*dt) + 0.02*accel"]
+    D --> E["Pitch / Roll / Yaw"]
+    E --> B
+    </pre>
+</section>
+
+<section>
+    <h2>🔌 การต่อวงจร</h2>
+    <pre class="ascii-circuit">
+            MPU6050 — 6-DOF IMU Sensor I2C
+    ┌────────────────────────────────────┐
+    │ MCU                        MPU6050 │
+    │ PC1─────────SDA          ┌────────┤
+    │ PC2─────────SCL          │ Gyro   │
+    │ 3.3V────────VCC          │  3-axis│
+    │ GND─────────GND          │ Accel  │
+    │ PC3─────────INT(optional)│  3-axis│
+    │                    addr └────────┤
+    │ AD0─GND → 0x68  AD0─VCC → 0x69   │
+    └────────────────────────────────────┘
+    </pre>
+    <p>PC1─SDA, PC2─SCL — AD0=GND → addr 0x68 — INT (PC3) optional สำหรับ interrupt แจ้ง data ready — ใช้ 3.3V</p>
+</section>
+
+<section>
+    <h2>📚 หลักการทำงาน</h2>
+    <p><strong>MPU6050</strong> มี MEMS sensors 2 ชนิดในชิปเดียว:</p>
+    <ul>
+        <li><strong>Gyroscope (ไจโร):</strong> วัดความเร็วเชิงมุม (°/s) — 3 แกน — ใช้คำนวณการหมุน</li>
+        <li><strong>Accelerometer (แอคเซเลอโรมิเตอร์):</strong> วัดความเร่ง (g) — 3 แกน — ใช้หาทิศทางแรงโน้มถ่วง</li>
+    </ul>
+    <p><strong>Complementary Filter:</strong> รวมข้อดีของ Gyro (ตอบสนองเร็ว) และ Accel (แม่นในระยะยาว — drift-free)</p>
+    <pre>angle = 0.98 × (angle_prev + gyro_rate × dt) + 0.02 × accel_angle</pre>
+    <p><strong>แปลง Raw Value → หน่วยจริง:</strong></p>
+    <ul>
+        <li>Gyro: raw / sensitivity (131.0 @ ±250°/s, 65.5 @ ±500°/s ...)</li>
+        <li>Accel: raw / sensitivity (16384 @ ±2g, 8192 @ ±4g ...)</li>
+        <li>Temp: raw/340 + 36.53 (°C)</li>
+    </ul>
+</section>
+
+<section>
+    <h2>💻 เขียน Code ทีละขั้น</h2>
+
+    <div class="step"><h3>ขั้นที่ 1: Init + Setup</h3>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "MPU6050.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_Init(USART1, BAUD_115200);
+    I2C_Init(I2C1, I2C_SPEED_FAST);
+
+    // ±250°/s gyro, ±2g accel
+    MPU6050_Init(MPU6050_GYRO_250, MPU6050_ACCEL_2G);
+
+    MPU6050_Calibrate(200);  // calibrate เก็บ offset 200 samples
+    USART_Println("MPU6050 Ready");</code></pre>
+    <p class="explain">🔍 <code>MPU6050_Init(gyroFS, accelFS)</code> — full scale: Gyro: 250/500/1000/2000, Accel: 2/4/8/16g — <code>MPU6050_Calibrate()</code> เก็บค่า offset ตอนอยู่กับที่ ห้ามขยับ! ลด gyro drift</p></div>
+
+    <div class="step"><h3>ขั้นที่ 2: อ่าน/เขียนค่า</h3>
+    <pre><code class="language-c">    float accel[3], gyro[3];  // x, y, z
+    float temp, pitch, roll;
+
+    MPU6050_ReadAll(accel, gyro, &temp);
+
+    // แปลง accel → มุม (pitch, roll)
+    pitch = atan2(accel[1], accel[2]) * 180.0f / M_PI;
+    roll  = atan2(accel[0], accel[2]) * 180.0f / M_PI;
+
+    USART_Print("Pitch: "); USART_PrintFloat(pitch, 1);
+    USART_Print(" Roll: "); USART_PrintFloat(roll, 1);
+    USART_Print(" Temp: "); USART_PrintFloat(temp, 1);
+    USART_Println(" C");</code></pre>
+    <p class="explain">🔍 <code>MPU6050_ReadAll(accel, gyro, &temp)</code> — accel ในหน่วย g, gyro ในหน่วย °/s, temp ใน °C — ใช้ pin int สำหรับ interrupt-driven จะประหยัด CPU กว่า polling</p></div>
+
+    <div class="step"><h3>ขั้นที่ 3: Loop + แสดงผล</h3>
+    <pre><code class="language-c">    float anglePitch = 0, angleRoll = 0;
+    uint32_t lastTime = Get_CurrentMs();
+
+    while(1) {
+        float accel[3], gyro[3], temp;
+        MPU6050_ReadAll(accel, gyro, &temp);
+
+        uint32_t now = Get_CurrentMs();
+        float dt = (now - lastTime) / 1000.0f;  // sec
+        lastTime = now;
+
+        // Accel angle
+        float accPitch = atan2(accel[1], accel[2]) * 180.0f / M_PI;
+        float accRoll  = atan2(accel[0], accel[2]) * 180.0f / M_PI;
+
+        // Complementary filter
+        anglePitch = 0.98f * (anglePitch + gyro[0] * dt) + 0.02f * accPitch;
+        angleRoll  = 0.98f * (angleRoll  + gyro[1] * dt) + 0.02f * accRoll;
+
+        USART_Print("P:"); USART_PrintFloat(anglePitch, 1);
+        USART_Print(" R:"); USART_PrintFloat(angleRoll, 1);
+        USART_Println("");
+
+        Delay_Ms(10);  // ~100Hz
+    }
+}</code></pre>
+    <p class="explain">🔍 Complementary filter — 0.98/0.02 คืออัตราส่วนความเชื่อถือระหว่าง Gyro (เร็วแต่ drift) กับ Accel (แม่นแต่ noisy) — dt ต้องถูกต้อง (ms → sec) — loop ต้องเร็วพอ (~100Hz)</p></div>
+</section>
+
+<section>
+    <h2>📋 API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+        <tr><td><code>MPU6050_Init(gyroFS, accelFS)</code></td><td>เริ่มต้น, ตั้ง full scale</td><td><code>MPU6050_Init(MPU6050_GYRO_250, MPU6050_ACCEL_2G)</code></td></tr>
+        <tr><td><code>MPU6050_Calibrate(samples)</code></td><td>เก็บ offset gyro (อย่าขยับ)</td><td><code>MPU6050_Calibrate(200)</code></td></tr>
+        <tr><td><code>MPU6050_ReadAll(a, g, &t)</code></td><td>อ่าน accel(g)+gyro(°/s)+temp(°C)</td><td><code>MPU6050_ReadAll(accel, gyro, &temp)</code></td></tr>
+        <tr><td><code>MPU6050_ReadGyro(g)</code></td><td>อ่าน gyro อย่างเดียว</td><td><code>MPU6050_ReadGyro(gyro)</code></td></tr>
+        <tr><td><code>MPU6050_ReadAccel(a)</code></td><td>อ่าน accel อย่างเดียว</td><td><code>MPU6050_ReadAccel(accel)</code></td></tr>
+        <tr><td><code>MPU6050_ReadTemp()</code></td><td>อ่านอุณหภูมิ (°C)</td><td><code>float t = MPU6050_ReadTemp()</code></td></tr>
+        <tr><td><code>MPU6050_Sleep()</code></td><td>เข้า sleep (ประหยัดไฟ)</td><td><code>MPU6050_Sleep()</code></td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>มุม drift (ค่อยๆ เลื่อน) ตลอดเวลา</td><td>Gyro offset ไม่ได้ calibrate</td><td>เรียก <code>MPU6050_Calibrate(500)</code> ตอนอยู่นิ่ง — ห้ามสั่น!</td></tr>
+        <tr><td>มุมกระโดด / noisy</td><td>ใช้ accel อย่างเดียว ไม่ผ่าน filter</td><td>ใช้ Complementary filter หรือ Kalman filter</td></tr>
+        <tr><td>ค่า Accel แกน Z ≈ 0.6g (ไม่ใช่ ~1g)</td><td>Full scale ตั้งผิด, ใช้ ±4g แต่คิดเป็น ±2g</td><td>เช็ค full scale config — ตรงกับ sensitivity factor</td></tr>
+        <tr><td>I2C read ได้ 0x00/0xFF ตลอด</td><td>MPU6050 ยังอยู่ใน sleep mode</td><td>Init ต้องปลุกจาก sleep — ตรวจสอบ <code>MPU6050_WakeUp()</code></td></tr>
+        <tr><td>Complementary filter delay ช้า</td><td>dt ผิด (นับเวลาเป็น ms แทน sec)</td><td>dt ต้องเป็นวินาที: <code>(now - lastTime) / 1000.0f</code></td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>🛠️ สร้าง Product: Self-Balancing Mini Robot</h2>
+    <p>MPU6050 + Complementary Filter + PID + Motor — หุ่นยนต์ทรงตัว 2 ล้อ</p>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "MPU6050.h"
+
+#define KP 25.0f  // PID proportional gain
+#define KI  0.5f  // PID integral
+#define KD  1.5f  // PID derivative
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+    I2C_Init(I2C1, I2C_SPEED_FAST);
+    USART_Init(USART1, BAUD_115200);
+
+    MPU6050_Init(MPU6050_GYRO_250, MPU6050_ACCEL_2G);
+    USART_Println("Calibrating... DO NOT MOVE!");
+    MPU6050_Calibrate(500);
+    USART_Println("Ready");
+
+    float angle = 0;
+    uint32_t lastTime = Get_CurrentMs();
+
+    while(1)
+    {
+        float accel[3], gyro[3], temp;
+        MPU6050_ReadAll(accel, gyro, &temp);
+
+        uint32_t now = Get_CurrentMs();
+        float dt = (now - lastTime) / 1000.0f;
+        lastTime = now;
+
+        float accAngle = atan2(accel[0], accel[2]) * 180.0f / M_PI;
+        angle = 0.98f * (angle + gyro[1] * dt) + 0.02f * accAngle;
+
+        // PID output → Motor PWM
+        float pid = KP * angle + KI * 0 + KD * gyro[1];
+        // Motor left:  base + pid
+        // Motor right: base - pid
+        // (เชื่อมต่อมอเตอร์ผ่าน H-Bridge ที่นี่)
+
+        USART_Print("Angle:"); USART_PrintFloat(angle, 1); USART_Println("");
+        Delay_Ms(5);  // 200Hz control loop
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>✏️ ลองทำดู</h2>
+    <ol>
+        <li>ทำ digital level — ใช้ accel หา pitch/roll แสดงเป็นองศาบน OLED — ใช้ calibrate ตอนวางบนพื้นราบ</li>
+        <li>ทำ gesture mouse — ตรวจจับ tilt → ส่งค่าผ่าน USART → PC แปลเป็น mouse movement</li>
+        <li>ทดลอง Complementary Filter — ลองเปลี่ยนค่า 0.98/0.02 → 0.95/0.05 และ 0.99/0.01 — ดูผลต่าง</li>
+        <li>ทำ fall detection — ถ้า accel รวม > 2g → แจ้งเตือน "FALL!" (ใช้กับอุปกรณ์ผู้สูงอายุ)</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_vl53l0x.html">บทก่อน</a>
+    <a href="chapx_lib_as5600.html">บทถัดไป →</a>
+</nav>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

@@ -1,0 +1,298 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย HX711 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_hx711.html">กลับบท</a><a href="chapx_lib_servo_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — HX711</h1>
+
+<div class="answer">
+<h2>ข้อ 1: Weight Scale — Tare + Calibrate + แสดงหน่วย g/oz</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "HX711.h"
+#include "OLED.h"
+
+#define DT_PIN      PC2
+#define SCK_PIN     PC3
+#define TARE_BTN    PC0
+#define UNIT_BTN    PC1
+
+typedef enum { UNIT_GRAM, UNIT_OZ } Unit_t;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    I2C_Init(PC1, PC2, I2C_SPEED_STANDARD);
+    USART_Init(115200);
+
+    HX711_t scale;
+    HX711_Init(&scale, DT_PIN, SCK_PIN, HX711_GAIN_128);
+
+    OLED_t oled;
+    OLED_Init(&oled, 0x3C, OLED_128x64);
+    OLED_SetFont(&oled, FONT_8x16);
+
+    pinMode(TARE_BTN, PIN_MODE_INPUT_PULLUP);
+    pinMode(UNIT_BTN, PIN_MODE_INPUT_PULLUP);
+
+    Unit_t unit = UNIT_GRAM;
+
+    USART_Print("Calibrating... place known weight\r\n");
+    HX711_Tare(&scale, 15);
+    USART_Print("Tare done. Place 100g calibration weight.\r\n");
+    Delay_Ms(3000);
+    HX711_Calibrate(&scale, 100.0f, 10);
+    USART_Print("Calibration done!\r\n");
+
+    while(1) {
+        float weight_g = HX711_ReadWeight(&scale, 8);
+
+        if(GPIO_Read(TARE_BTN) == 0) {
+            Delay_Ms(100);
+            HX711_Tare(&scale, 15);
+            USART_Print("TARE!\r\n");
+            while(GPIO_Read(TARE_BTN) == 0);
+        }
+
+        if(GPIO_Read(UNIT_BTN) == 0) {
+            Delay_Ms(100);
+            unit = (unit == UNIT_GRAM) ? UNIT_OZ : UNIT_GRAM;
+            USART_Print("Unit: ");
+            USART_Print(unit == UNIT_GRAM ? "gram" : "oz");
+            USART_Print("\r\n");
+            while(GPIO_Read(UNIT_BTN) == 0);
+        }
+
+        OLED_Clear(&oled);
+        OLED_SetCursor(&oled, 0, 0);
+        OLED_Print(&oled, "DIGITAL SCALE");
+
+        OLED_SetCursor(&oled, 20, 2);
+        if(unit == UNIT_GRAM) {
+            if(fabs(weight_g) < 0.5f) {
+                OLED_Print(&oled, "  0.0 g");
+            } else if(weight_g > 1000.0f) {
+                OLED_PrintFloat(&oled, "", weight_g / 1000.0f, 3);
+                OLED_Print(&oled, " kg");
+            } else {
+                OLED_PrintFloat(&oled, "", weight_g, 1);
+                OLED_Print(&oled, " g");
+            }
+        } else {
+            float weight_oz = weight_g * 0.035274f;
+            OLED_PrintFloat(&oled, "", weight_oz, 2);
+            OLED_Print(&oled, " oz");
+        }
+
+        OLED_SetCursor(&oled, 0, 6);
+        OLED_Print(&oled, "TARE ");
+        OLED_Print(unit == UNIT_GRAM ? "g" : "oz");
+        OLED_Print(&oled, "  UNIT");
+
+        OLED_Display(&oled);
+        Delay_Ms(200);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ฟังก์ชันครบของเครื่องชั่ง: Tare (ลบน้ำหนักภาชนะ), Calibrate (ตุ้ม 100g), สลับหน่วย g/oz — ปุ่ม TARE (PC0) เรียก HX711_Tare — ปุ่ม UNIT (PC1) สลับ gram ↔ ounce (×0.035274) — แสดงผล: <0.5g = "0.0", >1000g = kg, ปกติ = g — OLED แสดงผล 2 บรรทัด — averaging 8 samples ให้ค่าคงที่ — calibration factor เก็บใน scale.cal_factor หลัง Calibrate</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: Data Logging — บันทึกน้ำหนักลง Flash แบบ Time-Series</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "HX711.h"
+#include "W25Qxx.h"
+
+#define DT_PIN     PC2
+#define SCK_PIN    PC3
+#define LOG_BTN    PC0
+#define MAX_LOGS   200
+
+typedef struct {
+    uint32_t timestamp_ms;
+    float    weight_g;
+} WeightLog_t;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    SPI_Init(PC4, PC5, PC6, SPI_MODE0);
+    USART_Init(115200);
+
+    HX711_t scale;
+    HX711_Init(&scale, DT_PIN, SCK_PIN, HX711_GAIN_128);
+    HX711_SetScale(&scale, 420.5f);
+
+    W25Qxx_Init();
+    W25Qxx_EraseSector(0);
+
+    pinMode(LOG_BTN, PIN_MODE_INPUT_PULLUP);
+
+    USART_Print("Auto-Tare...\r\n");
+    Delay_Ms(2000);
+    HX711_Tare(&scale, 15);
+    USART_Print("Weight Logger Ready\r\n");
+
+    uint16_t log_count = 0;
+    uint32_t log_addr = 0;
+    float prev_weight = 0;
+    Timer_t tmr_log;
+    Start_Timer(&tmr_log, 1000, 1);
+    uint8_t logging = 0;
+
+    while(1) {
+        float weight = HX711_ReadWeight(&scale, 8);
+
+        if(GPIO_Read(LOG_BTN) == 0) {
+            Delay_Ms(100);
+            logging = !logging;
+            if(logging) {
+                USART_Print("LOGGING STARTED\r\n");
+            } else {
+                USART_Print("LOGGING STOPPED. ");
+                USART_PrintDec(log_count);
+                USART_Print(" entries\r\n");
+            }
+            while(GPIO_Read(LOG_BTN) == 0);
+        }
+
+        USART_Print("W:"); USART_PrintFloat(weight, 1);
+        USART_Print("g ");
+
+        if(logging) {
+            USART_Print("[LOG]");
+        }
+        USART_Print("\r\n");
+
+        if(logging && Is_Timer_Expired(&tmr_log) && log_count < MAX_LOGS) {
+            if(fabs(weight - prev_weight) > 1.0f) {
+                WeightLog_t log;
+                log.timestamp_ms = Get_CurrentMs();
+                log.weight_g = weight;
+
+                W25Qxx_WritePage(log_addr, (uint8_t*)&log, sizeof(WeightLog_t));
+                log_addr += sizeof(WeightLog_t);
+                log_count++;
+                prev_weight = weight;
+            }
+        }
+
+        if(!logging && log_count > 0) {
+            USART_Print("--- Dumping Log ---\r\n");
+            uint32_t read_addr = 0;
+            for(uint16_t i = 0; i < log_count; i++) {
+                WeightLog_t entry;
+                W25Qxx_Read(read_addr, (uint8_t*)&entry, sizeof(WeightLog_t));
+                read_addr += sizeof(WeightLog_t);
+                USART_Print("["); USART_PrintDec(i);
+                USART_Print("] t="); USART_PrintDec(entry.timestamp_ms);
+                USART_Print(" w="); USART_PrintFloat(entry.weight_g, 1);
+                USART_Print("g\r\n");
+            }
+            log_count = 0;
+            log_addr = 0;
+        }
+
+        Delay_Ms(100);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> กดปุ่มเริ่ม/หยุด logging — บันทึกทุก 1 วิ เฉพาะเมื่อน้ำหนักเปลี่ยน >1g (delta compression) — เก็บ timestamp + weight ใน struct — เขียน W25Qxx Flash แบบ sequential — MAX_LOGS=200 ป้องกัน overflow — เมื่อหยุด logging → dump ข้อมูลทั้งหมดออก USART — ใช้ SetScale เพื่อตั้ง calibration factor แบบ manual (ไม่ต้อง calibrate ใหม่ทุกครั้ง) — เหมาะกับงานชั่งน้ำหนักเป็นชุด หรือ monitoring น้ำหนักสัตว์เลี้ยง</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: Auto-Zero — ปรับ Tare อัตโนมัติเมื่อน้ำหนักคงที่</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "HX711.h"
+#include "OLED.h"
+
+#define DT_PIN    PC2
+#define SCK_PIN   PC3
+#define MAN_TARE  PC0
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    I2C_Init(PC1, PC2, I2C_SPEED_STANDARD);
+    USART_Init(115200);
+
+    HX711_t scale;
+    HX711_Init(&scale, DT_PIN, SCK_PIN, HX711_GAIN_128);
+    HX711_SetScale(&scale, 415.0f);
+    HX711_Tare(&scale, 15);
+
+    OLED_t oled;
+    OLED_Init(&oled, 0x3C, OLED_128x64);
+    OLED_SetFont(&oled, FONT_8x16);
+
+    pinMode(MAN_TARE, PIN_MODE_INPUT_PULLUP);
+
+    float stable_weight = 0;
+    uint16_t stable_count = 0;
+    uint8_t auto_zero_done = 0;
+
+    USART_Print("Auto-Zero Scale Ready\r\n");
+
+    while(1) {
+        float weight = HX711_ReadWeight(&scale, 10);
+        float diff = fabs(weight - stable_weight);
+
+        if(diff < 0.5f && fabs(weight) < 2.0f && !auto_zero_done) {
+            stable_count++;
+            if(stable_count >= 20) {
+                HX711_Tare(&scale, 15);
+                USART_Print("AUTO-ZERO! Weight was: ");
+                USART_PrintFloat(weight, 1);
+                USART_Print("g\r\n");
+                stable_count = 0;
+                auto_zero_done = 1;
+                weight = 0;
+            }
+        } else if(diff > 0.5f) {
+            stable_weight = weight;
+            stable_count = 0;
+        }
+
+        if(fabs(weight) > 3.0f) {
+            auto_zero_done = 0;
+            stable_weight = weight;
+        }
+
+        if(GPIO_Read(MAN_TARE) == 0) {
+            Delay_Ms(80);
+            HX711_Tare(&scale, 15);
+            USART_Print("MANUAL TARE\r\n");
+            auto_zero_done = 1;
+            while(GPIO_Read(MAN_TARE) == 0);
+        }
+
+        OLED_Clear(&oled);
+        OLED_SetCursor(&oled, 0, 0);
+        OLED_Print(&oled, "AUTO-ZERO SCALE");
+
+        OLED_SetCursor(&oled, 10, 2);
+        if(fabs(weight) < 0.3f) {
+            OLED_Print(&oled, "   0.0 g");
+        } else {
+            OLED_PrintFloat(&oled, "", weight, 1);
+            OLED_Print(&oled, " g");
+        }
+
+        OLED_SetCursor(&oled, 0, 5);
+        OLED_Print(&oled, "Zero wait: ");
+        OLED_PrintDec(&oled, stable_count);
+        OLED_Print(&oled, "/20");
+
+        OLED_SetCursor(&oled, 0, 7);
+        OLED_Print(auto_zero_done ? "Zero: DONE" : "Zero: WAIT...");
+
+        OLED_Display(&oled);
+
+        USART_Print("W:"); USART_PrintFloat(weight, 1);
+        USART_Print("g stable:"); USART_PrintDec(stable_count);
+        USART_Print("\r\n");
+        Delay_Ms(150);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> Auto-zero เมื่อน้ำหนักคงที่ (<0.5g เปลี่ยนแปลง) และอยู่ในช่วง ±2g — stable_count นับ 20 ครั้ง (~3 วิ) จึงทำ auto-tare — ป้องกัน auto-zero ซ้ำ: auto_zero_done flag — เมื่อมีน้ำหนัก >3g → reset flag (รอ auto-zero ครั้งถัดไป) — ปุ่ม Manual Tare สำหรับ override — แสดง countdown บน OLED — ใช้กับเครื่องชั่งที่ต้องการ zero อัตโนมัติ (เช่น conveyor scale, checkweigher) — averaging 10 samples ให้ค่าเสถียร</div>
+</div>
+
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_hx711.html">กลับบท</a><a href="chapx_lib_servo_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

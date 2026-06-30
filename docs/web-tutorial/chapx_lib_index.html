@@ -1,0 +1,168 @@
+﻿<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>📦 คลังอุปกรณ์ — 71 ไลบรารี — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<style>.lib-table{font-size:.82em}.lib-table td{vertical-align:top;padding:.35rem .5rem}.lib-table a{color:var(--accent);text-decoration:none;font-weight:600}.lib-table a:hover{text-decoration:underline}.cat-header{background:var(--accent-light)!important;color:var(--accent);font-weight:700;font-size:.92em}.ans-link:hover{color:var(--accent)!important;text-decoration:underline!important}</style>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_arduino_migration.html">บทก่อน</a>
+    <a href="chapx_lib_oled.html">บทถัดไป →</a>
+</nav>
+
+<h1>📦 คลังอุปกรณ์ — 71 ไลบรารี</h1>
+<span class="level beginner">ระดับเริ่มต้น</span>
+
+<section>
+    <h2>🧭 Universal Pattern — ใช้ได้กับทุก Lib</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["SystemCoreClockUpdate()+Timer_Init()"] --> B["Init Interface: I2C/SPI/USART"]
+    B --> C["Lib_Init(&inst, params)"]
+    C --> D{"Init สำเร็จ?"}
+    D -->|"✅ OK"| E["while(1)"]
+    D -->|"❌ Fail"| F["จัดการ Error"]
+    E --> G["Lib_Read/Update(&inst)"]
+    G --> H["ประมวลผล / แสดงผล"]
+    H --> I["Delay / Yield"]
+    I --> E
+</pre>
+</section>
+
+<section>
+    <h2>📚 3 ขั้นตอนใช้งานทุก Lib</h2>
+    <pre><code class="language-c">// ขั้น 1: System + Communication Init
+SystemCoreClockUpdate(); Timer_Init();
+I2C_SimpleInit(I2C_SPEED_100K, I2C_PINS_DEFAULT); // หรือ SPI/USART
+
+// ขั้น 2: Lib Init + Instance
+Lib_Instance_t dev;
+if (Lib_Init(&dev, params...) != LIB_OK) { /* error */ }
+
+// ขั้น 3: Main Loop
+while(1) { Lib_Read(&dev, &data); Delay_Ms(interval); }</code></pre>
+</section>
+
+<section>
+    <h2>📊 แคตตาล็อก — 71 บทเรียนเดี่ยว</h2>
+    <p style="color:#64748b">คลิกที่ชื่ออุปกรณ์ → เปิดบทเรียนละเอียด (Flowchart + วงจร + Code 3 ขั้น + API + ข้อผิดพลาด + Product + แบบฝึกหัด)</p>
+
+    <table class="lib-table">
+        <tr class="cat-header"><td colspan="3">🖥️ จอแสดงผล (11)</td></tr>
+        <tr><td><a href="chapx_lib_oled.html">OLED SSD1306</a> <a href="chapx_lib_oled_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>I2C</td><td>128x64 กราฟิก — ฟอนต์ไทย, animation, graphic primitives</td></tr>
+        <tr><td><a href="chapx_lib_lcd1602_i2c.html">LCD1602 I2C</a> <a href="chapx_lib_lcd1602_i2c_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>I2C</td><td>16x2 ตัวอักษร — CGRAM, backlight, ง่ายสุด</td></tr>
+        <tr><td><a href="chapx_lib_max7219.html">MAX7219</a> <a href="chapx_lib_max7219_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>SPI</td><td>8x8 LED Matrix — scroll ไทย, chainable, intensity control</td></tr>
+        <tr><td><a href="chapx_lib_p10.html">P10</a> <a href="chapx_lib_p10_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>GPIO</td><td>32x16 LED Panel — TIM2 scan, external 5V, large display</td></tr>
+        <tr><td><a href="chapx_lib_tm1637.html">TM1637</a> <a href="chapx_lib_tm1637_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>GPIO</td><td>4-digit 7-seg — clock, counter, 2-pin control</td></tr>
+        <tr><td><a href="chapx_lib_tm1650.html">TM1650</a> <a href="chapx_lib_tm1650_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>I2C</td><td>4-digit 7-seg — I2C version of TM1637, saves pins</td></tr>
+        <tr><td><a href="chapx_lib_neopixel.html">NeoPixel</a> <a href="chapx_lib_neopixel_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>GPIO</td><td>WS2812B RGB strip — HSV, rainbow, effects, level shifter</td></tr>
+        <tr><td><a href="chapx_lib_ws2812matrix.html">WS2812Matrix</a> <a href="chapx_lib_ws2812matrix_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>GPIO</td><td>8x8 RGB Matrix — Thai font, scroll, patterns</td></tr>
+        <tr><td><a href="chapx_lib_ws2815matrix.html">WS2815Matrix</a> <a href="chapx_lib_ws2815matrix_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>GPIO</td><td>8x8 RGB 12V — break-point continue, outdoor</td></tr>
+        <tr><td><a href="chapx_lib_tjc.html">TJC HMI</a> <a href="chapx_lib_tjc_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>USART</td><td>Touch Display — WYSIWYG UI editor, 5 callback types</td></tr>
+        <tr><td><a href="chapx_lib_shiftreg595.html">ShiftReg595</a> <a href="chapx_lib_shiftreg595_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>GPIO</td><td>74HC595 — 3 pins → 8+ outputs, chainable, no PWM</td></tr>
+
+        <tr class="cat-header"><td colspan="3">🌡️ อุณหภูมิ/ความชื้น (7)</td></tr>
+        <tr><td><a href="chapx_lib_dht.html">DHT11/DHT22</a> <a href="chapx_lib_dht_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>GPIO</td><td>Temp+Hum — bit-bang, CRC, 1Hz sampling max</td></tr>
+        <tr><td><a href="chapx_lib_ds18b20.html">DS18B20</a> <a href="chapx_lib_ds18b20_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>1-Wire</td><td>Temp -55~125°C — multi-sensor, parasite power, กันน้ำ</td></tr>
+        <tr><td><a href="chapx_lib_bmp280.html">BMP280</a> <a href="chapx_lib_bmp280_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>I2C</td><td>Pressure+Temp — altitude, sea-level, calibration data</td></tr>
+        <tr><td><a href="chapx_lib_aht10.html">AHT10/AHT20</a> <a href="chapx_lib_aht10_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>I2C</td><td>Temp+Hum — trigger→wait→read, fixed addr 0x38</td></tr>
+        <tr><td><a href="chapx_lib_sht3x.html">SHT3x</a> <a href="chapx_lib_sht3x_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>I2C</td><td>High-Accuracy ±0.3°C — periodic mode, heater, alert</td></tr>
+        <tr><td><a href="chapx_lib_max31855.html">MAX31855/MAX6675</a> <a href="chapx_lib_max31855_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>SPI</td><td>K-type Thermocouple — -270~1372°C, cold-junction, fault detect</td></tr>
+        <tr><td><a href="chapx_lib_buzzer.html">Buzzer</a> <a href="chapx_lib_buzzer_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>GPIO/PWM</td><td>Active+Passive — tone, melody, beep, frequency control</td></tr>
+
+        <tr class="cat-header"><td colspan="3">💡 แสง/แก๊ส/ฝุ่น (5)</td></tr>
+        <tr><td><a href="chapx_lib_bh1750.html">BH1750</a> <a href="chapx_lib_bh1750_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>I2C</td><td>Ambient Light 1-65535 lux — hires mode, no calibration</td></tr>
+        <tr><td><a href="chapx_lib_tcs34725.html">TCS34725</a> <a href="chapx_lib_tcs34725_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>I2C</td><td>RGB Color — gain+integration, color temp, lux calc</td></tr>
+        <tr><td><a href="chapx_lib_mqgas.html">MQGas</a> <a href="chapx_lib_mqgas_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>ADC</td><td>MQ-2/3/5/7/135 — PPM curve, preheat 24-48h, Ro calibration</td></tr>
+        <tr><td><a href="chapx_lib_pms5003.html">PMS5003</a> <a href="chapx_lib_pms5003_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>USART</td><td>PM2.5/PM10 — 32-byte frame, active/passive, fan life ~8000h</td></tr>
+        <tr><td><a href="chapx_lib_ntc10k.html">NTC10K</a> <a href="chapx_lib_ntc10k_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>ADC</td><td>Thermistor — Steinhart-Hart, voltage divider, self-heating</td></tr>
+
+        <tr class="cat-header"><td colspan="3">📏 ระยะ/ตรวจจับ (6)</td></tr>
+        <tr><td><a href="chapx_lib_hcsr04.html">HC-SR04</a> <a href="chapx_lib_hcsr04_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>GPIO</td><td>Ultrasonic 2-400cm — pulseIn, timeout, voltage divider</td></tr>
+        <tr><td><a href="chapx_lib_vl53l0x.html">VL53L0X</a> <a href="chapx_lib_vl53l0x_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>I2C</td><td>ToF Laser 3-200cm — continuous mode, ±3% accuracy</td></tr>
+        <tr><td><a href="chapx_lib_mpu6050.html">MPU6050</a> <a href="chapx_lib_mpu6050_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>I2C</td><td>Gyro+Accel 6-axis — complementary filter, raw→real units</td></tr>
+        <tr><td><a href="chapx_lib_as5600.html">AS5600</a> <a href="chapx_lib_as5600_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>I2C</td><td>Magnetic Encoder 12-bit — angle 0-360°, magnet required</td></tr>
+        <tr><td><a href="chapx_lib_pir.html">PIR</a> <a href="chapx_lib_pir_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>GPIO</td><td>Motion Sensor — interrupt-based, sensitivity+delay adjust</td></tr>
+        <tr><td><a href="chapx_lib_rcwl0516.html">RCWL0516</a> <a href="chapx_lib_rcwl0516_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>GPIO</td><td>Microwave Radar — through-wall, Doppler, range ~7m</td></tr>
+
+        <tr class="cat-header"><td colspan="3">⚡ วัดทางไฟฟ้า (6)</td></tr>
+        <tr><td><a href="chapx_lib_ina219.html">INA219</a> <a href="chapx_lib_ina219_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>I2C</td><td>V/A/W monitor — shunt calibration, high-side, 4 addresses</td></tr>
+        <tr><td><a href="chapx_lib_ads1115.html">ADS1115</a> <a href="chapx_lib_ads1115_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>I2C</td><td>16-bit ADC 4ch — differential/single, PGA gain, comparator</td></tr>
+        <tr><td><a href="chapx_lib_mcp4725.html">MCP4725</a> <a href="chapx_lib_mcp4725_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>I2C</td><td>12-bit DAC — 0-VDD output, EEPROM save, fast write</td></tr>
+        <tr><td><a href="chapx_lib_pzem004t.html">PZEM004T</a> <a href="chapx_lib_pzem004t_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>USART</td><td>AC Energy Meter — V,A,W,kWh,PF,Hz, CT clamp ⚡220VAC</td></tr>
+        <tr><td><a href="chapx_lib_pzem004tv3.html">PZEM004Tv3</a> <a href="chapx_lib_pzem004tv3_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>USART</td><td>PZEM v3 — ReadAll single request, alarm registers</td></tr>
+        <tr><td><a href="chapx_lib_oh49e.html">OH49E</a> <a href="chapx_lib_oh49e_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>ADC</td><td>Hall Effect — ratiometric, 2.5V@zero, magnet sensing</td></tr>
+
+        <tr class="cat-header"><td colspan="3">🌿 สิ่งแวดล้อม/น้ำ (6)</td></tr>
+        <tr><td><a href="chapx_lib_soilmoisture_yl69.html">Soil Moisture</a> <a href="chapx_lib_soilmoisture_yl69_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>ADC</td><td>YL-69 — % mapping, corrosion warning, transistor switch</td></tr>
+        <tr><td><a href="chapx_lib_flamesensor_ky026.html">Flame Sensor</a> <a href="chapx_lib_flamesensor_ky026_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>ADC+GPIO</td><td>KY-026 — IR 760-1100nm, digital threshold pot</td></tr>
+        <tr><td><a href="chapx_lib_soundsensor_ky038.html">Sound Sensor</a> <a href="chapx_lib_soundsensor_ky038_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>ADC+GPIO</td><td>KY-038 — LM393 comparator, clap detect, envelope</td></tr>
+        <tr><td><a href="chapx_lib_rainsensor_yl83.html">Rain Sensor</a> <a href="chapx_lib_rainsensor_yl83_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>ADC+GPIO</td><td>YL-83 — rain intensity, corrosion warning</td></tr>
+        <tr><td><a href="chapx_lib_waterflow_yfs201.html">WaterFlow</a> <a href="chapx_lib_waterflow_yfs201_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>GPIO</td><td>YF-S201 — pulse counting, K=450/L, flow rate+totalizer</td></tr>
+        <tr><td><a href="chapx_lib_hx711.html">HX711</a> <a href="chapx_lib_hx711_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>GPIO</td><td>Load Cell 24-bit — gain 128/64, tare, calibration, scale</td></tr>
+
+        <tr class="cat-header"><td colspan="3">⚙️ มอเตอร์ (10)</td></tr>
+        <tr><td><a href="chapx_lib_servo.html">Servo</a> <a href="chapx_lib_servo_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>PWM</td><td>SG90 RC Servo — angle 0-180°, 50Hz, external 5V required</td></tr>
+        <tr><td><a href="chapx_lib_servotester.html">ServoTester</a> <a href="chapx_lib_servotester_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>PWM</td><td>Calibration Tool — sweep, center find, pulse range test</td></tr>
+        <tr><td><a href="chapx_lib_servocluster.html">ServoCluster</a> <a href="chapx_lib_servocluster_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>PWM+I2C</td><td>Multi-Servo PCA9685 — 10 easing curves, non-blocking</td></tr>
+        <tr><td><a href="chapx_lib_esc.html">ESC</a> <a href="chapx_lib_esc_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>PWM</td><td>BLDC Motor — calibration, arm/disarm, throttle ⚡prop safety</td></tr>
+        <tr><td><a href="chapx_lib_steppermotor.html">StepperMotor</a> <a href="chapx_lib_steppermotor_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>GPIO</td><td>28BYJ-48+ULN2003 — full/half-step, acceleration</td></tr>
+        <tr><td><a href="chapx_lib_l298n.html">L298N</a> <a href="chapx_lib_l298n_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>GPIO+PWM</td><td>DC Motor H-Bridge — fwd/rev/brake/coast, 2 channels</td></tr>
+        <tr><td><a href="chapx_lib_drv8825.html">DRV8825</a> <a href="chapx_lib_drv8825_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>GPIO</td><td>Stepper Driver — microstep 1/32, NEMA17, current limit</td></tr>
+        <tr><td><a href="chapx_lib_tmc220x.html">TMC220x</a> <a href="chapx_lib_tmc220x_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>USART</td><td>Silent Stepper — stealthChop, stallGuard, UART config</td></tr>
+        <tr><td><a href="chapx_lib_tmc5160.html">TMC5160</a> <a href="chapx_lib_tmc5160_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>SPI</td><td>High-Power — motion controller, coolStep, 6-point ramp</td></tr>
+        <tr><td><a href="chapx_lib_relay.html">Relay</a> <a href="chapx_lib_relay_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>GPIO</td><td>Relay Module — optocoupler, flyback diode ⚡AC safety</td></tr>
+
+        <tr class="cat-header"><td colspan="3">📡 ไร้สาย (6)</td></tr>
+        <tr><td><a href="chapx_lib_esp01.html">ESP01</a> <a href="chapx_lib_esp01_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>USART</td><td>ESP8266 WiFi — AT commands, TCP/HTTP, 3.3V 500mA</td></tr>
+        <tr><td><a href="chapx_lib_hc05.html">HC05</a> <a href="chapx_lib_hc05_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>USART</td><td>Bluetooth — AT mode, pairing, master/slave, 38400baud</td></tr>
+        <tr><td><a href="chapx_lib_nrf24l01.html">nRF24L01</a> <a href="chapx_lib_nrf24l01_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>SPI</td><td>2.4GHz Radio — 6 pipes, autoACK, multi-node, 3.3V ONLY</td></tr>
+        <tr><td><a href="chapx_lib_gps_neo6m.html">GPS</a> <a href="chapx_lib_gps_neo6m_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>USART</td><td>NEO-6M — NMEA parse, lat/lon, speed, time, fix quality</td></tr>
+        <tr><td><a href="chapx_lib_ir.html">IR Remote</a> <a href="chapx_lib_ir_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>GPIO</td><td>NEC protocol — VS1838B, 38kHz carrier, code decode</td></tr>
+        <tr><td><a href="chapx_lib_softuart.html">SoftUART</a> <a href="chapx_lib_softuart_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>GPIO</td><td>Software Serial — bit-bang, extra UART, baud ≤19200</td></tr>
+
+        <tr class="cat-header"><td colspan="3">💾 จัดเก็บ/IO/นาฬิกา (7)</td></tr>
+        <tr><td><a href="chapx_lib_at24cxx.html">AT24Cxx</a> <a href="chapx_lib_at24cxx_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>I2C</td><td>EEPROM — page boundary, endurance 1M, wear leveling</td></tr>
+        <tr><td><a href="chapx_lib_w25qxx.html">W25Qxx</a> <a href="chapx_lib_w25qxx_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>SPI</td><td>Flash Memory — sector erase, JEDEC ID, 4-128Mbit</td></tr>
+        <tr><td><a href="chapx_lib_ds3231.html">DS3231</a> <a href="chapx_lib_ds3231_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>I2C</td><td>RTC Module — ±2ppm, alarm, temp, battery backup, SQW</td></tr>
+        <tr><td><a href="chapx_lib_rc522.html">RC522</a> <a href="chapx_lib_rc522_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>SPI</td><td>RFID Reader — ISO14443A, MIFARE, UID read, key auth</td></tr>
+        <tr><td><a href="chapx_lib_pca9685.html">PCA9685</a> <a href="chapx_lib_pca9685_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>I2C</td><td>16ch PWM Driver — 12-bit, external V+, servo control</td></tr>
+        <tr><td><a href="chapx_lib_pcf8574.html">PCF8574</a> <a href="chapx_lib_pcf8574_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>I2C</td><td>IO Expander 8-bit — quasi-bidirectional, int-on-change</td></tr>
+        <tr><td><a href="chapx_lib_i2cscan.html">I2CScan</a> <a href="chapx_lib_i2cscan_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>I2C</td><td>Bus Scanner — detect devices, address conflicts</td></tr>
+
+        <tr class="cat-header"><td colspan="3">🔧 อินพุต/เมนู/ระบบ (7)</td></tr>
+        <tr><td><a href="chapx_lib_button.html">Button</a> <a href="chapx_lib_button_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>GPIO</td><td>Debounce — press/long/double click, callback, 50ms</td></tr>
+        <tr><td><a href="chapx_lib_keymatrix.html">KeyMatrix</a> <a href="chapx_lib_keymatrix_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>GPIO</td><td>4x4 Keypad — row scan, ghost prevention, key mapping</td></tr>
+        <tr><td><a href="chapx_lib_rotaryencoder.html">RotaryEncoder</a> <a href="chapx_lib_rotaryencoder_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>GPIO</td><td>Knob — quadrature decode, acceleration, button</td></tr>
+        <tr><td><a href="chapx_lib_pid.html">PID</a> <a href="chapx_lib_pid_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>PureSW</td><td>Controller — Kp/Ki/Kd, DIRECT/REVERSE, anti-windup, tune</td></tr>
+        <tr><td><a href="chapx_lib_lcdmenu.html">LCDMenu</a> <a href="chapx_lib_lcdmenu_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>I2C+GPIO</td><td>Menu System — tree design, 4 callbacks, static pool</td></tr>
+        <tr><td><a href="chapx_lib_circularbuffer.html">CircularBuffer</a> <a href="chapx_lib_circularbuffer_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>PureSW</td><td>FIFO — ISR↔main bridge, overflow detect, 0 overhead</td></tr>
+        <tr><td><a href="chapx_lib_simplescheduler.html">SimpleScheduler</a> <a href="chapx_lib_simplescheduler_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>PureSW</td><td>Multitasking — 8 tasks, interval-based, yield()</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>⚠️ LIMITATIONS.md — ข้อจำกัดสำคัญ</h2>
+    <table>
+        <tr><th>ข้อจำกัด</th><th>รายละเอียด</th><th>กระทบ</th></tr>
+        <tr><td>Timer_Init()</td><td>ต้องเรียกเองใน main()</td><td>54 Libs ที่ใช้ Delay_Ms</td></tr>
+        <tr><td>SOP-8 ไม่มี SPI HW</td><td>PC5-PC7 ไม่มี</td><td>MAX7219, nRF24L01, W25Qxx, RC522</td></tr>
+        <tr><td>SOP-8 ไม่มี I2C HW</td><td>PC2 ไม่มี → ใช้ SimpleI2C_Soft</td><td>ทุก I2C Lib</td></tr>
+        <tr><td>RAM 2KB</td><td>OLED buffer 1KB</td><td>OLED+WS2812 พร้อมกันไม่ได้</td></tr>
+    </table>
+    <p>เปิด <code>User/Lib/LIMITATIONS.md</code> ในโปรเจกต์เพื่ออ่านเต็ม (112 บรรทัด)</p>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_arduino_migration.html">บทก่อน</a>
+    <a href="chapx_lib_oled.html">บทถัดไป →</a>
+</nav>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

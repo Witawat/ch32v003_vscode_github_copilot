@@ -1,0 +1,159 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย MAX7219 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_max7219.html">กลับบท</a><a href="chapx_lib_p10_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — MAX7219 8×8 LED Matrix</h1>
+
+<div class="answer">
+<h2>ข้อ 1: Custom Font ภาษาไทย 8×8</h2>
+<pre><code class="language-c">#include "simple_max7219.h"
+
+// ฟอนต์ไทย 8x8 — ตัวอย่างอักษร ก ข ค
+const uint8_t thai_font[3][8] = {
+    {0x00,0x3E,0x08,0x08,0x3E,0x00,0x7F,0x00}, // ก
+    {0x3C,0x24,0x3C,0x04,0x7E,0x04,0x7C,0x04}, // ข
+    {0x7E,0x02,0x7E,0x08,0x3E,0x28,0x3E,0x00}, // ค
+};
+
+void draw_char(uint8_t c, uint8_t col) {
+    MAX7219_SetColumn(col, thai_font[c][0]);
+    MAX7219_SetColumn(col+1, thai_font[c][1]);
+    MAX7219_SetColumn(col+2, thai_font[c][2]);
+    MAX7219_SetColumn(col+3, thai_font[c][3]);
+    MAX7219_SetColumn(col+4, thai_font[c][4]);
+    MAX7219_SetColumn(col+5, thai_font[c][5]);
+    MAX7219_SetColumn(col+6, thai_font[c][6]);
+    MAX7219_SetColumn(col+7, thai_font[c][7]);
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    MAX7219_Init(1);
+
+    while(1) {
+        MAX7219_Clear();
+        draw_char(0, 0);  // ก
+        Delay_Ms(1000);
+        draw_char(1, 0);  // ข
+        Delay_Ms(1000);
+        draw_char(2, 0);  // ค
+        Delay_Ms(2000);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ฟอนต์ 8×8 เก็บเป็น array of 8 bytes — แต่ละ byte คือ 1 คอลัมน์ของ LED matrix — ใช้ <code>MAX7219_SetColumn(col, data)</code> เขียนทีละคอลัมน์ — วาดตัวอักษรกินพื้นที่ 8 คอลัมน์บน 1 module — ถ้าต้องการฟอนต์ภาษาไทยเต็มชุด ให้สร้าง lookup table ของพยัญชนะ 44 ตัว — ใช้ tool สร้าง bitmap แบบ LED Matrix Editor</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: Scroll Text ข้าม 2 Modules</h2>
+<pre><code class="language-c">#include "simple_max7219.h"
+
+const uint8_t msg[] = {
+    0x7C,0x12,0x11,0x12,0x7C,0x00, // A
+    0x7F,0x49,0x49,0x49,0x36,0x00, // B
+    0x3E,0x41,0x41,0x41,0x22,0x00, // C
+};
+const uint8_t msg_len = 18;  // 3 chars × 6 cols
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    MAX7219_Init(2);  // 2 modules chained
+
+    int16_t offset = 0;
+    while(1) {
+        MAX7219_Clear();
+        for(uint8_t x = 0; x < 16; x++) {
+            int16_t src = (int16_t)x + offset;
+            uint8_t data = 0;
+            for(uint8_t row = 0; row < 8; row++) {
+                int16_t idx = src + row * msg_len;
+                if(idx >= 0 && idx < msg_len * 8) {
+                    uint8_t col = idx / 8;
+                    uint8_t bit = idx % 8;
+                    if(msg[col] & (1 << bit)) {
+                        data |= (1 << row);
+                    }
+                }
+            }
+            MAX7219_SetColumn(x, data);
+        }
+        offset++;
+        if(offset >= msg_len) offset = 0;
+        Delay_Ms(80);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ต่อ MAX7219 แบบ daisy-chain 2 ตัวด้วย <code>MAX7219_Init(2)</code> — ข้อมูลที่เขียน <code>SetColumn</code> จะ shift ผ่าน module แรกไป module สอง — offset เลื่อนทีละ 1 คอลัมน์เพื่อสร้าง animation scroll — เมื่อ offset เกินความยาวข้อความ ให้รีเซ็ตกลับ 0 — สำหรับข้อความที่ยาวกว่า 16 คอลัมน์ ให้ใช้ buffer array แล้ว shift ข้อมูลก่อนส่ง</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: Snake Game บน MAX7219</h2>
+<pre><code class="language-c">#include "simple_max7219.h"
+
+#define SNAKE_MAX 64
+int8_t snake_x[SNAKE_MAX], snake_y[SNAKE_MAX];
+uint8_t snake_len = 3;
+int8_t dir_x = 1, dir_y = 0;
+int8_t food_x, food_y;
+
+void spawn_food(void) {
+    food_x = (SystemCoreClock >> 4) & 7;
+    food_y = (SystemCoreClock >> 7) & 7;
+}
+
+void draw_all(void) {
+    MAX7219_Clear();
+    MAX7219_SetPixel(food_x, food_y, 1);
+    for(uint8_t i = 0; i < snake_len; i++) {
+        MAX7219_SetPixel(snake_x[i], snake_y[i], 1);
+    }
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    MAX7219_Init(1);
+
+    snake_x[0]=4; snake_y[0]=4;
+    snake_x[1]=3; snake_y[1]=4;
+    snake_x[2]=2; snake_y[2]=4;
+    spawn_food();
+
+    while(1) {
+        // เลื่อน: ทุกตัวตามหัว
+        for(uint8_t i = snake_len; i > 0; i--) {
+            snake_x[i] = snake_x[i-1];
+            snake_y[i] = snake_y[i-1];
+        }
+        snake_x[0] += dir_x;
+        snake_y[0] += dir_y;
+
+        // ชนขอบ → game over → restart
+        if(snake_x[0] < 0 || snake_x[0] > 7 ||
+           snake_y[0] < 0 || snake_y[0] > 7) {
+            snake_len = 3;
+            snake_x[0]=4; snake_y[0]=4;
+            snake_x[1]=3; snake_y[1]=4;
+            snake_x[2]=2; snake_y[2]=4;
+            dir_x=1; dir_y=0;
+        }
+
+        // กินอาหาร
+        if(snake_x[0] == food_x && snake_y[0] == food_y) {
+            if(snake_len < SNAKE_MAX) snake_len++;
+            spawn_food();
+        }
+
+        draw_all();
+        Delay_Ms(200);
+
+        // เปลี่ยนทิศ (จำลอง — ในของจริงใช้ปุ่มกด)
+        // if(btn_up)    { dir_x=0; dir_y=-1; }
+        // if(btn_down)  { dir_x=0; dir_y=1; }
+        // if(btn_left)  { dir_x=-1; dir_y=0; }
+        // if(btn_right) { dir_x=1; dir_y=0; }
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> งูเก็บเป็น 2 array ของพิกัด x,y — หัวอยู่ index 0 — ทุกเฟรม shift ทุกจุดตามหัว (<code>snake_x[i] = snake_x[i-1]</code>) แล้วขยับหัวตามทิศทาง — ใช้ <code>MAX7219_SetPixel</code> วาดทุกจุดของงูและอาหาร — ตรวจจับการชนขอบด้วยการเช็คพิกัดเกิน 0-7 — เมื่อกินอาหาร เพิ่มความยาวและสุ่มอาหารใหม่ — ในโปรเจกต์จริงต่อปุ่ม 4 ทิศเพื่อควบคุม</div>
+</div>
+
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_max7219.html">กลับบท</a><a href="chapx_lib_p10_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

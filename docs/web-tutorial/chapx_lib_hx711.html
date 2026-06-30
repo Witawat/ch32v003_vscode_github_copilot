@@ -1,0 +1,184 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>HX711 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_waterflow_yfs201.html">บทก่อน</a><a href="chapx_lib_servo.html">บทถัดไป →</a></nav>
+<h1>HX711 — Load Cell ADC 24-Bit สำหรับเครื่องชั่งน้ำหนัก</h1><span class="level advanced">ระดับสูง</span>
+<section class="flowchart"><h2>🧭 แผนภาพการทำงาน</h2><pre class="mermaid">
+flowchart TD
+    A["HX711_Init(DT, SCK)"] --> B["Set Gain 128 (chA) / 64 (chB)"]
+    B --> C["Tare — วัดค่าน้ำหนักเปล่า"]
+    C --> D["อ่าน Raw 24-bit จาก Load Cell"]
+    D --> E["Raw - Offset = Net Weight"]
+    E --> F["Weight = Net / Calibration Factor"]
+    F --> G["แสดงน้ำหนัก (g/kg/lb)"]
+    G --> H{"น้ำหนักคงที่?"}
+    H -->|"Yes"| I["Stable reading"]
+    H -->|"No"| J["Averaging / Filter"]
+    J --> G
+</pre></section>
+<section><h2>🔌 การต่อวงจร</h2><pre class="ascii-circuit">
+         HX711 + Load Cell (Wheatstone Bridge)
+   ┌────────────────────────────────────────┐
+   │  MCU              HX711                │
+   │  PC2─DT ────────── DT (Data)           │
+   │  PC3─SCK ───────── SCK (Clock)         │
+   │  3.3V───────────── VCC                  │
+   │  GND────────────── GND                 │
+   │                                        │
+   │  Load Cell:    HX711:                  │
+   │  Red ────────── E+ (Excitation+)       │
+   │  Black ──────── E- (Excitation-)       │
+   │  Green ──────── A+ (Signal+)           │
+   │  White ──────── A- (Signal-)           │
+   │  ⚠ Shield/Yellow─ GND                  │
+   └────────────────────────────────────────┘
+</pre><p>HX711 เป็น ADC 24-bit สำหรับ Load Cell โดยเฉพาะ — ใช้สาย 2 เส้น (DT/SCK) สื่อสารแบบ Bit-Bang — Gain 128 (Ch A) หรือ 64 (Ch B) — Sample Rate 10 SPS หรือ 80 SPS</p></section>
+<section><h2>📚 หลักการทำงาน</h2><p><strong>HX711</strong> เป็น Precision 24-bit Analog-to-Digital Converter ออกแบบมาสำหรับ Load Cell (Wheatstone Bridge) โดยเฉพาะ — มี PGA (Programmable Gain Amplifier) ในตัว — Gain 128 สำหรับ Channel A (Load Cell หลัก) หรือ Gain 64 สำหรับ Channel B</p><p><strong>Load Cell</strong> เป็น Wheatstone Bridge — เมื่อมีแรงกด → ความต้านทานเปลี่ยน → แรงดัน differential เปลี่ยน (mV level) — HX711 ขยายและแปลงเป็น digital 24-bit — ค่า raw อยู่ระหว่าง -8,388,608 ถึง 8,388,607</p><p><strong>Tare (Zeroing):</strong> น้ำหนักเปล่า (ภาชนะ/ถาด) จะให้ค่า raw offset — Tare = เก็บ offset ไว้ → Weight = (Raw - Offset) / Calibration_Factor — กดปุ่ม Tare เพื่อลบน้ำหนักภาชนะ</p><p><strong>Calibration:</strong> ใช้ตุ้มน้ำหนักที่ทราบค่า (เช่น 100g) — อ่าน raw difference → Cal_Factor = (Raw_with_weight - Raw_empty) / Known_Weight — เก็บ Cal_Factor ไว้ใช้คำนวณน้ำหนักจริง</p></section>
+<section><h2>💻 เขียน Code ทีละขั้น</h2>
+<div class="step"><h3>ขั้นที่ 1: Init HX711 + Set Gain</h3><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "HX711.h"
+
+HX711_t scale;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_Init(115200);
+
+    HX711_Init(&scale, PC2, PC3, HX711_GAIN_128);
+    // DT=PC2, SCK=PC3, Gain=128
+
+    USART_Print("HX711 Ready\r\n");
+    USART_Print("Place empty scale...\r\n");
+    Delay_Ms(3000);</code></pre><p class="explain">🔍 <code>HX711_Init(dev, dt_pin, sck_pin, gain)</code> — DT = Data Output (input to MCU) — SCK = Clock (output from MCU) — Gain 128 สำหรับ Load Cell มาตรฐาน</p></div>
+<div class="step"><h3>ขั้นที่ 2: Tare + Calibrate</h3><pre><code class="language-c">    // Tare — วัดน้ำหนักเปล่า
+    HX711_Tare(&scale, 10); // average 10 readings
+    USART_Print("Tare done. Offset: ");
+    USART_PrintDec(scale.offset);
+    USART_Print("\r\n");
+
+    // Calibrate — วางตุ้มน้ำหนัก 100g
+    USART_Print("Place 100g weight...\r\n");
+    Delay_Ms(3000);
+    HX711_Calibrate(&scale, 100.0f, 10);
+    USART_Print("Cal done. Factor: ");
+    USART_PrintFloat(scale.cal_factor, 4);
+    USART_Print("\r\n");</code></pre><p class="explain">🔍 <code>HX711_Tare(dev, samples)</code> — อ่านค่าเฉลี่ย 10 ครั้ง → เก็บเป็น offset — <code>HX711_Calibrate(dev, known_weight, samples)</code> — ใช้ตุ้มน้ำหนักที่รู้ค่า (เช่น 100g) — คำนวณ calibration factor อัตโนมัติ</p></div>
+<div class="step"><h3>ขั้นที่ 3: อ่านน้ำหนัก + แสดงผล</h3><pre><code class="language-c">    pinMode(PC0, PIN_MODE_INPUT_PULLUP); // ปุ่ม Tare
+
+    while(1) {
+        float weight = HX711_ReadWeight(&scale, 5); // avg 5 samples
+
+        USART_Print("Weight: ");
+        USART_PrintFloat(weight, 1);
+        USART_Print(" g");
+
+        if(weight < 0.5f) {
+            USART_Print(" (empty)");
+        }
+        USART_Print("\r\n");
+
+        // กดปุ่ม Tare
+        if(GPIO_Read(PC0) == 0) {
+            Delay_Ms(50);
+            HX711_Tare(&scale, 10);
+            USART_Print("TARE pressed!\r\n");
+            while(GPIO_Read(PC0) == 0);
+        }
+
+        Delay_Ms(200);
+    }
+}</code></pre><p class="explain">🔍 <code>HX711_ReadWeight(dev, samples)</code> — อ่านค่าเฉลี่ย samples ครั้ง → คำนวณน้ำหนักจาก (raw - offset) / cal_factor — แสดงหน่วยกรัม — ปุ่ม Tare สำหรับลบน้ำหนักภาชนะ</p></div>
+</section>
+<section><h2>📋 API Reference</h2><table><tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+<tr><td><code>HX711_Init(dev, dt, sck, gain)</code></td><td>เริ่มต้น HX711</td><td><code>HX711_Init(&scale, PC2, PC3, HX711_GAIN_128)</code></td></tr>
+<tr><td><code>HX711_ReadRaw(dev)</code></td><td>อ่านค่า raw 24-bit</td><td><code>int32_t r = HX711_ReadRaw(&scale)</code></td></tr>
+<tr><td><code>HX711_ReadAvg(dev, samples)</code></td><td>อ่านค่าเฉลี่ย raw</td><td><code>int32_t a = HX711_ReadAvg(&scale, 10)</code></td></tr>
+<tr><td><code>HX711_Tare(dev, samples)</code></td><td>บันทึกค่าน้ำหนักเปล่า</td><td><code>HX711_Tare(&scale, 10)</code></td></tr>
+<tr><td><code>HX711_Calibrate(dev, weight, samples)</code></td><td>Calibrate ด้วยตุ้มน้ำหนักที่รู้ค่า</td><td><code>HX711_Calibrate(&scale, 100.0f, 10)</code></td></tr>
+<tr><td><code>HX711_ReadWeight(dev, samples)</code></td><td>อ่านน้ำหนัก (g)</td><td><code>float w = HX711_ReadWeight(&scale, 5)</code></td></tr>
+<tr><td><code>HX711_SetScale(dev, factor)</code></td><td>ตั้ง calibration factor เอง</td><td><code>HX711_SetScale(&scale, 420.5f)</code></td></tr>
+<tr><td><code>HX711_PowerDown(dev)</code></td><td>ปิด HX711 (low power)</td><td><code>HX711_PowerDown(&scale)</code></td></tr>
+</table></section>
+<section><h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2><table><tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+<tr><td>อ่านค่าได้ 0 หรือ -8388608 ตลอด</td><td>ต่อสายผิด / Load Cell ไม่ต่อ / DT/SCK สลับ</td><td>ตรวจสอบสีสาย (Red=E+, Black=E-, Green=A+, White=A-) — DT=Data, SCK=Clock</td></tr>
+<tr><td>ค่า Jump ไปมา ไม่นิ่ง</td><td>สายยาว / Noise / Sample rate สูง</td><td>ใช้ averaging 10-20 samples — ใช้ 10 SPS (RATE=LOW) — shield cable — ต่อ 0.1µF cap ที่ VCC</td></tr>
+<tr><td>น้ำหนักไม่ linear</td><td>Calibration ผิด / Load Cell เสียหาย</td><td>Calibrate ด้วยตุ้มน้ำหนักหลายค่า (50g, 100g, 200g) — ตรวจสอบ Overload</td></tr>
+<tr><td>Tare แล้วน้ำหนักไม่เป็น 0</td><td>อ่าน samples น้อยเกิน / Load Cell ยังสั่น</td><td>ใช้ samples ≥ 10 — รอให้ stable ก่อน Tare — ใช้ filter moving average</td></tr>
+<tr><td>DT ค้าง HIGH ตลอด</td><td>HX711 ยังไม่พร้อม (data not ready)</td><td>รอจน DT = LOW (ready) — ถ้าค้าง HIGH > 100ms → power cycle HX711</td></tr>
+<tr><td>น้ำหนัก drift ตามเวลา</td><td>Load cell creep / อุณหภูมิเปลี่ยน</td><td>ใช้ Tare เป็นระยะ — ใช้ Load Cell ที่มี temperature compensation</td></tr>
+</table></section>
+<section><h2>🛠️ สร้าง Product: Digital Kitchen Scale</h2><p>HX711 + Load Cell 5kg + OLED + ปุ่ม Tare — แสดงน้ำหนัก g/kg — Auto Tare ตอนเปิด</p><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "HX711.h"
+#include "OLED.h"
+
+#define DT_PIN PC2
+#define SCK_PIN PC3
+#define TARE_BTN PC0
+#define CAL_FACTOR 420.5f // calibrate เอง!
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+    I2C_Init(PC1, PC2, I2C_SPEED_STANDARD);
+    USART_Init(115200);
+
+    HX711_t scale;
+    HX711_Init(&scale, DT_PIN, SCK_PIN, HX711_GAIN_128);
+    HX711_SetScale(&scale, CAL_FACTOR);
+
+    OLED_t oled;
+    OLED_Init(&oled, 0x3C, OLED_128x64);
+    OLED_SetFont(&oled, FONT_8x16);
+
+    pinMode(TARE_BTN, PIN_MODE_INPUT_PULLUP);
+
+    USART_Print("Auto-Tare...\r\n");
+    Delay_Ms(1000);
+    HX711_Tare(&scale, 15);
+    USART_Print("Scale Ready\r\n");
+
+    while(1)
+    {
+        float weight = HX711_ReadWeight(&scale, 8);
+
+        OLED_Clear(&oled);
+        OLED_SetCursor(&oled, 0, 1);
+        OLED_Print(&oled, "Weight:");
+
+        OLED_SetCursor(&oled, 0, 3);
+        if(fabs(weight) < 0.5f) {
+            OLED_Print(&oled, "  0.0 g");
+        } else if(weight > 1000.0f) {
+            OLED_PrintFloat(&oled, "", weight / 1000.0f, 3);
+            OLED_Print(&oled, " kg");
+        } else {
+            OLED_PrintFloat(&oled, "", weight, 1);
+            OLED_Print(&oled, " g");
+        }
+
+        OLED_SetCursor(&oled, 0, 6);
+        OLED_Print(&oled, "Press to TARE");
+
+        if(GPIO_Read(TARE_BTN) == 0) {
+            Delay_Ms(100);
+            HX711_Tare(&scale, 15);
+            OLED_SetCursor(&oled, 0, 6);
+            OLED_Print(&oled, "TARED!      ");
+            OLED_Display(&oled);
+            Delay_Ms(500);
+            while(GPIO_Read(TARE_BTN) == 0);
+        }
+
+        OLED_Display(&oled);
+        Delay_Ms(200);
+    }
+}</code></pre></section>
+<section><h2>✏️ ลองทำดู</h2><ol>
+<li>Calibrate ด้วยตุ้มน้ำหนักหลายค่า — ตรวจสอบ linearity — ปรับใช้ piecewise calibration ถ้าไม่ linear</li>
+<li>ทำ Counting Scale — ชั่งน้ำหนัก 1 ชิ้น → คำนวณจำนวนชิ้นจากน้ำหนักรวม — แสดง count บน OLED</li>
+<li>ทำ Auto-Sleep — ถ้าไม่มีน้ำหนักเปลี่ยนเกิน 5 นาที → HX711_PowerDown() → ปลุกด้วยปุ่ม Tare</li>
+<li>บันทึกน้ำหนักลง W25Qxx Flash — เก็บ log ชั่งน้ำหนักย้อนหลัง — ทำกราฟน้ำหนักรายวัน</li></ol></section>
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_waterflow_yfs201.html">บทก่อน</a><a href="chapx_lib_servo.html">บทถัดไป →</a></nav>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script><script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script><script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

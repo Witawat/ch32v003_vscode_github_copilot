@@ -1,0 +1,192 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย PID — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_pid.html">กลับบท</a><a href="chapx_lib_lcdmenu_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — PID Controller</h1>
+<div class="answer"><h2>ข้อ 1: Temperature Controller — รักษา 40°C ±0.5 ด้วย Relay</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "PID.h"
+#include "NTC10K.h"
+
+#define RELAY_PIN  PC0
+#define NTC_PIN    PA0
+#define SETPOINT   40.0f
+
+PID_t pid;
+float input, output;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_Init(115200);
+    ADC_SimpleInit(NTC_PIN);
+    pinMode(RELAY_PIN, PIN_MODE_OUTPUT);
+    digitalWrite(RELAY_PIN, LOW);
+
+    PID_Init(&pid, PID_DIRECT);
+    PID_SetTunings(&pid, 30.0f, 1.5f, 0.2f);    // Kp=30, Ki=1.5, Kd=0.2
+    PID_SetOutputLimits(&pid, 0, 1000);
+    PID_SetSampleTime(&pid, 250);                 // คำนวณทุก 250ms
+    PID_SetMode(&pid, PID_AUTOMATIC);
+
+    while(1) {
+        input = NTC_ReadTemp_C(NTC_PIN);
+        PID_Compute(&pid, input, SETPOINT, &output);
+
+        // Relay hysteresis ลดการกระพือ
+        static bool relay_state = false;
+        if(output > 500 && !relay_state) {        // >50% → เปิด heater
+            digitalWrite(RELAY_PIN, HIGH);
+            relay_state = true;
+        } else if(output < 200 && relay_state) {  // <20% → ปิด heater
+            digitalWrite(RELAY_PIN, LOW);
+            relay_state = false;
+        }
+
+        static Timer_t log_tmr;
+        if(!log_tmr.active) Start_Timer(&log_tmr, 1000, 1);
+        if(Is_Timer_Expired(&log_tmr)) {
+            USART_Printf("T:%.1f°C Out:%ld Relay:%d\n",
+                         input, (int32_t)output, relay_state);
+        }
+
+        Delay_Ms(10);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>PID_Init(DIRECT)</code> สำหรับ heating — <code>PID_Compute</code> คำนวณ output ทุก 250ms — relay ใช้ hysteresis (on >500, off <200) กัน relay กระพือ — <code>PID_SetOutputLimits(0,1000)</code> clamp output — NTC อ่านอุณหภูมิจาก ADC — <code>DIRECT</code> หมายถึง output เพิ่มเมื่อ error เป็นบวก (heating) — ตั้ง Kp,Ki,Kd เบื้องต้น แล้วปรับจูนด้วยวิธี Ziegler-Nichols — เพิ่ม <code>IWDG_Feed()</code> ถ้าต้องความปลอดภัยในระบบจริง</div></div>
+<div class="answer"><h2>ข้อ 2: Ziegler-Nichols Tuning — หาค่า Kp, Ki, Kd อัตโนมัติ</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "PID.h"
+
+PID_t pid;
+float Ku = 0, Tu = 0;
+
+float test_setpoint = 40.0f;
+
+void tune_ziegler_nichols(void) {
+    USART_Println("=== Ziegler-Nichols Tuning ===");
+
+    // Step 1: ตั้ง Ki=0, Kd=0, เพิ่ม Kp จน oscillation คงที่
+    PID_Init(&pid, PID_DIRECT);
+    PID_SetTunings(&pid, 0, 0, 0);
+    PID_SetMode(&pid, PID_AUTOMATIC);
+
+    float Kp = 1.0f;
+    uint32_t last_cross = 0, period_sum = 0;
+    uint8_t cross_count = 0;
+
+    while(cross_count < 6) {
+        float input = NTC_ReadTemp_C(PA0);
+        float output;
+        PID_Compute(&pid, input, test_setpoint, &output);
+
+        // เช็ค oscillation: ค่าข้าม setpoint
+        static float prev_input = 0;
+        if((input - test_setpoint) * (prev_input - test_setpoint) < 0) {
+            if(cross_count == 0) last_cross = Timer_GetMs();
+            else {
+                uint32_t dt = Timer_GetMs() - last_cross;
+                period_sum += dt;
+                last_cross = Timer_GetMs();
+            }
+            cross_count++;
+        }
+        prev_input = input;
+
+        if(cross_count < 3) { Kp += 0.5f; PID_SetTunings(&pid, Kp, 0, 0); }
+        Delay_Ms(50);
+    }
+
+    Ku = Kp;
+    Tu = (float)period_sum / (cross_count - 1) / 1000.0f;  // วินาที
+
+    // Step 2: คำนวณตาม Ziegler-Nichols classic
+    float final_Kp = Ku * 0.6f;
+    float final_Ki = final_Kp / (Tu * 0.5f);
+    float final_Kd = final_Kp * Tu * 0.125f;
+
+    PID_SetTunings(&pid, final_Kp, final_Ki, final_Kd);
+    PID_SetSampleTime(&pid, (uint32_t)(Tu * 1000 / 10));
+
+    USART_Printf("Ku=%.2f Tu=%.2fs\n", Ku, Tu);
+    USART_Printf("Kp=%.2f Ki=%.3f Kd=%.3f\n", final_Kp, final_Ki, final_Kd);
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_Init(115200);
+    ADC_SimpleInit(PA0);
+    tune_ziegler_nichols();
+    while(1);
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> Ziegler-Nichols: ตั้ง Ki=Kd=0 → เพิ่ม Kp จน oscillation คงที่ → บันทึก <code>Ku</code> (ultimate gain) และ <code>Tu</code> (period) — คำนวณ: <code>Kp=0.6×Ku</code>, <code>Ki=Kp/(Tu×0.5)</code>, <code>Kd=Kp×Tu×0.125</code> — ตรวจจับ oscillation โดยนับครั้งที่ข้าม setpoint — ใช้ <code>Timer_GetMs</code> วัดคาบ — ตัวคูณปรับได้ตาม ZN type (classic / some overshoot / no overshoot) — ในระบบจริงควรทำ auto-tune เพียงครั้งเดียวตอนเริ่ม แล้วเก็บค่าใน EEPROM</div></div>
+<div class="answer"><h2>ข้อ 3: Cooling vs Heating — สลับ PID_DIRECT/REVERSE</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "PID.h"
+
+#define RELAY_HEAT PC0
+#define RELAY_COOL PC1
+#define NTC_PIN    PA0
+
+typedef enum { MODE_HEAT, MODE_COOL } Mode_t;
+Mode_t mode = MODE_HEAT;
+
+PID_t pid;
+
+void set_mode(Mode_t m) {
+    mode = m;
+    PID_SetMode(&pid, PID_MANUAL);
+    if(m == MODE_HEAT) {
+        PID_SetDirection(&pid, PID_DIRECT);   // output↑เมื่อ temp↓
+        digitalWrite(RELAY_COOL, LOW);
+    } else {
+        PID_SetDirection(&pid, PID_REVERSE);  // output↑เมื่อ temp↑
+        digitalWrite(RELAY_HEAT, LOW);
+    }
+    PID_Reset(&pid);  // ล้าง integral term
+    PID_SetMode(&pid, PID_AUTOMATIC);
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_Init(115200);
+    ADC_SimpleInit(NTC_PIN);
+    pinMode(RELAY_HEAT, PIN_MODE_OUTPUT);
+    pinMode(RELAY_COOL, PIN_MODE_OUTPUT);
+    digitalWrite(RELAY_HEAT, LOW);
+    digitalWrite(RELAY_COOL, LOW);
+
+    PID_Init(&pid, PID_DIRECT);
+    PID_SetTunings(&pid, 25.0f, 2.0f, 0.3f);
+    PID_SetOutputLimits(&pid, 0, 1000);
+    PID_SetSampleTime(&pid, 200);
+    PID_SetMode(&pid, PID_AUTOMATIC);
+
+    while(1) {
+        float temp = NTC_ReadTemp_C(NTC_PIN);
+        float output;
+
+        // สลับโหมดอัตโนมัติตามค่า setpoint กับอุณหภูมิจริง
+        float setpoint = 40.0f;
+        if(temp > setpoint + 2.0f) set_mode(MODE_COOL);
+        if(temp < setpoint - 1.0f) set_mode(MODE_HEAT);
+
+        PID_Compute(&pid, temp, setpoint, &output);
+
+        if(mode == MODE_HEAT && output > 500)
+            digitalWrite(RELAY_HEAT, HIGH);
+        else digitalWrite(RELAY_HEAT, LOW);
+
+        if(mode == MODE_COOL && output > 500)
+            digitalWrite(RELAY_COOL, HIGH);
+        else digitalWrite(RELAY_COOL, LOW);
+
+        Delay_Ms(30);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> Heating = <code>PID_DIRECT</code> (output เพิ่มเมื่อ temp ต่ำกว่า setpoint), Cooling = <code>PID_REVERSE</code> (output เพิ่มเมื่อ temp สูงกว่า setpoint) — สลับโหมดด้วย hysteresis ±1–2°C ป้องกันการสลับไปมาถี่ — ก่อนเปลี่ยนทิศทางต้อง <code>PID_Reset()</code> ล้าง integral windup — ใช้ <code>PID_SetDirection</code> เปลี่ยนแบบ runtime — ระบบจริงควรมี deadband กลาง 1–2°C ที่ไม่ทำงานทั้ง heater และ cooler — Relay 2 ตัวแยกอิสระ ตรวจสอบว่าห้ามเปิด heater+cooler พร้อมกันเด็ดขาด</div></div>
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_pid.html">กลับบท</a><a href="chapx_lib_lcdmenu_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

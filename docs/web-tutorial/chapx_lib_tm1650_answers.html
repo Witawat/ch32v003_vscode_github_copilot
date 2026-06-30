@@ -1,0 +1,139 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย TM1650 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_tm1650.html">กลับบท</a><a href="chapx_lib_neopixel_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — TM1650 4-Digit 7-Segment</h1>
+
+<div class="answer">
+<h2>ข้อ 1: Nixie Tube Emulation (ตัวเลขเปลี่ยนแบบมี animation)</h2>
+<pre><code class="language-c">#include "simple_tm1650.h"
+
+// Nixie-style digit transition — ไล่เลข 0-9 ขึ้นก่อนหยุด
+void nixie_transition(uint8_t pos, uint8_t target) {
+    uint8_t current = 0;
+    while(current != target) {
+        TM1650_DisplayDigit(pos, current);
+        Delay_Ms(30);
+        current++;
+        if(current > 9) current = 0;
+    }
+    TM1650_DisplayDigit(pos, target);
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    TM1650_Init();
+    TM1650_SetBrightness(3);
+
+    uint8_t digits[4] = {1, 9, 8, 4};
+
+    while(1) {
+        // Nixie boot animation — ใส่ตัวเลขทีละหลัก
+        for(uint8_t pos = 0; pos < 4; pos++) {
+            nixie_transition(pos, digits[pos]);
+        }
+        Delay_Ms(2000);
+
+        // เปลี่ยนเลขแบบสุ่ม
+        for(uint8_t i = 0; i < 4; i++) {
+            digits[i] = (digits[i] + 3) % 10;
+        }
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> Nixie tube ตอนเปลี่ยนเลขจะมีการไล่เลขก่อนหยุดที่ค่าเป้าหมาย — <code>nixie_transition</code> หมุนเลข 0→1→2...→target ทีละ 30ms — ใส่ animation ทีละหลักจากซ้ายไปขวาเหมือน nixie clock จริง — เปลี่ยนเลขทุก 2 วินาทีด้วยการบวก offset — สำหรับเอฟเฟกต์สมจริงยิ่งขึ้น ให้สุ่มความเร็วไล่เลขแต่ละหลักไม่เท่ากัน และเพิ่ม "overshoot" (เลยเป้าแล้วเด้งกลับ)</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: Voltmeter — อ่าน ADC แสดงแรงดัน</h2>
+<pre><code class="language-c">#include "simple_tm1650.h"
+#include "simple_adc.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    TM1650_Init();
+    TM1650_SetBrightness(3);
+    ADC_SimpleInit(ADC_CH2);
+
+    while(1) {
+        // อ่าน ADC 10 ครั้งหาค่าเฉลี่ย
+        uint32_t sum = 0;
+        for(uint8_t i = 0; i < 10; i++) {
+            sum += ADC_Read(ADC_CH2);
+            Delay_Ms(1);
+        }
+        uint16_t adc = sum / 10;
+
+        // แปลงเป็นแรงดัน (Vref = 3.3V, 12-bit ADC)
+        // V = adc * 3.3 / 4095
+        // แสดงในหน่วย mV: mV = adc * 3300 / 4095
+        uint16_t mv = (uint32_t)adc * 3300 / 4095;
+
+        // แสดงผล format: X.XXX V
+        // หลัก 0 = โวลต์หลักหน่วย, หลัก 1-3 = mV
+        TM1650_DisplayDigit(0, mv / 1000);           // V
+        TM1650_DisplayDigit(1, (mv / 100) % 10 | 0x80); // . (จุดทศนิยม)
+        TM1650_DisplayDigit(2, (mv / 10) % 10);      // 100mV
+        TM1650_DisplayDigit(3, mv % 10);              // 10mV
+
+        Delay_Ms(200);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> อ่าน ADC 10 ครั้งหาค่าเฉลี่ยลด noise — แปลง ADC 12-bit (0-4095) เป็นแรงดัน mV ด้วยสูตร <code>adc * 3300 / 4095</code> — แสดงผล 4 หลักในรูปแบบ V.VVV — ใช้ OR 0x80 เพิ่มจุดทศนิยมที่หลักที่ 2 — การใช้ integer math (mV) แทน float ช่วยประหยัด flash และ RAM บน CH32V003 — ถ้าต้องการวัดแรงดันเกิน 3.3V ต้องใช้ voltage divider</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: 2-Channel Display — สลับแสดง Volt/Amp</h2>
+<pre><code class="language-c">#include "simple_tm1650.h"
+#include "simple_adc.h"
+#include "simple_gpio.h"
+
+#define BTN_PIN  PC1
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    TM1650_Init();
+    TM1650_SetBrightness(3);
+    ADC_SimpleInit(ADC_CH2);   // แรงดัน
+    ADC_SimpleInit(ADC_CH3);   // กระแส (ผ่าน shunt)
+    pinMode(BTN_PIN, PIN_MODE_INPUT_PULLUP);
+
+    uint8_t mode = 0;  // 0=Volt, 1=Amp
+    uint8_t last_btn = 1;
+
+    while(1) {
+        // ตรวจจับปุ่มเปลี่ยนโหมด
+        uint8_t btn = digitalRead(BTN_PIN);
+        if(last_btn && !btn) {
+            mode = !mode;
+            Delay_Ms(50);  // debounce
+        }
+        last_btn = btn;
+
+        if(mode == 0) {
+            // โหมด Volt
+            uint16_t adc = ADC_Read(ADC_CH2);
+            uint16_t mv = (uint32_t)adc * 3300 / 4095;
+            TM1650_DisplayDigit(0, mv / 1000);
+            TM1650_DisplayDigit(1, (mv / 100) % 10 | 0x80);
+            TM1650_DisplayDigit(2, (mv / 10) % 10);
+            TM1650_DisplayDigit(3, mv % 10);
+        } else {
+            // โหมด Amp — shunt 0.1Ω, gain 50
+            uint16_t adc = ADC_Read(ADC_CH3);
+            // I = (adc*3.3/4095) / (0.1*50) = adc * 3300 / (4095*5)
+            uint16_t ma = (uint32_t)adc * 3300 / (4095 * 5);
+            TM1650_DisplayDigit(0, ma / 1000);
+            TM1650_DisplayDigit(1, (ma / 100) % 10 | 0x80);
+            TM1650_DisplayDigit(2, (ma / 10) % 10);
+            TM1650_DisplayDigit(3, ma % 10);
+        }
+
+        Delay_Ms(200);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> TM1650 แสดงผลทีละ 1 channel — ใช้ปุ่มกดสลับระหว่างโหมด Volt และ Amp — แต่ละโหมดอ่าน ADC คนละช่อง — การวัดกระแสใช้ shunt resistor + amplifier (เช่น INA180) — สูตรกระแส: <code>I = V_adc / (R_shunt × gain)</code> — TM1650 ไม่มี colon ทำให้ใช้การสลับโหมดแทนการแสดงพร้อมกัน — สำหรับเวอร์ชัน auto-toggle ให้ใช้ timer แทนการกดปุ่ม</div>
+</div>
+
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_tm1650.html">กลับบท</a><a href="chapx_lib_neopixel_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

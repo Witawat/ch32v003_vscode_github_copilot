@@ -1,0 +1,192 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย SHT3x — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_sht3x.html">กลับบท</a><a href="chapx_lib_max31855_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — SHT3x</h1>
+<div class="answer"><h2>ข้อ 1: เทียบ Single-shot vs Periodic Mode</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "SHT3x.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_Init(115200);
+    SHT3x_Init(0x44);
+
+    USART_Println("Mode,SamplingRate(ms),T(C),H(%)");
+
+    // === Single-Shot Mode ===
+    USART_Println("--- Single-Shot ---");
+    uint32_t t0 = Timer_GetMs();
+    for(uint8_t i = 0; i < 10; i++) {
+        uint32_t t1 = Timer_GetMs();
+        SHT3x_ReadSingle();
+        float t = SHT3x_GetTemperature();
+        float h = SHT3x_GetHumidity();
+        uint32_t dt = Timer_GetMs() - t1;
+
+        USART_Print("SINGLE,");
+        USART_PrintNum(dt); USART_Print(",");
+        USART_PrintFloat(t, 1); USART_Print(",");
+        USART_PrintFloat(h, 1); USART_Println("");
+        Delay_Ms(500);
+    }
+    uint32_t single_total = Timer_GetMs() - t0;
+
+    // === Periodic Mode ===
+    USART_Println("--- Periodic (1 MPS) ---");
+    SHT3x_StartPeriodic(SHT3x_1MPS);  // 1 measurement per second
+    t0 = Timer_GetMs();
+    for(uint8_t i = 0; i < 10; i++) {
+        uint32_t t1 = Timer_GetMs();
+        SHT3x_ReadPeriodic();
+        float t = SHT3x_GetTemperature();
+        float h = SHT3x_GetHumidity();
+        uint32_t dt = Timer_GetMs() - t1;
+
+        USART_Print("PERIODIC,");
+        USART_PrintNum(dt); USART_Print(",");
+        USART_PrintFloat(t, 1); USART_Print(",");
+        USART_PrintFloat(h, 1); USART_Println("");
+        Delay_Ms(1000);
+    }
+    uint32_t periodic_total = Timer_GetMs() - t0;
+    SHT3x_StopPeriodic();
+
+    USART_Print("Single total: "); USART_PrintNum(single_total);
+    USART_Println("ms");
+    USART_Print("Periodic total: "); USART_PrintNum(periodic_total);
+    USART_Println("ms");
+
+    while(1);
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> Single-shot: วัดเมื่อสั่ง — response ~15ms — เหมาะกับวัดเป็นครั้งคราว — Periodic mode: ชิปวัดอัตโนมัติตามความถี่ (1MPS=1ครั้ง/วิ) — <code>SHT3x_ReadPeriodic()</code> อ่านค่าได้ทันทีไม่ต้องรอ convert — Periodic เหมาะกับ data logging ต่อเนื่องเพราะ CPU ว่างระหว่างรอ — ต้อง <code>SHT3x_StopPeriodic()</code> เมื่อเลิกใช้</div></div>
+<div class="answer"><h2>ข้อ 2: Alert Pin แบบ Interrupt — เมื่อ Temp > 40°C</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "SHT3x.h"
+#include "Buzzer.h"
+
+#define LED_RED     PC0
+#define BUZZER_PIN  PC4
+#define ALERT_PIN   PC3   // SHT3x ALERT → CH32V003 EXTI
+
+volatile uint8_t alert_flag = 0;
+
+void EXTI7_0_IRQHandler(void) __attribute__((interrupt));
+void EXTI7_0_IRQHandler(void) {
+    if(EXTI_GetITStatus(EXTI_Line3)) {
+        alert_flag = 1;
+        EXTI_ClearITPendingBit(EXTI_Line3);
+    }
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_Init(115200);
+
+    pinMode(LED_RED, PIN_MODE_OUTPUT);
+    pinMode(ALERT_PIN, PIN_MODE_INPUT_PULLUP);
+    Buzzer_Init(BUZZER_PIN, BUZZER_ACTIVE);
+
+    EXTI_Init(ALERT_PIN, EXTI_Trigger_Falling);
+    NVIC_EnableIRQ(EXTI7_0_IRQn);
+
+    SHT3x_Init(0x44);
+    SHT3x_SetAlertLimits(40.0f, 5.0f, 80.0f, 5.0f);  // T>40°C or H>80%
+
+    Timer_t tmr;
+    Start_Timer(&tmr, 2000, 1);
+
+    while(1) {
+        if(alert_flag) {
+            alert_flag = 0;
+            SHT3x_ReadSingle();
+            float t = SHT3x_GetTemperature();
+            USART_Print("ALERT! T="); USART_PrintFloat(t, 1);
+            USART_Println("C > 40°C!");
+
+            digitalWrite(LED_RED, HIGH);
+            Buzzer_Beep(BUZZER_PIN, 500);
+            Delay_Ms(200);
+            digitalWrite(LED_RED, LOW);
+        }
+
+        if(Is_Timer_Expired(&tmr)) {
+            SHT3x_ReadSingle();
+            float t = SHT3x_GetTemperature();
+            float h = SHT3x_GetHumidity();
+            USART_Print("T:"); USART_PrintFloat(t, 1);
+            USART_Print(" H:"); USART_PrintFloat(h, 1);
+            USART_Println("%");
+        }
+        IWDG_Feed();
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> SHT3x มีขา ALERT สัญญาณ hardware — ต่อเข้าขา PC3 ของ CH32V003 — ตั้ง EXTI interrupt แบบ falling edge — <code>SHT3x_SetAlertLimits(T_high, T_hyst, H_high, H_hyst)</code> — เมื่อ temp เกิน threshold, SHT3x ดึง ALERT LOW → trigger interrupt → ISR ตั้ง flag — main loop อ่านค่า + สั่ง Buzzer/LED — ข้อดี: ไม่ต้อง poll ตลอดเวลา, ประหยัด CPU</div></div>
+<div class="answer"><h2>ข้อ 3: Heater Test — ไล่น้ำแข็ง/ความชื้นเกาะ (De-icing)</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "SHT3x.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_Init(115200);
+    SHT3x_Init(0x44);
+
+    USART_Println("Time(s),T(C),H(%),Heater");
+
+    uint32_t start = Timer_GetMs();
+
+    while(1) {
+        // --- Phase 1: Normal reading (60s) ---
+        for(uint8_t i = 0; i < 60; i++) {
+            SHT3x_ReadSingle();
+            float t = SHT3x_GetTemperature();
+            float h = SHT3x_GetHumidity();
+            uint32_t elapsed = (Timer_GetMs() - start) / 1000;
+
+            USART_PrintNum(elapsed); USART_Print(",");
+            USART_PrintFloat(t, 1); USART_Print(",");
+            USART_PrintFloat(h, 1); USART_Print(",OFF");
+            USART_Println("");
+            Delay_Ms(1000);
+        }
+
+        // --- Phase 2: Heater ON 1 second ---
+        USART_Println(">>> HEATER ON <<<");
+        SHT3x_HeaterOn();
+        Delay_Ms(1000);
+
+        // --- Phase 3: Immediate read after heater ---
+        SHT3x_ReadSingle();
+        float t_after = SHT3x_GetTemperature();
+        float h_after = SHT3x_GetHumidity();
+        SHT3x_HeaterOff();
+
+        uint32_t elapsed = (Timer_GetMs() - start) / 1000;
+        USART_PrintNum(elapsed); USART_Print(",");
+        USART_PrintFloat(t_after, 1); USART_Print(",");
+        USART_PrintFloat(h_after, 1); USART_Print(",JUST_OFF");
+        USART_Println("");
+        USART_Println(">>> HEATER OFF <<<");
+
+        // --- Phase 4: Cool-down observation (10s) ---
+        for(uint8_t i = 0; i < 10; i++) {
+            SHT3x_ReadSingle();
+            float t = SHT3x_GetTemperature();
+            float h = SHT3x_GetHumidity();
+            elapsed = (Timer_GetMs() - start) / 1000;
+
+            USART_PrintNum(elapsed); USART_Print(",");
+            USART_PrintFloat(t, 1); USART_Print(",");
+            USART_PrintFloat(h, 1); USART_Print(",COOLDOWN");
+            USART_Println("");
+            Delay_Ms(1000);
+        }
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> SHT3x มี heater ในตัว — ใช้ไล่ความชื้น/น้ำแข็งที่เกาะบน sensor die — <code>SHT3x_HeaterOn()</code> เปิด heater (~5-10mA เพิ่ม) — <code>SHT3x_HeaterOff()</code> ปิด — ก่อนเปิด heater อุณหภูมิจริง (เช่น 25°C) — หลังเปิด 1 วิ อุณหภูมิจะพุ่งสูง (self-heating ~+2-5°C) — สังเกต cooldown curve ตอนอุณหภูมิกลับสู่ปกติ — ในตู้เย็นหรือที่เย็นจัด heater ช่วยป้องกันน้ำแข็งเกาะ</div></div>
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_sht3x.html">กลับบท</a><a href="chapx_lib_max31855_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

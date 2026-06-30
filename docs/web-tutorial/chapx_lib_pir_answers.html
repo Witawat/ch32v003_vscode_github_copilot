@@ -1,0 +1,120 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย PIR — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_pir.html">กลับบท</a><a href="chapx_lib_rcwl0516_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — PIR HC-SR501 Motion Sensor</h1>
+<div class="answer"><h2>ข้อ 1: Motion Counter — นับครั้งที่ตรวจจับความเคลื่อนไหว</h2><pre><code class="language-c">#define PIR_PIN       PC0
+#define DEBOUNCE_MS   2000
+
+uint32_t motion_count = 0;
+uint32_t last_motion_time = 0;
+
+void pir_motion_counter(void) {
+    pinMode(PIR_PIN, PIN_MODE_INPUT);
+
+    while(1) {
+        uint32_t now = millis();
+
+        if(digitalRead(PIR_PIN) == HIGH) {
+            if(now - last_motion_time > DEBOUNCE_MS) {
+                motion_count++;
+                last_motion_time = now;
+
+                USART_Print("Motion #");
+                USART_PrintNum(motion_count);
+                USART_Print(" at ");
+                USART_PrintNum(now / 1000);
+                USART_Println("s");
+            }
+        }
+
+        // แสดง counter ทุก 5 วิ
+        static uint32_t last_report = 0;
+        if(now - last_report >= 5000) {
+            USART_Print("Total: ");
+            USART_PrintNum(motion_count);
+            USART_Println(" motions");
+            last_report = now;
+        }
+
+        Delay_Ms(100);
+    }
+}
+</code></pre><div class="approach"><strong>🧠 แนวคิด:</strong> PIR output เป็น digital HIGH เมื่อตรวจจับ — debounce 2 วิ ป้องกันนับซ้ำจากการตรวจจับต่อเนื่อง — นับจำนวนครั้งและ timestamp — เหมาะกับนับคนเข้า-ออก หรือสถิติการเคลื่อนไหวในห้อง — PIR delay time ปรับได้ที่ตัวโมดูล (potentiometer)</div></div>
+<div class="answer"><h2>ข้อ 2: Sleep + Wake Pattern</h2><pre><code class="language-c">#define PIR_PIN      PC0
+#define RELAY_PIN    PC4
+#define LIGHT_ON_S   30  // เปิดไฟ 30 วิหลังตรวจจับ
+
+uint32_t light_off_at = 0;
+
+void pir_sleep_wake_light(void) {
+    pinMode(PIR_PIN, PIN_MODE_INPUT);
+    pinMode(RELAY_PIN, PIN_MODE_OUTPUT);
+    pinMode(PC1, PIN_MODE_OUTPUT);  // status LED
+
+    while(1) {
+        uint32_t now = millis();
+
+        if(digitalRead(PIR_PIN) == HIGH) {
+            light_off_at = now + LIGHT_ON_S * 1000;
+            digitalWrite(RELAY_PIN, HIGH);
+            digitalWrite(PC1, HIGH);
+            USART_Println("Motion! Light ON, timer reset");
+        }
+
+        if(light_off_at > 0 && now >= light_off_at) {
+            digitalWrite(RELAY_PIN, LOW);
+            digitalWrite(PC1, LOW);
+            light_off_at = 0;
+            USART_Println("No motion — Light OFF, entering sleep");
+        }
+
+        if(light_off_at == 0) {
+            // Idle state — ตรวจ PIR ช้าลง
+            Delay_Ms(500);
+        } else {
+            Delay_Ms(50);
+        }
+    }
+}
+</code></pre><div class="approach"><strong>🧠 แนวคิด:</strong> PIR HIGH → ต่ออายุ timer 30 วิ — ทุกครั้งที่ตรวจจับใหม่ timer ถูกรีเซ็ต — เมื่อหมดเวลา → ปิดไฟ — ตอน idle ตรวจช้าลง (500ms) ประหยัดพลังงาน — ตอน active ตรวจเร็ว (50ms) ตอบสนองไว — Retriggerable timer pattern ใช้กับไฟทางเดิน/ห้องน้ำอัตโนมัติ</div></div>
+<div class="answer"><h2>ข้อ 3: PIR vs RCWL-0516 Comparison</h2><pre><code class="language-c">void pir_vs_rcwl(void) {
+    pinMode(PC0, PIN_MODE_INPUT);  // PIR
+    pinMode(PC1, PIN_MODE_INPUT);  // RCWL-0516
+
+    uint32_t pir_count = 0, rcwl_count = 0, both_count = 0;
+    uint32_t start = millis();
+
+    USART_Println("PIR vs RCWL — 60 second test");
+    USART_Println("Sec, PIR, RCWL, Both");
+
+    while(millis() - start < 60000) {
+        uint8_t pir  = digitalRead(PC0);
+        uint8_t rcwl = digitalRead(PC1);
+
+        static uint8_t last_pir = 0, last_rcwl = 0;
+
+        if(pir && !last_pir)  pir_count++;
+        if(rcwl && !last_rcwl) rcwl_count++;
+        if(pir && rcwl)  both_count++;
+
+        last_pir = pir;
+        last_rcwl = rcwl;
+
+        static uint32_t last_log = 0;
+        if(millis() - last_log >= 1000) {
+            USART_PrintNum((millis() - start) / 1000);
+            USART_Print(", "); USART_PrintNum(pir);
+            USART_Print(", "); USART_PrintNum(rcwl);
+            USART_Print(", "); USART_PrintNum(pir && rcwl);
+            USART_Println("");
+            last_log = millis();
+        }
+        Delay_Ms(10);
+    }
+
+    USART_Print("PIR: "); USART_PrintNum(pir_count);
+    USART_Print(" RCWL: "); USART_PrintNum(rcwl_count);
+    USART_Println(" triggers");
+}
+</code></pre><div class="approach"><strong>🧠 แนวคิด:</strong> PIR: ตรวจจับความร้อน (infrared) → ต้องเห็นการเปลี่ยนแปลงอุณหภูมิ — RCWL: Doppler radar → ตรวจจับการเคลื่อนไหวของวัตถุ — RCWL ตรวจจับผ่านผนังได้ (RF) — ทั้งคู่: ใช้ rising edge counting กัน double-count — CSV output สำหรับวิเคราะห์ใน Excel — PIR false positive น้อยกว่า, RCWL range ไกลกว่า</div></div>
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_pir.html">กลับบท</a><a href="chapx_lib_rcwl0516_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

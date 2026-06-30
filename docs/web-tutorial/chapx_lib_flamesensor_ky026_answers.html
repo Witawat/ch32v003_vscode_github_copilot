@@ -1,0 +1,215 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย KY-026 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_flamesensor_ky026.html">กลับบท</a><a href="chapx_lib_soundsensor_ky038_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — KY-026 Flame Sensor</h1>
+
+<div class="answer">
+<h2>ข้อ 1: Fire Alarm — Buzzer + Relay ตัดแก๊สเมื่อตรวจจับไฟ</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+#define FLAME_A   PD2
+#define FLAME_D   PC3
+#define BUZZER    PC0
+#define GAS_RELAY PC1
+#define LED_OK    PC2
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    ADC_Init(FLAME_A, ADC_CH0);
+    pinMode(FLAME_D, PIN_MODE_INPUT);
+    pinMode(BUZZER, PIN_MODE_OUTPUT);
+    pinMode(GAS_RELAY, PIN_MODE_OUTPUT);
+    pinMode(LED_OK, PIN_MODE_OUTPUT);
+    USART_Init(115200);
+
+    digitalWrite(BUZZER, LOW);
+    digitalWrite(GAS_RELAY, LOW);
+    digitalWrite(LED_OK, HIGH);
+
+    uint8_t fire_streak = 0;
+    uint8_t alarm_active = 0;
+    Timer_t tmr;
+    Start_Timer(&tmr, 200, 1);
+
+    USART_Print("Fire Alarm System Ready\r\n");
+
+    while(1) {
+        if(Is_Timer_Expired(&tmr)) {
+            uint16_t adc = ADC_Read(FLAME_A);
+            uint8_t dig = GPIO_Read(FLAME_D);
+
+            if(dig && adc > 700) {
+                fire_streak++;
+                if(fire_streak >= 6 && !alarm_active) {
+                    alarm_active = 1;
+                    digitalWrite(BUZZER, HIGH);
+                    digitalWrite(GAS_RELAY, HIGH);
+                    digitalWrite(LED_OK, LOW);
+                    USART_Print("!!! FIRE ALARM !!!\r\n");
+                    USART_Print("GAS CUT. BUZZER ON.\r\n");
+                }
+            } else {
+                if(fire_streak > 0) fire_streak--;
+                if(fire_streak == 0 && alarm_active) {
+                    digitalWrite(BUZZER, LOW);
+                    digitalWrite(LED_OK, HIGH);
+                    alarm_active = 0;
+                    USART_Print("Alarm cleared. GAS relay still off.\r\n");
+                }
+            }
+
+            USART_Print("ADC:"); USART_PrintDec(adc);
+            USART_Print(" D:"); USART_PrintDec(dig);
+            USART_Print(" S:"); USART_PrintDec(fire_streak);
+            USART_Print(" A:"); USART_PrintDec(alarm_active);
+            USART_Print("\r\n");
+        }
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ตรวจจับไฟทั้ง Analog + Digital — ต้องตรงกันทั้งคู่ (dig=1 AND adc>700) — debounce 6 ครั้ง (1.2 วิ) ก่อนยืนยัน alarm — เมื่อ alarm active → Buzzer + ตัดแก๊ส (relay) — fire_streak ลดลงเมื่อไม่มีไฟ → alarm cleared (buzzer หยุด แต่ relay ยัง off อยู่เพื่อความปลอดภัย) — LED_OK แสดงสถานะปกติ — หลีกเลี่ยง false alarm จากแสงแดด/ไฟแช็กด้วย dual confirmation</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: Sunlight False Trigger Prevention — แยกแสงแดดกับเปลวไฟ</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+#define FLAME_A PD2
+#define FLAME_D PC3
+#define BUZZER  PC0
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    ADC_Init(FLAME_A, ADC_CH0);
+    pinMode(FLAME_D, PIN_MODE_INPUT);
+    pinMode(BUZZER, PIN_MODE_OUTPUT);
+    USART_Init(115200);
+
+    digitalWrite(BUZZER, LOW);
+
+    uint16_t samples[20];
+    uint8_t s_idx = 0;
+    Timer_t tmr;
+    Start_Timer(&tmr, 50, 1);
+
+    USART_Print("Flame Sensor with Flicker Detection\r\n");
+
+    while(1) {
+        if(Is_Timer_Expired(&tmr)) {
+            samples[s_idx] = ADC_Read(FLAME_A);
+            s_idx = (s_idx + 1) % 20;
+
+            uint16_t min_val = 1023, max_val = 0;
+            uint32_t sum = 0;
+            for(uint8_t i = 0; i < 20; i++) {
+                if(samples[i] > max_val) max_val = samples[i];
+                if(samples[i] < min_val) min_val = samples[i];
+                sum += samples[i];
+            }
+            uint16_t avg = sum / 20;
+            uint16_t flicker = max_val - min_val;
+            uint8_t dig = GPIO_Read(FLAME_D);
+
+            uint8_t is_fire = (dig && flicker > 80 && avg > 500);
+            uint8_t is_sunlight = (!dig && flicker < 40 && avg > 400);
+
+            USART_Print("Avg:"); USART_PrintDec(avg);
+            USART_Print(" Flick:"); USART_PrintDec(flicker);
+            USART_Print(" D:"); USART_PrintDec(dig);
+
+            if(is_fire) {
+                USART_Print(" >> FIRE! <<");
+                digitalWrite(BUZZER, HIGH);
+            } else if(is_sunlight) {
+                USART_Print(" (sunlight - ignored)");
+                digitalWrite(BUZZER, LOW);
+            } else {
+                USART_Print(" --");
+                digitalWrite(BUZZER, LOW);
+            }
+
+            USART_Print("\r\n");
+        }
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> เปลวไฟ flicker ที่ความถี่ ~10-20Hz → amplitude ผันผวนสูง — แสงแดดคงที่ → flicker ต่ำ — ใช้ sliding window 20 samples (@50ms = 1 วิ window) — คำนวณ flicker = max - min — เงื่อนไขไฟ: dig=1 AND flicker>80 AND avg>500 — เงื่อนไขแดด: dig=0 AND flicker<40 AND avg>400 — แยกออกจากกันได้โดยไม่ต้องใช้ hardware เพิ่ม — ใช้หลักการที่เปลวไฟมีความถี่ flicker เป็นเอกลักษณ์</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: Dual Flame + MQ-2 Gas Combo — ตรวจจับทั้งไฟและแก๊ส</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+#define FLAME_A   PD2
+#define FLAME_D   PC3
+#define MQ2_ADC   PD4
+#define MQ2_CH    ADC_CH1
+#define BUZZER    PC0
+#define GAS_VALVE PC1
+#define EXHAUST   PC2
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    ADC_Init(FLAME_A, ADC_CH0);
+    ADC_Init(MQ2_ADC, MQ2_CH);
+    pinMode(FLAME_D, PIN_MODE_INPUT);
+    pinMode(BUZZER, PIN_MODE_OUTPUT);
+    pinMode(GAS_VALVE, PIN_MODE_OUTPUT);
+    pinMode(EXHAUST, PIN_MODE_OUTPUT);
+    USART_Init(115200);
+
+    digitalWrite(BUZZER, LOW);
+    digitalWrite(GAS_VALVE, LOW);
+    digitalWrite(EXHAUST, LOW);
+
+    Timer_t tmr;
+    Start_Timer(&tmr, 300, 1);
+
+    USART_Print("Flame+MQ2 Combo Safety System\r\n");
+
+    while(1) {
+        if(Is_Timer_Expired(&tmr)) {
+            uint16_t flame_adc = ADC_Read(FLAME_A);
+            uint8_t  flame_dig = GPIO_Read(FLAME_D);
+            uint16_t mq2_adc   = ADC_Read(MQ2_ADC);
+
+            uint8_t fire_detected  = (flame_dig && flame_adc > 700);
+            uint8_t gas_detected   = (mq2_adc > 600);
+
+            USART_Print("Flame:"); USART_PrintDec(flame_adc);
+            USART_Print("/"); USART_PrintDec(flame_dig);
+            USART_Print(" MQ2:"); USART_PrintDec(mq2_adc);
+
+            if(fire_detected && gas_detected) {
+                USART_Print(" <<< EXPLOSION RISK! >>>");
+                digitalWrite(BUZZER, HIGH);
+                digitalWrite(GAS_VALVE, HIGH);
+                digitalWrite(EXHAUST, HIGH);
+            } else if(fire_detected) {
+                USART_Print(" << FIRE >>");
+                digitalWrite(BUZZER, HIGH);
+                digitalWrite(EXHAUST, LOW);
+            } else if(gas_detected) {
+                USART_Print(" << GAS LEAK >>");
+                digitalWrite(BUZZER, HIGH);
+                digitalWrite(GAS_VALVE, HIGH);
+                digitalWrite(EXHAUST, HIGH);
+            } else {
+                USART_Print(" OK");
+                digitalWrite(BUZZER, LOW);
+                digitalWrite(GAS_VALVE, LOW);
+                digitalWrite(EXHAUST, LOW);
+            }
+
+            USART_Print("\r\n");
+        }
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> รวม KY-026 Flame Sensor + MQ-2 Gas Sensor — 3 สถานะ: ไฟอย่างเดียว (buzzer), แก๊สรั่ว (buzzer+ตัดวาล์ว+พัดลมดูดอากาศ), ไฟ+แก๊ส (ทั้งสอง เสี่ยงระเบิดสูงสุด) — MQ-2 ต่อที่ PD4 (ADC_CH1) — threshold MQ2 > 600 (ต้อง calibrate ตาม environment) — EXHAUST (PC2) เปิดพัดลมระบายอากาศ — GAS_VALVE (PC1) ตัดวาล์วแก๊ส — ระบบ safety แบบ multi-sensor ลด false positive และครอบคลุมมากขึ้น</div>
+</div>
+
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_flamesensor_ky026.html">กลับบท</a><a href="chapx_lib_soundsensor_ky038_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

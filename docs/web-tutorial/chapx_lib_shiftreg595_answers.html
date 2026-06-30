@@ -1,0 +1,115 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย 74HC595 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_shiftreg595.html">กลับบท</a><a href="chapx_lib_dht_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — 74HC595 Shift Register</h1>
+
+<div class="answer">
+<h2>ข้อ 1: Binary Counter 8-bit พร้อม LED</h2>
+<pre><code class="language-c">#include "simple_shiftreg.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    ShiftReg_Init(SHIFTREG_PINS_DEFAULT);
+
+    uint8_t counter = 0;
+
+    while(1) {
+        ShiftReg_Write(counter);
+        ShiftReg_Update();
+        counter++;
+        Delay_Ms(300);
+
+        if(counter == 0) {  // overflow
+            // กระพริบทุก LED 3 ครั้ง
+            for(uint8_t i = 0; i < 3; i++) {
+                ShiftReg_Write(0xFF);
+                ShiftReg_Update();
+                Delay_Ms(200);
+                ShiftReg_Write(0x00);
+                ShiftReg_Update();
+                Delay_Ms(200);
+            }
+        }
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> 74HC595 เป็น shift register 8-bit รับข้อมูลผ่าน SPI (SER, SRCLK, RCLK) — <code>ShiftReg_Write(data)</code> shift 8 bits เข้า register — <code>ShiftReg_Update</code> latch ข้อมูลไป output ด้วย RCLK pulse — counter เพิ่มทีละ 1 แสดงผลเป็น binary บน LED 8 ดวง — เมื่อ overflow (กลับ 0) กระพริบทุก LED 3 ครั้ง — ถ้าต้องการนับถอยหลัง ให้ใช้ <code>counter--</code> แทน — 74HC595 ขับกระแสได้ ~6mA ต่อขา รวม ~70mA ต่อ IC</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: Knight Rider (ไฟวิ่งกลับไปกลับมา)</h2>
+<pre><code class="language-c">#include "simple_shiftreg.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    ShiftReg_Init(SHIFTREG_PINS_DEFAULT);
+
+    while(1) {
+        // วิ่งไปทางขวา
+        for(uint8_t i = 0; i < 7; i++) {
+            ShiftReg_Write(1 << i);
+            ShiftReg_Update();
+            Delay_Ms(80);
+        }
+
+        // วิ่งกลับทางซ้าย
+        for(int8_t i = 7; i >= 0; i--) {
+            ShiftReg_Write(1 << i);
+            ShiftReg_Update();
+            Delay_Ms(80);
+        }
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> Knight Rider ใช้ bit shift <code>1<<i</code> เพื่อให้ LED ติดทีละดวง — วน i 0→7 วิ่งขวา, แล้ววน 7→0 วิ่งซ้าย — delay 80ms ต่อ step ให้เห็นชัด — ShiftReg_Write รับค่า 8-bit ส่งตรงกับ Q0-Q7 — สำหรับเอฟเฟกต์สมจริงขึ้น เพิ่มหาง LED 2-3 ดวงด้วย PWM (ต้องใช้ PWM-capable shift register หรือ bit-bang) — ถ้าต้องการ Knight Rider แบบ 16 LED ให้ chain 74HC595 2 ตัว</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: Chain 2 Chips — ขับ 16 Outputs</h2>
+<pre><code class="language-c">#include "simple_shiftreg.h"
+
+// เขียนข้อมูล 16 บิต ผ่าน 74HC595 2 ตัวแบบ daisy-chain
+void ShiftReg_Write16(uint16_t data) {
+    for(int16_t i = 15; i >= 0; i--) {
+        digitalWrite(SRCLK_PIN, LOW);
+        digitalWrite(SER_PIN, (data >> i) & 1);
+        digitalWrite(SRCLK_PIN, HIGH);
+    }
+    // Latch ทั้ง 2 ตัวพร้อมกัน
+    digitalWrite(RCLK_PIN, LOW);
+    digitalWrite(RCLK_PIN, HIGH);
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    // Setup pins
+    pinMode(SER_PIN, PIN_MODE_OUTPUT);
+    pinMode(SRCLK_PIN, PIN_MODE_OUTPUT);
+    pinMode(RCLK_PIN, PIN_MODE_OUTPUT);
+
+    uint8_t pattern = 0x01;
+    uint8_t dir = 0;  // 0=shift left, 1=shift right
+
+    while(1) {
+        // สร้าง 16-bit pattern: left chip + right chip
+        uint16_t out;
+        if(dir == 0) {
+            out = ((uint16_t)pattern << 8) | pattern;
+            pattern <<= 1;
+            if(pattern == 0) { pattern = 0x80; dir = 1; }
+        } else {
+            out = ((uint16_t)pattern << 8) | pattern;
+            pattern >>= 1;
+            if(pattern == 0) { pattern = 0x01; dir = 0; }
+        }
+
+        ShiftReg_Write16(out);
+        Delay_Ms(100);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ต่อ 74HC595 2 ตัวแบบ daisy-chain — Q7' ของตัวแรกต่อเข้า SER ของตัวที่สอง — ข้อมูล 16 บิต shift เข้า MSB ก่อน — ตัวแรกจะได้ high byte ตัวที่สองได้ low byte — Latch ทั้งสองตัวพร้อมกันด้วย RCLK pulse เดียว — <code>pattern</code> เลื่อนซ้าย-ขวาแสดงผลซ้ำกันทั้ง 2 chips — chain ได้ไม่จำกัดจำนวน เพียงเพิ่มจำนวนบิตและเวลา shift — สำหรับ SPI hardware ให้ใช้ 16-bit transfer แทน bit-bang เพื่อความเร็ว</div>
+</div>
+
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_shiftreg595.html">กลับบท</a><a href="chapx_lib_dht_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

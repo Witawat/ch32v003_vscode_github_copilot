@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GPS NEO-6M — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_nrf24l01.html">บทก่อน</a>
+    <a href="chapx_lib_ir.html">บทถัดไป →</a>
+</nav>
+<h1>GPS NEO-6M — USART, NMEA Parsing, Lat/Lon/Speed</h1>
+<span class="level advanced">ระดับสูง</span>
+
+<section class="flowchart">
+    <h2>🧭 แผนภาพการทำงาน</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["GPS_Init(uart,baud)"] --> B["Wait for NMEA sentences"]
+    B --> C{"Parse $GPRMC"}
+    C -->|"Valid"| D["Extract lat, lon, speed, time"]
+    C -->|"Invalid"| B
+    D --> E["GPS_HasFix()?"]
+    E -->|"Yes"| F["Display/Use coordinates"]
+    E -->|"No"| G["Show 'No Fix' + wait"]
+    G --> B
+    F --> B
+    </pre>
+</section>
+
+<section>
+    <h2>🔌 การต่อวงจร</h2>
+    <pre class="ascii-circuit">
+                  GPS NEO-6M Module
+    ┌──────────────────────────────────────────────┐
+    │ CH32V003                          NEO-6M     │
+    │ PD5(TX)──────────RX               ┌─────────┤
+    │ PD6(RX)──────────TX               │         │
+    │ 3.3V─────────────VCC              │         │
+    │ GND──────────────GND              │         │
+    │                         ┌─PPS───┤LED blink  │
+    │                         │        │         │
+    │ ⚡ ใช้ภายนอกอาคารเท่านั้น          │         │
+    │ ⚡ Cold start ~30s                │         │
+    │ ⚡ Hot start ~1s                  │         │
+    │ ⚡ ควรต่อ backup battery          └─────────┤
+    └──────────────────────────────────────────────┘
+    </pre>
+    <p>GPS module ส่งข้อมูลออกทาง TX ตลอดเวลาที่ 9600 baud (default) — ต่อ RX ของ CH32V003 เข้ากับ TX ของ GPS ก็พอ (ขา TX ของ CH32V003 ไม่จำเป็นต้องต่อ ยกเว้นต้องการส่งคำสั่ง config)</p>
+</section>
+
+<section>
+    <h2>📚 หลักการทำงาน</h2>
+    <p><strong>GPS NEO-6M</strong> รับสัญญาณจากดาวเทียม GPS อย่างน้อย 3 ดวงเพื่อระบุตำแหน่ง 2D fix, 4+ ดวงเพื่อ 3D fix + altitude — ส่งข้อมูลออกเป็น NMEA sentences ผ่าน USART ที่ 9600 baud (default)</p>
+    <p><strong>NMEA Sentences สำคัญ:</strong></p>
+    <ul>
+        <li><code>$GPRMC</code> — Recommended Minimum: time, status, lat, lon, speed, date — สำคัญที่สุด</li>
+        <li><code>$GPGGA</code> — Fix data: quality, satellites, altitude, HDOP</li>
+        <li><code>$GPVTG</code> — Course and speed over ground</li>
+    </ul>
+    <p><strong>Fix Quality:</strong> 0=no fix, 1=GPS fix, 2=DGPS fix — ต้องมี fix ก่อนค่าพิกัดถึงจะน่าเชื่อถือ</p>
+    <p><strong>Baud Rate:</strong> Default 9600 — เปลี่ยนได้ด้วย UBX commands แต่ 9600 เพียงพอสำหรับ 1Hz update</p>
+</section>
+
+<section>
+    <h2>💻 เขียน Code ทีละขั้น</h2>
+
+    <div class="step"><h3>ขั้นที่ 1: Init + Setup</h3>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "GPS_NEO6M.h"
+
+GPS_Data gps;  // struct: lat, lon, speed, time, fix
+
+int main(void) {
+    SystemCoreClockUpdate();
+    USART_Init(USART1, BAUD_115200);     // debug
+    USART_Init(USART2, BAUD_9600);       // GPS TX connected to MCU RX
+    GPS_Init(USART2, BAUD_9600);
+    USART_Println("GPS Starting...");</code></pre>
+    <p class="explain">🔍 <code>GPS_Init(uart, baud)</code> — เริ่ม USART สำหรับรับ NMEA, struct <code>GPS_Data</code> เก็บค่าที่ parse แล้ว, GPS ต้องอยู่กลางแจ้ง view ท้องฟ้าเพื่อรับสัญญาณ</p></div>
+
+    <div class="step"><h3>ขั้นที่ 2: Parse NMEA + ตรวจสอบ Fix</h3>
+    <pre><code class="language-c">    while(!GPS_HasFix()) {          // รอจนได้ fix
+        if(USART_Available(USART2)){
+            GPS_Process();           // feed NMEA char-by-char
+        }
+        USART_Println("Waiting for GPS fix...");
+        Delay_Ms(1000);
+    }
+    USART_Println("GPS Fix acquired!");</code></pre>
+    <p class="explain">🔍 <code>GPS_Process()</code> — อ่าน USART buffer ทีละ char, parse $GPRMC sentence, <code>GPS_HasFix()</code> — เช็ค Status='A' (Active/Va​lid) ต้อง 'A' เท่านั้นถึงจะเชื่อถือพิกัดได้</p></div>
+
+    <div class="step"><h3>ขั้นที่ 3: Loop — อ่านและแสดงผล</h3>
+    <pre><code class="language-c">    while(1) {
+        if(USART_Available(USART2)) GPS_Process();
+
+        GPS_GetData(&gps);  // read latest parsed data
+        if(gps.fix) {
+            USART_Print("Lat: ");  USART_PrintFloat(gps.lat, 6);
+            USART_Print(" Lon: "); USART_PrintFloat(gps.lon, 6);
+            USART_Print(" Spd: "); USART_PrintFloat(gps.speed_kmh, 1);
+            USART_Print(" km/h Sat: "); USART_PrintInt(gps.satellites);
+            USART_Print(" Time: "); USART_Println(gps.time_str);
+        }
+        Delay_Ms(500);
+    }
+}</code></pre>
+    <p class="explain">🔍 <code>GPS_GetData(&gps)</code> — คัดลอกข้อมูล GPS ล่าสุดเข้า struct, latitude/longitude เป็นองศา (ddmm.mmmm format → แปลงเป็น decimal), speed เป็น km/h, time เป็น HHMMSS format</p></div>
+</section>
+
+<section>
+    <h2>📋 API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+        <tr><td><code>GPS_Init(uart, baud)</code></td><td>เริ่มต้น GPS USART</td><td><code>GPS_Init(USART2, BAUD_9600)</code></td></tr>
+        <tr><td><code>GPS_Process()</code></td><td>ประมวลผล NMEA แบบทีละ char</td><td>เรียกใน while(1) loop ตลอดเวลา</td></tr>
+        <tr><td><code>GPS_HasFix()</code></td><td>เช็คว่ามี GPS fix หรือยัง</td><td><code>if(GPS_HasFix()){...}</code></td></tr>
+        <tr><td><code>GPS_GetData(gps)</code></td><td>อ่านค่าพิกัดล่าสุด</td><td><code>GPS_GetData(&gps)</code></td></tr>
+        <tr><td><code>GPS_GetLatitude()</code></td><td>อ่าน latitude (decimal)</td><td><code>float lat = GPS_GetLatitude()</code></td></tr>
+        <tr><td><code>GPS_GetLongitude()</code></td><td>อ่าน longitude (decimal)</td><td><code>float lon = GPS_GetLongitude()</code></td></tr>
+        <tr><td><code>GPS_GetSpeed()</code></td><td>อ่านความเร็ว km/h</td><td><code>float spd = GPS_GetSpeed()</code></td></tr>
+        <tr><td><code>GPS_GetSatellites()</code></td><td>จำนวนดาวเทียมที่ล็อค</td><td><code>uint8_t sat = GPS_GetSatellites()</code></td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>ไม่มี NMEA ออกมาเลย</td><td>Baud rate ไม่ตรง (default 9600)</td><td>เช็ค <code>GPS_Init(USART2, BAUD_9600)</code>, ลอง baud อื่น</td></tr>
+        <tr><td>fix ไม่เคยได้</td><td>อยู่ภายในอาคาร — สัญญาณ GPS ทะลุไม่ถึง</td><td>ต้องอยู่กลางแจ้งหรือใกล้หน้าต่าง, cold start อาจใช้เวลา 5-15 นาที</td></tr>
+        <tr><td>ค่า lat/lon เพี้ยน</td><td>ใช้ Status='V' (Invalid)</td><td>เช็ค <code>GPS_HasFix()</code> ก่อน — ต้อง 'A' เท่านั้น</td></tr>
+        <tr><td>GPS_Process() นานเกิน</td><td>บัฟเฟอร์ล้น — อ่านไม่ทัน</td><td>เรียก <code>GPS_Process()</code> บ่อยๆ ใน loop, อย่า delay นานเกิน 100ms</td></tr>
+        <tr><td>ตำแหน่งกระโดด</td><td>Multipath หรือสัญญาณอ่อน</td><td>ใช้ averaging หรือ Kalman filter, รอให้ดาวเทียม ≥6 ดวง</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>🛠️ สร้าง Product: GPS Speedometer + Logger</h2>
+    <p>อ่านความเร็วจาก GPS + แสดงผ่าน USART + บันทึกตำแหน่งล่าสุด</p>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "GPS_NEO6M.h"
+#include <math.h>
+
+GPS_Data gps;
+float total_dist = 0;
+float prev_lat = 0, prev_lon = 0;
+
+float haversine(float lat1, float lon1, float lat2, float lon2) {
+    float R = 6371000; // metres
+    float dlat = (lat2-lat1) * 3.14159/180;
+    float dlon = (lon2-lon1) * 3.14159/180;
+    float a = sin(dlat/2)*sin(dlat/2) +
+              cos(lat1*3.14159/180)*cos(lat2*3.14159/180)*sin(dlon/2)*sin(dlon/2);
+    return R * 2 * atan2(sqrt(a), sqrt(1-a));
+}
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    USART_Init(USART1, BAUD_115200);
+    USART_Init(USART2, BAUD_9600);
+    GPS_Init(USART2, BAUD_9600);
+
+    while(!GPS_HasFix()) { GPS_Process(); Delay_Ms(500); }
+    GPS_GetData(&gps);
+    prev_lat = gps.lat; prev_lon = gps.lon;
+
+    while(1)
+    {
+        GPS_Process();
+        GPS_GetData(&gps);
+        if(gps.fix) {
+            float dist = haversine(prev_lat, prev_lon, gps.lat, gps.lon);
+            if(dist < 100) total_dist += dist; // filter glitch
+            prev_lat = gps.lat; prev_lon = gps.lon;
+
+            USART_Print("Speed:"); USART_PrintFloat(gps.speed_kmh,1);
+            USART_Print(" km/h Dist:"); USART_PrintFloat(total_dist/1000,3);
+            USART_Print(" km Sat:"); USART_PrintInt(gps.satellites);
+            USART_Println("");
+        }
+        Delay_Ms(500);
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>✏️ ลองทำดู</h2>
+    <ol>
+        <li>ทำ GPS data logger — บันทึก lat/lon/time ลง EEPROM ทุก 10 วินาที → ดึงข้อมูลผ่าน USART ทีหลัง</li>
+        <li>ทำ geofence alarm — ถ้า GPS อยู่นอกขอบเขตที่กำหนด (รั้วเสมือน) → LED ติด/ส่ง SMS ผ่าน ESP8266</li>
+        <li>ทำ GPS clock — ใช้ $GPRMC time stamp ตั้งเวลาให้ DS3231 RTC อัตโนมัติ</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_nrf24l01.html">บทก่อน</a>
+    <a href="chapx_lib_ir.html">บทถัดไป →</a>
+</nav>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

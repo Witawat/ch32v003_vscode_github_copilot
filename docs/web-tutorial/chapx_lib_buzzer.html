@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Buzzer — Active/Passive GPIO/PWM — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_max31855.html">บทก่อน</a>
+    <a href="chapx_lib_bh1750.html">บทถัดไป →</a>
+</nav>
+
+<h1>Buzzer — Active/Passive GPIO/PWM</h1>
+<span class="level beginner">ระดับเริ่มต้น</span>
+
+<section class="flowchart">
+    <h2>🧭 แผนภาพการทำงาน</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["Buzzer_Init(pin, type)"] --> B{"Type?"}
+    B -->|"Active"| C["Buzzer_Beep(pin, ms)"]
+    B -->|"Passive"| D["Buzzer_Tone(pin, freq, ms)"]
+    C --> E["GPIO HIGH → ดัง, LOW → เงียบ"]
+    D --> F["PWM สร้างความถี่"]
+    D --> G["Buzzer_Melody(notes, dur)"]
+    G --> H["เล่นทำนองเพลง"]
+    E --> B
+    F --> B
+    H --> B
+    </pre>
+</section>
+
+<section>
+    <h2>🔌 การต่อวงจร</h2>
+    <pre class="ascii-circuit">
+        Active Buzzer (GPIO)              Passive Buzzer (PWM)
+┌────────────────────────┐        ┌────────────────────────┐
+│ PC0 ──── Buzzer(+)     │        │ PC4 ──── Buzzer(+)     │
+│ GND ──── Buzzer(-)     │        │ GND ──── Buzzer(-)     │
+│                        │        │                        │
+│ Active = มี osc ในตัว   │        │ Passive = ต้อง PWM     │
+│ ต่อไฟ DC ก็ดังที่ความถี่คงที่│        │ เลือกความถี่ได้ (เล่นเพลง) │
+│ กระแส ~30mA            │        │ กระแส ~30mA            │
+│ (ใช้ transistor ถ้า > 8mA)│       │ (ใช้ transistor ถ้า > 8mA)│
+└────────────────────────┘        └────────────────────────┘
+    </pre>
+    <p>Active Buzzer: ต่อ GPIO ขาไหนก็ได้ — Passive Buzzer: ต้องต่อกับขา PWM (PC4=TIM1_CH4 หรือ PC3=TIM1_CH3)</p>
+</section>
+
+<section>
+    <h2>📚 หลักการทำงาน</h2>
+    <p><strong>Active Buzzer</strong>: มี oscillator ในตัว — ต่อไฟ DC ก็ดังที่ความถี่คงที่ (ปกติ ~2.3kHz) — ใช้ <code>Buzzer_Beep()</code> กำหนดระยะเวลาดัง</p>
+    <p><strong>Passive Buzzer</strong>: เหมือนลำโพงเล็กๆ — ต้องสร้างสัญญาณ PWM/square wave — เลือกความถี่ได้ตั้งแต่ 20Hz-20kHz — ใช้ <code>Buzzer_Tone()</code> เล่นโน้ตและทำนอง</p>
+    <p><strong>วิธีแยก Active vs Passive</strong>: ต่อไฟ DC — Active ดัง, Passive เงียบ (ได้ยินแค่ click ตอนต่อไฟ) — หรือวัดความต้านทาน: Active ~16-32Ω, Passive ~8Ω</p>
+    <p><strong>CH32V003 Pin Current Limit</strong>: GPIO จ่ายได้ ~8mA/pin — Buzzer กิน ~30mA → ต้องใช้ทรานซิสเตอร์ (NPN: BC547/2N2222) หรือ MOSFET</p>
+    <p><strong>Piezo vs Magnetic</strong>: Piezo buzzer ใช้ voltage drive (อิมพีแดนซ์สูง), Magnetic buzzer ใช้ current drive (อิมพีแดนซ์ต่ำ) — เลือก transistor ให้เหมาะ</p>
+</section>
+
+<section>
+    <h2>💻 เขียน Code ทีละขั้น</h2>
+
+    <div class="step"><h3>ขั้นที่ 1: Init + Setup</h3>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "Buzzer.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    // Active Buzzer — ต่อ PC0
+    Buzzer_Init(PC0, BUZZER_ACTIVE);
+
+    // Passive Buzzer — ต่อ PC4 (ต้องเป็น PWM pin!)
+    Buzzer_Init(PC4, BUZZER_PASSIVE);
+
+    USART_Println("Buzzer Ready!");</code></pre>
+    <p class="explain">🔍 <code>Buzzer_Init(pin, type)</code> — type เป็น <code>BUZZER_ACTIVE</code> (GPIO) หรือ <code>BUZZER_PASSIVE</code> (PWM  — ต้องต่อขา PWM), Passive ใช้ TIM1_CH4 (PC4) หรือ TIM1_CH3 (PC3)</p></div>
+
+    <div class="step"><h3>ขั้นที่ 2: Active Beep + Passive Tone</h3>
+    <pre><code class="language-c">    // Active Buzzer — ดัง 200ms, เงียบ 500ms (SOS pattern)
+    Buzzer_Beep(PC0, 200);    // ดัง 200ms
+    Delay_Ms(200);
+    Buzzer_Beep(PC0, 200);    // ดัง 200ms
+    Delay_Ms(200);
+    Buzzer_Beep(PC0, 200);    // ดัง 200ms
+    Delay_Ms(500);
+
+    // Passive Buzzer — เล่น tone 1kHz 500ms
+    Buzzer_Tone(PC4, 1000, 500);   // 1kHz, 500ms
+    Delay_Ms(200);
+    Buzzer_Tone(PC4, 2000, 300);   // 2kHz, 300ms
+    Delay_Ms(200);
+
+    // หยุดเสียง
+    Buzzer_Stop(PC4);</code></pre>
+    <p class="explain">🔍 <code>Buzzer_Beep(pin, ms)</code> ใช้กับ Active — ดังตามเวลาที่กำหนดแล้วเงียบเอง, <code>Buzzer_Tone(pin, freq, ms)</code> ใช้กับ Passive — เลือกความถี่ได้ (Hz), <code>Buzzer_Stop(pin)</code> หยุดเสียงทันที</p></div>
+
+    <div class="step"><h3>ขั้นที่ 3: Melody + Non-Blocking Loop</h3>
+    <pre><code class="language-c">    // Melody — เล่น C Major Scale (C4-C5)
+    uint16_t notes[] = {262,294,330,349,392,440,494,523};
+    uint16_t durations[] = {200,200,200,200,300,300,300,400};
+    Buzzer_Melody(PC4, notes, durations, 8);
+
+    Timer_t tmr;
+    Start_Timer(&tmr, 3000, 1);
+
+    while(1) {
+        if(Is_Timer_Expired(&tmr)) {
+            // เล่น melody ซ้ำทุก 3 วิ
+            Buzzer_Melody(PC4, notes, durations, 8);
+        }
+        IWDG_Feed();
+    }
+}</code></pre>
+    <p class="explain">🔍 <code>Buzzer_Melody(pin, notes, dur, len)</code> เล่นอาเรย์ของโน้ต — แต่ละโน้ตใช้ความถี่ Hz, durations ใช้ ms, <code>len</code> คือจำนวนโน้ต — melody เล่นแบบ blocking</p></div>
+</section>
+
+<section>
+    <h2>📋 API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+        <tr><td><code>Buzzer_Init(pin, type)</code></td><td>Init buzzer — type: ACTIVE/PASSIVE</td><td><code>Buzzer_Init(PC0, BUZZER_ACTIVE)</code></td></tr>
+        <tr><td><code>Buzzer_Beep(pin, ms)</code></td><td>Active: ดังตามเวลา (ms) แล้วเงียบ</td><td><code>Buzzer_Beep(PC0, 200)</code></td></tr>
+        <tr><td><code>Buzzer_Tone(pin, freq, ms)</code></td><td>Passive: เล่นความถี่ (Hz) ตามเวลา</td><td><code>Buzzer_Tone(PC4, 1000, 500)</code></td></tr>
+        <tr><td><code>Buzzer_Stop(pin)</code></td><td>หยุดเสียงทันที</td><td><code>Buzzer_Stop(PC4)</code></td></tr>
+        <tr><td><code>Buzzer_Melody(pin, notes, dur, len)</code></td><td>เล่นทำนองจากอาเรย์โน้ต</td><td><code>Buzzer_Melody(PC4, n, d, 8)</code></td></tr>
+        <tr><td><code>Buzzer_SetVolume(level)</code></td><td>ปรับ volume (PWM duty 0-255)</td><td><code>Buzzer_SetVolume(128)</code></td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>Active buzzer เสียงเบาหรือไม่ดังเลย</td><td>GPIO จ่ายกระแสไม่พอ — CH32V003 max 8mA แต่ buzzer กิน ~30mA</td><td>ใช้ NPN transistor (BC547/2N2222) — GPIO → base (ผ่าน R 1kΩ), collector → buzzer, emitter → GND</td></tr>
+        <tr><td>Passive buzzer ไม่ดัง — ได้ยินแต่ click</td><td>ต่อผิดขา — Passive ต้องต่อกับ PWM pin (PC4/PC3)</td><td>ต่อ PC4 (TIM1_CH4) หรือ PC3 (TIM1_CH3) — ถ้าต่อขาอื่น PWM ไม่ทำงาน</td></tr>
+        <tr><td>ใช้ BUZZER_ACTIVE กับ Passive buzzer → ดังเสียงเดียว</td><td>สลับ type ตอน Init — Passive ไม่มี oscillator ในตัว</td><td>เปลี่ยน <code>Buzzer_Init(pin, BUZZER_PASSIVE)</code> — แล้วใช้ <code>Buzzer_Tone()</code> แทน <code>Buzzer_Beep()</code></td></tr>
+        <tr><td>Melody เล่นแล้ว loop ค้าง</td><td><code>Buzzer_Melody()</code> เป็น blocking — ใช้ <code>Delay_Ms()</code> ระหว่างโน้ต</td><td>ใช้ Task scheduler หรือ state machine ถ้าต้องการ non-blocking melody — แยกโน้ตทีละตัวด้วย Timer_t</td></tr>
+        <tr><td>Volume ไม่เปลี่ยนเมื่อเรียก SetVolume</td><td><code>SetVolume()</code> เปลี่ยนแค่ PWM duty — ไม่มีผลกับ Active buzzer</td><td>Active buzzer ไม่สามารถปรับ volume ได้ด้วย PWM — ต้องใช้ digital pot หรือ voltage divider</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>🛠️ สร้าง Product: กริ่งประตู + เล่นทำนอง</h2>
+    <p>Passive buzzer + ปุ่มกด — กดปุ่มแล้วเล่นทำนอง Happy Birthday</p>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "Buzzer.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    Buzzer_Init(PC4, BUZZER_PASSIVE);
+    pinMode(PC0, PIN_MODE_INPUT_PULLUP);  // ปุ่มกด
+
+    uint16_t melody[] = {
+        262,262,294,262,349,330,
+        262,262,294,262,392,349,
+        262,262,523,440,349,330,294,
+        466,466,440,349,392,349
+    };
+    uint16_t dur[] = {
+        300,150,400,400,400,800,
+        300,150,400,400,400,800,
+        300,150,400,400,400,400,400,
+        300,150,400,400,400,800
+    };
+
+    while(1) {
+        if(digitalRead(PC0) == LOW) {      // กดปุ่ม (Active Low)
+            Buzzer_Melody(PC4, melody, dur, 25);
+            Delay_Ms(500);                  // debounce
+        }
+        IWDG_Feed();
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>✏️ ลองทำดู</h2>
+    <ol>
+        <li>ทำไฟเลี้ยวรถ — LED กระพริบ + Buzzer ดังพร้อมกัน (Non-Blocking ทั้งคู่ — LED toggle ทุก 500ms, Buzzer beep ทุก 1s)</li>
+        <li>สร้าง Piano 4 ปุ่ม — 4 ปุ่ม → 4 โน้ต (C D E F) — กดปุ่ มแล้ว Passive buzzer เล่นโน้ตนั้นด้วย <code>Buzzer_Tone()</code></li>
+        <li>ทำ Alarm 3 ระดับ — เขียว: active beep สั้น 100ms, เหลือง: active beep ยาว 500ms, แดง: passive tone 2kHz ต่อเนื่อง</li>
+        <li>เปรียบเทียบ Active vs Passive — ต่อทั้ง 2 ตัว (PC0=Active, PC4=Passive) แล้วทดสอบ API ต่างกัน</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_max31855.html">บทก่อน</a>
+    <a href="chapx_lib_bh1750.html">บทถัดไป →</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

@@ -1,0 +1,136 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย MAX31855 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_max31855.html">กลับบท</a><a href="chapx_lib_buzzer_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — MAX31855/MAX6675</h1>
+<div class="answer"><h2>ข้อ 1: วัดอุณหภูมิทุก 500ms สำหรับ Serial Plotter</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "MAX31855.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_Init(115200);
+    MAX31855_Init(PC4);
+
+    USART_Println("T_TC(C),T_CJ(C)");  // header for Serial Plotter
+
+    Timer_t tmr;
+    Start_Timer(&tmr, 500, 1);
+
+    while(1) {
+        if(Is_Timer_Expired(&tmr)) {
+            float tc = MAX31855_ReadCelsius();
+            float cj = MAX31855_ReadInternal();
+
+            USART_Print("T:");
+            USART_PrintFloat(tc, 1);
+            USART_Print(",");              // CSV format
+            USART_PrintFloat(cj, 1);
+            USART_Println("");
+
+            // เปิด Arduino IDE → Tools → Serial Plotter
+            // จะเห็นกราฟ TC temp (แดง) และ CJ temp (น้ำเงิน) แบบ real-time
+        }
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>MAX31855_ReadCelsius()</code> อ่านอุณหภูมิ thermocouple (14-bit) — <code>MAX31855_ReadInternal()</code> อ่านอุณหภูมิ cold-junction ภายในชิป (12-bit) — ส่ง CSV 2 ค่า — Timer 500ms ให้ sampling rate 2Hz — ใช้ Arduino Serial Plotter ดูกราฟ real-time — หัวแร้งบัดกรีจะเห็น response เร็วมากในไม่กี่วิ</div></div>
+<div class="answer"><h2>ข้อ 2: Fault Detection — ตรวจจับ thermocouple หลุด/ขาด/ลัดวงจร</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "MAX31855.h"
+
+#define LED_RED  PC0
+
+void print_fault(uint8_t fault) {
+    if(fault == 0) {
+        USART_Println("FAULT: NONE (OK)");
+        return;
+    }
+    USART_Print("FAULT: ");
+    if(fault & MAX31855_FAULT_OC)  USART_Print("OpenCircuit ");
+    if(fault & MAX31855_FAULT_SCG) USART_Print("ShortToGND ");
+    if(fault & MAX31855_FAULT_SCV) USART_Print("ShortToVCC ");
+    USART_Println("");
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_Init(115200);
+
+    pinMode(LED_RED, PIN_MODE_OUTPUT);
+    MAX31855_Init(PC4);
+
+    Timer_t tmr;
+    Start_Timer(&tmr, 1000, 1);
+
+    while(1) {
+        if(Is_Timer_Expired(&tmr)) {
+            uint8_t fault = MAX31855_ReadFault();
+            float tc = MAX31855_ReadCelsius();  // อ่านก่อนเช็ค fault
+            float cj = MAX31855_ReadInternal();
+
+            if(fault != 0) {
+                digitalWrite(LED_RED, HIGH);
+                USART_Print("!!! ");
+                print_fault(fault);
+                USART_Print("   TC="); USART_PrintFloat(tc, 1);
+                USART_Print(" CJ="); USART_PrintFloat(cj, 1);
+                USART_Println("");
+            } else {
+                digitalWrite(LED_RED, LOW);
+                USART_Print("OK  TC="); USART_PrintFloat(tc, 1);
+                USART_Print("C CJ="); USART_PrintFloat(cj, 1);
+                USART_Println("C");
+            }
+        }
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>MAX31855_ReadFault()</code> อ่าน 3 fault bits — <strong>OC</strong> = Open Circuit (สายขาด/หลุด) — <strong>SCG</strong> = Short to GND — <strong>SCV</strong> = Short to VCC — เช็ค fault ทุกรอบ — LED แดงติดเมื่อมี fault — กรณี OC (สาย thermocouple หลุด) พบบ่อยที่สุด — fault detection นี้ MAX6675 ไม่มี (เป็นข้อได้เปรียบของ MAX31855)</div></div>
+<div class="answer"><h2>ข้อ 3: เทียบ MAX31855 vs MAX6675 บน SPI บัสเดียวกัน</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "MAX31855.h"
+#include "MAX6675.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_Init(115200);
+
+    MAX31855_Init(PC4);   // CS1 = PC4
+    MAX6675_Init(PC3);    // CS2 = PC3 (คนละ CS, SPI bus เดียวกัน: SCK=PC5, MISO=PC7)
+
+    USART_Println("31855_TC,31855_CJ,31855_F,6675_TC,dT");
+
+    Timer_t tmr;
+    Start_Timer(&tmr, 500, 1);
+
+    while(1) {
+        if(Is_Timer_Expired(&tmr)) {
+            float tc31855 = MAX31855_ReadCelsius();
+            float cj31855 = MAX31855_ReadInternal();
+            uint8_t f31855 = MAX31855_ReadFault();
+
+            float tc6675 = MAX6675_ReadCelsius();
+
+            USART_PrintFloat(tc31855, 1); USART_Print(",");
+            USART_PrintFloat(cj31855, 1); USART_Print(",");
+            USART_PrintNum(f31855);       USART_Print(",");
+            USART_PrintFloat(tc6675, 1);  USART_Print(",");
+            USART_PrintFloat(tc31855 - tc6675, 2);
+            USART_Println("");
+
+            if(f31855 != 0) {
+                USART_Print("MAX31855 FAULT: ");
+                if(f31855 & MAX31855_FAULT_OC)  USART_Print("OC ");
+                if(f31855 & MAX31855_FAULT_SCG) USART_Print("SCG ");
+                if(f31855 & MAX31855_FAULT_SCV) USART_Print("SCV ");
+                USART_Println("");
+            }
+        }
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ใช้ SPI บัสเดียวกัน (SCK=PC5, MISO=PC7) — CS แยกขากัน (PC4=MAX31855, PC3=MAX6675) — MAX31855: 32-bit, มี cold-junction + fault detection, range -270~1372°C — MAX6675: 16-bit, ไม่มี fault, range 0~1024°C — พิมพ์ CSV เปรียบเทียบค่า TC + Δ — MAX31855 แม่นยำกว่าและมี fault detection ที่สำคัญมากในการใช้งานอุตสาหกรรม</div></div>
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_max31855.html">กลับบท</a><a href="chapx_lib_buzzer_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

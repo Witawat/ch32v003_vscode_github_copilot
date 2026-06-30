@@ -1,0 +1,139 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย AHT10 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_aht10.html">กลับบท</a><a href="chapx_lib_sht3x_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — AHT10/AHT20</h1>
+<div class="answer"><h2>ข้อ 1: เทียบ AHT10(I2C) vs DHT22(GPIO) วัดพร้อมกัน</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "AHT10.h"
+#include "DHT.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_Init(115200);
+
+    AHT10_Init(0x38);
+    DHT_Init(PC0, DHT22);
+
+    USART_Println("AHT_T,AHT_H,DHT_T,DHT_H,dT,dH");
+
+    Timer_t tmr;
+    Start_Timer(&tmr, 3000, 1);  // DHT22 ต้องการ >= 2000ms
+
+    while(1) {
+        if(Is_Timer_Expired(&tmr)) {
+            AHT10_TriggerMeasurement();
+            Delay_Ms(80);
+
+            float at = AHT10_ReadTemperature();
+            float ah = AHT10_ReadHumidity();
+
+            float dt, dh;
+            uint8_t ok = DHT_Read(&dt, &dh);
+
+            USART_PrintFloat(at, 1); USART_Print(",");
+            USART_PrintFloat(ah, 1); USART_Print(",");
+
+            if(ok == DHT_OK) {
+                USART_PrintFloat(dt, 1); USART_Print(",");
+                USART_PrintFloat(dh, 1); USART_Print(",");
+                USART_PrintFloat(at - dt, 2); USART_Print(",");
+                USART_PrintFloat(ah - dh, 2);
+            } else {
+                USART_Print("ERR,ERR,ERR,ERR");
+            }
+            USART_Println("");
+        }
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> AHT10 ใช้ I2C (PC1=SDA, PC2=SCL, addr 0x38) — DHT22 ใช้ GPIO (PC0) — <code>AHT10_TriggerMeasurement()</code> + <code>Delay_Ms(80)</code> ก่อนอ่าน — AHT10 แม่นยำกว่า DHT22 แต่ต่อได้ตัวเดียวต่อบัส (addr fix 0x38) — พิมพ์ CSV เปรียบเทียบค่า + Δ — Timer 3000ms เพราะ DHT22 ต้องเว้น ≥ 2 วิ</div></div>
+<div class="answer"><h2>ข้อ 2: Humidity Alarm — เมื่อความชื้น > 80% → Buzzer + LED</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "AHT10.h"
+#include "Buzzer.h"
+
+#define LED_RED    PC3
+#define BUZZER_PIN PC4
+#define HUM_THRESHOLD 80.0f
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    pinMode(LED_RED, PIN_MODE_OUTPUT);
+    AHT10_Init(0x38);
+    Buzzer_Init(BUZZER_PIN, BUZZER_ACTIVE);
+
+    Timer_t tmr;
+    Start_Timer(&tmr, 1500, 1);
+
+    while(1) {
+        if(Is_Timer_Expired(&tmr)) {
+            AHT10_TriggerMeasurement();
+            Delay_Ms(80);
+
+            float t = AHT10_ReadTemperature();
+            float h = AHT10_ReadHumidity();
+
+            USART_Print("T:"); USART_PrintFloat(t, 1);
+            USART_Print("C H:"); USART_PrintFloat(h, 1);
+            USART_Println("%");
+
+            if(h > HUM_THRESHOLD) {
+                digitalWrite(LED_RED, HIGH);
+                Buzzer_Beep(BUZZER_PIN, 300);
+                Delay_Ms(200);
+                digitalWrite(LED_RED, LOW);
+            } else {
+                digitalWrite(LED_RED, LOW);
+            }
+        }
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>if(h > 80.0f)</code> ตรวจสอบความชื้นเกิน threshold — Active Buzzer ใช้ <code>Buzzer_Beep(pin, ms)</code> ดัง 300ms — LED กระพริบคู่กับเสียง — ใช้ Active Buzzer เพราะไม่ต้องสร้างความถี่ แค่จ่ายไฟก็ดัง — ถ้าต้องการปิด alarm ชั่วคราว ให้เพิ่มปุ่มกดเพื่อ mute 5 นาที</div></div>
+<div class="answer"><h2>ข้อ 3: ทดลอง AHT10_SoftReset — รีเซ็ตเซนเซอร์โดยไม่ตัดไฟ</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "AHT10.h"
+
+#define BTN_RESET PC3
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_Init(115200);
+
+    pinMode(BTN_RESET, PIN_MODE_INPUT_PULLUP);
+    AHT10_Init(0x38);
+
+    USART_Println("Press button to SoftReset AHT10");
+
+    while(1) {
+        AHT10_TriggerMeasurement();
+        Delay_Ms(80);
+
+        float t = AHT10_ReadTemperature();
+        float h = AHT10_ReadHumidity();
+        uint8_t stat = AHT10_ReadStatus();
+
+        USART_Print("T:"); USART_PrintFloat(t, 1);
+        USART_Print(" H:"); USART_PrintFloat(h, 1);
+        USART_Print(" Status:0x"); USART_PrintHex(stat);
+        USART_Println("");
+
+        if(digitalRead(BTN_RESET) == LOW) {
+            USART_Println("→ SoftReset...");
+            AHT10_SoftReset();
+            Delay_Ms(20);
+            AHT10_Init(0x38);     // re-init หลัง reset
+            USART_Println("→ Re-initialized!");
+
+            Delay_Ms(300);  // debounce
+        }
+        Delay_Ms(1000);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>AHT10_SoftReset()</code> ส่งคำสั่ง reset ผ่าน I2C โดยไม่ต้องตัดไฟ — หลัง reset ต้องเรียก <code>AHT10_Init()</code> ใหม่เพื่อ calibrate — เช็ค status register ดูว่า calibration bit หายไปหลัง reset (bit 3 = 0) แล้วกลับมาใหม่หลัง init — มีประโยชน์เมื่อ sensor ค้าง หรือค่าผิดปกติ โดยไม่ต้อง power-cycle ทั้งบอร์ด</div></div>
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_aht10.html">กลับบท</a><a href="chapx_lib_sht3x_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TCS34725 — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_bh1750.html">บทก่อน</a>
+    <a href="chapx_lib_mqgas.html">บทถัดไป →</a>
+</nav>
+<h1>TCS34725 — เซนเซอร์วัดสี RGB I2C</h1>
+<span class="level advanced">ระดับสูง</span>
+
+<section class="flowchart">
+    <h2>🧭 แผนภาพการทำงาน</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["TCS34725_Init(gain, intTime)"] --> B["TCS34725_ReadRGB(r,g,b,c)"]
+    B --> C["คำนวณ ColorTemp, Lux"]
+    C --> D["แสดงผล / ใช้ตัดสินใจ"]
+    D --> B
+    </pre>
+</section>
+
+<section>
+    <h2>🔌 การต่อวงจร</h2>
+    <pre class="ascii-circuit">
+           TCS34725 — RGB Color Sensor I2C
+    ┌────────────────────────────────────┐
+    │ MCU                        TCS34725 │
+    │ PC1─────────SDA          ┌─────────┤
+    │ PC2─────────SCL          │ LED=IR   │
+    │ 3.3V────────VCC          │ filter   │
+    │ GND─────────GND          │ on-chip  │
+    │ INT(optional)────────────┘ 0x29    │
+    │                                    │
+    │ addr=0x29 (fixed)                  │
+    └────────────────────────────────────┘
+    </pre>
+    <p>PC1─SDA, PC2─SCL — I2C address 0x29 (fix), มี white LED ในตัวช่วยส่องวัตถุ, มี IR filter บนชิป</p>
+</section>
+
+<section>
+    <h2>📚 หลักการทำงาน</h2>
+    <p><strong>TCS34725</strong> เป็น RGB color light-to-digital converter — ภายในมี photodiode 4 ช่อง: Red, Green, Blue, Clear — กรองแสงผ่าน IR filter ทำให้อ่านสีได้แม่นยำ ไม่ถูกรบกวนด้วย IR</p>
+    <p><strong>Gain และ Integration Time:</strong></p>
+    <ul>
+        <li><strong>Gain:</strong> 1x, 4x, 16x, 60x — ใช้ gain สูงในที่มืด, gain ต่ำในที่สว่าง</li>
+        <li><strong>Integration Time:</strong> 2.4ms – 700ms — ตั้งเวลาสะสมแสง ยิ่งนานยิ่งไวแสง แต่ช้าลง</li>
+    </ul>
+    <p><strong>คำนวณอุณหภูมิสี (Color Temperature):</strong> ใช้สูตรจาก RGB → CIE XYZ → chromaticity → color temp ในหน่วย Kelvin (1000K–20000K)</p>
+    <p><strong>Lux:</strong> คำนวณจากช่อง Clear + ค่าสัมประสิทธิ์ R/G/B — ได้ค่าความสว่างเช่นเดียวกับ BH1750</p>
+</section>
+
+<section>
+    <h2>💻 เขียน Code ทีละขั้น</h2>
+
+    <div class="step"><h3>ขั้นที่ 1: Init + Setup</h3>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "TCS34725.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    USART_Init(USART1, BAUD_115200);
+    I2C_Init(I2C1, I2C_SPEED_STANDARD);
+
+    // gain=16x, integration=100ms (เหมาะแสงในห้อง)
+    TCS34725_Init(TCS34725_GAIN_16X, TCS34725_INT_100MS);
+
+    // เปิด LED ในตัวเพื่อส่องวัตถุ
+    TCS34725_SetLED(1);</code></pre>
+    <p class="explain">🔍 <code>TCS34725_Init(gain, integrationTime)</code> — เลือก gain ตามสภาพแสง: 1x กลางแจ้ง, 16x ในห้อง, 60x มืด — integration time ยาว = แม่นยำกว่าแต่ช้า</p></div>
+
+    <div class="step"><h3>ขั้นที่ 2: อ่าน/เขียนค่า</h3>
+    <pre><code class="language-c">    uint16_t r, g, b, c;
+    if(TCS34725_ReadRGB(&r, &g, &b, &c)) {
+        USART_Print("R:"); USART_PrintInt(r);
+        USART_Print(" G:"); USART_PrintInt(g);
+        USART_Print(" B:"); USART_PrintInt(b);
+        USART_Print(" C:"); USART_PrintInt(c);
+
+        // คำนวณอัตราส่วนสี
+        float ratio[3];
+        TCS34725_GetColorRatio(r, g, b, ratio);
+
+        // คำนวณอุณหภูมิสี (Kelvin)
+        uint16_t colorTemp = TCS34725_CalcColorTemp(r, g, b);
+        USART_Print(" CT:"); USART_PrintInt(colorTemp); USART_Println("K");
+    }</code></pre>
+    <p class="explain">🔍 <code>TCS34725_ReadRGB()</code> อ่านทั้ง 4 ช่องพร้อมกัน — <code>c</code> (Clear) ใช้คำนวณ lux และเช็คความอิ่มตัวของเซนเซอร์</p></div>
+
+    <div class="step"><h3>ขั้นที่ 3: Loop + แสดงผล</h3>
+    <pre><code class="language-c">    while(1) {
+        uint16_t r, g, b, c;
+        if(!TCS34725_ReadRGB(&r, &g, &b, &c)) {
+            USART_Println("Read error");
+            Delay_Ms(100);
+            continue;
+        }
+
+        // ตรวจจับสีเด่น
+        if(r > g && r > b && r > c/3)      USART_Println(">>> RED");
+        else if(g > r && g > b)            USART_Println(">>> GREEN");
+        else if(b > r && b > g)            USART_Println(">>> BLUE");
+        else if(c < 100)                   USART_Println(">>> DARK");
+
+        Delay_Ms(500);
+    }
+}</code></pre>
+    <p class="explain">🔍 ตรวจจับสีเด่นจากการเปรียบเทียบค่า RGB — <code>r > c/3</code> ป้องกัน false positive ตอนมืด — ใช้ค่านี้คัดแยกวัตถุตามสีได้</p></div>
+</section>
+
+<section>
+    <h2>📋 API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+        <tr><td><code>TCS34725_Init(gain, intTime)</code></td><td>เริ่มต้น, ตั้ง gain+integration</td><td><code>TCS34725_Init(TCS34725_GAIN_4X, TCS34725_INT_50MS)</code></td></tr>
+        <tr><td><code>TCS34725_ReadRGB(&r,&g,&b,&c)</code></td><td>อ่าน 4 channels</td><td><code>TCS34725_ReadRGB(&r, &g, &b, &c)</code></td></tr>
+        <tr><td><code>TCS34725_GetColorRatio(r,g,b, ratio[])</code></td><td>อัตราส่วน RGB (0.0–1.0)</td><td><code>TCS34725_GetColorRatio(r,g,b,ratio)</code></td></tr>
+        <tr><td><code>TCS34725_CalcColorTemp(r,g,b)</code></td><td>อุณหภูมิสี (K)</td><td><code>uint16_t ct = TCS34725_CalcColorTemp(r,g,b)</code></td></tr>
+        <tr><td><code>TCS34725_CalcLux(c,r,g,b)</code></td><td>คำนวณ lux จาก RGB</td><td><code>uint16_t lux = TCS34725_CalcLux(c,r,g,b)</code></td></tr>
+        <tr><td><code>TCS34725_SetLED(on)</code></td><td>เปิด/ปิด LED ในตัว</td><td><code>TCS34725_SetLED(1)</code></td></tr>
+        <tr><td><code>TCS34725_SetGain(gain)</code></td><td>เปลี่ยน gain ระหว่างรัน</td><td><code>TCS34725_SetGain(TCS34725_GAIN_16X)</code></td></tr>
+        <tr><td><code>TCS34725_Enable()</code></td><td>เปิดเซนเซอร์ (PON+AEN)</td><td><code>TCS34725_Enable()</code></td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>อ่านค่าได้ 0 ทุกช่อง</td><td>Gain ต่ำเกินไป / LED ปิด</td><td>เพิ่ม gain เป็น 16x หรือ 60x, เปิด LED ในตัว</td></tr>
+        <tr><td>ค่าสีเพี้ยน (ขาวทั้งที่ควรเป็นแดง)</td><td>Integration time น้อยไป + gain สูง</td><td>เพิ่ม integration time ลด noise, ลด gain</td></tr>
+        <tr><td>ค่า Clear channel ถึง 65535 (saturated)</td><td>แสงมากเกินไปสำหรับ gain ปัจจุบัน</td><td>ลด gain เป็น 1x หรือลด integration time</td></tr>
+        <tr><td>Color Temp เพี้ยนตอนมืด</td><td>S/N ratio ต่ำ → IR noise ครอบงำ</td><td>เปิด LED, เพิ่ม integration time, หลีกเลี่ยงวัดสีตอน c < 200</td></tr>
+        <tr><td>อ่านค่าได้แต่ไม่ตรงกับสีจริง</td><td>ยังไม่ calibrate white balance</td><td>วัดค่าจากวัตถุขาว ใช้เป็น reference สำหรับปรับอัตราส่วน</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>🛠️ สร้าง Product: เครื่องคัดแยกสีวัตถุ</h2>
+    <p>TCS34725 อ่านสี → แยกวัตถุแดง/เขียว/น้ำเงิน พร้อมแสดงบน OLED</p>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "TCS34725.h"
+#include "OLED.h"
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    USART_Init(USART1, BAUD_115200);
+    I2C_Init(I2C1, I2C_SPEED_STANDARD);
+
+    OLED_t oled;
+    OLED_Init(&oled, 0x3C, OLED_128x64);
+
+    TCS34725_Init(TCS34725_GAIN_16X, TCS34725_INT_100MS);
+    TCS34725_SetLED(1);
+
+    while(1)
+    {
+        uint16_t r, g, b, c;
+        if(!TCS34725_ReadRGB(&r, &g, &b, &c)) { Delay_Ms(50); continue; }
+
+        OLED_Clear(&oled);
+        OLED_SetCursor(&oled, 0, 0);
+
+        const char *color;
+        if(c < 150) color = "DARK";
+        else if(r > g*1.2 && r > b*1.2) color = "RED";
+        else if(g > r*1.2 && g > b*1.2) color = "GREEN";
+        else if(b > r*1.2 && b > g*1.2) color = "BLUE";
+        else color = "OTHER";
+
+        OLED_Print(&oled, color);
+        OLED_SetCursor(&oled, 0, 2);
+        OLED_PrintFloat(&oled, "R:", (float)r, 0);
+        OLED_PrintFloat(&oled, " G:", (float)g, 0);
+        OLED_PrintFloat(&oled, " B:", (float)b, 0);
+        OLED_Display(&oled);
+
+        Delay_Ms(300);
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>✏️ ลองทำดู</h2>
+    <ol>
+        <li>ทำ color identifier — แสดงชื่อสี 12 สี (แดง, เขียว, น้ำเงิน, เหลือง, ม่วง, ฟ้า, ส้ม, ชมพู, ฯลฯ) จากอัตราส่วน RGB</li>
+        <li>ต่อ NeoPixel — ให้ LED strip เปลี่ยนสีตามวัตถุที่วางบนเซนเซอร์ (copy สีวัตถุ)</li>
+        <li>ทำ color sorter — ใช้ servo แยกวัตถุตามสีลงกล่อง 3 ช่อง</li>
+        <li>วัด Color Temperature ของหลอดไฟ — เทียบ warm white vs cool white vs daylight</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_bh1750.html">บทก่อน</a>
+    <a href="chapx_lib_mqgas.html">บทถัดไป →</a>
+</nav>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

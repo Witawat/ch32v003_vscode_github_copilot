@@ -1,0 +1,169 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>CircularBuffer — บัฟเฟอร์วงกลม FIFO — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head><body>
+
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_lcdmenu.html">บทก่อน</a><a href="chapx_lib_simplescheduler.html">บทถัดไป →</a></nav>
+
+<h1>CircularBuffer — บัฟเฟอร์วงกลม FIFO</h1><span class="level-advanced">ระดับสูง</span>
+
+<section class="flowchart"><h2>🧭 แผนภาพการทำงาน</h2><pre class="mermaid">
+flowchart TD
+    A["CircularBuffer_Init(&amp;cb, buf, size)"] --> B["ISR: CircularBuffer_Write(&amp;cb, data)"]
+    B --> C{"Full?"}
+    C -->|"No"| D["Store at head, head++"]
+    C -->|"Yes"| E["Overwrite or Drop"]
+    D --> F["Main Loop: CircularBuffer_Available(&amp;cb)"]
+    F --> G{"Available > 0?"}
+    G -->|"Yes"| H["CircularBuffer_Read(&amp;cb) → tail++"]
+    H --> G
+    G -->|"No"| I["Wait / IWDG_Feed()"]
+    I --> F
+</pre></section>
+
+<section><h2>🔌 การต่อวงจร</h2><pre class="ascii-circuit">
+     USART RX Circular Buffer
+┌────────────────────────────────────┐
+│ MCU                         CH32V003│
+│                                    │
+│ TX (PD5) ─── RX ของ USB-UART       │
+│ RX (PD6) ─── TX ของ USB-UART       │
+│ GND  ─── GND ของ USB-UART          │
+│                                    │
+│ ข้อมูลจาก Serial → ISR → Buffer    │
+│ Main loop อ่านจาก Buffer → Process │
+│ Buffer size: 64-256 bytes          │
+└────────────────────────────────────┘
+</pre><p>ไม่ต้องต่อวงจรเพิ่ม — ใช้ USART ที่มีอยู่แล้ว — จุดสำคัญคือ pattern ISR-write + main-read ที่ต้องแยกกันด้วย buffer</p></section>
+
+<section><h2>📚 หลักการทำงาน</h2>
+<p><strong>FIFO (First-In First-Out)</strong>: ข้อมูลที่เขียนก่อนจะถูกอ่านก่อน — เหมือนคิว — เหมาะสำหรับ buffer ข้อมูลที่ผลิตไม่สม่ำเสมอ (เช่น USART, SPI, ADC DMA)</p>
+<p><strong>Head/Tail Mechanism</strong>: <strong>Head</strong> = ตำแหน่งเขียนถัดไป — <strong>Tail</strong> = ตำแหน่งอ่านถัดไป — เมื่อ head == tail: buffer ว่าง — เมื่อ head+1 == tail: buffer เต็ม — wrap-around อัตโนมัติ</p>
+<p><strong>ISR-Write + Main-Read Thread-Safe</strong>: ISR เขียน (interrupt context) — main loop อ่าน (foreground) — คนละ context แต่ไม่ชนกันเพราะคนละ pointer — ไม่ต้องใช้ mutex หรือ critical section</p>
+<p><strong>Overflow Detection</strong>: ถ้า buffer เต็ม มี 2 กลยุทธ์: (1) <strong>Drop</strong> — ไม่เขียนข้อมูลใหม่ คืน 0 (safe, data loss) — (2) <strong>Overwrite</strong> — เขียนทับข้อมูลเก่าสุด (tail++) — เหมาะกับ real-time stream</p>
+<p><strong>0 RAM Overhead</strong>: ตัว buffer struct ใช้แค่ head, tail, size, buffer pointer (~12 bytes) — หน่วยความจำทั้งหมดมาจาก array ที่ผู้ใช้ประกาศ — ไม่มี dynamic allocation</p>
+</section>
+
+<section><h2>💻 เขียน Code ทีละขั้น</h2>
+
+<div class="step"><h3>ขั้นที่ 1: Init + ประกาศ Buffer</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "CircularBuffer.h"
+#include "USART.h"
+
+#define BUF_SIZE 128
+CircularBuffer_Handle cb;
+uint8_t rx_buf[BUF_SIZE];
+char line[64];
+uint8_t line_idx = 0;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_Init(115200);
+    USART_EnableInterrupt(USART1, USART_IT_RXNE);
+
+    CircularBuffer_Init(&cb, rx_buf, BUF_SIZE);
+    USART_Println("=== Circular Buffer RX Demo ===");</code></pre>
+<p class="explain">🔍 <code>CircularBuffer_Init(&cb, buffer_array, size)</code> — buffer_array ต้องเป็น static/global — ห้ามใช้ stack variable — size ควรเป็น power of 2 เพื่อให้ wrap เร็วขึ้น — เปิด RX interrupt เพื่อให้ ISR เขียนเข้า buffer ได้</p></div>
+
+<div class="step"><h3>ขั้นที่ 2: ISR Handler — เขียนเข้า Buffer</h3>
+<pre><code class="language-c">void USART1_IRQHandler(void) __attribute__((interrupt)) {
+    if(USART_GetFlagStatus(USART1, USART_FLAG_RXNE)) {
+        char c = USART_ReceiveData(USART1);
+        CircularBuffer_Write(&cb, c);  // Thread-safe!
+    }
+}</code></pre>
+<p class="explain">🔍 ISR ต้องสั้นที่สุด — แค่อ่าน RXNE และเขียนเข้า buffer — <code>CircularBuffer_Write()</code> ออกแบบให้ปลอดภัยใน ISR เพราะเขียนเฉพาะ head (main loop ไม่แตะ head) — ถ้า buffer เต็ม ข้อมูลจะถูก drop (return 0) — ไม่บล็อก ISR</p></div>
+
+<div class="step"><h3>ขั้นที่ 3: Main Loop — อ่านจาก Buffer + Process</h3>
+<pre><code class="language-c">    while(1) {
+        while(CircularBuffer_Available(&cb)) {
+            char c = CircularBuffer_Read(&cb);
+
+            if(c == '\n' || c == '\r') {
+                if(line_idx > 0) {
+                    line[line_idx] = '\0';
+                    USART_Print("ECHO: "); USART_Println(line);
+                    process_command(line);  // parse & execute
+                    line_idx = 0;
+                }
+            } else if(line_idx < sizeof(line)-1) {
+                line[line_idx++] = c;
+            }
+        }
+        IWDG_Feed();
+    }
+}</code></pre>
+<p class="explain">🔍 <code>CircularBuffer_Available()</code> — เช็คว่ามีข้อมูลรออ่านหรือไม่ — <code>CircularBuffer_Read()</code> — อ่าน 1 byte จาก tail — main loop อ่านเฉพาะ tail (ISR ไม่แตะ tail) — สร้าง line buffer แยกเพื่อ parse command แบบ line-by-line</p></div>
+</section>
+
+<section><h2>📋 API Reference</h2><table><tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+<tr><td><code>CircularBuffer_Init(&cb, buf, size)</code></td><td>เริ่มต้น buffer — buf ต้องเป็น array คงที่</td><td><code>CircularBuffer_Init(&cb, rx_buf, 128)</code></td></tr>
+<tr><td><code>CircularBuffer_Write(&cb, data)</code></td><td>เขียน 1 byte — คืน 1=สำเร็จ, 0=buffer เต็ม</td><td><code>if(!CircularBuffer_Write(&cb, c)){/*overflow*/}</code></td></tr>
+<tr><td><code>CircularBuffer_Read(&cb)</code></td><td>อ่าน 1 byte — ต้องเช็ค Available ก่อน</td><td><code>char c = CircularBuffer_Read(&cb)</code></td></tr>
+<tr><td><code>CircularBuffer_Available(&cb)</code></td><td>จำนวน byte ที่รออ่าน</td><td><code>while(CircularBuffer_Available(&cb)){...}</code></td></tr>
+<tr><td><code>CircularBuffer_IsFull(&cb)</code></td><td>เช็คว่า buffer เต็มหรือไม่</td><td><code>if(CircularBuffer_IsFull(&cb)){...}</code></td></tr>
+<tr><td><code>CircularBuffer_IsEmpty(&cb)</code></td><td>เช็คว่า buffer ว่างหรือไม่</td><td><code>if(!CircularBuffer_IsEmpty(&cb)){...}</code></td></tr>
+<tr><td><code>CircularBuffer_Flush(&cb)</code></td><td>ล้าง buffer — รีเซ็ต head=tail=0</td><td><code>CircularBuffer_Flush(&cb)</code></td></tr>
+<tr><td><code>CircularBuffer_GetFree(&cb)</code></td><td>จำนวน byte ที่ยังเขียนได้</td><td><code>uint16_t free = CircularBuffer_GetFree(&cb)</code></td></tr>
+</table></section>
+
+<section><h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2><table><tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+<tr><td>Buffer overflow — ข้อมูลหาย</td><td>Main loop อ่านไม่ทัน — ISR เขียนเร็วกว่า</td><td>เพิ่ม buffer size → 256 — หรือลด baud rate — หรือใช้ DMA + buffer ใหญ่ขึ้น</td></tr>
+<tr><td>ข้อมูลเพี้ยน — อ่านออกมาแปลกๆ</td><td>Buffer ใช้ stack variable — ถูก overwrite</td><td>ประกาศ buffer เป็น global หรือ static — ห้ามใช้ local array</td></tr>
+<tr><td>ISR ค้าง — ไม่ตอบสนอง</td><td>เรียก <code>CircularBuffer_Read()</code> ใน ISR (เขียน+อ่านพร้อมกัน)</td><td>ISR ควร Write เท่านั้น — Main loop Read เท่านั้น — ห้ามสลับหน้าที่</td></tr>
+<tr><td>ข้อมูลเก่าค้างใน buffer</td><td>ไม่ได้ Flush buffer ตอนเปลี่ยนโหมด</td><td>เรียก <code>CircularBuffer_Flush(&cb)</code> ก่อนเริ่มรับข้อมูลชุดใหม่</td></tr>
+<tr><td><code>Available()</code> คืนค่าไม่ถูกต้อง</td><td>Interrupt เกิดขณะกำลัง Read ใน main — race condition</td><td>ใช้ขนาด buffer เป็น power of 2 — หรือใช้ <code>__disable_irq()</code> / <code>__enable_irq()</code> ครอบ critical section</td></tr>
+<tr><td>เขียนสำเร็จแต่ Read ไม่ได้อะไร</td><td>ใช้คนละ handle หรือ buffer array คนละตัว</td><td>เช็คว่า ISR กับ main loop ใช้ <code>&cb</code> ตัวเดียวกัน — และ buf array ตัวเดียวกัน</td></tr>
+</table></section>
+
+<section><h2>🛠️ สร้าง Product: USART RX Buffer + Command Parser</h2><p>รับคำสั่งผ่าน Serial ด้วย CircularBuffer — แยก command แบบ line-by-line — รองรับ LED ON/OFF, STATUS, HELP — ห้ามพลาดทุกตัวอักษร</p>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "CircularBuffer.h"
+
+#define BUF_SIZE 128
+CircularBuffer_Handle cb;
+uint8_t rx_buf[BUF_SIZE];
+char line[64]; uint8_t idx = 0;
+
+void process(char *cmd) {
+    if(!strcmp(cmd, "LED ON"))  { pinMode(PC0,PIN_MODE_OUTPUT); digitalWrite(PC0,HIGH); USART_Println("OK"); }
+    else if(!strcmp(cmd, "LED OFF")) { digitalWrite(PC0,LOW); USART_Println("OK"); }
+    else if(!strcmp(cmd, "STATUS")) { USART_Println("CH32V003 Online"); }
+    else if(!strcmp(cmd, "HELP"))  { USART_Println("LED ON|OFF, STATUS, HELP"); }
+    else { USART_Print("Unknown: "); USART_Println(cmd); }
+}
+
+void USART1_IRQHandler(void) __attribute__((interrupt)) {
+    if(USART_GetFlagStatus(USART1, USART_FLAG_RXNE))
+        CircularBuffer_Write(&cb, USART_ReceiveData(USART1));
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_Init(115200);
+    USART_EnableInterrupt(USART1, USART_IT_RXNE);
+    CircularBuffer_Init(&cb, rx_buf, BUF_SIZE);
+    USART_Println("Shell Ready. Type HELP");
+    while(1) {
+        while(CircularBuffer_Available(&cb)) {
+            char c = CircularBuffer_Read(&cb);
+            if(c == '\n' || c == '\r') {
+                if(idx > 0) { line[idx] = '\0'; process(line); idx = 0; }
+            } else if(idx < sizeof(line)-1) { line[idx++] = c; }
+        }
+        IWDG_Feed();
+    }
+}</code></pre></section>
+
+<section><h2>✏️ ลองทำดู</h2><ol>
+<li>Binary Protocol — แพ็กเกจแบบไบนารี (STX + length + payload + CRC) — ใช้ buffer เก็บแล้ว parse state machine</li>
+<li>Dual Buffer — 2 buffers: 1 สำหรับ RX (ISR→main), 1 สำหรับ TX (main→ISR) — ทำ full-duplex buffered UART</li>
+<li>Overflow LED — ถ้า buffer เต็ม ให้กระพริบ LED เตือน — ใช้ <code>CircularBuffer_IsFull()</code> ใน main loop</li>
+</ol></section>
+
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_lcdmenu.html">บทก่อน</a><a href="chapx_lib_simplescheduler.html">บทถัดไป →</a></nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script><script>mermaid.initialize({startOnLoad:true,theme:'base'});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

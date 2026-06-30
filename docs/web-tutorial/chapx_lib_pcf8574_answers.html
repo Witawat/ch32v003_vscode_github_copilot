@@ -1,0 +1,168 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย PCF8574 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_pcf8574.html">กลับบท</a><a href="chapx_lib_i2cscan_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — PCF8574 IO Expander</h1>
+
+<div class="answer">
+<h2>ข้อ 1: Keypad 4x4 ผ่าน I2C</h2>
+<pre><code class="language-c">#define PCF_ADDR  0x20
+
+const char keymap[4][4] = {
+    {'1','2','3','A'},
+    {'4','5','6','B'},
+    {'7','8','9','C'},
+    {'*','0','#','D'}
+};
+
+char pcf_keypad_read(void) {
+    for(uint8_t row=0; row<4; row++) {
+        uint8_t row_mask = ~(1 << (row + 4)) & 0xF0;
+        I2C_WriteByte(PCF_ADDR, row_mask | 0x0F);
+        Delay_Ms(1);
+
+        uint8_t val = I2C_ReadByte(PCF_ADDR) & 0x0F;
+        if(val != 0x0F) {
+            for(uint8_t col=0; col<4; col++) {
+                if(!(val & (1 << col))) {
+                    Delay_Ms(10);
+                    uint8_t v2 = I2C_ReadByte(PCF_ADDR) & 0x0F;
+                    if(!(v2 & (1 << col)))
+                        return keymap[row][col];
+                }
+            }
+        }
+    }
+    return 0;
+}
+
+void pcf8574_keypad(void) {
+    I2C_SimpleInit(I2C_PINS_DEFAULT);
+    char last = 0;
+
+    while(1) {
+        char k = pcf_keypad_read();
+        if(k != 0 && k != last) {
+            USART_Print("Key: ");
+            USART_Write(k);
+            USART_Println("");
+            last = k;
+        }
+        if(k == 0) last = 0;
+        Delay_Ms(30);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> PCF8574 เพิ่ม GPIO 8 ขาผ่าน I2C — Keypad 4x4 ใช้ 4 rows (P4-P7 output) + 4 cols (P0-P3 input) — ส่ง row mask ดึง 1 row LOW แล้วอ่าน column — ถ้า column ไม่เป็น HIGH แสดงว่ามีกดที่ row x col — debounce 2 ชั้น (delay 1ms + re-read) — ใช้ I2C แค่ 2 ขาแทน 8 ขา GPIO — PCF8574 มีขา INT แจ้งเมื่อ input เปลี่ยน</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: Interrupt-on-Change — ตรวจจับปุ่มกดโดยไม่ต้อง polling</h2>
+<pre><code class="language-c">#define PCF_ADDR    0x20
+#define PCF_INT_PIN PD2
+
+volatile uint8_t pcf_int_flag = 0;
+
+void EXTI2_IRQHandler(void) {
+    if(EXTI_GetITStatus(EXTI_Line2)) {
+        pcf_int_flag = 1;
+        EXTI_ClearITPendingBit(EXTI_Line2);
+    }
+}
+
+void pcf8574_int_setup(void) {
+    I2C_SimpleInit(I2C_PINS_DEFAULT);
+    I2C_WriteByte(PCF_ADDR, 0xFF);
+
+    GPIO_SimpleInit(PCF_INT_PIN, GPIO_IN_PU);
+    AFIO_EXTIConfig(GPIO_PortD, GPIO_PinSource2);
+    EXTI_InitTypeDef ex = {
+        .EXTI_Line = EXTI_Line2,
+        .EXTI_Mode = EXTI_Mode_Interrupt,
+        .EXTI_Trigger = EXTI_Trigger_Falling,
+        .EXTI_LineCmd = ENABLE
+    };
+    EXTI_Init(&ex);
+    NVIC_EnableIRQ(EXTI2_IRQn);
+}
+
+void pcf8574_int_loop(void) {
+    pcf8574_int_setup();
+    uint8_t last_inputs = 0xFF;
+
+    while(1) {
+        if(pcf_int_flag) {
+            pcf_int_flag = 0;
+            uint8_t inputs = I2C_ReadByte(PCF_ADDR);
+
+            uint8_t changed = last_inputs ^ inputs;
+            last_inputs = inputs;
+
+            for(uint8_t i=0; i<8; i++) {
+                if(changed & (1 << i)) {
+                    USART_Print("P");
+                    USART_PrintNum(i);
+                    USART_Print(inputs & (1<<i) ? "↑":"↓");
+                    USART_Println("");
+                }
+            }
+        }
+        __WFI();
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> PCF8574 มีขา INT (active LOW) ดึงลงเมื่อ input state เปลี่ยน — ต่อ INT เข้า EXTI ของ MCU — เมื่อ interrupt เกิด อ่านค่า input ทั้ง 8 bit จาก PCF8574 — XOR หาบิตที่เปลี่ยน — แจ้งว่า pin ไหนเปลี่ยน (↑=HIGH, ↓=LOW) — ข้อดี: ไม่ต้อง polling กินกระแสต่ำเพราะใช้ __WFI() sleep — I2C_ReadByte อ่านแล้ว auto-clear INT</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: Output Expansion — ต่อ LED 8 ดวง + Relay ผ่าน I2C</h2>
+<pre><code class="language-c">#define PCF1_ADDR  0x20
+#define PCF2_ADDR  0x21
+
+typedef struct {
+    uint8_t leds;
+    uint8_t relay;
+} pcf_outputs_t;
+
+pcf_outputs_t pcf_out;
+
+void pcf8574_output_write(void) {
+    I2C_WriteByte(PCF1_ADDR, ~pcf_out.leds);
+    I2C_WriteByte(PCF2_ADDR, ~pcf_out.relay);
+}
+
+void pcf8574_relay_control(uint8_t ch, uint8_t on) {
+    if(ch >= 8) return;
+    if(on) pcf_out.relay |=  (1 << ch);
+    else   pcf_out.relay &= ~(1 << ch);
+    pcf8574_output_write();
+}
+
+void pcf8574_expander_demo(void) {
+    I2C_SimpleInit(I2C_PINS_DEFAULT);
+    pcf_out.leds = 0;
+    pcf_out.relay = 0;
+    pcf8574_output_write();
+
+    uint8_t pattern = 0x01;
+
+    while(1) {
+        // LED chaser 8 ดวง (PCF1)
+        pcf_out.leds = pattern;
+        pcf8574_output_write();
+        pattern = (pattern << 1) | (pattern >> 7);
+        Delay_Ms(100);
+
+        // Relay toggle 1-8 (PCF2)
+        static uint8_t r = 0;
+        pcf8574_relay_control(r, 1);
+        Delay_Ms(500);
+        pcf8574_relay_control(r, 0);
+        r = (r + 1) % 8;
+    }
+}
+
+// หมายเหตุ: PCF8574 sink current ~25mA ต่อขา
+// LED ต้องต่อผ่าน resistor, Relay ต้องใช้ transistor driver
+// PCF8574 output = inverted (เขียน 0 = ON)</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ใช้ PCF8574 2 ตัว (address 0x20, 0x21) ขยาย I/O — ตัวแรก 8 LEDs, ตัวสอง 8 relays — PCF8574 output เป็น open-drain แบบ invert: เขียน 0 = ON, 1 = OFF — struct pcf_out เก็บ state แล้ว write ทั้ง byte — relay_control set/clear เฉพาะบิต — LED chaser 8 ดวงวนขวา — PCF8574 แต่ละขารับกระแส ~25mA, ทั้งชิป ~100mA</div>
+</div>
+
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_pcf8574.html">กลับบท</a><a href="chapx_lib_i2cscan_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

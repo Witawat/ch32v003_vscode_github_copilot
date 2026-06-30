@@ -1,0 +1,162 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย HC05 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_hc05.html">กลับบท</a><a href="chapx_lib_nrf24l01_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — HC05 Bluetooth Module</h1>
+
+<div class="answer">
+<h2>ข้อ 1: เปลี่ยนชื่อ Bluetooth + ตั้ง PIN ใหม่</h2>
+<pre><code class="language-c">#define BT_NEW_NAME  "CH32V003_BT"
+#define BT_NEW_PIN   "2580"
+
+void hc05_configure(void) {
+    // เข้า AT mode: กดปุ่มค้าง/ดึง KEY ขา HIGH ตอนเปิด
+    GPIO_SimpleInit(PC4, GPIO_OUT_PP);  // KEY pin
+    GPIO_WriteBit(PC4, 1);  // ENTER AT MODE
+    Delay_Ms(500);
+
+    USART_SimpleInit(BAUD_38400, USART_PINS_DEFAULT);  // HC05 AT: 38400
+
+    // เปลี่ยนชื่อ
+    USART_Print("AT+NAME=");
+    USART_Println(BT_NEW_NAME);
+    Delay_Ms(200);
+    if(USART_FindStr("OK", 1000) >= 0)
+        USART_Println("[BT] Name changed OK");
+
+    // เปลี่ยน PIN
+    USART_Print("AT+PSWD=");
+    USART_Println(BT_NEW_PIN);
+    Delay_Ms(200);
+    if(USART_FindStr("OK", 1000) >= 0)
+        USART_Println("[BT] PIN changed OK");
+
+    // เช็คการตั้งค่าปัจจุบัน
+    USART_Println("AT+VERSION?");
+    USART_Println("AT+NAME?");
+    USART_Println("AT+PSWD?");
+
+    GPIO_WriteBit(PC4, 0);  // EXIT AT MODE
+    USART_Println("[BT] Configuration done. Restart module.");
+}
+
+// AT command จำเป็นต้องส่ง CR+LF (\r\n)
+void USART_Println(const char *s) {
+    USART_Print(s);
+    USART_Print("\r\n");
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> HC05 เข้า AT mode โดยดึงขา KEY/EN HIGH แล้วเปิดไฟ — AT mode ใช้ baudrate 38400 (ค่า default) — คำสั่งเปลี่ยนชื่อ: AT+NAME=xxx, เปลี่ยนรหัส: AT+PSWD=xxx — ใช้ USART_FindStr หา "OK" แทนการเช็คทีละบรรทัด — รีบูตโมดูลหลังแก้ไขค่าเพื่อให้生效</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: Data Bridge — ส่งข้อมูลระหว่างมือถือกับ MCU</h2>
+<pre><code class="language-c">volatile char bt_rx_buf[64];
+volatile uint8_t bt_rx_idx = 0;
+volatile uint8_t bt_new_cmd = 0;
+
+void hc05_bridge(void) {
+    char line[64];
+    uint8_t li = 0;
+
+    while(1) {
+        // === ขาจาก Bluetooth → MCU ===
+        if(bt_new_cmd) {
+            USART_Print("[BT→MCU] ");
+            USART_Println((char *)bt_rx_buf);
+            bt_rx_idx = 0;
+            bt_new_cmd = 0;
+
+            // parse command
+            if(strcmp((char *)bt_rx_buf, "LED1_ON") == 0)
+                GPIO_WriteBit(PC0, 1);
+            else if(strcmp((char *)bt_rx_buf, "LED1_OFF") == 0)
+                GPIO_WriteBit(PC0, 0);
+            else if(strcmp((char *)bt_rx_buf, "STATUS") == 0) {
+                USART_Print("TEMP:25.5 HUM:60\r\n");
+            }
+        }
+
+        // === ขาจาก MCU → Bluetooth (echo + sensor) ===
+        // สมมติมี task อื่นเก็บค่าลง USART tx buffer
+        // HC05 จะส่งต่อให้มือถือโดยอัตโนมัติ
+
+        Delay_Ms(10);
+    }
+}
+
+// ISR หรือ polling loop เก็บข้อมูลจาก HC05
+void hc05_rx_poll(void) {
+    while(USART_Available()) {
+        char c = USART_Read();
+        if(c == '\n' || c == '\r') {
+            if(bt_rx_idx > 0) {
+                bt_rx_buf[bt_rx_idx] = '\0';
+                bt_new_cmd = 1;
+                bt_rx_idx = 0;
+            }
+        } else if(bt_rx_idx < sizeof(bt_rx_buf) - 1) {
+            bt_rx_buf[bt_rx_idx++] = c;
+        }
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> HC05 ในโหมด transparent ทำตัวเป็น wireless serial — ข้อมูลที่มือถือส่งมาจะโผล่ที่ USART RX ของ MCU ตรง ๆ — ใช้ line buffer แยกคำสั่งทีละบรรทัด (สิ้นสุดด้วย \n) — bt_new_cmd เป็น flag แจ้ง main loop ว่ามีคำสั่งใหม่ — ตอบกลับด้วย USART_Print ข้อมูลจะไปโผล่ที่มือถืออัตโนมัติ — รองรับคำสั่ง LED1_ON, LED1_OFF, STATUS</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: Master-Slave auto-connect + pairing</h2>
+<pre><code class="language-c">#define SLAVE_MAC  "98D3,31,F539AB"  // MAC ของอุปกรณ์ที่จะเชื่อม
+
+void hc05_master_connect(void) {
+    GPIO_SimpleInit(PC4, GPIO_OUT_PP);
+    GPIO_WriteBit(PC4, 1);  // AT MODE
+    Delay_Ms(300);
+
+    USART_SimpleInit(BAUD_38400, USART_PINS_DEFAULT);
+
+    // ตั้งเป็น Master
+    USART_Println("AT+ROLE=1");  // 0=Slave, 1=Master, 2=Loopback
+    Delay_Ms(100);
+
+    // ลบ pairing เก่า
+    USART_Println("AT+RMAAD");
+    Delay_Ms(100);
+
+    // จับคู่กับ Slave MAC
+    USART_Print("AT+PAIR=");
+    USART_Println(SLAVE_MAC);
+    Delay_Ms(100);
+
+    // ผูกกับอุปกรณ์นี้เท่านั้น
+    USART_Print("AT+BIND=");
+    USART_Println(SLAVE_MAC);
+    Delay_Ms(100);
+
+    // Auto-connect ทันทีเมื่อเปิด
+    USART_Println("AT+CMODE=0");  // connect to paired device only
+    Delay_Ms(100);
+
+    USART_Println("AT+INIT");  // เริ่ม SPP profile
+
+    USART_Println("[BT] Master config done");
+    GPIO_WriteBit(PC4, 0);
+
+    // Re-init at 9600 for data mode
+    USART_SimpleInit(BAUD_9600, USART_PINS_DEFAULT);
+    USART_Println("[BT] Ready. Auto-connecting to slave...");
+}
+
+// Slave side — minimal setup
+void hc05_slave_setup(void) {
+    GPIO_WriteBit(PC4, 1); Delay_Ms(300);
+    USART_SimpleInit(BAUD_38400, USART_PINS_DEFAULT);
+
+    USART_Println("AT+ROLE=0");    // Slave mode
+    USART_Println("AT+CMODE=0");   // connect to any device
+    USART_Println("AT+NAME=SLAVE_CH32");
+
+    GPIO_WriteBit(PC4, 0);
+    USART_SimpleInit(BAUD_9600, USART_PINS_DEFAULT);
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ฝั่ง Master: ตั้ง ROLE=1 (Master) → PAIR ด้วย MAC ของ Slave → BIND ให้เชื่อมเฉพาะเครื่องนี้ → CMODE=0 (โหมด fixed address) → INIT เริ่ม SPP — ฝั่ง Slave: ROLE=0 (Slave), CMODE=0 รับการเชื่อมต่อจากทุกเครื่อง — MAC หาได้จาก AT+ADDR? — หลัง config เปลี่ยน baudrate กลับเป็น 9600 (data mode default) — เมื่อเปิดไฟ Master จะหา Slave และ auto-connect เอง</div>
+</div>
+
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_hc05.html">กลับบท</a><a href="chapx_lib_nrf24l01_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

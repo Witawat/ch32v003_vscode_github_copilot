@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>📦 เซนเซอร์สิ่งแวดล้อม/น้ำ 6 ชนิด — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_elec.html">บทก่อน</a>
+    <a href="chapx_lib_motor1.html">บทถัดไป →</a>
+</nav>
+<h1>📦 เซนเซอร์สิ่งแวดล้อม/น้ำ 6 ชนิด — SoilMoisture, Flame, Sound, Rain, WaterFlow, HX711</h1>
+<span class="level intermediate">ระดับกลาง</span>
+<p style="margin-top:0.5rem;color:#64748b">⏱️ ดูดัชนีทั้งหมดที่ <a href="chapx_lib_index.html">📦 คลังอุปกรณ์</a></p>
+
+<section>
+<h2>SoilMoisture_YL69 — Soil Moisture (ADC)</h2>
+<pre class="ascii-circuit">
+PC4(ADC)─AO  3.3V─VCC  GND─GND  (DO optional — digital threshold)
+⚠️ ใช้ transistor switch VCC — เปิดเฉพาะตอนวัด ลด corrosion</pre>
+<pre><code class="language-c">#include "SoilMoisture_YL69.h"
+SoilMoisture_Init(ADC_CH_PC4);
+uint16_t raw = SoilMoisture_ReadRaw();
+float percent = SoilMoisture_ReadPercent(); // 0-100%
+// Percent = map(raw, WET_VALUE, DRY_VALUE, 100, 0)
+// Calibrate: WET = submerged in water, DRY = air → set limits</code></pre>
+<p class="explain">⚠️ Corrosion! อย่าเสียบ probe ทิ้งไว้ในดินตลอด → ใช้ transistor switch VCC (เปิดเฉพาะตอนวัด — ยืดอายุ probe), probe lifetime ~3-6 เดือนถ้าเปิดตลอด, capacitive probe ดีกว่า (ไม่เป็นสนิม) แต่แพงกว่า, calibrate เอง — WET_VALUE/DRY_VALUE ต่างกันตามชนิดดิน, DO pin = digital output (HIGH/LOW threshold ปรับด้วย potentiometer), resistance-based: ดินแห้ง = R สูง, ดินเปียก = R ต่ำ</p>
+
+<h3>API หลัก</h3>
+<table>
+<tr><td><code>SoilMoisture_Init(ch)</code></td><td>Init ADC channel</td><td><code>SoilMoisture_ReadRaw()</code></td><td>Raw ADC (0-4095)</td></tr>
+<tr><td><code>SoilMoisture_ReadPercent()</code></td><td>0-100% (calibrated)</td><td><code>SoilMoisture_SetWetDry(w, d)</code></td><td>ตั้ง calibration</td></tr>
+<tr><td><code>SoilMoisture_ReadDigital(pin)</code></td><td>อ่าน DO threshold</td><td><code>SoilMoisture_GetStatus()</code></td><td>Dry/Normal/Wet</td></tr>
+</table>
+
+<h2>FlameSensor_KY026 — Flame Detect (ADC+GPIO)</h2>
+<pre class="ascii-circuit">
+PC4(ADC)─AO  PC1─DO  3.3V─VCC  GND─GND
+(IR photodiode — จับ IR จากเปลวไฟ 760-1100nm)</pre>
+<pre><code class="language-c">#include "FlameSensor_KY026.h"
+FlameSensor_Init(ADC_CH_PC4);
+uint16_t raw = FlameSensor_ReadRaw();
+// Digital threshold (potentiometer on module):
+uint8_t flame = FlameSensor_ReadDigital(PC1); // 0 = flame detected
+// Sensitivity: 760-1100nm (IR flame spectrum)</code></pre>
+<p class="explain">⚠️ Response time ~1ms, range ~1m (candle) at max sensitivity, angle ~60°, โดนแสงแดด → false trigger (ใช้ cover/บังแดด หรือ digital threshold), potentiometer บนโมดูลปรับ digital threshold, DO active LOW (=0 เมื่อ detect flame), range ขึ้นกับความแรงของเปลวไฟ (เทียน 20cm → ไฟใหญ่ 1-2m), ใช้คู่กับ MQ2 gas sensor เพิ่มความน่าเชื่อถือ</p>
+
+<h3>API หลัก</h3>
+<table>
+<tr><td><code>FlameSensor_Init(ch)</code></td><td>Init ADC</td><td><code>FlameSensor_ReadRaw()</code></td><td>Raw ADC (ยิ่งไฟใกล้ = ต่ำ)</td></tr>
+<tr><td><code>FlameSensor_ReadDigital(pin)</code></td><td>อ่าน DO threshold</td><td><code>FlameSensor_ReadLux()</code></td><td>แปลงเป็น lux (approx)</td></tr>
+</table>
+
+<h2>SoundSensor_KY038 — Sound/Clap (ADC+GPIO)</h2>
+<pre class="ascii-circuit">
+PC4(ADC)─AO  PC1─DO  3.3V─VCC  GND─GND
+(electret mic + LM393 op-amp comparator)</pre>
+<pre><code class="language-c">#include "SoundSensor_KY038.h"
+SoundSensor_Init(ADC_CH_PC4);
+uint16_t level = SoundSensor_ReadLevel();
+uint8_t clap = SoundSensor_ReadDigital(PC1); // 0 = sound above threshold
+// Clap counter:
+static uint8_t claps = 0;
+if(!digitalRead(PC1)) { claps++; Delay_Ms(200); }
+if(claps == 2) { USART_Println("Double clap!"); claps=0; }</code></pre>
+<p class="explain">⚠️ Electret mic on module → amplified by LM393 op-amp → comparator vs pot-adjusted threshold, analog AO = sound amplitude (loudness), digital DO = binary (sound > threshold → LOW), potentiometer ปรับ digital threshold (หมุนจน sensitivity พอดี), noisy environment → false trigger → ปรับ pot ใหม่, sound level ไม่ calibrated (แค่ relative), response ~1ms, ใช้ตรวจจับ clap, เสียงดัง, voice control พื้นฐาน</p>
+
+<h3>API หลัก</h3>
+<table>
+<tr><td><code>SoundSensor_Init(ch)</code></td><td>Init ADC</td><td><code>SoundSensor_ReadLevel()</code></td><td>Sound level (0-4095)</td></tr>
+<tr><td><code>SoundSensor_ReadDigital(pin)</code></td><td>อ่าน DO threshold</td><td><code>SoundSensor_GetLevel()</code></td><td>Quiet/Normal/Loud</td></tr>
+</table>
+
+<h2>RainSensor_YL83 — Rain Detect (ADC+GPIO)</h2>
+<pre class="ascii-circuit">
+PC4(ADC)─AO  PC1─DO  3.3V─VCC  GND─GND
+⚠️ corrosion! — ใช้ transistor switch VCC, nickel/gold-plated probe ทนกว่า</pre>
+<pre><code class="language-c">#include "RainSensor_YL83.h"
+RainSensor_Init(ADC_CH_PC4);
+uint16_t raw = RainSensor_ReadRaw();         // low = wet, high = dry
+float percent = RainSensor_ReadPercent();     // 100% = complete rain
+uint8_t rain = RainSensor_ReadDigital(PC1);  // 0 = rain detected</code></pre>
+<p class="explain">⚠️ Corrosion (เหมือน soil moisture) — ใช้ transistor switch VCC, nickel/gold plated probe ทนกว่าแบบธรรมดา, ต่อ control board แยก (LM393 comparator) → กันน้ำ (control board วางในที่แห้ง), principle: น้ำลด resistance ระหว่าง probe tracks → analog voltage เปลี่ยน, DO = digital ทันทีที่ detect rain, ใช้คู่กับ servo ปิดฝาเมื่อฝนตก</p>
+
+<h3>API หลัก</h3>
+<table>
+<tr><td><code>RainSensor_Init(ch)</code></td><td>Init ADC</td><td><code>RainSensor_ReadRaw()</code></td><td>Raw (ต่ำ=เปียก)</td></tr>
+<tr><td><code>RainSensor_ReadPercent()</code></td><td>0-100% rain intensity</td><td><code>RainSensor_ReadDigital(pin)</code></td><td>DO threshold</td></tr>
+<tr><td><code>RainSensor_SetWetDry(w, d)</code></td><td>Calibrate limits</td><td><code>RainSensor_GetStatus()</code></td><td>NoRain/Drizzle/Rain/Heavy</td></tr>
+</table>
+
+<h2>WaterFlow_YFS201 — Flow Rate (GPIO)</h2>
+<pre class="ascii-circuit">
+PC1─Signal (pulse)  5V─VCC  GND─GND  (inline pipe)
+⚠️ 5V signal → voltage divider 2.2k+3.3k for CH32V003
+YF-S201 = 450 pulses/L, YF-S402 = 98 pulses/L</pre>
+<pre><code class="language-c">#include "WaterFlow_YFS201.h"
+WaterFlow_Init(PC1);
+volatile uint32_t pulses = 0;
+void flow_isr(void) { pulses++; }
+attachInterrupt(PC1, flow_isr, FALLING);
+while(1) {
+    Delay_Ms(1000); // 1s window
+    float lpm = WaterFlow_CalcFlow(pulses, 1000); // L/min
+    float total_L = WaterFlow_CalcVolume(pulses);
+    USART_PrintFloat(lpm, 1); USART_Println(" L/min");
+    pulses = 0; // reset counter each interval
+}</code></pre>
+<p class="explain">⚠️ 450 pulses/L (YF-S201), 98 pulses/L (YF-S402) — K-factor varies by model, min flow ~1 L/min (mechanically limits), 10ms pulse width @ 6L/min (จับทันด้วย interrupt), 5V signal → ใช้ voltage divider ลดเหลือ 3.3V, RISING หรือ FALLING edge, ใช้ในระบบน้ำเปิดตลอด: สะสม pulses → <code>total_L += pulses / 450.0f</code>, ระวัง air bubbles → pulse ปลอม</p>
+
+<h3>API หลัก</h3>
+<table>
+<tr><td><code>WaterFlow_Init(pin)</code></td><td>Init GPIO input</td><td><code>WaterFlow_CalcFlow(pulses, ms)</code></td><td>L/min</td></tr>
+<tr><td><code>WaterFlow_CalcVolume(pulses)</code></td><td>Total litre</td><td><code>WaterFlow_SetKFactor(k)</code></td><td>ตั้ง pulses/L</td></tr>
+<tr><td><code>WaterFlow_ResetTotal()</code></td><td>Clear total volume</td><td><code>WaterFlow_GetTotalLiters()</code></td><td>ยอดสะสม (L)</td></tr>
+</table>
+
+<h2>HX711 — Load Cell 24-bit (GPIO)</h2>
+<pre class="ascii-circuit">
+PC0─SCK  PC1─DOUT  3.3V─VCC  GND─GND
+Load Cell bridge: E+ = red, E- = black, A+ = green, A- = white
+⚠️ Keep wires short, twisted pair — 24-bit noise-sensitive</pre>
+<pre><code class="language-c">#include "HX711.h"
+HX711_Init(PC0, PC1); // SCK, DOUT
+HX711_SetGain(HX711_GAIN_128);
+int32_t tare_offset;
+// Tare: HX711_Tare(10); // average 10 readings = zero offset
+// Calibrate:
+float scale = 420.0f; // raw units per kg (หาโดยวางน้ำหนักรู้ค่า)
+int32_t raw = HX711_Read();
+float kg = (raw - tare_offset) / scale;
+// Averaging: float avg = HX711_ReadAvg(5);</code></pre>
+<p class="explain">⚠️ 24-bit ADC → sensitive to noise → keep wires short, twisted pair (A+ with A-), gain 128 (channel A) หรือ 64 (channel B), data rate 10 SPS (default) หรือ 80 SPS, DOUT HIGH → data ready → SCK 25-27 pulses to read, tare ก่อนวัดทุกครั้ง (หรือเก็บ tare_offset หลัง calibrate), calibration: วางน้ำหนักรู้ค่า (เช่น 1kg) → <code>scale = (raw - tare) / 1.0</code>, power supply noise → ใช้ capacitor ที่ VCC, อย่าใช้ breadboard (noise)</p>
+
+<h3>API หลัก</h3>
+<table>
+<tr><td><code>HX711_Init(sck, dout)</code></td><td>Init GPIO pins</td><td><code>HX711_Read()</code></td><td>Single raw reading</td></tr>
+<tr><td><code>HX711_ReadAvg(n)</code></td><td>Average n readings</td><td><code>HX711_Tare(n)</code></td><td>Zero/tare (n avg)</td></tr>
+<tr><td><code>HX711_SetGain(g)</code></td><td>GAIN_128/64/32</td><td><code>HX711_SetRate(r)</code></td><td>RATE_10HZ/80HZ</td></tr>
+<tr><td><code>HX711_GetOffset()</code></td><td>Read tare offset</td><td><code>HX711_SetOffset(off)</code></td><td>Restore tare</td></tr>
+</table>
+</section>
+
+<section>
+<h2>📋 เปรียบเทียบเซนเซอร์สิ่งแวดล้อมทั้ง 6 ชนิด</h2>
+<table>
+<tr><th>เซนเซอร์</th><th>Interface</th><th>Power</th><th>Accuracy</th><th>ใช้ดีที่สุดกับ</th></tr>
+<tr><td>SoilMoisture YL69</td><td>ADC (+ GPIO opt)</td><td>~5mA (วัด)</td><td>Relative (depends on soil)</td><td>รดน้ำอัตโนมัติ, สวนแนวตั้ง, IoT farm</td></tr>
+<tr><td>FlameSensor KY026</td><td>ADC + GPIO</td><td>~5mA</td><td>~1m (candle)</td><td>Fire alarm, ตรวจจับเปลวไฟ, safety cutoff</td></tr>
+<tr><td>SoundSensor KY038</td><td>ADC + GPIO</td><td>~5mA</td><td>Relative (uncalibrated)</td><td>Clap switch, noise monitor, voice trigger</td></tr>
+<tr><td>RainSensor YL83</td><td>ADC + GPIO</td><td>~5mA (วัด)</td><td>Relative</td><td>Rain alarm, auto window, car roof alert</td></tr>
+<tr><td>WaterFlow YFS201</td><td>GPIO (interrupt)</td><td>~5mA</td><td>±3% (up to 30 L/min)</td><td>Water meter, dispenser, cooling monitor</td></tr>
+<tr><td>HX711 + Load Cell</td><td>GPIO (2 pins)</td><td>~1.5mA</td><td>24-bit (very precise)</td><td>Digital scale, force sensor, counting</td></tr>
+</table>
+<p style="margin-top:1rem;color:#64748b"><strong>เลือกยังไง?</strong> วัดความชื้นดิน → SoilMoisture (ใช้ switch VCC ลดสนิม), ตรวจจับไฟ → FlameSensor + MQ2 gas (dual confirm), ตรวจจับเสียงดัง → SoundSensor (clap switch), ตรวจจับฝน → RainSensor (>80% → ปิดหน้าต่าง servo), วัดอัตราการไหลน้ำ → WaterFlow (นับ pulse interrupt), วัดน้ำหนักแม่นยำ → HX711 (24-bit — ดีกว่า ADS1115 สำหรับ load cell โดยเฉพาะ)</p>
+</section>
+
+<section>
+<h2>✏️ ลองทำดู</h2>
+<ol>
+<li>Smart plant pot — SoilMoisture วัดความชื้น → แห้งกว่า 30% → relay เปิดปั๊มน้ำ 3 วินาที → รอ 10 วินาที → วัดซ้ำ, แสดงสถานะบน OLED (%, pump on/off, last water)</li>
+<li>Water meter + daily log — YFS201 วัด flow rate + สะสมปริมาตร → OLED แสดง L/min + total L → บันทึกยอด daily ลง AT24Cxx EEPROM → export CSV ผ่าน USART</li>
+<li>Load cell scale — HX711 + LCD1602 แสดงน้ำหนักเป็นกรัม (0.1g res) → ปุ่ม tare + calibrate → LED แบ่ง zone (kg: <0.5, 0.5-1, >1)</li>
+<li>Weather combo — RainSensor (rain) + SoundSensor (thunder detect) → OLED dashboard → LINE alert (ESP01 WiFi) เมื่อ detect ทั้งคู่ → relay ปิดหน้าต่าง</li>
+<li>Fire alarm system — FlameSensor + MQ2 gas → buzzer + relay (sprinkler solenoid) → OLED แสดง flame level bar + gas PPM → log event time ลง EEPROM</li>
+</ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_elec.html">บทก่อน</a>
+    <a href="chapx_lib_motor1.html">บทถัดไป →</a>
+</nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

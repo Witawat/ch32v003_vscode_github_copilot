@@ -1,0 +1,88 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย TCS34725 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_tcs34725.html">กลับบท</a><a href="chapx_lib_mqgas_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — TCS34725 เซนเซอร์สี RGB</h1>
+<div class="answer"><h2>ข้อ 1: Color Detection — ตรวจจับสีวัตถุ</h2><pre><code class="language-c">void tcs34725_color_detect(void) {
+    TCS34725_Init(TCS34725_INTEGRATION_154MS, TCS34725_GAIN_1X);
+
+    while(1) {
+        Delay_Ms(200);
+        uint16_t r, g, b, c;
+        if(!TCS34725_ReadRGBC(&r, &g, &b, &c)) continue;
+
+        // normalize ให้รวมกันเป็น 100%
+        float sum = r + g + b;
+        float rp = r * 100.0f / sum;
+        float gp = g * 100.0f / sum;
+        float bp = b * 100.0f / sum;
+
+        USART_Print("R:"); USART_PrintFloat(rp, 1); USART_Print("% ");
+        USART_Print("G:"); USART_PrintFloat(gp, 1); USART_Print("% ");
+        USART_Print("B:"); USART_PrintFloat(bp, 1); USART_Print("% → ");
+
+        if(rp > 35 && rp > gp && rp > bp)      USART_Println("RED");
+        else if(gp > 32 && gp > rp)             USART_Println("GREEN");
+        else if(bp > 32 && bp > rp)             USART_Println("BLUE");
+        else if(rp > 28 && gp > 28 && bp < 22)  USART_Println("YELLOW");
+        else                                     USART_Println("UNKNOWN");
+    }
+}
+</code></pre><div class="approach"><strong>🧠 แนวคิด:</strong> normalize RGB เป็นเปอร์เซ็นต์เพื่อขจัดผลกระทบจากความเข้มแสง — ใช้ threshold ตรวจจับสีหลัก — สีเหลือง = R+G สูง B ต่ำ — clear channel <code>c</code> ใช้วัดความสว่างรวมเพื่อกรอง dark noise</div></div>
+<div class="answer"><h2>ข้อ 2: M&M Sorter — แยกสีลูกอม</h2><pre><code class="language-c">typedef enum { M_RED, M_GREEN, M_BLUE, M_YELLOW, M_BROWN, M_UNKNOWN } mm_color_t;
+
+mm_color_t tcs34725_sort_mm(void) {
+    uint16_t r, g, b, c;
+    if(!TCS34725_ReadRGBC(&r, &g, &b, &c)) return M_UNKNOWN;
+    if(c < 50) return M_UNKNOWN;  // มืดเกินไป
+
+    float sum = r + g + b;
+    float rp = r * 100.0f / sum;
+    float gp = g * 100.0f / sum;
+    float bp = b * 100.0f / sum;
+
+    if(rp > 42 && gp < 28 && bp < 25) return M_RED;
+    if(gp > 36 && rp < 30 && bp < 30) return M_GREEN;
+    if(bp > 38 && rp < 30 && gp < 33) return M_BLUE;
+    if(rp > 31 && gp > 33 && bp < 22) return M_YELLOW;
+    if(rp > 30 && gp < 30 && bp < 25) return M_BROWN;
+    return M_UNKNOWN;
+}
+</code></pre><div class="approach"><strong>🧠 แนวคิด:</strong> แต่ละสี M&M มีลายเซ็น RGB ต่างกัน — calibrate threshold ด้วยการวัดค่าจริงหลาย ๆ เม็ด — กรอง clear channel < 50 กัน false positive — ถ้าค่าคาบเกี่ยวให้เช็คใกล้สีไหนมากกว่าแบบ Euclidean distance ใน RGB space</div></div>
+<div class="answer"><h2>ข้อ 3: OLED แสดง RGB + Color Temperature</h2><pre><code class="language-c">uint16_t tcs34725_cct(uint16_t r, uint16_t g, uint16_t b) {
+    // McCamy's formula — CCT โดยประมาณจาก RGB
+    float ir = 0.0f;  // IR component = 0 สำหรับ TCS34725 (มี IR filter)
+    float ri = (float)r / (r + g + b + ir);
+    float bi = (float)b / (r + g + b + ir);
+    if(ri < 0.18f || bi < 0.10f) return 0;
+
+    float n = (ri - 0.3320f) / (0.1858f - bi);
+    float cct = 449.0f * n * n * n + 3525.0f * n * n + 6823.3f * n + 5520.33f;
+    return (uint16_t)cct;
+}
+
+void tcs34725_oled_rgb(void) {
+    OLED_Init(I2C_PINS_DEFAULT);
+    TCS34725_Init(TCS34725_INTEGRATION_154MS, TCS34725_GAIN_1X);
+
+    while(1) {
+        Delay_Ms(200);
+        uint16_t r, g, b, c;
+        if(!TCS34725_ReadRGBC(&r, &g, &b, &c)) continue;
+
+        OLED_SetCursor(0, 0);
+        OLED_Print("R:"); OLED_PrintNum(r); OLED_Print(" ");
+        OLED_Print("G:"); OLED_PrintNum(g); OLED_Print(" ");
+        OLED_Print("B:"); OLED_PrintNum(b);
+
+        uint16_t cct = tcs34725_cct(r, g, b);
+        OLED_SetCursor(0, 1);
+        OLED_Print("CCT: "); OLED_PrintNum(cct); OLED_Print(" K  ");
+
+        OLED_SetCursor(0, 2);
+        if(cct < 3500)     OLED_Print("Warm White   ");
+        else if(cct < 5000)OLED_Print("Neutral White");
+        else               OLED_Print("Cool White   ");
+    }
+}
+</code></pre><div class="approach"><strong>🧠 แนวคิด:</strong> McCamy's formula ใช้ RGB ratio หา CCT (Correlated Color Temperature) — ไม่ต้องแปลงเป็น xy chromaticity แยก — Warm (<3500K) / Neutral (3500–5000K) / Cool (>5000K) — OLED_PrintNum สำหรับ integer ค่าใหญ่กว่า 999</div></div>
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_tcs34725.html">กลับบท</a><a href="chapx_lib_mqgas_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

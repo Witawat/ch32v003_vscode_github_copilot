@@ -1,0 +1,214 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย NRF24L01 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_nrf24l01.html">กลับบท</a><a href="chapx_lib_gps_neo6m_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — NRF24L01 วิทยุ 2.4GHz</h1>
+
+<div class="answer">
+<h2>ข้อ 1: รีโมตควบคุม — กดปุ่มฝั่ง TX → LED ติดที่ฝั่ง RX</h2>
+<pre><code class="language-c">// ========== ฝั่ง Transmitter (รีโมต) ==========
+#define BTN1 PD2
+#define BTN2 PD3
+#define BTN3 PD4
+#define BTN4 PD5
+
+void rf_tx_remote(void) {
+    NRF24_Init(NRF24_TX);
+    GPIO_SimpleInit(BTN1, GPIO_IN_PU);
+    GPIO_SimpleInit(BTN2, GPIO_IN_PU);
+    GPIO_SimpleInit(BTN3, GPIO_IN_PU);
+    GPIO_SimpleInit(BTN4, GPIO_IN_PU);
+
+    uint8_t payload[4] = {0};
+    uint8_t last[4] = {0};
+
+    while(1) {
+        payload[0] = !GPIO_ReadBit(BTN1);
+        payload[1] = !GPIO_ReadBit(BTN2);
+        payload[2] = !GPIO_ReadBit(BTN3);
+        payload[3] = !GPIO_ReadBit(BTN4);
+
+        // ส่งเมื่อ state เปลี่ยนเท่านั้น ลด RF traffic
+        if(memcmp(payload, last, 4) != 0) {
+            NRF24_Send(payload, 4);
+            memcpy(last, payload, 4);
+            USART_Print("Sent: ");
+            for(int i=0; i<4; i++) USART_Print(payload[i]?'1':'0');
+            USART_Println("");
+        }
+        Delay_Ms(20);
+    }
+}
+
+// ========== ฝั่ง Receiver (ตัวควบคุม LED) ==========
+#define LED1_PIN PC0
+#define LED2_PIN PC1
+#define LED3_PIN PC2
+#define LED4_PIN PC3
+
+void rf_rx_led_control(void) {
+    NRF24_Init(NRF24_RX);
+    GPIO_SimpleInit(LED1_PIN, GPIO_OUT_PP);
+    GPIO_SimpleInit(LED2_PIN, GPIO_OUT_PP);
+    GPIO_SimpleInit(LED3_PIN, GPIO_OUT_PP);
+    GPIO_SimpleInit(LED4_PIN, GPIO_OUT_PP);
+
+    uint8_t buf[32];
+
+    while(1) {
+        if(NRF24_Available()) {
+            uint8_t len = NRF24_Read(buf, sizeof(buf));
+            if(len >= 4) {
+                GPIO_WriteBit(LED1_PIN, buf[0]);
+                GPIO_WriteBit(LED2_PIN, buf[1]);
+                GPIO_WriteBit(LED3_PIN, buf[2]);
+                GPIO_WriteBit(LED4_PIN, buf[3]);
+            }
+        }
+        Delay_Ms(5);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> TX: อ่านปุ่ม 4 ปุ่ม (active low → invert) แพ็คลง 4 ไบต์ — ส่งเมื่อ state เปลี่ยนเท่านั้น (memcmp) ลดการส่งซ้ำ — RX: NRF24_Available เช็คข้อมูลเข้าแบบ non-blocking — NRF24_Read อ่าน payload — map buf[0..3] ไป LED โดยตรง — ใช้ pipe เดียวกันทั้ง TX/RX (default pipe0)</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: Multi-node ID system — ส่งระบุ node เป้าหมาย</h2>
+<pre><code class="language-c">#define MY_NODE_ID    0x01   // ID ของบอร์ดนี้
+#define MAX_NODES     5
+
+typedef struct {
+    uint8_t target_id;
+    uint8_t sender_id;
+    uint8_t cmd;
+    uint8_t value;
+    uint8_t crc;  // XOR checksum
+} rf_packet_t;
+
+void rf_send_to(uint8_t target, uint8_t cmd, uint8_t val) {
+    rf_packet_t pkt;
+    pkt.target_id = target;
+    pkt.sender_id = MY_NODE_ID;
+    pkt.cmd = cmd;
+    pkt.value = val;
+    pkt.crc = target ^ MY_NODE_ID ^ cmd ^ val;
+
+    NRF24_Send((uint8_t *)&pkt, sizeof(pkt));
+}
+
+void rf_multi_node_rx(void) {
+    NRF24_Init(NRF24_RX);
+    uint8_t buf[32];
+
+    while(1) {
+        if(NRF24_Available()) {
+            uint8_t n = NRF24_Read(buf, sizeof(buf));
+            if(n < sizeof(rf_packet_t)) continue;
+
+            rf_packet_t *pkt = (rf_packet_t *)buf;
+
+            // ตรวจรับเฉพาะที่ส่งมาถึง node นี้ หรือ broadcast (0xFF)
+            if(pkt->target_id != MY_NODE_ID &&
+               pkt->target_id != 0xFF) continue;
+
+            // ตรวจ CRC
+            uint8_t calc = pkt->target_id ^ pkt->sender_id
+                         ^ pkt->cmd ^ pkt->value;
+            if(calc != pkt->crc) {
+                USART_Println("[RF] CRC error");
+                continue;
+            }
+
+            USART_Print("[RF] From node ");
+            USART_PrintNum(pkt->sender_id);
+            USART_Print(" cmd=");
+            USART_PrintNum(pkt->cmd);
+            USART_Print(" val=");
+            USART_PrintNum(pkt->value);
+            USART_Println("");
+
+            // execute command
+            rf_exec_cmd(pkt->cmd, pkt->value);
+        }
+        Delay_Ms(1);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> สร้าง struct packet มี target_id, sender_id, cmd, value, crc — target_id=0xFF คือ broadcast ทุก node — sender_id ให้ node ปลายทางรู้ว่าใครส่ง — CRC แบบ XOR ง่าย (เร็วพอสำหรับ MCU เล็ก) กรอง packet เสีย — แต่ละ node มี MY_NODE_ID แตกต่างกัน (ตั้งใน code ตอน flash) — NRF24L01 มี 6 pipes ใช้แยก ID ได้อีกชั้น (แต่ละ pipe = address ต่างกัน)</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: วัดระยะด้วย RSSI + แสดงสัญญาณ</h2>
+<pre><code class="language-c">#define RSSI_THRESH_GOOD   -60
+#define RSSI_THRESH_FAIR   -75
+#define RSSI_THRESH_POOR   -90
+
+typedef struct {
+    int8_t rssi_min;
+    int8_t rssi_max;
+    int8_t rssi_avg;
+    uint16_t pkt_cnt;
+    uint16_t lost_cnt;
+} rf_rssi_stats_t;
+
+rf_rssi_stats_t rssi_stats;
+
+void rf_rssi_monitor(void) {
+    NRF24_Init(NRF24_RX);
+    rssi_stats.rssi_min = 0;
+    rssi_stats.rssi_max = -127;
+    int32_t rssi_sum = 0;
+
+    uint32_t last_print = Timer_GetMs();
+    uint8_t buf[32];
+
+    while(1) {
+        if(NRF24_Available()) {
+            uint8_t n = NRF24_Read(buf, sizeof(buf));
+            int8_t rssi = NRF24_GetRSSI();
+
+            if(rssi > rssi_stats.rssi_max)
+                rssi_stats.rssi_max = rssi;
+            if(rssi < rssi_stats.rssi_min)
+                rssi_stats.rssi_min = rssi;
+
+            rssi_sum += rssi;
+            rssi_stats.pkt_cnt++;
+
+            // แสดงทุก 1 วินาที
+            if(Timer_GetMs() - last_print > 1000) {
+                rssi_stats.rssi_avg = (int8_t)(rssi_sum / rssi_stats.pkt_cnt);
+
+                USART_Print("RSSI: avg=");
+                USART_PrintNum(rssi_stats.rssi_avg);
+                USART_Print(" min=");
+                USART_PrintNum(rssi_stats.rssi_min);
+                USART_Print(" max=");
+                USART_PrintNum(rssi_stats.rssi_max);
+                USART_Print(" pkt=");
+                USART_PrintNum(rssi_stats.pkt_cnt);
+                USART_Print(" [");
+
+                if(rssi_stats.rssi_avg > RSSI_THRESH_GOOD)
+                    USART_Print("STRONG");
+                else if(rssi_stats.rssi_avg > RSSI_THRESH_FAIR)
+                    USART_Print("GOOD");
+                else if(rssi_stats.rssi_avg > RSSI_THRESH_POOR)
+                    USART_Print("FAIR");
+                else
+                    USART_Print("WEAK");
+
+                USART_Println("]");
+
+                // reset สถิติรอบใหม่
+                rssi_stats.rssi_min = 0;
+                rssi_stats.rssi_max = -127;
+                rssi_sum = 0;
+                rssi_stats.pkt_cnt = 0;
+                last_print = Timer_GetMs();
+            }
+        }
+        Delay_Ms(1);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> NRF24_GetRSSI อ่านค่า RSSI (Received Signal Strength Indicator) หลังรับ packet — หน่วย dBm: ใกล้ 0 = สัญญาณดี, -90 = อ่อนมาก — เก็บ min/max/avg ทุก 1 วิ — แปลงเป็นเกรด STRONG/GOOD/FAIR/WEAK — RSSI ไม่ใช่ระยะทางตรง ๆ แต่ใช้บอกคุณภาพลิงก์ — ถ้าต้องการหาระยะทางจริงต้องใช้ RSSI + ความถี่ + calibration ในที่โล่ง</div>
+</div>
+
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_nrf24l01.html">กลับบท</a><a href="chapx_lib_gps_neo6m_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

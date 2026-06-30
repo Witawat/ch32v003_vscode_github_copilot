@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>📦 วัดทางไฟฟ้า 6 ชนิด — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_range.html">บทก่อน</a>
+    <a href="chapx_lib_field.html">บทถัดไป →</a>
+</nav>
+<h1>📦 วัดทางไฟฟ้า 6 ชนิด — INA219, ADS1115, MCP4725, PZEM004T, PZEM004Tv3, OH49E</h1>
+<span class="level advanced">ระดับสูง</span>
+<p style="margin-top:0.5rem;color:#64748b">⏱️ ดูดัชนีทั้งหมดที่ <a href="chapx_lib_index.html">📦 คลังอุปกรณ์</a></p>
+
+<section>
+<h2>INA219 — V/A/W Monitor (I2C)</h2>
+<pre class="ascii-circuit">
+PC1─SDA  PC2─SCL  3.3V─VCC  GND─GND
+VIN+ ── load+ ── Rshunt 0.1Ω ── VIN- ── load- ── GND
+(High-side: วัดกระแสก่อน load — ปลอดภัยกว่า low-side)</pre>
+<pre><code class="language-c">#include "INA219.h"
+INA219_Init(0x40, INA219_32V_2A); // range เลือกตาม shunt
+float voltage = INA219_ReadBusVoltage();   // V
+float current = INA219_ReadCurrent();       // mA
+float power   = INA219_ReadPower();         // mW
+// Calibrate: INA219_SetCalibration(shunt_resistance_ohm, max_current_A);</code></pre>
+<p class="explain">⚠️ 4 I2C addresses (0x40-0x4F via A0,A1 jumpers), shunt R = 0.1Ω (default), max V=32V, max I depends on shunt (0.1Ω → 3.2A), high-side measurement (ต่อ shunt ก่อน GND — อ่านทั้ง V bus และ voltage drop ข้าม shunt), PGA + 12-bit ADC ในตัว — แม่นกว่า ADC ทั่วไป, calibration: <code>current_LSB = max_current / 32768</code>, <code>cal_value = 0.04096 / (current_LSB * Rshunt)</code></p>
+
+<h3>API หลัก</h3>
+<table>
+<tr><td><code>INA219_Init(addr, range)</code></td><td>Init + ตั้ง range</td><td><code>INA219_ReadBusVoltage()</code></td><td>อ่านแรงดัน V (bus)</td></tr>
+<tr><td><code>INA219_ReadCurrent()</code></td><td>อ่านกระแส mA</td><td><code>INA219_ReadPower()</code></td><td>อ่านกำลังไฟฟ้า mW</td></tr>
+<tr><td><code>INA219_ReadShuntVoltage()</code></td><td>Shunt voltage mV</td><td><code>INA219_SetCalibration(r, maxA)</code></td><td>เปลี่ยน shunt/range</td></tr>
+</table>
+
+<h2>ADS1115 — 16-bit ADC 4ch (I2C)</h2>
+<pre class="ascii-circuit">
+PC1─SDA  PC2─SCL  3.3V─VCC  GND─GND  A0-A3 ── signal inputs
+ADDR─GND = 0x48, ADDR─VCC = 0x49, ADDR─SDA = 0x4A, ADDR─SCL = 0x4B</pre>
+<pre><code class="language-c">#include "ADS1115.h"
+ADS1115_Init(0x48); // 0x48-0x4B via ADDR pin
+ADS1115_SetGain(ADS1115_GAIN_1);      // ±4.096V (0.125mV/step)
+ADS1115_SetRate(ADS1115_RATE_128SPS); // sample rate 8-860 SPS
+// Single-ended:
+int16_t val0 = ADS1115_ReadSingle(0);   // ch0
+float volt = ADS1115_ToVoltage(val0);   // convert to voltage
+// Differential: int16_t diff = ADS1115_ReadDifferential(0, 1); // ch0-ch1
+// Continuous: ADS1115_StartContinuous(0); val=ADS1115_ReadContinuous();</code></pre>
+<p class="explain">⚠️ 4 addresses via ADDR pin (ต่อ GND/VCC/SDA/SCL), gain 1/2/4/8/16 (±4.096V down to ±0.256V), 16-bit signed (±32768), rate 8-860 SPS, continuous mode auto-read FIFO, ดีกว่า CH32V003 ADC ในตัว (10-bit → 16-bit, PGA, differential, comparator with alert pin), input multiplexer 4ch single-ended หรือ 2ch differential</p>
+
+<h3>API หลัก</h3>
+<table>
+<tr><td><code>ADS1115_Init(addr)</code></td><td>Init ADC</td><td><code>ADS1115_ReadSingle(ch)</code></td><td>Single-shot raw</td></tr>
+<tr><td><code>ADS1115_ToVoltage(raw)</code></td><td>Raw → Voltage</td><td><code>ADS1115_ReadDifferential(p, n)</code></td><td>Diff input</td></tr>
+<tr><td><code>ADS1115_SetGain(g)</code></td><td>GAIN_1/2/4/8/16</td><td><code>ADS1115_SetRate(r)</code></td><td>8/16/32/64/128/250/475/860 SPS</td></tr>
+<tr><td><code>ADS1115_StartContinuous(ch)</code></td><td>เริ่ม continuous</td><td><code>ADS1115_ReadContinuous()</code></td><td>อ่านล่าสุด</td></tr>
+</table>
+
+<h2>MCP4725 — 12-bit DAC (I2C)</h2>
+<pre class="ascii-circuit">
+PC1─SDA  PC2─SCL  3.3V─VCC  GND─GND  VOUT ── scope/load
+(A0 pin — GND=0x60, VCC=0x61, SDA=0x62, SCL=0x63)</pre>
+<pre><code class="language-c">#include "MCP4725.h"
+MCP4725_Init(0x60); // 0x60-0x67 (A0 pin + factory bits)
+MCP4725_SetVoltage(2048, MCP4725_VREF_VDD); // 2048/4096 = 1.65V (3.3V VDD)
+// EEPROM save: MCP4725_SaveToEEPROM(2048); // จำค่าไว้หลัง power-off
+// Waveform: for(int i=0; i<4096; i+=8) { MCP4725_FastWrite(i); Delay_Us(10); }</code></pre>
+<p class="explain">⚠️ 12-bit (0-4095), I2C addr 0x60-0x67 (A0 pin + factory bits), VREF = VDD (default) หรือ external 2.048V reference, EEPROM เก็บค่าได้ (ใช้เป็น setpoint memory — เปิดเครื่องค่าเดิม), fast write = 3 bytes I2C (เร็วกว่า normal write), output drive ~15mA (ไม่พอขับ motor → ใช้ op-amp buffer), rise time ~6µs, resolution = VREF/4096, waveform generation: ramp, sine, triangle</p>
+
+<h3>API หลัก</h3>
+<table>
+<tr><td><code>MCP4725_Init(addr)</code></td><td>Init DAC</td><td><code>MCP4725_SetVoltage(val, vref)</code></td><td>ตั้งแรงดัน output</td></tr>
+<tr><td><code>MCP4725_SaveToEEPROM(val)</code></td><td>เก็บค่าใน EEPROM</td><td><code>MCP4725_FastWrite(val)</code></td><td>Fast write (3 bytes)</td></tr>
+<tr><td><code>MCP4725_SetVREF(ref)</code></td><td>VDD / External 2.048V</td><td><code>MCP4725_PowerDown(mode)</code></td><td>ปิด output (1k/100k/500kΩ)</td></tr>
+</table>
+
+<h2>PZEM004T — AC Energy Meter (USART)</h2>
+<pre class="ascii-circuit">
+PD5(TX)─RX(PZEM)  PD6(RX)─TX(PZEM)  5V─VCC  GND─GND
+CT clamp ⇛ live wire (แค่ 1 เส้น), voltage probe ⤏ socket L-N
+⚡ 220VAC อันตราย! — ต่อเฉพาะเมื่อรู้วิธี</pre>
+<pre><code class="language-c">#include "PZEM004T.h"
+PZEM004T_Init(USART1);
+float v  = PZEM004T_ReadVoltage();       // V
+float a  = PZEM004T_ReadCurrent();       // A
+float w  = PZEM004T_ReadPower();         // W
+float e  = PZEM004T_ReadEnergy();        // kWh
+float f  = PZEM004T_ReadFrequency();     // Hz
+float pf = PZEM004T_ReadPowerFactor();   // 0-1
+// Set address: PZEM004T_SetAddress(0x01, 0x02); // เปลี่ยนจาก addr 1 → 2</code></pre>
+<p class="explain">⚠️ ⚡ 220VAC อันตราย — ถ้าไม่มั่นใจให้ใช้ USB power meter แทน, Modbus-RTU protocol (baud 9600 8N1), address 1-255 (default 1), CT clamp 100A, อ่านทีละ register (ใช้เวลา ~200ms/register), PZEM004T = TTL output (ต่อตรง CH32V003), PZEM004Tv1 = RS485 (ต้องใช้ MAX485 converter), ต่อผิดขั้ว CT → current = 0, เปิด USART1 → ใช้ร่วมกับ USART_Print ไม่ได้ (ต้องเปลี่ยนเป็น SoftUART print)</p>
+
+<h3>API หลัก</h3>
+<table>
+<tr><td><code>PZEM004T_Init(usart)</code></td><td>Init USART 9600</td><td><code>PZEM004T_ReadVoltage()</code></td><td>อ่าน V (0.1V res)</td></tr>
+<tr><td><code>PZEM004T_ReadCurrent()</code></td><td>อ่าน A (0.001A res)</td><td><code>PZEM004T_ReadPower()</code></td><td>อ่าน W (0.1W res)</td></tr>
+<tr><td><code>PZEM004T_ReadEnergy()</code></td><td>อ่าน kWh (0.001kWh)</td><td><code>PZEM004T_ReadFrequency()</code></td><td>Hz</td></tr>
+<tr><td><code>PZEM004T_ReadPowerFactor()</code></td><td>PF 0-1 (0.01)</td><td><code>PZEM004T_SetAddress(old, new)</code></td><td>เปลี่ยน addr</td></tr>
+</table>
+
+<h2>PZEM004Tv3 — AC Energy Meter v3 (USART)</h2>
+<pre class="ascii-circuit">
+PD5(TX)─RX(PZEM)  PD6(RX)─TX(PZEM)  5V─VCC  GND─GND
+(ต่อแบบเดียวกับ PZEM004T — ต่างที่ firmware protocol)</pre>
+<pre><code class="language-c">#include "PZEM004Tv3.h"
+PZEM004Tv3_Init(USART1, 3); // address=3
+PZEM004Tv3_Data_t data;
+if(PZEM004Tv3_ReadAll(&data)) {
+    USART_PrintFloat(data.voltage, 1); USART_Print("V ");
+    USART_PrintFloat(data.current, 2); USART_Print("A ");
+    USART_PrintFloat(data.power, 1); USART_Println("W");
+}
+// Alarms: PZEM004Tv3_SetAlarm(PZEM_ALARM_VOLT_HIGH, 250.0f);</code></pre>
+<p class="explain">⚠️ v3 ใช้ protocol ใหม่ (ต่างจาก v1 — ห้ามใช้ PZEM004T.h), มี register alarms (over-voltage, over-current, over-power), direct TTL (5V — ใช้ voltage divider RX), รวมทุก register ใน 1 request → เร็วกว่า v1 (ไม่ต้อง request ทีละตัว), response time ~80ms (ทั้งหมด), ต้องใช้ PZEM004Tv3.h เท่านั้น (ไม่ compatible กับ PZEM004T.h), baud ยัง 9600 8N1</p>
+
+<h3>API หลัก</h3>
+<table>
+<tr><td><code>PZEM004Tv3_Init(usart, addr)</code></td><td>Init USART + addr</td><td><code>PZEM004Tv3_ReadAll(&data)</code></td><td>อ่านทั้งหมดใน 1 request</td></tr>
+<tr><td><code>PZEM004Tv3_ReadVoltage()</code></td><td>อ่านเฉพาะ V</td><td><code>PZEM004Tv3_ReadPower()</code></td><td>อ่านเฉพาะ W</td></tr>
+<tr><td><code>PZEM004Tv3_SetAlarm(type, val)</code></td><td>ตั้งค่า alarm</td><td><code>PZEM004Tv3_GetAlarm(type)</code></td><td>อ่าน alarm status</td></tr>
+</table>
+
+<h2>OH49E — Hall Effect Sensor (ADC)</h2>
+<pre class="ascii-circuit">
+3.3V─VCC  GND─GND  PC4(ADC)─OUT
+(ใช้แม่เหล็กถาวร — ขั้วเหนือ/ใต้ให้ผลลัพธ์ตรงข้าม)</pre>
+<pre><code class="language-c">ADC_SimpleInit();
+uint16_t raw = analogRead(PC4);
+float voltage = ADC_ToVoltage(raw, 3.3f);
+// Output ~2.5V at zero field (quiescent), ↑ with South pole, ↓ with North pole
+// Sensitivity: ~1.4mV/Gauss (typical)</code></pre>
+<p class="explain">⚠️ Ratiometric — Vout changes with VCC (ใช้ <code>ADC_ToVoltage</code> ชดเชย), output 0-5V range → CH32V003 ADC 3.3V max (วัดได้เฉพาะ 0-3.3V → lost range เหนือ 3.3V), ใช้กับแม่เหล็กถาวร, ไม่บอกขั้วโดยตรง (แค่ analog voltage เปลี่ยน), non-latching (magnet หาย → กลับ 2.5V), linear output proportional to magnetic field, อ่านง่าย (ADC อย่างเดียว) — ไม่ต้อง protocol ซับซ้อน</p>
+
+<h3>API หลัก</h3>
+<table>
+<tr><td><code>ADC_SimpleInit()</code></td><td>Init ADC</td><td><code>analogRead(pin)</code></td><td>อ่าน raw ADC</td></tr>
+<tr><td><code>ADC_ToVoltage(raw, vref)</code></td><td>Raw → Voltage</td><td><code>ADC_ToGauss(voltage)</code></td><td>Voltage → Gauss</td></tr>
+</table>
+</section>
+
+<section>
+<h2>📋 เปรียบเทียบอุปกรณ์วัดทางไฟฟ้าทั้ง 6 ชนิด</h2>
+<table>
+<tr><th>อุปกรณ์</th><th>Interface</th><th>วัดอะไร</th><th>Resolution</th><th>ราคา</th><th>ใช้ดีที่สุดกับ</th></tr>
+<tr><td>INA219</td><td>I2C</td><td>V, I, Power</td><td>12-bit, 0.1mA</td><td>~85฿</td><td>Battery monitor, solar MPPT, power supply</td></tr>
+<tr><td>ADS1115</td><td>I2C</td><td>Voltage (4ch)</td><td>16-bit, 0.125mV</td><td>~120฿</td><td>Precision measurement, load cell, thermocouple</td></tr>
+<tr><td>MCP4725</td><td>I2C</td><td>Output voltage</td><td>12-bit, 0.8mV</td><td>~50฿</td><td>Function gen, setpoint, audio, Vref control</td></tr>
+<tr><td>PZEM004T (v1)</td><td>USART TTL</td><td>V, A, W, kWh, Hz, PF</td><td>0.1V, 0.001A</td><td>~250฿</td><td>AC monitoring, energy logger, smart plug</td></tr>
+<tr><td>PZEM004Tv3</td><td>USART TTL</td><td>V, A, W, kWh, Hz, PF</td><td>0.1V, 0.001A</td><td>~350฿</td><td>Faster than v1, alarm features</td></tr>
+<tr><td>OH49E</td><td>ADC</td><td>Magnetic flux</td><td>10-bit (MCU ADC)</td><td>~15฿</td><td>Proximity detect, RPM, door sensor, position</td></tr>
+</table>
+<p style="margin-top:1rem;color:#64748b"><strong>เลือกยังไง?</strong> วัด DC power → INA219, ต้องการ ADC แม่นสูง 4 channels → ADS1115, สร้าง analog waveform → MCP4725, วัดไฟบ้าน 220V → PZEM004Tv3 (เร็วกว่า), ตรวจจับแม่เหล็กถูกๆ → OH49E, อ่านค่าแบบไม่ต้อง calibrate → PZEM004Tv3</p>
+</section>
+
+<section>
+<h2>✏️ ลองทำดู</h2>
+<ol>
+<li>INA219 battery fuel gauge — วัด V+I ทุก 1s → คำนวณ mAh ใช้ไป, แสดง % แบตคงเหลือบน OLED, ส่ง serial log เป็น CSV</li>
+<li>ADS1115 load cell reader — 4-wire bridge (differential mode) → calibrate ด้วยลูกตุ้มน้ำหนักรู้ค่า → แสดงน้ำหนักเป็นกรัมบน LCD 16x2</li>
+<li>MCP4725 function generator — สร้าง sine wave 10Hz (4096 samples/cycle), รับความถี่จาก rotary encoder, แสดง wave บน OLED</li>
+<li>PZEM004Tv3 power monitor — ทำ dashboard บน OLED: V, A, W, kWh, PF, Hz, พร้อม log ทุก 5 วินาทีลง EEPROM (AT24Cxx) เก็บสถิติรายวัน</li>
+<li>OH49E RPM counter — วางแม่เหล็กบนล้อหมุน, วัดจำนวน pulse/sec → นับรอบ, แสดง RPM บน TM1637, ทำ tachometer แบบง่าย</li>
+</ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_range.html">บทก่อน</a>
+    <a href="chapx_lib_field.html">บทถัดไป →</a>
+</nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

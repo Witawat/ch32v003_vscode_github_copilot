@@ -1,0 +1,172 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย TJC HMI — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_tjc.html">กลับบท</a><a href="chapx_lib_shiftreg595_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — TJC HMI Display</h1>
+
+<div class="answer">
+<h2>ข้อ 1: 2-Page UI — สลับหน้าด้วยปุ่ม</h2>
+<pre><code class="language-c">#include "simple_tjc.h"
+#include "simple_gpio.h"
+
+#define BTN_PAGE  PC1
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    TJC_Init(&USART2);
+    pinMode(BTN_PAGE, PIN_MODE_INPUT_PULLUP);
+
+    uint8_t page = 0;
+    uint8_t last_btn = 1;
+
+    // หน้าแรก — Main
+    TJC_SendCommand("page 0");
+
+    while(1) {
+        uint8_t btn = digitalRead(BTN_PAGE);
+        if(last_btn && !btn) {
+            page = !page;
+            if(page == 0) {
+                TJC_SendCommand("page 0");  // ไปหน้า Main
+            } else {
+                TJC_SendCommand("page 1");  // ไปหน้า Settings
+                // อัปเดตค่าในหน้า settings
+                TJC_SendCommand("t0.txt=\"Settings\"");
+                TJC_SendCommand("n0.val=25");
+                TJC_SendCommand("n1.val=60");
+            }
+            Delay_Ms(50);
+        }
+        last_btn = btn;
+
+        // หน้า Main — อัปเดตค่าจากเซ็นเซอร์
+        if(page == 0) {
+            uint16_t adc = ADC_Read(ADC_CH0);
+            uint16_t temp = (uint32_t)adc * 330 / 4095;
+            char cmd[32];
+            sprintf(cmd, "t1.txt=\"Temp: %d.%d C\"", temp/10, temp%10);
+            TJC_SendCommand(cmd);
+        }
+
+        Delay_Ms(200);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> TJC HMI แต่ละหน้าคือ "page" ที่ออกแบบไว้ใน Nextion Editor — <code>TJC_SendCommand("page N")</code> สั่งเปลี่ยนหน้า — ตอนเปลี่ยนไปหน้า settings ให้ส่งค่าปัจจุบันไปอัปเดต components (t0=text, n0=number) — หน้า Main อัปเดต sensor value ทุก 200ms — ใช้ <code>sprintf</code> สร้าง command string — TJC สื่อสารผ่าน UART (115200 baud) — ตั้งชื่อ component ให้สื่อความหมาย (t=text, n=number, b=button)</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: Graph แบบ Real-time จากเซ็นเซอร์</h2>
+<pre><code class="language-c">#include "simple_tjc.h"
+#include "simple_adc.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    TJC_Init(&USART2);
+    ADC_SimpleInit(ADC_CH0);
+
+    TJC_SendCommand("page 2");  // หน้า graph
+
+    uint8_t x = 0;
+
+    while(1) {
+        uint16_t adc = ADC_Read(ADC_CH0);
+        // Map ADC 0-4095 → graph Y 0-200
+        uint16_t y = (uint32_t)adc * 200 / 4095;
+
+        // เพิ่มจุดข้อมูลลง waveform component (wv0)
+        char cmd[64];
+        sprintf(cmd, "add 1,%d,%d", x, y);
+        TJC_SendCommand(cmd);
+
+        x++;
+        if(x >= 300) {  // waveform เต็ม
+            TJC_SendCommand("cle 1,0");  // ล้าง channel 1
+            x = 0;
+        }
+
+        // อัปเดตตัวเลขแสดงค่าปัจจุบัน
+        sprintf(cmd, "n0.val=%d", adc);
+        TJC_SendCommand(cmd);
+
+        // แสดงค่าแรงดัน
+        uint16_t mv = (uint32_t)adc * 3300 / 4095;
+        sprintf(cmd, "t0.txt=\"%d.%03d V\"", mv/1000, mv%1000);
+        TJC_SendCommand(cmd);
+
+        Delay_Ms(100);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> TJC มี waveform component ในตัว — <code>add ch,x,y</code> เพิ่มจุดข้อมูลลง channel — map ADC 0-4095 เป็นค่า y 0-200 — เลื่อน x ทีละ 1 จนเต็ม 300 จุดแล้ว clear — อัปเดตตัวเลข (n0) และข้อความ (t0) ประกอบกราฟ — Refresh rate 100ms = 10Hz — waveform component รองรับหลาย channel (สูงสุด 4) — สำหรับข้อมูลเร็ว (kHz) ควรส่งแบบ batch ด้วยคำสั่ง <code>addt</code> แทน</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: รับ Touch Event จาก TJC</h2>
+<pre><code class="language-c">#include "simple_tjc.h"
+#include "simple_gpio.h"
+
+#define LED_PIN  PC0
+
+volatile uint8_t led_state = 0;
+volatile uint8_t slider_value = 0;
+
+// Parse touch event จาก TJC
+// รูปแบบ: 0x65 btn_id event_type\xFF\xFF\xFF
+void TJC_ParseEvent(uint8_t *data, uint8_t len) {
+    if(len >= 4 && data[0] == 0x65) {  // touch event
+        uint8_t component = data[1];
+        uint8_t event = data[2];  // 1=press, 0=release
+
+        if(component == 0 && event == 1) {  // btn0 press
+            led_state = !led_state;
+            digitalWrite(LED_PIN, led_state);
+        }
+        if(component == 1 && event == 1) {  // btn1 press
+            TJC_SendCommand("page 0");  // back to main
+        }
+    }
+    if(len >= 4 && data[0] == 0x71) {  // slider/value event
+        slider_value = data[1];
+        // ใช้ slider_value ควบคุม PWM
+        PWM_SetDuty(TIM2_CH1, slider_value);
+    }
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    TJC_Init(&USART2);
+    pinMode(LED_PIN, PIN_MODE_OUTPUT);
+
+    TJC_SendCommand("page 0");
+
+    uint8_t rx_buf[32];
+
+    while(1) {
+        // อ่านข้อมูลจาก TJC
+        uint8_t len = 0;
+        while(USART_Available(&USART2)) {
+            if(len < sizeof(rx_buf)) {
+                rx_buf[len++] = USART_Read(&USART2);
+            }
+        }
+
+        if(len > 0) {
+            TJC_ParseEvent(rx_buf, len);
+        }
+
+        // อัปเดต slider value บนจอ
+        char cmd[16];
+        sprintf(cmd, "n0.val=%d", slider_value);
+        TJC_SendCommand(cmd);
+
+        Delay_Ms(50);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> TJC ส่ง touch event กลับมาผ่าน UART — ข้อมูลขึ้นต้นด้วย 0x65 (touch) หรือ 0x71 (slider/value) — ไบต์ที่ 2 คือ ID ของ component, ไบต์ที่ 3 คือ event type (1=press, 0=release) — อ่านข้อมูลจาก UART buffer แล้ว parse ทีละ event — ใช้ touch event ควบคุม LED, เปลี่ยนหน้า, ปรับ PWM — การ poll UART แบบนี้เหมาะกับ MCU ที่มี RAM น้อย — TJC ยังรองรับ pass-through mode เพื่อ debug คำสั่งผ่าน USB</div>
+</div>
+
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_tjc.html">กลับบท</a><a href="chapx_lib_shiftreg595_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

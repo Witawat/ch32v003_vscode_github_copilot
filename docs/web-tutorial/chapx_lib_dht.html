@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DHT11/DHT22 — เซนเซอร์อุณหภูมิ+ความชื้น GPIO — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_lcdmenu.html">บทก่อน</a>
+    <a href="chapx_lib_ds18b20.html">บทถัดไป →</a>
+</nav>
+
+<h1>DHT11/DHT22 — เซนเซอร์อุณหภูมิ+ความชื้น GPIO</h1>
+<span class="level beginner">ระดับเริ่มต้น</span>
+
+<section class="flowchart">
+    <h2>🧭 แผนภาพการทำงาน</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["DHT_Init(pin,type)"] --> B["DHT_Read(&amp;t,&amp;h)"]
+    B --> C{"==DHT_OK?"}
+    C -->|Yes| D["ใช้ค่า"]
+    D --> B
+    C -->|No| E["Delay 1000ms"]
+    E --> B
+    </pre>
+</section>
+
+<section>
+    <h2>🔌 การต่อวงจร</h2>
+    <pre class="ascii-circuit">
+        DHT11 / DHT22 (1-Wire GPIO)
+┌────────────────────────────────────┐
+│ PC0 ──── DATA                      │
+│ 3.3V ─── VCC                       │
+│ GND  ─── GND                       │
+│                                    │
+│ R 4.7kΩ pull-up: DATA ↔ 3.3V      │
+│ (โมดูลสำเร็จรูปมี pull-up ในตัว)     │
+└────────────────────────────────────┘
+    </pre>
+    <p>สายสัญญาณเส้นเดียว (Single-wire bidirectional) — ใช้ GPIO แบบ bit-bang ห้ามลืม pull-up 4.7kΩ ถ้าไม่มี pull-up จะอ่านไม่ขึ้น</p>
+</section>
+
+<section>
+    <h2>📚 หลักการทำงาน</h2>
+    <p><strong>Single-wire bidirectional</strong>: ใช้ขา GPIO เพียงขาเดียว ทั้งส่งคำสั่งและรับข้อมูลกลับ — ผลัดกันเป็น input/output</p>
+    <p><strong>40-bit frame</strong>: ความชื้นจำนวนเต็ม 8bit + ความชื้นทศนิยม 8bit + อุณหภูมิจำนวนเต็ม 8bit + อุณหภูมิทศนิยม 8bit + checksum 8bit</p>
+    <p><strong>DHT11</strong>: ความแม่นยำ ±2°C / ±5%RH, อ่านได้สูงสุด <strong>1Hz</strong> (1 ครั้งต่อวินาที)</p>
+    <p><strong>DHT22</strong>: ความแม่นยำ ±0.5°C / ±2%RH, อ่านได้สูงสุด <strong>0.5Hz</strong> (1 ครั้งต่อ 2 วินาที), มี CRC 8-bit ตรวจสอบความถูกต้อง</p>
+    <p><strong>Blocking ~25ms</strong>: ระหว่างอ่าน DHT_Read() จะบล็อกโปรแกรมประมาณ 25ms — <strong>ห้ามเรียกใน ISR โดยเด็ดขาด</strong></p>
+    <p><strong>ห้ามอ่านถี่เกิน</strong>: ถ้าอ่านเร็วกว่า 1Hz(DHT11) หรือ 0.5Hz(DHT22) จะได้ค่าเดิมซ้ำ หรือค่าเพี้ยน</p>
+</section>
+
+<section>
+    <h2>💻 เขียน Code ทีละขั้น</h2>
+
+    <div class="step"><h3>ขั้นที่ 1: Init + Setup</h3>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "DHT.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    DHT_Init(PC0, DHT11);  // หรือ DHT22
+    USART_Println("DHT Ready!");</code></pre>
+    <p class="explain">🔍 <code>DHT_Init(pin, type)</code> — type เป็น <code>DHT11</code> หรือ <code>DHT22</code> ต้องตรงกับเซนเซอร์ที่ต่ออยู่ ถ้า DHT22 แต่ตั้งเป็น DHT11 จะอ่านค่าแปลก</p></div>
+
+    <div class="step"><h3>ขั้นที่ 2: อ่านค่าอุณหภูมิ+ความชื้น</h3>
+    <pre><code class="language-c">    float t, h;
+    if(DHT_Read(&t, &h) == DHT_OK) {
+        USART_Print("Temp: ");
+        USART_PrintFloat(t, 1);
+        USART_Print("C  Hum: ");
+        USART_PrintFloat(h, 1);
+        USART_Println("%");
+    } else {
+        USART_Println("DHT Read Failed!");
+    }</code></pre>
+    <p class="explain">🔍 <code>DHT_Read(&t, &h)</code> — คืน <code>DHT_OK</code> เมื่ออ่านสำเร็จ หรือ <code>DHT_FAIL</code> เมื่อไม่สำเร็จ (pull-up หาย/สายหลวม/สายยาวเกิน 1m) ค่าที่อ่านได้จะถูกเก็บในตัวแปร t และ h ตามลำดับ</p></div>
+
+    <div class="step"><h3>ขั้นที่ 3: Loop + Non-Blocking Timer</h3>
+    <pre><code class="language-c">    Timer_t tmr;
+    Start_Timer(&tmr, 2000, 1);  // อ่านทุก 2 วินาที
+
+    while(1) {
+        if(Is_Timer_Expired(&tmr)) {
+            float t, h;
+            if(DHT_Read(&t, &h) == DHT_OK) {
+                USART_Print("T:"); USART_PrintFloat(t, 1);
+                USART_Print(" H:"); USART_PrintFloat(h, 1);
+                USART_Println("%");
+            }
+        }
+        IWDG_Feed();  // เลี้ยงหมาถ้ามี
+    }
+}</code></pre>
+    <p class="explain">🔍 ใช้ <code>Timer_t</code> แบบ Non-Blocking ตั้งอ่านทุก 2 วิ — ไม่บล็อก main loop, <code>IWDG_Feed()</code> เลี้ยง watchdog ระหว่างรอรอบถัดไป</p></div>
+</section>
+
+<section>
+    <h2>📋 API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+        <tr><td><code>DHT_Init(pin, type)</code></td><td>กำหนดขา GPIO และชนิดเซนเซอร์</td><td><code>DHT_Init(PC0, DHT22)</code></td></tr>
+        <tr><td><code>DHT_Read(&t, &h)</code></td><td>อ่านอุณหภูมิ+ความชื้น — คืน DHT_OK หรือ DHT_FAIL</td><td><code>if(DHT_Read(&t, &h) == DHT_OK){...}</code></td></tr>
+        <tr><td><code>DHT_ReadTempOnly(&t)</code></td><td>อ่านเฉพาะอุณหภูมิ</td><td><code>DHT_ReadTempOnly(&temp)</code></td></tr>
+        <tr><td><code>DHT_ReadHumOnly(&h)</code></td><td>อ่านเฉพาะความชื้น</td><td><code>DHT_ReadHumOnly(&hum)</code></td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>อ่านได้ -999 เสมอ</td><td>ไม่มี pull-up resistor หรือสายยาวเกิน 1 เมตร</td><td>ต่อ R 4.7kΩ ระหว่าง DATA ↔ 3.3V, ลดความยาวสายให้สั้นกว่า 50cm</td></tr>
+        <tr><td>อ่านได้ครั้งแรกครั้งเดียว แล้วค้าง</td><td>อ่านถี่เกิน — DHT11 ห้าม < 1Hz, DHT22 ห้าม < 0.5Hz</td><td>ใช้ Timer_t ตั้งช่วงห่าง >= 2000ms สำหรับ DHT22, >= 1000ms สำหรับ DHT11</td></tr>
+        <tr><td>DHT22 ให้ค่าแปลกๆ (เช่น temp ติดลบทั้งที่ห้อง 30°C)</td><td><code>DHT_Init</code> ใส่ type เป็น <code>DHT11</code> แต่เซนเซอร์เป็น DHT22</td><td>เปลี่ยน <code>DHT_Init(PC0, DHT11)</code> → <code>DHT_Init(PC0, DHT22)</code></td></tr>
+        <tr><td>ISR ทำงานแปลกหลังจากอ่าน DHT</td><td><code>DHT_Read()</code> บล็อก ~25ms — ไม่ควรเรียกใน ISR</td><td>ย้ายการอ่าน DHT ออกจาก ISR — อ่านใน main loop เท่านั้น ใช้ flag แจ้ง ISR</td></tr>
+        <tr><td>ค่าแกว่ง อ่านแล้วได้คนละค่าทุกครั้ง</td><td>ไฟเลี้ยงไม่นิ่ง หรือ noise บนสาย DATA</td><td>ใช้ capacitor 100nF คร่อม VCC-GND ใกล้เซนเซอร์, ใช้สายสั้น, average 3-5 ครั้ง</td></tr>
+        <tr><td>อ่านไม่ขึ้นเลย — คืน DHT_FAIL ตลอด</td><td>สลับขา VCC กับ DATA</td><td>เช็คขั้วสาย — DHT11/22 pin1=VCC, pin2=DATA, pin3=NC, pin4=GND</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>🛠️ สร้าง Product: เครื่องวัดอุณหภูมิ+ความชื้นในห้อง</h2>
+    <p>DHT11 + OLED SSD1306 แสดงผลทุก 2 วินาที ด้วย Timer Non-Blocking</p>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "DHT.h"
+#include "OLED.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_Init(115200);
+    USART_Println("=== DHT11 Room Monitor ===");
+
+    DHT_Init(PC0, DHT11);
+
+    OLED_t oled;
+    OLED_Init(&oled, 0x3C, OLED_128x64);
+    OLED_SetFont(&oled, FONT_8x16);
+
+    Timer_t tmr;
+    Start_Timer(&tmr, 2000, 1);
+
+    while(1) {
+        if(Is_Timer_Expired(&tmr)) {
+            float t, h;
+            OLED_Clear(&oled);
+            if(DHT_Read(&t, &h) == DHT_OK) {
+                OLED_SetCursor(&oled, 0, 0);
+                OLED_PrintFloat(&oled, "Temp:", t, 1); OLED_Print(&oled, " C");
+                OLED_SetCursor(&oled, 0, 2);
+                OLED_PrintFloat(&oled, "Hum :", h, 1); OLED_Print(&oled, " %");
+            } else {
+                OLED_SetCursor(&oled, 0, 1);
+                OLED_Print(&oled, "Sensor Error!");
+            }
+            OLED_Display(&oled);
+        }
+        IWDG_Feed();
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>✏️ ลองทำดู</h2>
+    <ol>
+        <li>LED แสดงสถานะ: LED เขียวเมื่ออุณหภูมิปกติ (≤ 35°C), LED แดงเมื่อร้อน (> 35°C) — ใช้ <code>digitalWrite</code></li>
+        <li>ทำ Data Logger บันทึกอุณหภูมิ+ความชื้นลง Flash ทุก 5 นาที — ใช้ <code>Flash_Write()</code> และ <code>ELAPSED_TIME()</code></li>
+        <li>เทียบ DHT11 vs DHT22 บน MCU ตัวเดียว — ต่อคนละขา (PC0= DHT11, PC1= DHT22) แสดงผลบน OLED พร้อมกัน</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_lcdmenu.html">บทก่อน</a>
+    <a href="chapx_lib_ds18b20.html">บทถัดไป →</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

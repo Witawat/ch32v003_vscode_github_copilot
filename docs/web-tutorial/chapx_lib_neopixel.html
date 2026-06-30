@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NeoPixel — WS2812B RGB Strip GPIO — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_tm1650.html">บทก่อน</a>
+    <a href="chapx_lib_ws2812matrix.html">บทถัดไป →</a>
+</nav>
+<h1>NeoPixel — WS2812B RGB Strip GPIO</h1>
+<span class="level intermediate">ระดับกลาง</span>
+<section class="flowchart">
+    <h2>🧭 แผนภาพการทำงาน</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["NeoPixel_Init(PC0, N)"] --> B["NeoPixel_SetPixel(i, R,G,B)"]
+    B --> C["NeoPixel_SetHSV(i, H,S,V)"]
+    C --> D["NeoPixel_Show()"]
+    D --> E["Disable Interrupts"]
+    E --> F["Bit-bang 800kHz NRZ"]
+    F --> G["Enable Interrupts"]
+    G --> H["while(1): rainbow loop"]
+    H --> B
+    </pre>
+</section>
+<section>
+    <h2>🔌 การต่อวงจร</h2>
+    <pre class="ascii-circuit">
+          WS2812B NeoPixel Strip
+    ┌────────────────────────────────┐
+    │ MCU                  WS2812B   │
+    │ 5V (External PSU) ─── VCC      │
+    │ GND ─────────────── GND        │
+    │ PC0 ──[LEVEL SHIFT]── DATA     │
+    │                                │
+    │ ⚠️ ต้องใช้ Level Shifter!      │
+    │ 3.3V → 5V (74HCT125/74AHCT125) │
+    │ หรือลด VCC WS2812B เหลือ ~4V   │
+    └────────────────────────────────┘
+    </pre>
+    <p>WS2812B ต้องการ 5V logic — CH32V003 3.3V ไม่พอ! — ต้องใช้ level shifter (74HCT125) หรือลดแรงดัน VCC ของ WS2812B ลง (เสี่ยง) — ต่อ 5V แยกทุก 50-100 LEDs</p>
+</section>
+<section>
+    <h2>📚 หลักการทำงาน</h2>
+    <p><strong>WS2812B Protocol:</strong> ใช้ NRZ (Non-Return-to-Zero) ที่ 800kHz — แต่ละ LED รับ 24-bit (G→R→B, 8-bit ต่อสี) — BIT 0: HIGH 0.4µs + LOW 0.85µs, BIT 1: HIGH 0.85µs + LOW 0.4µs — RESET: LOW >50µs — ความแม่นยำระดับนาโนวินาที</p>
+    <p><strong>Timing Critical:</strong> CH32V003 @ 48MHz — instruction ~21ns — ใช้ assembly bit-bang เพื่อความแม่นยำ — ต้องปิด interrupt ทั้งหมดระหว่าง Show() เพราะ interrupt จังหวะเดียวทำให้สีเพี้ยน</p>
+    <p><strong>GRB Color Order:</strong> WS2812B ใช้ GRB (Green-Red-Blue) — ไม่ใช่ RGB มาตรฐาน — NeoPixel_SetPixel(i, r, g, b) จัดการให้แล้ว — SetHSV() ใช้ HSL→RGB conversion</p>
+    <p><strong>Chain Topology:</strong> ข้อมูลส่งเรียงตาม LED — LED[0] → LED[1] → ... → LED[N-1] — LED แต่ละตัวกินข้อมูลของตัวเอง 24-bit แล้วส่งที่เหลือต่อไป — บัฟเฟอร์ต้องมีขนาด N × 24-bit</p>
+</section>
+<section>
+    <h2>💻 เขียน Code ทีละขั้น</h2>
+    <div class="step"><h3>ขั้นที่ 1: Init + Setup</h3>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+#define NUM_LEDS 8
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    NeoPixel_Init(PC0, NUM_LEDS);   // DATA pin, count
+    NeoPixel_SetBrightness(128);    // 0-255 global brightness</code></pre>
+    <p class="explain">🔍 NeoPixel_Init(pin, count) จอง buffer ขนาด count × 3 bytes — SetBrightness() ปรับความสว่างโดยรวม (scale ทุกสี) — ต้องต่อระดับสัญญาณ 5V!</p></div>
+    <div class="step"><h3>ขั้นที่ 2: ตั้งสี LED แต่ละดวง</h3>
+    <pre><code class="language-c">    // LED 0 = Red
+    NeoPixel_SetPixel(0, 255, 0, 0);
+    // LED 1 = Green
+    NeoPixel_SetPixel(1, 0, 255, 0);
+    // Set all to Blue
+    NeoPixel_SetAll(0, 0, 255);
+    // LED 2 = HSV (Hue=120=Green)
+    NeoPixel_SetHSV(2, 120, 255, 255);
+
+    NeoPixel_Show();  // Send data to strip</code></pre>
+    <p class="explain">🔍 SetPixel(index, R, G, B) ตั้งค่าสีใน buffer — SetAll(R,G,B) ตั้งทุก LED — SetHSV(index, H, S, V) ใช้ Hue 0-360 — ต้องเรียก Show() เพื่อส่งข้อมูล</p></div>
+    <div class="step"><h3>ขั้นที่ 3: Rainbow Loop</h3>
+    <pre><code class="language-c">    uint16_t hue = 0;
+
+    while(1) {
+        for(uint8_t i = 0; i < NUM_LEDS; i++) {
+            uint16_t h = hue + (i * 360 / NUM_LEDS);
+            NeoPixel_SetHSV(i, h % 360, 255, 255);
+        }
+        NeoPixel_Show();
+        Delay_Ms(20);
+        hue += 2;
+    }
+}</code></pre>
+    <p class="explain">🔍 Rainbow effect — แต่ละ LED มี hue ต่างกัน 360/N องศา — hue เพิ่มทีละ 2 ทำให้สีหมุนวน — Show() ส่งข้อมูล strip — 20ms delay = ~50fps</p></div>
+</section>
+<section>
+    <h2>📋 API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+        <tr><td><code>NeoPixel_Init(pin, count)</code></td><td>เริ่มต้น NeoPixel จอง buffer</td><td><code>NeoPixel_Init(PC0, 8)</code></td></tr>
+        <tr><td><code>NeoPixel_SetPixel(i, r, g, b)</code></td><td>ตั้งสี LED ดวงที่ i</td><td><code>NeoPixel_SetPixel(0, 255,0,0)</code></td></tr>
+        <tr><td><code>NeoPixel_SetAll(r, g, b)</code></td><td>ตั้งสีทุก LED</td><td><code>NeoPixel_SetAll(0, 255, 0)</code></td></tr>
+        <tr><td><code>NeoPixel_SetHSV(i, h, s, v)</code></td><td>ตั้งสีแบบ HSV (h=0-360)</td><td><code>NeoPixel_SetHSV(0, 180, 255, 255)</code></td></tr>
+        <tr><td><code>NeoPixel_Show()</code></td><td>ส่ง buffer ไป strip (ปิด interrupt)</td><td><code>NeoPixel_Show()</code></td></tr>
+        <tr><td><code>NeoPixel_Clear()</code></td><td>ปิดทุก LED</td><td><code>NeoPixel_Clear()</code></td></tr>
+        <tr><td><code>NeoPixel_SetBrightness(v)</code></td><td>ความสว่างรวม 0-255</td><td><code>NeoPixel_SetBrightness(128)</code></td></tr>
+        <tr><td><code>NeoPixel_GetPixel(i, &r, &g, &b)</code></td><td>อ่านค่าสีจาก buffer</td><td><code>NeoPixel_GetPixel(0, &r, &g, &b)</code></td></tr>
+    </table>
+</section>
+<section>
+    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>สีเพี้ยน / LED ไม่ติด</td><td>ขาด Level Shifter — WS2812B ต้อง 5V logic</td><td>ใช้ 74HCT125/74AHCT125 level shifter — หรือลด VCC เหลือ 3.7-4.0V (เสี่ยง)</td></tr>
+        <tr><td>LED ท้ายๆ สีเพี้ยน</td><td>แรงดันตกในสาย — ต่อ strip ยาวโดยไม่เสริมไฟ</td><td>ต่อ 5V เพิ่มทุก 50-100 LEDs — GND ต้องต่อร่วมกันทั้งหมด</td></tr>
+        <tr><td>LED ติดๆ ดับๆ / กระพริบสุ่ม</td><td>Interrupt ขัดจังหวะตอน Show() — timing เสีย</td><td>Show() จะปิด interrupt อัตโนมัติ — ตรวจสอบว่าใช้ Show() ไม่ใช่เขียนเอง</td></tr>
+        <tr><td>3.3V Hack — ใช้ได้บ้างไม่ได้บ้าง</td><td>ลด VCC เหลือ ~3.7V ให้ 3.3V เป็น HIGH ได้</td><td>เป็นวิธีที่ไม่แนะนำ — ใช้ level shifter ดีกว่า — WS2812B อาจเสียหาย</td></tr>
+        <tr><td>LED แรกสีถูก ตัวต่อไปผิด</td><td>LED เสียหรือบัดกรีไม่ดี — สัญญาณไม่ผ่าน</td><td>เปลี่ยน LED ดวงที่เสีย — ตรวจสอบจุดบัดกรี</td></tr>
+    </table>
+</section>
+<section>
+    <h2>🛠️ สร้าง Product: ไฟ RGB แสดงสถานะ 3 โหมด</h2>
+    <p>8 LEDs แสดงสถานะ 3 แบบ — เขียว=ปกติ, แดง=เตือน (Blink), น้ำเงิน=โหมดตั้งค่า — กดปุ่มเปลี่ยนโหมด</p>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+#define NUM_LEDS 8
+typedef enum { MODE_NORMAL, MODE_WARNING, MODE_SETUP } Mode_t;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    NeoPixel_Init(PC0, NUM_LEDS);
+    NeoPixel_SetBrightness(128);
+
+    pinMode(PC3, PIN_MODE_INPUT_PULLUP); // Button
+    Mode_t mode = MODE_NORMAL;
+    Timer_t tmr_blink;
+    uint8_t blink_state = 0;
+
+    while(1) {
+        // Button press → change mode
+        if(digitalRead(PC3) == 0) {
+            Delay_Ms(50); // debounce
+            if(digitalRead(PC3) == 0) {
+                mode = (mode + 1) % 3;
+                while(digitalRead(PC3) == 0); // wait release
+            }
+        }
+
+        switch(mode) {
+            case MODE_NORMAL:
+                NeoPixel_SetAll(0, 255, 0); // Green
+                NeoPixel_Show();
+                break;
+
+            case MODE_WARNING:
+                if(!blink_state) {
+                    Start_Timer(&tmr_blink, 500, 1);
+                    blink_state = 1;
+                }
+                if(Is_Timer_Expired(&tmr_blink)) {
+                    static uint8_t on = 1;
+                    NeoPixel_SetAll(on ? 255 : 0, on ? 0 : 255, 0);
+                    NeoPixel_Show();
+                    on = !on;
+                }
+                break;
+
+            case MODE_SETUP:
+                NeoPixel_SetAll(0, 0, 255); // Blue
+                NeoPixel_Show();
+                blink_state = 0;
+                break;
+        }
+        Delay_Ms(10);
+    }
+}</code></pre>
+</section>
+<section>
+    <h2>✏️ ลองทำดู</h2>
+    <ol>
+        <li>Rainbow Cycle — ไล่สีรุ้งวน — ปรับความเร็วด้วย Potentiometer อ่าน ADC</li>
+        <li>Chaser / Marquee — LED วิ่ง 1-3 ดวงพร้อมกัน — ใช้ Non-Blocking Timer เปลี่ยนตำแหน่ง</li>
+        <li>VU Meter — อ่านเสียงจาก ADC — แปลงเป็นความสูงของ LED — ใช้ SetHSV(hue ตามความดัง)</li>
+    </ol>
+</section>
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_tm1650.html">บทก่อน</a>
+    <a href="chapx_lib_ws2812matrix.html">บทถัดไป →</a>
+</nav>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

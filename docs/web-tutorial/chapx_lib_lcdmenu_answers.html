@@ -1,0 +1,164 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย LCD MENU — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_lcdmenu.html">กลับบท</a><a href="chapx_lib_circularbuffer_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — LCD Menu</h1>
+<div class="answer"><h2>ข้อ 1: WiFi SSID Edit — แก้ไขชื่อ WiFi ผ่านปุ่มกด</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "LCDMenu.h"
+#include "I2C_LCD.h"
+
+char ssid[33] = "MyWiFi_2.4G";
+uint8_t cursor_pos = 0;
+
+const char charset[] = " ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_.";
+#define CHARSET_LEN (sizeof(charset) - 1)
+
+void ssid_edit_up(void) {
+    char *p = strchr(charset, ssid[cursor_pos]);
+    if(p) { int idx = (p - charset + 1) % CHARSET_LEN;
+            ssid[cursor_pos] = charset[idx]; }
+}
+
+void ssid_edit_down(void) {
+    char *p = strchr(charset, ssid[cursor_pos]);
+    if(p) { int idx = (p - charset - 1 + CHARSET_LEN) % CHARSET_LEN;
+            ssid[cursor_pos] = charset[idx]; }
+}
+
+void ssid_edit_right(void) { if(cursor_pos < 31) cursor_pos++; }
+void ssid_edit_left(void)  { if(cursor_pos > 0)  cursor_pos--; }
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    I2C_LCD_Init(0x27, 16, 2);
+    I2C_LCD_Backlight(1);
+
+    LCDMenu_Init();
+    LCDMenu_AddItem("WiFi SSID", LCDMENU_EDIT, ssid_edit_up,
+                    ssid_edit_down, ssid_edit_right, ssid_edit_left);
+
+    while(1) {
+        LCDMenu_Process();
+
+        I2C_LCD_SetCursor(0, 0); I2C_LCD_Print("SSID:");
+        I2C_LCD_SetCursor(0, 1); I2C_LCD_Print(ssid + max(0, cursor_pos - 15));
+        I2C_LCD_SetCursor(min(cursor_pos, 15), 1);
+        I2C_LCD_Write(0x5F);  // underscore for cursor
+
+        Delay_Ms(50);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ใช้ <code>charset[]</code> เป็นชุดอักขระที่ยอมรับ — ปุ่ม up/down วนเลือกตัวอักษรใน charset ด้วย modulo — left/right เลื่อน cursor — แสดงผลโดย offset <code>cursor_pos-15</code> ให้ auto-scroll เมื่อชื่อยาวเกิน 16 ตัว — ใช้ <code>0x5F</code> (underscore) แทน cursor กะพริบ — <code>LCDMENU_EDIT</code> บอกว่า menu item นี้เป็น editable — เมื่อบันทึกค่า ควรเขียนลง EEPROM ด้วย <code>AT24Cxx_Write</code> — charset ควรแยกเป็นกลุ่ม (uppercase/lowercase/numbers/symbols) เพื่อให้แก้ไขเร็วขึ้น</div></div>
+<div class="answer"><h2>ข้อ 2: Setpoint Adjust — ปรับค่า setpoint ด้วยปุ่ม up/down</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "LCDMenu.h"
+#include "I2C_LCD.h"
+
+float setpoint = 40.0f;
+float step = 0.5f;
+float min_val = 10.0f, max_val = 80.0f;
+
+void setpoint_inc(void) { if(setpoint < max_val) setpoint += step; }
+void setpoint_dec(void) { if(setpoint > min_val) setpoint -= step; }
+
+void setpoint_fast_inc(void) { if(setpoint < max_val) setpoint += step * 10; }
+void setpoint_fast_dec(void) { if(setpoint > min_val) setpoint -= step * 10; }
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    I2C_LCD_Init(0x27, 16, 2);
+    I2C_LCD_Backlight(1);
+
+    LCDMenu_Init();
+    LCDMenu_AddItem("Setpoint", LCDMENU_ADJUST,
+                    setpoint_inc, setpoint_dec,
+                    setpoint_fast_inc, setpoint_fast_dec);
+
+    char buf[17];
+    while(1) {
+        LCDMenu_Process();
+
+        I2C_LCD_SetCursor(0, 0); I2C_LCD_Print("TARGET TEMP");
+        I2C_LCD_SetCursor(3, 1);
+        snprintf(buf, 17, "%.1f C    ", setpoint);
+        I2C_LCD_Print(buf);
+
+        Delay_Ms(80);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>LCDMENU_ADJUST</code> รองรับ up/down + fast increment (long press) — step ปกติ 0.5°C, fast step ×10 — clamp ด้วย <code>min_val</code>/<code>max_val</code> ป้องกันค่าผิดปกติ — แสดงด้วยทศนิยม 1 ตำแหน่ง <code>%.1f</code> — space ท้ายสตริงลบตัวอักษรเก่าที่อาจค้าง — ควรเก็บค่า setpoint ลง EEPROM ทุกครั้งที่เปลี่ยน — สำหรับระบบจริงควรเพิ่ม callback on_exit เพื่อบันทึกค่าเฉพาะเมื่อออกจากเมนู</div></div>
+<div class="answer"><h2>ข้อ 3: Toggle ON/OFF + Save ลง EEPROM</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "LCDMenu.h"
+#include "I2C_LCD.h"
+#include "AT24Cxx.h"
+
+#define EEPROM_ADDR  0x00
+
+typedef struct {
+    uint8_t power_on;
+    uint8_t backlight;
+    uint8_t buzzer;
+    float   setpoint;
+} Config_t;
+
+Config_t cfg;
+
+void toggle_power(void)    { cfg.power_on  = !cfg.power_on; }
+void toggle_backlight(void) { cfg.backlight = !cfg.backlight; }
+void toggle_buzzer(void)   { cfg.buzzer    = !cfg.buzzer; }
+
+void save_config(void) {
+    AT24Cxx_Write(EEPROM_ADDR, (uint8_t*)&cfg, sizeof(Config_t));
+}
+
+void load_config(void) {
+    AT24Cxx_Read(EEPROM_ADDR, (uint8_t*)&cfg, sizeof(Config_t));
+    // ตรวจสอบ magic number / CRC
+    if(cfg.setpoint < 0 || cfg.setpoint > 100) {
+        memset(&cfg, 0, sizeof(Config_t));
+        cfg.backlight = 1; cfg.power_on = 1; cfg.setpoint = 40.0f;
+        save_config();
+    }
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    I2C_LCD_Init(0x27, 16, 2);
+    AT24Cxx_Init();
+    load_config();
+
+    LCDMenu_Init();
+    LCDMenu_AddItem("Power",     LCDMENU_TOGGLE, toggle_power,     NULL, NULL, NULL);
+    LCDMenu_AddItem("Backlight", LCDMENU_TOGGLE, toggle_backlight, NULL, NULL, NULL);
+    LCDMenu_AddItem("Buzzer",    LCDMENU_TOGGLE, toggle_buzzer,    NULL, NULL, NULL);
+
+    I2C_LCD_Print("Config Loaded");
+    Delay_Ms(1000);
+
+    while(1) {
+        LCDMenu_Process();
+
+        static Config_t last_cfg;
+        if(memcmp(&cfg, &last_cfg, sizeof(Config_t)) != 0) {
+            I2C_LCD_Clear();
+            I2C_LCD_SetCursor(0, 0); I2C_LCD_Printf("PWR:%s BL:%s BZ:%s",
+                cfg.power_on ? "ON " : "OFF",
+                cfg.backlight ? "ON " : "OFF",
+                cfg.buzzer ? "ON " : "OFF");
+            I2C_LCD_SetCursor(0, 1); I2C_LCD_Print("→ saving...");
+            save_config();
+            last_cfg = cfg;
+        }
+
+        Delay_Ms(50);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>LCDMENU_TOGGLE</code> สำหรับ boolean settings — เก็บ config ใน <code>Config_t</code> struct — <code>save_config()</code> เขียน struct ทั้งหมดลง AT24Cxx EEPROM — <code>load_config()</code> อ่านตอนบูท พร้อม validation: ถ้าค่าผิดปกติ → reset เป็น default แล้ว save — ใช้ <code>memcmp</code> เช็คการเปลี่ยนแปลงก่อน save ลด EEPROM wear — ควรเพิ่ม CRC8/CRC16 ใน struct เพื่อตรวจจับ EEPROM corruption — สำหรับ production ควรมี factory reset (กดปุ่มค้างตอนบูท) เพื่อ restore default</div></div>
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_lcdmenu.html">กลับบท</a><a href="chapx_lib_circularbuffer_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

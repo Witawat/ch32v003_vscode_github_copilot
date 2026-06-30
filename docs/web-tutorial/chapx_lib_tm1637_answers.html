@@ -1,0 +1,161 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย TM1637 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_tm1637.html">กลับบท</a><a href="chapx_lib_tm1650_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — TM1637 4-Digit Display</h1>
+
+<div class="answer">
+<h2>ข้อ 1: Countdown Timer 99:59</h2>
+<pre><code class="language-c">#include "simple_tm1637.h"
+#include "simple_timer.h"
+
+volatile uint16_t total_seconds = 99 * 60 + 59;  // 99:59
+volatile uint8_t tick = 0;
+
+void Timer_IRQ(void) {
+    tick++;
+    if(tick >= 10) {  // 100ms × 10 = 1s
+        tick = 0;
+        if(total_seconds > 0) total_seconds--;
+    }
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    TM1637_Init(TM1637_PINS_DEFAULT);
+    TM1637_SetBrightness(4);
+
+    // Timer interrupt ทุก 100ms
+    Timer1_Init(TIM1_UP_COUNT, 47999, 4999);
+
+    while(1) {
+        uint8_t min = total_seconds / 60;
+        uint8_t sec = total_seconds % 60;
+
+        TM1637_DisplayDigit(0, min / 10);
+        TM1637_DisplayDigit(1, min % 10);
+        TM1637_DisplayDigit(2, sec / 10);
+        TM1637_DisplayDigit(3, sec % 10);
+        TM1637_SetColon(1);
+
+        if(total_seconds == 0) {
+            // หมดเวลา — กระพริบ 0000
+            for(uint8_t i = 0; i < 5; i++) {
+                TM1637_Clear();
+                Delay_Ms(300);
+                TM1637_DisplayNum(0);
+                Delay_Ms(300);
+            }
+            break;
+        }
+        Delay_Ms(100);
+    }
+    while(1) {}
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> เก็บเวลารวมเป็นวินาทีในตัวแปร <code>total_seconds</code> — Timer interrupt ทุก 100ms นับถึง 10 จึงลดวินาที (1 วิ) — ใน loop หลักแปลงวินาทีเป็นนาที:วินาที แล้วแสดงผล 4 หลัก — เปิด colon ค้างไว้ระหว่างนับถอยหลัง — เมื่อหมดเวลา วนกระพริบ 0000 — ถ้าต้องการปุ่ม pause/resume ให้ใช้ flag หยุดการนับใน ISR</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: แสดงอุณหภูมิจาก ADC</h2>
+<pre><code class="language-c">#include "simple_tm1637.h"
+#include "simple_adc.h"
+
+// NTC 10K + 10K divider, B=3950
+float adc_to_temp(uint16_t adc) {
+    if(adc == 0) return 999;
+    float r = (float)(4095 - adc) * 10000.0f / (float)adc;
+    float steinhart;
+    steinhart = r / 10000.0f;
+    steinhart = log(steinhart);
+    steinhart /= 3950.0f;
+    steinhart += 1.0f / (25.0f + 273.15f);
+    steinhart = 1.0f / steinhart;
+    steinhart -= 273.15f;
+    return steinhart;
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    TM1637_Init(TM1637_PINS_DEFAULT);
+    TM1637_SetBrightness(4);
+    ADC_SimpleInit(ADC_CH1);
+
+    while(1) {
+        uint16_t adc = ADC_Read(ADC_CH1);
+        float temp = adc_to_temp(adc);
+        int16_t display = (int16_t)(temp * 10);  // 25.5 → 255
+
+        if(temp < 100) {
+            TM1637_DisplayDigit(0, display / 100);
+            TM1637_DisplayDigit(1, (display / 10) % 10);
+            TM1637_DisplayDigit(2, display % 10);
+            TM1637_DisplayDigit(3, 12);  // 'C' segment
+            // จุดทศนิยมที่หลักที่ 2
+            TM1637_DisplayDigit(1, (display / 10) % 10 | 0x80);
+        }
+
+        Delay_Ms(500);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> อ่าน ADC → คำนวณความต้านทาน NTC ด้วย voltage divider → แปลงเป็นอุณหภูมิด้วย Steinhart-Hart equation — คูณ 10 เพื่อเก็บทศนิยม 1 ตำแหน่งเป็น integer — แสดงผล 3 หลัก + ตัวอักษร C — จุดทศนิยมเปิดด้วย OR 0x80 กับ digit — สมการ Steinhart-Hart ให้ความแม่นยำ ±0.5°C — ต้อง calibrate ค่า R_ref และ B-coefficient ตาม NTC ที่ใช้จริง</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: RPM Counter จาก Pulse Input</h2>
+<pre><code class="language-c">#include "simple_tm1637.h"
+#include "simple_gpio.h"
+#include "simple_timer.h"
+
+#define PULSE_PIN  PC0
+
+volatile uint16_t pulse_count = 0;
+volatile uint16_t rpm = 0;
+
+// External interrupt — นับ pulse
+void EXTI7_0_IRQHandler(void) {
+    if(EXTI_GetITStatus(EXTI_Line0)) {
+        pulse_count++;
+        EXTI_ClearITPendingBit(EXTI_Line0);
+    }
+}
+
+// Timer interrupt ทุก 1 วินาที — คำนวณ RPM
+void Timer_IRQ(void) {
+    rpm = pulse_count * 60;  // pulses/sec → pulses/min
+    pulse_count = 0;
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    TM1637_Init(TM1637_PINS_DEFAULT);
+    TM1637_SetBrightness(4);
+
+    // Setup PC0 เป็น input + interrupt falling edge
+    pinMode(PULSE_PIN, PIN_MODE_INPUT_PULLUP);
+    GPIO_EXTILineConfig(GPIO_PortSource_GPIOC, GPIO_PinSource0);
+    EXTI_InitTypeDef ei = {EXTI_Line0, EXTI_Mode_Interrupt,
+                           EXTI_Trigger_Falling, ENABLE};
+    EXTI_Init(&ei);
+    NVIC_EnableIRQ(EXTI7_0_IRQn);
+
+    // Timer 1Hz
+    Timer1_Init(TIM1_UP_COUNT, 47999, 23999);
+
+    while(1) {
+        if(rpm < 10000) {
+            TM1637_DisplayNum(rpm);
+        } else {
+            TM1637_DisplayDigit(0, 10); // 'H'
+            TM1637_DisplayDigit(1, 10);
+            TM1637_DisplayDigit(2, 10);
+            TM1637_DisplayDigit(3, 10);
+        }
+        Delay_Ms(200);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ใช้ external interrupt จับ falling edge ของ pulse — นับจำนวน pulse ใน 1 วินาที — คูณ 60 ได้ RPM (กรณี 1 pulse/round) — Timer interrupt 1Hz ทำหน้าที่รีเซ็ตตัวนับและอัปเดตค่า RPM — ถ้าเซ็นเซอร์ให้หลาย pulse ต่อรอบ (เช่น 4 pulses) ให้หารด้วยจำนวน pulse/round — กรณี RPM เกิน 9999 แสดง "HHHH" — สำหรับความเร็วสูงใช้ input capture แทน external interrupt เพื่อวัดช่วงเวลา</div>
+</div>
+
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_tm1637.html">กลับบท</a><a href="chapx_lib_tm1650_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

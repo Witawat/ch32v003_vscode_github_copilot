@@ -1,0 +1,106 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย NTC10K — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_ntc10k.html">กลับบท</a><a href="chapx_lib_hcsr04_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — NTC10K เทอร์มิสเตอร์วัดอุณหภูมิ</h1>
+<div class="answer"><h2>ข้อ 1: Temp Calibration ด้วย Reference Thermometer</h2><pre><code class="language-c">#define NTC_PIN    PA1
+#define R_FIXED    10000.0f
+float cal_offset = 0.0f;
+
+void ntc_calibrate(float ref_temp_c) {
+    // วัดอุณหภูมิจาก NTC 10 ครั้งแล้วเฉลี่ย
+    float ntc_sum = 0;
+    for(int i = 0; i < 10; i++) {
+        uint16_t adc = analogRead(NTC_PIN);
+        float voltage = adc * 3.3f / 1023.0f;
+        float r_ntc = R_FIXED * voltage / (3.3f - voltage);
+        float temp = NTC_SteinhartHart(r_ntc, 10000, 25, 3950);
+        ntc_sum += temp;
+        Delay_Ms(50);
+    }
+    float ntc_avg = ntc_sum / 10.0f;
+
+    cal_offset = ref_temp_c - ntc_avg;
+
+    USART_Print("Calibration: NTC=");
+    USART_PrintFloat(ntc_avg, 2);
+    USART_Print(" Ref=");
+    USART_PrintFloat(ref_temp_c, 2);
+    USART_Print(" Offset=");
+    USART_PrintFloat(cal_offset, 2);
+    USART_Println(" °C");
+}
+
+float ntc_read_calibrated(void) {
+    uint16_t adc = analogRead(NTC_PIN);
+    float voltage = adc * 3.3f / 1023.0f;
+    float r_ntc = R_FIXED * voltage / (3.3f - voltage);
+    return NTC_SteinhartHart(r_ntc, 10000, 25, 3950) + cal_offset;
+}
+</code></pre><div class="approach"><strong>🧠 แนวคิด:</strong> เปรียบเทียบค่าที่วัดได้กับ reference thermometer ที่รู้ค่าจริง — หาค่า offset เชิงเส้น — เก็บ <code>cal_offset</code> เป็น global แล้วบวกทุกครั้งที่อ่าน — Steinhart-Hart equation ให้ค่าอุณหภูมิจากความต้านทาน NTC — B-constant 3950 สำหรับ NTC 10K ทั่วไป</div></div>
+<div class="answer"><h2>ข้อ 2: Voltage Divider Calculation</h2><pre><code class="language-c">// วงจร: VCC(3.3V) → R_fixed(10k) → ADC_PIN → NTC → GND
+// Vout = VCC * R_ntc / (R_fixed + R_ntc)
+// => R_ntc = R_fixed * Vout / (VCC - Vout)
+
+float ntc_resistance_from_adc(uint16_t adc, float vcc, float r_fixed) {
+    float vout = adc * vcc / 1023.0f;
+
+    if(vout >= vcc * 0.995f) return 1e6f;  // NTC หลุด → ค่าสูงมาก
+    if(vout <= vcc * 0.005f) return 1.0f;  // NTC short → ค่าต่ำมาก
+
+    return r_fixed * vout / (vcc - vout);
+}
+
+void ntc_voltage_divider_demo(void) {
+    USART_Println("ADC | Vout   | R_ntc   | Temp C");
+    USART_Println("----|--------|---------|-------");
+
+    for(uint16_t adc = 0; adc <= 1023; adc += 50) {
+        float r_ntc = ntc_resistance_from_adc(adc, 3.3f, 10000.0f);
+        float temp = NTC_SteinhartHart(r_ntc, 10000, 25, 3950);
+
+        USART_PrintNum(adc); USART_Print(" | ");
+        USART_PrintFloat(adc * 3.3f / 1023.0f, 3); USART_Print(" | ");
+        USART_PrintFloat(r_ntc, 1); USART_Print(" | ");
+        USART_PrintFloat(temp, 1);
+        USART_Println("");
+    }
+}
+</code></pre><div class="approach"><strong>🧠 แนวคิด:</strong> Voltage divider: ADC อ่านแรงดันที่จุดกึ่งกลางระหว่าง R_fixed กับ NTC — สูตร <code>R_ntc = R_fixed × Vout / (VCC − Vout)</code> — กรอง out-of-range: ADC ~0 = NTC short, ADC ~1023 = NTC ขาด — ตาราง ADC→Temp ช่วยดีบักและเลือก R_fixed ที่เหมาะสม</div></div>
+<div class="answer"><h2>ข้อ 3: เทียบความแม่นยำ NTC10K vs DS18B20</h2><pre><code class="language-c">void ntc_vs_ds18b20(void) {
+    OLED_Init(I2C_PINS_DEFAULT);
+    DS18B20_Init(PC3);
+
+    while(1) {
+        float ntc_temp = ntc_read_calibrated();
+
+        float ds_temp = DS18B20_ReadTemp();
+
+        float diff = fabsf(ntc_temp - ds_temp);
+
+        OLED_SetCursor(0, 0);
+        OLED_Print("NTC:  "); OLED_PrintFloat(ntc_temp, 1); OLED_Print(" C ");
+
+        OLED_SetCursor(0, 1);
+        OLED_Print("DS18: "); OLED_PrintFloat(ds_temp, 1); OLED_Print(" C ");
+
+        OLED_SetCursor(0, 2);
+        OLED_Print("Diff: "); OLED_PrintFloat(diff, 2); OLED_Print(" C ");
+
+        OLED_SetCursor(0, 3);
+        if(diff < 0.5f)       OLED_Print("Excellent    ");
+        else if(diff < 1.0f)  OLED_Print("Good         ");
+        else if(diff < 2.0f)  OLED_Print("Acceptable   ");
+        else                  OLED_Print("Recalibrate!  ");
+
+        USART_PrintFloat(ntc_temp, 2);
+        USART_Print(",");
+        USART_PrintFloat(ds_temp, 2);
+        USART_Print(",");
+        USART_PrintFloat(diff, 3);
+        USART_Println("");  // CSV output
+
+        Delay_Ms(2000);
+    }
+}
+</code></pre><div class="approach"><strong>🧠 แนวคิด:</strong> DS18B20 ความแม่นยำ ±0.5°C ใช้เป็น reference — NTC ทั่วไป ±1–2°C — แสดงผลต่างบน OLED และ serial CSV ให้ import Excel วิเคราะห์ — NTC ข้อดี: ราคาถูก ตอบสนองเร็ว — DS18B20 ข้อดี: digital ไม่ต้อง calibrate, one-wire bus ต่อหลายตัวได้</div></div>
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_ntc10k.html">กลับบท</a><a href="chapx_lib_hcsr04_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

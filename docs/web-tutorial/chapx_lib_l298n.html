@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>L298N — DC Motor H-Bridge Driver — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_steppermotor.html">บทก่อน</a>
+    <a href="chapx_lib_drv8825.html">บทถัดไป →</a>
+</nav>
+
+<h1>L298N — DC Motor H-Bridge Driver</h1>
+<span class="level intermediate">ระดับกลาง</span>
+
+<section class="flowchart">
+    <h2>🧭 แผนภาพการทำงาน</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["Motor_Init(IN1,IN2,ENA)"] --> B{"Command"}
+    B -->|"Forward"| C["IN1=HIGH, IN2=LOW, ENA=PWM"]
+    B -->|"Reverse"| D["IN1=LOW, IN2=HIGH, ENA=PWM"]
+    B -->|"Brake"| E["IN1=HIGH, IN2=HIGH"]
+    B -->|"Coast"| F["IN1=LOW, IN2=LOW, ENA=0"]
+    C --> G["Motor spins CW"]
+    D --> H["Motor spins CCW"]
+    E --> I["Motor stops fast (short brake)"]
+    F --> J["Motor coasts freely"]
+    G --> B
+    H --> B
+    I --> B
+    J --> B
+    </pre>
+</section>
+
+<section>
+    <h2>🔌 การต่อวงจร</h2>
+    <pre class="ascii-circuit">
+              L298N Dual H-Bridge
+    ┌──────────────────────────────────┐
+    │ MCU                    L298N     │
+    │ PC0──────IN1 (Motor A)           │
+    │ PC1──────IN2 (Motor A)           │
+    │ PD2──────ENA (PWM speed)         │
+    │                                  │
+    │ PC2──────IN3 (Motor B)           │
+    │ PC3──────IN4 (Motor B)           │
+    │ PD3──────ENB (PWM speed)         │
+    │                           ⚠️     │
+    │              ┌─L298N──┐ 12V      │
+    │ 5V───5V/VCC  │  OUT1──┤ Motor A  │
+    │ GND──GND     │  OUT2──┘          │
+    │              │  OUT3──┤ Motor B  │
+    │              │  OUT4──┘          │
+    │              │  VMS───12V Power  │
+    │              └────────┘          │
+    └──────────────────────────────────┘
+    </pre>
+    <p>L298N เป็น Dual H-Bridge — ขับมอเตอร์ DC ได้ 2 ตัว (Motor A, Motor B) หรือ Stepper 1 ตัว — รับแรงดัน VMS 5V–35V, กระแส 2A ต่อช่อง — ใช้ PWM ที่ ENA/ENB ปรับความเร็ว — ต่อ GND ของ MCU, L298N logic, และ Motor Supply รวมกัน</p>
+</section>
+
+<section>
+    <h2>📚 หลักการทำงาน</h2>
+    <p><strong>H-Bridge</strong> คือวงจรสวิตช์ 4 ตัว (2×High-side + 2×Low-side) ต่อเป็นรูปตัว H — ควบคุมทิศทางกระแสที่ไหลผ่านมอเตอร์ → หมุนเดินหน้า/ถอยหลัง</p>
+    <p><strong>4 States:</strong> (1) <strong>Forward</strong> — IN1=HIGH, IN2=LOW → กระแสไหล A→B; (2) <strong>Reverse</strong> — IN1=LOW, IN2=HIGH → กระแสไหล B→A; (3) <strong>Brake</strong> — IN1=IN2=HIGH → ลัดวงจรขั้วมอเตอร์ → หยุดเร็ว; (4) <strong>Coast</strong> — IN1=IN2=LOW → ปล่อยให้มอเตอร์หมุนอิสระ</p>
+    <p><strong>PWM Speed Control:</strong> ปรับ duty cycle ที่ ENA pin — 0% = หยุด, 100% = สุด — ใช้ <code>PWM_SimpleInit()</code> ที่ ~1-20kHz (เหนือเสียง) เพื่อไม่ให้มีเสียงหวีด</p>
+    <p><strong>2 Channels อิสระ:</strong> Motor A ใช้ IN1,IN2,ENA; Motor B ใช้ IN3,IN4,ENB — ควบคุมแยกกันได้ทั้งทิศทางและความเร็ว</p>
+</section>
+
+<section>
+    <h2>💻 เขียน Code ทีละขั้น</h2>
+
+    <div class="step"><h3>ขั้นที่ 1: Init Motor Channels + PWM</h3>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+#define IN1 PC0
+#define IN2 PC1
+#define ENA PD2  // PWM channel 1
+#define IN3 PC2
+#define IN4 PC3
+#define ENB PD3  // PWM channel 2
+
+int main(void) {
+    SystemCoreClockUpdate();
+    // Motor A
+    pinMode(IN1, PIN_MODE_OUTPUT);
+    pinMode(IN2, PIN_MODE_OUTPUT);
+    PWM_SimpleInit(1, ENA, 10000);  // 10kHz
+    PWM_Start(1);
+    // Motor B
+    pinMode(IN3, PIN_MODE_OUTPUT);
+    pinMode(IN4, PIN_MODE_OUTPUT);
+    PWM_SimpleInit(2, ENB, 10000);
+    PWM_Start(2);</code></pre>
+    <p class="explain">🔍 10kHz PWM — หูคนไม่ได้ยิน — 2 channels อิสระ — แต่ละ channel มี IN pins 2 pins + ENA PWM pin</p></div>
+
+    <div class="step"><h3>ขั้นที่ 2: Forward/Reverse/Brake/Coast</h3>
+    <pre><code class="language-c">    void motor_a_forward(uint8_t speed) {
+        digitalWrite(IN1, HIGH);
+        digitalWrite(IN2, LOW);
+        PWM_SetDuty(1, speed);  // 0-100%
+    }
+    void motor_a_reverse(uint8_t speed) {
+        digitalWrite(IN1, LOW);
+        digitalWrite(IN2, HIGH);
+        PWM_SetDuty(1, speed);
+    }
+    void motor_a_brake() {
+        digitalWrite(IN1, HIGH);
+        digitalWrite(IN2, HIGH);  // Short brake
+        PWM_SetDuty(1, 0);
+    }
+    void motor_a_coast() {
+        digitalWrite(IN1, LOW);
+        digitalWrite(IN2, LOW);   // Free spin
+        PWM_SetDuty(1, 0);
+    }</code></pre>
+    <p class="explain">🔍 Forward: IN1 high, IN2 low + PWM — Reverse: สลับ logic — Brake: ทั้งคู่ high (มอเตอร์กลายเป็น generator, พลังงานถูก short → หยุดเร็ว) — Coast: ทั้งคู่ low (ปล่อยอิสระ)</p></div>
+
+    <div class="step"><h3>ขั้นที่ 3: Speed Ramp + Loop Demo</h3>
+    <pre><code class="language-c">    while(1) {
+        // Motor A: ramp up forward
+        for(uint8_t s = 0; s <= 100; s += 5) {
+            motor_a_forward(s);
+            Delay_Ms(100);
+        }
+        Delay_Ms(1000);
+        motor_a_brake();  // หยุดแบบ brake
+        Delay_Ms(2000);
+
+        // Motor A: ramp up reverse
+        for(uint8_t s = 0; s <= 80; s += 5) {
+            motor_a_reverse(s);
+            Delay_Ms(100);
+        }
+        Delay_Ms(1000);
+        motor_a_coast();  // ปล่อย coast
+        Delay_Ms(3000);
+
+        // Motor B: ไปพร้อมกัน
+        motor_a_forward(60);
+        motor_b_forward(30);  // ต้อง implement คล้าย motor_a
+        Delay_Ms(3000);
+        motor_a_brake();
+        motor_b_brake();
+        Delay_Ms(2000);
+    }
+}</code></pre>
+    <p class="explain">🔍 Ramp speed ขึ้นทีละ 5% — ป้องกันไฟกระชาก — Brake vs Coast ใช้ต่างสถานการณ์: brake ตอนต้องการหยุดแม่น, coast ตอนปล่อยอิสระ (เช่น robot coasting)</p></div>
+</section>
+
+<section>
+    <h2>📋 API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+        <tr><td><code>L298N_Init(ch, in1, in2, en)</code></td><td>เริ่ม channel พร้อม PWM pin</td><td><code>L298N_Init(A, PC0, PC1, PD2)</code></td></tr>
+        <tr><td><code>L298N_Forward(ch, speed)</code></td><td>หมุนเดินหน้า speed 0-100%</td><td><code>L298N_Forward(A, 75)</code></td></tr>
+        <tr><td><code>L298N_Reverse(ch, speed)</code></td><td>หมุนถอยหลัง speed 0-100%</td><td><code>L298N_Reverse(B, 50)</code></td></tr>
+        <tr><td><code>L298N_Brake(ch)</code></td><td>หยุดทันที (short brake)</td><td><code>L298N_Brake(A)</code></td></tr>
+        <tr><td><code>L298N_Coast(ch)</code></td><td>ปล่อยมอเตอร์หมุนอิสระ</td><td><code>L298N_Coast(A)</code></td></tr>
+        <tr><td><code>L298N_SetSpeed(ch, pct)</code></td><td>เปลี่ยนความเร็วโดยไม่เปลี่ยนทิศทาง</td><td><code>L298N_SetSpeed(A, 40)</code></td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>มอเตอร์ไม่หมุนเลย</td><td>ลืมต่อ VMS (Motor Supply) หรือ ENA PWM ไม่ start</td><td>ตรวจสอบ 12V/VMS ขั้ว L298N — <code>PWM_Start(ch)</code> — วัดไฟที่ OUT1/OUT2 ด้วย multimeter</td></tr>
+        <tr><td>มอเตอร์หมุนทิศทางเดียวเสมอ</td><td>IN1/IN2 สลับ — หรือต่อสายมอเตอร์กลับขั้ว</td><td>ตรวจสอบ logic: IN1=1,IN2=0 = Forward — ลองสลับสายมอเตอร์ที่ OUT1/OUT2</td></tr>
+        <tr><td>L298N ร้อนมาก (thermal shutdown)</td><td>มอเตอร์กินกระแสเกิน 2A — ไม่มี heatsink</td><td>ใช้ heatsink + fan — หรือเปลี่ยนเป็น driver ที่ทนกระแสสูงกว่าเช่น BTS7960</td></tr>
+        <tr><td>ความเร็วไม่ linear — 0-30% ไม่ขยับ</td><td>Deadband ของมอเตอร์ — ต้องใช้แรงดันขั้นต่ำก่อนหมุน</td><td>ใช้ lookup table ปรับ throttle curve — หรือใช้ closed-loop PID</td></tr>
+        <tr><td>PWM ทำให้เสียงหวีด</td><td>ใช้ความถี่ PWM ในช่วงการได้ยิน (&lt; 8kHz)</td><td>ตั้ง PWM frequency ≥ 10kHz — อยู่เหนือย่านการได้ยินของมนุษย์</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>🛠️ สร้าง Product: 2-Wheel Differential Drive Robot Base</h2>
+    <p>มอเตอร์ 2 ตัว L298N + Bluetooth Control — Forward/Reverse/Left/Right ด้วย PWM speed แยกซ้าย-ขวา</p>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+void motor_left(int16_t speed) {  // -100..0..+100
+    if(speed > 0) { digitalWrite(PC0,HIGH); digitalWrite(PC1,LOW); PWM_SetDuty(1,speed); }
+    else if(speed < 0) { digitalWrite(PC0,LOW); digitalWrite(PC1,HIGH); PWM_SetDuty(1,-speed); }
+    else { digitalWrite(PC0,LOW); digitalWrite(PC1,LOW); PWM_SetDuty(1,0); }
+}
+void motor_right(int16_t speed) {
+    if(speed > 0) { digitalWrite(PC2,LOW); digitalWrite(PC3,HIGH); PWM_SetDuty(2,speed); }
+    else if(speed < 0) { digitalWrite(PC2,HIGH); digitalWrite(PC3,LOW); PWM_SetDuty(2,-speed); }
+    else { digitalWrite(PC2,LOW); digitalWrite(PC3,LOW); PWM_SetDuty(2,0); }
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    USART1_Init(115200);  // Bluetooth HC-05
+    pinMode(PC0,PIN_MODE_OUTPUT); pinMode(PC1,PIN_MODE_OUTPUT);
+    pinMode(PC2,PIN_MODE_OUTPUT); pinMode(PC3,PIN_MODE_OUTPUT);
+    PWM_SimpleInit(1,PD2,10000); PWM_Start(1);
+    PWM_SimpleInit(2,PD3,10000); PWM_Start(2);
+
+    while(1) {
+        if(USART1_Available()) {
+            char cmd = USART1_Read();
+            switch(cmd) {
+                case 'F': motor_left(80); motor_right(80); break;
+                case 'B': motor_left(-80); motor_right(-80); break;
+                case 'L': motor_left(-50); motor_right(50); break;
+                case 'R': motor_left(50); motor_right(-50); break;
+                case 'S': motor_left(0); motor_right(0); break;
+            }
+        }
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>✏️ ลองทำดู</h2>
+    <ol>
+        <li>ทำ Line Following Robot — ใช้ IR Sensor 2 ตัว + PID algorithm ปรับความเร็วซ้าย-ขวาให้ตามเส้น</li>
+        <li>เพิ่ม Encoder — ใช้ Hall sensor หรือ optical encoder นับรอบมอเตอร์ — ทำ closed-loop speed control</li>
+        <li>ใช้ L298N ขับ Stepper Motor — ต่อ bipolar stepper แบบ 4-wire เข้า OUT1-OUT4 — ใช้ step sequence แทน DC control</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_steppermotor.html">บทก่อน</a>
+    <a href="chapx_lib_drv8825.html">บทถัดไป →</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

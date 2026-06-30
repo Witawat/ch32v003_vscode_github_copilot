@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ShiftReg595 — 74HC595 GPIO — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_tjc.html">บทก่อน</a>
+    <a href="chapx_lib_oled.html">บทถัดไป →</a>
+</nav>
+<h1>ShiftReg595 — 74HC595 GPIO</h1>
+<span class="level beginner">ระดับเริ่มต้น</span>
+<section class="flowchart">
+    <h2>🧭 แผนภาพการทำงาน</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["ShiftReg595_Init(DATA,CLK,LATCH)"] --> B["ShiftReg595_Write(0b10101010)"]
+    B --> C["ShiftReg595_Update()"]
+    C --> D["LEDs reflect register value"]
+    D --> E["while(1)"]
+    E --> B
+    </pre>
+</section>
+<section>
+    <h2>🔌 การต่อวงจร</h2>
+    <pre class="ascii-circuit">
+          74HC595 Shift Register (8 Outputs)
+    ┌────────────────────────────────┐
+    │ MCU                  74HC595   │
+    │ 3.3V ─────────────── VCC(16)   │
+    │ GND  ─────────────── GND(8)    │
+    │ PC0  ─────────────── DATA(14)  │
+    │ PC1  ─────────────── CLK(11)   │
+    │ PC2  ─────────────── LATCH(12) │
+    │                                │
+    │ Q0-Q7(15,1-7)──220Ω──LED─GND   │
+    │ ต่อ chain: Q7'(9)→DATA ตัวถัดไป│
+    └────────────────────────────────┘
+    </pre>
+    <p>74HC595 ใช้ 3 ขา (DATA, CLK, LATCH) — 8 outputs ต่อ chip — ต่อพ่วงหลายตัวได้ — output กระแส ~6mA ต่อขา — ใช้ external 5V ได้ (CH32V003 3.3V logic ใช้ได้กับ 74HC595 5V)</p>
+</section>
+<section>
+    <h2>📚 หลักการทำงาน</h2>
+    <p><strong>Serial-In Parallel-Out (SIPO):</strong> 74HC595 รับข้อมูล serial 1 bit ต่อครั้งผ่านขา DATA — CLK ใช้ shift ข้อมูลเข้า register — LATCH pulse คัดลอกข้อมูลจาก shift register ไป output register — output เปลี่ยนพร้อมกันทุกขา</p>
+    <p><strong>8 Outputs per Chip:</strong> แต่ละ 74HC595 มี 8 outputs (Q0-Q7) — เขียนค่า 8-bit (0-255) เข้า shift register — Update() ส่ง LATCH pulse — LEDs เปลี่ยนพร้อมกัน (no flicker)</p>
+    <p><strong>Chain Multiple Chips:</strong> ต่อ Q7' (pin 9) ของตัวแรกเข้า DATA ของตัวที่สอง — ส่งข้อมูล 16-bit ต่อเนื่อง — LATCH pulse เดียวอัปเดตทุกตัวพร้อมกัน — ShiftReg595_Write16() สำหรับ 2 chips</p>
+    <p><strong>No PWM:</strong> 74HC595 เป็น digital output เท่านั้น — ไม่มี PWM ในตัว — ถ้าต้องการ PWM ต้องใช้ software PWM หรือใช้ GPIO ของ MCU โดยตรง — แต่ต่อ LEDs มากกว่า 8 ดวงด้วย GPIO 3 ขาเท่านั้น</p>
+</section>
+<section>
+    <h2>💻 เขียน Code ทีละขั้น</h2>
+    <div class="step"><h3>ขั้นที่ 1: Init + Setup</h3>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    ShiftReg595_Init(PC0, PC1, PC2);  // DATA, CLK, LATCH</code></pre>
+    <p class="explain">🔍 ShiftReg595_Init(data, clk, latch) ตั้ง 3 ขา — ใช้ GPIO bit-bang — ไม่ต้องใช้ SPI — 3.3V logic ใช้กับ 74HC595 ได้ (V_IH min = 3.15V สำหรับ VCC=5V)</p></div>
+    <div class="step"><h3>ขั้นที่ 2: เขียนค่า + Update</h3>
+    <pre><code class="language-c">    // LED สลับฟันปลา
+    ShiftReg595_Write(0b10101010);
+    ShiftReg595_Update();
+    Delay_Ms(500);
+
+    // LED ตรงข้าม
+    ShiftReg595_Write(0b01010101);
+    ShiftReg595_Update();
+    Delay_Ms(500);
+
+    // ควบคุมทีละ bit
+    ShiftReg595_WriteBit(0, 1);  // Q0 = HIGH
+    ShiftReg595_WriteBit(7, 1);  // Q7 = HIGH
+    ShiftReg595_Update();
+
+    // 16-bit สำหรับ 2 chips
+    ShiftReg595_Write16(0b1111000000001111);
+    ShiftReg595_Update();</code></pre>
+    <p class="explain">🔍 Write(value) เขียน 8-bit ลง buffer — ต้องเรียก Update() เพื่อ latch output — WriteBit(bit, val) เปลี่ยนทีละบิต — Write16 สำหรับ 2 chips ต่อพ่วง</p></div>
+    <div class="step"><h3>ขั้นที่ 3: LED Chaser Binary Counter</h3>
+    <pre><code class="language-c">    uint8_t counter = 0;
+
+    while(1) {
+        ShiftReg595_Write(counter);
+        ShiftReg595_Update();
+        Delay_Ms(200);
+        counter++;
+    }
+}</code></pre>
+    <p class="explain">🔍 Binary counter 0-255 — LEDs แสดงผลเป็น binary — 8-bit counter วิ่งวน — Delay_Ms 200ms ต่อขั้น — ดูจังหวะ shift อย่างชัดเจน</p></div>
+</section>
+<section>
+    <h2>📋 API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+        <tr><td><code>ShiftReg595_Init(d, c, l)</code></td><td>เริ่มต้น DATA, CLK, LATCH</td><td><code>ShiftReg595_Init(PC0, PC1, PC2)</code></td></tr>
+        <tr><td><code>ShiftReg595_Write(v)</code></td><td>เขียน 8-bit เข้า shift register</td><td><code>ShiftReg595_Write(0xAA)</code></td></tr>
+        <tr><td><code>ShiftReg595_WriteBit(b, v)</code></td><td>เขียนทีละบิต (b=0-7)</td><td><code>ShiftReg595_WriteBit(3, 1)</code></td></tr>
+        <tr><td><code>ShiftReg595_Write16(v)</code></td><td>เขียน 16-bit (2 chips)</td><td><code>ShiftReg595_Write16(0xFF00)</code></td></tr>
+        <tr><td><code>ShiftReg595_Update()</code></td><td>LATCH pulse — output เปลี่ยน</td><td><code>ShiftReg595_Update()</code></td></tr>
+        <tr><td><code>ShiftReg595_Clear()</code></td><td>ล้างทุก output เป็น LOW</td><td><code>ShiftReg595_Clear()</code></td></tr>
+    </table>
+</section>
+<section>
+    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>Output ไม่เปลี่ยน</td><td>ลืมเรียก <code>ShiftReg595_Update()</code></td><td>Write() แค่เขียน buffer — ต้อง Update() เพื่อ latch output</td></tr>
+        <tr><td>output 8 ขา ต่อ 1 chip ก็พอ</td><td>74HC595 มี 8 output — ไม่ต้องใช้ 2 chip ถ้าไม่จำเป็น</td><td>ใช้ 1 chip ต่อ 8 LEDs — Write16 สำหรับ 2 chips เท่านั้น</td></tr>
+        <tr><td>LED สลัว / กระแสไม่พอ</td><td>Output กระแส ~6mA ต่อขา (source/sink)</td><td>ใช้ LED ความสว่างสูง หรือใช้ transistor buffer — 220Ω resistor ก็พอ</td></tr>
+        <tr><td>3.3V logic กับ 74HC595 VCC=5V</td><td>V_IH min = 3.15V สำหรับ HC series</td><td>CH32V003 3.3V ≥ 3.15V — ใช้งานได้ แต่ marginal — ใช้ 74HCT595 สำหรับ 3.3V ดีกว่า</td></tr>
+        <tr><td>ต่อ chain 2 chips แล้วตัวหลังเพี้ยน</td><td>ส่งข้อมูลไม่ครบ — Write16 จำเป็น</td><td>ใช้ <code>ShiftReg595_Write16()</code> — หรือเรียก Write() 2 ครั้งแล้ว Update ทีเดียว</td></tr>
+    </table>
+</section>
+<section>
+    <h2>🛠️ สร้าง Product: LED Chaser 8 ดวง</h2>
+    <p>LED 8 ดวงวิ่งไปมา (Knight Rider / Larson Scanner) — ใช้ Non-Blocking Timer</p>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    ShiftReg595_Init(PC0, PC1, PC2);
+
+    Timer_t tmr;
+    Start_Timer(&tmr, 100, 1);
+    int8_t pos = 0, dir = 1;
+
+    while(1) {
+        if(Is_Timer_Expired(&tmr)) {
+            uint8_t pattern = 1 << pos;
+            ShiftReg595_Write(pattern);
+            ShiftReg595_Update();
+
+            pos += dir;
+            if(pos >= 7 || pos <= 0) dir = -dir;
+        }
+    }
+}</code></pre>
+</section>
+<section>
+    <h2>✏️ ลองทำดู</h2>
+    <ol>
+        <li>Binary Counter — นับ 0-255 แสดงผลบน LED 8 ดวง — ใช้ Non-Blocking Timer 100ms</li>
+        <li>Knight Rider — LED วิ่งไป-กลับ 8 ดวง — smooth acceleration ด้วย delay แปรผัน</li>
+        <li>Chain 2 Chips — ต่อ 16 LEDs — ใช้ Write16() — ทำ pattern 16-bit (เช่น ไฟวิ่ง 2 ดวงสวนกัน)</li>
+    </ol>
+</section>
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_tjc.html">บทก่อน</a>
+    <a href="chapx_lib_oled.html">บทถัดไป →</a>
+</nav>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

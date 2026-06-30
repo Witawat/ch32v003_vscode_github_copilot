@@ -1,0 +1,160 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย TMC5160 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_tmc5160.html">กลับบท</a><a href="chapx_lib_relay_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — TMC5160 High-Power Stepper Driver</h1>
+
+<div class="answer">
+<h2>ข้อ 1: Multi-Axis Coordinated Move — 2 แกนเคลื่อนที่พร้อมกัน</h2>
+<pre><code class="language-c">#include "simple_tmc5160.h"
+
+TMC5160_t axis_x, axis_y;
+
+void coordinated_move(int32_t dx, int32_t dy, uint32_t speed) {
+    int32_t steps_x = dx &gt; 0 ? dx : -dx;
+    int32_t steps_y = dy &gt; 0 ? dy : -dy;
+    int8_t  dir_x   = dx &gt; 0 ? 1 : -1;
+    int8_t  dir_y   = dy &gt; 0 ? 1 : -1;
+
+    // Bresenham interpolation
+    int32_t error = 0;
+    int32_t major = steps_x &gt; steps_y ? steps_x : steps_y;
+
+    for (int32_t i = 0; i &lt; major; i++) {
+        TMC5160_Step(&axis_x, dir_x);
+        error += steps_y;
+        if (error &gt;= major) {
+            TMC5160_Step(&axis_y, dir_y);
+            error -= major;
+        }
+        Delay_Us(speed);
+    }
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    TMC5160_Init(&axis_x, SPI1, GPIOA, GPIO_Pin_4);
+    TMC5160_Init(&axis_y, SPI1, GPIOA, GPIO_Pin_5);
+
+    TMC5160_SetCurrent(&axis_x, 1200);  // 1.2A
+    TMC5160_SetCurrent(&axis_y, 1200);
+
+    while (1) {
+        // วาดสี่เหลี่ยมด้วย 2 แกน
+        coordinated_move(1600, 0, 500);    // ขวา
+        coordinated_move(0, 1600, 500);    // ขึ้น
+        coordinated_move(-1600, 0, 500);   // ซ้าย
+        coordinated_move(0, -1600, 500);   // ลง
+        Delay_Ms(500);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ใช้ Bresenham's line algorithm เพื่อ interpolate 2 แกนให้เคลื่อนที่พร้อมกันเป็นเส้นตรง — major axis (แกนที่เดินมากกว่า) ได้ 1 step ทุกรอบ, minor axis ได้ step เมื่อ error สะสมเต็ม — ผลลัพธ์คือเส้นตรงบนระนาบ XY แม้ความเร็วสองแกนต่างกัน — TMC5160 สื่อสารผ่าน SPI (ใช้ขา CS แยก แต่ bus ร่วมได้) — สำหรับ multi-axis จริง: TMC5160 มี internal motion controller (RAMP_STAT, XACTUAL) ถ้าใช้ SPI เต็มความสามารถ สามารถสั่ง move แบบ absolute ผ่าน register ได้เลย — สำหรับการเคลื่อนที่โค้ง: ใช้ circular interpolation หรือคำนวณ trajectory ล่วงหน้าเก็บใน buffer</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: 6-Point Ramp Tuning — ปรับ Acceleration Profile</h2>
+<pre><code class="language-c">#include "simple_tmc5160.h"
+
+TMC5160_t motor;
+
+/* Ramp profile: 6 จุดควบคุมความเร่ง */
+typedef struct {
+    uint32_t v_start;    // pps, ความเร็วเริ่มต้น
+    uint32_t v1;         // จุดเปลี่ยนที่ 1
+    uint32_t v2;         // จุดเปลี่ยนที่ 2
+    uint32_t v_max;      // ความเร็วสูงสุด
+    uint32_t a1;         // acceleration ช่วงแรก
+    uint32_t a2;         // acceleration ช่วงสอง
+    uint32_t d1;         // deceleration ช่วงแรก
+} RampConfig_t;
+
+void apply_ramp(RampConfig_t *cfg) {
+    TMC5160_SetRampParam(&motor, cfg-&gt;v_start, cfg-&gt;v1,
+                         cfg-&gt;v_max, cfg-&gt;a1, cfg-&gt;a2, cfg-&gt;d1);
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    TMC5160_Init(&motor, SPI1, GPIOA, GPIO_Pin_4);
+    TMC5160_SetCurrent(&motor, 1500);
+
+    RampConfig_t profiles[] = {
+        { 500,  5000, 20000, 50000, 1000,  5000,  2000 },  // smooth
+        { 800,  8000, 30000, 80000, 2000,  8000,  3000 },  // medium
+        { 1000, 10000,40000,100000,5000, 15000,  5000 },  // aggressive
+    };
+
+    for (uint8_t p = 0; p &lt; 3; p++) {
+        apply_ramp(&profiles[p]);
+
+        // หมุน 10 รอบไป-กลับ
+        for (uint8_t r = 0; r &lt; 10; r++) {
+            TMC5160_MoveTo(&motor,  3200);  // +10 rev
+            while (!TMC5160_IsDone(&motor)) Delay_Ms(5);
+            TMC5160_MoveTo(&motor,  0);
+            while (!TMC5160_IsDone(&motor)) Delay_Ms(5);
+        }
+
+        Delay_Ms(2000);  // เปลี่ยน profile
+    }
+
+    while (1) {}
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> TMC5160 มี hardware motion controller — ตั้งค่า ramp 6 จุด: VSTART, V1 (breakpoint speed 1), VMAX, A1 (accel), AMAX (max accel), D1 (decel) — เปรียบเทียบ 3 profiles: smooth (งานละเอียด), medium (general purpose), aggressive (งานเร็ว) — aggressive อาจ stall ถ้าแรงบิดไม่พอหรือโหลดมาก — smooth มีอัตราการเคลื่อนที่ช้าแต่ปลอดภัย — TMC5160 สั่ง move แบบ absolute ผ่าน SPI — <code>TMC5160_IsDone</code> ตรวจสอบ RAMP_STAT register ว่า position reached หรือยัง — TMC5160 รองรับ S-curve ramp ผ่าน register ด้วย (SGT, TOFF) — การ tune ควรเริ่มจากค่า conservative แล้วเพิ่มทีละน้อยจนเจอจุดที่ motor stall</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: CoolStep Energy Comparison — เปิด vs ปิด</h2>
+<pre><code class="language-c">#include "simple_tmc5160.h"
+#include "simple_ina219.h"
+
+TMC5160_t motor;
+INA219_t   ina;
+
+float measure_power(void) {
+    return INA219_ReadPower_mW(&ina);
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    TMC5160_Init(&motor, SPI1, GPIOA, GPIO_Pin_4);
+    INA219_Init(&ina, I2C1, 0x40);
+
+    TMC5160_SetCurrent(&motor, 1200);
+    TMC5160_SetMicrostep(&motor, 256);
+
+    float power_no_coolstep, power_coolstep;
+
+    /* === รอบ 1: CoolStep OFF === */
+    TMC5160_CoolStep_Enable(&motor, 0);
+    for (uint16_t rev = 0; rev &lt; 50; rev++) {
+        TMC5160_MoveTo(&motor, 51200);  // 1 rev @ 256 microstep
+        while (!TMC5160_IsDone(&motor)) Delay_Ms(1);
+    }
+    power_no_coolstep = measure_power();
+
+    Delay_Ms(1000);
+
+    /* === รอบ 2: CoolStep ON === */
+    TMC5160_CoolStep_Enable(&motor, 1);
+    TMC5160_CoolStep_Config(&motor, 4, 3);  // threshold, min current
+    for (uint16_t rev = 0; rev &lt; 50; rev++) {
+        TMC5160_MoveTo(&motor, 0);
+        while (!TMC5160_IsDone(&motor)) Delay_Ms(1);
+    }
+    power_coolstep = measure_power();
+
+    float saving = 100.0f * (power_no_coolstep - power_coolstep)
+                   / power_no_coolstep;
+    // saving ปกติ ~30-70% ขึ้นกับโหลด
+
+    while (1) {
+        // Toggle LED ตาม % saving
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> CoolStep เป็นฟีเจอร์ของ Trinamic ที่ปรับกระแสตามโหลดอัตโนมัติ — ใช้ INA219 วัดกำลังไฟฟ้าจริง (mW) — ทดสอบ: หมุน 50 รอบแบบมี/ไม่มี CoolStep เปรียบเทียบพลังงาน — CoolStep ลดกระแสเมื่อโหลดเบา และเพิ่มเมื่อต้องการแรงบิด — TMC5160 ใช้ SG_RESULT (stallGuard) ในการวัดโหลดเพื่อตัดสินใจปรับกระแส — ค่าประหยัดทั่วไป: 30-75% ขึ้นกับภาระ — ตั้ง CoolStep threshold: ค่าต่ำ = ไวต่อการปรับ, ค่าสูง = อนุรักษ์นิยม — ข้อควรระวัง: CoolStep อาจทำให้เสีย step ถ้า threshold ตั้งสูงเกินไปและโหลดเปลี่ยนกะทันหัน — ควรเปิด coolStep พร้อมกับ spreadCycle เพื่อ StallGuard ทำงานถูกต้อง — สำหรับงานที่ต้องการความแม่นยำสูงสุด (CNC) ควรปิด CoolStep</div>
+</div>
+
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_tmc5160.html">กลับบท</a><a href="chapx_lib_relay_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

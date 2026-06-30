@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AHT10/AHT20 — Temp+Hum I2C — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_bmp280.html">บทก่อน</a>
+    <a href="chapx_lib_sht3x.html">บทถัดไป →</a>
+</nav>
+
+<h1>AHT10/AHT20 — Temp+Hum I2C</h1>
+<span class="level intermediate">ระดับกลาง</span>
+
+<section class="flowchart">
+    <h2>🧭 แผนภาพการทำงาน</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["AHT10_Init(0x38)"] --> B["TriggerMeasurement"]
+    B --> C["Delay 80ms"]
+    C --> D["ReadTemperature+ReadHumidity"]
+    D --> B
+    </pre>
+</section>
+
+<section>
+    <h2>🔌 การต่อวงจร</h2>
+    <pre class="ascii-circuit">
+        AHT10 / AHT20 (I2C)
+┌────────────────────────────────────┐
+│ PC1 ──── SDA                       │
+│ PC2 ──── SCL                       │
+│ 3.3V ─── VCC                       │
+│ GND  ─── GND                       │
+│                                    │
+│ I2C addr = 0x38 (fixed — เปลี่ยนไม่ได้)│
+│ AHT20 = drop-in replacement        │
+│ (pin+code เหมือน AHT10, accuracy ดีกว่า)│
+└────────────────────────────────────┘
+    </pre>
+    <p>I2C address คงที่ 0x38 — AHT20 ใช้แทน AHT10 ได้ทันที ไม่ต้องเปลี่ยนวงจรหรือโค้ด</p>
+</section>
+
+<section>
+    <h2>📚 หลักการทำงาน</h2>
+    <p><strong>I2C Address Fixed 0x38</strong>: ไม่มีขาให้เลือก address — ต่อได้ตัวเดียวต่อบัส</p>
+    <p><strong>Calibration Command</strong>: ตอน Init ต้องส่งคำสั่ง calibration — Library ทำ auto</p>
+    <p><strong>Trigger → Wait 80ms → Read</strong>: ต้องเรียก <code>TriggerMeasurement()</code> ก่อนอ่านทุกครั้ง — รอ 80ms ให้วัดเสร็จ — แตกต่างจาก DHT ที่อ่านทีเดียวเสร็จ</p>
+    <p><strong>AHT10 vs AHT20</strong>: AHT20 เป็นรุ่นใหม่ — drop-in replacement, accuracy ±0.3°C (vs AHT10 ±0.5°C), pin และ code เหมือนกันทุกประการ</p>
+    <p><strong>CRC Check</strong>: มี CRC ในตัว — ข้อมูลได้รับความเสียหายจะถูกตรวจจับได้</p>
+    <p><strong>Accuracy</strong>: ±0.3°C / ±2%RH — ดีกว่า DHT22 ในด้านอุณหภูมิ</p>
+</section>
+
+<section>
+    <h2>💻 เขียน Code ทีละขั้น</h2>
+
+    <div class="step"><h3>ขั้นที่ 1: Init I2C + AHT10</h3>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "AHT10.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    I2C_SimpleInit(I2C_SPEED_100K, I2C_PINS_DEFAULT);
+
+    if(AHT10_Init(0x38) != AHT10_OK) {
+        USART_Println("AHT10 Init Failed!");
+        while(1);
+    }
+    USART_Println("AHT10 Ready!");</code></pre>
+    <p class="explain">🔍 <code>AHT10_Init(0x38)</code> ส่ง calibration command + ตรวจสอบ ACK — ถ้า init fail มักเกิดจากปัญหา I2C (สายสลับ / ไม่ดึง pull-up / chip เสีย)</p></div>
+
+    <div class="step"><h3>ขั้นที่ 2: Trigger + อ่านค่า</h3>
+    <pre><code class="language-c">    AHT10_TriggerMeasurement();       // สั่งวัด
+    Delay_Ms(80);                     // รอ measurement เสร็จ
+    float t = AHT10_ReadTemperature();
+    float h = AHT10_ReadHumidity();
+
+    USART_Print("T: "); USART_PrintFloat(t, 1);
+    USART_Print("C  H: "); USART_PrintFloat(h, 1);
+    USART_Println("%");</code></pre>
+    <p class="explain">🔍 <code>TriggerMeasurement()</code> ต้องเรียกทุกครั้งก่อนอ่าน — <code>Delay_Ms(80)</code> เป็นเวลาที่ต้องรอ, <code>ReadTemperature()</code> และ <code>ReadHumidity()</code> คืนค่าจาก measurement ล่าสุด</p></div>
+
+    <div class="step"><h3>ขั้นที่ 3: Loop + OLED Display</h3>
+    <pre><code class="language-c">    OLED_t oled;
+    OLED_Init(&oled, 0x3C, OLED_128x64);
+    OLED_SetFont(&oled, FONT_8x16);
+
+    Timer_t tmr;
+    Start_Timer(&tmr, 2000, 1);
+
+    while(1) {
+        if(Is_Timer_Expired(&tmr)) {
+            AHT10_TriggerMeasurement();
+            Delay_Ms(80);
+            float t = AHT10_ReadTemperature();
+            float h = AHT10_ReadHumidity();
+            OLED_Clear(&oled);
+            OLED_SetCursor(&oled, 0, 0);
+            OLED_PrintFloat(&oled, "Temp:", t, 1); OLED_Print(&oled, " C");
+            OLED_SetCursor(&oled, 0, 2);
+            OLED_PrintFloat(&oled, "Hum :", h, 1); OLED_Print(&oled, " %");
+            OLED_Display(&oled);
+        }
+        IWDG_Feed();
+    }
+}</code></pre>
+    <p class="explain">🔍 ระบบทั้งหมดเป็น Non-Blocking — main loop ว่างทำงานอื่นได้, <code>IWDG_Feed()</code> ป้องกัน watchdog reset</p></div>
+</section>
+
+<section>
+    <h2>📋 API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+        <tr><td><code>AHT10_Init(addr)</code></td><td>Init sensor + send calibration cmd</td><td><code>AHT10_Init(0x38)</code></td></tr>
+        <tr><td><code>AHT10_TriggerMeasurement()</code></td><td>สั่งเริ่มวัด — ต้องเรียกก่อน Read</td><td><code>AHT10_TriggerMeasurement()</code></td></tr>
+        <tr><td><code>AHT10_ReadTemperature()</code></td><td>อ่านอุณหภูมิ (°C)</td><td><code>float t = AHT10_ReadTemperature()</code></td></tr>
+        <tr><td><code>AHT10_ReadHumidity()</code></td><td>อ่านความชื้น (%)</td><td><code>float h = AHT10_ReadHumidity()</code></td></tr>
+        <tr><td><code>AHT10_SoftReset()</code></td><td>รีเซ็ต sensor โดยไม่ต้องตัดไฟ</td><td><code>AHT10_SoftReset()</code></td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>Init fail — AHT10 ไม่ตอบ ACK</td><td>Calibration command ไม่ได้รับตอบ — สาย I2C หลวม หรือ addr ผิด</td><td>เช็คสาย SDA/SCL — I2C Scan หา address, เช็ค pull-up 4.7kΩ บน I2C</td></tr>
+        <tr><td>อ่านได้ค่า 0 ทั้ง temp และ hum</td><td>ลืมเรียก <code>TriggerMeasurement()</code> ก่อนอ่าน</td><td>ต้องเรียก <code>TriggerMeasurement()</code> → <code>Delay_Ms(80)</code> → <code>ReadTemperature()</code> ทุกครั้ง</td></tr>
+        <tr><td>อ่านค่าได้ช้า — ต้องรอ 80ms ทุกครั้ง</td><td>AHT10 ต้องใช้เวลา 80ms ต่อการวัด 1 ครั้ง (เป็นข้อจำกัดของชิป)</td><td>ใช้ Timer Non-Blocking: trigger → flag → loop อ่านเมื่อครบ 80ms (แทน Delay_Ms blocking)</td></tr>
+        <tr><td>ค่าแกว่ง ±2°C ระหว่างอ่านต่อเนื่อง</td><td>Self-heating — sensor element ร้อนจากการวัดต่อเนื่อง</td><td>ลด sampling rate เหลือทุก 2-5 วินาที — ใช้ FORCED mode (หยุดระหว่างวัด)</td></tr>
+        <tr><td>ใช้อ่านในตู้บ่มเพาะ (Incubator) — ค่าเพี้ยนที่ความชื้นสูง > 90%</td><td>Condensation บน sensor element</td><td>ใช้ SHT3x ที่มี heater ไล่ condensation — AHT10 ไม่เหมาะกับ humidity > 90% ต่อเนื่อง</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>🛠️ สร้าง Product: Incubator Monitor</h2>
+    <p>AHT10 + Relay + OLED — ควบคุมอุณหภูมิในตู้ฟักไข่</p>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "AHT10.h"
+#include "OLED.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    I2C_SimpleInit(I2C_SPEED_100K, I2C_PINS_DEFAULT);
+
+    AHT10_Init(0x38);
+    pinMode(PC0, PIN_MODE_OUTPUT);  // Relay = Heater
+    digitalWrite(PC0, LOW);
+
+    OLED_t oled;
+    OLED_Init(&oled, 0x3C, OLED_128x64);
+    OLED_SetFont(&oled, FONT_8x16);
+
+    Timer_t tmr;
+    Start_Timer(&tmr, 2000, 1);
+
+    while(1) {
+        if(Is_Timer_Expired(&tmr)) {
+            AHT10_TriggerMeasurement();
+            Delay_Ms(80);
+            float t = AHT10_ReadTemperature();
+            float h = AHT10_ReadHumidity();
+
+            if(t < 37.0f) digitalWrite(PC0, HIGH);  // Heater ON
+            if(t > 37.8f) digitalWrite(PC0, LOW);   // Heater OFF
+
+            OLED_Clear(&oled);
+            OLED_SetCursor(&oled, 0, 0);
+            OLED_PrintFloat(&oled, "T:", t, 1); OLED_Print(&oled, "C");
+            OLED_SetCursor(&oled, 0, 2);
+            OLED_PrintFloat(&oled, "H:", h, 1); OLED_Print(&oled, "%");
+            OLED_SetCursor(&oled, 0, 4);
+            OLED_Print(&oled, digitalRead(PC0) ? "HEATER ON " : "HEATER OFF");
+            OLED_Display(&oled);
+        }
+        IWDG_Feed();
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>✏️ ลองทำดู</h2>
+    <ol>
+        <li>เทียบ AHT10 vs DHT22 — ต่อทั้ง 2 ตัว (AHT10=I2C, DHT22=GPIO) วัดอุณหภูมิ+ความชื้นพร้อมกัน แสดงผลบน OLED ดู accuracy ต่างกัน</li>
+        <li>ทำ Humidity Alarm — เมื่อความชื้น > 80% → Buzzer ดัง + LED กระพริบ — ใช้ <code>Buzzer_Beep()</code></li>
+        <li>ทดลอง <code>AHT10_SoftReset()</code> — กดปุ่มเพื่อรีเซ็ต sensor โดยไม่ต้องตัดไฟ — เช็คว่าค่าที่อ่านได้หลัง reset ถูกต้อง</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_bmp280.html">บทก่อน</a>
+    <a href="chapx_lib_sht3x.html">บทถัดไป →</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

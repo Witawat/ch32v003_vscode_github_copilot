@@ -1,0 +1,217 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย ADS1115 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_ads1115.html">กลับบท</a><a href="chapx_lib_mcp4725_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — ADS1115</h1>
+
+<div class="answer">
+<h2>ข้อ 1: 4-Channel Data Logger — บันทึกทั้ง 4 ช่องลง Flash</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "ADS1115.h"
+#include "W25Qxx.h"
+
+#define MAX_LOGS 256
+
+typedef struct {
+    uint32_t timestamp;
+    int16_t ch0, ch1, ch2, ch3;
+} LogEntry_t;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    I2C_Init(PC1, PC2, I2C_SPEED_STANDARD);
+    SPI_Init(PC4, PC5, PC6, SPI_MODE0);
+    USART_Init(115200);
+
+    ADS1115_t adc;
+    ADS1115_Init(&adc, 0x48);
+    ADS1115_SetGain(&adc, ADS1115_PGA_4096);
+    ADS1115_SetDataRate(&adc, ADS1115_DR_128);
+
+    W25Qxx_Init();
+    W25Qxx_EraseSector(0);
+    USART_Print("4-Ch Data Logger Ready\r\n");
+
+    Timer_t tmr_log, tmr_dump;
+    Start_Timer(&tmr_log, 1000, 1);
+    Start_Timer(&tmr_dump, 30000, 1);
+
+    uint32_t addr = 0;
+    uint16_t count = 0;
+
+    while(1) {
+        if(Is_Timer_Expired(&tmr_log) && count < MAX_LOGS) {
+            LogEntry_t log;
+            log.timestamp = Get_CurrentMs();
+            log.ch0 = ADS1115_Read(&adc, 0);
+            log.ch1 = ADS1115_Read(&adc, 1);
+            log.ch2 = ADS1115_Read(&adc, 2);
+            log.ch3 = ADS1115_Read(&adc, 3);
+
+            W25Qxx_WritePage(addr, (uint8_t*)&log, sizeof(LogEntry_t));
+            addr += sizeof(LogEntry_t);
+            count++;
+
+            USART_Print("#"); USART_PrintDec(count);
+            USART_Print(" CH0:"); USART_PrintDec(log.ch0);
+            USART_Print(" CH1:"); USART_PrintDec(log.ch1);
+            USART_Print(" CH2:"); USART_PrintDec(log.ch2);
+            USART_Print(" CH3:"); USART_PrintDec(log.ch3);
+            USART_Print("\r\n");
+        }
+
+        if(Is_Timer_Expired(&tmr_dump)) {
+            USART_Print("--- Dumping all logs ---\r\n");
+            uint32_t read_addr = 0;
+            for(uint16_t i = 0; i < count; i++) {
+                LogEntry_t entry;
+                W25Qxx_Read(read_addr, (uint8_t*)&entry, sizeof(LogEntry_t));
+                read_addr += sizeof(LogEntry_t);
+                USART_Print("["); USART_PrintDec(i);
+                USART_Print("] t="); USART_PrintDec(entry.timestamp);
+                USART_Print(" "); USART_PrintDec(entry.ch0);
+                USART_Print(","); USART_PrintDec(entry.ch1);
+                USART_Print(","); USART_PrintDec(entry.ch2);
+                USART_Print(","); USART_PrintDec(entry.ch3);
+                USART_Print("\r\n");
+            }
+        }
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> อ่าน 4 ช่องทุก 1 วิ — เก็บใน struct + บันทึกลง W25Qxx Flash — ทุก 30 วิ dump ข้อมูลทั้งหมดออก USART — ใช้ <code>ADS1115_Read(&adc, ch)</code> แบบ single-ended — จำกัด MAX_LOGS ป้องกัน Flash overflow — W25Qxx_WritePage เขียนทีละ page (256 bytes)</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: Differential Mode สำหรับ Load Cell</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "ADS1115.h"
+
+void LCD1602_PrintFloat(float val, uint8_t dec);
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    I2C_Init(PC1, PC2, I2C_SPEED_STANDARD);
+    USART_Init(115200);
+
+    ADS1115_t adc;
+    ADS1115_Init(&adc, 0x48);
+    ADS1115_SetGain(&adc, ADS1115_PGA_0512);
+    ADS1115_SetDataRate(&adc, ADS1115_DR_128);
+    ADS1115_SetChannel(&adc, ADS1115_CH_DIFF_0_1);
+
+    USART_Print("Calibrating zero...\r\n");
+    int32_t sum = 0;
+    for(int i = 0; i < 100; i++) {
+        sum += ADS1115_ReadDiff(&adc);
+        Delay_Ms(10);
+    }
+    int32_t zero_offset = sum / 100;
+    USART_Print("Zero offset: ");
+    USART_PrintDec(zero_offset);
+    USART_Print("\r\n");
+
+    USART_Print("Place 200g weight for calibration...\r\n");
+    Delay_Ms(5000);
+    sum = 0;
+    for(int i = 0; i < 100; i++) {
+        sum += ADS1115_ReadDiff(&adc);
+        Delay_Ms(10);
+    }
+    int32_t cal_raw = sum / 100;
+    float cal_factor = (float)(cal_raw - zero_offset) / 200.0f;
+    USART_Print("Cal factor (raw/g): ");
+    USART_PrintFloat(cal_factor, 2);
+    USART_Print("\r\n");
+
+    while(1) {
+        int32_t diff = ADS1115_ReadDiff(&adc);
+        float weight_g = (float)(diff - zero_offset) / cal_factor;
+
+        USART_Print("Raw:"); USART_PrintDec(diff);
+        USART_Print(" Diff:"); USART_PrintDec(diff - zero_offset);
+        USART_Print(" Weight:");
+        USART_PrintFloat(weight_g, 1);
+        USART_Print("g\r\n");
+        Delay_Ms(200);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> Differential Mode วัดผลต่าง AIN0-AIN1 — PGA ±0.512V ให้ความละเอียดสูงสุดสำหรับ Load Cell (mV level) — Zero calibration หา offset ตอนไม่มีโหลด — Calibration ด้วยตุ้ม 200g — <code>cal_factor = (raw - zero) / known_weight</code> — น้ำหนัก = (diff - zero) / cal_factor</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: Comparator Threshold Alert — ตรวจจับแรงดันเกิน + EXTI</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "ADS1115.h"
+
+#define ALERT_PIN PD4
+
+volatile uint8_t alert_flag = 0;
+
+void EXTI_IRQ(void) {
+    if(EXTI_GetITStatus(EXTI_Line4)) {
+        alert_flag = 1;
+        EXTI_ClearITPendingBit(EXTI_Line4);
+    }
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    I2C_Init(PC1, PC2, I2C_SPEED_STANDARD);
+    USART_Init(115200);
+
+    ADS1115_t adc;
+    ADS1115_Init(&adc, 0x48);
+    ADS1115_SetGain(&adc, ADS1115_PGA_4096);
+    ADS1115_SetDataRate(&adc, ADS1115_DR_250);
+    ADS1115_SetChannel(&adc, 0);
+
+    int16_t lo_thresh = (int16_t)(2.5f / 4.096f * 32767.0f);
+    int16_t hi_thresh = (int16_t)(3.1f / 4.096f * 32767.0f);
+    ADS1115_SetComparator(&adc, lo_thresh, hi_thresh, ADS1115_COMP_TRAD);
+
+    pinMode(ALERT_PIN, PIN_MODE_INPUT_PULLUP);
+    EXTI_Init(ALERT_PIN, EXTI_Trigger_Falling);
+    NVIC_EnableIRQ(EXTI7_0_IRQn);
+
+    pinMode(PC0, PIN_MODE_OUTPUT);
+    pinMode(PC1, PIN_MODE_OUTPUT);
+
+    USART_Print("Comparator Alert Ready\r\n");
+    USART_Print("Threshold: 2.5V ~ 3.1V\r\n");
+
+    while(1) {
+        int16_t raw = ADS1115_Read(&adc, 0);
+        float voltage = ADS1115_ReadVoltage(&adc, 0);
+
+        if(alert_flag) {
+            alert_flag = 0;
+            USART_Print("ALERT! V=");
+            USART_PrintFloat(voltage, 3);
+            USART_Print("V ");
+
+            if(voltage > 3.1f) {
+                USART_Print("OVER-VOLTAGE!\r\n");
+                digitalWrite(PC0, HIGH);
+                digitalWrite(PC1, LOW);
+            } else if(voltage < 2.5f) {
+                USART_Print("UNDER-VOLTAGE!\r\n");
+                digitalWrite(PC0, LOW);
+                digitalWrite(PC1, HIGH);
+            }
+        }
+
+        USART_Print("V:"); USART_PrintFloat(voltage, 3);
+        USART_Print("V Raw:"); USART_PrintDec(raw);
+        USART_Print("\r\n");
+        Delay_Ms(500);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ใช้ ADS1115 Comparator ในตัว — ตั้ง lo/hi threshold แบบ TRAD (traditional) — ALERT pin (PD4) active LOW เมื่อค่าผ่าน threshold — ต่อ PD4 ผ่าน EXTI Falling edge → interrupt ทันทีโดยไม่ต้อง polling — alert_flag บอกสถานะ — LED PC0/PC1 แยก over/under voltage — ใช้ <code>ADS1115_SetComparator()</code> ตั้งค่าในตัว ADS1115 เลย ลดภาระ MCU</div>
+</div>
+
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_ads1115.html">กลับบท</a><a href="chapx_lib_mcp4725_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

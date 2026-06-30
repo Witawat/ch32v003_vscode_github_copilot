@@ -1,0 +1,112 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย LCD1602 I2C — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_lcd1602_i2c.html">กลับบท</a><a href="chapx_lib_max7219_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — LCD1602 I2C</h1>
+
+<div class="answer">
+<h2>ข้อ 1: Scrolling Text เลื่อนซ้ายทุก 500ms</h2>
+<pre><code class="language-c">#include "simple_lcd1602_i2c.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    LCD1602_I2C_Init(0x27, 16, 2);
+
+    LCD1602_I2C_SetCursor(0, 0);
+    LCD1602_I2C_Print("Hello CH32V003  World!");
+    uint8_t scroll_count = 0;
+
+    while(1) {
+        LCD1602_I2C_ScrollLeft();
+        scroll_count++;
+        if(scroll_count >= 24) {
+            LCD1602_I2C_Home();
+            scroll_count = 0;
+        }
+        Delay_Ms(500);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> LCD1602 มีรีจิสเตอร์เลื่อนภายใน 40 ตำแหน่งต่อบรรทัด — <code>LCD1602_I2C_ScrollLeft</code> เลื่อน display window ไปทางขวาของ buffer ทีละ 1 ตัวอักษร — นับจำนวนครั้งที่เลื่อน เมื่อครบ 24 ครั้ง (ความยาวข้อความ + ระยะห่าง) ก็ <code>Home()</code> กลับจุดเริ่มต้น — ถ้าต้องการ scroll 2 บรรทัดพร้อมกัน ให้ใช้ <code>LCD1602_I2C_Print</code> ทั้งสองบรรทัดก่อนเริ่ม scroll</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: Custom Character ตัวเลข 0-9 แบบพิเศษ</h2>
+<pre><code class="language-c">#include "simple_lcd1602_i2c.h"
+
+const uint8_t big_digits[10][8] = {
+    {0x0E,0x11,0x11,0x11,0x11,0x11,0x0E,0x00}, // 0
+    {0x04,0x0C,0x04,0x04,0x04,0x04,0x0E,0x00}, // 1
+    {0x0E,0x11,0x01,0x02,0x04,0x08,0x1F,0x00}, // 2
+    {0x0E,0x11,0x01,0x0E,0x01,0x11,0x0E,0x00}, // 3
+    {0x02,0x06,0x0A,0x12,0x1F,0x02,0x02,0x00}, // 4
+    {0x1F,0x10,0x1E,0x01,0x01,0x11,0x0E,0x00}, // 5
+    {0x0E,0x10,0x10,0x1E,0x11,0x11,0x0E,0x00}, // 6
+    {0x1F,0x01,0x02,0x04,0x08,0x08,0x08,0x00}, // 7
+    {0x0E,0x11,0x11,0x0E,0x11,0x11,0x0E,0x00}, // 8
+    {0x0E,0x11,0x11,0x0F,0x01,0x01,0x0E,0x00}, // 9
+};
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    LCD1602_I2C_Init(0x27, 16, 2);
+
+    for(uint8_t i = 0; i < 8; i++) {
+        LCD1602_I2C_CreateChar(i, big_digits[i]);
+    }
+    LCD1602_I2C_CreateChar(8, big_digits[8]);
+    LCD1602_I2C_CreateChar(9, big_digits[9]);
+
+    LCD1602_I2C_SetCursor(0, 0);
+    for(uint8_t i = 0; i < 10; i++) {
+        LCD1602_I2C_WriteChar(i);
+        LCD1602_I2C_Print(" ");
+    }
+
+    while(1) {}
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> LCD1602 มี CGRAM 8 ตำแหน่ง (0-7) สำหรับ custom character — แต่ละตัวอักษรคือ 8 ไบต์ (5×8 พิกเซล) — ตัวเลข 0-7 ใช้ CGRAM address 0-7 โดยตรง ส่วน 8-9 ต้องเขียนทับตำแหน่ง 0-1 ใหม่ — <code>CreateChar(location, pattern)</code> เขียน pattern 8 ไบต์ลง CGRAM — <code>WriteChar(n)</code> แสดง custom char ตำแหน่ง n — ถ้าต้องการ custom char มากกว่า 8 ตัว ต้องเขียน CGRAM ใหม่ระหว่างแสดงผล</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: Toggle 2 ภาษา เมื่อกดปุ่ม</h2>
+<pre><code class="language-c">#include "simple_lcd1602_i2c.h"
+#include "simple_gpio.h"
+
+#define BTN_PIN  PC1
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    LCD1602_I2C_Init(0x27, 16, 2);
+    pinMode(BTN_PIN, PIN_MODE_INPUT_PULLUP);
+
+    bool english = true;
+    bool last_btn = HIGH;
+
+    while(1) {
+        bool btn = digitalRead(BTN_PIN);
+        if(last_btn == HIGH && btn == LOW) {  // falling edge
+            english = !english;
+            Delay_Ms(50);  // debounce
+        }
+        last_btn = btn;
+
+        LCD1602_I2C_Clear();
+        LCD1602_I2C_SetCursor(0, 0);
+        if(english) {
+            LCD1602_I2C_Print("Temp: 25.5 C");
+            LCD1602_I2C_SetCursor(0, 1);
+            LCD1602_I2C_Print("Status: Normal");
+        } else {
+            LCD1602_I2C_Print("อุณหภูมิ: 25.5C");
+            LCD1602_I2C_SetCursor(0, 1);
+            LCD1602_I2C_Print("สถานะ: ปกติ");
+        }
+        Delay_Ms(200);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ใช้ boolean flag <code>english</code> เก็บสถานะภาษา — ตรวจจับปุ่มกดแบบ falling edge (HIGH→LOW) เพื่อ toggle flag — debounce ด้วย delay 50ms หลังตรวจเจอ edge — ใน loop หลักเช็ค flag แล้วแสดงข้อความภาษาที่ตรงกัน — <code>Clear()</code> ก่อนเขียนใหม่ทุกครั้งป้องกันข้อความเก่าตกค้าง — ถ้าใช้ภาษาไทยบน LCD1602 ต้องใช้ ROM code ที่รองรับอักขระไทย (บางรุ่นมี Thai ROM)</div>
+</div>
+
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_lcd1602_i2c.html">กลับบท</a><a href="chapx_lib_max7219_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

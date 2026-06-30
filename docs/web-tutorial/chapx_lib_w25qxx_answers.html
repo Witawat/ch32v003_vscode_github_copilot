@@ -1,0 +1,211 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย W25Qxx — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_w25qxx.html">กลับบท</a><a href="chapx_lib_ds3231_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — W25Qxx SPI Flash</h1>
+
+<div class="answer">
+<h2>ข้อ 1: Data Logger — บันทึก 1000 readings แบบ append</h2>
+<pre><code class="language-c">#define FLASH_LOG_SECTOR   (4 * 4096)  // sector 4
+#define MAX_READINGS       1000
+#define READING_SIZE       8
+
+typedef struct {
+    uint32_t timestamp;
+    int16_t  temp;     // ×10 (°C)
+    uint16_t hum;      // ×10 (%)
+} sensor_reading_t;
+
+uint16_t log_index = 0;   // จำนวนที่บันทึกแล้ว
+
+void flash_logger_init(void) {
+    W25Q_Init();
+
+    // อ่าน index จาก address สุดท้ายของ sector
+    W25Q_Read(FLASH_LOG_SECTOR + MAX_READINGS * READING_SIZE,
+              (uint8_t *)&log_index, 2);
+
+    if(log_index > MAX_READINGS) log_index = 0;
+
+    USART_Print("Logger: ");
+    USART_PrintNum(log_index);
+    USART_Println(" existing readings");
+}
+
+void flash_log_append(int16_t temp, uint16_t hum) {
+    if(log_index >= MAX_READINGS) {
+        USART_Println("[LOG] Full — erase and restart");
+        W25Q_SectorErase(FLASH_LOG_SECTOR);
+        log_index = 0;
+    }
+
+    sensor_reading_t r;
+    r.timestamp = Timer_GetMs() / 1000;
+    r.temp = temp;
+    r.hum = hum;
+
+    uint32_t addr = FLASH_LOG_SECTOR + log_index * READING_SIZE;
+    W25Q_Write(addr, (uint8_t *)&r, READING_SIZE);
+
+    // บันทึก index
+    log_index++;
+    W25Q_Write(FLASH_LOG_SECTOR + MAX_READINGS * READING_SIZE,
+               (uint8_t *)&log_index, 2);
+
+    USART_Print("Logged #");
+    USART_PrintNum(log_index);
+    USART_Print(" @0x");
+    USART_PrintHex(addr);
+    USART_Println("");
+}
+
+void flash_logger_loop(void) {
+    flash_logger_init();
+
+    uint32_t last_log = 0;
+    while(1) {
+        if(Timer_GetMs() - last_log > 1000) {
+            int16_t t = (int16_t)(DHT_ReadTemp() * 10);
+            uint16_t h = (uint16_t)(DHT_ReadHum() * 10);
+            flash_log_append(t, h);
+            last_log = Timer_GetMs();
+        }
+        Delay_Ms(100);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> W25Qxx ต้อง erase ก่อนเขียน (sector=4KB, block=32/64KB) — ใช้ sector 4 สำหรับ data log — เขียนแบบ append: index บอกจำนวน record, เขียนต่อท้ายไปเรื่อย ๆ — เก็บ index ไว้หลังข้อมูล (address=FLASH_LOG_SECTOR + 1000*8) — เมื่อเต็ม 1000 records → erase sector แล้วเริ่มใหม่ — 8 bytes/record = 8000 bytes ใช้ 2 sectors — W25Qxx เขียนได้เฉพาะ bit 1→0, ต้อง erase เพื่อ reset เป็น 1</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: Dump ข้อมูลทั้งหมดออก Serial</h2>
+<pre><code class="language-c">void flash_dump_all(void) {
+    W25Q_Init();
+
+    // อ่าน index
+    uint16_t count;
+    W25Q_Read(FLASH_LOG_SECTOR + MAX_READINGS * READING_SIZE,
+              (uint8_t *)&count, 2);
+
+    USART_Println("=== Flash Dump ===");
+    USART_Print("Records: ");
+    USART_PrintNum(count);
+    USART_Println("");
+
+    sensor_reading_t r;
+    uint32_t start_addr = FLASH_LOG_SECTOR;
+
+    USART_Println("No\tTime(s)\tTemp(C)\tHum(%)");
+    USART_Println("-----------------------------------");
+
+    for(uint16_t i=0; i<count; i++) {
+        W25Q_Read(start_addr + i * READING_SIZE,
+                  (uint8_t *)&r, READING_SIZE);
+
+        USART_PrintNum(i + 1);
+        USART_Print("\t");
+        USART_PrintNum(r.timestamp);
+        USART_Print("\t");
+        USART_PrintFloat(r.temp / 10.0f, 1);
+        USART_Print("\t");
+        USART_PrintFloat(r.hum / 10.0f, 1);
+        USART_Println("");
+
+        // หน่วงเล็กน้อยกัน buffer UART overflow
+        if(i % 20 == 19) Delay_Ms(10);
+    }
+
+    USART_Println("=== End of Dump ===");
+}
+
+// Dump แบบ RAW hex สำหรับ debug
+void flash_hexdump(uint32_t addr, uint16_t len) {
+    uint8_t buf[32];
+    W25Q_Init();
+
+    USART_Print("Hexdump 0x");
+    USART_PrintHex(addr);
+    USART_Print(" +");
+    USART_PrintNum(len);
+    USART_Println(" bytes\n");
+
+    for(uint16_t off=0; off<len; off+=16) {
+        USART_PrintHex(addr + off);
+        USART_Print(": ");
+
+        W25Q_Read(addr + off, buf, 16);
+        for(uint8_t j=0; j<16 && (off+j)<len; j++) {
+            USART_PrintHexByte(buf[j]);
+            USART_Print(" ");
+        }
+        USART_Println("");
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> อ่าน index ก่อนเพื่อรู้จำนวน record — วนลูปอ่าน record ทีละตัวจาก Flash — แสดงเป็นตาราง CSV-friendly (tab-separated) — แปลง fixed-point กลับเป็น float ก่อนแสดง — hexdump แสดง address + 16 bytes ต่อบรรทัด รูปแบบเดียวกับ xxd — ใช้ USART_PrintHexByte แสดง 2 หลัก hex มี leading zero — หน่วงทุก 20 records ป้องกัน UART buffer overflow</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: Sector Erase + Rewrite — จัดการข้อมูลเก่า</h2>
+<pre><code class="language-c">#define CONFIG_SECTOR    (8 * 4096)  // sector 8, 4KB
+#define CONFIG_MAGIC     0xBEEF
+
+typedef struct {
+    uint16_t magic;
+    uint16_t version;
+    uint8_t  dev_name[16];
+    uint8_t  baudrate_idx;
+    uint8_t  i2c_addr;
+    uint8_t  padding[10];  // align 32 bytes
+} flash_config_t;
+
+flash_config_t flash_cfg;
+
+void flash_config_load(void) {
+    W25Q_Init();
+    W25Q_Read(CONFIG_SECTOR, (uint8_t *)&flash_cfg,
+              sizeof(flash_cfg));
+
+    if(flash_cfg.magic != CONFIG_MAGIC) {
+        USART_Println("[CONFIG] No config — load defaults");
+        strcpy((char *)flash_cfg.dev_name, "CH32V003");
+        flash_cfg.baudrate_idx = 7;  // 115200
+        flash_cfg.i2c_addr = 0x68;
+        flash_cfg.version = 1;
+        flash_cfg.magic = CONFIG_MAGIC;
+        flash_config_save();
+    }
+    USART_Print("Config v");
+    USART_PrintNum(flash_cfg.version);
+    USART_Print(" loaded: ");
+    USART_Println((char *)flash_cfg.dev_name);
+}
+
+void flash_config_save(void) {
+    flash_cfg.magic = CONFIG_MAGIC;
+    flash_cfg.version++;
+
+    USART_Println("[CONFIG] Erasing sector...");
+    W25Q_SectorErase(CONFIG_SECTOR);
+    Delay_Ms(100);  // รอ erase จริง (W25Qxx ~30-100ms)
+
+    USART_Println("[CONFIG] Writing new config...");
+    W25Q_Write(CONFIG_SECTOR, (uint8_t *)&flash_cfg,
+               sizeof(flash_cfg));
+
+    USART_Println("[CONFIG] Saved OK");
+}
+
+void flash_sector_verify(void) {
+    USART_Println("Verifying...");
+    flash_config_t verify;
+
+    W25Q_Read(CONFIG_SECTOR, (uint8_t *)&verify,
+              sizeof(verify));
+
+    if(memcmp(&flash_cfg, &verify, sizeof(flash_cfg)) == 0)
+        USART_Println("✓ Verify PASS");
+    else
+        USART_Println("✗ Verify FAIL");
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> W25Qxx ต้อง erase ทั้ง sector ก่อนเขียนใหม่ — sector erase ใช้เวลา 30-100ms (ขึ้นกับรุ่น) — หลัง erase ทุก byte เป็น 0xFF — เขียน config ใหม่หลัง erase — magic number ป้องกันอ่านค่า random ตอน Flash ว่าง — version field ตามการเปลี่ยนแปลง — verify อ่านกลับมาเทียบว่าเขียนถูกต้อง — sector เดียวเก็บ config ได้หลายเวอร์ชันโดยใช้ offset ต่างกัน</div>
+</div>
+
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_w25qxx.html">กลับบท</a><a href="chapx_lib_ds3231_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

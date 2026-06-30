@@ -1,0 +1,165 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>RotaryEncoder — ตัวหมุนเข้ารหัส — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head><body>
+
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_keymatrix.html">บทก่อน</a><a href="chapx_lib_pid.html">บทถัดไป →</a></nav>
+
+<h1>RotaryEncoder — ตัวหมุนเข้ารหัส</h1><span class="level-intermediate">ระดับกลาง</span>
+
+<section class="flowchart"><h2>🧭 แผนภาพการทำงาน</h2><pre class="mermaid">
+flowchart TD
+    A["RotaryEncoder_Init(CLK,DT,SW)"] --> B{"Mode"}
+    B -->|"Polling"| C["RotaryEncoder_Update()"]
+    B -->|"Interrupt"| D["RotaryEncoder_InitInt(CLK,DT,SW)"]
+    C --> E["Quadrature Decode"]
+    D --> E
+    E --> F{"Direction?"}
+    F -->|"CW"| G["Fire on_rotate(+1)"]
+    F -->|"CCW"| H["Fire on_rotate(-1)"]
+    G --> C
+    H --> C
+</pre></section>
+
+<section><h2>🔌 การต่อวงจร</h2><pre class="ascii-circuit">
+    Rotary Encoder Module (KY-040)
+┌────────────────────────────────────┐
+│ MCU                         CH32V003│
+│                                    │
+│ PC0 ─── CLK  (A)                   │
+│ PC1 ─── DT   (B)                   │
+│ PC2 ─── SW   (Button)              │
+│ 3.3V ── VCC                        │
+│ GND  ── GND                        │
+│                                    │
+│ ใช้ internal pull-up ทั้ง 3 ขา      │
+│ CLK/DT = quadrature signal         │
+│ SW = กดติดปล่อยดับ (active LOW)     │
+│ 20 pulses/rev (typical)            │
+└────────────────────────────────────┘
+</pre><p>Rotary Encoder มาตรฐานมี 3 ขา (CLK, DT, SW) บวก VCC/GND — CLK และ DT สร้างสัญญาณ quadrature — ขา SW เป็นปุ่มในตัว</p></section>
+
+<section><h2>📚 หลักการทำงาน</h2>
+<p><strong>Quadrature Decoding</strong>: CLK และ DT มีเฟสห่างกัน 90° — เมื่อหมุนตามเข็ม (CW) CLK จะนำ DT — เมื่อหมุนทวนเข็ม (CCW) DT จะนำ CLK — ตรวจจับ edge การเปลี่ยนแปลงเพื่อนับ step</p>
+<p><strong>Step Counting</strong>: 1 รอบหมุนมี 20-24 steps (pulses) — ไลบรารีคืนค่า +1 หรือ -1 ต่อ step — ผู้ใช้สะสมค่าเองเพื่อทำตำแหน่ง</p>
+<p><strong>Interrupt vs Polling</strong>: Interrupt mode (<code>RotaryEncoder_InitInt</code>) ใช้ GPIO interrupt จับ edge — ไม่ต้องเรียก Update() ใน loop — เหมาะกับหมุนเร็วหรือ CPU busy — Polling mode ต้องเรียก <code>RotaryEncoder_Update()</code> บ่อยๆ</p>
+<p><strong>Acceleration</strong>: เมื่อหมุนเร็ว ไลบรารีจะคูณ step เพื่อให้ขยับไวขึ้น — เช่น หมุนช้า step=1, หมุนเร็ว step=4 — threshold และ multiplier ปรับได้</p>
+<p><strong>Button Press</strong>: ปุ่มในตัว rotary encoder (กดลงไป) — ใช้ debounce 50ms — callback แยกออกจาก rotate — มักใช้เป็น Enter หรือ Reset</p>
+</section>
+
+<section><h2>💻 เขียน Code ทีละขั้น</h2>
+
+<div class="step"><h3>ขั้นที่ 1: Init + Set Callbacks</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "RotaryEncoder.h"
+
+int32_t position = 0;
+
+void on_rotate(int8_t dir) {
+    position += dir;
+    USART_Print("Pos: "); USART_PrintNum(position); USART_Println("");
+}
+void on_button(void) {
+    position = 0;
+    USART_Println("Reset!");
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_Init(115200);
+
+    RotaryEncoder_Init(PC0, PC1, PC2);  // CLK, DT, SW
+    RotaryEncoder_OnRotate(on_rotate);
+    RotaryEncoder_OnButton(on_button);
+    USART_Println("Encoder Ready!");</code></pre>
+<p class="explain">🔍 <code>RotaryEncoder_Init(CLK, DT, SW)</code> — ถ้าไม่มีปุ่มให้ส่ง <code>NO_PIN</code> แทน SW — <code>RotaryEncoder_OnRotate(cb)</code> รับ callback ที่มี parameter <code>int8_t dir</code> (+1 หรือ -1)</p></div>
+
+<div class="step"><h3>ขั้นที่ 2: Loop (Polling Mode)</h3>
+<pre><code class="language-c">    while(1) {
+        RotaryEncoder_Update();
+        IWDG_Feed();
+    }
+}</code></pre>
+<p class="explain">🔍 Polling mode ต้องเรียก <code>RotaryEncoder_Update()</code> ใน main loop ทุกรอบ — ต้องเรียกบ่อยพอ (อย่างน้อยทุก 1ms) ไม่เช่นนั้นจะพลาด step — ถ้า main loop ยุ่งมากให้ใช้ interrupt mode แทน</p></div>
+
+<div class="step"><h3>ขั้นที่ 3: Interrupt Mode + Acceleration</h3>
+<pre><code class="language-c">    // แทน Init+Update ด้วย InitInt — ไม่ต้อง poll
+    RotaryEncoder_InitInt(PC0, PC1, PC2);
+    RotaryEncoder_OnRotate(on_rotate);
+    RotaryEncoder_OnButton(on_button);
+
+    // ตั้งค่า acceleration
+    RotaryEncoder_SetAccel(2, 4);  // ถ้าหมุน >2 steps/50ms → คูณ 4
+
+    while(1) {
+        // ไม่ต้องเรียก Update() — interrupt จัดการให้
+        IWDG_Feed();
+    }
+}</code></pre>
+<p class="explain">🔍 <code>RotaryEncoder_InitInt()</code> ใช้ GPIO interrupt — CPU ไม่ต้อง poll — <code>SetAccel(threshold, multiplier)</code> ทำให้หมุนเร็วขยับไว — callback ถูกเรียกจาก ISR โดยตรง ดังนั้นต้องสั้นและไม่ใช้ Delay</p></div>
+</section>
+
+<section><h2>📋 API Reference</h2><table><tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+<tr><td><code>RotaryEncoder_Init(CLK, DT, SW)</code></td><td>เริ่มต้นแบบ Polling — SW=NO_PIN ถ้าไม่มีปุ่ม</td><td><code>RotaryEncoder_Init(PC0, PC1, PC2)</code></td></tr>
+<tr><td><code>RotaryEncoder_InitInt(CLK, DT, SW)</code></td><td>เริ่มต้นแบบ Interrupt — ไม่ต้อง poll</td><td><code>RotaryEncoder_InitInt(PC0, PC1, PC2)</code></td></tr>
+<tr><td><code>RotaryEncoder_OnRotate(cb)</code></td><td>ตั้ง callback — cb(int8_t dir): +1=CW, -1=CCW</td><td><code>RotaryEncoder_OnRotate(on_rotate)</code></td></tr>
+<tr><td><code>RotaryEncoder_OnButton(cb)</code></td><td>ตั้ง callback เมื่อกดปุ่ม</td><td><code>RotaryEncoder_OnButton(on_press)</code></td></tr>
+<tr><td><code>RotaryEncoder_Update()</code></td><td>Polling update — เรียกใน loop (เฉพาะ polling)</td><td><code>while(1){RotaryEncoder_Update();}</code></td></tr>
+<tr><td><code>RotaryEncoder_SetAccel(thr, mul)</code></td><td>ตั้ง acceleration — thr=threshold steps/50ms, mul=multiplier</td><td><code>RotaryEncoder_SetAccel(2, 4)</code></td></tr>
+<tr><td><code>RotaryEncoder_GetPosition()</code></td><td>อ่านตำแหน่งสะสม (ถ้าใช้ internal counter)</td><td><code>int32_t pos = RotaryEncoder_GetPosition()</code></td></tr>
+</table></section>
+
+<section><h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2><table><tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+<tr><td>หมุน 1 step แต่ค่าขึ้น 2-3</td><td>Bounce หรือ noise บนสาย CLK/DT</td><td>ใช้ capacitor 100nF คร่อม CLK-GND และ DT-GND — หรือใช้ HW debounce RC</td></tr>
+<tr><td>พลาด step เมื่อหมุนเร็ว (Polling)</td><td>Update() ไม่ถูกเรียกถี่พอ</td><td>เปลี่ยนเป็น Interrupt mode (<code>InitInt</code>) — หรือลดงานใน main loop</td></tr>
+<tr><td>ทิศทางกลับด้าน (CW ขึ้นเป็นลบ)</td><td>สลับสาย CLK กับ DT</td><td>สลับขา CLK/DT ในโค้ด หรือป้อนค่าลบให้ callback</td></tr>
+<tr><td>Callback ทำงานใน ISR แล้ว delay ไม่ได้</td><td>Callback ถูกเรียกจาก interrupt</td><td>Callback ต้องสั้น — ถ้าต้องการ delay ให้ set flag แล้ว main loop จัดการ</td></tr>
+<tr><td>ปุ่มไม่ทำงาน</td><td>ลืม <code>RotaryEncoder_OnButton()</code> — หรือ SW ต่อผิดขา</td><td>เช็ค SW pin mapping — ใช้ <code>digitalRead(SW)</code> ทดสอบว่าอ่านค่าถูก</td></tr>
+<tr><td>Step หายเมื่อหมุนกลับไปกลับมาเร็ว</td><td>MCU จับ edge ไม่ทัน — polling rate ช้า</td><td>ใช้ Interrupt mode + เพิ่มความสำคัญของ ISR — หรือใช้ hardware quadrature decoder</td></tr>
+</table></section>
+
+<section><h2>🛠️ สร้าง Product: Volume Control + PWM Audio</h2><p>Rotary Encoder ควบคุม PWM duty cycle (0-100%) สำหรับ LED/motor — หมุน=ปรับ, กด=mute toggle — แสดงผล OLED</p>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "RotaryEncoder.h"
+#include "PWM.h"
+
+uint8_t volume = 50;  // 0-100%
+uint8_t muted = 0;
+
+void on_rotate(int8_t dir) {
+    if(!muted) {
+        int16_t v = volume + dir * 5;
+        if(v < 0) v = 0; if(v > 100) v = 100;
+        volume = (uint8_t)v;
+        PWM_SetDuty(TIM2_CH1, volume);
+        USART_Print("Vol: "); USART_PrintNum(volume); USART_Println("%");
+    }
+}
+void on_button(void) {
+    muted = !muted;
+    PWM_SetDuty(TIM2_CH1, muted ? 0 : volume);
+    USART_Println(muted ? "MUTED" : "UNMUTED");
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_Init(115200);
+    PWM_Init(TIM2_CH1, PC4, 10000, 50);  // 10kHz, 50% initial
+    RotaryEncoder_InitInt(PC0, PC1, PC2);
+    RotaryEncoder_OnRotate(on_rotate);
+    RotaryEncoder_OnButton(on_button);
+    USART_Println("=== Volume Knob ===");
+    while(1) { IWDG_Feed(); }
+}</code></pre></section>
+
+<section><h2>✏️ ลองทำดู</h2><ol>
+<li>Menu Navigator — หมุน=เลื่อนเมนู, กด=เลือก — ใช้ร่วมกับ LCDMenu หรือ OLED แสดงชื่อเมนูปัจจุบัน</li>
+<li>Multi-turn Counter — นับตำแหน่งแบบ absolute หมุนกี่รอบก็ได้ — ใช้ OLED แสดงจำนวนรอบและองศา (360°/20steps = 18°ต่อ step)</li>
+<li>Game Paddle — หมุนเพื่อขยับ paddle ในเกม Pong — สื่อสารผ่าน USART ไป PC โดยส่งเฉพาะ deltas</li>
+</ol></section>
+
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_keymatrix.html">บทก่อน</a><a href="chapx_lib_pid.html">บทถัดไป →</a></nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script><script>mermaid.initialize({startOnLoad:true,theme:'base'});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

@@ -1,0 +1,143 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย NeoPixel — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_neopixel.html">กลับบท</a><a href="chapx_lib_ws2812matrix_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — NeoPixel (WS2812)</h1>
+
+<div class="answer">
+<h2>ข้อ 1: Rainbow Cycle (ไล่สีรุ้ง)</h2>
+<pre><code class="language-c">#include "simple_neopixel.h"
+
+#define LED_COUNT  12
+
+// HSV → RGB conversion
+void hsv_to_rgb(uint8_t h, uint8_t s, uint8_t v,
+                uint8_t *r, uint8_t *g, uint8_t *b) {
+    if(s == 0) { *r = *g = *b = v; return; }
+    uint8_t region = h / 43;
+    uint8_t rem = (h - region * 43) * 6;
+    uint8_t p = (v * (255 - s)) >> 8;
+    uint8_t q = (v * (255 - ((s * rem) >> 8))) >> 8;
+    uint8_t t = (v * (255 - ((s * (255 - rem)) >> 8))) >> 8;
+    switch(region) {
+        case 0: *r=v; *g=t; *b=p; break;
+        case 1: *r=q; *g=v; *b=p; break;
+        case 2: *r=p; *g=v; *b=t; break;
+        case 3: *r=p; *g=q; *b=v; break;
+        case 4: *r=t; *g=p; *b=v; break;
+        default:*r=v; *g=p; *b=q; break;
+    }
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    NeoPixel_Init(LED_COUNT);
+
+    uint8_t hue = 0;
+    while(1) {
+        for(uint8_t i = 0; i < LED_COUNT; i++) {
+            uint8_t h = hue + (i * 255 / LED_COUNT);
+            uint8_t r, g, b;
+            hsv_to_rgb(h, 255, 128, &r, &g, &b);
+            NeoPixel_SetRGB(i, r, g, b);
+        }
+        NeoPixel_Show();
+        hue += 2;
+        Delay_Ms(20);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ใช้ HSV color space — hue 0-255 ไล่สีครบวงรุ้ง — แต่ละ LED มี hue ต่างกัน (<code>hue + offset</code>) ทำให้เห็นสีกระจายทั่ว strip — เปลี่ยน hue ทีละ 2 ทุก 20ms สร้าง animation สีเคลื่อนที่ — <code>hsv_to_rgb</code> แปลงกลับเป็น RGB ก่อนส่งให้ NeoPixel — แทนการใช้ float ใช้ integer math ตลอดเพื่อประสิทธิภาพบน CH32V003 — ถ้าต้องการ rainbow แบบเต็มความสว่าง ให้ใช้ <code>v=255</code></div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: LED Chaser (ไฟวิ่ง)</h2>
+<pre><code class="language-c">#include "simple_neopixel.h"
+
+#define LED_COUNT  12
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    NeoPixel_Init(LED_COUNT);
+
+    uint8_t pos = 0;
+    int8_t dir = 1;
+
+    while(1) {
+        NeoPixel_Clear();
+
+        // LED หลัก — สีขาวสว่าง
+        NeoPixel_SetRGB(pos, 255, 255, 255);
+
+        // หางไล่สี — fade ออก 3 ดวง
+        for(uint8_t i = 1; i <= 3; i++) {
+            int8_t tail_pos = pos - dir * i;
+            if(tail_pos >= 0 && tail_pos < LED_COUNT) {
+                uint8_t brightness = 80 >> i;  // 40, 20, 10
+                NeoPixel_SetRGB(tail_pos, brightness, brightness, brightness);
+            }
+        }
+
+        NeoPixel_Show();
+        Delay_Ms(80);
+
+        pos += dir;
+        if(pos == 0 || pos == LED_COUNT - 1) dir = -dir;
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ไฟวิ่งกลับไปกลับมา (bounce) — LED หลักสีขาวสว่างสุด — หาง 3 ดวงใช้ bit shift ลดความสว่าง (<code>80>>i</code> = 40, 20, 10) — <code>dir</code> กำหนดทิศทาง กลับเมื่อชนขอบ — <code>NeoPixel_Clear</code> ล้าง buffer ก่อนวาดใหม่ — สำหรับเอฟเฟกต์ smooth ให้ใช้ dimming แบบ cosine แทน — ถ้าต้องการหลายสี ให้เปลี่ยนสีตามตำแหน่งหรือใช้ array สี</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: VU Meter — ระดับเสียงจาก ADC</h2>
+<pre><code class="language-c">#include "simple_neopixel.h"
+#include "simple_adc.h"
+
+#define LED_COUNT  16
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    NeoPixel_Init(LED_COUNT);
+    ADC_SimpleInit(ADC_CH0);
+
+    while(1) {
+        // อ่านค่า peak
+        uint16_t peak = 0;
+        for(uint8_t i = 0; i < 20; i++) {
+            uint16_t val = ADC_Read(ADC_CH0);
+            int16_t centered = (int16_t)val - 2048;
+            if(centered < 0) centered = -centered;
+            if(centered > peak) peak = centered;
+            Delay_Ms(1);
+        }
+
+        // Map peak → จำนวน LED (0-16)
+        uint8_t level = (uint32_t)peak * LED_COUNT / 2048;
+        if(level > LED_COUNT) level = LED_COUNT;
+
+        // แสดงผล — ไล่สีเขียว→เหลือง→แดง
+        NeoPixel_Clear();
+        for(uint8_t i = 0; i < level; i++) {
+            uint8_t r, g, b;
+            if(i < LED_COUNT / 2) {
+                // เขียว → เหลือง
+                r = i * 255 / (LED_COUNT / 2);
+                g = 255;
+                b = 0;
+            } else {
+                // เหลือง → แดง
+                r = 255;
+                g = 255 - (i - LED_COUNT/2) * 255 / (LED_COUNT/2);
+                b = 0;
+            }
+            NeoPixel_SetRGB(i, r, g, b);
+        }
+        NeoPixel_Show();
+        Delay_Ms(30);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> อ่าน ADC 20 ครั้งหาค่า peak (amplitude สูงสุด) — ลบค่า offset 2048 (กึ่งกลาง ADC) แล้วหา absolute value — map peak เป็นจำนวน LED — แบ่งแถบสี: ครึ่งแรกเขียว→เหลือง ครึ่งหลังเหลือง→แดง — VU meter จริงควรมี peak hold (LED สุดท้ายค้าง 500ms ก่อนลด) — สำหรับเสียงจริงต่อวงจร bias + amplifier ก่อนเข้า ADC — ถ้าใช้ MEMS mic แบบ analog ต่อตรงเข้า ADC ได้เลย</div>
+</div>
+
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_neopixel.html">กลับบท</a><a href="chapx_lib_ws2812matrix_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

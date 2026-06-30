@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HC-SR04 — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_ntc10k.html">บทก่อน</a>
+    <a href="chapx_lib_vl53l0x.html">บทถัดไป →</a>
+</nav>
+<h1>HC-SR04 — เซนเซอร์วัดระยะอัลตราโซนิค</h1>
+<span class="level intermediate">ระดับกลาง</span>
+
+<section class="flowchart">
+    <h2>🧭 แผนภาพการทำงาน</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["Trigger 10µs HIGH"] --> B["ส่งคลื่น 40kHz 8 pulses"]
+    B --> C["Echo goes HIGH"]
+    C --> D["pulseIn(Echo)<br/>= pulse width (µs)"]
+    D --> E["Distance = (time × 0.034) / 2"]
+    E --> F["Display / Decision"]
+    F --> A
+    </pre>
+</section>
+
+<section>
+    <h2>🔌 การต่อวงจร</h2>
+    <pre class="ascii-circuit">
+            HC-SR04 — Ultrasonic Distance Sensor
+    ┌────────────────────────────────────┐
+    │ MCU                       HC-SR04  │
+    │ PC0──────TRIG        ┌────────────┤
+    │ PC1──────ECHO        │ 40kHz      │
+    │ 5V───────VCC         │ Transducer │
+    │ GND──────GND         └────────────┤
+    │                                    │
+    │ Range: 2cm – 400cm                │
+    │ Accuracy: ±3mm                    │
+    │ Angle: 15° cone                   │
+    └────────────────────────────────────┘
+    </pre>
+    <p>PC0─TRIG (output), PC1─ECHO (input) — ใช้ไฟ 5V แต่ TRIG รับ 3.3V logic ได้, ECHO output เป็น 5V → ใช้ voltage divider 2 ตัว (1k+2k) ลดเหลือ ~3.3V</p>
+</section>
+
+<section>
+    <h2>📚 หลักการทำงาน</h2>
+    <p><strong>HC-SR04</strong> วัดระยะทางโดยการส่งพัลส์อัลตราโซนิค 40 kHz จำนวน 8 ลูก แล้วจับเวลาที่คลื่นสะท้อนกลับ — หลักการเดียวกับค้างคาวและเรดาร์</p>
+    <p><strong>สูตรคำนวณระยะทาง:</strong></p>
+    <pre>Distance (cm) = (Pulse_Width_µs × Speed_of_Sound) / 2
+
+Speed of Sound = 0.0343 cm/µs (@ 20°C)
+= pulse_µs / 58 สำหรับ cm
+= pulse_µs / 148 สำหรับ inch</pre>
+    <p><strong>Timeout:</strong> ถ้าไม่มีวัตถุในระยะ (< 2cm หรือ > 400cm) — ECHO จะค้าง HIGH นานเกิน — ต้องตั้ง timeout ~38ms (เกินเวลาที่คลื่นเดินทางไปกลับ 4 เมตร) เพื่อป้องกันโปรแกรมค้าง</p>
+    <p><strong>ผลของอุณหภูมิ:</strong> ความเร็วเสียงเปลี่ยนตามอุณหภูมิ — v = 331.3 + 0.606×T (°C) — ที่ 40°C คลาดเคลื่อน ~3.5% — แก้โดยวัดอุณหภูมิแล้วชดเชยในสูตร</p>
+</section>
+
+<section>
+    <h2>💻 เขียน Code ทีละขั้น</h2>
+
+    <div class="step"><h3>ขั้นที่ 1: Init + Setup</h3>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "HCSR04.h"
+
+#define TRIG_PIN  PC0
+#define ECHO_PIN  PC1
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();  // สำหรับ pulseIn
+    USART_Init(USART1, BAUD_115200);
+
+    HCSR04_Init(TRIG_PIN, ECHO_PIN, 38000);
+    //              trig     echo    timeout(µs)
+    // 38000µs = 38ms = ระยะสูงสุด ~650cm</code></pre>
+    <p class="explain">🔍 <code>HCSR04_Init(trig, echo, timeout_us)</code> — timeout ป้องกันโปรแกรมค้างถ้าไม่มีวัตถุสะท้อน — 38000µs ~650cm (ปลอดภัยสำหรับ range 400cm) — CH32V003 3.3V อาจต้องใช้ level shifter ที่ ECHO</p></div>
+
+    <div class="step"><h3>ขั้นที่ 2: อ่าน/เขียนค่า</h3>
+    <pre><code class="language-c">    float distanceCm = HCSR04_ReadDistance(HCSR04_UNIT_CM);
+    float distanceIn = HCSR04_ReadDistance(HCSR04_UNIT_INCH);
+
+    if(distanceCm < 0) {
+        USART_Println("Out of range (TOO_CLOSE / TOO_FAR)");
+    } else {
+        USART_Print("Distance: ");
+        USART_PrintFloat(distanceCm, 1);
+        USART_Println(" cm");
+    }</code></pre>
+    <p class="explain">🔍 <code>HCSR04_ReadDistance()</code> — คืนค่าลบ (-1) ถ้า timeout หรือพัลส์ผิดปกติ — <code>pulseIn(ECHO_PIN, HIGH, timeout)</code> วัดความกว้างพัลส์ขาขึ้นในหน่วย µs</p></div>
+
+    <div class="step"><h3>ขั้นที่ 3: Loop + แสดงผล</h3>
+    <pre><code class="language-c">    OLED_t oled;
+    OLED_Init(&oled, 0x3C, OLED_128x64);
+
+    while(1) {
+        float dist = HCSR04_ReadDistance(HCSR04_UNIT_CM);
+
+        OLED_Clear(&oled);
+        OLED_SetCursor(&oled, 0, 0);
+
+        if(dist < 0) {
+            OLED_Print(&oled, "Out of Range");
+        } else {
+            OLED_PrintFloat(&oled, "Distance:", dist, 1);
+            OLED_Print(&oled, " cm");
+
+            OLED_SetCursor(&oled, 0, 2);
+            if(dist < 10)       OLED_Print(&oled, "TOO CLOSE!");
+            else if(dist < 50)  OLED_Print(&oled, "Close");
+            else if(dist < 200)  OLED_Print(&oled, "Medium");
+            else                OLED_Print(&oled, "Far");
+        }
+
+        OLED_Display(&oled);
+        Delay_Ms(100);  // 10 readings/sec
+    }
+}</code></pre>
+    <p class="explain">🔍 แสดงระยะทางบน OLED แบบ real-time — ใช้ Timer_t + Non-Blocking ก็ได้ถ้าต้องการทำอย่างอื่นพร้อมกัน — <code>HCSR04_ReadDistance()</code> ใช้ <code>Delay_Us()</code> ภายใน — blocking ~40ms max</p></div>
+</section>
+
+<section>
+    <h2>📋 API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+        <tr><td><code>HCSR04_Init(trig, echo, timeout)</code></td><td>เริ่มต้นเซนเซอร์</td><td><code>HCSR04_Init(PC0, PC1, 38000)</code></td></tr>
+        <tr><td><code>HCSR04_ReadDistance(unit)</code></td><td>วัดระยะทาง (CM/INCH)</td><td><code>float d = HCSR04_ReadDistance(HCSR04_UNIT_CM)</code></td></tr>
+        <tr><td><code>HCSR04_ReadRaw()</code></td><td>อ่าน pulse width (µs) ดิบ</td><td><code>uint32_t pw = HCSR04_ReadRaw()</code></td></tr>
+        <tr><td><code>HCSR04_SetTimeout(us)</code></td><td>ตั้ง timeout ใหม่</td><td><code>HCSR04_SetTimeout(25000)</code></td></tr>
+        <tr><td><code>HCSR04_Trigger()</code></td><td>ส่ง trigger pulse อย่างเดียว</td><td><code>HCSR04_Trigger()</code></td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>อ่านได้ 0 cm / ค่าลบตลอด</td><td>ECHO 5V → CH32V003 3.3V ไม่มี level shifter</td><td>ใช้ voltage divider (R1=1k, R2=2k) ที่ ECHO</td></tr>
+        <tr><td>วัดระยะผิดอย่างมาก</td><td>วัตถุเอียงหรืออยู่นอก cone 15°</td><td>หันเซนเซอร์ตั้งฉากกับวัตถุ ใช้พื้นผิวเรียบแข็ง</td></tr>
+        <tr><td>วัดไม่ได้ระยะ < 2-3 cm</td><td>Dead zone — Echo กลับเร็วกว่าเซนเซอร์จะพร้อมรับ</td><td>ถอยเซนเซอร์ห่างวัตถุเกิน 3 cm</td></tr>
+        <tr><td>ค่า distance แกว่ง ±2-3 cm</td><td>การรบกวนระหว่าง Trigger→Echo, noise จากแหล่งจ่าย</td><td>เฉลี่ย 5-10 readings, ต่อ capacitor 100µF ที่ VCC</td></tr>
+        <tr><td>ติด timeout ตลอด (>38ms)</td><td>ไม่มีวัตถุในระยะ หรือวัตถุดูดซับเสียง (ผ้า/ฟองน้ำ)</td><td>เช็คระยะด้วยมือ, ใช้วัตถุแข็งผิวเรียบ</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>🛠️ สร้าง Product: เครื่องวัดระดับน้ำในถัง</h2>
+    <p>HC-SR04 ติดบนฝาถัง วัดลงไปที่ผิวน้ำ — แสดง % ความจุที่เหลือ</p>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "HCSR04.h"
+#include "OLED.h"
+
+#define TANK_HEIGHT  150.0f  // ความสูงถัง 150cm
+#define SENSOR_OFFSET  5.0f  // เซนเซอร์สูงจากฝา 5cm
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_Init(USART1, BAUD_115200);
+    I2C_Init(I2C1, I2C_SPEED_STANDARD);
+
+    OLED_t oled;
+    OLED_Init(&oled, 0x3C, OLED_128x64);
+    HCSR04_Init(PC0, PC1, 38000);
+
+    while(1)
+    {
+        float dist = HCSR04_ReadDistance(HCSR04_UNIT_CM);
+        if(dist < 0) { Delay_Ms(200); continue; }
+
+        float waterLevel = TANK_HEIGHT - dist + SENSOR_OFFSET;
+        if(waterLevel < 0) waterLevel = 0;
+        if(waterLevel > TANK_HEIGHT) waterLevel = TANK_HEIGHT;
+
+        float percent = (waterLevel / TANK_HEIGHT) * 100.0f;
+
+        OLED_Clear(&oled);
+        OLED_SetCursor(&oled, 0, 0);
+        OLED_PrintFloat(&oled, "Water:", waterLevel, 1);
+        OLED_Print(&oled, " cm");
+
+        OLED_SetCursor(&oled, 0, 2);
+        OLED_PrintFloat(&oled, "Level:", percent, 0);
+        OLED_Print(&oled, " %");
+
+        // Draw bar graph
+        int barWidth = (int)(percent * 128 / 100);
+        OLED_DrawRect(&oled, 0, 48, barWidth, 15, 1);
+
+        OLED_Display(&oled);
+        Delay_Ms(500);
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>✏️ ลองทำดู</h2>
+    <ol>
+        <li>ทำ parking sensor — วัดระยะจากรถถึงกำแพง — ไฟเขียว (>50cm), เหลือง (20-50), แดง (<20cm) + Buzzer ถี่ขึ้น</li>
+        <li>ทำเซนเซอร์วัดระดับน้ำ — ติด HC-SR04 ด้านบนถัง วัดลงหาผิวน้ำ — log ระดับน้ำทุก 10 นาที</li>
+        <li>ใช้ NTC ชดเชยอุณหภูมิ — อ่านอุณหภูมิจาก NTC → แก้ speed of sound → ระยะแม่นขึ้นที่อุณหภูมิสูง/ต่ำ</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_ntc10k.html">บทก่อน</a>
+    <a href="chapx_lib_vl53l0x.html">บทถัดไป →</a>
+</nav>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

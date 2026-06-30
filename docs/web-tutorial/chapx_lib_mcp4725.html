@@ -1,0 +1,150 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>MCP4725 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_ads1115.html">บทก่อน</a><a href="chapx_lib_pzem004t.html">บทถัดไป →</a></nav>
+<h1>MCP4725 — DAC 12-Bit I2C พร้อม EEPROM</h1><span class="level advanced">ระดับสูง</span>
+<section class="flowchart"><h2>🧭 แผนภาพการทำงาน</h2><pre class="mermaid">
+flowchart TD
+    A["MCP4725_Init(addr)"] --> B{"Write Mode?"}
+    B -->|"Fast Write"| C["ส่ง 12-bit value โดยตรง"]
+    B -->|"Write + EEPROM"| D["เขียน DAC + บันทึก EEPROM"]
+    C --> E["Vout = (DAC/4096) × VDD"]
+    D --> E
+    E --> F{"Waveform?"}
+    F -->|"Yes"| G["ใช้ Fast Write + Timer สร้าง Wave"]
+    F -->|"No"| H["ใช้เป็น analog output คงที่"]
+</pre></section>
+<section><h2>🔌 การต่อวงจร</h2><pre class="ascii-circuit">
+            MCP4725 12-bit DAC
+   ┌──────────────────────────────────┐
+   │  MCU              MCP4725        │
+   │  PC1─SDA──────────SDA   VDD─3.3V │
+   │  PC2─SCL──────────SCL   GND─GND  │
+   │                   A0─GND (0x60)  │
+   │  Vout ──────────── Output        │
+   │                            │     │
+   │  Oscilloscope / Load ──────┘     │
+   └──────────────────────────────────┘
+</pre><p>ต่อ I2C ปกติ — A0 pin เลือก address (GND=0x60, VDD=0x61) — Output ต่อตรงเข้า Oscilloscope หรือวงจร analog — Vout = (value/4096) × VDD</p></section>
+<section><h2>📚 หลักการทำงาน</h2><p><strong>MCP4725</strong> เป็น DAC 12-bit สื่อสารผ่าน I2C — รับค่า 0-4095 แปลงเป็นแรงดัน 0V ถึง VDD (3.3V) — ความละเอียด 3.3V/4096 ≈ 0.8mV ต่อ step — มี Buffer Amplifier ในตัว ขับโหลดได้สูง</p><p><strong>EEPROM ภายใน</strong> เก็บค่า DAC default — เมื่อเปิดเครื่อง MCP4725 จะอ่านค่า EEPROM มาใช้เป็นค่าเริ่มต้น — ใช้สำหรับงานที่ต้องการค่าเริ่มต้นคงที่แม้ไฟดับ</p><p><strong>Fast Write Mode</strong> เขียนค่า DAC โดยไม่เขียน EEPROM — เร็วกว่า ใช้สร้าง Waveform (sine, triangle, sawtooth) ได้ — I2C Standard 100kHz ส่ง 3 bytes ≈ 240µs ต่อการอัพเดท 1 ครั้ง</p><p><strong>Write + EEPROM</strong> เขียนทั้ง DAC และ EEPROM — ช้ากว่า (~25ms เพราะ EEPROM write cycle) — ใช้เมื่อต้องการให้ค่าคงอยู่หลังปิดเครื่อง</p></section>
+<section><h2>💻 เขียน Code ทีละขั้น</h2>
+<div class="step"><h3>ขั้นที่ 1: Init MCP4725</h3><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "MCP4725.h"
+
+MCP4725_t dac;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    I2C_Init(PC1, PC2, I2C_SPEED_FAST); // Fast mode 400kHz
+    USART_Init(115200);
+
+    MCP4725_Init(&dac, 0x60); // addr=0x60 (A0=GND)
+    USART_Print("MCP4725 Ready\r\n");</code></pre><p class="explain">🔍 <code>MCP4725_Init(dev, addr)</code> — ตั้งค่า I2C address — ใช้ I2C Fast Mode (400kHz) เพื่อความเร็วสูงสุดในการอัพเดท waveform</p></div>
+<div class="step"><h3>ขั้นที่ 2: เขียนค่า DAC + อ่าน EEPROM</h3><pre><code class="language-c">    // Fast Write — แค่เปลี่ยน output
+    MCP4725_FastWrite(&dac, 2048); // ~1.65V (ครึ่ง VDD)
+
+    // Write + Save EEPROM
+    MCP4725_WriteEEPROM(&dac, 1024); // ~0.825V — เก็บใน EEPROM
+    USART_Print("Saved 1024 to EEPROM\r\n");
+
+    // อ่านค่าใน EEPROM
+    uint16_t saved = MCP4725_ReadEEPROM(&dac);
+    USART_Print("EEPROM value: ");
+    USART_PrintDec(saved);
+    USART_Print("\r\n");</code></pre><p class="explain">🔍 <code>FastWrite(value)</code> อัพเดท DAC ทันที ~240µs — <code>WriteEEPROM(value)</code> เขียนทั้ง DAC + EEPROM ~25ms — <code>ReadEEPROM()</code> อ่านค่าที่บันทึกไว้ใน EEPROM</p></div>
+<div class="step"><h3>ขั้นที่ 3: สร้าง Waveform Generator</h3><pre><code class="language-c">    // Sine wave table (pre-computed)
+    const uint16_t sine_table[64] = {
+        2048,2248,2447,2642,2831,3013,3185,3346,
+        3495,3630,3750,3853,3939,4007,4056,4085,
+        4095,4085,4056,4007,3939,3853,3750,3630,
+        3495,3346,3185,3013,2831,2642,2447,2248,
+        2048,1847,1649,1453,1264,1082,910,749,
+        600,465,345,242,156,88,39,10,
+        0,10,39,88,156,242,345,465,
+        600,749,910,1082,1264,1453,1649,1847
+    };
+
+    uint8_t idx = 0;
+    while(1) {
+        MCP4725_FastWrite(&dac, sine_table[idx]);
+        idx = (idx + 1) % 64;
+        Delay_Us(100); // ~156Hz
+    }
+}</code></pre><p class="explain">🔍 ใช้ตาราง sine 64 จุด pre-computed — วนลูปด้วย Fast Write — 100µs delay = ~156Hz sine wave — เปลี่ยน delay เพื่อเปลี่ยนความถี่ — เชื่อมต่อกับ Oscilloscope ดู waveform ได้</p></div>
+</section>
+<section><h2>📋 API Reference</h2><table><tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+<tr><td><code>MCP4725_Init(dev, addr)</code></td><td>เริ่มต้น MCP4725</td><td><code>MCP4725_Init(&dac, 0x60)</code></td></tr>
+<tr><td><code>MCP4725_FastWrite(dev, value)</code></td><td>เขียนค่า DAC (ไม่บันทึก EEPROM)</td><td><code>MCP4725_FastWrite(&dac, 2048)</code></td></tr>
+<tr><td><code>MCP4725_WriteEEPROM(dev, value)</code></td><td>เขียน DAC + บันทึก EEPROM</td><td><code>MCP4725_WriteEEPROM(&dac, 1024)</code></td></tr>
+<tr><td><code>MCP4725_ReadEEPROM(dev)</code></td><td>อ่านค่าใน EEPROM</td><td><code>uint16_t v = MCP4725_ReadEEPROM(&dac)</code></td></tr>
+<tr><td><code>MCP4725_SetVoltage(dev, volt)</code></td><td>ตั้งแรงดันโดยตรง (V)</td><td><code>MCP4725_SetVoltage(&dac, 2.5f)</code></td></tr>
+<tr><td><code>MCP4725_GetVoltage(dev)</code></td><td>อ่านแรงดันปัจจุบัน (V)</td><td><code>float v = MCP4725_GetVoltage(&dac)</code></td></tr>
+</table></section>
+<section><h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2><table><tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+<tr><td>Output เป็น 0V ตลอด</td><td>ไม่ได้เรียก Init หรือ address ผิด</td><td>ตรวจสอบ I2C address — 0x60(A0=GND), 0x61(A0=VDD)</td></tr>
+<tr><td>Waveform กระตุก/ไม่ smooth</td><td>I2C speed ช้าเกินไป</td><td>ใช้ I2C Fast Mode (400kHz) — ลดจำนวนจุดในตาราง waveform</td></tr>
+<tr><td>EEPROM เขียนไม่ติด</td><td>เขียนถี่เกิน (EEPROM มี write cycle limit)</td><td>รอ 25ms หลังเขียน — EEPROM ทน ~1M cycles — อย่าเขียนใน loop ถี่ ๆ</td></tr>
+<tr><td>ค่า EEPROM ไม่ตรง</td><td>Power-on reset อ่านค่าเก่าจาก EEPROM</td><td>ตรวจสอบด้วย ReadEEPROM — อย่า power-cycle ระหว่าง write</td></tr>
+<tr><td>แรงดัน output ไม่ถึง VDD</td><td>Buffer amplifier มี headroom</td><td>Output rail-to-rail — แต่มี offset ~15mV — max output ≈ VDD - 0.04V</td></tr>
+</table></section>
+<section><h2>🛠️ สร้าง Product: Analog Waveform Generator</h2><p>MCP4725 สร้าง Sine, Triangle, Sawtooth, Square wave — เลือก waveform ผ่านปุ่ม — ปรับความถี่ด้วย Potentiometer (ADC)</p><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "MCP4725.h"
+
+const uint16_t sine64[64] = {
+    2048,2248,2447,2642,2831,3013,3185,3346,
+    3495,3630,3750,3853,3939,4007,4056,4085,
+    4095,4085,4056,4007,3939,3853,3750,3630,
+    3495,3346,3185,3013,2831,2642,2447,2248,
+    2048,1847,1649,1453,1264,1082,910,749,
+    600,465,345,242,156,88,39,10,
+    0,10,39,88,156,242,345,465,
+    600,749,910,1082,1264,1453,1649,1847
+};
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+    I2C_Init(PC1, PC2, I2C_SPEED_FAST);
+    ADC_Init(PD2, ADC_CH0);
+    USART_Init(115200);
+
+    MCP4725_t dac;
+    MCP4725_Init(&dac, 0x60);
+
+    pinMode(PC0, PIN_MODE_INPUT_PULLUP); // ปุ่มเปลี่ยน waveform
+    uint8_t wave_type = 0;
+    uint8_t idx = 0;
+
+    while(1)
+    {
+        uint16_t freq = ADC_Read(PD2); // 0-1023 → frequency
+        uint16_t delay_us = 5000 / (freq + 1); // 5kHz max ÷ (freq+1)
+
+        if(GPIO_Read(PC0) == 0) {
+            Delay_Ms(50); // debounce
+            wave_type = (wave_type + 1) % 4;
+            while(GPIO_Read(PC0) == 0);
+        }
+
+        uint16_t val;
+        switch(wave_type) {
+            case 0: val = sine64[idx]; break;
+            case 1: val = (idx * 64) % 4096; break;         // Sawtooth
+            case 2: val = (idx < 32) ? (idx*128) : (4095 - (idx-32)*128); break; // Triangle
+            case 3: val = (idx < 32) ? 4095 : 0; break;     // Square
+        }
+
+        MCP4725_FastWrite(&dac, val);
+        idx = (idx + 1) % 64;
+        Delay_Us(delay_us);
+    }
+}</code></pre></section>
+<section><h2>✏️ ลองทำดู</h2><ol>
+<li>ใช้ตาราง 256 จุดสร้าง sine wave ความละเอียดสูง — ลองหาค่าสูงสุดของ sampling rate ที่ CH32V003 ทำได้</li>
+<li>สร้าง Arbitrary Waveform — รับค่าผ่าน USART แล้วเล่น waveform ตามที่ผู้ใช้กำหนด</li>
+<li>ต่อ RC Low-Pass Filter ที่ Output — ดูผลการกรองสัญญาณที่ความถี่ cutoff ต่าง ๆ</li>
+<li>สร้าง Audio Tone Generator — เปลี่ยน MCP4725 เป็น sine wave 440Hz (Note A4) — ต่อลำโพงผ่าน amplifier</li></ol></section>
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_ads1115.html">บทก่อน</a><a href="chapx_lib_pzem004t.html">บทถัดไป →</a></nav>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script><script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script><script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

@@ -1,0 +1,275 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย YL-69 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_soilmoisture_yl69.html">กลับบท</a><a href="chapx_lib_flamesensor_ky026_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — YL-69 Soil Moisture</h1>
+
+<div class="answer">
+<h2>ข้อ 1: Smart Plant Watering — วัดความชื้น → เปิดปั๊มอัตโนมัติ</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "OLED.h"
+
+#define SOIL_VCC PC0
+#define SOIL_ADC PD2
+#define SOIL_CH  ADC_CH0
+#define PUMP_PIN PC3
+#define DRY_THRESHOLD 30.0f
+#define WATER_DURATION_MS 5000
+#define CHECK_INTERVAL_MS 30000
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    I2C_Init(PC1, PC2, I2C_SPEED_STANDARD);
+    ADC_Init(SOIL_ADC, SOIL_CH);
+    USART_Init(115200);
+
+    pinMode(SOIL_VCC, PIN_MODE_OUTPUT);
+    pinMode(PUMP_PIN, PIN_MODE_OUTPUT);
+    digitalWrite(SOIL_VCC, LOW);
+    digitalWrite(PUMP_PIN, LOW);
+
+    OLED_t oled;
+    OLED_Init(&oled, 0x3C, OLED_128x64);
+    OLED_SetFont(&oled, FONT_8x16);
+
+    uint16_t adc_dry = 200, adc_wet = 950;
+    uint32_t pump_run_count = 0;
+    Timer_t tmr;
+    Start_Timer(&tmr, CHECK_INTERVAL_MS, 1);
+
+    USART_Print("Smart Plant Watering Ready\r\n");
+
+    while(1) {
+        if(Is_Timer_Expired(&tmr)) {
+            digitalWrite(SOIL_VCC, HIGH);
+            Delay_Ms(80);
+            uint16_t adc = ADC_Read(SOIL_ADC);
+            digitalWrite(SOIL_VCC, LOW);
+
+            if(adc < adc_dry) adc = adc_dry;
+            if(adc > adc_wet) adc = adc_wet;
+            float moisture = 100.0f - ((float)(adc - adc_dry) /
+                             (float)(adc_wet - adc_dry)) * 100.0f;
+
+            OLED_Clear(&oled);
+            OLED_SetCursor(&oled, 0, 0);
+            OLED_Print(&oled, "Smart Watering");
+
+            OLED_SetCursor(&oled, 0, 2);
+            OLED_PrintFloat(&oled, "Soil:", moisture, 1);
+            OLED_Print(&oled, "%");
+
+            OLED_SetCursor(&oled, 0, 4);
+            OLED_Print(&oled, "Pumps:");
+            OLED_PrintDec(&oled, pump_run_count);
+
+            if(moisture < DRY_THRESHOLD) {
+                OLED_SetCursor(&oled, 0, 6);
+                OLED_Print(&oled, "WATERING...");
+                OLED_Display(&oled);
+
+                digitalWrite(PUMP_PIN, HIGH);
+                USART_Print("WATERING! ");
+                USART_PrintFloat(moisture, 1);
+                USART_Print("%\r\n");
+                Delay_Ms(WATER_DURATION_MS);
+                digitalWrite(PUMP_PIN, LOW);
+                pump_run_count++;
+            } else {
+                OLED_SetCursor(&oled, 0, 6);
+                OLED_Print(&oled, "Soil OK   ");
+            }
+
+            OLED_Display(&oled);
+
+            USART_Print("Moisture:"); USART_PrintFloat(moisture, 1);
+            USART_Print("% ADC:"); USART_PrintDec(adc);
+            USART_Print("\r\n");
+        }
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> เปิด VCC → รอ 80ms stabilize → อ่าน ADC → ปิด VCC ทันที — วัดทุก 30 วิ ลดการเปิดปิด VCC ถี่ — ถ้าความชื้น < 30% → เปิดปั๊ม 5 วิ — Map ADC เป็น % ด้วย formula ที่ clamp ค่า min/max — แสดงสถานะ OLED — นับจำนวนครั้งที่รดน้ำ — ป้องกัน probe กัดกร่อนด้วย GPIO VCC control</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: Calibration — บันทึกค่าในน้ำและในอากาศ</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "AT24Cxx.h"
+
+#define SOIL_VCC PC0
+#define SOIL_ADC PD2
+#define SOIL_CH  ADC_CH0
+#define CAL_MAGIC 0xA5A5
+
+typedef struct {
+    uint16_t magic;
+    uint16_t adc_dry;
+    uint16_t adc_wet;
+} CalData_t;
+
+CalData_t cal;
+
+void save_calibration(void) {
+    AT24Cxx_WritePage(0, (uint8_t*)&cal, sizeof(CalData_t));
+    USART_Print("Calibration saved to EEPROM\r\n");
+}
+
+void load_calibration(void) {
+    AT24Cxx_Read(0, (uint8_t*)&cal, sizeof(CalData_t));
+    if(cal.magic != CAL_MAGIC) {
+        cal.magic = CAL_MAGIC;
+        cal.adc_dry = 200;
+        cal.adc_wet = 950;
+        USART_Print("No calibration found, using defaults\r\n");
+    }
+}
+
+uint16_t read_soil(void) {
+    digitalWrite(SOIL_VCC, HIGH);
+    Delay_Ms(50);
+    uint16_t adc = ADC_Read(SOIL_ADC);
+    digitalWrite(SOIL_VCC, LOW);
+    return adc;
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    I2C_Init(PC1, PC2, I2C_SPEED_STANDARD);
+    ADC_Init(SOIL_ADC, SOIL_CH);
+    USART_Init(115200);
+
+    pinMode(SOIL_VCC, PIN_MODE_OUTPUT);
+    digitalWrite(SOIL_VCC, LOW);
+    pinMode(PC3, PIN_MODE_INPUT_PULLUP);
+    pinMode(PC4, PIN_MODE_INPUT_PULLUP);
+
+    AT24Cxx_Init(0x50, 256);
+    load_calibration();
+
+    USART_Print("Soil Calibration Menu\r\n");
+    USART_Print("Press PC3: Calibrate DRY (in air)\r\n");
+    USART_Print("Press PC4: Calibrate WET (in water)\r\n");
+    USART_Print("Current: dry="); USART_PrintDec(cal.adc_dry);
+    USART_Print(" wet="); USART_PrintDec(cal.adc_wet);
+    USART_Print("\r\n");
+
+    while(1) {
+        if(GPIO_Read(PC3) == 0) {
+            Delay_Ms(100);
+            USART_Print("Calibrating DRY...\r\n");
+            uint32_t sum = 0;
+            for(int i = 0; i < 30; i++) {
+                sum += read_soil();
+                Delay_Ms(50);
+            }
+            cal.adc_dry = sum / 30;
+            save_calibration();
+            USART_Print("Dry ADC: "); USART_PrintDec(cal.adc_dry);
+            USART_Print("\r\n");
+            while(GPIO_Read(PC3) == 0);
+        }
+
+        if(GPIO_Read(PC4) == 0) {
+            Delay_Ms(100);
+            USART_Print("Calibrating WET...\r\n");
+            uint32_t sum = 0;
+            for(int i = 0; i < 30; i++) {
+                sum += read_soil();
+                Delay_Ms(50);
+            }
+            cal.adc_wet = sum / 30;
+            save_calibration();
+            USART_Print("Wet ADC: "); USART_PrintDec(cal.adc_wet);
+            USART_Print("\r\n");
+            while(GPIO_Read(PC4) == 0);
+        }
+
+        uint16_t adc = read_soil();
+        if(adc < cal.adc_dry) adc = cal.adc_dry;
+        if(adc > cal.adc_wet) adc = cal.adc_wet;
+
+        float moisture = 100.0f - ((float)(adc - cal.adc_dry) /
+                         (float)(cal.adc_wet - cal.adc_dry)) * 100.0f;
+
+        USART_Print("ADC:"); USART_PrintDec(adc);
+        USART_Print(" Moisture:"); USART_PrintFloat(moisture, 1);
+        USART_Print("%\r\n");
+        Delay_Ms(2000);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ใช้ EEPROM (AT24Cxx) เก็บค่า calibration — magic number 0xA5A5 ตรวจสอบว่ามีข้อมูล calibration หรือยัง — ปุ่ม PC3 = calibrate แห้ง (จุ่ม probe ในอากาศ), PC4 = calibrate เปียก (จุ่มในน้ำ) — average 30 samples เพื่อความแม่นยำ — <code>save_calibration()</code> บันทึกลง EEPROM — <code>load_calibration()</code> อ่านค่ากลับมาตอนบูท — ค่า default: dry=200, wet=950</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: Transistor Switch — ใช้ 2N2222 ขับ VCC แทน GPIO ตรง</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+#define SOIL_VCC_EN PC0
+#define SOIL_ADC    PD2
+#define SOIL_CH     ADC_CH0
+
+/*
+  ______ 3.3V
+  |
+  R(10k)
+  |
+  +-------- VCC of Sensor
+  |
+  C (2N2222)
+  |
+  E --- GND
+  |
+  B ---[1k]--- PC0 (SOIL_VCC_EN)
+*/
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    ADC_Init(SOIL_ADC, SOIL_CH);
+    USART_Init(115200);
+
+    pinMode(SOIL_VCC_EN, PIN_MODE_OUTPUT);
+    digitalWrite(SOIL_VCC_EN, LOW);
+
+    uint16_t adc_dry = 200, adc_wet = 950;
+    Timer_t tmr;
+    Start_Timer(&tmr, 10000, 1);
+
+    USART_Print("Soil Sensor (Transistor VCC)\r\n");
+    USART_Print("Transistor ON → 50ms → Read → OFF\r\n");
+
+    while(1) {
+        if(Is_Timer_Expired(&tmr)) {
+            digitalWrite(SOIL_VCC_EN, HIGH);
+            Delay_Ms(50);
+
+            uint16_t adc = ADC_Read(SOIL_ADC);
+
+            digitalWrite(SOIL_VCC_EN, LOW);
+
+            if(adc < adc_dry) adc = adc_dry;
+            if(adc > adc_wet) adc = adc_wet;
+
+            float moisture = 100.0f - ((float)(adc - adc_dry) /
+                             (float)(adc_wet - adc_dry)) * 100.0f;
+
+            USART_Print("ADC:"); USART_PrintDec(adc);
+            USART_Print(" → "); USART_PrintFloat(moisture, 1);
+            USART_Print("%");
+
+            if(adc > 0) {
+                USART_Print(" OK\r\n");
+            } else {
+                USART_Print(" (check transistor wiring)\r\n");
+            }
+        }
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> GPIO ของ CH32V003 จ่ายกระแสได้จำกัด (~8mA) — ถ้าเซนเซอร์กินกระแสมาก ใช้ NPN Transistor (2N2222) เป็นสวิตช์ — GPIO (PC0) ต่อผ่าน R 1kΩ ไป Base ของ transistor — เมื่อ PC0=HIGH → transistor ON → 3.3V จ่ายเข้าเซนเซอร์ — กระแสไหลผ่าน collector-emitter ไม่ผ่าน GPIO — วงจร: Base มี R 1k จำกัดกระแส, Collector ต่อ VCC ผ่าน R pull-up 10k ไปเซนเซอร์, Emitter ลง GND — ใช้กับเซนเซอร์หลายตัวที่ใช้ VCC ร่วมกันได้</div>
+</div>
+
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_soilmoisture_yl69.html">กลับบท</a><a href="chapx_lib_flamesensor_ky026_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

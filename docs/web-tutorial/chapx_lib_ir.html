@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IR Remote — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_gps_neo6m.html">บทก่อน</a>
+    <a href="chapx_lib_softuart.html">บทถัดไป →</a>
+</nav>
+<h1>IR Remote — NEC Protocol, VS1838B Receiver</h1>
+<span class="level intermediate">ระดับกลาง</span>
+
+<section class="flowchart">
+    <h2>🧭 แผนภาพการทำงาน</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["IR_Init(pin)"] --> B["รอ interrupt / polling"]
+    B --> C{"ตรวจสอบ Lead Code<br>9ms LOW + 4.5ms HIGH"}
+    C -->|"Valid NEC"| D["อ่าน 32 bits<br>Address(8) + ~Address(8)<br>+ Command(8) + ~Command(8)"]
+    C -->|"Invalid/Noise"| B
+    D --> E["ตรวจสอบ checksum"]
+    E -->|"OK"| F["IR_Decode() → addr, cmd"]
+    E -->|"Fail"| B
+    F --> G["Switch(cmd) → ทำงานตามปุ่ม"]
+    G --> B
+    </pre>
+</section>
+
+<section>
+    <h2>🔌 การต่อวงจร</h2>
+    <pre class="ascii-circuit">
+               IR Remote + VS1838B Receiver
+    ┌──────────────────────────────────────────────┐
+    │ CH32V003                        VS1838B      │
+    │ PC3──────────────OUT            ┌───────────┤
+    │ 3.3V─────────────VCC            │  ╭──╮     │
+    │ GND──────────────GND            │  │IR│     │
+    │                                  │  ╰──╯     │
+    │ VS1838B: OUT=LOW เมื่อเจอ IR     │           │
+    │ Carrier: 38kHz                  │           │
+    │ Range: ~10m                     └───────────┤
+    │                                  │           │
+    │ IR LED Transmitter (optional):   │           │
+    │ PC0─100Ω─|IR LED|---GND         │           │
+    │ ใช้ PWM 38kHz สร้าง carrier      │           │
+    └──────────────────────────────────────────────┘
+    </pre>
+    <p>VS1838B มีตัวกรอง 38kHz ในตัว — เอาต์พุตเป็น digital LOW เมื่อได้รับสัญญาณ IR ที่ความถี่ carrier 38kHz เท่านั้น, ใช้ไฟ 3.3V หรือ 5V ก็ได้, ขา OUT ต่อกับ GPIO ธรรมดา</p>
+</section>
+
+<section>
+    <h2>📚 หลักการทำงาน</h2>
+    <p><strong>NEC Protocol</strong> เป็นโปรโตคอล IR remote control ที่ใช้กันแพร่หลายที่สุด — ทุกปุ่มของรีโมท NEC จะส่ง frame 32-bit (Address 8-bit + ~Address 8-bit + Command 8-bit + ~Command 8-bit) ผ่านการมอดูเลตด้วย carrier 38kHz</p>
+    <p><strong>NEC Frame Structure:</strong></p>
+    <ul>
+        <li><strong>Lead Code:</strong> 9ms LOW + 4.5ms HIGH — แจ้งว่ากำลังจะเริ่ม frame</li>
+        <li><strong>Logic 0:</strong> 562.5µs LOW + 562.5µs HIGH</li>
+        <li><strong>Logic 1:</strong> 562.5µs LOW + 1687.5µs HIGH (HIGH = 3× LOW)</li>
+        <li><strong>Repeat Code:</strong> 9ms LOW + 2.25ms HIGH — ส่งทุก 110ms เมื่อกดปุ่มค้าง</li>
+    </ul>
+    <p><strong>VS1838B</strong> demodulate carrier 38kHz ออกจากสัญญาณให้อัตโนมัติ — เราเห็นแต่ LOW/HIGH pulse ไม่ต้องยุ่งกับ carrier เอง</p>
+</section>
+
+<section>
+    <h2>💻 เขียน Code ทีละขั้น</h2>
+
+    <div class="step"><h3>ขั้นที่ 1: Init + Setup</h3>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "IR_Remote.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();  // จำเป็นสำหรับวัด pulse width
+    IR_Init(PC3);  // VS1838B OUT → PC3
+    USART_Init(USART1, BAUD_115200);
+    USART_Println("IR Receiver Ready!");
+    USART_Println("Press any key on remote...");</code></pre>
+    <p class="explain">🔍 <code>IR_Init(pin)</code> — ตั้ง GPIO เป็น input + interrupt (falling edge), Timer_Init() จำเป็นเพราะใช้ SysTick วัดความกว้าง pulse</p></div>
+
+    <div class="step"><h3>ขั้นที่ 2: รับและถอดรหัส</h3>
+    <pre><code class="language-c">    uint8_t addr, cmd;
+    uint32_t last_time = 0;
+    while(1) {
+        if(IR_Available()) {  // มี NEC frame เข้ามาครบ
+            IR_Decode(&addr, &cmd);
+            USART_Print("Addr: 0x"); USART_PrintHex(addr);
+            USART_Print(" Cmd: 0x"); USART_PrintHex(cmd);
+            USART_Println("");
+        }
+    }
+}</code></pre>
+    <p class="explain">🔍 <code>IR_Available()</code> — non-blocking เช็คว่ามี frame ครบหรือยัง, <code>IR_Decode(&addr, &cmd)</code> — ถอดรหัส 32-bit frame ตรวจสอบ checksum (~addr, ~cmd), ใช้ <code>USART_PrintHex()</code> แสดงค่า hex</p></div>
+
+    <div class="step"><h3>ขั้นที่ 3: นำไปใช้ — ควบคุม LED ตามปุ่ม</h3>
+    <pre><code class="language-c">    pinMode(PC0, PIN_MODE_OUTPUT);  // LED1
+    pinMode(PC1, PIN_MODE_OUTPUT);  // LED2
+    uint8_t addr, cmd;
+
+    while(1) {
+        if(IR_Available()) {
+            IR_Decode(&addr, &cmd);
+            switch(cmd) {
+                case 0x45: digitalWrite(PC0, HIGH); break;  // ปุ่ม 1 = LED1 ON
+                case 0x46: digitalWrite(PC0, LOW);  break;  // ปุ่ม 2 = LED1 OFF
+                case 0x47: digitalToggle(PC1);       break;  // ปุ่ม 3 = Toggle LED2
+                case 0x44: digitalWrite(PC0, LOW);   // ปุ่ม 0 = ALL OFF
+                           digitalWrite(PC1, LOW); break;
+                default: USART_Print("Unknown: 0x");
+                         USART_PrintHex(cmd); USART_Println(""); break;
+            }
+        }
+    }
+}</code></pre>
+    <p class="explain">🔍 🔴 แต่ละรีโมทมีรหัสปุ่มไม่เหมือนกัน — ต้องอ่านค่าจริงก่อนแล้วจึง map, ใช้ <code>switch(cmd)</code> จับคู่ปุ่ม, Address ใช้กรองกรณีมีรีโมทหลายตัว</p></div>
+</section>
+
+<section>
+    <h2>📋 API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+        <tr><td><code>IR_Init(pin)</code></td><td>เริ่ม IR receiver บน GPIO</td><td><code>IR_Init(PC3)</code></td></tr>
+        <tr><td><code>IR_Available()</code></td><td>เช็ค frame ใหม่เข้ามาหรือยัง</td><td><code>if(IR_Available()){...}</code></td></tr>
+        <tr><td><code>IR_Decode(addr, cmd)</code></td><td>ถอดรหัส 32-bit NEC</td><td><code>IR_Decode(&addr, &cmd)</code></td></tr>
+        <tr><td><code>IR_IsRepeat()</code></td><td>เช็คว่าเป็น repeat code หรือไม่</td><td><code>if(IR_IsRepeat()){...}</code></td></tr>
+        <tr><td><code>IR_SendNEC(addr, cmd)</code></td><td>ส่ง NEC frame (tx mode)</td><td><code>IR_SendNEC(0x00, 0x45)</code></td></tr>
+        <tr><td><code>IR_SetTXPin(pin)</code></td><td>ตั้งขา IR LED transmitter</td><td><code>IR_SetTXPin(PC0)</code></td></tr>
+        <tr><td><code>IR_Reset()</code></td><td>ล้าง buffer เริ่มรอ frame ใหม่</td><td><code>IR_Reset()</code></td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>ไม่เคยรับ IR ได้เลย</td><td>VS1838B ขากลับด้าน หรือใช้ GPIO ผิด</td><td>เช็ค OUT→MCU, VCC→3.3V, GND→GND, VS1838B มองจากด้านโดม: OUT,GND,VCC</td></tr>
+        <tr><td>รับค่าเดิมซ้ำตลอด</td><td>ลืมเคลียร์ IR buffer หลังอ่าน</td><td>เรียก <code>IR_Decode()</code> ซึ่งจะเคลียร์อัตโนมัติ หรือเรียก <code>IR_Reset()</code></td></tr>
+        <tr><td>ค่า cmd ไม่ตรงที่คาดไว้</td><td>รีโมทแต่ละยี่ห้อใช้รหัสไม่เหมือนกัน</td><td>ใช้ code ในขั้นที่ 1 อ่านค่าจริงก่อน แล้วจึง map ใหม่</td></tr>
+        <tr><td>VS1838B รับสัญญาณรบกวน</td><td>หลอดไฟ LED/หลอดฟลูออเรสเซนต์ปล่อย IR</td><td>เพิ่มตัวกรอง (ใส่ท่อหดที่ตัวรับ), หลีกเลี่ยงแสงสว่างจ้าส่องโดยตรง</td></tr>
+        <tr><td>บางครั้ง decode ผิด</td><td>Noise หรือ distance ไกลเกินไป</td><td>ลดระยะห่างเหลือ <5m, ใช้ capacitor 100nF ที่ VCC-GND VS1838B</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>🛠️ สร้าง Product: IR Home Automation Controller</h2>
+    <p>รับคำสั่งจากรีโมท NEC → ควบคุม LED 4 ดวง + บันทึกปุ่มล่าสุด</p>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "IR_Remote.h"
+
+uint8_t led_pins[4] = {PC0, PC1, PC2, PC3};
+uint8_t led_state[4] = {0,0,0,0};
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_Init(USART1, BAUD_115200);
+    IR_Init(PC4);
+
+    for(int i=0; i<4; i++) pinMode(led_pins[i], PIN_MODE_OUTPUT);
+
+    uint8_t addr, cmd;
+    USART_Println("IR Controller Ready");
+
+    while(1)
+    {
+        if(IR_Available()) {
+            IR_Decode(&addr, &cmd);
+            USART_Print("Cmd: 0x"); USART_PrintHex(cmd);
+
+            if(cmd == 0x45) { led_state[0] = !led_state[0]; // toggle LED1
+                digitalWrite(led_pins[0], led_state[0]); }
+            else if(cmd == 0x46) { led_state[1] = !led_state[1];
+                digitalWrite(led_pins[1], led_state[1]); }
+            else if(cmd == 0x47) { led_state[2] = !led_state[2];
+                digitalWrite(led_pins[2], led_state[2]); }
+            else if(cmd == 0x44) { led_state[3] = !led_state[3];
+                digitalWrite(led_pins[3], led_state[3]); }
+            else if(cmd == 0x40) { // ปุ่ม "ALL OFF"
+                for(int i=0;i<4;i++) { led_state[i]=0; digitalWrite(led_pins[i],LOW); }
+            }
+            USART_Print(" States:"); for(int i=0;i<4;i++) { USART_PrintInt(led_state[i]); USART_Print(" "); }
+            USART_Println("");
+        }
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>✏️ ลองทำดู</h2>
+    <ol>
+        <li>ทำ IR Repeater — รับสัญญาณจากรีโมท → ถอดรหัส → ส่งซ้ำด้วย IR LED (ใช้ PWM 38kHz)</li>
+        <li>ทำ IR remote code learner — กดปุ่มบนรีโมท → บันทึก addr+cmd ลง EEPROM → เล่นซ้ำได้</li>
+        <li>ทำ IR-controlled servo — ปุ่ม CH+/CH- หมุน servo ซ้าย-ขวาทีละ 5 องศา</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_gps_neo6m.html">บทก่อน</a>
+    <a href="chapx_lib_softuart.html">บทถัดไป →</a>
+</nav>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

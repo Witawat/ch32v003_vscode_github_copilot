@@ -1,0 +1,158 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย WS2815 Matrix — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_ws2815matrix.html">กลับบท</a><a href="chapx_lib_tjc_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — WS2815 12V Matrix</h1>
+
+<div class="answer">
+<h2>ข้อ 1: ไฟวิ่ง Matrix 16×16 (4-Channel Parallel)</h2>
+<pre><code class="language-c">#include "simple_ws2815matrix.h"
+
+#define WIDTH  16
+#define HEIGHT 16
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    WS2815Matrix_Init(WIDTH, HEIGHT);
+
+    uint8_t x = 0, y = 0;
+    int8_t dx = 1, dy = 0;
+
+    while(1) {
+        WS2815Matrix_Clear();
+
+        // วาดหัวงูสีขาว
+        WS2815Matrix_SetPixel(x, y, 255, 255, 255);
+
+        // หาง 5 dots fade
+        for(uint8_t i = 1; i <= 5; i++) {
+            int8_t tx = x - dx * i;
+            int8_t ty = y - dy * i;
+            if(tx >= 0 && tx < WIDTH && ty >= 0 && ty < HEIGHT) {
+                uint8_t b = 50 >> (i / 2);
+                WS2815Matrix_SetPixel(tx, ty, b, b, 255);
+            }
+        }
+
+        x += dx; y += dy;
+
+        // Bounce logic
+        if(x >= WIDTH)  { x = WIDTH-1; dx = 0; dy = 1; }
+        if(y >= HEIGHT) { y = HEIGHT-1; dy = 0; dx = -1; }
+        if(x < 0)       { x = 0; dx = 0; dy = -1; }
+        if(y < 0)       { y = 0; dy = 0; dx = 1; }
+
+        WS2815Matrix_Show();
+        Delay_Ms(50);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> WS2815 ใช้ไฟ 12V ทำให้ขับ LED ระยะไกลได้โดยไม่มี voltage drop — ใช้ SPI 4-channel parallel ส่งข้อมูลพร้อมกันลด refresh time — ไฟวิ่งวนรอบขอบ matrix โดยเปลี่ยนทิศเมื่อชนขอบ — หาง fade 5 dots ด้วย bit shift ลดความสว่าง — WS2815 มี bidirectional data ทำให้ LED ดวงถัดไปยังทำงานแม้ดวงก่อนหน้าพัง — สำหรับ matrix ใหญ่ใช้ DMA ส่ง SPI ลด CPU load</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: Pac-Man Animation บน Matrix</h2>
+<pre><code class="language-c">#include "simple_ws2815matrix.h"
+
+#define WIDTH  16
+#define HEIGHT 16
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    WS2815Matrix_Init(WIDTH, HEIGHT);
+
+    // สร้าง dots แบบสุ่ม
+    uint8_t dots[HEIGHT][WIDTH];
+    for(uint8_t y = 0; y < HEIGHT; y++)
+        for(uint8_t x = 0; x < WIDTH; x++)
+            dots[y][x] = (rand() & 3) == 0 ? 1 : 0;
+
+    uint8_t px = 1, py = 1;  // Pac-Man position
+    int8_t pdx = 1, pdy = 0;
+    uint8_t mouth_frame = 0;
+
+    while(1) {
+        WS2815Matrix_Clear();
+
+        // วาด dots
+        for(uint8_t y = 0; y < HEIGHT; y++)
+            for(uint8_t x = 0; x < WIDTH; x++)
+                if(dots[y][x])
+                    WS2815Matrix_SetPixel(x, y, 80, 80, 80);
+
+        // Pac-Man — เหลือง, ปากเปิด-ปิด
+        uint8_t mouth = mouth_frame & 2 ? 0 : 2;  // toggle mouth size
+        WS2815Matrix_SetPixel(px, py, 255, 255, 0);
+        WS2815Matrix_SetPixel(px + pdx, py + pdy, 255, 255, 0);
+        // erase "mouth" area to black
+        for(uint8_t m = 0; m < mouth; m++) {
+            int8_t mx = px + pdx * (m + 2);
+            int8_t my = py + pdy * (m + 2);
+            if(mx >= 0 && mx < WIDTH && my >= 0 && my < HEIGHT)
+                WS2815Matrix_SetPixel(mx, my, 0, 0, 0);
+        }
+
+        // กิน dot
+        if(dots[py][px]) dots[py][px] = 0;
+
+        WS2815Matrix_Show();
+        Delay_Ms(200);
+
+        mouth_frame++;
+
+        // ขยับ
+        px += pdx; py += pdy;
+        if(px >= WIDTH || px < 0) { pdx = -pdx; px += pdx * 2; }
+        if(py >= HEIGHT || py < 0) { pdy = -pdy; py += pdy * 2; }
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> Pac-Man ใช้ 3 พิกเซลเป็นตัว — ตรงกลางสีเหลืองเข้ม — ปากทำโดยลบพิกเซลด้านหน้าตาม mouth_frame — dots สร้างแบบสุ่มตอนเริ่ม — เมื่อ Pac-Man เดินผ่าน dot จะถูกลบ (<code>dots[y][x]=0</code>) — WS2815 ที่ 12V สามารถขับ matrix 16×16 (256 LEDs) ได้สบาย — สำหรับเกมจริง เพิ่ม ghost 4 ตัวที่มี AI ไล่ตาม Pac-Man</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: ไล่สีรุ้งทั้ง Matrix แบบ Diagonal</h2>
+<pre><code class="language-c">#include "simple_ws2815matrix.h"
+
+#define WIDTH  16
+#define HEIGHT 16
+
+void hsv_to_rgb(uint8_t h, uint8_t *r, uint8_t *g, uint8_t *b) {
+    uint8_t region = h / 43;
+    uint8_t rem = (h - region * 43) * 6;
+    uint8_t p = 0, q = (255 * (255 - ((255 * rem) >> 8))) >> 8;
+    uint8_t t = (255 * (255 - ((255 * (255 - rem)) >> 8))) >> 8;
+    switch(region) {
+        case 0: *r=255; *g=t; *b=0; break;
+        case 1: *r=q; *g=255; *b=0; break;
+        case 2: *r=0; *g=255; *b=t; break;
+        case 3: *r=0; *g=q; *b=255; break;
+        case 4: *r=t; *g=0; *b=255; break;
+        default:*r=255; *g=0; *b=q; break;
+    }
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    WS2815Matrix_Init(WIDTH, HEIGHT);
+
+    uint8_t hue_offset = 0;
+    while(1) {
+        WS2815Matrix_Clear();
+        for(uint8_t y = 0; y < HEIGHT; y++) {
+            for(uint8_t x = 0; x < WIDTH; x++) {
+                uint8_t h = hue_offset + (x + y) * 8;
+                uint8_t r, g, b;
+                hsv_to_rgb(h, &r, &g, &b);
+                WS2815Matrix_SetPixel(x, y, r, g, b);
+            }
+        }
+        WS2815Matrix_Show();
+        hue_offset++;
+        Delay_Ms(20);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> สีรุ้ง diagonal — hue คำนวณจาก <code>(x + y) * 8</code> ทำให้สีเปลี่ยนตามแนวทแยง — <code>hue_offset</code> เพิ่มทีละ 1 ทำให้ลายสีเคลื่อนที่ — ใช้ HSV→RGB แบบ integer math ทั้งหมด — WS2815 12V ใช้กับงาน outdoor ได้ดีเพราะทนแรงดันตก — matrix ขนาด 16×16 กินกระแสสูงสุด ~15A ที่ 12V (ขาวสว่างทุกดวง) ต้องใช้ power supply เพียงพอ — สำหรับงานจริง ควรจำกัด brightness รวมไม่ให้เกิน spec PSU</div>
+</div>
+
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_ws2815matrix.html">กลับบท</a><a href="chapx_lib_tjc_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

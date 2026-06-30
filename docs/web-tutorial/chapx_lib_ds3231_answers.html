@@ -1,0 +1,221 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย DS3231 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_ds3231.html">กลับบท</a><a href="chapx_lib_rc522_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — DS3231 RTC</h1>
+
+<div class="answer">
+<h2>ข้อ 1: นาฬิกาปลุก + Snooze 5 นาที</h2>
+<pre><code class="language-c">#define ALARM_HOUR      7
+#define ALARM_MIN       0
+#define SNOOZE_MINUTES  5
+#define BUZZER_PIN      PC0
+
+volatile uint8_t alarm_active = 0;
+uint8_t alarm_h = ALARM_HOUR, alarm_m = ALARM_MIN;
+
+void ds3231_alarm_init(void) {
+    DS3231_Init(I2C_PINS_DEFAULT);
+    GPIO_SimpleInit(BUZZER_PIN, GPIO_OUT_PP);
+    PWM_SimpleInit(BUZZER_PIN, 1, 2000, 0);
+
+    // ตั้ง Alarm1: เมื่อชั่วโมง+นาทีตรง
+    DS3231_ClearAlarm(1);
+    DS3231_SetAlarm1(alarm_h, alarm_m, 0,
+                     DS3231_ALARM1_MATCH_HOUR_MIN);
+
+    USART_Print("Alarm set: ");
+    USART_PrintNum(alarm_h); USART_Print(":");
+    USART_PrintNum(alarm_m); USART_Println("");
+}
+
+void ds3231_snooze(void) {
+    if(!alarm_active) return;
+
+    // SNOOZE: เลื่อน alarm ไปอีก 5 นาที
+    DS3231_GetTime(&alarm_h, &alarm_m, NULL);
+
+    alarm_m += SNOOZE_MINUTES;
+    if(alarm_m >= 60) { alarm_m -= 60; alarm_h++; }
+    if(alarm_h >= 24) alarm_h = 0;
+
+    DS3231_SetAlarm1(alarm_h, alarm_m, 0,
+                     DS3231_ALARM1_MATCH_HOUR_MIN);
+
+    // ปิด buzzer
+    PWM_SetDuty(BUZZER_PIN, 1, 0);
+    alarm_active = 0;
+
+    USART_Print("Snoozed → ");
+    USART_PrintNum(alarm_h); USART_Print(":");
+    USART_PrintNum(alarm_m); USART_Println("");
+}
+
+void ds3231_alarm_loop(void) {
+    ds3231_alarm_init();
+
+    while(1) {
+        // เช็ค alarm flag
+        if(DS3231_IsAlarm1()) {
+            alarm_active = 1;
+            PWM_SetDuty(BUZZER_PIN, 1, 1000);
+            USART_Println("⏰ ALARM!");
+
+            // กดปุ่ม PD2 = snooze
+            while(alarm_active) {
+                if(GPIO_ReadBit(PD2) == 0) {
+                    ds3231_snooze();
+                    Delay_Ms(300);
+                }
+                Delay_Ms(50);
+            }
+            DS3231_ClearAlarm(1);
+        }
+
+        // แสดงเวลาปัจจุบัน
+        static uint32_t last = 0;
+        if(Timer_GetMs() - last > 1000) {
+            uint8_t h, m, s;
+            DS3231_GetTime(&h, &m, &s);
+            USART_PrintNum(h);   USART_Print(":");
+            USART_PrintNum(m/10); USART_PrintNum(m%10);
+            USART_Print(":");
+            USART_PrintNum(s/10); USART_PrintNum(s%10);
+            USART_Println("");
+            last = Timer_GetMs();
+        }
+        Delay_Ms(100);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> DS3231 มี 2 alarms ในตัว — Alarm1 match ชั่วโมง+นาที — Snooze: อ่านเวลาปัจจุบัน +5 นาที, ตั้ง alarm ใหม่ — alarm_active flag กัน buzzer เปิดซ้ำ — DS3231_IsAlarm1 เช็ค flag โดยไม่ต้อง polling บ่อย — ใช้ PWM buzzer สร้างเสียง — ปุ่ม PD2 กดเพื่อ snooze, ระหว่าง alarm active รอจนกว่าจะกด</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: Temperature-Compensated Accuracy — ปรับเทียบความถี่</h2>
+<pre><code class="language-c">// DS3231 มี temperature-compensated crystal (TCXO) ในตัว
+// ความแม่นยำ ±2ppm (≈1 นาที/ปี) โดยไม่ต้องปรับเทียบเอง
+// แต่เราสามารถอ่านอุณหภูมิและคำนวณ drift ได้
+
+void ds3231_temp_compensate(void) {
+    DS3231_Init(I2C_PINS_DEFAULT);
+
+    // อ่านอุณหภูมิ DS3231
+    float temp = DS3231_GetTemperature();
+
+    USART_Print("DS3231 Temp: ");
+    USART_PrintFloat(temp, 2);
+    USART_Println(" °C");
+
+    // DS3231 มี aging offset register (0x10)
+    // ค่าแก้ความถี่คริสตัลที่เสื่อมตามอายุ
+    int8_t aging = DS3231_ReadReg(0x10);
+    USART_Print("Aging offset: ");
+    USART_PrintNum(aging);
+    USART_Println(" (0.1ppm steps)");
+
+    // คำนวณ drift จากอุณหภูมิ (ปกติ DS3231 ทำ auto)
+    // แสดงตารางเทียบ
+    USART_Println("Temp(°C)\tDrift(ppm)");
+    for(int8_t t=-40; t<=85; t+=10) {
+        // TCXO curve (ค่าประมาณสำหรับ DS3231)
+        float drift = 0.042f * (t - 25) * (t - 25) - 0.1f;
+        USART_PrintNum(t);
+        USART_Print("\t");
+        USART_PrintFloat(drift, 2);
+        USART_Println("");
+    }
+
+    // Drift → error/วัน
+    float daily_err = 2.0f * 86400 / 1000000;
+    USART_Print("Max daily error: ±");
+    USART_PrintFloat(daily_err, 2);
+    USART_Println(" sec");
+}
+
+// วิธีเชิงปฏิบัติ: sync กับ GPS/NTP แล้วปรับ aging register
+void ds3231_calibrate_from_gps(void) {
+    uint32_t rtc_start = DS3231_GetUnix();
+    // ... รอ GPS fix แล้วคำนวณ offset ...
+    uint32_t gps_unix = 0;  // from GPS
+    int32_t diff = (int32_t)(gps_unix - rtc_start);
+
+    // 1 ppm = 0.0864 sec/day, aging offset = 0.1 ppm/step
+    int8_t aging = (int8_t)(diff * 10 / 864);  // rough
+    DS3231_WriteReg(0x10, aging);
+
+    USART_Print("Calibrated aging: ");
+    USART_PrintNum(aging);
+    USART_Println(" steps");
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> DS3231 มี TCXO ในตัว ชดเชยอุณหภูมิอัตโนมัติ — Aging register (0x10) ปรับ crystal aging ระยะยาว — ความแม่นยำ ±2ppm = ±63 วินาที/ปี — TCXO curve เป็นพาราโบลา (quadratic) มีจุดดีที่สุดที่ ~25°C — calibrate จาก GPS: อ่าน unix timestamp ทั้ง DS3231 และ GPS, หาผลต่าง, คำนวณ aging offset — formula: diff_seconds / day × 10 ≈ aging_steps</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: SQW 1Hz output — ใช้ RTC pulse ขับ LED กระพริบแบบประหยัดพลังงาน</h2>
+<pre><code class="language-c">#define SQW_PIN  PD2  // ขา GPIO อ่าน SQW
+
+volatile uint32_t rtc_ticks = 0;
+
+// EXTI interrupt เมื่อ SQW เปลี่ยน state
+void EXTI2_IRQHandler(void) {
+    if(EXTI_GetITStatus(EXTI_Line2)) {
+        rtc_ticks++;
+        EXTI_ClearITPendingBit(EXTI_Line2);
+    }
+}
+
+void ds3231_sqw_init(void) {
+    DS3231_Init(I2C_PINS_DEFAULT);
+
+    // ตั้ง SQW output = 1Hz
+    DS3231_WriteReg(0x0E, 0x00);  // 1Hz square wave, INT disabled
+
+    // ตั้ง EXTI ขา PD2 รับ rising edge
+    GPIO_SimpleInit(SQW_PIN, GPIO_IN_PU);
+    AFIO_EXTIConfig(GPIO_PortD, GPIO_PinSource2);
+    EXTI_InitTypeDef ex = {
+        .EXTI_Line = EXTI_Line2,
+        .EXTI_Mode = EXTI_Mode_Interrupt,
+        .EXTI_Trigger = EXTI_Trigger_Rising,
+        .EXTI_LineCmd = ENABLE
+    };
+    EXTI_Init(&ex);
+    NVIC_EnableIRQ(EXTI2_IRQn);
+
+    USART_Println("[SQW] 1Hz interrupt enabled");
+}
+
+void ds3231_ultra_low_power_clock(void) {
+    ds3231_sqw_init();
+
+    uint32_t last_tick = 0;
+
+    while(1) {
+        // Sleep จนกว่า RTC จะปลุก (ใช้ WFI หรือ standby)
+        __WFI();  // ถูกปลุกโดย EXTI interrupt
+
+        if(rtc_ticks != last_tick) {
+            last_tick = rtc_ticks;
+
+            // LED toggle ทุก 1 วิ
+            if(rtc_ticks & 1)
+                GPIO_WriteBit(PC0, 1);
+            else
+                GPIO_WriteBit(PC0, 0);
+
+            // อ่านเวลาจาก DS3231 ทุก 60 วิ
+            if(rtc_ticks % 60 == 0) {
+                uint8_t h, m, s;
+                DS3231_GetTime(&h, &m, &s);
+                USART_PrintNum(h);  USART_Print(":");
+                USART_PrintNum(m/10); USART_PrintNum(m%10);
+                USART_Print(":");
+                USART_PrintNum(s/10); USART_PrintNum(s%10);
+                USART_Println("");
+            }
+        }
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> DS3231 SQW pin ให้สัญญาณ square wave 1Hz, 1.024kHz, 4.096kHz, 8.192kHz — ตั้ง 1Hz ผ่าน register 0x0E bit 3:4 = 00 — ใช้ EXTI interrupt ที่ PD2 นับ pulse — __WFI() sleep ประหยัดพลังงานระหว่างรอ (กระแส ~2μA) — ถูกปลุกทุก 1 วิเพื่ออัปเดต LED — อ่าน I2C แค่ทุก 60 วิลด traffic — DS3231 ใช้กระแสต่ำมาก (200μA ปกติ, 0.6μA ใน battery backup)</div>
+</div>
+
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_ds3231.html">กลับบท</a><a href="chapx_lib_rc522_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

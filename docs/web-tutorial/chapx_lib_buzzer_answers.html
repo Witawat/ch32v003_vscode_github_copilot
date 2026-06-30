@@ -1,0 +1,134 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย Buzzer — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_buzzer.html">กลับบท</a><a href="chapx_lib_bh1750_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — Buzzer</h1>
+<div class="answer"><h2>ข้อ 1: Melody Player — เล่นทำนอง Happy Birthday</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "Buzzer.h"
+
+#define BUZZER_PIN PC4
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    Buzzer_Init(BUZZER_PIN, BUZZER_PASSIVE);
+
+    uint16_t notes[] = {
+        262,262,294,262,349,330,    // Happy birthday to you
+        262,262,294,262,392,349,    // Happy birthday to you
+        262,262,523,440,349,330,294, // Happy birthday dear X
+        466,466,440,349,392,349      // Happy birthday to you
+    };
+
+    uint16_t dur[] = {
+        300,150,400,400,400,800,
+        300,150,400,400,400,800,
+        300,150,400,400,400,400,400,
+        300,150,400,400,400,800
+    };
+
+    uint8_t count = sizeof(notes) / sizeof(notes[0]);
+
+    while(1) {
+        for(uint8_t i = 0; i < count; i++) {
+            Buzzer_Tone(BUZZER_PIN, notes[i], dur[i]);
+            Delay_Ms(50);  // pause ระหว่างโน้ต
+        }
+        Delay_Ms(2000);  // pause ก่อนเล่นซ้ำ
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ใช้ <strong>Passive Buzzer</strong> — array <code>notes[]</code> เก็บความถี่ Hz (C4=262, D4=294, E4=330, F4=349, G4=392, A4=440, C5=523) — array <code>dur[]</code> เก็บความยาวโน้ตใน ms — <code>Buzzer_Tone(pin, freq, ms)</code> สร้าง PWM ที่ความถี่นั้นตามเวลาที่กำหนด — <code>Delay_Ms(50)</code> เว้นจังหวะระหว่างโน้ต — ต้องต่อ Passive Buzzer (ไม่มี oscillator ในตัว)</div></div>
+<div class="answer"><h2>ข้อ 2: PWM Frequency Sweep — กวาดความถี่ 100-4000Hz</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "Buzzer.h"
+
+#define BUZZER_PIN PC4
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_Init(115200);
+    Buzzer_Init(BUZZER_PIN, BUZZER_PASSIVE);
+
+    USART_Println("Frequency Sweep: 100Hz → 4000Hz");
+
+    while(1) {
+        // กวาดความถี่ต่ำ → สูง
+        for(uint16_t freq = 100; freq <= 4000; freq += 50) {
+            Buzzer_Tone(BUZZER_PIN, freq, 30);
+            Delay_Ms(10);
+            USART_Print("Freq: "); USART_PrintNum(freq);
+            USART_Println(" Hz");
+        }
+
+        Delay_Ms(500);
+
+        // กวาดความถี่สูง → ต่ำ
+        for(uint16_t freq = 4000; freq >= 100; freq -= 50) {
+            Buzzer_Tone(BUZZER_PIN, freq, 30);
+            Delay_Ms(10);
+        }
+
+        Delay_Ms(1000);
+
+        // เฉพาะช่วงเสียงแหลม (siren effect)
+        for(uint16_t freq = 2000; freq <= 4000; freq += 100) {
+            Buzzer_Tone(BUZZER_PIN, freq, 50);
+        }
+        for(uint16_t freq = 4000; freq >= 2000; freq -= 100) {
+            Buzzer_Tone(BUZZER_PIN, freq, 50);
+        }
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>for</code> loop เปลี่ยนความถี่ทีละ 50Hz จาก 100→4000 — <code>Buzzer_Tone(pin, freq, 30)</code> เล่นแต่ละความถี่ 30ms — ใช้ Passive Buzzer เพราะ Active มีความถี่คงที่ — sweep loop แรก: เสียงต่ำไปสูง (เหมือน siren ตำรวจ) — sweep loop ที่สอง: กลับทิศ — sweep loop ที่สาม: เฉพาะช่วง 2-4kHz (เสียงแหลม) ให้ผลเหมือน siren ฉุกเฉิน — ดู response frequency ของ Passive buzzer ว่าดังสุดที่ความถี่ไหน</div></div>
+<div class="answer"><h2>ข้อ 3: Dual Buzzer Alarm — Active + Passive สลับแพทเทิร์น</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "Buzzer.h"
+
+#define ACTIVE_PIN  PC0
+#define PASSIVE_PIN PC4
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    Buzzer_Init(ACTIVE_PIN, BUZZER_ACTIVE);
+    Buzzer_Init(PASSIVE_PIN, BUZZER_PASSIVE);
+
+    while(1) {
+        // ===== ALARM LEVEL 1: Active สั้น =====
+        for(uint8_t i = 0; i < 3; i++) {
+            Buzzer_Beep(ACTIVE_PIN, 150);
+            Delay_Ms(150);
+        }
+        Delay_Ms(500);
+
+        // ===== ALARM LEVEL 2: Active+Passive สลับ =====
+        for(uint8_t i = 0; i < 4; i++) {
+            Buzzer_Beep(ACTIVE_PIN, 100);
+            Delay_Ms(50);
+            Buzzer_Tone(PASSIVE_PIN, 800, 100);
+            Delay_Ms(50);
+        }
+        Delay_Ms(800);
+
+        // ===== ALARM LEVEL 3: Passive ต่อเนื่อง 2kHz =====
+        Buzzer_Tone(PASSIVE_PIN, 2000, 1000);
+        Delay_Ms(200);
+
+        // ===== ALARM LEVEL 4: ทั้งคู่ดังพร้อม + ความถี่เปลี่ยน =====
+        for(uint8_t i = 0; i < 5; i++) {
+            digitalWrite(ACTIVE_PIN, HIGH);
+            Buzzer_Tone(PASSIVE_PIN, 1000 + i*300, 150);
+            digitalWrite(ACTIVE_PIN, LOW);
+            Delay_Ms(150);
+        }
+
+        Delay_Ms(3000);  // pause ระหว่างรอบ
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ต่อ Buzzer 2 ตัว: Active (PC0) + Passive (PC4) — <strong>Level 1</strong>: Active beep สั้นๆ 3 ครั้ง (แจ้งเตือนเบา) — <strong>Level 2</strong>: Active+Passive สลับกัน (เสียง 2 โทน — เตือนกลาง) — <strong>Level 3</strong>: Passive ต่อเนื่อง 1 วิ (เตือนหนัก) — <strong>Level 4</strong>: ทั้งคู่พร้อม + ความถี่ไล่ขึ้น (ฉุกเฉินสูงสุด) — ใช้ทั้ง <code>Buzzer_Beep</code> (Active) และ <code>Buzzer_Tone</code> (Passive) — เลือกแพทเทิร์นตาม severity</div></div>
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_buzzer.html">กลับบท</a><a href="chapx_lib_bh1750_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

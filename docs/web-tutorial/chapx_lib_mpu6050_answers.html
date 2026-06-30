@@ -1,0 +1,112 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย MPU6050 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_mpu6050.html">กลับบท</a><a href="chapx_lib_as5600_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — MPU6050 Accelerometer + Gyroscope</h1>
+<div class="answer"><h2>ข้อ 1: Tilt Alarm >30° พร้อม Buzzer</h2><pre><code class="language-c">#define TILT_THRESHOLD  30.0f
+#define BUZZER_PIN      PC3
+
+void mpu6050_tilt_alarm(void) {
+    MPU6050_Init(I2C_PINS_DEFAULT, MPU6050_ACCEL_2G, MPU6050_GYRO_250DPS);
+    pinMode(BUZZER_PIN, PIN_MODE_OUTPUT);
+
+    while(1) {
+        MPU6050_Data_t data;
+        if(!MPU6050_ReadAll(&data)) {
+            Delay_Ms(10);
+            continue;
+        }
+
+        // Tilt angle from accelerometer
+        float ax = data.accel_x, ay = data.accel_y, az = data.accel_z;
+        float pitch = atan2f(ax, sqrtf(ay * ay + az * az)) * 180.0f / 3.14159f;
+        float roll  = atan2f(ay, sqrtf(ax * ax + az * az)) * 180.0f / 3.14159f;
+        float tilt  = sqrtf(pitch * pitch + roll * roll);
+
+        USART_Print("Tilt: ");
+        USART_PrintFloat(tilt, 1);
+        USART_Println(" deg");
+
+        if(tilt > TILT_THRESHOLD) {
+            digitalWrite(BUZZER_PIN, HIGH);
+            Delay_Ms(100);
+            digitalWrite(BUZZER_PIN, LOW);
+            Delay_Ms(100);
+        } else {
+            digitalWrite(BUZZER_PIN, LOW);
+            Delay_Ms(500);
+        }
+    }
+}
+</code></pre><div class="approach"><strong>🧠 แนวคิด:</strong> Accelerometer วัดแรงโน้มถ่วง → คำนวณ pitch และ roll — tilt = sqrt(pitch² + roll²) คือมุมรวมจากแนวตั้ง — <code>atan2f</code> จาก math.h — threshold 30° แล้ว Buzzer เตือน — ใช้ได้กับตรวจจับของล้ม/หุ่นยนต์ล้ม</div></div>
+<div class="answer"><h2>ข้อ 2: Complementary Filter — รวม Accel + Gyro</h2><pre><code class="language-c">float angle_pitch = 0, angle_roll = 0;
+uint32_t last_filter_time = 0;
+
+void mpu6050_complementary_filter(void) {
+    MPU6050_Init(I2C_PINS_DEFAULT, MPU6050_ACCEL_2G, MPU6050_GYRO_250DPS);
+    last_filter_time = millis();
+
+    while(1) {
+        MPU6050_Data_t data;
+        if(!MPU6050_ReadAll(&data)) { Delay_Ms(5); continue; }
+
+        uint32_t now = millis();
+        float dt = (now - last_filter_time) / 1000.0f;
+        last_filter_time = now;
+
+        // Accel angle
+        float ax = data.accel_x, ay = data.accel_y, az = data.accel_z;
+        float accel_pitch = atan2f(ax, sqrtf(ay * ay + az * az)) * 180.0f / 3.14159f;
+        float accel_roll  = atan2f(ay, sqrtf(ax * ax + az * az)) * 180.0f / 3.14159f;
+
+        // Gyro rate (°/s)
+        float gyro_x = data.gyro_x * 250.0f / 32768.0f;
+        float gyro_y = data.gyro_y * 250.0f / 32768.0f;
+
+        // Complementary filter: 98% gyro + 2% accel
+        #define ALPHA 0.98f
+        angle_pitch = ALPHA * (angle_pitch + gyro_x * dt) + (1.0f - ALPHA) * accel_pitch;
+        angle_roll  = ALPHA * (angle_roll  + gyro_y * dt) + (1.0f - ALPHA) * accel_roll;
+
+        USART_Print("Pitch: "); USART_PrintFloat(angle_pitch, 2);
+        USART_Print(" Roll: "); USART_PrintFloat(angle_roll, 2);
+        USART_Println("");
+
+        Delay_Ms(10);
+    }
+}
+</code></pre><div class="approach"><strong>🧠 แนวคิด:</strong> Gyro: ตอบสนองเร็ว, drift สะสม — Accel: ไม่ drift, แต่มี noise ตอนเคลื่อนที่ — Complementary filter: α=0.98 เชื่อ gyro 98% ตอบสนองดี + accel 2% แก้ drift — ต้อง convert gyro raw → °/s ก่อน integrate — dt สำคัญมากต้องวัดจาก millis() จริง</div></div>
+<div class="answer"><h2>ข้อ 3: Calibrate Gyro Drift</h2><pre><code class="language-c">float gyro_bias_x = 0, gyro_bias_y = 0, gyro_bias_z = 0;
+
+void mpu6050_calibrate_gyro(void) {
+    const int samples = 200;
+    float sum_x = 0, sum_y = 0, sum_z = 0;
+
+    USART_Println("Calibrating gyro... Keep sensor STILL!");
+    Delay_Ms(1000);
+
+    for(int i = 0; i < samples; i++) {
+        int16_t gx, gy, gz;
+        MPU6050_ReadGyro(&gx, &gy, &gz);
+        sum_x += gx;
+        sum_y += gy;
+        sum_z += gz;
+        Delay_Ms(5);
+    }
+
+    gyro_bias_x = sum_x / samples;
+    gyro_bias_y = sum_y / samples;
+    gyro_bias_z = sum_z / samples;
+
+    USART_Print("Gyro Bias X:"); USART_PrintFloat(gyro_bias_x, 1);
+    USART_Print(" Y:"); USART_PrintFloat(gyro_bias_y, 1);
+    USART_Print(" Z:"); USART_PrintFloat(gyro_bias_z, 1);
+    USART_Println("");
+}
+
+float mpu6050_read_gyro_x_cal(void) {
+    int16_t raw;
+    MPU6050_ReadGyro(&raw, NULL, NULL);
+    return (raw - gyro_bias_x) * 250.0f / 32768.0f;  // °/s
+}
+</code></pre><div class="approach"><strong>🧠 แนวคิด:</strong> ตอนเซนเซอร์อยู่นิ่ง gyro ควรอ่าน 0 — แต่ในความเป็นจริงมี offset — เก็บ 200 ตัวอย่างตอนนิ่ง → หาค่าเฉลี่ยเป็น bias — ลบ bias ทุกครั้งที่อ่านก่อน integrate — ลด drift จาก 0.5°/s เหลือ <0.01°/s — ควร calibrate ทุกครั้งที่เปิดเครื่องเพราะ bias เปลี่ยนตามอุณหภูมิ</div></div>
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_mpu6050.html">กลับบท</a><a href="chapx_lib_as5600_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

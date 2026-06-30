@@ -1,0 +1,159 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย ESP01 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_esp01.html">กลับบท</a><a href="chapx_lib_hc05_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — ESP01 WiFi Module</h1>
+
+<div class="answer">
+<h2>ข้อ 1: ส่งข้อมูลเซนเซอร์ขึ้น ThingSpeak ทุก 30 วินาที</h2>
+<pre><code class="language-c">#define API_KEY  "YOUR_THINGSPEAK_API_KEY"
+#define SSID     "YOUR_WIFI_SSID"
+#define PASS     "YOUR_WIFI_PASSWORD"
+
+void thingspeak_send(float temp, float hum) {
+    char buf[128];
+
+    ESP01_SendCmd("AT+CIPSTART=\"TCP\",\"api.thingspeak.com\",80");
+    if(ESP01_WaitResponse("OK", 5000) < 0) {
+        USART_Println("TCP connect fail");
+        return;
+    }
+
+    Delay_Ms(500);
+    snprintf(buf, sizeof(buf),
+        "GET /update?api_key=%s&field1=%.1f&field2=%.1f HTTP/1.1\r\n"
+        "Host: api.thingspeak.com\r\n"
+        "Connection: close\r\n\r\n",
+        API_KEY, temp, hum);
+
+    uint16_t len = strlen(buf);
+    snprintf(buf + 90, 8, "%d", len);
+    ESP01_SendCmd("AT+CIPSEND=");
+    ESP01_SendCmd(buf + 90);  // send length
+
+    if(ESP01_WaitResponse(">", 3000) < 0) return;
+
+    USART_Print(buf);  // send actual GET request
+
+    if(ESP01_WaitResponse("CLOSED", 5000) > 0) {
+        USART_Println("Data sent to ThingSpeak OK");
+    }
+}
+
+void main_loop(void) {
+    while(1) {
+        float t = DHT_ReadTemp();
+        float h = DHT_ReadHum();
+
+        thingspeak_send(t, h);
+        Delay_Ms(30000);  // ThingSpeak free tier: max every 15s
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> AT+CIPSTART เปิด TCP ไปที่ api.thingspeak.com port 80 — AT+CIPSEND ตามด้วยจำนวน byte ที่จะส่ง — HTTP GET request มี API key และค่า field ใน URL — หลังส่งแล้วรอ "CLOSED" แสดงว่า server ปิด connection — snprintf ใช้ต่อสตริงแบบมีขอบเขตป้องกัน buffer overflow — หน่วง 30 วิตามข้อกำหนด ThingSpeak free tier</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: HTTP GET ดึงข้อมูล JSON จาก API สาธารณะ</h2>
+<pre><code class="language-c">#define API_URL   "http://worldtimeapi.org/api/timezone/Asia/Bangkok"
+
+void http_get_time(char *out, uint16_t maxlen) {
+    char buf[96];
+    uint16_t idx = 0;
+    *out = '\0';
+
+    ESP01_SendCmd("AT+CIPSTART=\"TCP\",\"worldtimeapi.org\",80");
+    if(ESP01_WaitResponse("OK", 5000) < 0) return;
+
+    snprintf(buf, sizeof(buf),
+        "GET /api/timezone/Asia/Bangkok HTTP/1.1\r\n"
+        "Host: worldtimeapi.org\r\n"
+        "Connection: close\r\n\r\n");
+
+    uint16_t len = strlen(buf);
+    // AT+CIPSEND=...
+    ESP01_SendCmdF("AT+CIPSEND=%d", len);
+    if(ESP01_WaitResponse(">", 3000) < 0) return;
+
+    USART_Print(buf);
+
+    // อ่าน response ทีละ char เก็บเฉพาะ body หลัง \r\n\r\n
+    uint8_t empty_lines = 0;
+    uint32_t start = Timer_GetMs();
+    while(Timer_GetMs() - start < 8000 && idx < maxlen - 1) {
+        if(USART_Available()) {
+            char c = USART_Read();
+            if(c == '\r' || c == '\n') {
+                empty_lines++;
+            } else {
+                if(empty_lines >= 4) out[idx++] = c;
+                empty_lines = 0;
+            }
+        }
+    }
+    out[idx] = '\0';
+    USART_Print("\r\n=== JSON Response ===\r\n");
+    USART_Println(out);
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ดึงเวลาจาก WorldTimeAPI — หลังส่ง GET request ต้อง parse หาจุดสิ้นสุด HTTP header (ว่าง 2 บรรทัด = \r\n\r\n) — ใช้ USART_Available/Read อ่านทีละ char แบบ non-blocking — เลือกเก็บเฉพาะ body หลัง header — timeout 8 วิกันค้าง — ESP01_SendCmdF ส่ง AT command แบบมี format string สะดวกกว่า sprintf แยก</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: WiFi reconnect อัตโนมัติเมื่อหลุด</h2>
+<pre><code class="language-c">#define WIFI_CHECK_INTERVAL  10000
+
+volatile uint8_t wifi_connected = 1;
+
+void wifi_monitor(void) {
+    static uint32_t last_check = 0;
+    uint32_t now = Timer_GetMs();
+
+    if(now - last_check < WIFI_CHECK_INTERVAL) return;
+    last_check = now;
+
+    ESP01_SendCmd("AT+CWJAP?");
+    char resp[64];
+    if(ESP01_ReadLine(resp, sizeof(resp), 2000) > 0) {
+        if(strstr(resp, "No AP") || strstr(resp, "ERROR")) {
+            wifi_connected = 0;
+            USART_Println("[WiFi] Disconnected — reconnecting...");
+            wifi_reconnect();
+        }
+    }
+}
+
+void wifi_reconnect(void) {
+    uint8_t attempt = 0;
+    while(attempt < 5 && !wifi_connected) {
+        USART_Print("Reconnect attempt ");
+        USART_PrintNum(attempt + 1);
+        USART_Println("...");
+
+        ESP01_Init(BAUD_115200);
+        Delay_Ms(500);
+
+        ESP01_SendCmdF("AT+CWJAP=\"%s\",\"%s\"", SSID, PASS);
+        if(ESP01_WaitResponse("OK", 8000) > 0) {
+            wifi_connected = 1;
+            USART_Println("[WiFi] Connected OK");
+            return;
+        }
+
+        attempt++;
+        Delay_Ms(3000);
+    }
+    USART_Println("[WiFi] Reconnect failed after 5 attempts");
+}
+
+void esp01_auto_reconnect(void) {
+    ESP01_Init(BAUD_115200);
+    wifi_reconnect();
+
+    while(1) {
+        wifi_monitor();
+        // main application logic...
+        Delay_Ms(100);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ตรวจสอบการเชื่อมต่อทุก 10 วิด้วย AT+CWJAP? — ถ้าเจอ "No AP" หรือ "ERROR" แสดงว่าหลุด — ฟังก์ชัน reconnect ลองใหม่ 5 ครั้ง หน่วง 3 วิระหว่างครั้ง — wifi_connected เป็น flag ให้ task อื่นรู้ว่าพร้อมส่งหรือยัง — ESP01_Init ใหม่ก่อน reconnect เคลียร์ state ค้าง — ใช้ Timer_GetMs แทน Delay เพื่อไม่บล็อก task อื่น</div>
+</div>
+
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_esp01.html">กลับบท</a><a href="chapx_lib_hc05_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

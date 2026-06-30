@@ -1,0 +1,208 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย MCP4725 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_mcp4725.html">กลับบท</a><a href="chapx_lib_pzem004t_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — MCP4725</h1>
+
+<div class="answer">
+<h2>ข้อ 1: Function Generator — Sine, Triangle, Sawtooth, Square Wave</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "MCP4725.h"
+
+const uint16_t sine128[128] = {
+    2048,2148,2248,2347,2447,2545,2642,2738,2831,2922,3013,3100,3185,3268,
+    3346,3422,3495,3564,3630,3692,3750,3804,3853,3898,3939,3975,4007,4034,
+    4056,4073,4085,4092,4095,4092,4085,4073,4056,4034,4007,3975,3939,3898,
+    3853,3804,3750,3692,3630,3564,3495,3422,3346,3268,3185,3100,3013,2922,
+    2831,2738,2642,2545,2447,2347,2248,2148,2048,1947,1847,1748,1649,1550,
+    1453,1357,1264,1173,1082,995,910,827,749,673,600,531,465,403,345,291,
+    242,197,156,120,88,60,39,22,10,3,0,3,10,22,39,60,88,120,156,197,242,
+    291,345,403,465,531,600,673,749,827,910,995,1082,1173,1264,1357,1453,
+    1550,1649,1748,1847,1947
+};
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    I2C_Init(PC1, PC2, I2C_SPEED_FAST);
+    ADC_Init(PD2, ADC_CH0);
+    USART_Init(115200);
+
+    MCP4725_t dac;
+    MCP4725_Init(&dac, 0x60);
+
+    pinMode(PC0, PIN_MODE_INPUT_PULLUP);
+    uint8_t wave = 0;
+    uint8_t idx = 0;
+
+    while(1) {
+        uint16_t pot = ADC_Read(PD2);
+        uint16_t delay_us = 5000 / (pot + 1);
+
+        if(GPIO_Read(PC0) == 0) {
+            Delay_Ms(50);
+            wave = (wave + 1) % 4;
+            idx = 0;
+            while(GPIO_Read(PC0) == 0);
+        }
+
+        uint16_t val;
+        switch(wave) {
+            case 0: val = sine128[idx]; break;
+            case 1: val = (idx * 32) % 4096; break;
+            case 2: val = (idx < 64) ? (idx * 64) : (4095 - (idx-64)*64); break;
+            case 3: val = (idx < 64) ? 4095 : 0; break;
+        }
+
+        MCP4725_FastWrite(&dac, val);
+        idx = (idx + 1) % 128;
+        Delay_Us(delay_us);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ตาราง sine 128 จุด (ความละเอียดสูงกว่า 64 จุด) — 3 waveform เพิ่ม: Triangle (ขึ้น-ลงเชิงเส้น), Square (HIGH/LOW 50%), Sawtooth (ramp 0→4095) — ปุ่ม PC0 สลับ wave — Potentiometer PD2 ปรับความถี่ (ADC 0-1023 → delay 5ms-5µs) — I2C Fast Mode 400kHz จำเป็นสำหรับความถี่สูง</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: EEPROM — บันทึก Setpoint ไว้ใช้หลัง reboot</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "MCP4725.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    I2C_Init(PC1, PC2, I2C_SPEED_FAST);
+    USART_Init(115200);
+
+    MCP4725_t dac;
+    MCP4725_Init(&dac, 0x60);
+
+    uint16_t saved = MCP4725_ReadEEPROM(&dac);
+    USART_Print("EEPROM saved value: ");
+    USART_PrintDec(saved);
+    USART_Print("\r\n");
+
+    if(saved > 0 && saved <= 4095) {
+        MCP4725_FastWrite(&dac, saved);
+        USART_Print("Restored setpoint from EEPROM\r\n");
+    } else {
+        MCP4725_FastWrite(&dac, 2048);
+        USART_Print("No valid EEPROM value, default: 2048\r\n");
+    }
+
+    pinMode(PC0, PIN_MODE_INPUT_PULLUP);
+    pinMode(PC1, PIN_MODE_INPUT_PULLUP);
+
+    uint16_t setpoint = saved ? saved : 2048;
+    float volt = setpoint * (3.3f / 4096.0f);
+    USART_Print("Setpoint: ");
+    USART_PrintDec(setpoint);
+    USART_Print(" → ");
+    USART_PrintFloat(volt, 3);
+    USART_Print("V\r\n");
+
+    while(1) {
+        if(GPIO_Read(PC0) == 0) {
+            Delay_Ms(100);
+            if(setpoint < 4095) setpoint += 40;
+            MCP4725_FastWrite(&dac, setpoint);
+            float v = setpoint * (3.3f / 4096.0f);
+            USART_Print("UP → "); USART_PrintDec(setpoint);
+            USART_Print(" ("); USART_PrintFloat(v, 3);
+            USART_Print("V)\r\n");
+            while(GPIO_Read(PC0) == 0);
+        }
+
+        if(GPIO_Read(PC1) == 0) {
+            Delay_Ms(100);
+            if(setpoint >= 40) setpoint -= 40;
+            MCP4725_FastWrite(&dac, setpoint);
+            float v = setpoint * (3.3f / 4096.0f);
+            USART_Print("DOWN → "); USART_PrintDec(setpoint);
+            USART_Print(" ("); USART_PrintFloat(v, 3);
+            USART_Print("V)\r\n");
+            while(GPIO_Read(PC1) == 0);
+        }
+
+        if(GPIO_Read(PC0) == 0 && GPIO_Read(PC1) == 0) {
+            Delay_Ms(100);
+            MCP4725_WriteEEPROM(&dac, setpoint);
+            USART_Print("SAVED to EEPROM!\r\n");
+        }
+
+        uint16_t verify = MCP4725_ReadEEPROM(&dac);
+        if(verify != setpoint) {
+            USART_Print("EEPROM mismatch! ");
+            USART_PrintDec(verify);
+            USART_Print("\r\n");
+        }
+
+        Delay_Ms(50);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ตอนบูท อ่าน EEPROM ด้วย <code>MCP4725_ReadEEPROM()</code> — ถ้ามีค่าเก่า → restore กลับ — ปุ่ม UP/DOWN (PC0/PC1) ปรับ setpoint ทีละ ~32mV (40 steps) — กดทั้งสองปุ่มพร้อมกัน → บันทึกด้วย <code>WriteEEPROM()</code> (ใช้เวลา ~25ms) — หลังจาก reboot ค่าจะยังคงอยู่เพราะเก็บใน EEPROM ของ MCP4725 — ห้ามเขียน EEPROM ถี่เกิน (limit ~1M cycles)</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: Voltage Ramp — กวาดแรงดัน 0→3.3V แบบ Smooth</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "MCP4725.h"
+
+typedef enum { RAMP_UP, RAMP_DOWN, TRIANGLE } RampMode_t;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    I2C_Init(PC1, PC2, I2C_SPEED_FAST);
+    USART_Init(115200);
+
+    MCP4725_t dac;
+    MCP4725_Init(&dac, 0x60);
+
+    pinMode(PC0, PIN_MODE_INPUT_PULLUP);
+    RampMode_t mode = RAMP_TRIANGLE;
+    uint16_t step_delay_us = 200;
+    int16_t value = 0;
+    int8_t direction = 1;
+
+    USART_Print("Voltage Ramp Generator\r\n");
+    USART_Print("Mode: TRIANGLE (default)\r\n");
+
+    while(1) {
+        if(GPIO_Read(PC0) == 0) {
+            Delay_Ms(50);
+            mode = (RampMode_t)((mode + 1) % 3);
+            value = (mode == RAMP_DOWN) ? 4095 : 0;
+            direction = (mode == RAMP_DOWN) ? -1 : 1;
+            USART_Print("Mode: ");
+            USART_Print(mode == RAMP_UP ? "UP" : mode == RAMP_DOWN ? "DOWN" : "TRIANGLE");
+            USART_Print("\r\n");
+            while(GPIO_Read(PC0) == 0);
+        }
+
+        MCP4725_FastWrite(&dac, (uint16_t)value);
+
+        switch(mode) {
+            case RAMP_UP:
+                value += 8;
+                if(value > 4095) value = 0;
+                break;
+            case RAMP_DOWN:
+                value -= 8;
+                if(value < 0) value = 4095;
+                break;
+            case TRIANGLE:
+                value += direction * 8;
+                if(value >= 4095) { value = 4095; direction = -1; }
+                if(value <= 0)     { value = 0;    direction = 1;  }
+                break;
+        }
+
+        Delay_Us(step_delay_us);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> Ramp 3 โหมด: UP (0→3.3V→reset), DOWN (3.3V→0→reset), TRIANGLE (0→3.3V→0 ซ้ำ) — step size 8 (~6.4mV ต่อ step) × 512 steps = full range — delay 200µs ต่อ step → full sweep ~102ms — ปุ่ม PC0 สลับโหมด — ใช้กับ Oscilloscope ดู waveform หรือใช้ทดสอบวงจร analog อื่น ๆ (เช่น VCO, LED dimmer)</div>
+</div>
+
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_mcp4725.html">กลับบท</a><a href="chapx_lib_pzem004t_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

@@ -1,0 +1,94 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย BH1750 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_bh1750.html">กลับบท</a><a href="chapx_lib_tcs34725_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — BH1750 เซนเซอร์วัดแสง</h1>
+<div class="answer"><h2>ข้อ 1: Lux Logger — บันทึกค่า lux ทุก N วินาทีลง Flash</h2><pre><code class="language-c">#define LOG_INTERVAL_MS  5000
+#define FLASH_SAVE_ADDR  0x08003C00
+
+float last_lux = 0;
+
+void bh1750_logger(void) {
+    if(!BH1750_IsReady()) return;
+
+    float lux = BH1750_ReadLux();
+    if(lux < 0) {
+        USART_Println("BH1750 read error");
+        return;
+    }
+
+    USART_Print("Lux: ");
+    USART_PrintFloat(lux, 1);
+    USART_Println(" lx");
+
+    // บันทึกลง Flash เฉพาะเมื่อค่าเปลี่ยนเกิน 5%
+    if(fabsf(lux - last_lux) > last_lux * 0.05f) {
+        FLASH_Unlock();
+        FLASH_ErasePage(FLASH_SAVE_ADDR);
+        FLASH_ProgramHalfWord(FLASH_SAVE_ADDR, (uint16_t)(lux * 10));
+        FLASH_Lock();
+        last_lux = lux;
+    }
+
+    Delay_Ms(LOG_INTERVAL_MS);
+}
+</code></pre><div class="approach"><strong>🧠 แนวคิด:</strong> ใช้ <code>BH1750_ReadLux()</code> อ่านค่าแล้ว <code>USART_PrintFloat</code> ออก serial — บันทึกเฉพาะเมื่อค่าเปลี่ยนเกิน threshold ป้องกัน Flash wear — แปลง float → uint16_t โดยคูณ 10 เก็บเป็น fixed-point ทศนิยม 1 ตำแหน่ง</div></div>
+<div class="answer"><h2>ข้อ 2: Auto Night Light — PWM LED ตามค่า lux</h2><pre><code class="language-c">#define LED_PIN       PA2
+#define PWM_CHANNEL   1
+#define LUX_DARK      50
+#define LUX_BRIGHT    500
+
+void bh1750_night_light(void) {
+    BH1750_Init(BH1750_ADDR_LOW, BH1750_CONT_HIRES);
+    PWM_SimpleInit(LED_PIN, PWM_CHANNEL, 1000, 0);
+
+    while(1) {
+        Delay_Ms(150);
+        if(!BH1750_IsReady()) continue;
+
+        float lux = BH1750_ReadLux();
+        if(lux < 0) continue;
+
+        uint16_t duty;
+        if(lux <= LUX_DARK) {
+            duty = 1000;  // มืด → LED สว่างสุด
+        } else if(lux >= LUX_BRIGHT) {
+            duty = 0;     // สว่าง → LED ดับ
+        } else {
+            // map lux→duty แบบผกผัน: lux 50→1000, lux 500→0
+            duty = 1000 - (uint16_t)((lux - LUX_DARK) * 1000 / (LUX_BRIGHT - LUX_DARK));
+        }
+
+        PWM_SetDuty(LED_PIN, PWM_CHANNEL, duty);
+    }
+}
+</code></pre><div class="approach"><strong>🧠 แนวคิด:</strong> map เชิงเส้นแบบผกผัน — มืด LED สว่าง, สว่าง LED ดับ — ใช้ <code>PWM_SimpleInit</code> ตั้งความถี่ 1kHz แล้ว <code>PWM_SetDuty</code> อัปเดต duty cycle ตามค่า lux — clamp duty 0–1000 ป้องกัน overflow</div></div>
+<div class="answer"><h2>ข้อ 3: OLED Lux Display — แสดงค่า lux บน OLED</h2><pre><code class="language-c">void bh1750_oled_display(void) {
+    OLED_Init(I2C_PINS_DEFAULT);
+    BH1750_Init(BH1750_ADDR_LOW, BH1750_CONT_HIRES);
+
+    OLED_Clear();
+    OLED_SetCursor(0, 0);
+    OLED_Print("Lux Meter");
+
+    while(1) {
+        Delay_Ms(200);
+        if(!BH1750_IsReady()) continue;
+
+        float lux = BH1750_ReadLux();
+        if(lux < 0) continue;
+
+        OLED_SetCursor(0, 1);
+        OLED_Print("Lux: ");
+        OLED_PrintFloat(lux, 1);
+        OLED_Print(" lx  ");
+
+        // แสดงสถานะความสว่าง
+        OLED_SetCursor(0, 2);
+        if(lux < 50)       OLED_Print("Dark     ");
+        else if(lux < 500) OLED_Print("Indoor   ");
+        else if(lux < 5000)OLED_Print("Bright   ");
+        else               OLED_Print("Outdoor  ");
+    }
+}
+</code></pre><div class="approach"><strong>🧠 แนวคิด:</strong> ใช้ <code>OLED_PrintFloat</code> แสดงค่า lux — เพิ่มบรรทัดบอกสถานะ (Dark/Indoor/Bright/Outdoor) — <code>OLED_SetCursor</code> กำหนดตำแหน่งก่อนพิมพ์ทุกครั้ง — ช่องว่างท้ายสตริงลบตัวอักษรเก่าที่อาจค้าง</div></div>
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_bh1750.html">กลับบท</a><a href="chapx_lib_tcs34725_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

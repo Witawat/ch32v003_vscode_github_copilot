@@ -1,0 +1,293 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย YF-S201 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_waterflow_yfs201.html">กลับบท</a><a href="chapx_lib_hx711_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — YF-S201 Water Flow</h1>
+
+<div class="answer">
+<h2>ข้อ 1: Water Meter with Totalizer — สะสมปริมาตรน้ำ</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "OLED.h"
+
+#define FLOW_PIN  PC3
+#define K_FACTOR  450.0f
+
+volatile uint32_t pulse_count = 0;
+
+void EXTI_IRQ(void) {
+    if(EXTI_GetITStatus(EXTI_Line3)) {
+        pulse_count++;
+        EXTI_ClearITPendingBit(EXTI_Line3);
+    }
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    I2C_Init(PC1, PC2, I2C_SPEED_STANDARD);
+    USART_Init(115200);
+
+    pinMode(FLOW_PIN, PIN_MODE_INPUT_PULLUP);
+    EXTI_Init(FLOW_PIN, EXTI_Trigger_Falling);
+    NVIC_EnableIRQ(EXTI7_0_IRQn);
+
+    OLED_t oled;
+    OLED_Init(&oled, 0x3C, OLED_128x64);
+    OLED_SetFont(&oled, FONT_8x16);
+
+    float total_liters = 0;
+    float total_m3 = 0;
+    uint32_t last_pulse = 0;
+    Timer_t tmr;
+    Start_Timer(&tmr, 1000, 1);
+
+    USART_Print("Water Meter Ready (K=");
+    USART_PrintFloat(K_FACTOR, 0);
+    USART_Print(")\r\n");
+
+    while(1) {
+        if(Is_Timer_Expired(&tmr)) {
+            NVIC_DisableIRQ(EXTI7_0_IRQn);
+            uint32_t pps = pulse_count - last_pulse;
+            last_pulse = pulse_count;
+            NVIC_EnableIRQ(EXTI7_0_IRQn);
+
+            float flow_lpm = (pps / K_FACTOR) * 60.0f;
+            float volume_added = (float)pps / K_FACTOR;
+            total_liters += volume_added;
+
+            if(total_liters >= 1000.0f) {
+                total_m3 += 1.0f;
+                total_liters -= 1000.0f;
+            }
+
+            OLED_Clear(&oled);
+            OLED_SetCursor(&oled, 0, 0);
+            OLED_Print(&oled, "WATER METER");
+
+            OLED_SetCursor(&oled, 0, 2);
+            OLED_PrintFloat(&oled, "Flow:", flow_lpm, 1);
+            OLED_Print(&oled, " L/min");
+
+            OLED_SetCursor(&oled, 0, 4);
+            OLED_PrintFloat(&oled, "Total:", total_m3, 2);
+            OLED_Print(&oled, " m3");
+
+            OLED_SetCursor(&oled, 0, 6);
+            OLED_PrintFloat(&oled, "", total_liters, 1);
+            OLED_Print(&oled, " L  ");
+            OLED_PrintDec(&oled, pulse_count);
+            OLED_Print(&oled, "p");
+
+            OLED_Display(&oled);
+
+            USART_Print("Flow:"); USART_PrintFloat(flow_lpm, 1);
+            USART_Print("L/m Total:"); USART_PrintFloat(total_m3, 2);
+            USART_Print("m3+"); USART_PrintFloat(total_liters, 1);
+            USART_Print("L P:"); USART_PrintDec(pulse_count);
+            USART_Print("\r\n");
+        }
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ใช้ EXTI interrupt นับพัลส์จาก flow sensor — ทุก 1 วิ: disable IRQ, อ่าน pulse_count (atomic), enable IRQ — Flow Rate(L/min) = (pulses/K_factor) × 60 — ปริมาตรสะสมแยกเป็น m³ (1000L) และ L — แสดงผล OLED + USART — K-factor 450 pulse/L สำหรับ YF-S201 — แสดง total pulses ด้วยเพื่อ debug — ป้องกัน race condition ด้วย NVIC_DisableIRQ/EnableIRQ</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: Flow Rate Display — OLED แบบ Real-Time</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "OLED.h"
+
+#define FLOW_PIN   PC3
+#define K_FACTOR   450.0f
+#define VALVE_PIN  PC0
+
+volatile uint32_t pulses = 0;
+
+void EXTI_IRQ(void) {
+    if(EXTI_GetITStatus(EXTI_Line3)) {
+        pulses++;
+        EXTI_ClearITPendingBit(EXTI_Line3);
+    }
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    I2C_Init(PC1, PC2, I2C_SPEED_STANDARD);
+    USART_Init(115200);
+
+    pinMode(FLOW_PIN, PIN_MODE_INPUT_PULLUP);
+    pinMode(VALVE_PIN, PIN_MODE_OUTPUT);
+    EXTI_Init(FLOW_PIN, EXTI_Trigger_Falling);
+    NVIC_EnableIRQ(EXTI7_0_IRQn);
+    digitalWrite(VALVE_PIN, LOW);
+
+    OLED_t oled;
+    OLED_Init(&oled, 0x3C, OLED_128x64);
+    OLED_SetFont(&oled, FONT_8x16);
+
+    uint32_t last_pulses = 0;
+    float flow_history[8] = {0};
+    uint8_t hist_idx = 0;
+    Timer_t tmr;
+    Start_Timer(&tmr, 500, 1);
+
+    while(1) {
+        if(Is_Timer_Expired(&tmr)) {
+            NVIC_DisableIRQ(EXTI7_0_IRQn);
+            uint32_t pps = pulses - last_pulses;
+            last_pulses = pulses;
+            NVIC_EnableIRQ(EXTI7_0_IRQn);
+
+            float flow_lpm = (pps / K_FACTOR) * 120.0f;
+            flow_history[hist_idx] = flow_lpm;
+            hist_idx = (hist_idx + 1) % 8;
+
+            OLED_Clear(&oled);
+            OLED_SetCursor(&oled, 0, 0);
+            OLED_Print(&oled, "FLOW RATE");
+
+            OLED_SetCursor(&oled, 0, 2);
+            OLED_PrintFloat(&oled, "", flow_lpm, 1);
+            OLED_Print(&oled, " L/min");
+
+            OLED_SetCursor(&oled, 0, 4);
+            OLED_Print(&oled, "[");
+            for(uint8_t i = 0; i < 8; i++) {
+                uint8_t idx = (hist_idx + i) % 8;
+                if(flow_history[idx] > 20.0f)      OLED_Print(&oled, "#");
+                else if(flow_history[idx] > 10.0f) OLED_Print(&oled, "=");
+                else if(flow_history[idx] > 5.0f)  OLED_Print(&oled, "-");
+                else if(flow_history[idx] > 1.0f)  OLED_Print(&oled, ".");
+                else                                OLED_Print(&oled, " ");
+            }
+            OLED_Print(&oled, "]");
+
+            const char* status;
+            if(flow_lpm > 25.0f) {
+                status = "OVERFLOW!";
+                digitalWrite(VALVE_PIN, HIGH);
+            } else if(flow_lpm > 15.0f) {
+                status = "HIGH";
+            } else if(flow_lpm > 5.0f) {
+                status = "Normal";
+            } else if(flow_lpm > 0.5f) {
+                status = "Low";
+            } else {
+                status = "No Flow";
+                digitalWrite(VALVE_PIN, LOW);
+            }
+
+            OLED_SetCursor(&oled, 0, 6);
+            OLED_Print(&oled, status);
+
+            OLED_Display(&oled);
+        }
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> อัพเดททุก 500ms แทน 1 วิเพื่อการตอบสนองที่ไวขึ้น — Flow Rate = (pulses/K_factor) × 120 (เพราะ 500ms → ต้อง ×2 เป็น 1 วิ แล้ว ×60 เป็นนาที = ×120) — History bar 8 จุด แสดงแนวโน้มอัตราการไหล — 5 ระดับสถานะ: OVERFLOW(>25), HIGH(>15), Normal(>5), Low(>0.5), No Flow(≤0.5) — ตัดวาล์วอัตโนมัติเมื่อ overflow — พิกัด 500ms แม่นยำเพียงพอสำหรับงานน้ำประปา</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: Daily Usage Log — บันทึกการใช้น้ำรายวันลง Flash</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "W25Qxx.h"
+
+#define FLOW_PIN    PC3
+#define K_FACTOR    450.0f
+#define LOG_MINUTES 1440
+
+typedef struct {
+    uint16_t minute_of_day;
+    float    liters_used;
+    float    total_liters;
+} UsageLog_t;
+
+volatile uint32_t pulse_count = 0;
+
+void EXTI_IRQ(void) {
+    if(EXTI_GetITStatus(EXTI_Line3)) {
+        pulse_count++;
+        EXTI_ClearITPendingBit(EXTI_Line3);
+    }
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    SPI_Init(PC4, PC5, PC6, SPI_MODE0);
+    USART_Init(115200);
+
+    pinMode(FLOW_PIN, PIN_MODE_INPUT_PULLUP);
+    EXTI_Init(FLOW_PIN, EXTI_Trigger_Falling);
+    NVIC_EnableIRQ(EXTI7_0_IRQn);
+
+    W25Qxx_Init();
+    W25Qxx_EraseSector(0);
+
+    float total_liters = 0;
+    uint32_t last_pulse = 0;
+    uint16_t minute = 0;
+    uint32_t log_addr = 0;
+    Timer_t tmr;
+    Start_Timer(&tmr, 60000, 1);
+
+    USART_Print("Daily Water Usage Logger\r\n");
+    USART_Print("Log entry every 1 min\r\n");
+
+    while(1) {
+        if(Is_Timer_Expired(&tmr) && minute < LOG_MINUTES) {
+            NVIC_DisableIRQ(EXTI7_0_IRQn);
+            uint32_t pps = pulse_count - last_pulse;
+            last_pulse = pulse_count;
+            NVIC_EnableIRQ(EXTI7_0_IRQn);
+
+            float liters_this_minute = (float)pps / K_FACTOR;
+            total_liters += liters_this_minute;
+
+            UsageLog_t log;
+            log.minute_of_day = minute;
+            log.liters_used = liters_this_minute;
+            log.total_liters = total_liters;
+
+            W25Qxx_WritePage(log_addr, (uint8_t*)&log, sizeof(UsageLog_t));
+            log_addr += sizeof(UsageLog_t);
+
+            USART_Print("["); USART_PrintDec(minute);
+            USART_Print("m] "); USART_PrintFloat(liters_this_minute, 2);
+            USART_Print("L Total:"); USART_PrintFloat(total_liters, 1);
+            USART_Print("L\r\n");
+            minute++;
+        }
+
+        if(minute >= LOG_MINUTES) {
+            USART_Print("--- 24hr Complete ---\r\n");
+            USART_Print("Total: ");
+            USART_PrintFloat(total_liters, 1);
+            USART_Print("L\r\n");
+
+            USART_Print("Hourly summary:\r\n");
+            uint32_t read_addr = 0;
+            float hourly[24] = {0};
+            for(uint16_t i = 0; i < LOG_MINUTES; i++) {
+                UsageLog_t entry;
+                W25Qxx_Read(read_addr, (uint8_t*)&entry, sizeof(UsageLog_t));
+                read_addr += sizeof(UsageLog_t);
+                hourly[entry.minute_of_day / 60] += entry.liters_used;
+            }
+            for(uint8_t h = 0; h < 24; h++) {
+                USART_Print("H"); USART_PrintDec(h);
+                USART_Print(": "); USART_PrintFloat(hourly[h], 1);
+                USART_Print("L\r\n");
+            }
+            break;
+        }
+    }
+    while(1) { Delay_Ms(1000); }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> บันทึกทุก 1 นาที × 1440 entries = 24 ชม. — แต่ละ entry เก็บ minute_of_day, liters_used, total_liters — เขียนลง W25Qxx Flash ทีละ entry — เมื่อครบ 24 ชม. → คำนวณ hourly summary โดยอ่านกลับจาก Flash — แสดงผลรายชั่วโมง — เก็บข้อมูลได้แม้ไฟดับ — ใช้ struct pack ข้อมูลให้กระชับ (8 bytes/entry × 1440 ≈ 11.5KB) — W25Qxx รองรับการเขียนจำนวนมาก</div>
+</div>
+
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_waterflow_yfs201.html">กลับบท</a><a href="chapx_lib_hx711_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

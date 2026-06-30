@@ -1,0 +1,128 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย DHT — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_dht.html">กลับบท</a><a href="chapx_lib_ds18b20_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — DHT11/DHT22</h1>
+<div class="answer"><h2>ข้อ 1: LED แสดงสถานะ — เขียวปกติ, แดงร้อน >35°C</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "DHT.h"
+
+#define LED_GREEN PC1
+#define LED_RED   PC2
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    pinMode(LED_GREEN, PIN_MODE_OUTPUT);
+    pinMode(LED_RED, PIN_MODE_OUTPUT);
+    DHT_Init(PC0, DHT11);
+
+    Timer_t tmr;
+    Start_Timer(&tmr, 2000, 1);
+
+    while(1) {
+        if(Is_Timer_Expired(&tmr)) {
+            float t, h;
+            if(DHT_Read(&t, &h) == DHT_OK) {
+                if(t > 35.0f) {
+                    digitalWrite(LED_RED, HIGH);
+                    digitalWrite(LED_GREEN, LOW);
+                } else {
+                    digitalWrite(LED_GREEN, HIGH);
+                    digitalWrite(LED_RED, LOW);
+                }
+            }
+        }
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ใช้ <code>if(t > 35.0f)</code> ตัดสินสถานะ — สั่ง <code>digitalWrite</code> แยกขา LED เขียว/แดง พร้อมกัน — เมื่อไฟแดงติด ไฟเขียวต้องดับ (และกลับกัน) — ใช้ <code>Timer_t</code> อ่านทุก 2 วิ ไม่บล็อก loop</div></div>
+<div class="answer"><h2>ข้อ 2: Data Logger บันทึกลง Flash ทุก 5 นาที</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "SimpleFlash.h"
+#include "DHT.h"
+
+#define LOG_ADDR   0x0800F800
+#define MAX_ENTRIES 72
+
+typedef struct {
+    uint32_t timestamp;
+    float temp;
+    float hum;
+} LogEntry_t;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_Init(115200);
+    DHT_Init(PC0, DHT11);
+
+    Timer_t tmr;
+    Start_Timer(&tmr, 300000, 1);   // 5 min = 300,000 ms
+
+    uint8_t idx = 0;
+    while(1) {
+        if(Is_Timer_Expired(&tmr)) {
+            float t, h;
+            if(DHT_Read(&t, &h) == DHT_OK) {
+                LogEntry_t entry;
+                entry.timestamp = Timer_GetMs();
+                entry.temp = t;
+                entry.hum = h;
+                Flash_WriteLog(&entry, sizeof(LogEntry_t), idx);
+                idx = (idx + 1) % MAX_ENTRIES;
+                USART_Print("Log #"); USART_PrintNum(idx);
+                USART_Print(" T:"); USART_PrintFloat(t, 1);
+                USART_Print(" H:"); USART_PrintFloat(h, 1);
+                USART_Println("%");
+            }
+        }
+        IWDG_Feed();
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ใช้ <code>Timer_t</code> ตั้ง 300,000ms (5 นาที) — <code>Flash_WriteLog()</code> จาก <code>SimpleFlash.h</code> เขียน struct <code>LogEntry_t</code> ลง Flash (มี timestamp+temp+hum) — วน buffer ด้วย modulo <code>idx % MAX_ENTRIES</code> — <code>Flash_ReadLog()</code> อ่านกลับมาทีหลังได้</div></div>
+<div class="answer"><h2>ข้อ 3: เทียบ DHT11 vs DHT22 บน 2 pin</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "DHT.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_Init(115200);
+
+    DHT_Init(PC0, DHT11);
+    DHT_Init(PC1, DHT22);
+
+    Timer_t tmr;
+    Start_Timer(&tmr, 2500, 1);  // DHT22 ต้อง >= 2000ms
+
+    while(1) {
+        if(Is_Timer_Expired(&tmr)) {
+            float t11, h11, t22, h22;
+            uint8_t r11 = DHT_Read(PC0, &t11, &h11);
+            uint8_t r22 = DHT_Read(PC1, &t22, &h22);
+
+            USART_Println("---------");
+            if(r11 == DHT_OK) {
+                USART_Print("DHT11 → T:"); USART_PrintFloat(t11, 1);
+                USART_Print(" H:"); USART_PrintFloat(h11, 1);
+                USART_Println("%");
+            } else USART_Println("DHT11 FAIL");
+
+            if(r22 == DHT_OK) {
+                USART_Print("DHT22 → T:"); USART_PrintFloat(t22, 1);
+                USART_Print(" H:"); USART_PrintFloat(h22, 1);
+                USART_Println("%");
+            } else USART_Println("DHT22 FAIL");
+
+            if(r11 == DHT_OK && r22 == DHT_OK) {
+                USART_Print("ΔT:"); USART_PrintFloat(t22 - t11, 2);
+                USART_Print(" ΔH:"); USART_PrintFloat(h22 - h11, 2);
+                USART_Println("");
+            }
+        }
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>DHT_Init</code> 2 ตัวบนคนละขา (PC0=DHT11, PC1=DHT22) — <code>DHT_Read(pin, &t, &h)</code> อ่านแยกกัน — ตั้ง Timer 2500ms เพราะ DHT22 ต้องเว้น ≥ 2 วิ — พิมพ์ค่าเปรียบเทียบและค่า Δ (ผลต่าง) ดู accuracy ของทั้ง 2 รุ่น — DHT22 แม่นยำกว่าแต่ช้ากว่า</div></div>
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_dht.html">กลับบท</a><a href="chapx_lib_ds18b20_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

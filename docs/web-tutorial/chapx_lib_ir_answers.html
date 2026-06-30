@@ -1,0 +1,227 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย IR — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_ir.html">กลับบท</a><a href="chapx_lib_softuart_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — IR Infrared</h1>
+
+<div class="answer">
+<h2>ข้อ 1: IR Learner — บันทึกโค้ดรีโมตแล้วเล่นซ้ำ</h2>
+<pre><code class="language-c">#define IR_SLOTS 10
+#define IR_TIMING_LEN 68
+
+uint16_t ir_timings[IR_SLOTS][IR_TIMING_LEN];
+uint8_t ir_timing_count[IR_SLOTS];
+uint8_t ir_slot = 0;
+uint8_t ir_learn_mode = 0;  // 0=รับปกติ 1=เรียนรู้
+
+void ir_learn_record(void) {
+    if(!ir_learn_mode) return;
+
+    uint16_t buf[IR_TIMING_LEN];
+    uint8_t cnt = IR_CaptureRaw(buf, IR_TIMING_LEN);
+
+    if(cnt < 10) return;  // เสียงรบกวน
+
+    ir_timing_count[ir_slot] = cnt;
+    memcpy(ir_timings[ir_slot], buf, cnt * 2);
+
+    USART_Print("Learned code #");
+    USART_PrintNum(ir_slot);
+    USART_Print(" (");
+    USART_PrintNum(cnt);
+    USART_Println(" pulses)");
+    ir_slot = (ir_slot + 1) % IR_SLOTS;
+    ir_learn_mode = 0;
+}
+
+void ir_replay_slot(uint8_t slot) {
+    if(slot >= IR_SLOTS) return;
+    if(ir_timing_count[slot] == 0) return;
+
+    USART_Print("Replaying slot ");
+    USART_PrintNum(slot);
+    USART_Println("...");
+    IR_SendRaw(ir_timings[slot], ir_timing_count[slot], 38000);
+}
+
+void ir_learner_main(void) {
+    IR_Init(IR_PINS_DEFAULT);
+
+    while(1) {
+        if(GPIO_ReadBit(PD2) == 0) {  // ปุ่ม Learn
+            ir_learn_mode = 1;
+            USART_Println("[IR] Waiting for signal...");
+            Delay_Ms(3000);  // รอรับสัญญาณ 3 วิ
+            ir_learn_record();
+        }
+
+        if(GPIO_ReadBit(PD3) == 0) {  // ปุ่ม Replay
+            ir_replay_slot(0);  // เล่น slot ล่าสุด
+            Delay_Ms(200);
+        }
+
+        // Normal decode mode
+        if(IR_Available()) {
+            uint32_t code = IR_Read();
+            USART_Print("IR NEC: 0x");
+            USART_PrintHex(code);
+            USART_Println("");
+        }
+        Delay_Ms(20);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> IR_CaptureRaw บันทึก timing ของแต่ละ pulse/mark (หน่วย μs) — เก็บลง array 10 slots — IR_SendRaw ส่งกลับด้วย timing เดิม — ใช้ pin แยกสำหรับ learn (PD2) และ replay (PD3) — learn_mode ป้องกันการเรียนรู้เองตอน replay — IR_Available/IR_Read ใช้สำหรับ NEC decode ปกติ — timing buffer 68 ตัวพอสำหรับ NEC (67 pulses: 1 start + 32 data bits × 2)</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: Universal Remote — ส่งโค้ด NEC หลายอุปกรณ์</h2>
+<pre><code class="language-c">typedef struct {
+    const char *name;
+    uint8_t addr;
+    uint8_t cmd;
+} ir_button_t;
+
+typedef struct {
+    const char *brand;
+    ir_button_t buttons[6];
+} ir_device_t;
+
+const ir_device_t ir_db[] = {
+    {"Samsung TV", {
+        {"POWER", 0x07, 0x02},
+        {"VOL+",  0x07, 0x07},
+        {"VOL-",  0x07, 0x0B},
+        {"CH+",   0x07, 0x09},
+        {"CH-",   0x07, 0x0D},
+        {"MUTE",  0x07, 0x0F}
+    }},
+    {"LG TV", {
+        {"POWER", 0x04, 0x08},
+        {"VOL+",  0x04, 0x00},
+        {"VOL-",  0x04, 0x01},
+        {"CH+",   0x04, 0x02},
+        {"CH-",   0x04, 0x03},
+        {"MUTE",  0x04, 0x09}
+    }}
+};
+
+uint8_t ir_dev_idx = 0;
+uint8_t ir_btn_idx = 0;
+
+void ir_universal_send(void) {
+    ir_device_t *dev = &ir_db[ir_dev_idx];
+    ir_button_t *btn = &dev->buttons[ir_btn_idx];
+
+    // NEC format: 32-bit = addr(8) + ~addr(8) + cmd(8) + ~cmd(8)
+    uint32_t code = ((uint32_t)btn->addr) << 24
+                  | ((uint32_t)(~btn->addr & 0xFF)) << 16
+                  | ((uint32_t)btn->cmd) << 8
+                  | ((uint32_t)(~btn->cmd & 0xFF));
+
+    IR_SendNEC(code);
+    USART_Print("Send: ");
+    USART_Print(dev->brand);
+    USART_Print(" → ");
+    USART_Println(btn->name);
+}
+
+void ir_cycle_devices(void) {
+    IR_Init(IR_PINS_DEFAULT);
+
+    while(1) {
+        if(GPIO_ReadBit(PD2) == 0) {  // ปุ่มเปลี่ยนอุปกรณ์
+            ir_dev_idx = (ir_dev_idx + 1) %
+                (sizeof(ir_db)/sizeof(ir_db[0]));
+            ir_btn_idx = 0;
+            USART_Print("Device: ");
+            USART_Println(ir_db[ir_dev_idx].brand);
+            Delay_Ms(300);
+        }
+
+        if(GPIO_ReadBit(PD3) == 0) {  // ปุ่มเปลี่ยนฟังก์ชัน
+            ir_btn_idx = (ir_btn_idx + 1) % 6;
+            USART_Print("Button: ");
+            USART_Println(ir_db[ir_dev_idx].buttons[ir_btn_idx].name);
+            Delay_Ms(300);
+        }
+
+        if(GPIO_ReadBit(PD4) == 0) {  // ปุ่มส่ง
+            ir_universal_send();
+            Delay_Ms(200);
+        }
+        Delay_Ms(20);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> สร้างฐานข้อมูลอุปกรณ์เป็น array of struct — แต่ละอุปกรณ์มี name และ array of button (addr+cmd) — NEC 32-bit = address(8) + inverted_address(8) + command(8) + inverted_command(8) — ปุ่ม 3 ปุ่ม: เปลี่ยนอุปกรณ์, เปลี่ยนฟังก์ชัน, ส่ง — IR_SendNEC ส่ง NEC protocol 38kHz — เพิ่มอุปกรณ์ได้โดยเพิ่ม entry ใน ir_db</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: NEC Repeat Code Handler</h2>
+<pre><code class="language-c">volatile uint32_t ir_last_code = 0;
+volatile uint8_t  ir_repeat_count = 0;
+volatile uint32_t ir_last_time = 0;
+volatile uint8_t  ir_held = 0;
+
+void ir_repeat_handler(void) {
+    IR_Init(IR_PINS_DEFAULT);
+
+    while(1) {
+        if(!IR_Available()) { Delay_Ms(10); continue; }
+
+        uint32_t now = Timer_GetMs();
+        uint32_t code = IR_Read();
+
+        // NEC repeat code = 0xFFFFFFFF
+        if(code == 0xFFFFFFFF && ir_last_code != 0) {
+            // เป็น repeat code
+            uint32_t dt = now - ir_last_time;
+
+            if(dt < 150) {  // repeat ทุก ~110ms
+                ir_repeat_count++;
+
+                if(ir_repeat_count > 5 && !ir_held) {
+                    ir_held = 1;
+                    USART_Print("Button HELD: 0x");
+                    USART_PrintHex(ir_last_code);
+                    USART_Println("");
+                }
+
+                // Action: ต่อเนื่อง (เช่น VOL+ กดค้าง)
+                if(ir_held) {
+                    ir_continuous_action(ir_last_code);
+                }
+            }
+        }
+        else if(code != 0xFFFFFFFF) {
+            // ปกติ: กดครั้งแรก
+            ir_last_code = code;
+            ir_repeat_count = 0;
+            ir_held = 0;
+
+            USART_Print("Press: 0x");
+            USART_PrintHex(code);
+            USART_Println("");
+            ir_single_action(code);
+        }
+
+        ir_last_time = now;
+    }
+}
+
+void ir_single_action(uint32_t code) {
+    // กดครั้งเดียว: toggle, menu, etc.
+    switch(code & 0xFF) {
+        case 0x45: GPIO_WriteBit(PC0, !GPIO_ReadBit(PC0)); break;
+    }
+}
+
+void ir_continuous_action(uint32_t code) {
+    // กดค้าง: volume, channel, brightness
+    switch(code & 0xFF) {
+        case 0x46: PWM_DutyUp(PA1, 1, 50);  break;  // VOL+
+        case 0x47: PWM_DutyDown(PA1, 1, 50); break; // VOL-
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> NEC repeat code = 0xFFFFFFFF ส่งทุก ~110ms เมื่อกดค้าง — แยก logic: ครั้งแรก→single_action, repeat→continuous_action — ir_held ตั้งเมื่อนับ repeat >5 ครั้ง (กันสัญญาณพลาด) — ใช้ Timer_GetMs จับเวลา dt<150ms กรอง repeat code — continuous_action สำหรับฟังก์ชันที่ต้องกดค้าง (VOL+/-, brightness) — single_action สำหรับ toggle, menu</div>
+</div>
+
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_ir.html">กลับบท</a><a href="chapx_lib_softuart_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

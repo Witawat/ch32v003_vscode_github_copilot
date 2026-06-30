@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>📦 เซนเซอร์อุณหภูมิ/ความชื้น 6 ชนิด — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_display.html">บทก่อน</a>
+    <a href="chapx_lib_env2.html">บทถัดไป →</a>
+</nav>
+<h1>🌡️ เซนเซอร์อุณหภูมิ/ความชื้น 6 ชนิด — DHT, DS18B20, BMP280, AHT10, SHT3x, MAX31855</h1>
+<span class="level intermediate">ระดับกลาง</span>
+<p style="margin-top:0.5rem;color:#64748b">⏱️ ดูดัชนีทั้งหมดที่ <a href="chapx_lib_index.html">📦 คลังอุปกรณ์</a></p>
+
+<section>
+<h2>DHT11/DHT22 — วัดอุณหภูมิ+ความชื้น (GPIO)</h2>
+<pre class="ascii-circuit">
+3.3V─VCC  GND─GND  PC0─DATA  (R 4.7kΩ pull-up DATA↔3.3V)
+</pre>
+<pre><code class="language-c">#include "DHT.h"
+DHT_Init(PC0, DHT11);   // หรือ DHT22
+float t, h;
+if(DHT_Read(&t, &h) == DHT_OK) {
+    USART_Print("T:"); USART_PrintFloat(t, 1);
+    USART_Print(" H:"); USART_PrintFloat(h, 1);
+}</code></pre>
+<p class="explain">⚠️ DHT11 อ่านได้ทุก 1 วินาที, DHT22 ทุก 2 วินาที — ถ้าอ่านเร็วเกินจะได้ค่าเดิม, ถ้าคืน -999 = อ่านไม่สำเร็จ (สายหลวม/ไฟตก/pull-up หาย), COM port bit-bang — <strong>ห้ามเรียกใน interrupt</strong> เพราะต้อง polling รอ ~25ms, CRC 8-bit ใน DHT22 ตรวจสอบความถูกต้องของข้อมูล</p>
+
+<h3>API หลัก</h3>
+<table>
+<tr><td><code>DHT_Init(pin, type)</code></td><td>กำหนด pin + รุ่น (DHT11/DHT22)</td><td><code>DHT_Read(&t, &h)</code></td><td>อ่านค่า — คืน DHT_OK/FAIL</td></tr>
+</table>
+
+<h2>DS18B20 — 1-Wire Temperature (GPIO)</h2>
+<pre class="ascii-circuit">
+3.3V─VCC  GND─GND  PC0─DQ  (R 4.7kΩ pull-up DQ↔3.3V)
+</pre>
+<pre><code class="language-c">#include "DS18B20.h"
+OneWire_Init(PC0);
+DS18B20_Init();
+DS18B20_RequestTemperatures();
+Delay_Ms(750);  // ★ รอ conversion เสร็จ
+float t = DS18B20_GetTempCByIndex(0);  // ตัวแรก
+
+// Multi-sensor — อ่าน ROM ทุกตัวบน bus เดียว
+DS18B20_ROM_t rom;
+uint8_t n = DS18B20_GetDeviceCount();
+for(uint8_t i = 0; i < n; i++) {
+    DS18B20_GetROM(i, &rom);
+    float ti = DS18B20_GetTempC(&rom);
+    USART_Print("ROM "); USART_PrintHex(rom.bytes, 8);
+    USART_Print(" = "); USART_PrintFloat(ti, 2);
+}</code></pre>
+<p class="explain">⚠️ 1-Wire timing critical — <strong>ห้ามมี interrupt ตอนอ่าน</strong>, conversion time 750ms (12-bit) / 93.75ms (9-bit), parasite power mode ใช้ 2 wires (DQ+GND) — ต้องมี strong pull-up ระหว่าง conversion, แต่ละตัวมี unique 64-bit ROM ID, bus เดียวต่อได้หลายร้อยตัว, range -55°C ~ +125°C, accuracy ±0.5°C</p>
+
+<h3>API หลัก</h3>
+<table>
+<tr><td><code>OneWire_Init(pin)</code></td><td>Init 1-Wire bus</td><td><code>DS18B20_Init()</code></td><td>ค้นหา devices ทั้งหมดบน bus</td></tr>
+<tr><td><code>DS18B20_RequestTemperatures()</code></td><td>ส่งคำสั่ง convert (ทั้งหมด)</td><td><code>DS18B20_GetTempCByIndex(i)</code></td><td>อ่าน temp ตัวที่ i</td></tr>
+<tr><td><code>DS18B20_GetDeviceCount()</code></td><td>จำนวน devices</td><td><code>DS18B20_GetROM(i, &rom)</code></td><td>อ่าน ROM ID</td></tr>
+<tr><td><code>DS18B20_GetTempC(&rom)</code></td><td>อ่านตาม ROM</td><td><code>DS18B20_SetResolution(bits)</code></td><td>9/10/11/12 bit</td></tr>
+</table>
+
+<h2>BMP280 — วัดความกดอากาศ+อุณหภูมิ (I2C)</h2>
+<pre class="ascii-circuit">
+3.3V─VCC  GND─GND  PC1─SDA  PC2─SCL  (SDO─GND = 0x76, SDO─VCC = 0x77)
+</pre>
+<pre><code class="language-c">#include "BMP280.h"
+BMP280_Init(0x76);                  // หรือ 0x77
+BMP280_SetMode(BMP280_MODE_NORMAL); // SLEEP / FORCED / NORMAL
+Delay_Ms(100);  // รอ measurement แรก
+float t = BMP280_ReadTemperature();         // °C
+float p = BMP280_ReadPressure() / 100.0f;   // hPa
+float alt = BMP280_ReadAltitude(1013.25f);  // ความสูงจากระดับน้ำทะเล (m)</code></pre>
+<p class="explain">⚠️ 2 address: 0x76 (SDO=GND) vs 0x77 (SDO=VCC) — ต่อ 2 ตัวบน I2C เดียวได้, mode SLEEP (พัก), FORCED (วัดครั้งเดียวแล้วพัก), NORMAL (วัดต่อเนื่องอัตโนมัติ), calibration data อ่านจาก registers ภายใน — Lib จัดการให้, oversampling: temperature x1/x2/x4/x8/x16, pressure x1~x16, IIR filter: off/2/4/8/16</p>
+
+<h3>API หลัก</h3>
+<table>
+<tr><td><code>BMP280_Init(addr)</code></td><td>Init + load calibration</td><td><code>BMP280_SetMode(mode)</code></td><td>SLEEP/FORCED/NORMAL</td></tr>
+<tr><td><code>BMP280_ReadTemperature()</code></td><td>อ่าน temp (°C)</td><td><code>BMP280_ReadPressure()</code></td><td>อ่าน pressure (Pa)</td></tr>
+<tr><td><code>BMP280_ReadAltitude(sea_hPa)</code></td><td>คำนวณ altitude (m)</td><td><code>BMP280_SetOversampling(t,p)</code></td><td>ตั้ง oversampling</td></tr>
+</table>
+
+<h2>AHT10/AHT20 — วัดอุณหภูมิ+ความชื้น (I2C)</h2>
+<pre class="ascii-circuit">
+3.3V─VCC  GND─GND  PC1─SDA  PC2─SCL
+</pre>
+<pre><code class="language-c">#include "AHT10.h"
+AHT10_Init(0x38);          // I2C addr fixed
+AHT10_TriggerMeasurement();
+Delay_Ms(80);              // รอวัดเสร็จ
+float t = AHT10_ReadTemperature();
+float h = AHT10_ReadHumidity();</code></pre>
+<p class="explain">⚠️ ต้องเรียก <code>TriggerMeasurement()</code> ก่อนอ่านทุกครั้ง — แตกต่างจาก DHT ที่อ่านอัตโนมัติ, I2C addr 0x38 (fix — เปลี่ยนไม่ได้), AHT20 = drop-in replacement (pin+code เหมือนแต่ accuracy ดีกว่า), init ต้องส่ง calibration command (Lib ทำ auto), CRC check ในตัว, accuracy ±0.3°C / ±2%RH</p>
+
+<h3>API หลัก</h3>
+<table>
+<tr><td><code>AHT10_Init(addr)</code></td><td>Init + send cal cmd</td><td><code>AHT10_TriggerMeasurement()</code></td><td>สั่งวัด</td></tr>
+<tr><td><code>AHT10_ReadTemperature()</code></td><td>อ่าน temp (°C)</td><td><code>AHT10_ReadHumidity()</code></td><td>อ่าน humidity (%)</td></tr>
+</table>
+
+<h2>SHT3x — วัดอุณหภูมิ+ความชื้นแม่นยำสูง (I2C)</h2>
+<pre class="ascii-circuit">
+3.3V─VCC  GND─GND  PC1─SDA  PC2─SCL  (ADDR─GND = 0x44, ADDR─VCC = 0x45)
+</pre>
+<pre><code class="language-c">#include "SHT3x.h"
+SHT3x_Init(0x44);         // หรือ 0x45
+SHT3x_ReadSingle();       // single-shot measurement
+float t = SHT3x_GetTemperature();
+float h = SHT3x_GetHumidity();
+
+// Periodic mode — อ่านต่อเนื่องไม่ต้อง trigger ทุกครั้ง
+SHT3x_StartPeriodic(SHT3x_1MPS);  // 1 measurement/sec
+while(1) {
+    SHT3x_ReadPeriodic();
+    float tp = SHT3x_GetTemperature();
+    float hp = SHT3x_GetHumidity();
+    Delay_Ms(1000);
+}</code></pre>
+<p class="explain">⚠️ 2 address: ADDR pin GND=0x44, VCC=0x45 — ต่อ 2 ตัวบน I2C เดียวได้, มี heater สำหรับ de-icing (ไล่น้ำแข็ง), accuracy ±0.3°C / ±2%RH, เร็วกว่า DHT22 มาก (วัดเสร็จใน ~15ms), repeatability สูง, alert pin สำหรับแจ้งเตือน threshold</p>
+
+<h3>API หลัก</h3>
+<table>
+<tr><td><code>SHT3x_Init(addr)</code></td><td>Init sensor</td><td><code>SHT3x_ReadSingle()</code></td><td>Single-shot measurement</td></tr>
+<tr><td><code>SHT3x_GetTemperature()</code></td><td>อ่าน temp หลัง read</td><td><code>SHT3x_GetHumidity()</code></td><td>อ่าน humidity หลัง read</td></tr>
+<tr><td><code>SHT3x_StartPeriodic(mps)</code></td><td>เริ่ม periodic mode</td><td><code>SHT3x_ReadPeriodic()</code></td><td>อ่านตามจังหวะที่ตั้งไว้</td></tr>
+<tr><td><code>SHT3x_Heater(en)</code></td><td>เปิด/ปิด heater</td><td><code>SHT3x_SetMPS(mps)</code></td><td>0.5/1/2/4/10 MPS</td></tr>
+</table>
+
+<h2>MAX31855 / MAX6675 — Thermocouple K-Type (SPI)</h2>
+<pre class="ascii-circuit">
+3.3V─VCC  GND─GND  PC4─CS  PC5─SCK  PC7─MISO  (Thermocouple → K-type)
+</pre>
+<pre><code class="language-c">#include "MAX31855.h"
+MAX31855_Init(PC4);               // CS pin
+float tc = MAX31855_ReadCelsius();  // thermocouple temp
+float cj = MAX31855_ReadInternal(); // cold-junction temp
+uint8_t fault = MAX31855_ReadFault(); // 0=OK, bit0=OC, bit1=SCG, bit2=SCV
+
+// MAX6675 variant (16-bit, simpler):
+#include "MAX6675.h"
+MAX6675_Init(PC4);
+float t = MAX6675_ReadCelsius();</code></pre>
+<p class="explain">⚠️ SPI mode 0, MAX31855 = 32-bit read (14-bit TC + 12-bit CJ + fault bits), MAX6675 = 16-bit read (12-bit TC), ทั้งคู่เป็น K-type, cold-junction compensation ฝังในชิป → ไม่ต้องคำนวณเอง, thermocouple ไม่ต้องใช้ ADC — ชิปอ่าน mV ตรง, MAX31855 range -270°C ~ +1372°C, accuracy ±2°C, SPI pins ใน SOP-8 ไม่มี — ใช้กับ SOP-16/QFN เท่านั้น</p>
+
+<h3>API หลัก</h3>
+<table>
+<tr><td><code>MAX31855_Init(cs_pin)</code></td><td>Init SPI + CS</td><td><code>MAX31855_ReadCelsius()</code></td><td>อ่าน temp TC (°C)</td></tr>
+<tr><td><code>MAX31855_ReadInternal()</code></td><td>อ่าน CJ temp</td><td><code>MAX31855_ReadFault()</code></td><td>ตรวจ fault: OC/SCG/SCV</td></tr>
+<tr><td><code>MAX6675_Init(cs_pin)</code></td><td>Init MAX6675</td><td><code>MAX6675_ReadCelsius()</code></td><td>อ่าน temp (°C)</td></tr>
+</table>
+</section>
+
+<section>
+<h2>📋 เปรียบเทียบเซนเซอร์ทั้ง 6 ชนิด</h2>
+<table>
+<tr><th>เซนเซอร์</th><th>Interface</th><th>Accuracy</th><th>Speed</th><th>Range</th><th>ราคา</th><th>จุดเด่น</th></tr>
+<tr><td>DHT11</td><td>GPIO</td><td>±2°C / ±5%RH</td><td>~25ms (ช้า)</td><td>0-50°C, 20-80%RH</td><td>~20฿</td><td>ถูกสุด, ง่ายสุด</td></tr>
+<tr><td>DHT22</td><td>GPIO</td><td>±0.5°C / ±2%RH</td><td>~25ms (ช้า)</td><td>-40~80°C, 0-100%RH</td><td>~60฿</td><td>Range กว้างกว่า DHT11</td></tr>
+<tr><td>DS18B20</td><td>1-Wire</td><td>±0.5°C</td><td>750ms (12-bit)</td><td>-55~125°C</td><td>~30฿</td><td>Multi-sensor, กันน้ำ</td></tr>
+<tr><td>BMP280</td><td>I2C</td><td>±1°C / ±1hPa</td><td>~10ms (เร็ว)</td><td>-40~85°C, 300-1100hPa</td><td>~40฿</td><td>ความกดอากาศ+ความสูง</td></tr>
+<tr><td>AHT10/AHT20</td><td>I2C</td><td>±0.3°C / ±2%RH</td><td>~80ms (กลาง)</td><td>-40~85°C, 0-100%RH</td><td>~35฿</td><td>Accuracy ดี, I2C ง่าย</td></tr>
+<tr><td>SHT3x</td><td>I2C</td><td>±0.3°C / ±2%RH</td><td>~15ms (เร็วที่สุด)</td><td>-40~125°C, 0-100%RH</td><td>~120฿</td><td>แม่นยำ+เร็ว+กันน้ำแข็ง</td></tr>
+<tr><td>MAX31855</td><td>SPI</td><td>±2°C</td><td>~100ms</td><td>-270~1372°C</td><td>~150฿</td><td>สูงสุด 1372°C (เตาเผา)</td></tr>
+<tr><td>MAX6675</td><td>SPI</td><td>±3°C</td><td>~200ms</td><td>0~1024°C</td><td>~100฿</td><td>ถูกกว่า MAX31855, ง่ายกว่า</td></tr>
+</table>
+<p style="margin-top:1rem;color:#64748b"><strong>เลือกยังไง?</strong> อุณหภูมิทั่วไป → DHT22/AHT10, ต้องการความชื้นด้วย → AHT10/SHT3x, วัดกลางแจ้ง/กันน้ำ → DS18B20, ความกดอากาศ → BMP280, อุณหภูมิสูงมาก (เตาเผา) → MAX31855, โปรเจกต์ละเอียดสูง → SHT3x</p>
+</section>
+
+<section>
+<h2>✏️ ลองทำดู</h2>
+<ol>
+<li>เทียบ DHT11 vs AHT10 — ต่อทั้ง 2 ตัว (คนละ interface — GPIO + I2C) วัดพร้อมกัน แสดงผลบน OLED ดู accuracy ต่างกันไหม</li>
+<li>DS18B20 3 ตัวบน 1-Wire เดียว — แสดง ROM ID และอุณหภูมิทีละตัว — ใช้ลูปวน <code>DS18B20_GetDeviceCount()</code></li>
+<li>BMP280 แสดง altitude + sea-level pressure — หาความสูงของห้องเทียบกับ Google Maps</li>
+<li>MAX31855 อ่านอุณหภูมิทุก 500ms — plot graph ผ่าน USART (ส่งค่าขึ้น Serial Plotter ใน Arduino IDE)</li>
+<li>รวม 3 sensor: DS18B20 + AHT10 + BMP280 — ทำ weather station ย่อส่วน แสดง temp, hum, pressure, altitude</li>
+</ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_display.html">บทก่อน</a>
+    <a href="chapx_lib_env2.html">บทถัดไป →</a>
+</nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

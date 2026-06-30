@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TM1650 — 7-Segment I2C — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_tm1637.html">บทก่อน</a>
+    <a href="chapx_lib_neopixel.html">บทถัดไป →</a>
+</nav>
+<h1>TM1650 — 7-Segment I2C</h1>
+<span class="level beginner">ระดับเริ่มต้น</span>
+<section class="flowchart">
+    <h2>🧭 แผนภาพการทำงาน</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["TM1650_Init(0x24)"] --> B["TM1650_SetBrightness(5)"]
+    B --> C{"Display Mode"}
+    C -->|"Number"| D["TM1650_DisplayNumber(5678)"]
+    C -->|"Time"| E["TM1650_DisplayTime(8, 30)"]
+    C -->|"Float"| F["TM1650_DisplayFloat(3.14, 2)"]
+    D --> G["while(1) loop"]
+    E --> G
+    F --> G
+    </pre>
+</section>
+<section>
+    <h2>🔌 การต่อวงจร</h2>
+    <pre class="ascii-circuit">
+          TM1650 4-Digit 7-Segment I2C
+    ┌────────────────────────────────┐
+    │ MCU                  TM1650    │
+    │ 3.3V ─────────────── VCC      │
+    │ GND  ─────────────── GND      │
+    │ PC1  ─────────────── SDA      │
+    │ PC2  ─────────────── SCL      │
+    │                 (pull-up 4.7k)│
+    └────────────────────────────────┘
+    </pre>
+    <p>TM1650 ใช้ I2C มาตรฐาน — address 0x24-0x27 เลือกได้ด้วย jumper A1/A2 — API คล้าย TM1637 แต่ใช้ I2C ไม่ต้อง bit-bang</p>
+</section>
+<section>
+    <h2>📚 หลักการทำงาน</h2>
+    <p><strong>I2C Variant ของ TM1637:</strong> TM1650 ใช้โปรโตคอล I2C มาตรฐานแทน bit-bang GPIO — ทำให้ไม่ต้องกังวลเรื่อง interrupt ขัดจังหวะ — เร็วกว่าและน่าเชื่อถือกว่า TM1637</p>
+    <p><strong>Address Selection:</strong> 4 address ให้เลือกผ่าน jumper A1 และ A2 — 0x24 (A1=GND, A2=GND), 0x25 (A1=VCC, A2=GND), 0x26 (A1=GND, A2=VCC), 0x27 (A1=VCC, A2=VCC) — สามารถต่อหลายตัวบน I2C bus เดียวกัน</p>
+    <p><strong>Compatible API:</strong> มีฟังก์ชันเดียวกับ TM1637 — DisplayNumber, DisplayTime, DisplayFloat — เปลี่ยนจาก TM1637 เป็น TM1650 แค่เปลี่ยน Init และใส่ address</p>
+    <p><strong>Brightness:</strong> 8 ระดับ (0-7) — ควบคุมผ่าน I2C command — ระดับ 5-6 เหมาะสำหรับใช้งานปกติ</p>
+</section>
+<section>
+    <h2>💻 เขียน Code ทีละขั้น</h2>
+    <div class="step"><h3>ขั้นที่ 1: Init + Setup</h3>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    I2C_SimpleInit(I2C_SPEED_100K, I2C_PINS_DEFAULT);
+
+    TM1650_Init(0x24);           // address 0x24 (default)
+    TM1650_SetBrightness(5);     // 5/7 brightness</code></pre>
+    <p class="explain">🔍 ต้องเริ่ม I2C ก่อน — TM1650_Init(address) ระบุ address — ใช้ I2C_SimpleInit แทน GPIO bit-bang — SetBrightness เหมือน TM1637</p></div>
+    <div class="step"><h3>ขั้นที่ 2: แสดงผลรูปแบบต่างๆ</h3>
+    <pre><code class="language-c">    TM1650_DisplayNumber(5678);     // แสดง 5678
+    Delay_Ms(2000);
+
+    TM1650_DisplayTime(8, 30);      // แสดง 08:30
+    Delay_Ms(2000);
+
+    TM1650_DisplayFloat(3.14f, 2);  // แสดง 3.14
+    Delay_Ms(2000);
+
+    TM1650_Clear();                 // ล้างหน้าจอ</code></pre>
+    <p class="explain">🔍 API เหมือน TM1637 ทุกประการ — DisplayNumber, DisplayTime, DisplayFloat — Clear() ล้างหน้าจอ — ใช้ Delay_Ms หน่วงระหว่างตัวอย่าง</p></div>
+    <div class="step"><h3>ขั้นที่ 3: Loop แสดง RTC</h3>
+    <pre><code class="language-c">    Timer_t tmr;
+    Start_Timer(&tmr, 1000, 1);
+    uint8_t h = 8, m = 30, s = 0;
+
+    while(1) {
+        if(Is_Timer_Expired(&tmr)) {
+            s++;
+            if(s >= 60) { s = 0; m++; }
+            if(m >= 60) { m = 0; h++; }
+            if(h >= 24) { h = 0; }
+
+            TM1650_DisplayTime(h, m);
+        }
+    }
+}</code></pre>
+    <p class="explain">🔍 นาฬิกาแบบ Non-Blocking — อัปเดตทุก 1 วิ — แสดง hh:mm — ใช้ Timer_t ควบคุม — เรียบง่าย ไม่ต้องใช้ RTC จริง</p></div>
+</section>
+<section>
+    <h2>📋 API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+        <tr><td><code>TM1650_Init(addr)</code></td><td>เริ่มต้น TM1650 ที่ address</td><td><code>TM1650_Init(0x24)</code></td></tr>
+        <tr><td><code>TM1650_SetBrightness(v)</code></td><td>ความสว่าง 0-7</td><td><code>TM1650_SetBrightness(5)</code></td></tr>
+        <tr><td><code>TM1650_DisplayNumber(n)</code></td><td>แสดงเลข 0-9999</td><td><code>TM1650_DisplayNumber(5678)</code></td></tr>
+        <tr><td><code>TM1650_DisplayTime(h, m)</code></td><td>แสดง hh:mm</td><td><code>TM1650_DisplayTime(8, 30)</code></td></tr>
+        <tr><td><code>TM1650_DisplayFloat(f, dec)</code></td><td>แสดงทศนิยม</td><td><code>TM1650_DisplayFloat(3.14f, 2)</code></td></tr>
+        <tr><td><code>TM1650_Clear()</code></td><td>ล้างหน้าจอ</td><td><code>TM1650_Clear()</code></td></tr>
+    </table>
+</section>
+<section>
+    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>I2C scan ไม่เจอ TM1650</td><td>Address ผิด — ใช้ jumper เลือก address</td><td>ตรวจสอบ jumper A1/A2 — ใช้ <code>I2C_Scan()</code> หา address (0x24-0x27)</td></tr>
+        <tr><td>จอไม่แสดงผล</td><td>ลืมเริ่ม I2C ก่อน TM1650_Init</td><td>ต้องเรียก <code>I2C_SimpleInit()</code> ก่อน <code>TM1650_Init()</code></td></tr>
+        <tr><td>DisplayTime แสดงแค่ 3 หลัก</td><td>ใช้ DisplayNumber แทน DisplayTime</td><td>DisplayTime จัดการ leading zero และ colon ให้ — ใช้ DisplayTime สำหรับเวลา</td></tr>
+        <tr><td>Colon ติดตลอดเวลา</td><td>TM1650 มี colon fix — ควบคุมไม่ได้แยก</td><td>เป็นข้อจำกัดของ chip — TM1652 มี colon control ถ้าต้องการแยก</td></tr>
+        <tr><td>ต่อหลายตัวบน I2C bus</td><td>Address ชนกัน</td><td>ตั้ง jumper A1/A2 ให้ต่างกัน — รองรับสูงสุด 4 ตัวบน bus เดียว</td></tr>
+    </table>
+</section>
+<section>
+    <h2>🛠️ สร้าง Product: Real-Time Clock Display</h2>
+    <p>TM1650 + DS3231 RTC — แสดงเวลา 24 ชม. — ใช้ Non-Blocking Timer อัปเดตทุก 1 วินาที</p>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+RTC_DS3231_t rtc;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    I2C_SimpleInit(I2C_SPEED_100K, I2C_PINS_DEFAULT);
+
+    TM1650_Init(0x24);
+    TM1650_SetBrightness(5);
+
+    if(DS3231_Init(&rtc) != DS3231_OK) {
+        TM1650_DisplayNumber(0xEEEE);  // Error display
+        while(1);
+    }
+
+    RTC_DateTime_t dt;
+    Timer_t tmr;
+    Start_Timer(&tmr, 1000, 1);
+
+    while(1) {
+        if(Is_Timer_Expired(&tmr)) {
+            DS3231_GetDateTime(&rtc, &dt);
+            TM1650_DisplayTime(dt.hour, dt.minute);
+        }
+    }
+}</code></pre>
+</section>
+<section>
+    <h2>✏️ ลองทำดู</h2>
+    <ol>
+        <li>ทำ Nixie Tube Emulation — ไล่เลข 0-9 animation ตอนเปลี่ยนค่า — ใช้ Timer เล็กๆ + DisplayNumber</li>
+        <li>แสดงแรงดันจาก ADC — อ่าน ADC → แปลงเป็นโวลต์ → DisplayFloat(v, 2) — อัปเดต 4fps</li>
+    </ol>
+</section>
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_tm1637.html">บทก่อน</a>
+    <a href="chapx_lib_neopixel.html">บทถัดไป →</a>
+</nav>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

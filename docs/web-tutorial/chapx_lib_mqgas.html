@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MQGas — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_tcs34725.html">บทก่อน</a>
+    <a href="chapx_lib_pms5003.html">บทถัดไป →</a>
+</nav>
+<h1>MQGas — เซนเซอร์ตรวจจับแก๊ส ADC</h1>
+<span class="level intermediate">ระดับกลาง</span>
+
+<section class="flowchart">
+    <h2>🧭 แผนภาพการทำงาน</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["Preheat 24-48h"] --> B["MQGas_Init(type, pin)"]
+    B --> C["MQGas_ReadPPM()"]
+    C --> D["เทียบค่ากับ threshold"]
+    D -->|"เกิน"| E["Alarm!"]
+    D -->|"ปกติ"| C
+    </pre>
+</section>
+
+<section>
+    <h2>🔌 การต่อวงจร</h2>
+    <pre class="ascii-circuit">
+            MQ Gas Sensor — เชื่อมต่อ ADC
+    ┌────────────────────────────────────┐
+    │ MCU                        MQ-xxx  │
+    │ PA1────────AOUT     ┌─────────────┤
+    │                      │ B: H1─5V    │
+    │                    ┌─┤ A: H2─GND   │
+    │                    │ │ H1─RL─H2───GND (RL=1k-10k)
+    │ 5V─────────VCC     │ └────────────┤
+    │ GND────────GND     │    Heater    │
+    │                    └──────────────┤
+    │ Heater กินไฟ ~150mA @ 5V           │
+    └────────────────────────────────────┘
+    </pre>
+    <p>PA1─AOUT (analog output) ผ่าน voltage divider — MQ-2 (LPG/ควัน), MQ-3 (แอลกอฮอล์), MQ-4 (มีเทน), MQ-7 (CO), MQ-135 (CO2/Air Quality)</p>
+</section>
+
+<section>
+    <h2>📚 หลักการทำงาน</h2>
+    <p><strong>MQ Gas Sensors</strong> ใช้หลักการเปลี่ยนความต้านทานของวัสดุ SnO₂ เมื่อสัมผัสแก๊ส — Heater ภายในต้องให้ความร้อนตลอดเวลาเพื่อให้วัสดุไวต่อแก๊ส — <strong>ต้อง preheat 24–48 ชม. ก่อน Calibrate</strong></p>
+    <p><strong>การ Calibrate Ro (ความต้านทานในอากาศสะอาด):</strong></p>
+    <ul>
+        <li>เปิด Heater ทิ้งไว้ ≥24 ชม. ในอากาศสะอาด</li>
+        <li>วัดค่า ADC → คำนวณ Rs = RL × (1024 − ADC) / ADC</li>
+        <li>Ro = Rs / Ro_ratio (Ro_ratio จาก datasheet ของแต่ละรุ่น)</li>
+    </ul>
+    <p><strong>PPM Curve:</strong> แต่ละแก๊สมี sensitivity curve ต่างกัน — ใช้สมการ log-log: PPM = a × (Rs/Ro)^b — ค่า a, b เป็นค่าคงที่เฉพาะแก๊สและเซนเซอร์แต่ละรุ่น</p>
+</section>
+
+<section>
+    <h2>💻 เขียน Code ทีละขั้น</h2>
+
+    <div class="step"><h3>ขั้นที่ 1: Init + Setup</h3>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "MQGas.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    USART_Init(USART1, BAUD_115200);
+    ADC_Init(ADC1);
+
+    // MQ-2: LPG/ควัน, calibrate ในอากาศสะอาด
+    // Ro_calibrated ได้จากการ calibrate ล่วงหน้า
+    MQGas_Init(MQ2, PA1, 4.7f, 9.83f, -0.43f);
+    //              ^type ^pin ^RL(kΩ) a     b (log-log params)</code></pre>
+    <p class="explain">🔍 <code>MQGas_Init(type, adcPin, RL, a, b)</code> — type เลือก MQ2/MQ3/MQ4/MQ7/MQ135, RL=load resistor (kΩ), a,b=duration coefficients จาก datasheet — ต้อง calibrate Ro ด้วยตนเองก่อนใช้งานจริง</p></div>
+
+    <div class="step"><h3>ขั้นที่ 2: อ่าน/เขียนค่า</h3>
+    <pre><code class="language-c">    // อ่านค่า PPM
+    float ppm = MQGas_ReadPPM();
+    USART_Print("Gas PPM: ");
+    USART_PrintFloat(ppm, 2);
+    USART_Println("");
+
+    // อ่านค่า Rs/Ro ratio (ค่าดิบ)
+    float ratio = MQGas_ReadRatio();
+    USART_Print("Rs/Ro: ");
+    USART_PrintFloat(ratio, 3);
+    USART_Println("");</code></pre>
+    <p class="explain">🔍 <code>MQGas_ReadPPM()</code> คืนค่า PPM — ค่านี้ขึ้นอยู่กับ Ro calibration โดยตรง — ถ้า Ro ไม่แม่น PPM ก็ไม่แม่น — <code>MQGas_ReadRatio()</code> อ่าน Rs/Ro โดยไม่แปลงเป็น PPM</p></div>
+
+    <div class="step"><h3>ขั้นที่ 3: Loop + แสดงผล</h3>
+    <pre><code class="language-c">    // Calibrate Ro อัตโนมัติ (ต้องทำในอากาศสะอาด)
+    MQGas_CalibrateRo(50);  // เฉลี่ย 50 samples
+
+    while(1) {
+        float ppm = MQGas_ReadPPM();
+
+        USART_Print("PPM: "); USART_PrintFloat(ppm, 2);
+        if(ppm > 1000) {
+            USART_Println(" ⚠️ DANGER! Gas leak!");
+            // เปิดพัดลม / แจ้งเตือน
+        } else if(ppm > 200) {
+            USART_Println(" ⚡ WARNING! Elevated gas");
+        } else {
+            USART_Println(" ✓ Normal");
+        }
+
+        Delay_Ms(1000);
+    }
+}</code></pre>
+    <p class="explain">🔍 CalibrateRo ต้องทำ <strong>ในอากาศสะอาด</strong> — เซนเซอร์ใช้เวลา warm-up อย่างน้อย 30 นาทีก่อนวัด — เก็บค่าเฉลี่ยหลาย sample ลด noise — ตั้ง threshold ตาม datasheet</p></div>
+</section>
+
+<section>
+    <h2>📋 API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+        <tr><td><code>MQGas_Init(type, pin, RL, a, b)</code></td><td>เริ่มต้นเซนเซอร์</td><td><code>MQGas_Init(MQ2, PA1, 4.7f, 9.83f, -0.43f)</code></td></tr>
+        <tr><td><code>MQGas_ReadPPM()</code></td><td>อ่านค่า PPM ของแก๊ส</td><td><code>float ppm = MQGas_ReadPPM()</code></td></tr>
+        <tr><td><code>MQGas_ReadRatio()</code></td><td>อ่านอัตราส่วน Rs/Ro</td><td><code>float r = MQGas_ReadRatio()</code></td></tr>
+        <tr><td><code>MQGas_CalibrateRo(samples)</code></td><td>Calibrate Ro ในอากาศสะอาด</td><td><code>MQGas_CalibrateRo(50)</code></td></tr>
+        <tr><td><code>MQGas_SetRo(ro)</code></td><td>ตั้งค่า Ro ด้วยตนเอง</td><td><code>MQGas_SetRo(12.5f)</code></td></tr>
+        <tr><td><code>MQGas_GetResistance()</code></td><td>อ่าน Rs (kΩ) ดิบ</td><td><code>float rs = MQGas_GetResistance()</code></td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>ค่า PPM ไม่ตรง/แกว่ง</td><td>ยังไม่预热 หรือ Ro ยังไม่ calibrate</td><td>Preheat ≥24 ชม. แล้ว calibrate Ro ในอากาศสะอาด</td></tr>
+        <tr><td>อ่านค่าต่ำมาก (ใกล้ 0)</td><td>Heater ยังไม่ถึงอุณหภูมิ</td><td>รอ warm-up 30-60 นาทีหลังจ่ายไฟ</td></tr>
+        <tr><td>ค่า Rs/Ro ต่ำกว่า 1 ในอากาศสะอาด</td><td>RL ผิดค่า หรือ Ro calibrate ตอนมีแก๊ส</td><td>เช็ค RL ตาม datasheet, calibrate ในที่อากาศถ่ายเทดี</td></tr>
+        <tr><td>เซนเซอร์ร้อนเกิน</td><td>ใช้ไฟ Heater เกิน specs</td><td>MQ series ใช้ Heater 5V/150mA — ห้ามต่อ 3.3V ที่ Heater</td></tr>
+        <tr><td>PPM = 0 ทั้งที่ได้กลิ่นแก๊ส</td><td>MQ sensor ไม่ตอบสนองแก๊สชนิดนั้น</td><td>เช็ค datasheet ว่าเซนเซอร์ไวต่อแก๊สนั้นหรือไม่ (MQ-2 ไม่ไว CO)</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>🛠️ สร้าง Product: เครื่องตรวจจับแก๊สรั่ว</h2>
+    <p>MQ-2 ตรวจจับ LPG/ควัน — เมื่อเกิน threshold ให้ Buzzer ดัง + LED กระพริบ</p>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "MQGas.h"
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    USART_Init(USART1, BAUD_115200);
+    ADC_Init(ADC1);
+
+    pinMode(PC0, PIN_MODE_OUTPUT);  // Buzzer
+    pinMode(PC1, PIN_MODE_OUTPUT);  // LED Alarm
+
+    MQGas_Init(MQ2, PA1, 4.7f, 9.83f, -0.43f);
+    USART_Println("Calibrating Ro in clean air...");
+    MQGas_CalibrateRo(100);
+    USART_Println("Ready!");
+
+    Timer_t tmr_buzz;
+    Start_Timer(&tmr_buzz, 200, 1);
+
+    while(1)
+    {
+        float ppm = MQGas_ReadPPM();
+        USART_Print("PPM: "); USART_PrintFloat(ppm, 2); USART_Println("");
+
+        if(ppm > 500) {  // อันตราย!
+            digitalWrite(PC1, HIGH);
+            if(Is_Timer_Expired(&tmr_buzz)) digitalToggle(PC0);
+        } else {
+            digitalWrite(PC1, LOW);
+            digitalWrite(PC0, LOW);
+        }
+
+        Delay_Ms(1000);
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>✏️ ลองทำดู</h2>
+    <ol>
+        <li>ทดลอง calibrate MQ-2 ในอากาศสะอาด — บันทึกค่า Ro แล้วทดสอบกับควันธูป — สังเกต PPM ที่เปลี่ยน</li>
+        <li>ทำ gas logger — บันทึก PPM ทุกวินาทีผ่าน USART ลง PC — plot กราฟดูก่อน-หลังจุดไฟแช็ค</li>
+        <li>ใช้ MQ-135 วัด Air Quality — เทียบกับวันที่ฝนตก vs วันที่ฝุ่น PM2.5 สูง</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_tcs34725.html">บทก่อน</a>
+    <a href="chapx_lib_pms5003.html">บทถัดไป →</a>
+</nav>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

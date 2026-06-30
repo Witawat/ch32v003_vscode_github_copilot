@@ -1,0 +1,179 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย WS2812 Matrix — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_ws2812matrix.html">กลับบท</a><a href="chapx_lib_ws2815matrix_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — WS2812 8×8 Matrix</h1>
+
+<div class="answer">
+<h2>ข้อ 1: แสดงตัวอักษรวิ่ง (Scrolling Text)</h2>
+<pre><code class="language-c">#include "simple_ws2812matrix.h"
+
+// Font 5x7 for A-Z
+const uint8_t font[26][5] = {
+    {0x7C,0x12,0x11,0x12,0x7C}, // A
+    {0x7F,0x49,0x49,0x49,0x36}, // B
+    {0x3E,0x41,0x41,0x41,0x22}, // C
+    // ... (ย่อ — ใส่เต็มทั้ง 26 ตัวอักษร)
+};
+
+const char *msg = "HELLO";
+uint8_t buffer[8];  // 1 แถวของ matrix = 8 คอลัมน์
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    WS2812Matrix_Init(8, 8);
+
+    int16_t offset = 0;
+    while(1) {
+        WS2812Matrix_Clear();
+
+        // วาด bitmap จาก buffer ลง matrix
+        for(uint8_t y = 0; y < 8; y++) {
+            for(uint8_t x = 0; x < 8; x++) {
+                if(buffer[y] & (1 << (7 - x))) {
+                    WS2812Matrix_SetPixel(x, y, 0, 255, 0);
+                }
+            }
+        }
+
+        // เลื่อน buffer ซ้าย 1 ตำแหน่ง
+        for(uint8_t y = 0; y < 8; y++) {
+            buffer[y] <<= 1;
+        }
+
+        // ใส่คอลัมน์ใหม่จาก font เมื่อถึงจังหวะ
+        offset++;
+        if(offset % 6 == 0) {
+            uint8_t char_idx = (offset / 6) % strlen(msg);
+            uint8_t ch = msg[char_idx] - 'A';
+            for(uint8_t y = 0; y < 7; y++) {
+                if(font[ch][offset % 6] & (1 << y)) {
+                    buffer[y] |= 1;
+                }
+            }
+        }
+
+        WS2812Matrix_Show();
+        Delay_Ms(100);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ใช้ buffer array 8 ไบต์แทนแต่ละแถวของ matrix — เลื่อน buffer ด้วย left shift — ดึงคอลัมน์จาก font 5×7 มาวางทางขวาเมื่อถึงตำแหน่ง — แต่ละตัวอักษรกิน 5 คอลัมน์ + 1 คอลัมน์ว่าง = 6 ช่วง — ใช้ <code>WS2812Matrix_SetPixel</code> วาด pixel-by-pixel — สำหรับฟอนต์ใหญ่ขึ้น ใช้เมทริกซ์ใหญ่ขึ้นหรือรวม 4 pixel ต่อ 1 dot</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: Conway's Game of Life</h2>
+<pre><code class="language-c">#include "simple_ws2812matrix.h"
+
+uint8_t grid[8][8];
+uint8_t next_gen[8][8];
+
+int count_neighbors(uint8_t x, uint8_t y) {
+    int count = 0;
+    for(int8_t dy = -1; dy <= 1; dy++) {
+        for(int8_t dx = -1; dx <= 1; dx++) {
+            if(dx == 0 && dy == 0) continue;
+            int8_t nx = (x + dx + 8) % 8;
+            int8_t ny = (y + dy + 8) % 8;
+            if(grid[ny][nx]) count++;
+        }
+    }
+    return count;
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    WS2812Matrix_Init(8, 8);
+
+    // เริ่มต้น — Glider pattern
+    grid[1][2] = 1; grid[2][3] = 1;
+    grid[3][1] = 1; grid[3][2] = 1; grid[3][3] = 1;
+
+    while(1) {
+        // วาด grid ปัจจุบัน
+        WS2812Matrix_Clear();
+        for(uint8_t y = 0; y < 8; y++) {
+            for(uint8_t x = 0; x < 8; x++) {
+                if(grid[y][x]) {
+                    WS2812Matrix_SetPixel(x, y, 0, 255, 255);
+                }
+            }
+        }
+        WS2812Matrix_Show();
+
+        // คำนวณ generation ถัดไป
+        for(uint8_t y = 0; y < 8; y++) {
+            for(uint8_t x = 0; x < 8; x++) {
+                int n = count_neighbors(x, y);
+                if(grid[y][x]) {
+                    next_gen[y][x] = (n == 2 || n == 3) ? 1 : 0;
+                } else {
+                    next_gen[y][x] = (n == 3) ? 1 : 0;
+                }
+            }
+        }
+
+        // สลับ buffer
+        for(uint8_t y = 0; y < 8; y++)
+            for(uint8_t x = 0; x < 8; x++)
+                grid[y][x] = next_gen[y][x];
+
+        Delay_Ms(300);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> Game of Life — แต่ละเซลล์มีชีวิตถ้ามีเพื่อนบ้าน 2-3 เซลล์; เกิดใหม่ถ้ามีเพื่อนบ้าน 3 เซลล์ — ใช้ 2 arrays (<code>grid</code> + <code>next_gen</code>) เพื่อไม่ให้การคำนวณรบกวนกัน — world แบบ toroidal (wrap-around) ด้วย <code>% 8</code> — Glider pattern เป็น starting pattern ยอดนิยม — delay 300ms ต่อ generation — ถ้า matrix ใหญ่ขึ้น ให้ใช้ 1D array แทน 2D เพื่อประสิทธิภาพ</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: Fire Effect (เปลวไฟจำลอง)</h2>
+<pre><code class="language-c">#include "simple_ws2812matrix.h"
+#include "stdlib.h"
+
+uint8_t heat[8][8];
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    WS2812Matrix_Init(8, 8);
+
+    while(1) {
+        // 1. สุ่มไฟบรรทัดล่าง
+        for(uint8_t x = 0; x < 8; x++) {
+            heat[7][x] = rand() % 256;
+        }
+
+        // 2. แพร่ความร้อนขึ้นข้างบน (blur)
+        for(uint8_t y = 0; y < 7; y++) {
+            for(uint8_t x = 0; x < 8; x++) {
+                uint16_t sum = (uint16_t)heat[y+1][x] * 2;
+                if(x > 0)   sum += heat[y+1][x-1];
+                if(x < 7)   sum += heat[y+1][x+1];
+                heat[y][x] = sum / 4;  // average + cool
+                if(heat[y][x] > 30) heat[y][x] -= 30;
+                else heat[y][x] = 0;
+            }
+        }
+
+        // 3. แปลง heat → สี
+        WS2812Matrix_Clear();
+        for(uint8_t y = 0; y < 8; y++) {
+            for(uint8_t x = 0; x < 8; x++) {
+                uint8_t h = heat[y][x];
+                uint8_t r, g, b;
+                if(h > 200)      { r=255; g=255; b=255; }  // white hot
+                else if(h > 150) { r=255; g=255; b=0;   }  // yellow
+                else if(h > 100) { r=255; g=100; b=0;   }  // orange
+                else if(h > 50)  { r=255; g=0;   b=0;   }  // red
+                else if(h > 0)   { r=50;  g=0;   b=0;   }  // dim red
+                else             { r=0;   g=0;   b=0;   }
+                WS2812Matrix_SetPixel(x, y, r, g, b);
+            }
+        }
+        WS2812Matrix_Show();
+        Delay_Ms(40);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> เอฟเฟกต์ไฟใช้หลักการ heat diffusion — แถวล่างสุ่มค่า heat 0-255 — แต่ละเฟรม heat แพร่ขึ้นข้างบนด้วย weighted average (blur) พร้อม cooling (-30) — แปลงค่า heat เป็นสี: dim red → red → orange → yellow → white — ยิ่ง matrix ใหญ่เอฟเฟกต์ยิ่งสวย — ปรับ cooling rate และ blur weight เพื่อให้ไฟดูเร็ว/ช้าตามต้องการ — ถ้าใช้ hardware RNG (ADC noise) แทน <code>rand()</code> จะสุ่มดีกว่า</div>
+</div>
+
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_ws2812matrix.html">กลับบท</a><a href="chapx_lib_ws2815matrix_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

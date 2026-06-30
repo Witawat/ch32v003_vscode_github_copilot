@@ -1,0 +1,173 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย KEYMATRIX — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_keymatrix.html">กลับบท</a><a href="chapx_lib_rotaryencoder_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — Key Matrix</h1>
+<div class="answer"><h2>ข้อ 1: Calculator — +−×÷ = บน LCD 16×2</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "KeyMatrix.h"
+#include "I2C_LCD.h"
+
+#define KEYMAP "123+456-789*C0=/"  // 4×4 matrix
+
+int32_t num1 = 0, num2 = 0;
+char op = 0;
+bool new_input = true;
+char display[17];
+
+void calc_process(char key) {
+    if(key >= '0' && key <= '9') {
+        if(new_input) { num1 = key - '0'; new_input = false; }
+        else num1 = num1 * 10 + (key - '0');
+    }
+    else if(key == 'C') { num1 = num2 = 0; op = 0; new_input = true; }
+    else if(key == '=') {
+        if(op == '+') num1 = num2 + num1;
+        if(op == '-') num1 = num2 - num1;
+        if(op == '*') num1 = num2 * num1;
+        if(op == '/') num1 = num2 / num1;
+        op = 0; new_input = true;
+    }
+    else {  // operator + - * /
+        num2 = num1; op = key; new_input = true;
+    }
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    KeyMatrix_Init(PA0, PA1, PA2, PA3, PA4, PA5, PA6, PA7, KEYMAP);
+    I2C_LCD_Init(0x27, 16, 2);
+    I2C_LCD_Backlight(1);
+
+    while(1) {
+        char key = KeyMatrix_GetKey();
+        if(key != 0) {
+            calc_process(key);
+            I2C_LCD_Clear();
+            if(op) snprintf(display, 17, "%ld%c", num2, op);
+            else   snprintf(display, 17, "%ld", num1);
+            I2C_LCD_SetCursor(0, 0); I2C_LCD_Print(display);
+            if(!new_input) {
+                snprintf(display, 17, "%ld", num1);
+                I2C_LCD_SetCursor(0, 1); I2C_LCD_Print(display);
+            }
+            while(KeyMatrix_GetKey() != 0);  // debounce wait
+        }
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> แยก state: <code>new_input</code> flag บอกว่าเป็นเลขตัวแรกหลัง operator — กดเลข → ต่อ string ทศนิยม (<code>×10+</code>) — กด operator → เก็บ <code>num2</code>+<code>op</code> แล้วรอเลขถัดไป — กด <code>=</code> → switch ตาม <code>op</code> คำนวณ <code>num2 op num1</code> — แสดงบรรทัดบนเป็นสูตร บรรทัดล่างเป็นเลขปัจจุบัน — <code>C</code> ล้างทั้งหมด — หารใช้ integer หารเอาเฉพาะผลลัพธ์</div></div>
+<div class="answer"><h2>ข้อ 2: Password Input — ป้อน 4 หลัก แสดง ***</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "KeyMatrix.h"
+#include "I2C_LCD.h"
+#include "AT24Cxx.h"
+
+#define KEYMAP  "123A456B789C*0#D"
+#define PASSWD  "2847"
+#define MAXLEN  4
+
+char input[5] = "";
+uint8_t pos = 0;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    KeyMatrix_Init(PA0, PA1, PA2, PA3, PA4, PA5, PA6, PA7, KEYMAP);
+    I2C_LCD_Init(0x27, 16, 2);
+    I2C_LCD_Backlight(1);
+    I2C_LCD_SetCursor(0, 0); I2C_LCD_Print("Enter Password:");
+
+    while(1) {
+        char key = KeyMatrix_GetKey();
+        if(key == 0) continue;
+
+        if(key >= '0' && key <= '9' && pos < MAXLEN) {
+            input[pos++] = key; input[pos] = '\0';
+            I2C_LCD_SetCursor(4, 1);
+            for(uint8_t i = 0; i < pos; i++) I2C_LCD_Print("*");
+            for(uint8_t i = pos; i < MAXLEN; i++) I2C_LCD_Print(" ");
+        }
+
+        if(key == 'C' || key == '#') {  // clear
+            pos = 0; input[0] = '\0';
+            I2C_LCD_SetCursor(4, 1); I2C_LCD_Print("    ");
+        }
+
+        if(key == '#' && pos == MAXLEN) {
+            if(strcmp(input, PASSWD) == 0) {
+                I2C_LCD_Clear(); I2C_LCD_Print("ACCESS GRANTED");
+                digitalWrite(PC0, HIGH); Delay_Ms(2000); digitalWrite(PC0, LOW);
+            } else {
+                I2C_LCD_Clear(); I2C_LCD_Print("ACCESS DENIED");
+                Delay_Ms(1500);
+            }
+            pos = 0; input[0] = '\0';
+            I2C_LCD_Clear(); I2C_LCD_SetCursor(0, 0); I2C_LCD_Print("Enter Password:");
+        }
+
+        Delay_Ms(80);  // debounce
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> รับเฉพาะ '0'-'9' สะสมใน <code>input[]</code> ถึง <code>MAXLEN</code> — แสดง <code>*</code> เพื่ออำพรางรหัส — ปุ่ม <code>C</code> ล้าง input — ปุ่ม <code>#</code> ยืนยันเมื่อครบ 4 หลัก → <code>strcmp</code> เทียบกับรหัสลับ — ถ้าผ่าน → เปิด relay/LED, ถ้าไม่ → แจ้ง DENIED — เพิ่ม delay หลัง <code>GetKey</code> กัน debounce ซ้ำ — สำหรับระบบจริง ควรเก็บรหัสใน EEPROM ไม่ใช่ hardcode</div></div>
+<div class="answer"><h2>ข้อ 3: Ghost Key Detection — ตรวจจับ phantom key ใน matrix</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "KeyMatrix.h"
+
+#define ROWS 4
+#define COLS 4
+#define KEYMAP "123A456B789C*0#D"
+
+uint8_t row_pins[] = {PA0, PA1, PA2, PA3};
+uint8_t col_pins[] = {PA4, PA5, PA6, PA7};
+
+uint8_t ghost_detect(uint8_t *keys, uint8_t count) {
+    if(count < 3) return 0;  // ghost เกิดเฉพาะเมื่อกด ≥ 3 ปุ่ม
+
+    uint8_t row_mask = 0, col_mask = 0;
+    for(uint8_t i = 0; i < count; i++) {
+        uint8_t r = (keys[i] - 1) / COLS;
+        uint8_t c = (keys[i] - 1) % COLS;
+        row_mask |= (1 << r);
+        col_mask |= (1 << c);
+    }
+
+    // ถ้ามี row ใดถูกกด ≥ 2 ปุ่ม และ col เหล่านั้นมีอีกปุ่มอยู่ → ghost
+    uint8_t rows_used = 0, cols_used = 0;
+    for(uint8_t i = 0; i < ROWS; i++) if(row_mask & (1<<i)) rows_used++;
+    for(uint8_t i = 0; i < COLS; i++) if(col_mask & (1<<i)) cols_used++;
+
+    // Ghost: จำนวนปุ่มที่กด < rows_used × cols_used ที่ถูกครอบ
+    return (count < rows_used * cols_used && rows_used >= 2 && cols_used >= 2);
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_Init(115200);
+    KeyMatrix_Init(row_pins[0], row_pins[1], row_pins[2], row_pins[3],
+                   col_pins[0], col_pins[1], col_pins[2], col_pins[3], KEYMAP);
+
+    uint8_t pressed[16], pcount = 0;
+    Timer_t scan_tmr;
+    Start_Timer(&scan_tmr, 20, 1);
+
+    while(1) {
+        if(Is_Timer_Expired(&scan_tmr)) {
+            pcount = KeyMatrix_GetAllPressed(pressed, 16);
+
+            if(ghost_detect(pressed, pcount)) {
+                USART_Println("⚠ GHOST KEY DETECTED — data unreliable!");
+            } else {
+                USART_Printf("Keys: %d → ", pcount);
+                for(uint8_t i = 0; i < pcount; i++)
+                    USART_Printf("%c ", KEYMAP[pressed[i] - 1]);
+                USART_Println("");
+            }
+        }
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> Ghost key เกิดเมื่อกด ≥ 3 ปุ่มใน matrix ที่ไม่มี diode — วงจรไหลย้อนกลับทำให้อ่านค่าผิด — วิธีตรวจจับ: นับจำนวน row/col ที่ active — ถ้า <code>count < rows_used × cols_used</code> แสดงว่ามีตำแหน่งที่ "ว่าง" แต่ matrix อ่านเจอ — วิธีแก้ ghost จริง: ใส่ diode 1N4148 อนุกรมทุกสวิตช์ หรือใช้ <code>KeyMatrix_ScanWithDiode</code> — ถ้าตรวจพบ ghost ให้ ignore การกดทั้งหมด ป้องกัน false trigger</div></div>
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_keymatrix.html">กลับบท</a><a href="chapx_lib_rotaryencoder_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

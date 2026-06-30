@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ESC BLDC — Brushless Motor Control — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_servocluster.html">บทก่อน</a>
+    <a href="chapx_lib_steppermotor.html">บทถัดไป →</a>
+</nav>
+
+<h1>ESC BLDC — Brushless Motor Control</h1>
+<span class="level advanced">ระดับสูง</span>
+
+<section class="flowchart">
+    <h2>🧭 แผนภาพการทำงาน</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["Power ON"] --> B["ESC_Init(PD2)"]
+    B --> C{"Calibrate?"}
+    C -->|"Yes"| D["Send Max Throttle (100%)"]
+    D --> E["Wait for ESC beep"]
+    E --> F["Send Min Throttle (0%)"]
+    F --> G["Wait for confirmation beep"]
+    G --> H["ESC Calibrated"]
+    C -->|"No"| H
+    H --> I["ESC_Arm() → 0% Throttle 3s"]
+    I --> J["ESC_SetThrottle(0-100%)"]
+    J --> K{"Throttle = 0?"}
+    K -->|"Yes"| L["ESC_Disarm()"]
+    K -->|"No"| J
+    </pre>
+</section>
+
+<section>
+    <h2>🔌 การต่อวงจร</h2>
+    <pre class="ascii-circuit">
+          ESC + BLDC Motor Setup
+    ┌──────────────────────────────────┐
+    │ MCU                  LiPo 3S⚠️   │
+    │ PD2──────Signal (ขาว/เหลือง)      │
+    │                  ┌──ESC──┐       │
+    │ GND──┬───GND─────┤ GND   │       │
+    │      │     ┌─────┤ VCC───┤─11.1V │
+    │      │     │     │ A─┬───┘       │
+    │      │     │     │ B─┤ Motor     │
+    │      │     │     │ C─┘           │
+    │      │     │     └────────────── │
+    │      │     └─ GND Common         │
+    └──────────────────────────────────┘
+    ⚠️ ถอดใบพัดทุกครั้งขณะพัฒนา!
+    </pre>
+    <p><strong>⚠️ อันตราย!</strong> BLDC Motor หมุนเร็วหลายพัน RPM — <strong>ต้องถอด Propeller ออกทุกครั้ง</strong> ขณะเขียนโค้ดและทดสอบ — ใช้ 12V LiPo หรือ DC Power Supply — ต่อ GND ร่วมกันระหว่าง MCU, ESC, และ Battery</p>
+</section>
+
+<section>
+    <h2>📚 หลักการทำงาน</h2>
+    <p><strong>ESC (Electronic Speed Control)</strong> รับสัญญาณ PWM แบบเดียวกับ servo (50Hz, 1–2ms pulse) — แต่ ESC ใช้ควบคุมความเร็วมอเตอร์แบบไร้แปรงถ่าน (BLDC) โดย 1ms = 0% throttle, 2ms = 100% throttle</p>
+    <p><strong>Calibration Sequence:</strong> ESC ต้องรู้ค่า min/max pulse ก่อนใช้งาน — (1) จ่ายไฟ ESC, (2) ส่ง max throttle ~2000μs, (3) รอเสียง beep, (4) ส่ง min throttle ~1000μs, (5) รอเสียง beep ยืนยัน — ทำครั้งเดียวหรือเมื่อเปลี่ยน ESC</p>
+    <p><strong>Arm/Disarm:</strong> หลัง calibration ต้อง "arm" โดยส่ง throttle 0% ค้างไว้ ~3 วินาที — ESC บางรุ่นต้องใช้ combination (เช่น throttle min + รอ beep) — "disarm" โดยลด throttle ลง 0%</p>
+    <p><strong>Throttle 0–100%</strong> แปลงเป็น pulse width: 1000μs (0%) ถึง 2000μs (100%) — duty cycle ที่ 50Hz: 5%–10%</p>
+</section>
+
+<section>
+    <h2>💻 เขียน Code ทีละขั้น</h2>
+
+    <div class="step"><h3>ขั้นที่ 1: Init PWM + ESC Setup</h3>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    // PWM 50Hz บน PD2 สำหรับ ESC
+    PWM_SimpleInit(1, PD2, 50);
+    PWM_Start(1);
+
+    // ส่ง throttle 0% (1000μs = 5% duty at 50Hz)
+    PWM_SetDuty(1, 5.0f);
+    Delay_Ms(3000);  // รอ ESC arm 3 วินาที</code></pre>
+    <p class="explain">🔍 ESC ใช้ PWM 50Hz เหมือน servo แต่ range 1ms–2ms (5%–10% duty) — ต้องรอ 3 วิหลังจ่ายไฟก่อน ESC จะ arm — ระหว่างนี้ห้ามส่งสัญญาณผิด</p></div>
+
+    <div class="step"><h3>ขั้นที่ 2: Throttle Control + Safety</h3>
+    <pre><code class="language-c">    // ไล่ throttle จาก 0% → 50% → 0%
+    for(uint8_t t = 0; t <= 50; t += 5) {
+        float duty = 5.0f + (t * 5.0f / 100.0f);  // 5% + throttle%
+        PWM_SetDuty(1, duty);
+        Delay_Ms(1000);
+    }
+    // ลด throttle กลับ
+    for(uint8_t t = 50; t > 0; t -= 5) {
+        PWM_SetDuty(1, 5.0f + (t * 5.0f / 100.0f));
+        Delay_Ms(500);
+    }</code></pre>
+    <p class="explain">🔍 <code>duty = 5.0 + (throttle × 5.0 / 100.0)</code> — แปลง throttle % เป็น duty cycle — เปลี่ยน throttle ช้า ๆ ป้องกัน ESC ตัดการทำงาน — ขณะทดสอบให้ใช้ low throttle ก่อน</p></div>
+
+    <div class="step"><h3>ขั้นที่ 3: Calibration + Safe Loop</h3>
+    <pre><code class="language-c">    // ===== ESC Calibration (ทำครั้งเดียว) =====
+    PWM_SetDuty(1, 10.0f);  // Max throttle (2000μs)
+    Delay_Ms(3000);          // รอ ESC beep (1-2 ครั้ง)
+    PWM_SetDuty(1, 5.0f);   // Min throttle (1000μs)
+    Delay_Ms(2000);          // รอ ESC confirmation beep
+    // ===== Calibration Complete =====
+
+    while(1) {
+        // Ramp up slowly
+        for(uint8_t t = 0; t <= 80; t++) {
+            PWM_SetDuty(1, 5.0f + (t * 5.0f / 100.0f));
+            Delay_Ms(50);
+        }
+        // Hold 3s
+        Delay_Ms(3000);
+        // Ramp down
+        for(uint8_t t = 80; t > 0; t--) {
+            PWM_SetDuty(1, 5.0f + (t * 5.0f / 100.0f));
+            Delay_Ms(50);
+        }
+        // Disarm pause
+        PWM_SetDuty(1, 5.0f);
+        Delay_Ms(5000);
+    }
+}</code></pre>
+    <p class="explain">🔍 Calibration sequence ต้องทำก่อนใช้งานจริง — Max→Min→Done — ถ้าเสียบแบตแล้ว ESC beep ถี่ ๆ แสดงว่ายังไม่ calibrate — Safety: ramp up/down ช้า ๆ และหยุดพักระหว่างรอบ</p></div>
+</section>
+
+<section>
+    <h2>📋 API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+        <tr><td><code>ESC_Init(pin)</code></td><td>เริ่ม PWM 50Hz สำหรับ ESC</td><td><code>ESC_Init(PD2)</code></td></tr>
+        <tr><td><code>ESC_Calibrate()</code></td><td>ทำ calibration sequence อัตโนมัติ</td><td><code>ESC_Calibrate()</code></td></tr>
+        <tr><td><code>ESC_Arm()</code></td><td>Arm ESC — ส่ง 0% throttle 3 วิ</td><td><code>ESC_Arm()</code></td></tr>
+        <tr><td><code>ESC_SetThrottle(pct)</code></td><td>ตั้ง throttle 0–100%</td><td><code>ESC_SetThrottle(60)</code></td></tr>
+        <tr><td><code>ESC_Disarm()</code></td><td>Disarm — throttle 0%</td><td><code>ESC_Disarm()</code></td></tr>
+        <tr><td><code>ESC_Stop()</code></td><td>หยุด PWM — motor หยุดทันที</td><td><code>ESC_Stop()</code></td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>มอเตอร์ไม่หมุน — ESC beep ถี่</td><td>ESC ยังไม่ได้ Calibrate หรือ Throttle ไม่ใช่ 0% ตอนเริ่ม</td><td>ทำ Calibration sequence: Max→Min→Done — หรือตั้ง throttle เป็น 0% แล้วรอ 3 วิ</td></tr>
+        <tr><td>มอเตอร์กระตุก ไม่ smooth</td><td>PWM ความถี่ไม่ใช่ 50Hz</td><td>ตรวจสอบ PWM frequency — ต้องเป็น 50Hz เท่านั้น (20ms period)</td></tr>
+        <tr><td>มอเตอร์เร่งไม่สุด</td><td>Pulse width ไม่ถึง 2ms</td><td>ตั้ง duty = 10% ที่ 50Hz (2000μs) — เช็คด้วย oscilloscope</td></tr>
+        <tr><td>ESC ร้อนเกินไป</td><td>Battery voltage เกิน spec ESC</td><td>ตรวจสอบ LiPo cell count — 2S=7.4V, 3S=11.1V, 4S=14.8V — ใช้ให้ตรง ESC rating</td></tr>
+        <tr><td>ถอดใบพัดไม่ได้ → อุบัติเหตุ</td><td>ละเลย safety protocol</td><td>⚠️ ตั้งกฎ: "No props on bench" — ใช้เทปพันเพลาแทนการทดสอบ</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>🛠️ สร้าง Product: BLDC Thrust Tester</h2>
+    <p>ใช้ Load Cell (HX711) + ESC วัดแรงขับของมอเตอร์ที่ throttle ต่าง ๆ — แสดงผลผ่าน OLED</p>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate(); Timer_Init();
+    OLED_Init_I2C(0x3C, PC2, PC1);
+    HX711_Init(PD3, PD4);  // DT, SCK
+    HX711_Tare(10);
+
+    PWM_SimpleInit(1, PD2, 50); PWM_Start(1);
+    PWM_SetDuty(1, 5.0f);  // 0% throttle
+    Delay_Ms(3000);         // Arm wait
+
+    uint8_t throttle = 0;
+    while(1) {
+        throttle += 10; if(throttle > 100) throttle = 0;
+        PWM_SetDuty(1, 5.0f + (throttle * 5.0f / 100.0f));
+        Delay_Ms(2000); // รอแรงขับ stabilize
+
+        float grams = HX711_ReadGrams();
+        OLED_Clear();
+        OLED_Printf(0,0,"Throttle: %d%%", throttle);
+        OLED_Printf(0,2,"Thrust: %.1fg", grams);
+        OLED_Printf(0,4,"PWM: %.1f%%", 5.0+throttle*5.0/100.0);
+        OLED_Update();
+
+        if(throttle == 0) Delay_Ms(3000); // cool down
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>✏️ ลองทำดู</h2>
+    <ol>
+        <li>ทำ ESC Tester แบบพกพา — ใช้ POT ควบคุม throttle + OLED แสดงผล — ใส่ในกล่องมีปุ่ม ARM/DISARM</li>
+        <li>ทำ Closed-Loop Speed Control — ใช้ hall sensor อ่าน RPM แล้วปรับ throttle อัตโนมัติให้ได้ความเร็วคงที่</li>
+        <li>วัด KV Rating ของมอเตอร์ — ใช้ ESC + Tachometer หาค่า RPM/Volt โดยอัตโนมัติ</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_servocluster.html">บทก่อน</a>
+    <a href="chapx_lib_steppermotor.html">บทถัดไป →</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

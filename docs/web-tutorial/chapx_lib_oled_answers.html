@@ -1,0 +1,159 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย OLED — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_oled.html">กลับบท</a><a href="chapx_lib_lcd1602_i2c_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — OLED Display</h1>
+
+<div class="answer">
+<h2>ข้อ 1: แสดงข้อความ 2 ภาษา (ไทย+อังกฤษ) สลับบรรทัด</h2>
+<pre><code class="language-c">#include "simple_oled.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    OLED_Init();
+
+    OLED_SetFont(FONT_16X16_THAI);
+    OLED_Print(0, 0, "สวัสดี");
+    OLED_SetFont(FONT_6X8);
+    OLED_Print(60, 0, "Hello");
+    OLED_SetFont(FONT_8X16);
+    OLED_Print(0, 20, "อุณหภูมิ:");
+    OLED_SetFont(FONT_6X8);
+    OLED_PrintFloat(72, 20, 25.5f, 1);
+    OLED_Print(0, 40, "Celsius");
+    OLED_Display();
+
+    while(1) {}
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> เรียก <code>OLED_SetFont</code> เพื่อเปลี่ยนฟอนต์ระหว่างไทยกับอังกฤษก่อนพิมพ์แต่ละครั้ง — ฟอนต์ไทยเป็น 16x16 พิกเซล อังกฤษ 6x8 — ต้องคำนวณตำแหน่ง x ให้ไม่ทับกัน — ใช้ <code>OLED_PrintFloat</code> สำหรับตัวเลขทศนิยม — ถ้าต้องการสลับภาษาแบบไดนามิก ให้เก็บ state ของภาษาที่ใช้อยู่แล้วเรียก SetFont ก่อนพิมพ์เสมอ</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: วาดกราฟแท่งแสดงค่า ADC</h2>
+<pre><code class="language-c">#include "simple_oled.h"
+#include "simple_adc.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    OLED_Init();
+    ADC_SimpleInit(ADC_CH0);
+
+    while(1) {
+        uint16_t adc = ADC_Read(ADC_CH0);
+        uint8_t bar_height = (uint8_t)((uint32_t)adc * 48 / 4095);
+
+        OLED_Clear();
+        OLED_DrawRect(10, 5, 30, 50, 1);       // กรอบนอก
+        OLED_DrawRect(11, 5 + 50 - bar_height,
+                      28, bar_height, 1);        // แท่งข้างใน
+        OLED_SetFont(FONT_6X8);
+        OLED_Print(45, 20, "ADC:");
+        OLED_PrintNum(45, 30, adc);
+        OLED_Display();
+
+        Delay_Ms(100);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> อ่านค่า ADC 0-4095 แล้ว map เป็นความสูงแท่ง 0-48 พิกเซล — <code>OLED_DrawRect</code> วาดกรอบนอกก่อน จากนั้นวาด filled rect ข้างในโดยคำนวณ y จากด้านล่างขึ้นบน — <code>(5 + 50 - bar_height)</code> ทำให้แท่งโตจากล่างขึ้นบน — ถ้าต้องการกราฟหลายแท่ง (เช่น ADC หลายช่อง) ให้เพิ่ม loop และเลื่อน x ไปทีละ 35 พิกเซล</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: Animation ลูกบอลกระเด้ง</h2>
+<pre><code class="language-c">#include "simple_oled.h"
+
+#define BALL_R  3
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    OLED_Init();
+
+    int16_t x = 32, y = 24;
+    int16_t vx = 2, vy = 1;
+    const uint8_t gravity = 1;
+
+    while(1) {
+        // ลบบอลเก่า
+        OLED_DrawCircle(x, y, BALL_R, 0);
+
+        // อัปเดตตำแหน่งด้วยฟิสิกส์
+        vy += gravity;
+        x += vx;
+        y += vy;
+
+        // ชนขอบ — กลับทิศ + ลดพลังงาน
+        if(x - BALL_R <= 0)   { x = BALL_R;     vx = -vx * 8 / 10; }
+        if(x + BALL_R >= 127) { x = 127 - BALL_R; vx = -vx * 8 / 10; }
+        if(y + BALL_R >= 63)  { y = 63 - BALL_R;  vy = -vy * 8 / 10; }
+        if(y - BALL_R <= 0)   { y = BALL_R;       vy = -vy * 8 / 10; }
+
+        // ถ้าความเร็วน้อยมาก → หยุด
+        if(abs(vx) < 1 && abs(vy) < 1 && y >= 60) { vx = 0; vy = 0; }
+
+        // วาดบอลใหม่
+        OLED_DrawCircle(x, y, BALL_R, 1);
+        OLED_Display();
+        Delay_Ms(20);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> จำลองฟิสิกส์ง่าย ๆ — มีแรงโน้มถ่วงเพิ่ม vy ทุกเฟรม — เมื่อชนขอบจะกลับทิศและลดพลังงานลง 80% (<code>*8/10</code>) เพื่อให้ลูกบอลค่อย ๆ หยุด — เทคนิค "ลบก่อนวาด" คือวาดวงกลมสีดำที่ตำแหน่งเก่าแล้ววาดสีขาวที่ตำแหน่งใหม่ — ถ้าต้องการหลายลูกบอล ให้เก็บ state ใน array of struct แล้ว loop วาด</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 4: แสดง QR Code ด้วย DrawPixel</h2>
+<pre><code class="language-c">#include "simple_oled.h"
+
+const uint8_t qr[29][29] = {
+    {1,1,1,1,1,1,1,0,0,0,1,0,0,1,0,1,0,0,1,0,1,0,1,1,1,1,1,1,1},
+    {1,0,0,0,0,0,1,0,1,1,0,0,1,0,1,0,0,0,1,0,0,0,1,0,0,0,0,0,1},
+    {1,0,1,1,1,0,1,0,0,0,1,0,0,1,0,0,1,1,0,0,1,0,1,0,1,1,1,0,1},
+    {1,0,1,1,1,0,1,1,0,1,0,1,0,0,1,0,1,1,1,0,1,0,1,0,1,1,1,0,1},
+    {1,0,1,1,1,0,1,0,0,1,1,0,0,1,1,0,0,1,0,1,1,0,1,0,1,1,1,0,1},
+    {1,0,0,0,0,0,1,0,1,0,0,1,1,1,1,1,1,0,1,1,1,0,1,0,0,0,0,0,1},
+    {1,1,1,1,1,1,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,1,1,1,1,1,1},
+    {0,0,0,0,0,0,0,1,0,0,0,1,1,0,1,1,0,1,1,1,0,1,0,0,0,0,0,0,0},
+    {1,1,1,0,0,1,1,1,1,1,0,0,1,1,1,1,1,1,1,1,0,0,1,0,1,1,1,0,1},
+    {1,1,1,1,0,0,0,0,1,1,0,0,0,0,1,1,0,1,1,1,1,0,1,1,0,1,1,1,0},
+    {1,1,0,1,1,0,0,1,1,0,1,1,0,0,1,0,0,1,0,0,1,1,1,0,0,1,1,1,1},
+    {1,1,1,0,1,1,0,1,1,1,1,0,0,0,0,1,0,1,1,0,0,0,0,1,1,0,1,0,0},
+    {1,0,1,1,1,0,0,1,1,1,1,0,0,0,1,1,1,0,1,0,1,0,0,1,0,1,1,1,1},
+    {0,1,1,0,1,1,0,0,0,0,0,1,1,1,0,1,0,1,1,0,1,0,1,0,1,0,0,0,1},
+    {1,1,1,1,1,0,1,1,0,1,0,1,0,1,0,1,0,0,1,0,0,0,1,1,0,0,0,0,1},
+    {1,0,0,1,1,0,0,0,0,1,0,1,0,0,0,1,1,1,1,0,0,1,1,0,1,1,0,0,1},
+    {0,1,0,0,1,0,1,1,0,0,1,1,0,0,0,0,0,1,1,0,0,0,0,1,0,1,1,0,0},
+    {0,1,1,0,1,0,0,0,1,1,1,1,1,1,0,0,0,0,0,0,1,0,0,0,0,0,1,0,0},
+    {1,0,1,1,1,1,0,0,0,1,0,1,1,0,0,1,1,1,0,0,1,1,1,1,1,0,1,1,1},
+    {0,0,0,1,0,1,1,1,0,1,0,0,0,1,0,1,0,0,0,1,0,0,0,1,1,0,0,1,0},
+    {0,1,1,1,1,1,1,0,0,1,1,0,0,1,1,0,0,0,0,1,0,0,0,1,1,1,1,1,1},
+    {1,1,1,1,0,0,1,0,1,1,0,0,0,1,0,0,1,1,1,0,0,0,1,0,1,1,1,1,1},
+    {1,1,1,0,1,0,1,0,0,1,0,0,1,1,1,1,0,0,0,1,1,0,0,0,1,1,1,1,0},
+    {0,1,1,0,1,0,1,0,0,0,1,1,0,0,0,1,0,1,1,0,1,1,0,1,0,1,0,1,1},
+    {1,0,0,1,1,1,0,1,1,0,0,0,1,0,0,1,1,0,0,1,0,0,1,0,0,1,0,1,0},
+    {0,0,0,1,0,1,1,0,1,1,0,0,1,1,1,1,0,1,1,1,0,0,1,1,1,1,1,0,1},
+    {0,0,0,0,0,0,0,1,0,1,0,0,0,1,1,0,1,0,1,0,0,1,0,0,0,1,1,1,1},
+    {1,1,1,1,1,1,1,0,1,0,1,1,0,0,1,0,0,1,0,1,1,0,0,1,1,0,1,1,0},
+    {1,0,0,0,0,0,1,0,0,1,0,0,0,0,0,0,0,1,1,1,1,1,0,0,0,0,1,1,0},
+};
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    OLED_Init();
+
+    OLED_Clear();
+    for(uint8_t y = 0; y < 29; y++) {
+        for(uint8_t x = 0; x < 29; x++) {
+            if(qr[y][x]) {
+                OLED_DrawPixel(20 + x, 10 + y, 1);
+            }
+        }
+    }
+    OLED_Display();
+
+    while(1) {}
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> QR Code เวอร์ชันเล็กเก็บเป็น 2D bool array 29×29 — ใช้ nested for loop เช็คแต่ละจุด ถ้าเป็น 1 ก็วาดพิกเซล — offset (20,10) จัดกึ่งกลางบนจอ 128×64 — <code>OLED_DrawPixel</code> ทีละจุดเหมาะกับ pattern ที่ไม่ต่อเนื่อง — ถ้าต้องการ QR code แบบ dynamic ให้สร้าง array จากข้อมูลแทน hardcode — สำหรับจอใหญ่ขึ้น ปรับ scale โดยวาด rect 2×2 หรือ 3×3 ต่อ 1 จุด QR</div>
+</div>
+
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_oled.html">กลับบท</a><a href="chapx_lib_lcd1602_i2c_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

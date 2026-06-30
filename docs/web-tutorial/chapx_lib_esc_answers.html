@@ -1,0 +1,132 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย ESC — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_esc.html">กลับบท</a><a href="chapx_lib_steppermotor_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — ESC (Electronic Speed Controller)</h1>
+
+<div class="answer">
+<h2>ข้อ 1: Thrust Test Ramp — ค่อย ๆ เพิ่มกำลังวัดแรงขับ</h2>
+<pre><code class="language-c">#include "simple_esc.h"
+
+ESC_t esc;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    ESC_Init(&esc, GPIOA, GPIO_Pin_0);
+
+    // Arm ESC
+    ESC_SetThrottle(&esc, 0);
+    Delay_Ms(3000);
+
+    // Ramp จาก 0% → 100% ทีละ 1%
+    for (uint8_t throttle = 0; throttle &lt;= 100; throttle++) {
+        ESC_SetThrottle(&esc, throttle);
+        Delay_Ms(150);  // ค้างแต่ละระดับ 150ms เพื่อให้แรงขับคงที่
+
+        // ถ้าต้องการ log ค่า ADC จาก load cell ที่นี่
+    }
+
+    // ค้างที่ 100% 2 วินาที
+    Delay_Ms(2000);
+
+    // Ramp ลงกลับ 0%
+    for (int8_t t = 100; t &gt;= 0; t--) {
+        ESC_SetThrottle(&esc, (uint8_t)t);
+        Delay_Ms(100);
+    }
+
+    ESC_SetThrottle(&esc, 0);
+
+    while (1) {
+        // idle
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ESC ต้อง arm ก่อนใช้งาน — ส่ง throttle 0% ค้างไว้ 3 วิ — ramp ขึ้นทีละ 1% หน่วง 150ms ต่อ step เพื่อให้ motor มีเวลาตอบสนองต่อการเปลี่ยน RPM — การเพิ่มช้า ๆ ทำให้แรงขับค่อยเป็นค่อยไป ป้องกัน prop strike และ over-current — loop วัดแรงขับได้โดยอ่าน ADC จาก load cell หรือ strain gauge ในช่วง delay — หลังจบ ramp ลงช้ากว่ารอบขึ้นเล็กน้อยเพื่อให้ prop เบรกอย่างปลอดภัย — ระวัง: ต้องยึดมอเตอร์กับแท่นทดสอบให้แน่นก่อนรัน</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: Battery Voltage Monitor ระหว่างรันมอเตอร์</h2>
+<pre><code class="language-c">#include "simple_esc.h"
+#include "simple_adc.h"
+
+ESC_t esc;
+
+#define BAT_LOW_MV   3300   // 3.3V per cell (3S = 9.9V)
+#define BAT_CRIT_MV  3000   // 3.0V per cell — cut off
+#define VOLT_DIVIDER 4.0f   // 1:4 voltage divider ratio
+
+uint16_t read_battery_mv(void) {
+    uint16_t adc = ADC_Read(ADC_CH0);
+    float v_adc = (float)adc * 3.3f / 4095.0f;
+    float v_bat = v_adc * VOLT_DIVIDER;
+    return (uint16_t)(v_bat * 1000.0f);
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    ADC_SimpleInit(ADC_CH0);
+    ESC_Init(&esc, GPIOA, GPIO_Pin_0);
+
+    ESC_SetThrottle(&esc, 0);
+    Delay_Ms(3000);
+
+    for (uint8_t t = 10; t &lt;= 100; t += 10) {
+        ESC_SetThrottle(&esc, t);
+        Delay_Ms(200);
+
+        uint16_t bat_mv = read_battery_mv();
+        if (bat_mv &lt; BAT_CRIT_MV) {
+            ESC_SetThrottle(&esc, 0);
+            // Blink LED for warning
+            while (1) {}
+        }
+    }
+
+    ESC_SetThrottle(&esc, 0);
+    while (1) {}
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ใช้ voltage divider (เช่น 10k+3.3k) ลดแรงดันแบต LiPo ให้อยู่ในช่วง 0–3.3V ที่ ADC อ่านได้ — <code>read_battery_mv</code> อ่าน ADC แล้วคูณกลับด้วยอัตราส่วน divider — เมื่อแรงดันต่ำกว่า critical (3.0V/cell) ให้ตัด throttle ทันทีเพื่อป้องกันแบตเสียหาย — ทดสอบทีละ 10% throttle เพื่อดูกำลังโหลดเทียบกับแรงดันตก — แบตคุณภาพดีแรงดันจะตกน้อยเมื่อโหลดสูง — ควรเพิ่ม hysteresis ป้องกันการตัดต่อซ้ำไปมา (cut at 3.0V, restore at 3.3V) — ใช้ averaging หลาย sampling เพื่อลด noise</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: Automated Thrust Curve Logger — ส่งข้อมูลความเร็วผ่าน UART</h2>
+<pre><code class="language-c">#include "simple_esc.h"
+#include "simple_adc.h"
+#include "simple_uart.h"
+
+ESC_t esc;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    ADC_SimpleInit(ADC_CH0);
+    UART_Init(USART1, 115200);
+    ESC_Init(&esc, GPIOA, GPIO_Pin_0);
+
+    ESC_SetThrottle(&esc, 0);
+    Delay_Ms(3000);
+    UART_Printf(USART1, "Throttle(%%),ADC_Raw\r\n");
+
+    for (uint8_t t = 5; t &lt;= 100; t += 5) {
+        ESC_SetThrottle(&esc, t);
+        Delay_Ms(500);
+
+        uint32_t sum = 0;
+        for (uint8_t s = 0; s &lt; 32; s++) {
+            sum += ADC_Read(ADC_CH0);
+            Delay_Ms(2);
+        }
+        uint16_t avg = sum / 32;
+
+        UART_Printf(USART1, "%d,%d\r\n", t, avg);
+    }
+
+    ESC_SetThrottle(&esc, 0);
+    UART_Printf(USART1, "DONE\r\n");
+    while (1) {}
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ส่งข้อมูลผ่าน UART แบบ CSV ให้เปิด Serial Plotter ใน IDE หรือ import เข้า Excel — ทดสอบทีละ 5% throttle เพื่อความละเอียดของกราฟ — หน่วง 500ms ต่อระดับให้แรงขับ stabilise — อ่าน ADC 32 ครั้งแล้วหาค่าเฉลี่ยเพื่อลด noise จาก vibration — ข้อมูลที่ได้: แกน X = throttle%, แกน Y = ADC (หรือแรงขับ) — ถ้ามี RPM sensor เพิ่มคอลัมน์ RPM ด้วย — ต่อกับแบตที่ชาร์จเต็มก่อนเริ่มทดสอบเพื่อผลลัพธ์ที่แม่นยำ — ห้ามใช้ ESC แบบไม่มี load นานเกิน 30 วินาที มิฉะนั้นมอเตอร์จะร้อนเกิน</div>
+</div>
+
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_esc.html">กลับบท</a><a href="chapx_lib_steppermotor_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

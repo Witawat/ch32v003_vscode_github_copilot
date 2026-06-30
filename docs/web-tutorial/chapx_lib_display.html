@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>📦 จอแสดงผล 11 ชนิด — OLED, LCD, LED Matrix — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_index.html">บทก่อน</a>
+    <a href="chapx_lib_env1.html">บทถัดไป →</a>
+</nav>
+<h1>🖥️ จอแสดงผล 11 ชนิด — OLED, LCD, LED Matrix, HMI</h1>
+<span class="level intermediate">ระดับกลาง</span>
+<p style="margin-top:0.5rem;color:#64748b">⏱️ ดูดัชนีทั้งหมดที่ <a href="chapx_lib_index.html">📦 คลังอุปกรณ์</a></p>
+
+<section>
+<h2>OLED SSD1306 — จอ 128x64 I2C</h2>
+<pre class="ascii-circuit">
+3.3V─VCC  GND─GND  PC1─SDA  PC2─SCL   (I2C addr=0x3C)
+</pre>
+<pre><code class="language-c">#include "OLED.h"
+OLED_t oled;
+OLED_Init(&oled, 0x3C, OLED_128x64);
+OLED_Clear(&oled);
+OLED_SetCursor(&oled, 0, 0); OLED_Print(&oled, "สวัสดี CH32V003!");
+OLED_SetCursor(&oled, 0, 2); OLED_PrintFloat(&oled, "Temp:", 25.5f, 1);
+OLED_DrawRect(&oled, 100, 0, 127, 63, 1);
+OLED_Display(&oled);  // ★ ต้องเรียก — push buffer ลงจอ</code></pre>
+<p class="explain">⚠️ 3 ขนาด (128x64/128x32/64x48) → เลือกตอน Init, buffer ~1KB ใน RAM, I2C addr 0x3C(0x78<<1) หรือ 0x3D, Font 6x8/8x16 สลับด้วย OLED_SetFont(&oled, FONT_8x16)</p></div>
+
+<h3>API หลัก</h3>
+<table>
+<tr><td><code>OLED_Init(o, addr, size)</code></td><td>Init + clear</td><td><code>OLED_SetCursor(o, x, y)</code></td><td>ตำแหน่ง text</td></tr>
+<tr><td><code>OLED_Print(o, str)</code></td><td>พิมพ์ข้อความ</td><td><code>OLED_PrintFloat(o, prefix, val, decimals)</code></td><td>เลขทศนิยม</td></tr>
+<tr><td><code>OLED_DrawPixel(o, x, y)</code></td><td>จุด</td><td><code>OLED_DrawLine(o, x1,y1,x2,y2)</code></td><td>เส้น</td></tr>
+<tr><td><code>OLED_DrawRect(o, x,y,w,h, fill)</code></td><td>สี่เหลี่ยม</td><td><code>OLED_DrawCircle(o, cx,cy,r, fill)</code></td><td>วงกลม</td></tr>
+<tr><td><code>OLED_Display(o)</code></td><td>Push buffer → จอ</td><td><code>OLED_Clear(o)</code></td><td>ล้าง buffer</td></tr>
+</table>
+
+<h2>LCD1602 I2C — จอตัวอักษร 16x2</h2>
+<pre><code class="language-c">#include "LCD1602_I2C.h"
+LCD1602_I2C_Init(0x27);  // หรือ 0x3F
+LCD1602_I2C_SetCursor(0, 0); LCD1602_I2C_Print("Hello World!");
+LCD1602_I2C_SetCursor(1, 0); LCD1602_I2C_Print("Line 2");
+// Custom char: LCD1602_I2C_CreateChar(0, custom_pattern); LCD1602_I2C_WriteChar(0);</code></pre>
+<p class="explain">⚠️ 2 address หลัก: 0x27 vs 0x3F — ใช้ I2CScan ตรวจสอบ, backlight เปิด/ปิดด้วย jumper หรือคำสั่ง</p>
+
+<h2>MAX7219 — LED Matrix 8x8 (SPI)</h2>
+<pre class="ascii-circuit">
+PC4─CS  PC5─SCK  PC6─DIN  5V─VCC  GND─GND  (chain ได้หลาย module)
+</pre>
+<pre><code class="language-c">#include "MAX7219.h"
+MAX7219_Init(1, PC4);       // 1 module, CS=PC4
+MAX7219_SetIntensity(5);    // 0-15
+MAX7219_Clear();
+MAX7219_ScrollText("สวัสดี", 100);  // 100ms/frame
+// Static char: MAX7219_PrintChar('A');
+// Custom bitmap: MAX7219_DrawBitmap(custom_8x8);</code></pre>
+<p class="explain">⚠️ SPI pins ต้องเป็น PC5(SCK) PC6(MOSI) — CS เลือก pin ไหนก็ได้, ต่อหลาย module → MAX7219_Init(N, CS), ใช้ไฟ 5V ได้</p>
+
+<h2>TM1637 — 7-Segment 4 หลัก (GPIO)</h2>
+<pre><code class="language-c">#include "TM1637.h"
+TM1637_Init(PC0, PC1);           // CLK, DIO — pin ไหนก็ได้
+TM1637_SetBrightness(7);         // 0-7
+TM1637_DisplayNumber(1234);      // "1234"
+TM1637_DisplayTime(12, 30);      // "12:30"
+TM1637_DisplayFloat(25.5f, 1);   // "25.5"</code></pre>
+<p class="explain">⚠️ GPIO bit-bang, เลือก pin อะไรก็ได้, 4-digit เท่านั้น, no colon control — colon ติดตลอดเวลา</p>
+
+<h2>TM1650 — 7-Segment I2C</h2>
+<pre><code class="language-c">#include "TM1650.h"
+TM1650_Init(0x24);  // I2C addr 0x24-0x27
+TM1650_SetBrightness(3);
+TM1650_DisplayNumber(5678);
+TM1650_DisplayTime(8, 30);  // "08:30"</code></pre>
+<p class="explain">⚠️ I2C 4 address (0x24/0x25/0x26/0x27) เลือกด้วย jumper, เหมือน TM1637 แต่ใช้ I2C แทน GPIO — ประหยัด pin</p>
+
+<h2>NeoPixel — WS2812B RGB Strip (GPIO)</h2>
+<pre class="ascii-circuit">
+PC0─DATA  5V─VCC  GND─GND  (ห้าม 3.3V! WS2812B ต้อง 5V logic → level shifter)
+</pre>
+<pre><code class="language-c">#include "NeoPixel.h"
+#define LED_COUNT 8
+NeoPixel_Init(PC0, LED_COUNT);
+NeoPixel_SetPixel(0, 255, 0, 0);    // LED 0 = Red
+NeoPixel_SetPixel(1, 0, 255, 0);    // LED 1 = Green
+NeoPixel_SetAll(0, 0, 255);         // All Blue
+NeoPixel_Show();                     // Push to strip
+// Rainbow: for(i=0;i<LED_COUNT;i++) { NeoPixel_SetHSV(i, i*360/LED_COUNT, 255, 255); }</code></pre>
+<p class="explain">⚠️ WS2812B ใช้ 5V logic → CH32V003 3.3V → ต้องใช้ level shifter (74HCT125/SN74AHCT125) หรือ hack: ลดไฟ VCC strip เหลือ ~3.7V, timing-critical — ห้ามมี interrupt ขัดจังหวะตอน NeoPixel_Show()</p>
+
+<h2>WS2812Matrix — 8x8 RGB Matrix (GPIO)</h2>
+<pre><code class="language-c">#include "WS2812Matrix.h"
+WS2812Matrix_Init(PC0, MATRIX_8x8);
+WS2812Matrix_Clear();
+WS2812Matrix_SetBrightness(50);  // 0-255
+WS2812Matrix_PrintChar('A', 255,0,0);    // Red 'A'
+WS2812Matrix_ScrollText("THAI", 100, 0,255,0);  // Green scroll
+WS2812Matrix_DrawPixel(0, 0, 255, 255, 255);    // White pixel
+WS2812Matrix_Show();</code></pre>
+<p class="explain">⚠️ ต่อยอดจาก NeoPixel, RAM ~512B (buffer+temp), มีฟอนต์ไทยในตัว, รองรับ effects: fade, flash, rotate</p>
+
+<h2>WS2815Matrix — 12V RGB Matrix</h2>
+<pre><code class="language-c">#include "WS2815Matrix.h"
+// API เหมือน WS2812Matrix — เปลี่ยนแค่ 12V power + ระดับสัญญาณ
+WS2815Matrix_Init(PC0, MATRIX_8x8);
+// ... same API ...</code></pre>
+<p class="explain">⚠️ 12V — ใช้กับไฟเลี้ยง 12V, signal ยัง 5V (ใช้ level shifter), เหนือกว่า WS2812: ถ้า LED หลอดนึงพัง หลอดต่อไปยังทำงาน (break-point continue)</p>
+
+<h2>P10 — LED Panel 32x16 (GPIO+timer)</h2>
+<pre class="ascii-circuit">
+PC0─A  PC1─B  PC2─CLK  PC3─SCLK  PC4─R1  PC5─OE  5V─VCC
+</pre>
+<pre><code class="language-c">#include "P10.h"
+P10_Init(PC2, PC4, PC0, PC1, PC3, PC5); // CLK, R1, A, B, SCLK, OE
+P10_Clear();
+P10_SetCursor(0, 0); P10_Print("P10 Panel");
+P10_SetCursor(0, 8); P10_Print("32x16");
+// P10_Update() — called by timer ISR (auto)</code></pre>
+<p class="explain">⚠️ ใช้ TIM2 สำหรับ scan rate (~2kHz), 6 GPIO pins, RAM 64B buffer, 5V logic — CH32V003 3.3V พอ (marginal), ใช้ external 5V power</p>
+
+<h2>TJC HMI — Touch Display (USART)</h2>
+<pre class="ascii-circuit">
+PD5(TX)─RX(TJC)  PD6(RX)─TX(TJC)  5V─VCC  GND─GND
+</pre>
+<pre><code class="language-c">#include "TJC.h"
+TJC_Handle hmi;
+TJC_Init(&hmi, USART1, BAUD_9600);
+TJC_SendCommand(&hmi, "page 0");  // switch page
+TJC_SetText(&hmi, "t0", "Hello");  // set text widget
+TJC_SetValue(&hmi, "n0", 42);      // set number widget
+// Callback:
+void on_btn_press(TJC_Handle *h, const char *page, const char *id) {
+    if(strcmp(id, "b0") == 0) { USART_Println("OK pressed!"); }
+}
+TJC_RegisterTouchCallback(&hmi, on_btn_press);
+// In loop:
+TJC_ProcessResponse(&hmi);  // ★ ต้องเรียกบ่อย — process RX buffer</code></pre>
+<p class="explain">⚠️ ใช้ USART 1 เดียวของ CH32V003 → แชร์กับ USART_Print ไม่ได้, ต้องออกแบบ UI ใน TJC Editor ก่อน (PC software), callback 5 แบบ: touch, numeric, command, page, error, ข้อความภาษาไทย → ใช้ font ใน TJC ไม่เกี่ยวกับ CH32V003</p>
+
+<h2>ShiftReg595 — 74HC595 (GPIO)</h2>
+<pre class="ascii-circuit">
+PC0─DATA  PC1─CLK  PC2─LATCH  3.3V─VCC  GND─GND
+</pre>
+<pre><code class="language-c">#include "ShiftReg595.h"
+ShiftReg595_Init(PC0, PC1, PC2);  // DATA, CLK, LATCH
+ShiftReg595_Write(0b10101010);     // 8-bit output
+ShiftReg595_WriteBit(0, 1);        // bit 0 = HIGH
+// Chain multiple: ShiftReg595_Write16(0xFF00);  // 16-bit
+ShiftReg595_Update();              // push to outputs</code></pre>
+<p class="explain">⚠️ 74HC595 ขยาย 8 outputs ต่อ 1 ตัว — ใช้ 3 GPIO pins เท่านั้น — chain ได้ไม่จำกัด — ไม่มี PWM, output HIGH/LOW เท่านั้น — กระแส output ~6mA/pin</p>
+</section>
+
+<section>
+<h2>📋 เลือกจอแบบไหนดี</h2>
+<table>
+<tr><th>ต้องการ</th><th>แนะนำ</th><th>เหตุผล</th></tr>
+<tr><td>แสดงผลกราฟิก, ภาษาไทย</td><td>OLED SSD1306</td><td>ฟอนต์ในตัว, ราคาถูก, I2C ง่าย</td></tr>
+<tr><td>แสดงตัวอักษรล้วน</td><td>LCD1602 I2C</td><td>ง่ายสุด, 2 บรรทัด, backlight</td></tr>
+<tr><td>แสดงตัวเลข (นาฬิกา)</td><td>TM1637</td><td>ถูกสุด (~15฿), 4-digit, GPIO 2 pins</td></tr>
+<tr><td>แสดงผลระยะไกล (ใหญ่)</td><td>MAX7219</td><td>LED matrix สว่าง, chain ได้หลายโมดูล</td></tr>
+<tr><td>LED สี สวยงาม</td><td>NeoPixel / WS2812Matrix</td><td>RGB เต็ม, effects, ไทย font</td></tr>
+<tr><td>Touch Screen UI</td><td>TJC HMI</td><td>หน้าจอสัมผัส, สวย, ใช้ PC ออกแบบ</td></tr>
+<tr><td>ขยาย GPIO output</td><td>ShiftReg595</td><td>3 pins → 8+ outputs</td></tr>
+</table>
+</section>
+
+<section>
+<h2>✏️ ลองทำดู</h2>
+<ol>
+<li>OLED: แสดงข้อความ 2 ภาษา (ไทย+อังกฤษ) — "温度: 25.5°C"</li>
+<li>MAX7219: scroll text ภาษาไทย ต่อ 2 module (16x8)</li>
+<li>NeoPixel: ทำ rainbow effect วน 8 ดวง</li>
+<li>TJC: ทำ UI 2 หน้า — หน้า 1 แสดง sensor, หน้า 2 ตั้งค่า — สลับด้วยปุ่ม</li>
+<li>รวม 2 จอ: OLED (detail) + TM1637 (clock) ในโปรเจกต์เดียว</li>
+</ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_index.html">บทก่อน</a>
+    <a href="chapx_lib_env1.html">บทถัดไป →</a>
+</nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

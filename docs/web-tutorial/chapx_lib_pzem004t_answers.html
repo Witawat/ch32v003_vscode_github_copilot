@@ -1,0 +1,241 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย PZEM-004T — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_pzem004t.html">กลับบท</a><a href="chapx_lib_pzem004tv3_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — PZEM-004T</h1>
+
+<div class="answer">
+<h2>ข้อ 1: Power Monitor OLED Dashboard — V, A, W, kWh, PF</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "PZEM004T.h"
+#include "OLED.h"
+
+#define COST_PER_KWH 4.5f
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    I2C_Init(PC1, PC2, I2C_SPEED_STANDARD);
+    USART_Init(115200);
+
+    PZEM004T_t pzem;
+    PZEM004T_Init(&pzem, PD6, PD5, 0x01);
+
+    OLED_t oled;
+    OLED_Init(&oled, 0x3C, OLED_128x64);
+    OLED_SetFont(&oled, FONT_8x16);
+
+    Timer_t tmr;
+    Start_Timer(&tmr, 2000, 1);
+
+    while(1) {
+        if(Is_Timer_Expired(&tmr)) {
+            float v = PZEM004T_ReadVoltage(&pzem);
+            float a = PZEM004T_ReadCurrent(&pzem);
+            float w = PZEM004T_ReadPower(&pzem);
+            float e = PZEM004T_ReadEnergy(&pzem);
+            float pf = PZEM004T_ReadPowerFactor(&pzem);
+            float hz = PZEM004T_ReadFrequency(&pzem);
+
+            if(v != v) { USART_Print("Timeout\r\n"); continue; }
+
+            OLED_Clear(&oled);
+
+            OLED_SetCursor(&oled, 0, 0);
+            OLED_PrintFloat(&oled, "", v, 1);
+            OLED_Print(&oled, "V ");
+
+            OLED_SetCursor(&oled, 55, 0);
+            OLED_PrintFloat(&oled, "", a, 2);
+            OLED_Print(&oled, "A");
+
+            OLED_SetCursor(&oled, 0, 2);
+            OLED_PrintFloat(&oled, "", w, 1);
+            OLED_Print(&oled, "W ");
+
+            OLED_SetCursor(&oled, 55, 2);
+            OLED_PrintFloat(&oled, "PF:", pf, 2);
+
+            OLED_SetCursor(&oled, 0, 4);
+            OLED_PrintFloat(&oled, "", hz, 1);
+            OLED_Print(&oled, "Hz ");
+
+            OLED_SetCursor(&oled, 55, 4);
+            OLED_PrintFloat(&oled, "", e, 2);
+            OLED_Print(&oled, "kWh");
+
+            float cost = e * COST_PER_KWH;
+            OLED_SetCursor(&oled, 0, 6);
+            OLED_PrintFloat(&oled, "Cost:", cost, 2);
+            OLED_Print(&oled, "B");
+
+            OLED_Display(&oled);
+        }
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> อ่าน 6 ค่าจาก PZEM ทุก 2 วิ — แสดงทั้งหมดบน OLED 128x64 แบบ 3 บรรทัด 2 คอลัมน์ — เพิ่มการคำนวณค่าไฟ: <code>cost = kWh × COST_PER_KWH</code> — ตรวจสอบ NaN ด้วย <code>if(v != v)</code> กรณี timeout — ใช้ non-blocking timer 2 วิเพราะ PZEM ต้องใช้เวลา ~50-100ms ต่อ register</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: Daily kWh Logger — บันทึกพลังงานสะสมรายวันลง EEPROM</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "PZEM004T.h"
+#include "AT24Cxx.h"
+
+#define LOG_INTERVAL_S 300
+#define LOGS_PER_DAY (86400 / LOG_INTERVAL_S)
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    I2C_Init(PC1, PC2, I2C_SPEED_STANDARD);
+    USART_Init(115200);
+
+    PZEM004T_t pzem;
+    PZEM004T_Init(&pzem, PD6, PD5, 0x01);
+    AT24Cxx_Init(0x50, 256);
+
+    float start_energy = PZEM004T_ReadEnergy(&pzem);
+    uint16_t log_count = 0;
+    uint16_t eeprom_addr = 0;
+
+    Timer_t tmr_log;
+    Start_Timer(&tmr_log, LOG_INTERVAL_S * 1000, 1);
+
+    USART_Print("Daily kWh Logger\r\n");
+    USART_Print("Start energy: ");
+    USART_PrintFloat(start_energy, 2);
+    USART_Print("kWh\r\n");
+
+    while(1) {
+        if(Is_Timer_Expired(&tmr_log) && log_count < LOGS_PER_DAY) {
+            float energy_now = PZEM004T_ReadEnergy(&pzem);
+            float v = PZEM004T_ReadVoltage(&pzem);
+            float a = PZEM004T_ReadCurrent(&pzem);
+
+            if(energy_now != energy_now) continue;
+
+            float diff_kwh = energy_now - start_energy;
+            if(diff_kwh < 0) diff_kwh = 0;
+
+            uint32_t ts = Get_CurrentMs() / 1000;
+
+            USART_Print("["); USART_PrintDec(log_count);
+            USART_Print("] t="); USART_PrintDec(ts);
+            USART_Print("s kWh="); USART_PrintFloat(energy_now, 2);
+            USART_Print(" diff="); USART_PrintFloat(diff_kwh, 3);
+            USART_Print(" V="); USART_PrintFloat(v, 1);
+            USART_Print(" A="); USART_PrintFloat(a, 2);
+            USART_Print("\r\n");
+
+            AT24Cxx_WriteByte(eeprom_addr++, (uint8_t)(energy_now * 10));
+            AT24Cxx_WriteByte(eeprom_addr++, (uint8_t)((uint16_t)(energy_now * 10) >> 8));
+            Delay_Ms(10);
+            log_count++;
+        }
+
+        if(log_count >= LOGS_PER_DAY) {
+            USART_Print("--- End of Day ---\r\n");
+            USART_Print("Total logs: ");
+            USART_PrintDec(log_count);
+            USART_Print("\r\n");
+
+            USART_Print("Dumping EEPROM log:\r\n");
+            for(uint16_t i = 0; i < log_count; i++) {
+                uint8_t lo = AT24Cxx_ReadByte(i * 2);
+                uint8_t hi = AT24Cxx_ReadByte(i * 2 + 1);
+                uint16_t val = lo | (hi << 8);
+                float kwh = val / 10.0f;
+                USART_PrintFloat(kwh, 1);
+                USART_Print("\r\n");
+            }
+            break;
+        }
+    }
+
+    while(1) { Delay_Ms(1000); }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> บันทึก kWh ทุก 5 นาที (288 logs/วัน) ลง AT24Cxx EEPROM — เก็บค่าเป็นหน่วย ×10 ใน 2 bytes ต่อ entry — เมื่อครบวัน (288 logs) → dump ข้อมูลทั้งหมดออก USART — ใช้ <code>start_energy</code> เป็น baseline คำนวณ diff — กรณี PZEM timeout ใช้ NaN check แล้วข้าม — EEPROM เก็บข้อมูลได้แม้ไฟดับ</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: Over-Current Alarm — ตัด Relay เมื่อกระแสเกิน</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "PZEM004T.h"
+
+#define OVERCURRENT_A 8.0f
+#define OVERPOWER_W 2000.0f
+#define RELAY_PIN PC0
+#define BUZZER_PIN PC1
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_Init(115200);
+
+    PZEM004T_t pzem;
+    PZEM004T_Init(&pzem, PD6, PD5, 0x01);
+
+    pinMode(RELAY_PIN, PIN_MODE_OUTPUT);
+    pinMode(BUZZER_PIN, PIN_MODE_OUTPUT);
+    digitalWrite(RELAY_PIN, LOW);
+    digitalWrite(BUZZER_PIN, LOW);
+
+    uint8_t fault_count = 0;
+    uint8_t relay_cut = 0;
+    Timer_t tmr;
+    Start_Timer(&tmr, 1000, 1);
+
+    USART_Print("Over-Current Alarm Ready\r\n");
+    USART_Print("Threshold: "); USART_PrintFloat(OVERCURRENT_A, 1);
+    USART_Print("A / "); USART_PrintFloat(OVERPOWER_W, 0);
+    USART_Print("W\r\n");
+
+    while(1) {
+        if(Is_Timer_Expired(&tmr)) {
+            float v = PZEM004T_ReadVoltage(&pzem);
+            float a = PZEM004T_ReadCurrent(&pzem);
+            float w = PZEM004T_ReadPower(&pzem);
+            uint16_t alarm = PZEM004T_ReadAlarm(&pzem);
+
+            if(v != v) continue;
+
+            USART_Print("V:"); USART_PrintFloat(v, 1);
+            USART_Print(" A:"); USART_PrintFloat(a, 2);
+            USART_Print(" W:"); USART_PrintFloat(w, 1);
+
+            if(a > OVERCURRENT_A || w > OVERPOWER_W || alarm) {
+                fault_count++;
+                USART_Print(" FAULT x"); USART_PrintDec(fault_count);
+
+                if(fault_count >= 3 && !relay_cut) {
+                    digitalWrite(RELAY_PIN, HIGH);
+                    digitalWrite(BUZZER_PIN, HIGH);
+                    relay_cut = 1;
+                    USART_Print(" RELAY CUT!");
+                }
+            } else {
+                if(fault_count > 0) fault_count--;
+
+                if(fault_count == 0 && relay_cut) {
+                    digitalWrite(RELAY_PIN, LOW);
+                    digitalWrite(BUZZER_PIN, LOW);
+                    relay_cut = 0;
+                    USART_Print(" RELAY RESTORED");
+                }
+            }
+
+            if(alarm & 0x0001) USART_Print(" [OV]");
+            if(alarm & 0x0002) USART_Print(" [OC]");
+            if(alarm & 0x0004) USART_Print(" [OP]");
+
+            USART_Print("\r\n");
+        }
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ตรวจจับ over-current + over-power + PZEM alarm register — ใช้ debounce 3 ครั้งก่อนตัด relay ป้องกัน false trigger จากกระแสกระชาก — เมื่อย้อนกลับสู่ปกติ fault_count ลดลง → ต่อ relay กลับ — Buzzer เตือนตอนตัด — ใช้ alarm register เป็นตัวเสริม (bit0=OV, bit1=OC, bit2=OP) — PZEM alarm threshold ตั้งผ่าน <code>PZEM004T_SetAlarm()</code></div>
+</div>
+
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_pzem004t.html">กลับบท</a><a href="chapx_lib_pzem004tv3_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

@@ -1,0 +1,190 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย BUTTON — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_button.html">กลับบท</a><a href="chapx_lib_keymatrix_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — Button</h1>
+<div class="answer"><h2>ข้อ 1: Single-Button Menu — short=next, long=select, double=back</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "Button.h"
+
+typedef enum { MENU_MAIN, MENU_LED, MENU_SENSOR, MENU_COUNT } Menu_t;
+
+const char *items[] = {"1. LED Control", "2. Read Sensor", "3. Settings"};
+uint8_t cur = 0;
+Menu_t submenu = MENU_MAIN;
+
+void btn_short_cb(void) { cur = (cur + 1) % MENU_COUNT; }
+void btn_long_cb(void)  { submenu = cur; }
+void btn_double_cb(void) { if(submenu != MENU_MAIN) submenu = MENU_MAIN; }
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_Init(115200);
+    Button_Init(PC0, BTN_PULLUP);
+
+    Button_AttachEvent(PC0, BTN_EVENT_SHORT,  btn_short_cb);
+    Button_AttachEvent(PC0, BTN_EVENT_LONG,   btn_long_cb);
+    Button_AttachEvent(PC0, BTN_EVENT_DOUBLE, btn_double_cb);
+
+    USART_Println("Menu: short=next, long=select, double=back");
+
+    while(1) {
+        Button_Process();
+
+        static uint8_t last_cur = 255, last_sub = 255;
+        if(cur != last_cur || submenu != last_sub) {
+            USART_Print("\nMenu> ");
+            if(submenu == MENU_MAIN) for(uint8_t i = 0; i < MENU_COUNT; i++)
+                USART_Printf("%s%s", cur == i ? " ->[" : "    ", items[i]);
+            else USART_Printf("[%s selected — double=back]", items[submenu]);
+            last_cur = cur; last_sub = submenu;
+        }
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ใช้ <code>Button_AttachEvent</code> ผูก callback 3 แบบ — short เลื่อน cursor, long เข้า submenu, double กลับ menu หลัก — ใช้ enum <code>Menu_t</code> เก็บสถานะ — พิมพ์เฉพาะเมื่อ state เปลี่ยนด้วยการเทียบ <code>last_cur</code>/<code>last_sub</code> ลด serial spam — <code>Button_Process()</code> ใน loop คอยอัปเดต state machine ภายใน</div></div>
+<div class="answer"><h2>ข้อ 2: Double-Click Counter — นับจำนวนกด 2 ครั้งติด</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "Button.h"
+
+volatile uint16_t dbl_cnt = 0;
+
+void on_double(void) { dbl_cnt++; }
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_Init(115200);
+
+    Button_Init(PC0, BTN_PULLUP);
+    Button_AttachEvent(PC0, BTN_EVENT_DOUBLE, on_double);
+
+    Timer_t tmr;
+    Start_Timer(&tmr, 1000, 1);
+
+    USART_Println("Double-click to count. Press DEL to reset.");
+
+    while(1) {
+        Button_Process();
+
+        if(Is_Timer_Expired(&tmr)) {
+            USART_Printf("Double-clicks: %d\n", dbl_cnt);
+        }
+
+        if(USART_Available()) {
+            char c = USART_Read();
+            if(c == 127 || c == 'r') dbl_cnt = 0;  // DEL or 'r' resets
+        }
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>BTN_EVENT_DOUBLE</code> จับ double-click โดยตรง — counter เป็น <code>volatile uint16_t</code> เพราะถูกแก้ไขใน ISR — แสดงผลทุก 1 วิด้วย <code>Is_Timer_Expired</code> — เพิ่ม serial command 'r' หรือ DEL เพื่อรีเซ็ต counter — ถ้าต้องการหลายปุ่ม แค่ Init คนละขาแล้ว AttachEvent แยกกัน</div></div>
+<div class="answer"><h2>ข้อ 3: Hold-to-Dim LED — กดค้างแล้ว LED ค่อย ๆ หรี่</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "Button.h"
+#include "PWM.h"
+
+#define LED_PIN   PC1
+#define BTN_PIN   PC0
+#define PWM_CH    1
+
+volatile uint16_t duty = 1000;
+volatile bool holding = false;
+
+void btn_down(void)  { holding = true; }
+void btn_up(void)    { holding = false; }
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    Button_Init(BTN_PIN, BTN_PULLUP);
+
+    Button_AttachEvent(BTN_PIN, BTN_EVENT_DOWN, btn_down);
+    Button_AttachEvent(BTN_PIN, BTN_EVENT_UP,   btn_up);
+
+    PWM_SimpleInit(LED_PIN, PWM_CH, 1000, 1000);  // เริ่มสว่างสุด
+    pinMode(PA0, PIN_MODE_OUTPUT);
+    digitalWrite(PA0, HIGH);  // LED on-board แสดงสถานะ
+
+    Timer_t dim_tmr;
+    Start_Timer(&dim_tmr, 50, 1);
+
+    while(1) {
+        Button_Process();
+
+        if(holding && Is_Timer_Expired(&dim_tmr)) {
+            if(duty > 0) duty -= 10;           // ลด duty ทีละ 1% ทุก 50ms
+            PWM_SetDuty(LED_PIN, PWM_CH, duty);
+        }
+
+        if(!holding && duty < 1000) {
+            duty = 1000;                         // ปล่อยปุ่ม → สว่างเต็มทันที
+            PWM_SetDuty(LED_PIN, PWM_CH, duty);
+        }
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ใช้ <code>BTN_EVENT_DOWN</code>/<code>BTN_EVENT_UP</code> จับสถานะกด/ปล่อย — flag <code>holding</code> บอกว่ากำลังกดค้าง — Timer 50ms ลด duty cycle ทีละ 10 (1%) — จาก 1000→0 ใช้เวลา ~5 วิ — เมื่อปล่อยปุ่ม duty กลับ 100% ทันที — <code>PWM_SimpleInit</code> ตั้งความถี่ 1kHz แสงไม่กะพริบ</div></div>
+<div class="answer"><h2>ข้อ 4: Combo Lock — ปลดล็อกด้วยลำดับกด (สั้น-ยาว-สั้น)</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "Button.h"
+
+#define LOCK_PIN  PC2
+#define BTN_PIN   PC0
+
+const uint8_t combo[] = {BTN_EVENT_SHORT, BTN_EVENT_LONG, BTN_EVENT_SHORT};
+#define COMBO_LEN 3
+uint8_t input_buf[COMBO_LEN];
+uint8_t idx = 0;
+
+void btn_event_cb(uint8_t event) {
+    input_buf[idx++] = event;
+    if(idx >= COMBO_LEN) idx = 0;  // wrap around
+}
+
+bool check_combo(void) {
+    for(uint8_t i = 0; i < COMBO_LEN; i++)
+        if(input_buf[i] != combo[i]) return false;
+    return true;
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_Init(115200);
+    Button_Init(BTN_PIN, BTN_PULLUP);
+
+    Button_AttachEvent(BTN_PIN, BTN_EVENT_SHORT, btn_event_cb);
+    Button_AttachEvent(BTN_PIN, BTN_EVENT_LONG,  btn_event_cb);
+
+    pinMode(LOCK_PIN, PIN_MODE_OUTPUT);
+    digitalWrite(LOCK_PIN, LOW);
+
+    USART_Println("Enter combo: SHORT→LONG→SHORT");
+
+    Timer_t tmr;
+    Start_Timer(&tmr, 5000, 1);   // auto-reset ทุก 5 วิ
+
+    while(1) {
+        Button_Process();
+
+        if(Is_Timer_Expired(&tmr)) {
+            idx = 0;                              // หมดเวลา → รีเซ็ต input
+            USART_Println("Timeout! Try again.");
+        }
+
+        if(idx == 0 && input_buf[2] != 0) {       // input เต็มแล้ววนกลับมา
+            if(check_combo()) {
+                digitalWrite(LOCK_PIN, HIGH);     // ปลดล็อก
+                USART_Println("UNLOCKED!");
+                Delay_Ms(3000);
+                digitalWrite(LOCK_PIN, LOW);
+            }
+            memset(input_buf, 0, COMBO_LEN);
+            idx = 0;
+        }
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> เก็บ <code>combo[]</code> เป็น array ของ event type — <code>btn_event_cb</code> รับ event ทุกแบบมาเติม <code>input_buf</code> แบบ circular — เมื่อครบ 3 ครั้ง เรียก <code>check_combo()</code> เทียบทีละ element — ใช้ Timer 5 วิ auto-reset ถ้า user กดไม่ครบ — <code>memset</code> ล้าง buffer หลังจากเช็คแล้ว — ถ้าถูกต้อง เปิด relay/LED 3 วิแล้วปิด — สำหรับ combo ยาวขึ้น แค่เพิ่ม <code>COMBO_LEN</code> และขยาย array</div></div>
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_button.html">กลับบท</a><a href="chapx_lib_keymatrix_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

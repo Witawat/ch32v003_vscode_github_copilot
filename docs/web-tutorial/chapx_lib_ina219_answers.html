@@ -1,0 +1,218 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย INA219 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_ina219.html">กลับบท</a><a href="chapx_lib_ads1115_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — INA219</h1>
+
+<div class="answer">
+<h2>ข้อ 1: Battery Fuel Gauge — วัด V+I แล้วคำนวณ mAh</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "INA219.h"
+#include "OLED.h"
+
+#define SHUNT_OHM 0.1f
+#define BATTERY_CAPACITY_MAH 2000.0f
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    I2C_Init(PC1, PC2, I2C_SPEED_STANDARD);
+    USART_Init(115200);
+
+    INA219_t ina;
+    INA219_Init(&ina, 0x40, SHUNT_OHM, INA219_32V_2A);
+
+    OLED_t oled;
+    OLED_Init(&oled, 0x3C, OLED_128x64);
+    OLED_SetFont(&oled, FONT_8x16);
+
+    float mah_used = 0;
+    float mah_capacity = BATTERY_CAPACITY_MAH;
+    Timer_t tmr;
+    Start_Timer(&tmr, 1000, 1);
+
+    while(1) {
+        if(Is_Timer_Expired(&tmr)) {
+            float v = INA219_ReadBusVoltage(&ina);
+            float a = INA219_ReadCurrent(&ina);
+            float w = INA219_ReadPower(&ina);
+            mah_used += (a * 1000.0f) / 3600.0f;
+
+            float mah_remain = mah_capacity - mah_used;
+            if(mah_remain < 0) mah_remain = 0;
+            float percent = (mah_remain / mah_capacity) * 100.0f;
+
+            OLED_Clear(&oled);
+            OLED_SetCursor(&oled, 0, 0);
+            OLED_PrintFloat(&oled, "V:", v, 2);
+            OLED_Print(&oled, "V");
+
+            OLED_SetCursor(&oled, 70, 0);
+            OLED_PrintFloat(&oled, "I:", a * 1000, 0);
+            OLED_Print(&oled, "mA");
+
+            OLED_SetCursor(&oled, 0, 2);
+            OLED_PrintFloat(&oled, "P:", w, 2);
+            OLED_Print(&oled, "W");
+
+            OLED_SetCursor(&oled, 0, 4);
+            OLED_PrintFloat(&oled, "Used:", mah_used, 0);
+            OLED_Print(&oled, "mAh");
+
+            OLED_SetCursor(&oled, 0, 6);
+            OLED_PrintFloat(&oled, "Left:", percent, 0);
+            OLED_Print(&oled, "%");
+
+            if(v < 3.0f) {
+                OLED_SetCursor(&oled, 70, 6);
+                OLED_Print(&oled, "LOW!");
+            }
+
+            OLED_Display(&oled);
+        }
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> สะสมกระแสทุก 1 วินาที — <code>mAh_used += (I_A × 1000) / 3600</code> เพราะ 1 ชม. = 3600 วิ — แสดง % คงเหลือจากความจุแบตฯ — ตรวจจับ Low เมื่อแรงดันต่ำกว่า 3.0V — ใช้ OLED แสดงทั้ง V, I, W, mAh, %</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: Shunt Calibration — สอบเทียบด้วยโหลดที่ทราบค่า</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "INA219.h"
+
+#define SHUNT_NOMINAL 0.1f
+#define KNOWN_CURRENT_MA 500.0f
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    I2C_Init(PC1, PC2, I2C_SPEED_STANDARD);
+    USART_Init(115200);
+
+    INA219_t ina;
+    INA219_Init(&ina, 0x40, SHUNT_NOMINAL, INA219_32V_2A);
+
+    USART_Print("Shunt Calibration\r\n");
+    USART_Print("Connect known load (e.g. 500mA)\r\n");
+    USART_Print("Press any key when ready...\r\n");
+
+    while(!USART_Available());
+    while(USART_Available()) USART_Read();
+
+    float sum_current = 0;
+    for(int i = 0; i < 50; i++) {
+        sum_current += INA219_ReadCurrent(&ina);
+        Delay_Ms(20);
+    }
+    float avg_current_a = sum_current / 50.0f;
+    float avg_current_ma = avg_current_a * 1000.0f;
+
+    float ratio = KNOWN_CURRENT_MA / avg_current_ma;
+    float actual_shunt = SHUNT_NOMINAL * ratio;
+
+    USART_Print("Measured: ");
+    USART_PrintFloat(avg_current_ma, 1);
+    USART_Print("mA\r\nExpected: ");
+    USART_PrintFloat(KNOWN_CURRENT_MA, 1);
+    USART_Print("mA\r\nCorrected shunt: ");
+    USART_PrintFloat(actual_shunt, 4);
+    USART_Print(" Ohm\r\n");
+
+    INA219_Init(&ina, 0x40, actual_shunt, INA219_32V_2A);
+    USART_Print("Re-initialized with calibrated shunt\r\n");
+
+    while(1) {
+        float v = INA219_ReadBusVoltage(&ina);
+        float a = INA219_ReadCurrent(&ina);
+        USART_Print("V:"); USART_PrintFloat(v, 3);
+        USART_Print(" I:"); USART_PrintFloat(a * 1000, 1);
+        USART_Print("mA\r\n");
+        Delay_Ms(1000);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ต่อโหลดที่ทราบค่ากระแสแน่นอน — วัดค่าเฉลี่ย 50 ครั้ง — คำนวณอัตราส่วนระหว่างค่าที่วัดได้กับค่าจริง — ปรับค่า Shunt Ohm จริง (shunt จริงอาจคลาดเคลื่อนจาก nominal ±5%) — Init ใหม่ด้วยค่าที่ calibrate แล้ว — เหมาะกับงานที่ต้องการความแม่นยำสูง</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: Power Monitor Dashboard — OLED แสดง V/A/W</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "INA219.h"
+#include "OLED.h"
+
+#define SHUNT_OHM 0.1f
+#define OVERCURRENT_A 1.5f
+#define OVERPOWER_W 5.0f
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    I2C_Init(PC1, PC2, I2C_SPEED_STANDARD);
+    USART_Init(115200);
+
+    INA219_t ina;
+    INA219_Init(&ina, 0x40, SHUNT_OHM, INA219_32V_2A);
+
+    OLED_t oled;
+    OLED_Init(&oled, 0x3C, OLED_128x64);
+    OLED_SetFont(&oled, FONT_8x16);
+
+    pinMode(PC0, PIN_MODE_OUTPUT);
+    pinMode(PC1, PIN_MODE_OUTPUT);
+
+    float energy_wh = 0;
+    Timer_t tmr;
+    Start_Timer(&tmr, 1000, 1);
+
+    while(1) {
+        if(Is_Timer_Expired(&tmr)) {
+            float v = INA219_ReadBusVoltage(&ina);
+            float a = INA219_ReadCurrent(&ina);
+            float w = INA219_ReadPower(&ina);
+            energy_wh += (w / 3600.0f);
+
+            OLED_Clear(&oled);
+            OLED_SetCursor(&oled, 0, 0);
+            OLED_Print(&oled, "=== POWER DASH ===");
+
+            OLED_SetCursor(&oled, 0, 1);
+            OLED_PrintFloat(&oled, "V:", v, 2);
+            OLED_Print(&oled, "V  ");
+            OLED_PrintFloat(&oled, "I:", a * 1000, 0);
+            OLED_Print(&oled, "mA");
+
+            OLED_SetCursor(&oled, 0, 2);
+            OLED_PrintFloat(&oled, "P:", w, 2);
+            OLED_Print(&oled, "W  ");
+            OLED_PrintFloat(&oled, "E:", energy_wh, 1);
+            OLED_Print(&oled, "Wh");
+
+            uint8_t bar_len = (uint8_t)(w / OVERPOWER_W * 100);
+            if(bar_len > 100) bar_len = 100;
+            OLED_SetCursor(&oled, 0, 4);
+            OLED_Print(&oled, "[");
+            for(uint8_t i = 0; i < bar_len / 5; i++)
+                OLED_Print(&oled, "=");
+            OLED_Print(&oled, "]");
+
+            if(a > OVERCURRENT_A) {
+                digitalWrite(PC0, HIGH);
+                digitalWrite(PC1, HIGH);
+                OLED_SetCursor(&oled, 0, 6);
+                OLED_Print(&oled, "OVERLOAD! RELAY CUT");
+            } else {
+                digitalWrite(PC0, LOW);
+                digitalWrite(PC1, LOW);
+                OLED_SetCursor(&oled, 0, 6);
+                OLED_Print(&oled, "Status: NORMAL  ");
+            }
+
+            OLED_Display(&oled);
+        }
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> Dashboard แสดง V/A/W/Wh บน OLED — Power Bar Graph แสดงสัดส่วนกำลังเทียบกับ max — สะสมพลังงานเป็น Wh: <code>W / 3600</code> ต่อวินาที — Overcurrent protection: ถ้ากระแสเกิน 1.5A → ตัด relay (PC0+PC1) — แสดงสถานะ NORMAL/OVERLOAD</div>
+</div>
+
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_ina219.html">กลับบท</a><a href="chapx_lib_ads1115_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ESP8266 — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_relay.html">บทก่อน</a>
+    <a href="chapx_lib_hc05.html">บทถัดไป →</a>
+</nav>
+<h1>ESP8266 — WiFi AT Command, TCP/HTTP</h1>
+<span class="level advanced">ระดับสูง</span>
+
+<section class="flowchart">
+    <h2>🧭 แผนภาพการทำงาน</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["ESP_Init(baud)"] --> B["AT Test — AT\\r\\n"]
+    B -->|"OK"| C["ESP_ConnectWiFi(ssid,pwd)"]
+    B -->|"ERR"| D["Check wiring/power"]
+    C --> E["WIFI GOT IP?"]
+    E -->|"Yes"| F["ESP_ConnectTCP(host,port)"]
+    F --> G["ESP_Send(data)"]
+    G --> H["ESP_Read()"]
+    H --> G
+    E -->|"No"| C
+    </pre>
+</section>
+
+<section>
+    <h2>🔌 การต่อวงจร</h2>
+    <pre class="ascii-circuit">
+                ESP8266 WiFi Module (3.3V ONLY!)
+    ┌──────────────────────────────────────────────┐
+    │ CH32V003                          ESP-01     │
+    │ PD5(TX)──────────RX               ┌─────────┤
+    │ PD6(RX)──────────TX               │         │
+    │ PC0──────────────RST (opt)       │         │
+    │ PC1──────────────CH_PD/EN        │         │
+    │ 3.3V─────────────VCC             │         │
+    │ GND──────────────GND             │         │
+    │                        GP0──GND  │FlashMode│
+    │                        GP2──HIGH │         │
+    │                                    │         │
+    │ ⚡ External 3.3V Regulator ≥500mA!│         │
+    │ ห้ามจ่ายจาก WCH-Link เด็ดขาด!      └─────────┤
+    └──────────────────────────────────────────────┘
+    </pre>
+    <p>⚠️ ESP8266 กินกระแสสูงสุด ~300mA ตอนส่ง WiFi — ต้องใช้ external 3.3V regulator อย่างน้อย 500mA (AMS1117-3.3 หรือดีกว่า), CH_PD ต้องต่อ HIGH ตลอดเวลา, GPIO0 ต่อ GND = Flash mode (ตอนโปรแกรม ESP), GPIO0 ลอย = Normal mode</p>
+</section>
+
+<section>
+    <h2>📚 หลักการทำงาน</h2>
+    <p><strong>ESP8266</strong> เป็น WiFi SoC ที่สื่อสารผ่าน AT Commands ทาง USART — CH32V003 ส่งคำสั่งแบบ text แล้วรอ response <code>OK</code> หรือ <code>ERROR</code> แต่ละคำสั่งคั่นด้วย <code>\r\n</code></p>
+    <p><strong>โหมด WiFi:</strong> <code>AT+CWMODE=1</code> = Station (ต่อ AP), <code>AT+CWMODE=2</code> = SoftAP (สร้าง hotspot), <code>AT+CWMODE=3</code> = Station+SoftAP — ส่วนใหญ่ใช้ mode 1</p>
+    <p><strong>AT Command ทีละขั้น:</strong> Test → Set Mode → Connect WiFi → Get IP → Connect TCP → Send/Recv</p>
+    <p><strong>Baud Rate:</strong> Default 115200 bps — ต้อง match กับ CH32V003 USART ถ้าเปลี่ยน baud ใน ESP ต้องเปลี่ยนตาม</p>
+</section>
+
+<section>
+    <h2>💻 เขียน Code ทีละขั้น</h2>
+
+    <div class="step"><h3>ขั้นที่ 1: Init + Setup</h3>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "ESP8266.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    USART_Init(USART1, BAUD_115200);      // debug console
+    USART_Init(USART2, BAUD_115200);      // ESP communication
+    ESP_Init(USART2, BAUD_115200);
+    pinMode(PC1, PIN_MODE_OUTPUT);         // CH_PD pin
+    digitalWrite(PC1, HIGH);               // enable ESP</code></pre>
+    <p class="explain">🔍 ใช้ USART2 สำหรับ ESP8266, USART1 สำหรับ debug console — CH32V003 มี 2 USART พอดี, CH_PD ต้อง HIGH ก่อน ESP จะเริ่มทำงาน</p></div>
+
+    <div class="step"><h3>ขั้นที่ 2: ต่อ WiFi + TCP</h3>
+    <pre><code class="language-c">    USART_Println("Connecting WiFi...");
+    if(!ESP_ConnectWiFi("MyWiFi", "password123")) {
+        USART_Println("WiFi Failed!"); while(1);
+    }
+    USART_Println("WiFi Connected!");
+    USART_Print(ESP_GetIP());  // print IP address
+
+    if(!ESP_ConnectTCP("api.thingspeak.com", 80)) {
+        USART_Println("TCP Failed!"); while(1);
+    }</code></pre>
+    <p class="explain">🔍 <code>ESP_ConnectWiFi(ssid, pwd)</code> — ใช้ AT+CWJAP ภายใน, ต้องรอจนกว่า ESP ตอบ WIFI GOT IP, <code>ESP_ConnectTCP(host, port)</code> — เปิด TCP connection</p></div>
+
+    <div class="step"><h3>ขั้นที่ 3: ส่งข้อมูล HTTP + Loop</h3>
+    <pre><code class="language-c">    while(1) {
+        // HTTP GET request to ThingSpeak
+        ESP_Send("GET /update?api_key=xxx&field1=25 HTTP/1.1\r\n");
+        ESP_Send("Host: api.thingspeak.com\r\n");
+        ESP_Send("Connection: close\r\n\r\n");
+        Delay_Ms(1000);
+        USART_Println(ESP_Read());  // read response
+        Delay_Ms(15000);  // ThingSpeak limit: 1 update/15s
+    }
+}</code></pre>
+    <p class="explain">🔍 <code>ESP_Send(str)</code> — ส่ง raw data ผ่าน TCP (ใช้ AT+CIPSEND), <code>ESP_Read()</code> — อ่านข้อมูลที่ ESP ได้รับและคืนเป็น string, ThingSpeak จำกัด 15 วินาทีต่อ 1 update</p></div>
+</section>
+
+<section>
+    <h2>📋 API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+        <tr><td><code>ESP_Init(uart, baud)</code></td><td>เริ่มต้น ESP8266</td><td><code>ESP_Init(USART2, BAUD_115200)</code></td></tr>
+        <tr><td><code>ESP_Test()</code></td><td>ทดสอบการสื่อสาร (AT)</td><td><code>if(ESP_Test()) {...}</code></td></tr>
+        <tr><td><code>ESP_ConnectWiFi(ssid,pwd)</code></td><td>ต่อ WiFi AP</td><td><code>ESP_ConnectWiFi("home","pass")</code></td></tr>
+        <tr><td><code>ESP_ConnectTCP(host, port)</code></td><td>เปิด TCP connection</td><td><code>ESP_ConnectTCP("192.168.1.5", 8080)</code></td></tr>
+        <tr><td><code>ESP_Send(data)</code></td><td>ส่งข้อมูลผ่าน TCP</td><td><code>ESP_Send("Hello World")</code></td></tr>
+        <tr><td><code>ESP_Read()</code></td><td>อ่านข้อมูลจาก ESP buffer</td><td><code>char* resp = ESP_Read()</code></td></tr>
+        <tr><td><code>ESP_Reset()</code></td><td>Software reset ESP</td><td><code>ESP_Reset()</code></td></tr>
+        <tr><td><code>ESP_GetIP()</code></td><td>อ่าน IP address</td><td><code>USART_Print(ESP_GetIP())</code></td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>ESP ไม่ตอบ AT</td><td>ไฟ 3.3V ไม่พอ — ESP ดับขณะ TX</td><td>ใช้ external 3.3V ≥500mA, ต่อ capacitor 100µF ขนาน VCC-GND</td></tr>
+        <tr><td>บอดไม่ตรงกัน</td><td>ESP default baud 115200, แต่ CH32V003 ตั้งผิด</td><td>เช็ค <code>USART_Init(USART2, BAUD_115200)</code> ให้ตรงกันทั้งสองฝั่ง</td></tr>
+        <tr><td>WiFi เชื่อมทุกครั้งตก</td><td>ไฟกระเพื่อมตอน TX (current spike)</td><td>เพิ่ม capacitor 470µF + 0.1µF ที่ขา VCC, ใช้ regulator แยก</td></tr>
+        <tr><td>TCP ส่งข้อมูลไม่ครบ</td><td>ส่งเร็วเกินไป buffer overflow</td><td>delay 50-100ms ระหว่าง <code>ESP_Send()</code> แต่ละครั้ง</td></tr>
+        <tr><td>RX buffer เต็ม ค้าง</td><td>ลืมอ่านข้อมูลจาก ESP</td><td>เรียก <code>ESP_Read()</code> หลังแต่ละการส่งเพื่อ clear buffer</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>🛠️ สร้าง Product: IoT Temperature Logger</h2>
+    <p>CH32V003 อ่านอุณหภูมิภายใน + ส่งขึ้น ThingSpeak ทุก 20 วินาทีผ่าน ESP8266</p>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "ESP8266.h"
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    USART_Init(USART1, BAUD_115200);
+    USART_Init(USART2, BAUD_115200);
+    ADC_Init(ADC1, ADC_CH_TEMP);
+    ESP_Init(USART2, BAUD_115200);
+    pinMode(PC1, PIN_MODE_OUTPUT);
+    digitalWrite(PC1, HIGH);
+    Delay_Ms(3000);
+
+    if(!ESP_ConnectWiFi("MyWiFi", "pass")) {
+        USART_Println("WiFi Fail"); while(1);
+    }
+
+    while(1)
+    {
+        uint16_t adc = ADC_Read(ADC1, ADC_CH_TEMP);
+        float temp = (float)adc * 3300.0 / 4096.0;  // mV
+        temp = (temp - 1430.0) / 4.3 + 25.0;        // °C
+
+        ESP_ConnectTCP("api.thingspeak.com", 80);
+        char buf[128];
+        sprintf(buf, "GET /update?api_key=XXXXXXXX&field1=%.1f HTTP/1.1\r\nHost: api.thingspeak.com\r\n\r\n", temp);
+        ESP_Send(buf);
+        Delay_Ms(1000);
+        ESP_Read();
+        ESP_Disconnect();
+
+        USART_Print("Temp: "); USART_PrintFloat(temp, 1); USART_Println(" C");
+        Delay_Ms(20000);
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>✏️ ลองทำดู</h2>
+    <ol>
+        <li>ทำ IoT switch — ส่ง <code>AT+CIPSEND</code> พร้อม HTTP GET ไปยัง API server เพื่อเปิด/ปิด LED จาก Web browser</li>
+        <li>ทำ ESP web server — ใช้ <code>AT+CIPSERVER=1,80</code> สร้าง HTTP server บน ESP รับคำสั่งจาก browser มา toggle GPIO</li>
+        <li>ส่งข้อมูลเซนเซอร์ 3 ค่า (temp, humidity, light) ขึ้น ThingSpeak 3 channels — ใช้ sprintf จัดรูปแบบ JSON/POST</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_relay.html">บทก่อน</a>
+    <a href="chapx_lib_hc05.html">บทถัดไป →</a>
+</nav>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

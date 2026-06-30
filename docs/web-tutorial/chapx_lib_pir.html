@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PIR — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_as5600.html">บทก่อน</a>
+    <a href="chapx_lib_rcwl0516.html">บทถัดไป →</a>
+</nav>
+<h1>PIR — เซนเซอร์ตรวจจับความเคลื่อนไหว (Motion Sensor)</h1>
+<span class="level beginner">ระดับเริ่มต้น</span>
+
+<section class="flowchart">
+    <h2>🧭 แผนภาพการทำงาน</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["PIR_Init(pin, mode)"] --> B{"Mode?"}
+    B -->|"Polling"| C["digitalRead(PIR_PIN)"]
+    B -->|"Interrupt"| D["EXTI callback → onMotion()"]
+    C --> E{"HIGH?"}
+    D --> F["Motion Detected!"]
+    E -->|"Yes"| F
+    E -->|"No"| C
+    F --> G["Light ON / Alarm / Send"]
+    G --> H["Delay (Time delay pot)"]
+    H --> C
+    </pre>
+</section>
+
+<section>
+    <h2>🔌 การต่อวงจร</h2>
+    <pre class="ascii-circuit">
+            HC-SR501 PIR — Motion Sensor
+    ┌────────────────────────────────────┐
+    │ MCU                        PIR     │
+    │ PC0─────────OUT       ┌───────────┤
+    │ 3.3V(5V)────VCC       │ Fresnel   │
+    │ GND─────────GND       │ Lens      │
+    │                        │ + Pyro-  │
+    │ Potentiometers:       │ electric │
+    │  • Sensitivity (3-7m) │ Sensor   │
+    │  • Delay Time (5-300s)└───────────┤
+    │                                    │
+    │ OUT: HIGH when motion, LOW idle    │
+    └────────────────────────────────────┘
+    </pre>
+    <p>PC0─OUT (INPUT_PULLUP หรือ INPUT) — ใช้ไฟ 3.3V หรือ 5V — มีปุ่มปรับ Sensitivity (ระยะ) และ Delay Time (นานในการค้าง HIGH หลังตรวจจับ)</p>
+</section>
+
+<section>
+    <h2>📚 หลักการทำงาน</h2>
+    <p><strong>PIR (Passive Infrared)</strong> เซนเซอร์ตรวจจับการเปลี่ยนแปลงของรังสีอินฟราเรด — เมื่อมีมนุษย์หรือสัตว์ (แหล่งความร้อน) เคลื่อนที่ผ่านหน้าการตรวจจับ → pyroelectric sensor ตรวจจับความแตกต่างของ IR → output HIGH</p>
+    <p><strong>Fresnel Lens:</strong> เลนส์พลาสติกทรงโดมรวมแสง IR — แบ่งพื้นที่ตรวจจับเป็นโซน — การเคลื่อนผ่านโซนทำให้เกิดการเปลี่ยนแปลง IR → trigger</p>
+    <p><strong>2 โหมดการทำงาน:</strong></p>
+    <ul>
+        <li><strong>Repeatable (L):</strong> ทุกการเคลื่อนไหว → reset delay timer → output ค้าง HIGH ถ้ายังมีคนเคลื่อนที่</li>
+        <li><strong>Non-Repeatable (H):</strong> Trigger ครั้งเดียว → รอ delay → LOW → รอถึงจะ trigger ใหม่</li>
+    </ul>
+    <p><strong>Interrupt vs Polling:</strong> Polling ง่ายแต่อาจพลาด trigger สั้นๆ — Interrupt-based จับทุก edge แม่นกว่าแต่ต้องจัดการ debounce</p>
+</section>
+
+<section>
+    <h2>💻 เขียน Code ทีละขั้น</h2>
+
+    <div class="step"><h3>ขั้นที่ 1: Init + Setup</h3>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "PIR.h"
+
+volatile uint8_t motionFlag = 0;
+
+// Interrupt callback
+void onMotion(void) {
+    motionFlag = 1;
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_Init(USART1, BAUD_115200);
+
+    pinMode(PC1, PIN_MODE_OUTPUT);  // LED indicator
+
+    // PIR: pin=PC0, interrupt mode, callback=onMotion
+    PIR_Init(PC0, PIR_MODE_INTERRUPT, onMotion);
+    USART_Println("PIR Ready...");</code></pre>
+    <p class="explain">🔍 <code>PIR_Init(pin, mode, callback)</code> — PIR_MODE_INTERRUPT: ให้ interrupt จัดการ, PIR_MODE_POLLING: programmer เช็คเอง — callback ถูกเรียกใน ISR → ควรสั้นที่สุด</p></div>
+
+    <div class="step"><h3>ขั้นที่ 2: อ่าน/เขียนค่า</h3>
+    <pre><code class="language-c">    // Polling mode
+    #if 0
+    if(PIR_IsMotion()) {
+        USART_Println("Motion detected! (polling)");
+    }
+    #endif
+
+    // Interrupt mode — check flag
+    if(motionFlag) {
+        motionFlag = 0;
+        USART_Println("Motion detected! (interrupt)");
+        digitalWrite(PC1, HIGH);  // LED ON
+    } else {
+        digitalWrite(PC1, LOW);   // LED OFF
+    }</code></pre>
+    <p class="explain">🔍 <code>PIR_IsMotion()</code> — อ่าน pin โดยตรง (polling) — Interrupt mode ใช้ flag ใน main loop — ตั้งใจว่า PIR จะค้าง HIGH ตาม delay pot (ถ้ามีคนอยู่)</p></div>
+
+    <div class="step"><h3>ขั้นที่ 3: Loop + แสดงผล</h3>
+    <pre><code class="language-c">    uint32_t lastMotion = 0;
+    uint16_t motionCount = 0;
+
+    while(1) {
+        if(motionFlag) {
+            motionFlag = 0;
+            motionCount++;
+            lastMotion = Get_CurrentMs();
+
+            USART_Print("Motion #");
+            USART_PrintInt(motionCount);
+            USART_Println(" detected!");
+
+            digitalWrite(PC1, HIGH);
+        }
+
+        // Auto off LED after 5 seconds of no motion
+        if(Get_CurrentMs() - lastMotion > 5000) {
+            digitalWrite(PC1, LOW);
+        }
+
+        Delay_Ms(100);  // check every 100ms
+    }
+}</code></pre>
+    <p class="explain">🔍 ใช้ interrupt flag + main loop pattern — motionFlag ถูก set ใน ISR, clear ใน main loop — LED ติด 5 วิหลัง motion ล่าสุด — นับจำนวนครั้งที่ตรวจจับได้ — ปรับ delay pot ที่ PIR เพิ่มความ long-hold</p></div>
+</section>
+
+<section>
+    <h2>📋 API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+        <tr><td><code>PIR_Init(pin, mode, callback)</code></td><td>เริ่มต้น PIR sensor</td><td><code>PIR_Init(PC0, PIR_MODE_INTERRUPT, onMotion)</code></td></tr>
+        <tr><td><code>PIR_IsMotion()</code></td><td>เช็ค motion (polling)</td><td><code>if(PIR_IsMotion()) { ... }</code></td></tr>
+        <tr><td><code>PIR_GetState()</code></td><td>อ่านสถานะ pin ดิบ</td><td><code>uint8_t s = PIR_GetState()</code></td></tr>
+        <tr><td><code>PIR_SetMode(mode)</code></td><td>เปลี่ยน POLLING/INTERRUPT</td><td><code>PIR_SetMode(PIR_MODE_POLLING)</code></td></tr>
+        <tr><td><code>PIR_Enable()</code></td><td>เปิด interrupt</td><td><code>PIR_Enable()</code></td></tr>
+        <tr><td><code>PIR_Disable()</code></td><td>ปิด interrupt (ประหยัดไฟ)</td><td><code>PIR_Disable()</code></td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>Trigger ตลอดเวลา (false trigger)</td><td>Sensitivity pot สูงเกิน, แหล่งความร้อนใกล้เคียง</td><td>ลด sensitivity, หัน PIR ออกจากหน้าต่าง/แอร์/ฮีตเตอร์</td></tr>
+        <tr><td>ไม่ trigger แม้มีคนเดินผ่าน</td><td>Sensitivity pot ต่ำเกิน, lens สกปรก</td><td>เพิ่ม sensitivity, ทำความสะอาด Fresnel lens</td></tr>
+        <tr><td>Interrupt ทำงานครั้งเดียวแล้วหยุด</td><td>ไม่ได้ clear interrupt flag ใน ISR</td><td>อ่าน EXTI status register → clear Pending bit</td></tr>
+        <tr><td>Output ค้าง HIGH ไม่ยอมกลับ LOW</td><td>Delay pot ตั้งนานเกิน (300s)</td><td>ลด delay time, หรือใช้ Repeatable mode (L) แทน H</td></tr>
+        <tr><td>PIR ใช้ไม่ได้กับสัตว์ขนาดเล็ก</td><td>สัตว์เล็ก → IR เปลี่ยนแปลงน้อย → ไม่ถึง threshold</td><td>ใช้ PIR ความไวสูง หรือใช้ microwave sensor (RCWL-0516)</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>🛠️ สร้าง Product: ไฟเปิดอัตโนมัติเมื่อมีคนเดินผ่าน</h2>
+    <p>PIR ตรวจจับ motion → Relay เปิดไฟ → ไฟดับหลังไม่มีคน 30 วิ</p>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "PIR.h"
+
+volatile uint8_t motionFlag = 0;
+void onMotion(void) { motionFlag = 1; }
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    pinMode(PC1, PIN_MODE_OUTPUT);  // Relay (ไฟ)
+    PIR_Init(PC0, PIR_MODE_INTERRUPT, onMotion);
+
+    Timer_t tmr_off;
+    uint8_t lightOn = 0;
+
+    while(1)
+    {
+        if(motionFlag) {
+            motionFlag = 0;
+
+            if(!lightOn) {
+                digitalWrite(PC1, HIGH);  // เปิดไฟ
+                lightOn = 1;
+            }
+            Start_Timer(&tmr_off, 30000, 0);  // 30 วิ ไม่มีคน → ปิด
+        }
+
+        if(lightOn && Is_Timer_Expired(&tmr_off)) {
+            digitalWrite(PC1, LOW);  // ปิดไฟ
+            lightOn = 0;
+        }
+
+        Delay_Ms(100);
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>✏️ ลองทำดู</h2>
+    <ol>
+        <li>เปรียบเทียบ Repeatable (L) vs Non-Repeatable (H) mode — สังเกตพฤติกรรมตอนมีคนยืนอยู่กับที่ vs เดินผ่าน</li>
+        <li>ทำคนนับ — PIR ตรวจจับเข้า/ออก — แสดงจำนวนคนในห้องบน OLED</li>
+        <li>ใช้ PIR + BH1750 — เปิดไฟเฉพาะตอนมืด AND มีคน — ประหยัดไฟกว่าตรวจจับอย่างเดียว</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_as5600.html">บทก่อน</a>
+    <a href="chapx_lib_rcwl0516.html">บทถัดไป →</a>
+</nav>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

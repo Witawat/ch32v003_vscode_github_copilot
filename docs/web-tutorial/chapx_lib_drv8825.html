@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DRV8825 — NEMA17 Microstepping Driver — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_l298n.html">บทก่อน</a>
+    <a href="chapx_lib_tmc220x.html">บทถัดไป →</a>
+</nav>
+
+<h1>DRV8825 — NEMA17 Microstepping Driver</h1>
+<span class="level advanced">ระดับสูง</span>
+
+<section class="flowchart">
+    <h2>🧭 แผนภาพการทำงาน</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["DRV8825_Init(STEP,DIR,EN)"] --> B["Set Microstepping M0-M2"]
+    B --> C{"Microstep Mode"}
+    C -->|"Full"| D["1/1 — 200 steps/rev"]
+    C -->|"Half"| E["1/2 — 400"]
+    C -->|"1/4"| F["1/4 — 800"]
+    C -->|"1/8"| G["1/8 — 1600"]
+    C -->|"1/16"| H["1/16 — 3200"]
+    C -->|"1/32"| I["1/32 — 6400"]
+    D --> J["Set Current Limit via Pot"]
+    E --> J
+    F --> J
+    G --> J
+    H --> J
+    I --> J
+    J --> K["Pulse STEP pin at desired speed"]
+    K --> L["Motor rotates smoothly"]
+    </pre>
+</section>
+
+<section>
+    <h2>🔌 การต่อวงจร</h2>
+    <pre class="ascii-circuit">
+          DRV8825 + NEMA17 Stepper
+    ┌──────────────────────────────────┐
+    │ MCU                  DRV8825     │
+    │ PC0──────STEP (pulse)            │
+    │ PC1──────DIR (direction)         │
+    │ PC2──────EN (enable, LOW=on)     │
+    │                                  │
+    │ PC3──────M0 (MS1)                │
+    │ PC4──────M1 (MS2)  ⚠️            │
+    │ PC5──────M2 (MS3)  8.2-45V       │
+    │                          ┌───────┤
+    │ GND──────GND         VMOT┤       │
+    │                  ┌─DRV8825─┐     │
+    │              ┌───┤ A1    B1├──┐  │
+    │              │   │ A2    B2├──┤  │
+    │          NEMA17  │        │  │  │
+    │              └───┘        │  │  │
+    │                  └────────┘  │  │
+    │                     100μF cap │
+    └──────────────────────────────────┘
+    </pre>
+    <p>⚠️ VMOT 8.2–45V — ต่อ capacitor 100μF ขนาน VMOT-GND ใกล้ driver — ปรับ Current Limit ด้วย potentiometer บนบอร์ด — DRV8825 ร้อนเร็วที่กระแสสูง ควรติด heatsink</p>
+</section>
+
+<section>
+    <h2>📚 หลักการทำงาน</h2>
+    <p><strong>DRV8825</strong> เป็น stepper motor driver ที่ใช้ STEP/DIR interface — ต่างจาก ULN2003 ตรงที่ไม่ต้องเขียน step sequence เอง — ส่ง pulse ที่ STEP pin 1 ครั้ง = 1 microstep — ความถี่ของ pulse กำหนดความเร็ว</p>
+    <p><strong>Microstepping 1/1 ถึง 1/32</strong> — ตั้งค่าด้วย M0,M1,M2 3 pins — NEMA17 ทั่วไป 1.8°/step (200 steps/rev ใน full-step) — 1/32 microstepping = 6400 pulses/rev — การเคลื่อนที่ละเอียดและเงียบขึ้นมาก</p>
+    <p><strong>Current Limit:</strong> ตั้งกระแสสูงสุดด้วยตัวต้านทานปรับค่า (pot) บนบอร์ด — สูตร: <code>I_max = Vref × 2</code> — วัด Vref ที่ test point — NEMA17 ทั่วไป 1-2A/phase ตั้ง Vref = 0.5-1.0V</p>
+    <p><strong>Enable (EN):</strong> LOW = เปิดใช้งาน, HIGH = ปิด (ปล่อย motor) — ใช้ LOW ตลอดเวลาเพื่อให้มอเตอร์ hold ตำแหน่ง</p>
+</section>
+
+<section>
+    <h2>💻 เขียน Code ทีละขั้น</h2>
+
+    <div class="step"><h3>ขั้นที่ 1: Init GPIO + Microstepping Pins</h3>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+#define STEP PC0
+#define DIR  PC1
+#define EN   PC2
+#define M0   PC3
+#define M1   PC4
+#define M2   PC5
+
+typedef enum {FULL=0, HALF=1, QUARTER=2, EIGHTH=3, SIXTEENTH=4, THIRTYSEC=5} Microstep_t;
+
+void drv8825_set_microstep(Microstep_t ms) {
+    digitalWrite(M0, ms & 0x01);
+    digitalWrite(M1, (ms >> 1) & 0x01);
+    digitalWrite(M2, (ms >> 2) & 0x01);
+}</code></pre>
+    <p class="explain">🔍 M0-M2 ใช้ 3-bit binary เลือก microstep mode — เขียน GPIO ตามตาราง datasheet — LOW=LOW=LOW → Full-Step, HIGH=HIGH=HIGH → 1/32</p></div>
+
+    <div class="step"><h3>ขั้นที่ 2: Pulse Generation + Speed</h3>
+    <pre><code class="language-c">void drv8825_step(uint32_t pulses, uint16_t delay_us, uint8_t dir) {
+    digitalWrite(DIR, dir);  // 1=CW, 0=CCW
+    for(uint32_t i = 0; i < pulses; i++) {
+        digitalWrite(STEP, HIGH);
+        Delay_Us(2);       // DRV8825 ต้องการ pulse > 1.9μs
+        digitalWrite(STEP, LOW);
+        Delay_Us(delay_us);  // ความเร็ว = delay ระหว่าง pulses
+    }
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    pinMode(STEP, PIN_MODE_OUTPUT);
+    pinMode(DIR, PIN_MODE_OUTPUT);
+    pinMode(EN, PIN_MODE_OUTPUT);
+    pinMode(M0, PIN_MODE_OUTPUT);
+    pinMode(M1, PIN_MODE_OUTPUT);
+    pinMode(M2, PIN_MODE_OUTPUT);
+
+    digitalWrite(EN, LOW);    // Enable driver
+    drv8825_set_microstep(SIXTEENTH);  // 1/16 = 3200 pulses/rev</code></pre>
+    <p class="explain">🔍 Pulse ต้องกว้าง ≥1.9μs — EN=LOW เพื่อเปิด — 1/16 microstepping ให้ความละเอียด 3200 pulses/รอบ — delay_us ยิ่งน้อยยิ่งเร็ว (100μs = ~187 RPM)</p></div>
+
+    <div class="step"><h3>ขั้นที่ 3: Acceleration Profile + Loop</h3>
+    <pre><code class="language-c">    while(1) {
+        // หมุน 10 รอบที่ 1/16 = 32000 pulses
+        // Ramp up from 500μs to 100μs
+        for(uint32_t i = 0; i < 32000; i++) {
+            uint16_t spd;
+            if(i < 5000) spd = 500 - (i * 400 / 5000);       // ramp up
+            else if(i > 27000) spd = 100 + ((i-27000) * 400 / 5000); // ramp down
+            else spd = 100;  // constant speed
+
+            digitalWrite(STEP, HIGH); Delay_Us(2);
+            digitalWrite(STEP, LOW);  Delay_Us(spd);
+        }
+        Delay_Ms(1000);
+
+        // เปลี่ยนทิศทาง
+        digitalWrite(DIR, !digitalRead(DIR)); // toggle
+    }
+}</code></pre>
+    <p class="explain">🔍 Acceleration แบบ linear ramp — 3 ช่วง: เร่ง 5k pulses, คงที่ 22k pulses, ผ่อน 5k pulses — ป้องกัน motor stall ที่รอบสูง — 1/16 microstepping = 3200 pulses/rev → 32000 = 10 รอบ</p></div>
+</section>
+
+<section>
+    <h2>📋 API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+        <tr><td><code>DRV8825_Init(step,dir,en)</code></td><td>เริ่ม driver GPIO</td><td><code>DRV8825_Init(PC0, PC1, PC2)</code></td></tr>
+        <tr><td><code>DRV8825_SetMicrostep(ms)</code></td><td>ตั้ง microstep 1/1 ถึง 1/32</td><td><code>DRV8825_SetMicrostep(MS_1_16)</code></td></tr>
+        <tr><td><code>DRV8825_Step(n, speed, dir)</code></td><td>หมุน n microsteps</td><td><code>DRV8825_Step(3200, 200, CW)</code></td></tr>
+        <tr><td><code>DRV8825_Move(mm, speed)</code></td><td>เคลื่อนที่เป็น mm (ต้องตั้ง steps/mm)</td><td><code>DRV8825_Move(50, 500)</code></td></tr>
+        <tr><td><code>DRV8825_Enable()</code></td><td>เปิด driver (EN=LOW)</td><td><code>DRV8825_Enable()</code></td></tr>
+        <tr><td><code>DRV8825_Disable()</code></td><td>ปิด driver — ปล่อยมอเตอร์</td><td><code>DRV8825_Disable()</code></td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>Motor ไม่หมุน — DRV8825 ร้อนจัด</td><td>ต่อ VMOT กลับขั้ว หรือ Current Limit สูงเกิน</td><td>ตรวจสอบขั้ว VMOT — ปรับ pot ทวนเข็มเพื่อลด Vref — วัด Vref ≤ 1V</td></tr>
+        <tr><td>Motor สั่นแต่ไม่หมุน</td><td>pulse frequency สูงเกิน หรือ microstep mode ไม่ตรง</td><td>เริ่มจากความเร็วต่ำ (delay 1000μs) — ตรวจสอบ M0-M2 logic กับตาราง datasheet</td></tr>
+        <tr><td>Motor skip steps ที่ความเร็วสูง</td><td>ไม่มี acceleration — หรือ current limit ต่ำไป</td><td>ใช้ ramp-up profile — เพิ่ม Vref (ระวังความร้อน) — ลด microstep level</td></tr>
+        <tr><td>STEP pin ไม่สร้าง pulse</td><td>ลืมตั้ง pinMode เป็น OUTPUT</td><td>ตรวจสอบ <code>pinMode(STEP, PIN_MODE_OUTPUT)</code> — ใช้ oscilloscope วัด</td></tr>
+        <tr><td>นับรอบผิด — จำนวน pulses ไม่ตรง</td><td>ลืมเปลี่ยน steps/rev ตาม microstep mode</td><td>Full=200, 1/16=3200, 1/32=6400 — คำนวณสูตร: <code>200 × microstep_level</code></td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>🛠️ สร้าง Product: Precision Linear Slide</h2>
+    <p>NEMA17 + DRV8825 + Lead Screw GT2 — เคลื่อนที่ตำแหน่ง mm ที่แม่นยำ — ใช้ Endstop + Home sequence</p>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+#define STEP PC0
+#define DIR  PC1
+#define EN   PC2
+#define M0   PC3
+#define M1   PC4
+#define M2   PC5
+#define LIMIT PC6  // Endstop (NC, LOW=triggered)
+
+#define STEPS_PER_MM 25600  // 1/32 * 200 steps * (1rev/2.5mm) * 32
+int32_t position_mm = 0;
+
+void move_to_mm(int32_t target_mm) {
+    int32_t delta = target_mm - position_mm;
+    uint8_t dir = (delta > 0) ? 1 : 0;
+    uint32_t pulses = (delta > 0) ? delta * STEPS_PER_MM : -delta * STEPS_PER_MM;
+    digitalWrite(DIR, dir);
+    for(uint32_t i = 0; i < pulses; i++) {
+        if(!digitalRead(LIMIT) && dir == 0) break; // Limit switch stop
+        digitalWrite(STEP, HIGH); Delay_Us(2);
+        digitalWrite(STEP, LOW);  Delay_Us(300);
+    }
+    position_mm = target_mm;
+}
+
+void home_sequence() {
+    digitalWrite(DIR, 0);  // Move towards limit
+    while(digitalRead(LIMIT)) {  // Until triggered
+        digitalWrite(STEP, HIGH); Delay_Us(2);
+        digitalWrite(STEP, LOW);  Delay_Us(500);
+    }
+    position_mm = 0;  // Home = 0mm
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    pinMode(STEP, PIN_MODE_OUTPUT); pinMode(DIR, PIN_MODE_OUTPUT);
+    pinMode(EN, PIN_MODE_OUTPUT);
+    pinMode(M0,PIN_MODE_OUTPUT); pinMode(M1,PIN_MODE_OUTPUT); pinMode(M2,PIN_MODE_OUTPUT);
+    pinMode(LIMIT, PIN_MODE_INPUT_PULLUP);
+    digitalWrite(EN, LOW);
+    digitalWrite(M0,HIGH); digitalWrite(M1,HIGH); digitalWrite(M2,HIGH); // 1/32
+
+    home_sequence();
+    while(1) {
+        move_to_mm(100); Delay_Ms(1000);
+        move_to_mm(0);   Delay_Ms(1000);
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>✏️ ลองทำดู</h2>
+    <ol>
+        <li>ทำ Auto-Tune Current — ใช้ ADC อ่านกระแสจาก shunt resistor แล้วปรับ Vref อัตโนมัติด้วย digital pot</li>
+        <li>เพิ่ม Stall Detection — ใช้ back-EMF sensing หรือ encoder feedback ตรวจจับเมื่อมอเตอร์ stall</li>
+        <li>ทำ Multi-Axis CNC Controller — ใช้ DRV8825 3 ตัว (X,Y,Z) + PWM Spindle — ส่ง G-Code ผ่าน USART</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_l298n.html">บทก่อน</a>
+    <a href="chapx_lib_tmc220x.html">บทถัดไป →</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TM1637 — 7-Segment 4 หลัก GPIO — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_p10.html">บทก่อน</a>
+    <a href="chapx_lib_tm1650.html">บทถัดไป →</a>
+</nav>
+<h1>TM1637 — 7-Segment 4 หลัก GPIO</h1>
+<span class="level beginner">ระดับเริ่มต้น</span>
+<section class="flowchart">
+    <h2>🧭 แผนภาพการทำงาน</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["TM1637_Init(CLK, DIO)"] --> B["TM1637_SetBrightness(5)"]
+    B --> C{"Display Mode"}
+    C -->|"Number"| D["TM1637_DisplayNumber(1234)"]
+    C -->|"Time"| E["TM1637_DisplayTime(12, 30)"]
+    C -->|"Float"| F["TM1637_DisplayFloat(25.5, 1)"]
+    D --> G["while(1) loop"]
+    E --> G
+    F --> G
+    </pre>
+</section>
+<section>
+    <h2>🔌 การต่อวงจร</h2>
+    <pre class="ascii-circuit">
+          TM1637 4-Digit 7-Segment Display
+    ┌────────────────────────────────┐
+    │ MCU                  TM1637    │
+    │ 3.3V ─────────────── VCC      │
+    │ GND  ─────────────── GND      │
+    │ PC0  ─────────────── CLK      │
+    │ PC1  ─────────────── DIO      │
+    └────────────────────────────────┘
+    </pre>
+    <p>TM1637 ใช้สายแค่ 2 เส้น (CLK + DIO) — ใช้ 3.3V หรือ 5V ก็ได้ — มี pull-up ภายใน chip — 4 หลัก 7-segment + colon (:) ตรงกลาง</p>
+</section>
+<section>
+    <h2>📚 หลักการทำงาน</h2>
+    <p><strong>Bit-Bang 2-Wire Protocol:</strong> TM1637 ใช้โปรโตคอล 2 เส้นแบบ proprietary — ไม่ใช่ I2C มาตรฐาน — CLK ควบคุมจังหวะ DIO ส่งข้อมูล — ใช้ GPIO bit-bang (Software I2C-like) — เริ่มด้วย start condition → ส่ง command → ส่ง 4 ไบต์ data → stop condition</p>
+    <p><strong>4-Digit 7-Segment:</strong> แต่ละ digit แสดงตัวเลข 0-9 และอักษรบางตัว (A-F, H, P, U) — segment a-g + dp — ส่งข้อมูล digit ละ 1 ไบต์ (8-bit segment map) — หน่วงเวลาเล็กน้อยระหว่าง byte</p>
+    <p><strong>Brightness Control:</strong> PWM 8 ระดับ (0=mืด, 7=สว่างสุด) — TM1637_SetBrightness(0-7) — ระดับ 4-5 เหมาะสำหรับใช้งานปกติ</p>
+    <p><strong>Colon:</strong> TM1637 มี colon ระหว่างหลัก 2 และ 3 — ติดตลอดเวลาเมื่อเปิด display — ไม่สามารถควบคุมแยกได้ (แต่บาง library มี SetColon ถ้าใช้ pin แยก)</p>
+</section>
+<section>
+    <h2>💻 เขียน Code ทีละขั้น</h2>
+    <div class="step"><h3>ขั้นที่ 1: Init + Setup</h3>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    TM1637_Init(PC0, PC1);      // CLK=PC0, DIO=PC1
+    TM1637_SetBrightness(5);    // 5/7 brightness</code></pre>
+    <p class="explain">🔍 TM1637_Init(clk_pin, dio_pin) ตั้งขา 2 เส้น — ใช้ GPIO bit-bang — SetBrightness 0-7 — ไม่ต้องใช้ I2C หรือ SPI</p></div>
+    <div class="step"><h3>ขั้นที่ 2: แสดงตัวเลขรูปแบบต่างๆ</h3>
+    <pre><code class="language-c">    TM1637_DisplayNumber(1234);     // แสดง 1234
+    Delay_Ms(2000);
+
+    TM1637_DisplayTime(12, 30);     // แสดง 12:30
+    Delay_Ms(2000);
+
+    TM1637_DisplayFloat(25.5f, 1);  // แสดง 25.5
+    Delay_Ms(2000);
+
+    TM1637_DisplayHex(0xAB);        // แสดง "AB" hex</code></pre>
+    <p class="explain">🔍 DisplayNumber(n) แสดงเลข 0-9999 — DisplayTime(h, m) แสดง hh:mm (12:30) — DisplayFloat(f, dec) แสดงทศนิยม 1 ตำแหน่ง — DisplayHex แสดงค่า hex 2 หลัก</p></div>
+    <div class="step"><h3>ขั้นที่ 3: Countdown Timer</h3>
+    <pre><code class="language-c">    uint16_t count = 9999;
+
+    while(1) {
+        TM1637_DisplayNumber(count);
+        Delay_Ms(1000);
+
+        if(count > 0) {
+            count--;
+        } else {
+            // Blink เมื่อถึง 0
+            for(uint8_t i = 0; i < 5; i++) {
+                TM1637_Clear();
+                Delay_Ms(300);
+                TM1637_DisplayNumber(0);
+                Delay_Ms(300);
+            }
+            count = 9999;
+        }
+    }
+}</code></pre>
+    <p class="explain">🔍 countdown จาก 9999 → 0 — เมื่อถึง 0 กระพริบ 5 ครั้งแล้ว reset — Clear() ล้างหน้าจอ — ใช้ Delay_Ms แบบ blocking เพื่อความเรียบง่าย</p></div>
+</section>
+<section>
+    <h2>📋 API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+        <tr><td><code>TM1637_Init(clk, dio)</code></td><td>เริ่มต้น TM1637</td><td><code>TM1637_Init(PC0, PC1)</code></td></tr>
+        <tr><td><code>TM1637_SetBrightness(v)</code></td><td>ความสว่าง 0-7</td><td><code>TM1637_SetBrightness(5)</code></td></tr>
+        <tr><td><code>TM1637_DisplayNumber(n)</code></td><td>แสดงเลข 0-9999</td><td><code>TM1637_DisplayNumber(1234)</code></td></tr>
+        <tr><td><code>TM1637_DisplayTime(h, m)</code></td><td>แสดง hh:mm</td><td><code>TM1637_DisplayTime(12, 30)</code></td></tr>
+        <tr><td><code>TM1637_DisplayFloat(f, dec)</code></td><td>แสดงทศนิยม</td><td><code>TM1637_DisplayFloat(25.5f, 1)</code></td></tr>
+        <tr><td><code>TM1637_DisplayHex(v)</code></td><td>แสดงค่า hex 2 หลัก</td><td><code>TM1637_DisplayHex(0xAB)</code></td></tr>
+        <tr><td><code>TM1637_Clear()</code></td><td>ล้างหน้าจอ (ปิดทุก segment)</td><td><code>TM1637_Clear()</code></td></tr>
+        <tr><td><code>TM1637_SetColon(on)</code></td><td>เปิด/ปิด colon (ถ้ามี pin แยก)</td><td><code>TM1637_SetColon(1)</code></td></tr>
+    </table>
+</section>
+<section>
+    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>ตัวเลขกลับหัว / 7-segment เพี้ยน</td><td>CLK/DIO กลับข้างกัน</td><td>สลับขา CLK กับ DIO — ตรวจสอบ pinout ของโมดูล</td></tr>
+        <tr><td>ความสว่างไม่พอ</td><td>Brightness < 3</td><td>SetBrightness(5) หรือ 6 — ระดับ 7 สว่างสุดแต่กินไฟเพิ่ม</td></tr>
+        <tr><td>แสดงค่าเกิน 9999 เพี้ยน</td><td>TM1637 รองรับ 4 หลักเท่านั้น</td><td>เช็คค่า input ไม่ให้เกิน 9999 — หรือแบ่งแสดงแบบสลับ</td></tr>
+        <tr><td>Colon ควบคุมไม่ได้ (ติดตลอด)</td><td>TM1637 ไม่มี pin แยก colon</td><td>เป็นข้อจำกัดของฮาร์ดแวร์ — ใช้โมดูลที่มี pin colon แยก หรือใช้ TM1650</td></tr>
+        <tr><td>Display กระตุกตอนอัปเดต</td><td>Protocol bit-bang ช้าเพราะ interrupt ขัดจังหวะ</td><td>ปิด interrupt ก่อนเรียก DisplayNumber() — หรือใช้ TM1650 I2C แทน</td></tr>
+    </table>
+</section>
+<section>
+    <h2>🛠️ สร้าง Product: นาฬิกาจับเวลา Rotary Encoder ตั้งเวลา</h2>
+    <p>TM1637 + Rotary Encoder — หมุนตั้งนาที, กดเริ่มนับถอยหลัง — ใช้ Non-Blocking Timer สำหรับ countdown</p>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    TM1637_Init(PC0, PC1);
+    TM1637_SetBrightness(5);
+
+    uint16_t target_sec = 60;
+    uint16_t remaining = 0;
+    uint8_t running = 0;
+
+    // Setup Rotary Encoder on PC2(CLK), PC3(DT), PC4(SW)
+    Rotary_Init(PC2, PC3, PC4);
+
+    Timer_t tmr_countdown;
+    TM1637_DisplayTime(target_sec / 60, target_sec % 60);
+
+    while(1) {
+        int8_t rot = Rotary_Read();
+        if(rot != 0 && !running) {
+            if(rot > 0 && target_sec < 5999) target_sec += 30;
+            if(rot < 0 && target_sec > 0) target_sec -= 30;
+            TM1637_DisplayTime(target_sec / 60, target_sec % 60);
+        }
+
+        if(Rotary_ButtonPressed() && !running) {
+            remaining = target_sec;
+            Start_Timer(&tmr_countdown, 1000, 1);
+            running = 1;
+        }
+
+        if(running && Is_Timer_Expired(&tmr_countdown)) {
+            if(remaining > 0) {
+                remaining--;
+                TM1637_DisplayTime(remaining / 60, remaining % 60);
+            } else {
+                running = 0;
+                // Blink 3 times
+                for(int i = 0; i < 3; i++) {
+                    TM1637_Clear(); Delay_Ms(200);
+                    TM1637_DisplayTime(0, 0); Delay_Ms(200);
+                }
+                TM1637_DisplayTime(target_sec / 60, target_sec % 60);
+            }
+        }
+    }
+}</code></pre>
+</section>
+<section>
+    <h2>✏️ ลองทำดู</h2>
+    <ol>
+        <li>ทำ Countdown 99:59 — รองรับการตั้งเวลามากกว่า 59:59 โดยใช้ DisplayNumber แทน DisplayTime</li>
+        <li>แสดงอุณหภูมิ — อ่าน DHT11 แล้ว DisplayFloat(temp, 1) — อัปเดตทุก 2 วิ</li>
+        <li>RPM Counter — ใช้ External Interrupt นับรอบ — คำนวณ RPM แล้ว DisplayNumber</li>
+    </ol>
+</section>
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_p10.html">บทก่อน</a>
+    <a href="chapx_lib_tm1650.html">บทถัดไป →</a>
+</nav>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

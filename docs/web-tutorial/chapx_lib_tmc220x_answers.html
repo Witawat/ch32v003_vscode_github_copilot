@@ -1,0 +1,170 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย TMC220x — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_tmc220x.html">กลับบท</a><a href="chapx_lib_tmc5160_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — TMC220x Stepper Driver</h1>
+
+<div class="answer">
+<h2>ข้อ 1: Sensorless Homing ด้วย StallGuard</h2>
+<pre><code class="language-c">#include "simple_tmc220x.h"
+
+TMC220X_t motor;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    TMC220X_Init(&motor, USART2);
+
+    // ตั้งค่า StallGuard
+    TMC220X_SetCoolStep(&motor, 0);        // ปิด CoolStep ชั่วคราว
+    TMC220X_SetStallGuardThreshold(&motor, 10);  // ค่า threshold (0-255)
+    TMC220X_SetCurrent(&motor, 600);       // 600mA drive current
+
+    // Homing: หมุนถอยหลังจน stall
+    uint8_t stalled = 0;
+    while (!stalled) {
+        TMC220X_Step(&motor, -1);          // 1 step ถอยหลัง
+        Delay_Us(500);
+        stalled = TMC220X_ReadStallGuard(&motor);
+    }
+
+    // stall แล้ว → ถอยออกจาก endstop
+    for (uint16_t i = 0; i &lt; 200; i++) {
+        TMC220X_Step(&motor, 1);
+        Delay_Us(500);
+    }
+
+    while (1) {
+        // ทำงานปกติ
+        for (uint16_t i = 0; i &lt; 3200; i++) {
+            TMC220X_Step(&motor, 1);
+            Delay_Us(800);
+        }
+        Delay_Ms(500);
+
+        for (uint16_t i = 0; i &lt; 3200; i++) {
+            TMC220X_Step(&motor, -1);
+            Delay_Us(800);
+        }
+        Delay_Ms(500);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> StallGuard ใช้หลักการวัด back-EMF — เมื่อมอเตอร์ชนสิ่งกีดขวาง กระแสจะเปลี่ยนและ TMC220x ตรวจจับได้ผ่าน SG_RESULT register — หาค่า threshold ที่เหมาะสม: ลองหมุนฟรีก่อน จดค่า SG ปกติ แล้วตั้ง threshold ต่ำกว่านั้นประมาณ 30-50% — หลัง stall ให้ถอยออกจาก endstop เล็กน้อย (200 step) เพื่อให้เคลื่อนที่ได้อิสระ — sensorless homing ดีตรงที่ไม่ต้องใช้ limit switch ลดสายไฟ — ข้อเสีย: ไม่แม่นยำเท่า optical switch (ความคลาดเคลื่อน ±2-3 full step) — ต้องปิด CoolStep ชั่วคราวระหว่าง homing เพราะ CoolStep ลดกระแสจะทำให้ SG อ่านผิด</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: StealthChop vs SpreadCycle — เปรียบเทียบเสียงและแรงบิด</h2>
+<pre><code class="language-c">#include "simple_tmc220x.h"
+
+TMC220X_t motor;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    TMC220X_Init(&motor, USART2);
+
+    TMC220X_SetCurrent(&motor, 800);
+    TMC220X_SetMicrostep(&motor, 16);  // 1/16 microstep
+
+    /* === โหมด 1: StealthChop (เงียบ,แรงบิดต่ำ-กลาง) === */
+    TMC220X_SetMode(&motor, MODE_STEALTHCHOP);
+    Delay_Ms(500);
+
+    for (uint32_t i = 0; i &lt; 3200; i++) {
+        TMC220X_Step(&motor, 1);
+        Delay_Us(600);
+    }
+    for (uint32_t i = 0; i &lt; 3200; i++) {
+        TMC220X_Step(&motor, -1);
+        Delay_Us(600);
+    }
+
+    Delay_Ms(2000);  // สังเกตเสียง
+
+    /* === โหมด 2: SpreadCycle (ดังกว่า,แรงบิดสูง) === */
+    TMC220X_SetMode(&motor, MODE_SPREADCYCLE);
+    Delay_Ms(500);
+
+    for (uint32_t i = 0; i &lt; 3200; i++) {
+        TMC220X_Step(&motor, 1);
+        Delay_Us(600);
+    }
+    for (uint32_t i = 0; i &lt; 3200; i++) {
+        TMC220X_Step(&motor, -1);
+        Delay_Us(600);
+    }
+
+    // กลับไป StealthChop สำหรับ idle
+    TMC220X_SetMode(&motor, MODE_STEALTHCHOP);
+    while (1) {}
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> TMC220x มี 2 โหมดหลัก — StealthChop: ใช้ voltage PWM ที่ปรับรูปคลื่นให้ smooth → เงียบสนิท เสียงเหมือนไม่มีมอเตอร์ — SpreadCycle: ใช้ current chopping แบบ hysteresis → มีเสียงหวีดเบา ๆ แต่แรงบิดสูงกว่า ~20-30% — ทดสอบด้วยความเร็วและโหลดเท่ากัน — สังเกต: ที่ความเร็วต่ำ StealthChop เหนือกว่า, ที่ความเร็วสูง (&gt;500 RPM) SpreadCycle อาจดีกว่า — TMC220x สามารถ auto-switch โหมดผ่าน TPWMTHRS register (threshold ความเร็ว) — ในงาน 3D printer: StealthChop สำหรับ X/Y axis, SpreadCycle สำหรับ Z axis หรือ extruder ที่ต้องการแรงบิดสูง — โหมด StealthChop ไม่รองรับ StallGuard ให้ใช้ SpreadCycle เมื่อต้องการ stall detection</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: UART Configuration — ปรับค่าผ่าน Serial</h2>
+<pre><code class="language-c">#include "simple_tmc220x.h"
+#include "simple_uart.h"
+
+TMC220X_t motor;
+
+void print_status(void) {
+    uint8_t sg    = TMC220X_ReadStallGuard(&motor);
+    uint16_t curr = TMC220X_GetCurrent(&motor);
+    uint8_t temp  = TMC220X_ReadTemperature(&motor);
+
+    UART_Printf(USART1, "SG=%d Curr=%dmA Temp=%dC\r\n", sg, curr, temp);
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    UART_Init(USART1, 115200);
+    TMC220X_Init(&motor, USART2);
+
+    // ตั้งค่าเริ่มต้นผ่าน UART
+    TMC220X_SetCurrent(&motor, 800);
+    TMC220X_SetMicrostep(&motor, 8);
+    TMC220X_SetMode(&motor, MODE_STEALTHCHOP);
+
+    UART_Printf(USART1, "TMC220X UART Config Ready\r\n");
+
+    while (1) {
+        if (UART_Available(USART1)) {
+            char cmd = UART_Read(USART1);
+            switch (cmd) {
+                case 'f':  // forward 1000 steps
+                    for (uint16_t i = 0; i &lt; 1000; i++) {
+                        TMC220X_Step(&motor, 1);
+                        Delay_Us(800);
+                    }
+                    break;
+                case 'b':  // backward
+                    for (uint16_t i = 0; i &lt; 1000; i++) {
+                        TMC220X_Step(&motor, -1);
+                        Delay_Us(800);
+                    }
+                    break;
+                case 's':  // status
+                    print_status();
+                    break;
+                case 'q':  // quiet mode
+                    TMC220X_SetMode(&motor, MODE_STEALTHCHOP);
+                    break;
+                case 'l':  // loud / torque mode
+                    TMC220X_SetMode(&motor, MODE_SPREADCYCLE);
+                    break;
+            }
+        }
+
+        // แสดงสถานะทุก 5 วินาที
+        static uint32_t last = 0;
+        if (Timer_GetMs() - last &gt; 5000) {
+            last = Timer_GetMs();
+            print_status();
+        }
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ใช้ UART 2 เส้น — USART1 คุยกับ PC, USART2 คุยกับ TMC220x ผ่าน single-wire UART — คำสั่ง: f=forward, b=backward, s=status, q=quiet mode, l=loud mode — <code>print_status</code> อ่าน SG_RESULT, กระแส, และอุณหภูมิแบบ real-time — TMC220x UART baud rate ต้องตรงกัน (ปกติ 500k หรือ 115200 ขึ้นกับรุ่น) — single-wire UART ใช้ขา PDN_UART (ขา 4) ของ TMC220x — ถ้าต้องการควบคุมหลายตัวบน bus เดียว ให้ตั้ง OTP address ไม่ซ้ำกัน (0-3) — ข้อควรระวัง: CH32V003 มี 1 USART ถ้าต้องใช้ 2 ช่อง ให้ใช้ software UART (simple_softuart) สำหรับฝั่ง PC</div>
+</div>
+
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_tmc220x.html">กลับบท</a><a href="chapx_lib_tmc5160_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

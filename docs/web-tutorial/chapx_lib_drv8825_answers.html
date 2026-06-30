@@ -1,0 +1,148 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย DRV8825 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_drv8825.html">กลับบท</a><a href="chapx_lib_tmc220x_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — DRV8825 Stepper Driver</h1>
+
+<div class="answer">
+<h2>ข้อ 1: เปรียบเทียบ Microstepping — Full vs Half vs 1/4 vs 1/8</h2>
+<pre><code class="language-c">#include "simple_drv8825.h"
+
+DRV8825_t motor;
+
+typedef struct {
+    const char *name;
+    uint8_t      ms_pins;   // M0:M1:M2 pattern
+    uint32_t     steps_per_rev;
+} MicrostepConfig_t;
+
+const MicrostepConfig_t modes[] = {
+    {"Full Step", 0b000, 200},
+    {"Half Step", 0b001, 400},
+    {"1/4 Step",  0b010, 800},
+    {"1/8 Step",  0b011, 1600},
+};
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    DRV8825_Init(&motor, GPIOA, GPIO_Pin_0,
+                 GPIOA, GPIO_Pin_1, GPIOA, GPIO_Pin_2,
+                 GPIOA, GPIO_Pin_3);
+
+    for (uint8_t m = 0; m &lt; 4; m++) {
+        DRV8825_SetMicrostep(&motor, modes[m].ms_pins);
+        Delay_Ms(100);
+        // หมุน 1 รอบในแต่ละโหมด
+        for (uint32_t i = 0; i &lt; modes[m].steps_per_rev; i++) {
+            DRV8825_Step(&motor, 1);
+            Delay_Us(2000);
+        }
+        Delay_Ms(1500);  // พักระหว่างโหมด สังเกตความต่าง
+    }
+    while (1) {}
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ใช้ array of struct เก็บค่า microstep แต่ละโหมด — M0/M1/M2 3 ขาเป็น binary select (000=full, 111=1/32) — <code>steps_per_rev</code> = 200 × microstep factor — หมุน 1 รอบเท่ากันทุกโหมดโดยเปลี่ยนจำนวน step — ฟังเสียง: full step เสียงดังและสั่น, microstep สูงนุ่มนวลกว่า — สังเกต torque: full step มีแรงบิดสูงสุด, microstep สูง ๆ แรงบิดลดลง — ใช้ <code>Delay_Us</code> สำหรับ pulse rate สูง — ข้อควรระวัง: CH32V003 ที่ 48MHz สร้าง step rate ได้ไม่เกิน ~50kHz ในโหมด bit-bang</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: ตั้งกระแสสูงสุดผ่าน Vref และ Current Limit</h2>
+<pre><code class="language-c">#include "simple_drv8825.h"
+#include "simple_adc.h"
+
+DRV8825_t motor;
+
+/* ตั้งกระแสผ่าน Vref pin โดยใช้ PWM เป็น DAC */
+void set_motor_current(uint16_t current_ma) {
+    /* สูตร DRV8825: I_max = Vref * 2
+       Vref ถูกสร้างจาก PWM + RC filter
+       เช่น PWM duty 0-100% → Vref 0-3.3V → I_max 0-2A */
+    uint8_t duty = (uint8_t)((uint32_t)current_ma * 255 / 2000);
+    if (duty &gt; 255) duty = 255;
+
+    /* ใช้ Timer PWM output ที่ขา GPIOA_Pin_6
+       ต่อผ่าน RC filter (10k + 10uF) เข้า Vref pin */
+    // PWM_SetDuty(TIM2, 1, duty);
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    ADC_SimpleInit(ADC_CH0);
+    DRV8825_Init(&motor, GPIOA, GPIO_Pin_0,
+                 GPIOA, GPIO_Pin_1, GPIOA, GPIO_Pin_2,
+                 GPIOA, GPIO_Pin_3);
+
+    uint16_t currents[] = {250, 500, 750, 1000, 1500};  // mA
+
+    for (uint8_t i = 0; i &lt; 5; i++) {
+        set_motor_current(currents[i]);
+
+        for (uint16_t step = 0; step &lt; 800; step++) {
+            DRV8825_Step(&motor, 1);
+            Delay_Us(1500);
+        }
+
+        // อ่านอุณหภูมิ chip
+        uint16_t adc = ADC_Read(ADC_CH0);
+        Delay_Ms(1000);
+        // ถ้า chip ร้อนเกิน &gt;85°C → ลดกระแส
+    }
+
+    set_motor_current(500);  // safe idle current
+    while (1) {}
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> DRV8825 ตั้งกระแสผ่านแรงดันที่ขา Vref — สูตร: I_max(A) = Vref(V) × 2 — ถ้า Vref = 0.5V → I_max = 1A — ใช้ PWM + RC low-pass filter สร้างแรงดันแปรผันได้ — เช็คอุณหภูมิ chip ผ่าน thermistor หรือ NTC — กระแสสูงเกิน → chip ร้อน → thermal shutdown — ค่ากระแสควรตั้งที่ 70-85% ของ rated motor current เพื่อความปลอดภัย — เปลี่ยนจาก PWM เป็น digital potentiometer (เช่น MCP41010) ถ้าต้องการความแม่นยำสูง — วงจร RC filter: R=10kΩ, C=10µF ให้ cutoff ~1.6Hz เพียงพอสำหรับ Vref ที่เปลี่ยนช้า</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: CNC Linear Slide — ควบคุมแกนเดียวด้วย Limit Switch สองข้าง</h2>
+<pre><code class="language-c">#include "simple_drv8825.h"
+
+DRV8825_t axis;
+
+#define LIMIT_MIN  GPIO_Pin_4
+#define LIMIT_MAX  GPIO_Pin_5
+#define LIMIT_PORT GPIOA
+
+int32_t pos = 0;
+const int32_t STROKE = 3200;  // steps เต็มช่วงการเคลื่อนที่
+
+void move_to(int32_t target) {
+    int8_t dir = (target &gt; pos) ? 1 : -1;
+    while (pos != target) {
+        // เช็ค limit switch ก่อนทุก step
+        if (dir == 1 &amp;&amp; !GPIO_ReadInputDataBit(LIMIT_PORT, LIMIT_MAX)) break;
+        if (dir == -1 &amp;&amp; !GPIO_ReadInputDataBit(LIMIT_PORT, LIMIT_MIN)) break;
+
+        DRV8825_Step(&axis, dir);
+        pos += dir;
+        Delay_Us(1200);
+    }
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    DRV8825_Init(&axis, GPIOA, GPIO_Pin_0,
+                 GPIOA, GPIO_Pin_1, GPIOA, GPIO_Pin_2,
+                 GPIOA, GPIO_Pin_3);
+    DRV8825_SetMicrostep(&axis, 0b011);  // 1/8 step
+
+    GPIO_InitTypeDef g = {0};
+    g.GPIO_Pin  = LIMIT_MIN | LIMIT_MAX;
+    g.GPIO_Mode = GPIO_Mode_IPU;
+    GPIO_Init(LIMIT_PORT, &g);
+
+    // Home: ถอยจนชน limit min
+    move_to(-STROKE);
+    pos = 0;
+
+    while (1) {
+        move_to(STROKE);   Delay_Ms(500);
+        move_to(0);        Delay_Ms(500);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> CNC linear slide ใช้ 2 limit switch ป้องกันการเคลื่อนที่เกินช่วง — <code>move_to</code> ตรวจสอบ limit switch ทุก step — limit switch แบบ NC (ปกติ HIGH, กดแล้ว LOW) ทำให้สายขาดปลอดภัย — homing โดยถอยจนชน limit min แล้วตั้ง pos=0 — STROKE = ระยะทางเต็ม / mm_per_step — ใช้ microstepping 1/8 เพื่อความละเอียด — สำหรับ CNC จริง: เพิ่ม feed rate override, soft limit (ตำแหน่งในซอฟต์แวร์), และ emergency stop — ถ้าใช้ linear rail จริง ควรคำนวณ acceleration profile เพื่อลดแรงกระชาก</div>
+</div>
+
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_drv8825.html">กลับบท</a><a href="chapx_lib_tmc220x_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

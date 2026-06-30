@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>I2C Scanner — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_pcf8574.html">บทก่อน</a>
+    <a href="chapx_lib_button.html">บทถัดไป →</a>
+</nav>
+<h1>I2C Scanner — ตรวจจับอุปกรณ์บนบัส I2C</h1>
+<span class="level beginner">ระดับเริ่มต้น</span>
+
+<section class="flowchart">
+    <h2>🧭 แผนภาพการทำงาน</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["I2C_Init()"] --> B["Address = 1"]
+    B --> C["Send I2C Start + Address + W"]
+    C --> D{"ACK received?"}
+    D -->|"Yes"| E["Print: Device found at 0xXX"]
+    D -->|"No"| F["Device not present"]
+    E --> G["Address += 1"]
+    F --> G
+    G --> H{"Address <= 127?"}
+    H -->|"Yes"| C
+    H -->|"No"| I["Scan complete!"]
+    </pre>
+</section>
+
+<section>
+    <h2>🔌 การต่อวงจร</h2>
+    <pre class="ascii-circuit">
+              I2C Scanner — หา Address อุปกรณ์
+    ┌──────────────────────────────────────────────┐
+    │ CH32V003                         I2C Bus     │
+    │ PC1(SDA)──┬──SDA──┬──Device1──┬──Device2    │
+    │ PC2(SCL)──┼──SCL──┼──────────┼──────...     │
+    │           │       │          │              │
+    │ 3.3V──────┼──4.7k─┘          │              │
+    │ 3.3V──────┼──4.7k─┘          │              │
+    │ GND───────┴──────GND─────────┘              │
+    │                                              │
+    │ ⚡ ต่อง่ายมาก: แค่ SDA + SCL + pull-up       │
+    │ ⚡ Scan address 1-127 (7-bit)               │
+    │ ⚡ แต่ละอุปกรณ์มี address ต่างกัน              │
+    │    (หรือ set ด้วย A0-A2 pins)               │
+    └──────────────────────────────────────────────┘
+    </pre>
+    <p>I2C Scanner เป็นเครื่องมือพื้นฐานที่สุด — ใช้หา address ของอุปกรณ์ I2C ทุกตัวบนบัส, ใช้ debug ตอนต่อวงจรใหม่, ใช้ตรวจสอบว่าบัส I2C สื่อสารได้หรือไม่, ใช้เช็ค address conflict (2 อุปกรณ์ใช้ address เดียวกัน)</p>
+</section>
+
+<section>
+    <h2>📚 หลักการทำงาน</h2>
+    <p><strong>I2C Scanner</strong> ทำงานโดยส่ง I2C Start condition + Address + R/W bit ไปยังทุก address ตั้งแต่ 1 ถึง 127 — ถ้าอุปกรณ์ตอบ ACK (ดึง SDA LOW ระหว่าง bit 9) แสดงว่ามีอุปกรณ์ที่ address นั้น, ถ้า NACK (SDA HIGH) แสดงว่าไม่มีอุปกรณ์</p>
+    <p><strong>Address Range:</strong></p>
+    <ul>
+        <li><strong>0x00-0x07:</strong> Reserved — 10-bit address และ special purposes</li>
+        <li><strong>0x08-0x77:</strong> Normal device addresses (1-127)</li>
+        <li><strong>0x78-0x7F:</strong> Reserved — 10-bit address และ broadcast</li>
+    </ul>
+    <p><strong>7-bit vs 8-bit Address:</strong> I2C address จริงๆ คือ 7-bit (0-127) — แต่บาง datasheet แสดงเป็น 8-bit (shift ซ้าย 1 บิต + R/W bit) เช่น address 0x68 (7-bit) = 0xD0 (8-bit write), 0xD1 (8-bit read) — I2C Scanner มักแสดงค่าทั้งสองแบบ</p>
+    <p><strong>ประโยชน์:</strong></p>
+    <ul>
+        <li>ตรวจสอบว่าอุปกรณ์ต่อถูกต้อง — ถ้า scan ไม่เจอ แสดงว่าสายหลุดหรือ address ไม่ตรง</li>
+        <li>ตรวจจับ address conflict — ถ้า 2 อุปกรณ์ใช้ address เดียวกัน I2C จะพัง</li>
+        <li>ทดสอบ pull-up resistors — ถ้าไม่มี pull-up, I2C จะไม่ทำงาน</li>
+    </ul>
+</section>
+
+<section>
+    <h2>💻 เขียน Code ทีละขั้น</h2>
+
+    <div class="step"><h3>ขั้นที่ 1: Init + Setup</h3>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "I2C_Scanner.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    I2C_Init(I2C1, I2C_SPEED_STANDARD);  // 100kHz
+    USART_Init(USART1, BAUD_115200);
+    USART_Println("=== I2C Scanner ===");
+    USART_Println("Scanning addresses 1-127...");</code></pre>
+    <p class="explain">🔍 ใช้ I2C speed 100kHz (standard) — ปลอดภัยกับทุกอุปกรณ์, USART สำหรับแสดงผล, ไม่ต้องต่ออะไรพิเศษนอกจาก pull-up 4.7k ที่ SDA/SCL</p></div>
+
+    <div class="step"><h3>ขั้นที่ 2: สแกนหาอุปกรณ์</h3>
+    <pre><code class="language-c">    uint8_t found = 0;
+    for(uint8_t addr = 1; addr < 128; addr++) {
+        I2C_Start(I2C1);
+        I2C_WriteByte(I2C1, (addr << 1) | 0);  // 7-bit addr + W=0
+        if(I2C_CheckACK(I2C1)) {  // ACK = device present!
+            USART_Print("Device found at 0x");
+            USART_PrintHex(addr);  // 7-bit address
+            USART_Print(" (8-bit: 0x");
+            USART_PrintHex(addr << 1);  // 8-bit write
+            USART_Print(" / 0x");
+            USART_PrintHex((addr << 1) | 1);  // 8-bit read
+            USART_Println(")");
+            found++;
+        }
+        I2C_Stop(I2C1);
+        Delay_Ms(1);  // brief pause between scans
+    }</code></pre>
+    <p class="explain">🔍 <code>I2C_WriteByte(i2c, addr << 1)</code> — shift 7-bit address ไปเป็น 8-bit (bit 0 = R/W), <code>I2C_CheckACK(i2c)</code> — ตรวจสอบว่าได้รับ ACK หรือไม่ (ACK = มีอุปกรณ์), delay 1ms ระหว่างแต่ละ scan เพื่อไม่ให้อุปกรณ์สับสน</p></div>
+
+    <div class="step"><h3>ขั้นที่ 3: แสดงสรุป + I2C_Scan() ฟังก์ชันสำเร็จรูป</h3>
+    <pre><code class="language-c">    USART_Print("Scan complete. Found ");
+    USART_PrintInt(found); USART_Println(" device(s).");
+
+    if(found == 0) {
+        USART_Println("No I2C devices found!");
+        USART_Println("Check:");
+        USART_Println("  1. SDA/SCL wiring");
+        USART_Println("  2. Pull-up resistors (4.7k)");
+        USART_Println("  3. Power to devices (3.3V)");
+    }
+
+    // === ใช้ฟังก์ชัน I2C_Scan() สำเร็จรูป ===
+    // I2C_Scan(I2C1);  // พิมพ์ผลลัพธ์อัตโนมัติผ่าน USART
+
+    while(1) {
+        // ทำงานอื่นต่อ...
+        Delay_Ms(1000);
+    }
+}</code></pre>
+    <p class="explain">🔍 <code>I2C_Scan(I2C1)</code> — สแกน I2C อัตโนมัติและพิมพ์ผลลัพธ์, ถ้าไม่พบอุปกรณ์เลย → เช็ค 3 อย่าง: สาย, pull-up, ไฟเลี้ยง, แนะนำให้รัน I2C Scanner เป็นขั้นตอนแรกทุกครั้งที่ต่ออุปกรณ์ I2C ใหม่</p></div>
+</section>
+
+<section>
+    <h2>📋 API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+        <tr><td><code>I2C_Scan(i2c)</code></td><td>สแกน I2C bus อัตโนมัติ</td><td><code>I2C_Scan(I2C1)</code></td></tr>
+        <tr><td><code>I2C_FindDevice(i2c, addr)</code></td><td>เช็คอุปกรณ์ที่ address เฉพาะ</td><td><code>if(I2C_FindDevice(I2C1, 0x68))</code></td></tr>
+        <tr><td><code>I2C_GetDeviceCount(i2c)</code></td><td>นับจำนวนอุปกรณ์บนบัส</td><td><code>uint8_t n = I2C_GetDeviceCount(I2C1)</code></td></tr>
+        <tr><td><code>I2C_GetDeviceList(i2c,buf)</code></td><td>รายชื่อ address ที่พบ</td><td><code>I2C_GetDeviceList(I2C1, list)</code></td></tr>
+        <tr><td><code>I2C_CheckACK(i2c)</code></td><td>เช็ค ACK หลังส่ง address</td><td>ใช้ภายในสำหรับ scan</td></tr>
+        <tr><td><code>I2C_Start(i2c)</code></td><td>สร้าง I2C Start condition</td><td><code>I2C_Start(I2C1)</code></td></tr>
+        <tr><td><code>I2C_Stop(i2c)</code></td><td>สร้าง I2C Stop condition</td><td><code>I2C_Stop(I2C1)</code></td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>Scan ไม่เจออุปกรณ์เลย</td><td>ลืมต่อ pull-up resistors (4.7k)</td><td>ต่อ 4.7kΩ จาก SDA→3.3V และ SCL→3.3V (ถ้าไม่มีบนโมดูล)</td></tr>
+        <tr><td>เจอ address ลึกลับที่ไม่รู้จัก</td><td>Noise หรือสายยาวเกินไป</td><td>ใช้สายสั้น (<20cm), ลด speed เหลือ 50kHz, เพิ่ม capacitor 100nF ที่ VCC</td></tr>
+        <tr><td>เจอแต่บาง address ไม่ครบ</td><td>Bus capacitance สูง — SDA/SCL ขึ้นไม่ทัน</td><td>ลด pull-up เหลือ 2.2k หรือ 1k, ลดความเร็ว I2C</td></tr>
+        <tr><td>Address conflict (2 devices)</td><td>2 อุปกรณ์ใช้ address เดียวกัน</td><td>เปลี่ยน address ด้วย A0/A1/A2 pins — เช็ค datasheet ว่าปรับได้ไหม</td></tr>
+        <tr><td>Scan แล้ว I2C bus ค้าง</td><td>อุปกรณ์บางตัว SDA stuck LOW</td><td>ส่ง clock pulses 9-16 ครั้งเพื่อให้อุปกรณ์ปล่อย SDA, แล้วลองใหม่</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>🛠️ สร้าง Product: I2C Bus Monitor + Device Checker</h2>
+    <p>สแกน I2C ทุก 5 วินาที — แสดงอุปกรณ์ที่ต่ออยู่, ตรวจจับเมื่ออุปกรณ์ถูกถอด/เพิ่ม</p>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    I2C_Init(I2C1, I2C_SPEED_STANDARD);
+    USART_Init(USART1, BAUD_115200);
+
+    uint8_t prev_list[128] = {0};  // previous scan results
+    uint8_t curr_list[128] = {0};
+
+    USART_Println("I2C Bus Monitor");
+
+    // Initial scan
+    I2C_Scan(I2C1);
+
+    while(1)
+    {
+        // Scan current devices
+        uint8_t count = 0;
+        for(uint8_t a=1; a<128; a++) {
+            I2C_Start(I2C1);
+            I2C_WriteByte(I2C1, (a << 1) | 0);
+            if(I2C_CheckACK(I2C1)) curr_list[a] = 1;
+            else curr_list[a] = 0;
+            I2C_Stop(I2C1);
+            Delay_Ms(1);
+        }
+
+        // Detect changes
+        for(uint8_t a=1; a<128; a++) {
+            if(curr_list[a] && !prev_list[a]) {
+                USART_Print("NEW device: 0x");
+                USART_PrintHex(a); USART_Println("");
+            }
+            if(!curr_list[a] && prev_list[a]) {
+                USART_Print("REMOVED device: 0x");
+                USART_PrintHex(a); USART_Println("");
+            }
+        }
+
+        // Current status
+        uint8_t dev_count = 0;
+        for(uint8_t a=1; a<128; a++) if(curr_list[a]) dev_count++;
+        USART_Print("Devices on bus: ");
+        USART_PrintInt(dev_count); USART_Println("");
+
+        // Save state for next round
+        for(uint8_t a=1; a<128; a++) prev_list[a] = curr_list[a];
+
+        Delay_Ms(5000);
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>✏️ ลองทำดู</h2>
+    <ol>
+        <li>ทำ I2C device enumerator — ต่ออุปกรณ์หลายตัว → scan → แสดงชื่ออุปกรณ์จาก lookup table (เช่น 0x68=DS3231, 0x3C=OLED)</li>
+        <li>ทำ I2C conflict detector — เช็คว่ามี address ซ้ำกันไหม → แจ้งเตือนถ้า conflict</li>
+        <li>ทำ I2C bus diagnostic — วัด bus capacitance, ตรวจจับ stuck bus, แนะนำ pull-up value ที่เหมาะสม</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_pcf8574.html">บทก่อน</a>
+    <a href="chapx_lib_button.html">บทถัดไป →</a>
+</nav>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

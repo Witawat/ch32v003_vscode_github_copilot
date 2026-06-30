@@ -1,0 +1,121 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย HC-SR04 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_hcsr04.html">กลับบท</a><a href="chapx_lib_vl53l0x_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — HC-SR04 เซนเซอร์อัลตราโซนิก</h1>
+<div class="answer"><h2>ข้อ 1: Parking Sensor — LED เขียว/เหลือง/แดง</h2><pre><code class="language-c">#define TRIG_PIN    PC0
+#define ECHO_PIN    PC1
+#define LED_GREEN   PC4
+#define LED_YELLOW  PC5
+#define LED_RED     PC3
+#define BUZZER      PC6
+#define ZONE_SAFE   100.0f  // cm
+#define ZONE_WARN   50.0f
+#define ZONE_STOP   20.0f
+
+void hcsr04_parking_sensor(void) {
+    HCSR04_Init(TRIG_PIN, ECHO_PIN);
+    pinMode(LED_GREEN, PIN_MODE_OUTPUT);
+    pinMode(LED_YELLOW, PIN_MODE_OUTPUT);
+    pinMode(LED_RED, PIN_MODE_OUTPUT);
+    pinMode(BUZZER, PIN_MODE_OUTPUT);
+
+    while(1) {
+        float dist = HCSR04_ReadDistance();
+
+        if(dist < 0 || dist > 400) {
+            // No valid reading
+            digitalWrite(LED_GREEN, LOW);
+            digitalWrite(LED_YELLOW, LOW);
+            digitalWrite(LED_RED, HIGH);
+            Delay_Ms(200);
+            digitalWrite(LED_RED, LOW);
+            Delay_Ms(200);
+            continue;
+        }
+
+        digitalWrite(LED_GREEN, dist > ZONE_SAFE);
+        digitalWrite(LED_YELLOW, dist <= ZONE_SAFE && dist > ZONE_WARN);
+        digitalWrite(LED_RED, dist <= ZONE_WARN);
+
+        if(dist <= ZONE_WARN) {
+            uint16_t beep_delay = (uint16_t)(dist * 5);  // ยิ่งใกล้ ยิ่งถี่
+            digitalWrite(BUZZER, HIGH); Delay_Ms(50);
+            digitalWrite(BUZZER, LOW);  Delay_Ms(beep_delay);
+        } else {
+            digitalWrite(BUZZER, LOW);
+        }
+        Delay_Ms(60);
+    }
+}
+</code></pre><div class="approach"><strong>🧠 แนวคิด:</strong> 3 โซน: SAFE (>100cm เขียว) / WARN (50–100cm เหลือง) / STOP (<50cm แดง) — Buzzer กระพริบถี่ขึ้นเมื่อใกล้ — ใช้ค่า dist map เป็น delay: dist×5 ms — กรอง invalid reading (dist < 0 หรือ > 4m) — <code>HCSR04_ReadDistance</code> คืน cm โดยตรง</div></div>
+<div class="answer"><h2>ข้อ 2: Average Multiple Readings Filter</h2><pre><code class="language-c">#define FILTER_SAMPLES 8
+
+float hcsr04_read_filtered(void) {
+    float readings[FILTER_SAMPLES];
+    int count = 0;
+
+    // เก็บตัวอย่าง
+    for(int i = 0; i < FILTER_SAMPLES; i++) {
+        float d = HCSR04_ReadDistance();
+        if(d > 0 && d <= 400) {
+            readings[count++] = d;
+        }
+        Delay_Ms(30);
+    }
+
+    if(count == 0) return -1;  // ไม่มีค่าที่ใช้ได้เลย
+
+    // Bubble sort
+    for(int i = 0; i < count - 1; i++) {
+        for(int j = 0; j < count - i - 1; j++) {
+            if(readings[j] > readings[j + 1]) {
+                float tmp = readings[j];
+                readings[j] = readings[j + 1];
+                readings[j + 1] = tmp;
+            }
+        }
+    }
+
+    // Median filter — ตัดหัวตัดท้าย แล้วเฉลี่ยกลาง
+    int start = count / 4;
+    int end   = count - count / 4;
+    float sum = 0;
+    int valid = 0;
+    for(int i = start; i < end; i++) {
+        sum += readings[i];
+        valid++;
+    }
+
+    return sum / valid;
+}
+</code></pre><div class="approach"><strong>🧠 แนวคิด:</strong> เก็บ 8 ตัวอย่าง — median filter: sort แล้วตัดหัว-ท้าย 25% (กรอง outlier) — เฉลี่ยค่าที่เหลือ — ดีกว่า simple average เพราะ spike จาก echo ข้างเคียงจะถูกตัดทิ้ง — เพิ่ม 30ms ระหว่างอ่านให้คลื่นจางก่อนยิงใหม่</div></div>
+<div class="answer"><h2>ข้อ 3: เปรียบเทียบ HC-SR04 vs VL53L0X</h2><pre><code class="language-c">void ultrasonic_vs_laser(void) {
+    HCSR04_Init(PC0, PC1);
+    VL53L0X_Init(VL53L0X_ADDR_DEFAULT, I2C_PINS_DEFAULT);
+    OLED_Init(I2C_PINS_DEFAULT);
+
+    while(1) {
+        float dist_us = HCSR04_ReadDistance();
+        uint16_t dist_lx = VL53L0X_ReadDistance();
+
+        OLED_SetCursor(0, 0);
+        OLED_Print("US: "); OLED_PrintFloat(dist_us, 1); OLED_Print(" cm  ");
+
+        OLED_SetCursor(0, 1);
+        OLED_Print("LX: "); OLED_PrintNum(dist_lx); OLED_Print(" mm  ");
+
+        // Comment on accuracy
+        OLED_SetCursor(0, 2);
+        if(dist_us < 10 && dist_lx < 100) {
+            OLED_Print("Near — laser wins ");
+        } else if(dist_us > 200) {
+            OLED_Print("Far  — US wins    ");
+        } else {
+            OLED_Print("Mid  — both OK    ");
+        }
+
+        Delay_Ms(500);
+    }
+}
+</code></pre><div class="approach"><strong>🧠 แนวคิด:</strong> HC-SR04: range 2–400cm, blind zone ~0–2cm, beam กว้าง (~15°) — VL53L0X: range 0–200cm (ขึ้นกับแสง), beam แคบ (~25° FoV) — ระยะใกล้: laser แม่นกว่า เพราะ US มี blind zone — ระยะไกล >2m: US วัดได้ laser อาจไม่ถึง — สรุป: ใช้คู่กันเสริมจุดอ่อน</div></div>
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_hcsr04.html">กลับบท</a><a href="chapx_lib_vl53l0x_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

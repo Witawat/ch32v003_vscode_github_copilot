@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Servo SG90 — RC Servo Motor PWM — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_hx711.html">บทก่อน</a>
+    <a href="chapx_lib_servotester.html">บทถัดไป →</a>
+</nav>
+
+<h1>Servo SG90 — RC Servo Motor PWM</h1>
+<span class="level intermediate">ระดับกลาง</span>
+
+<section class="flowchart">
+    <h2>🧭 แผนภาพการทำงาน</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["PWM_SimpleInit(1, PD2, 50)"] --> B["PWM_Start(1)"]
+    B --> C["PWM_SetDuty(1, duty)"]
+    C --> D["คำนวณ duty จากมุม: 2.5 + angle × 10 / 180"]
+    D --> E["Servo หมุนไปตำแหน่งที่ต้องการ"]
+    E --> F{"ต้องการย้ายตำแหน่ง?"}
+    F -->|"ใช่"| C
+    F -->|"ไม่"| G["Servo คงตำแหน่ง"]
+    </pre>
+</section>
+
+<section>
+    <h2>🔌 การต่อวงจร</h2>
+    <pre class="ascii-circuit">
+                SG90 Servo
+    ┌──────────────────────────────┐
+    │ MCU                 External │
+    │                 5V Power  ⚠️  │
+    │ PD2──────Signal (ส้ม)        │
+    │ 3.3V                      5V │
+    │                  ┌──────────┐ │
+    │ GND──┬────GND (น้ำตาล)       │
+    │      │     VCC (แดง)─────────┤
+    │      │     ┌──────────┘      │
+    │      └─────┤ GND Common      │
+    │            └─────────────────│
+    └──────────────────────────────┘
+    </pre>
+    <p>⚠️ <strong>สำคัญ:</strong> Servo กินกระแสสูงสุด 500mA+ — ต้องใช้ไฟ 5V แยก ไม่ใช้ไฟ 3.3V จาก MCU ตรง ๆ! อย่าลืมต่อ GND ร่วมกันระหว่าง MCU กับ External Supply</p>
+</section>
+
+<section>
+    <h2>📚 หลักการทำงาน</h2>
+    <p><strong>PWM 50Hz</strong> คือความถี่มาตรฐานของ RC Servo — 20ms ต่อ 1 คาบ (1/50 = 0.02s) ภายใน 1 คาบ จะมี <strong>pulse</strong> ความกว้าง 0.5ms–2.5ms คุมมุม 0°–180° โดย <strong>center = 1.5ms = 90°</strong></p>
+    <p><strong>SG90 Specifications:</strong> แรงดัน 4.8V, แรงบิด 1.2 kg·cm, ความเร็ว 0.12s/60°, มุมทำงาน 0–180°, น้ำหนัก 9g, ขนาด 23×12×29mm</p>
+    <p><strong>การคำนวณ Duty Cycle:</strong> ที่ 50Hz (20ms) → duty = 0.5ms/20ms × 100 = 2.5% (0°) ถึง 2.5ms/20ms × 100 = 12.5% (180°) → สูตร: <code>duty = 2.5 + (angle × 10.0 / 180.0)</code></p>
+    <p><strong>ข้อควรระวัง:</strong> Servo สั่งงานด้วย pulse width — ไม่ใช่ duty cycle ของ PWM ทั่วไป ถ้าเปลี่ยนความถี่ PWM ต้องคำนวณ duty ใหม่</p>
+</section>
+
+<section>
+    <h2>💻 เขียน Code ทีละขั้น</h2>
+
+    <div class="step"><h3>ขั้นที่ 1: Init PWM + Setup</h3>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    // เริ่ม PWM1 ที่ PD2, ความถี่ 50Hz
+    PWM_SimpleInit(1, PD2, 50);
+    PWM_Start(1);</code></pre>
+    <p class="explain">🔍 <code>PWM_SimpleInit(ch, pin, freq_hz)</code> ตั้งค่า PWM channel 1 บน PD2 ที่ 50Hz (มาตรฐาน servo) — <code>PWM_Start()</code> เริ่มสร้างสัญญาณ</p></div>
+
+    <div class="step"><h3>ขั้นที่ 2: ควบคุมตำแหน่ง Servo</h3>
+    <pre><code class="language-c">    // หมุนไป 0° (duty ~2.5%)
+    PWM_SetDuty(1, 2.5f);
+    Delay_Ms(1000);
+    // หมุนไป 90° (duty ~7.5%)
+    PWM_SetDuty(1, 7.5f);
+    Delay_Ms(1000);
+    // หมุนไป 180° (duty ~12.5%)
+    PWM_SetDuty(1, 12.5f);
+    Delay_Ms(1000);</code></pre>
+    <p class="explain">🔍 <code>PWM_SetDuty(ch, percent)</code> รับค่า % — 2.5% = 0°, 7.5% = 90°, 12.5% = 180° ที่ 50Hz — หน่วง 1 วิให้ servo มีเวลาหมุนถึงตำแหน่ง</p></div>
+
+    <div class="step"><h3>ขั้นที่ 3: Sweep Loop + แปลงมุม</h3>
+    <pre><code class="language-c">    while(1) {
+        // Sweep 0° → 180°
+        for(uint8_t a = 0; a <= 180; a++) {
+            float duty = 2.5f + (a * 10.0f / 180.0f);
+            PWM_SetDuty(1, duty);
+            Delay_Ms(15);
+        }
+        // Sweep 180° → 0°
+        for(uint8_t a = 180; a > 0; a--) {
+            float duty = 2.5f + (a * 10.0f / 180.0f);
+            PWM_SetDuty(1, duty);
+            Delay_Ms(15);
+        }
+    }
+}</code></pre>
+    <p class="explain">🔍 Sweep ไป-กลับ 0–180° — <code>Delay_Ms(15)</code> ให้ servo มีเวลาขยับทีละองศา (0.12s/60° ≈ 2ms/°) — ใช้ float เพื่อความแม่นยำของ duty</p></div>
+</section>
+
+<section>
+    <h2>📋 API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+        <tr><td><code>PWM_SimpleInit(ch, pin, freq)</code></td><td>เริ่ม PWM ที่ pin, ความถี่ Hz</td><td><code>PWM_SimpleInit(1, PD2, 50)</code></td></tr>
+        <tr><td><code>PWM_Start(ch)</code></td><td>เริ่มสร้างสัญญาณ PWM</td><td><code>PWM_Start(1)</code></td></tr>
+        <tr><td><code>PWM_Stop(ch)</code></td><td>หยุดสัญญาณ PWM</td><td><code>PWM_Stop(1)</code></td></tr>
+        <tr><td><code>PWM_SetDuty(ch, percent)</code></td><td>ตั้ง duty cycle เป็น % (float)</td><td><code>PWM_SetDuty(1, 7.5f)</code></td></tr>
+        <tr><td><code>Servo_Write(angle)</code></td><td>สั่ง servo ไปมุมที่ต้องการ</td><td><code>Servo_Write(90)</code></td></tr>
+        <tr><td><code>Servo_WriteUs(us)</code></td><td>สั่ง servo ด้วย pulse width μs</td><td><code>Servo_WriteUs(1500)</code></td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>Servo กระตุก/ไม่หมุน</td><td>ไฟ 5V จ่ายกระแสไม่พอ (servo กิน 500mA+)</td><td>ใช้ External 5V supply แยก — ห้ามใช้ 3.3V จาก MCU</td></tr>
+        <tr><td>Servo หมุนเกิน 180°</td><td>pulse width เกิน 0.5–2.5ms</td><td>จำกัด duty ระหว่าง 2.5%–12.5% ที่ 50Hz</td></tr>
+        <tr><td>Servo ไม่ตอบสนอง</td><td>GND ไม่ร่วมกันระหว่าง MCU กับ servo</td><td>ต่อ GND ของ MCU, External 5V, และ servo เข้าด้วยกัน</td></tr>
+        <tr><td>หลายตัวควบคุมไม่แม่น</td><td>CH32V003 มี PWM channels จำกัด</td><td>ใช้ PCA9685 I²C Servo Driver สำหรับ ≥4 ตัว</td></tr>
+        <tr><td>Servo สั่นค้างตำแหน่ง</td><td>PWM ความถี่ไม่ใช่ 50Hz</td><td>ตรวจสอบว่า freq=50 — ถ้าใช้ 1kHz pulse จะแคบเกินไป</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>🛠️ สร้าง Product: Pan-Tilt 2-Axis Camera Mount</h2>
+    <p>ใช้ Servo 2 ตัว + Joystick (2 Potentiometer ADC) ควบคุมกล้อง — แกน X (Pan) PD2, แกน Y (Tilt) PD3</p>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+float angle_to_duty(uint8_t angle) {
+    if(angle > 180) angle = 180;
+    return 2.5f + (angle * 10.0f / 180.0f);
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    ADC_Init_Single(PA1); ADC_Init_Single(PA2);
+    PWM_SimpleInit(1, PD2, 50); PWM_Start(1);
+    PWM_SimpleInit(2, PD3, 50); PWM_Start(2);
+
+    uint8_t pan = 90, tilt = 90;
+    while(1) {
+        uint16_t adc_x = ADC_Read(PA1);
+        uint16_t adc_y = ADC_Read(PA2);
+        pan = (uint8_t)(adc_x * 180 / 4095);
+        tilt = (uint8_t)(adc_y * 180 / 4095);
+        PWM_SetDuty(1, angle_to_duty(pan));
+        PWM_SetDuty(2, angle_to_duty(tilt));
+        Delay_Ms(20);
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>✏️ ลองทำดู</h2>
+    <ol>
+        <li>ทำ Pan-Tilt tracker ที่ขยับตามแสง — ใช้ LDR 2 ตัวอ่านค่า ADC แล้วปรับ servo ให้หันเข้าหาแสงที่สว่างที่สุด</li>
+        <li>ทำ servo sweep ด้วย Non-Blocking Timer — ให้ main loop ยังทำงานอื่นได้ขณะ servo กำลังกวาด</li>
+        <li>ใช้ Servo + Laser Pointer — ติด laser บน servo แล้วเขียนโปรแกรมให้ฉายจุดเลเซอร์เป็นรูปสี่เหลี่ยมบนผนัง</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_hx711.html">บทก่อน</a>
+    <a href="chapx_lib_servotester.html">บทถัดไป →</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

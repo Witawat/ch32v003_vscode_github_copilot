@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WS2815Matrix — 8×8 RGB 12V — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_ws2812matrix.html">บทก่อน</a>
+    <a href="chapx_lib_tjc.html">บทถัดไป →</a>
+</nav>
+<h1>WS2815Matrix — 8×8 RGB 12V</h1>
+<span class="level intermediate">ระดับกลาง</span>
+<section class="flowchart">
+    <h2>🧭 แผนภาพการทำงาน</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["WS2815Matrix_Init(PC0, W, H)"] --> B["WS2815Matrix_Clear()"]
+    B --> C{"Display Mode"}
+    C -->|"Text"| D["WS2815Matrix_Print + Show"]
+    C -->|"Bitmap"| E["WS2815Matrix_DrawBitmap + Show"]
+    C -->|"Effect"| F["ScrollText / Rainbow / Sparkle"]
+    D --> G["while(1) loop"]
+    E --> G
+    F --> G
+    H["Break-Point Continue: LED เสีย→ตัวอื่นยังทำงาน"]
+    </pre>
+</section>
+<section>
+    <h2>🔌 การต่อวงจร</h2>
+    <pre class="ascii-circuit">
+          WS2815 8x8 RGB Matrix (12V)
+    ┌────────────────────────────────┐
+    │ MCU                    WS2815  │
+    │ 12V (External PSU) ──── VCC    │
+    │ GND ──────────────── GND      │
+    │ PC0 ──[LEVEL SHIFT]── DIN     │
+    │                       BI (GND) │
+    │                                │
+    │ ⚠️ 12V Supply Required!        │
+    │ Level Shifter 3.3V → 5V        │
+    │ Break-Point: LED เสีย 1 ดวง    │
+    │ → ดวงอื่นยังทำงานต่อได้         │
+    └────────────────────────────────┘
+    </pre>
+    <p>WS2815 ใช้ไฟ 12V — มีขา BI (Backup Input) สำหรับ break-point continue — ถ้า LED ดวงใดเสีย สัญญาณจะข้ามไปดวงถัดไป — ต้องใช้ Level Shifter 3.3V → 5V สำหรับ data</p>
+</section>
+<section>
+    <h2>📚 หลักการทำงาน</h2>
+    <p><strong>WS2815 vs WS2812B:</strong> WS2815 เป็นรุ่น 12V ของ WS2812B — แรงดันสูงกว่าทำให้ voltage drop ตามสายน้อยลง — เหมาะกับ strip ยาวหรืองาน outdoor — protocol เหมือน WS2812B (800kHz NRZ, GRB)</p>
+    <p><strong>Break-Point Continue (BPC):</strong> WS2815 มี 2 data input (DIN + BI) — ถ้า LED ดวงใดเสียหาย (open circuit) — สัญญาณจะถูกส่งต่อไป LED ถัดไปผ่านขา BI — LED ดวงอื่นยังทำงานได้ตามปกติ — ข้อดีสำหรับงานติดตั้งถาวร</p>
+    <p><strong>12V Advantage:</strong> แรงดันสูง = กระแสต่ำ = voltage drop น้อย — ไฟ 12V 2A จ่าย LED ได้ 200+ ดวง — ไม่ต้องต่อไฟเสริมบ่อยเหมือน WS2812B — ใช้กับ PSU 12V ทั่วไป</p>
+    <p><strong>API Compatible:</strong> WS2815Matrix มี API เหมือน WS2812Matrix — Init, Clear, SetPixel, Print, ScrollText, Rainbow — เปลี่ยนจาก WS2812B เป็น WS2815 แค่เปลี่ยนชื่อฟังก์ชัน</p>
+</section>
+<section>
+    <h2>💻 เขียน Code ทีละขั้น</h2>
+    <div class="step"><h3>ขั้นที่ 1: Init + Setup</h3>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    WS2815Matrix_Init(PC0, 8, 8);
+    WS2815Matrix_SetBrightness(128);
+    WS2815Matrix_Clear();
+    WS2815Matrix_Show();</code></pre>
+    <p class="explain">🔍 ใช้ API เดียวกับ WS2812Matrix — Init(pin, w, h) — SetBrightness 0-255 — Clear+Show pattern มาตรฐาน</p></div>
+    <div class="step"><h3>ขั้นที่ 2: แสดงผล</h3>
+    <pre><code class="language-c">    WS2815Matrix_SetCursor(0, 0);
+    WS2815Matrix_SetTextColor(RGB(255, 165, 0)); // Orange
+    WS2815Matrix_Print("12V");
+    WS2815Matrix_Show();
+
+    // Scroll text
+    WS2815Matrix_ScrollText("WS2815", 150, RGB(0, 255, 255));
+    // Rainbow
+    WS2815Matrix_Rainbow(40);</code></pre>
+    <p class="explain">🔍 ฟังก์ชันเหมือน WS2812Matrix — SetCursor + Print + Show — ScrollText เลื่อนข้อความ — Rainbow effect — ไม่ต้องเปลี่ยน logic</p></div>
+    <div class="step"><h3>ขั้นที่ 3: Loop แสดงโหมด</h3>
+    <pre><code class="language-c">    uint8_t mode = 0;
+    Timer_t tmr;
+    Start_Timer(&tmr, 5000, 1);
+
+    while(1) {
+        if(Is_Timer_Expired(&tmr)) {
+            WS2815Matrix_Clear();
+            if(mode == 0) {
+                WS2815Matrix_SetCursor(0, 1);
+                WS2815Matrix_Print("12V");
+                WS2815Matrix_Show();
+            } else {
+                WS2815Matrix_Rainbow(30);
+            }
+            mode = !mode;
+        }
+    }
+}</code></pre>
+    <p class="explain">🔍 สลับโหมดทุก 5 วิ — แสดง "12V" กับ Rainbow — Non-Blocking Timer — WS2815 ทนทานกว่า WS2812B เพราะ break-point continue</p></div>
+</section>
+<section>
+    <h2>📋 API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+        <tr><td><code>WS2815Matrix_Init(pin, w, h)</code></td><td>เริ่มต้น matrix จอง buffer</td><td><code>WS2815Matrix_Init(PC0, 8, 8)</code></td></tr>
+        <tr><td><code>WS2815Matrix_SetBrightness(v)</code></td><td>ความสว่าง 0-255</td><td><code>WS2815Matrix_SetBrightness(128)</code></td></tr>
+        <tr><td><code>WS2815Matrix_Clear()</code></td><td>ล้างทุก LED</td><td><code>WS2815Matrix_Clear()</code></td></tr>
+        <tr><td><code>WS2815Matrix_Show()</code></td><td>ส่ง buffer ไป matrix</td><td><code>WS2815Matrix_Show()</code></td></tr>
+        <tr><td><code>WS2815Matrix_SetPixel(x, y, c)</code></td><td>ตั้งสี 1 pixel</td><td><code>WS2815Matrix_SetPixel(3,3,RGB(255,0,0))</code></td></tr>
+        <tr><td><code>WS2815Matrix_SetCursor(r, c)</code></td><td>ตั้ง cursor ข้อความ</td><td><code>WS2815Matrix_SetCursor(0, 0)</code></td></tr>
+        <tr><td><code>WS2815Matrix_Print(str)</code></td><td>พิมพ์ข้อความ</td><td><code>WS2815Matrix_Print("HI")</code></td></tr>
+        <tr><td><code>WS2815Matrix_ScrollText(s, ms, c)</code></td><td>เลื่อนข้อความ</td><td><code>WS2815Matrix_ScrollText("HI",100,RGB(0,255,0))</code></td></tr>
+        <tr><td><code>WS2815Matrix_Rainbow(ms)</code></td><td>Effect รุ้งวน</td><td><code>WS2815Matrix_Rainbow(50)</code></td></tr>
+        <tr><td><code>WS2815Matrix_DrawBitmap(bmp, w, h, c)</code></td><td>วาด bitmap ตามสี</td><td><code>WS2815Matrix_DrawBitmap(bmp,8,8,RGB(255,0,255))</code></td></tr>
+    </table>
+</section>
+<section>
+    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>LED เจอแต่ไม่ติด</td><td>ใช้ไฟ 5V — WS2815 ต้อง 12V</td><td>ใช้ PSU 12V — อย่าใช้ 5V — WS2815 ไม่ทำงานที่ 5V</td></tr>
+        <tr><td>LED บางดวงไม่ติดแต่ดวงอื่นปกติ</td><td>LED ดวงนั้นเสีย — BPC ทำงาน</td><td>WS2815 มี break-point continue — เปลี่ยนเฉพาะ LED ที่เสีย</td></tr>
+        <tr><td>สีเพี้ยนทั้ง matrix</td><td>Level Shifter ไม่ทำงาน หรือต่อผิด</td><td>3.3V → 5V จำเป็น — ใช้ 74HCT125 หรือ SN74AHCT125</td></tr>
+        <tr><td>ไฟ 12V แต่ LED สลัว</td><td>PSU จ่ายกระแสไม่พอ — 12V ต้อง ≥ 1.5A</td><td>ใช้ PSU 12V 2A+ — ตรวจสอบ rating PSU</td></tr>
+        <tr><td>BI ขาลอย — LED ทำงานแปลก</td><td>ขา BI ต้องต่อ GND เมื่อไม่ใช้</td><td>ต่อ BI ลง GND — อย่าปล่อยลอย (floating)</td></tr>
+    </table>
+</section>
+<section>
+    <h2>🛠️ สร้าง Product: ป้ายไฟ Outdoor 12V</h2>
+    <p>WS2815 8×8 แสดงข้อความเลื่อน — เหมาะกับงาน outdoor เพราะ 12V + BPC — ใช้ PSU 12V ทนแดดทนฝน</p>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    WS2815Matrix_Init(PC0, 8, 8);
+    WS2815Matrix_SetBrightness(200);
+
+    while(1) {
+        WS2815Matrix_ScrollText("OPEN", 150, RGB(0, 255, 0));
+        Delay_Ms(500);
+        WS2815Matrix_Rainbow(40);
+        Delay_Ms(500);
+        WS2815Matrix_ScrollText("12V!", 150, RGB(255, 165, 0));
+        Delay_Ms(500);
+    }
+}</code></pre>
+</section>
+<section>
+    <h2>✏️ ลองทำดู</h2>
+    <ol>
+        <li>ทดสอบ Break-Point Continue — ถอด LED 1 ดวงออก ดูว่าดวงอื่นยังทำงาน</li>
+        <li>ทำ Thermometer แสดงอุณหภูมิด้วยสี — ใช้ DHT11 — น้ำเงิน=เย็น, เขียว=ปกติ, แดง=ร้อน</li>
+        <li>ทำไฟวิ่ง 2 แถว — ใช้ 8×16 Matrix (2 แผงต่อกัน) — ใช้ WS2815Matrix_Init(PC0, 8, 16)</li>
+    </ol>
+</section>
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_ws2812matrix.html">บทก่อน</a>
+    <a href="chapx_lib_tjc.html">บทถัดไป →</a>
+</nav>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

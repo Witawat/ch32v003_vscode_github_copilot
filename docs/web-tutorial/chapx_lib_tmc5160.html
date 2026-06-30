@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TMC5160 — High-Power Motion Controller SPI — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_tmc220x.html">บทก่อน</a>
+    <a href="chapx_lib_relay.html">บทถัดไป →</a>
+</nav>
+
+<h1>TMC5160 — High-Power Motion Controller SPI</h1>
+<span class="level expert">ระดับผู้เชี่ยวชาญ</span>
+
+<section class="flowchart">
+    <h2>🧭 แผนภาพการทำงาน</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["TMC5160_SPI_Init()"] --> B["Configure Registers"]
+    B --> C{"Motion Command"}
+    C -->|"Position"| D["XTARGET → 6-Point Ramp"]
+    C -->|"Velocity"| E["VMAX → Spin"]
+    D --> F["Accel→VMAX→Decel→Stop"]
+    E --> G["Constant Velocity"]
+    F --> H["StallGuard2 Check"]
+    G --> H
+    H -->|"Stall"| I["Stop / Home"]
+    H -->|"OK"| J["RAMP_STAT: done?"]
+    J -->|"No"| F
+    J -->|"Yes"| K["Motion Complete"]
+    </pre>
+</section>
+
+<section>
+    <h2>🔌 การต่อวงจร</h2>
+    <pre class="ascii-circuit">
+          TMC5160 SPI + NEMA23
+    ┌──────────────────────────────────┐
+    │ MCU                   TMC5160    │
+    │ PC5──SCK (SPI Clock)             │
+    │ PC6──MOSI (SPI TX)               │
+    │ PC7──MISO (SPI RX)               │
+    │ PC4──CSN (Chip Select)    ⚠️     │
+    │                         8-60V    │
+    │              ┌─TMC5160──┐        │
+    │          ┌───┤ A1    B1 ├──┐     │
+    │          │   │ A2    B2 ├──┤     │
+    │      NEMA23  │        │  │      │
+    │          └───┘        │  │      │
+    │              └────────┘  │      │
+    │ GND──GND    VMOT─┤1000μF├GND    │
+    └──────────────────────────────────┘
+    </pre>
+    <p>⚠️ TMC5160 รองรับมอเตอร์กระแสสูงสุด 10A — VMOT 8-60V — SPI Mode 3 (CPOL=1, CPHA=1) ที่ 4MHz+ — CSN LOW ก่อนส่ง HIGH หลังเสร็จ — ต่อ capacitor 1000μF ขนาน VMOT-GND</p>
+</section>
+
+<section>
+    <h2>📚 หลักการทำงาน</h2>
+    <p><strong>TMC5160</strong> คือ stepper motion controller + driver ในตัวเดียว — ไม่ต้องใช้ MCU สร้าง STEP pulse — สั่งงานผ่าน SPI ด้วยคำสั่งระดับสูง (เคลื่อนที่ไปตำแหน่ง X) — TMC5160 จัดการ acceleration profile เองทั้งหมด</p>
+    <p><strong>6-Point Ramp Generator</strong> (built-in): A1 (start accel) -> V1 (start velocity) -> AMAX (max accel) -> VMAX (max velocity) -> DMAX (max decel) -> VSTOP (stop velocity) — motion profile ราบรื่นโดยไม่ใช้ CPU</p>
+    <p><strong>Features:</strong> StealthChop2 (เงียบ), SpreadCycle (แรงบิด), CoolStep (ปรับกระแสตามโหลด), StallGuard2 (sensorless stall), dcStep (velocity control แม้ stall), Encoder Interface (ABN + SPI encoder) — ครบทุกฟีเจอร์ในชิปเดียว</p>
+    <p><strong>SPI Registers:</strong> GCONF (0x00), IHOLD_IRUN (0x10), RAMPMODE (0x20), XTARGET (0x2D), VMAX (0x27), AMAX (0x24), VACTUAL (0x22), RAMP_STAT (0x35) — เขียน/อ่าน 40-bit datagram: 8-bit addr + 32-bit data</p>
+</section>
+
+<section>
+    <h2>💻 เขียน Code ทีละขั้น</h2>
+
+    <div class="step"><h3>ขั้นที่ 1: SPI Init + Register R/W</h3>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+#define CSN PC4
+#define REG_IHOLD_IRUN 0x10
+#define REG_XTARGET    0x2D
+#define REG_VMAX       0x27
+#define REG_AMAX       0x24
+#define REG_RAMP_STAT  0x35
+
+void tmc5160_write(uint8_t reg, uint32_t val) {
+    digitalWrite(CSN, LOW);
+    SPI_Transfer((reg | 0x80) & 0xFF);
+    SPI_Transfer((val >> 24) & 0xFF);
+    SPI_Transfer((val >> 16) & 0xFF);
+    SPI_Transfer((val >> 8) & 0xFF);
+    SPI_Transfer(val & 0xFF);
+    digitalWrite(CSN, HIGH);
+}
+
+uint32_t tmc5160_read(uint8_t reg) {
+    digitalWrite(CSN, LOW);
+    SPI_Transfer(reg & 0x7F);  // Read
+    uint32_t v = (uint32_t)SPI_Transfer(0) << 24;
+    v |= (uint32_t)SPI_Transfer(0) << 16;
+    v |= (uint32_t)SPI_Transfer(0) << 8;
+    v |= SPI_Transfer(0);
+    digitalWrite(CSN, HIGH);
+    return v;
+}</code></pre>
+    <p class="explain">🔍 TMC5160 ใช้ SPI 40-bit datagram: 8-bit address (W=0x80) + 32-bit data — CSN LOW ก่อน-หลังทุก transaction — SPI mode 3, CPOL=1, CPHA=1</p></div>
+
+    <div class="step"><h3>ขั้นที่ 2: Configure Ramp + Current</h3>
+    <pre><code class="language-c">int main(void) {
+    SystemCoreClockUpdate();
+    SPI_Init(PC5, PC6, PC7, SPI_MODE3);
+    pinMode(CSN, PIN_MODE_OUTPUT);
+    digitalWrite(CSN, HIGH);
+
+    // Enable StealthChop + internal ramp generator
+    tmc5160_write(0x00, 0x00000004); // GCONF: stealthChop
+    tmc5160_write(0x20, 0x00000001); // RAMPMODE: position mode
+
+    // Current: IHOLD=8/31 (~0.4A), IRUN=16/31 (~0.8A)
+    tmc5160_write(REG_IHOLD_IRUN, 0x00021008);
+
+    // 6-Point Ramp parameters (in microsteps per second)
+    tmc5160_write(0x24, 50000);  // AMAX: max accel
+    tmc5160_write(0x26, 10000);  // DMAX: max decel
+    tmc5160_write(REG_VMAX, 200000); // VMAX: max velocity
+    tmc5160_write(0x2A, 10);     // A1: start accel
+    tmc5160_write(0x2B, 500);    // V1: start velocity
+    tmc5160_write(0x2C, 100);    // VSTOP</code></pre>
+    <p class="explain">🔍 RAMPMODE=1 เปิด position mode — set IHOLD/IRUN ตาม spec มอเตอร์ — 6-point ramp ใส่ค่าใน microsteps/sec — ไม่ต้องใช้ MCU จัดการ pulse อีกต่อไป</p></div>
+
+    <div class="step"><h3>ขั้นที่ 3: Motion Commands + Status Poll</h3>
+    <pre><code class="language-c">    while(1) {
+        // Move to position 100000 microsteps (~50 rev at 1/16)
+        tmc5160_write(REG_XTARGET, 100000);
+        // Wait until position reached
+        while(1) {
+            uint32_t stat = tmc5160_read(REG_RAMP_STAT);
+            if(stat & 0x04) break;  // position_reached flag
+            Delay_Ms(10);
+        }
+        Delay_Ms(1000);
+
+        // Move back to 0
+        tmc5160_write(REG_XTARGET, 0);
+        while(1) {
+            uint32_t stat = tmc5160_read(REG_RAMP_STAT);
+            if(stat & 0x04) break;
+            Delay_Ms(10);
+        }
+        Delay_Ms(1000);
+
+        // Read actual velocity for monitoring
+        uint32_t vactual = tmc5160_read(0x22);
+        // VACTUAL in microsteps/sec (signed int24)
+        int32_t speed = (int32_t)(vactual << 8) >> 8;
+    }
+}</code></pre>
+    <p class="explain">🔍 <code>tmc5160_write(REG_XTARGET, pos)</code> สั่งให้ TMC5160 จัดการ ramp เอง — poll <code>RAMP_STAT</code> bit 2 (position_reached) — <code>VACTUAL</code> เป็น signed 24-bit แสดงความเร็วจริง</p></div>
+</section>
+
+<section>
+    <h2>📋 API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+        <tr><td><code>TMC5160_Init(csn)</code></td><td>เริ่ม SPI + default config</td><td><code>TMC5160_Init(PC4)</code></td></tr>
+        <tr><td><code>TMC5160_WriteReg(reg,val)</code></td><td>เขียน 32-bit ลง register</td><td><code>TMC5160_WriteReg(0x2D, 50000)</code></td></tr>
+        <tr><td><code>TMC5160_ReadReg(reg)</code></td><td>อ่าน 32-bit จาก register</td><td><code>uint32_t s = TMC5160_ReadReg(0x35)</code></td></tr>
+        <tr><td><code>TMC5160_MoveTo(pos)</code></td><td>เคลื่อนที่ไปตำแหน่ง microsteps</td><td><code>TMC5160_MoveTo(25600)</code></td></tr>
+        <tr><td><code>TMC5160_WaitComplete()</code></td><td>รอจน motion เสร็จ</td><td><code>TMC5160_WaitComplete()</code></td></tr>
+        <tr><td><code>TMC5160_SetRamp(a,vmax,d)</code></td><td>ตั้ง ramp parameters</td><td><code>TMC5160_SetRamp(50000,200000,10000)</code></td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>SPI ไม่ตอบสนอง — TMC5160 silent</td><td>SPI mode ผิด (ต้อง Mode 3) หรือ CSN ไม่ toggle</td><td>ตั้ง SPI Mode 3 (CPOL=1,CPHA=1) — เช็ค CSN LOW/HIGH ด้วย oscilloscope</td></tr>
+        <tr><td>Motor สั่นแต่ไม่ขยับตาม ramp</td><td>RAMPMODE ไม่ได้ set เป็น position mode</td><td>เขียน <code>tmc5160_write(0x20, 1)</code> — RAMPMODE=0 = hold mode (ไม่เคลื่อนที่)</td></tr>
+        <tr><td>Motor เร่งแล้วหยุดทันที — RAMP_STAT ค้าง</td><td>AMAX หรือ VMAX ตั้งสูงเกิน — มอเตอร์ stall</td><td>ลด AMAX, VMAX ลง 50% — เช็ค StallGuard2 value — OR เปิด dcStep</td></tr>
+        <tr><td>TMC5160 ร้อนจน thermal shutdown</td><td>IRUN สูงเกิน + heatsink ไม่พอ — 10A peak</td><td>ใช้ heatsink + active fan — เปิด CoolStep (TCOOLTHRS) — ลด IRUN</td></tr>
+        <tr><td>หลาย SPI device บนบัส — CSN แย่งกัน</td><td>ใช้ CSN เดียวกันหลายอุปกรณ์</td><td>CSN ต้องแยกต่อ device — TMC5160 1 ตัวต่อ 1 CSN pin — ห้าม share</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>🛠️ สร้าง Product: High-Torque CNC Spindle Axis</h2>
+    <p>ใช้ TMC5160 + NEMA23 — เคลื่อนที่ด้วย 6-point ramp — G-Code position mode — StallGuard2 sensorless homing</p>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int32_t pos = 0;
+#define STEPS_PER_MM 3200
+
+void move_to_mm(float mm) {
+    int32_t target = (int32_t)(mm * STEPS_PER_MM);
+    TMC5160_WriteReg(0x2D, target);
+    while(1) {
+        uint32_t st = TMC5160_ReadReg(0x35);
+        if(st & 0x04) break;  // position reached
+        // Check stallGuard for safety
+        uint32_t sg = TMC5160_ReadReg(0x52);
+        if(sg < 10) { TMC5160_WriteReg(0x2D, pos); break; } // stall -> stop
+    }
+    pos = target;
+}
+
+void home() {
+    TMC5160_WriteReg(0x27, 50000);  // slow VMAX for homing
+    TMC5160_WriteReg(0x2D, -200000); // move towards limit
+    while(1) {
+        uint32_t sg = TMC5160_ReadReg(0x52);
+        if(sg < 15) {  // Stall = home
+            TMC5160_WriteReg(0x2D, TMC5160_ReadReg(0x22)/256);
+            break;
+        }
+    }
+    pos = 0; TMC5160_WriteReg(0x2D, 0);  // set as zero
+    TMC5160_WriteReg(0x27, 200000); // restore VMAX
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    USART1_Init(115200);
+    TMC5160_Init(PC4);
+    TMC5160_WriteReg(0x00, 0x04);   // StealthChop
+    TMC5160_WriteReg(0x20, 0x01);   // Position mode
+    TMC5160_WriteReg(0x10, 0x00021008); // Current
+    TMC5160_WriteReg(0x24, 50000);  // AMAX
+    TMC5160_WriteReg(0x27, 200000); // VMAX
+    home();
+
+    while(1) {
+        if(USART1_Available()) {
+            char cmd = USART1_Read();
+            if(cmd == 'H') home();
+            if(cmd == '1') move_to_mm(50);
+            if(cmd == '2') move_to_mm(0);
+        }
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>✏️ ลองทำดู</h2>
+    <ol>
+        <li>ใช้ dcStep Mode — ให้ motor ปรับความเร็วอัตโนมัติตามโหลด โดยไม่ stall — เหมาะกับ winding machine</li>
+        <li>ใช้ Encoder Interface — ต่อ ABN encoder เข้ากับ TMC5160 — ทำ closed-loop position control แบบ absolute</li>
+        <li>ทำ Multi-Axis CNC — ใช้ TMC5160 3 ตัวบน SPI bus (แยก CSN) — สร้าง motion planner ที่ sync ทุกแกน</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_tmc220x.html">บทก่อน</a>
+    <a href="chapx_lib_relay.html">บทถัดไป →</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

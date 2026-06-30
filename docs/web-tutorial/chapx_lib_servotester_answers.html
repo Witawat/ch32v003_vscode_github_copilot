@@ -1,0 +1,104 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย SERVOTESTER — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_servotester.html">กลับบท</a><a href="chapx_lib_servocluster_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — Servo Tester</h1>
+
+<div class="answer">
+<h2>ข้อ 1: Calibrate เซอร์โวที่ไม่รู้จัก — หา min/max pulse</h2>
+<pre><code class="language-c">#include "simple_servotester.h"
+
+ServoTester_t tester;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    ServoTester_Init(&tester, GPIOA, GPIO_Pin_0);
+
+    // กวาด pulse ตั้งแต่ 500us ถึง 2500us ทีละ 10us
+    for (uint16_t pulse = 500; pulse &lt;= 2500; pulse += 10) {
+        ServoTester_SetPulse(&tester, pulse);
+        Delay_Ms(30);  // รอให้เซอร์โวตอบสนอง
+    }
+
+    while (1) {
+        // วนกลับไปกลับมา ระหว่าง min กับ max ที่หาได้
+        for (uint16_t p = 500; p &lt;= 2500; p += 50)
+            { ServoTester_SetPulse(&tester, p); Delay_Ms(40); }
+        for (uint16_t p = 2500; p &gt;= 500; p -= 50)
+            { ServoTester_SetPulse(&tester, p); Delay_Ms(40); }
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> เริ่มด้วยการสแกน pulse แบบเต็มช่วง 500–2500µs — สังเกตตำแหน่งที่ servo เริ่มหมุนและหยุดหมุน — ค่า min คือ pulse ที่ servo เพิ่งเริ่มขยับจากปลายหนึ่ง ค่า max คือ pulse ที่ servo หยุดหมุนอีกฝั่ง — ขั้นตอน calibrate ทำครั้งเดียวตอนเริ่ม จากนั้นใช้ค่า min/max ในการคำนวณมุม — หลัง calibrate ให้ใช้ for loop สลับทิศทางเพื่อทดสอบการตอบสนอง</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: ทดสอบ Center Accuracy — วนกลับจุดกึ่งกลางซ้ำ ๆ</h2>
+<pre><code class="language-c">#include "simple_servotester.h"
+
+ServoTester_t tester;
+
+#define CENTER_PULSE  1500
+#define LEFT_PULSE    1000
+#define RIGHT_PULSE   2000
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    ServoTester_Init(&tester, GPIOA, GPIO_Pin_0);
+
+    uint16_t positions[] = {LEFT_PULSE, CENTER_PULSE, RIGHT_PULSE, CENTER_PULSE};
+    uint8_t  idx = 0;
+
+    while (1) {
+        ServoTester_SetPulse(&tester, positions[idx]);
+        Delay_Ms(800);
+
+        if (positions[idx] == CENTER_PULSE) {
+            // หน่วงนานขึ้นที่ตำแหน่งกลางเพื่อวัดความแม่นยำ
+            Delay_Ms(500);
+        }
+
+        idx = (idx + 1) % 4;
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ทดสอบความแม่นยำในการกลับจุดกึ่งกลาง — ใช้ array เก็บลำดับตำแหน่ง Left → Center → Right → Center — หน่วงนานที่ตำแหน่งกลางเป็นพิเศษเพื่อให้ผู้ใช้สังเกตด้วยตาเปล่าว่าเซอร์โวกลับมาตรงเดิมหรือไม่ — ถ้าเซอร์โวมี backlash (ฟันเฟืองหลวม) จะเห็นตำแหน่งกลางจากทางซ้ายไม่เท่ากับจากทางขวา — ในทางปฏิบัติให้ใช้เครื่องหมายเทียบกับไม้บรรทัดหรือ protractor — ค่า pulse ที่ใช้ควรมาจากการ calibrate จริง ไม่ใช่ค่ามาตรฐาน</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: วัด Deadband ของเซอร์โว — หา pulse ขั้นต่ำที่ทำให้ขยับ</h2>
+<pre><code class="language-c">#include "simple_servotester.h"
+
+ServoTester_t tester;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    ServoTester_Init(&tester, GPIOA, GPIO_Pin_0);
+
+    uint16_t base_pulse = 1500;
+
+    ServoTester_SetPulse(&tester, base_pulse);
+    Delay_Ms(1000);
+
+    while (1) {
+        uint16_t delta = 1;
+        uint16_t test_pulse;
+
+        // เพิ่ม pulse ทีละ 1 จนกว่าเซอร์โวจะขยับ
+        for (delta = 1; delta &lt;= 30; delta++) {
+            test_pulse = base_pulse + delta;
+            ServoTester_SetPulse(&tester, test_pulse);
+            Delay_Ms(200);
+
+            test_pulse = base_pulse - delta;
+            ServoTester_SetPulse(&tester, test_pulse);
+            Delay_Ms(200);
+        }
+
+        Delay_Ms(2000);  // พักระหว่างรอบ
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> Deadband คือช่วง pulse ที่ servo ยังไม่ตอบสนอง — เริ่มจากตำแหน่งกลาง 1500µs — เพิ่ม delta ทีละ 1µs ทั้งสองทิศทาง — สังเกตด้วยตาว่า delta เท่าไหร่ที่ servo เริ่มกระตุก — เซอร์โวคุณภาพดี deadband ≈ 1-2µs, คุณภาพต่ำ ≈ 4-8µs — ข้อมูล deadband มีประโยชน์ในการตั้งค่า PID และการปรับ smoothing — อย่าลืมรอ delay เพียงพอ (200ms) ให้เซอร์โวมีเวลาตอบสนอง</div>
+</div>
+
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_servotester.html">กลับบท</a><a href="chapx_lib_servocluster_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

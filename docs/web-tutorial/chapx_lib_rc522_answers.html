@@ -1,0 +1,234 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย RC522 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_rc522.html">กลับบท</a><a href="chapx_lib_pca9685_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — RC522 RFID/NFC</h1>
+
+<div class="answer">
+<h2>ข้อ 1: Door Lock — ตรวจ UID whitelist เปิดประตู</h2>
+<pre><code class="language-c">#define MAX_CARDS   10
+#define RELAY_PIN   PC0
+#define BUZZER_PIN  PC1
+
+// Whitelist UIDs (4 หรือ 7 bytes)
+uint8_t whitelist[MAX_CARDS][7] = {
+    {0xDE, 0xAD, 0xBE, 0xEF},
+    {0x12, 0x34, 0x56, 0x78},
+    // เพิ่ม card ได้อีก...
+};
+uint8_t whitelist_len[MAX_CARDS] = {4, 4};  // UID length
+uint8_t whitelist_count = 2;
+
+void rc522_door_lock(void) {
+    RC522_Init();
+    GPIO_SimpleInit(RELAY_PIN, GPIO_OUT_PP);
+    GPIO_SimpleInit(BUZZER_PIN, GPIO_OUT_PP);
+    GPIO_WriteBit(RELAY_PIN, 0);  // ล็อกเริ่มต้น
+
+    USART_Println("[DOOR] Waiting for card...");
+
+    while(1) {
+        if(!RC522_IsCardPresent()) {
+            Delay_Ms(200);
+            continue;
+        }
+
+        uint8_t uid[10];
+        uint8_t uid_len = RC522_ReadUID(uid);
+
+        if(uid_len == 0) { Delay_Ms(200); continue; }
+
+        // แสดง UID
+        USART_Print("Card: ");
+        for(uint8_t i=0; i<uid_len; i++) {
+            USART_PrintHexByte(uid[i]);
+            USART_Print(" ");
+        }
+        USART_Println("");
+
+        // ตรวจ whitelist
+        uint8_t found = 0;
+        for(uint8_t c=0; c<whitelist_count; c++) {
+            if(uid_len == whitelist_len[c] &&
+               memcmp(uid, whitelist[c], uid_len) == 0) {
+                found = 1;
+                break;
+            }
+        }
+
+        if(found) {
+            USART_Println("✓ ACCESS GRANTED");
+            GPIO_WriteBit(RELAY_PIN, 1);  // เปิดล็อก
+
+            // เสียง Beep
+            PWM_SimpleInit(BUZZER_PIN, 1, 1000, 500);
+            Delay_Ms(200);
+            PWM_SetDuty(BUZZER_PIN, 1, 0);
+
+            Delay_Ms(3000);  // เปิด 3 วิ
+            GPIO_WriteBit(RELAY_PIN, 0);  // ล็อก
+        } else {
+            USART_Println("✗ ACCESS DENIED");
+            // เสียงผิดพลาด
+            PWM_SimpleInit(BUZZER_PIN, 1, 500, 500);
+            Delay_Ms(500);
+            PWM_SetDuty(BUZZER_PIN, 1, 0);
+            Delay_Ms(1000);  // หน่วงกัน brute force
+        }
+
+        RC522_Halt();
+        Delay_Ms(500);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> RC522_ReadUID อ่าน UID ของการ์ด (4 ไบต์สำหรับ Mifare Classic, 7 ไบต์สำหรับ Ultralight) — whitelist เก็บ UID ที่อนุญาต — memcmp เทียบ UID — relay ควบคุมล็อกแม่เหล็ก (active HIGH เปิด) — buzzer ให้ feedback เสียง (เสียงสูง=ผ่าน, เสียงต่ำ=ไม่ผ่าน) — หน่วง 1 วิเมื่อผิดพลาดกัน brute force — RC522_Halt สั่งการ์ดหยุดก่อนวนรอบใหม่</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: เขียนข้อมูลลงการ์ด Mifare Classic</h2>
+<pre><code class="language-c">#define MFRC_SECTOR    1     // sector ที่จะเขียน
+#define MFRC_BLOCK     (MFRC_SECTOR * 4)  // block แรกของ sector
+#define MFRC_DEFAULT_KEY  {0xFF,0xFF,0xFF,0xFF,0xFF,0xFF}
+
+uint8_t key_a[6] = MFRC_DEFAULT_KEY;
+
+typedef struct {
+    char    name[16];
+    uint32_t balance;     // หน่วยสตางค์
+    uint16_t issued;      // YYMM
+    uint8_t  checksum;
+} card_data_t;
+
+void rc522_write_card_data(void) {
+    RC522_Init();
+
+    USART_Println("[RC522] Place card to write...");
+
+    while(1) {
+        if(!RC522_IsCardPresent()) {
+            Delay_Ms(200);
+            continue;
+        }
+
+        uint8_t uid[10];
+        uint8_t uid_len = RC522_ReadUID(uid);
+        if(uid_len == 0) { Delay_Ms(200); continue; }
+
+        USART_Println("Card detected. Writing...");
+
+        // Authenticate sector ด้วย Key A
+        if(!RC522_Auth(MFRC_PICC_AUTHENT1A, MFRC_BLOCK,
+                       key_a, uid)) {
+            USART_Println("Auth FAIL");
+            RC522_Halt();
+            Delay_Ms(500);
+            continue;
+        }
+
+        // เตรียมข้อมูล
+        card_data_t data;
+        strcpy(data.name, "CH32V003 User");
+        data.balance = 10000;  // 100.00 บาท
+        data.issued = 2406;    // มิ.ย. 2024
+        data.checksum = rc522_calc_checksum((uint8_t *)&data,
+                                            sizeof(data)-1);
+
+        // เขียน block (16 bytes)
+        RC522_WriteBlock(MFRC_BLOCK, (uint8_t *)&data);
+
+        USART_Println("Write OK");
+
+        // Verify: อ่านกลับ
+        uint8_t verify[16];
+        RC522_ReadBlock(MFRC_BLOCK, verify);
+        USART_Print("Verify: ");
+        for(uint8_t i=0; i<16; i++) {
+            USART_PrintHexByte(verify[i]);
+            USART_Print(" ");
+        }
+        USART_Println("");
+
+        RC522_Halt();
+        Delay_Ms(1000);
+    }
+}
+
+uint8_t rc522_calc_checksum(uint8_t *d, uint8_t len) {
+    uint8_t sum = 0;
+    while(len--) sum ^= *d++;
+    return sum;
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> Mifare Classic 1K มี 16 sectors, แต่ละ sector มี 4 blocks (block0-3) — Block 3 ของแต่ละ sector คือ sector trailer (keyA + access bits + keyB) — ต้อง authenticate ด้วย key ก่อนอ่าน/เขียน — เขียน 16 bytes/block — เขียนข้อมูลผู้ใช้ลง block 0 ของ sector 1 — checksum XOR ง่ายสำหรับตรวจ integrity — อ่านกลับ verify ว่าเขียนถูก — sector trailer ห้ามเขียนทับโดยไม่ระวัง (จะล็อก sector ถาวร)</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: Sector Key Management — เปลี่ยนคีย์ A/B</h2>
+<pre><code class="language-c">uint8_t new_key_a[6] = {0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5};
+uint8_t new_key_b[6] = {0xB0, 0xB1, 0xB2, 0xB3, 0xB4, 0xB5};
+
+void rc522_change_keys(void) {
+    RC522_Init();
+
+    USART_Println("[KEY] Place card to change keys...");
+
+    while(1) {
+        if(!RC522_IsCardPresent()) { Delay_Ms(200); continue; }
+
+        uint8_t uid[10];
+        uint8_t uid_len = RC522_ReadUID(uid);
+        if(uid_len == 0) continue;
+
+        uint8_t sector = 1;
+        uint8_t trailer = sector * 4 + 3;  // block 7
+
+        // 1. Auth ด้วย key เดิม (default: FFFFFF)
+        uint8_t default_key[6] = MFRC_DEFAULT_KEY;
+        if(!RC522_Auth(MFRC_PICC_AUTHENT1A, trailer,
+                       default_key, uid)) {
+            USART_Println("Auth FAIL — wrong old key?");
+            RC522_Halt(); Delay_Ms(500); continue;
+        }
+
+        // 2. สร้าง sector trailer ใหม่
+        uint8_t new_trailer[16];
+        memcpy(new_trailer, new_key_a, 6);           // Key A
+        new_trailer[6] = 0xFF; new_trailer[7] = 0x07;
+        new_trailer[8] = 0x80;  // access bits
+        memcpy(new_trailer + 10, new_key_b, 6);      // Key B
+
+        // 3. เขียน trailer ใหม่
+        RC522_WriteBlock(trailer, new_trailer);
+
+        USART_Println("[KEY] Sector 1 keys changed!");
+
+        // 4. Verify ด้วย key ใหม่
+        if(RC522_Auth(MFRC_PICC_AUTHENT1A, trailer,
+                      new_key_a, uid)) {
+            USART_Println("✓ New Key A verified OK");
+        }
+        if(RC522_Auth(MFRC_PICC_AUTHENT1B, trailer,
+                      new_key_b, uid)) {
+            USART_Println("✓ New Key B verified OK");
+        }
+
+        // แสดง access bits
+        uint8_t tr[16];
+        RC522_ReadBlock(trailer, tr);
+        USART_Print("New trailer: ");
+        for(uint8_t i=0; i<16; i++) {
+            USART_PrintHexByte(tr[i]);
+            USART_Print(" ");
+        }
+        USART_Println("");
+
+        RC522_Halt();
+        break;
+    }
+}
+
+// Access bits 0x78 → KeyA: read+write, KeyB: read
+// Access bits 0x08 → KeyA: read, KeyB: read+write
+// Access bits 0x0F → transport config (default)
+// คำเตือน: ห้ามตั้ง access bits ผิด → sector ถูกล็อกถาวร!</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> sector trailer = block สุดท้ายของแต่ละ sector — 6 bytes Key A + 4 bytes access bits + 6 bytes Key B — เปลี่ยนคีย์: auth ด้วยคีย์เก่า → เขียน trailer ใหม่ → verify ด้วยคีย์ใหม่ — access bits 0xFF0780 = KeyA ใช้ auth ได้, KeyB อ่าน/เขียนได้ — อันตราย: ตั้ง access bits ผิดทำให้ sector ล็อกถาวร — ทดสอบกับ Mifare Classic 1K blank card ก่อนใช้จริง</div>
+</div>
+
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_rc522.html">กลับบท</a><a href="chapx_lib_pca9685_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

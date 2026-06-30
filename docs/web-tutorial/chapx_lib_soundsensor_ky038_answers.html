@@ -1,0 +1,229 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย KY-038 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_soundsensor_ky038.html">กลับบท</a><a href="chapx_lib_rainsensor_yl83_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — KY-038 Sound Sensor</h1>
+
+<div class="answer">
+<h2>ข้อ 1: Clap Counter — นับจำนวนครั้งที่ตบมือ</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "OLED.h"
+
+#define SOUND_ADC PD2
+#define SOUND_DIG PC3
+#define CLAP_DEBOUNCE_MS 250
+#define TIMEOUT_MS 800
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    I2C_Init(PC1, PC2, I2C_SPEED_STANDARD);
+    ADC_Init(SOUND_ADC, ADC_CH0);
+    pinMode(SOUND_DIG, PIN_MODE_INPUT);
+    USART_Init(115200);
+
+    OLED_t oled;
+    OLED_Init(&oled, 0x3C, OLED_128x64);
+    OLED_SetFont(&oled, FONT_8x16);
+
+    uint32_t last_clap_ms = 0;
+    uint8_t clap_count = 0;
+    uint32_t total_claps = 0;
+    Timer_t tmr_timeout;
+
+    USART_Print("Clap Counter Ready\r\n");
+
+    while(1) {
+        uint16_t adc = ADC_Read(SOUND_ADC);
+        uint8_t dig = GPIO_Read(SOUND_DIG);
+        uint32_t now = Get_CurrentMs();
+
+        if(dig && adc > 750 && (now - last_clap_ms > CLAP_DEBOUNCE_MS)) {
+            last_clap_ms = now;
+            clap_count++;
+            Start_Timer(&tmr_timeout, TIMEOUT_MS, 0);
+
+            USART_Print("Clap #"); USART_PrintDec(clap_count);
+            USART_Print(" (ADC:"); USART_PrintDec(adc); USART_Print(")\r\n");
+        }
+
+        if(clap_count > 0 && Is_Timer_Expired(&tmr_timeout)) {
+            USART_Print("Sequence: "); USART_PrintDec(clap_count);
+            USART_Print(" claps\r\n");
+            total_claps += clap_count;
+            clap_count = 0;
+        }
+
+        OLED_Clear(&oled);
+        OLED_SetCursor(&oled, 0, 0);
+        OLED_Print(&oled, "Clap Counter");
+
+        OLED_SetCursor(&oled, 0, 2);
+        OLED_Print(&oled, "Total: ");
+        OLED_PrintDec(&oled, total_claps);
+
+        OLED_SetCursor(&oled, 0, 4);
+        OLED_Print(&oled, "Seq: ");
+        OLED_PrintDec(&oled, clap_count);
+
+        OLED_SetCursor(&oled, 0, 6);
+        OLED_PrintDec(&oled, adc);
+        OLED_Print(&oled, " ");
+        OLED_Print(dig ? "LOUD" : "---");
+
+        OLED_Display(&oled);
+        Delay_Ms(20);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ตรวจจับการตบมือด้วย digital + analog threshold (>750) — debounce 250ms กันนับซ้ำ — timeout 800ms → สิ้นสุด sequence → แสดงจำนวน clap ใน sequence นั้น — สะสม total_claps — แสดงผล OLED — ใช้ Get_CurrentMs() และ Timer_t แบบ non-blocking — การตบมือสร้าง peak สูงและสั้น (~100ms) — threshold ADC>750 กรองเสียงเบาออก</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: Sound-Triggered LED — ไฟกระพริบตามจังหวะเสียง</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+#define SOUND_ADC PD2
+#define SOUND_DIG PC3
+#define LED_PIN   PC0
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    ADC_Init(SOUND_ADC, ADC_CH0);
+    pinMode(SOUND_DIG, PIN_MODE_INPUT);
+    pinMode(LED_PIN, PIN_MODE_OUTPUT);
+    USART_Init(115200);
+
+    digitalWrite(LED_PIN, LOW);
+
+    uint16_t quiet_level = 0;
+    USART_Print("Calibrating ambient noise...\r\n");
+    for(int i = 0; i < 50; i++) {
+        quiet_level += ADC_Read(SOUND_ADC);
+        Delay_Ms(20);
+    }
+    quiet_level /= 50;
+    USART_Print("Quiet level: ");
+    USART_PrintDec(quiet_level);
+    USART_Print("\r\n");
+
+    uint16_t threshold = quiet_level + 80;
+    USART_Print("Threshold: ");
+    USART_PrintDec(threshold);
+    USART_Print("\r\nReady\r\n");
+
+    uint8_t led_state = 0;
+    uint8_t beat_count = 0;
+
+    while(1) {
+        uint16_t adc = ADC_Read(SOUND_ADC);
+        uint8_t dig = GPIO_Read(SOUND_DIG);
+
+        if(adc > threshold) {
+            led_state = !led_state;
+            digitalWrite(LED_PIN, led_state);
+            beat_count++;
+
+            if(beat_count % 4 == 0) {
+                USART_Print("Beat!\r\n");
+            }
+            Delay_Ms(50);
+        } else {
+            Delay_Ms(20);
+        }
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ปรับเทียบระดับเสียงเงียบ (ambient calibration) โดยอ่าน 50 samples — threshold = quiet + 80 (ค่าชดเชย noise) — เมื่อเสียงดังเกิน threshold → toggle LED — LED กระพริบตาม beat ของเสียงเพลง — ใช้ delay 50ms หลัง toggle เพื่อไม่ให้ flicker ถี่เกิน — เหมาะกับงาน music visualizer, sound-reactive lighting, หรือ disco light — ค่า quiet_level เปลี่ยนตามสภาพแวดล้อม ทำให้ adaptive กับ noise ต่าง ๆ</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: Volume Meter — แสดงระดับเสียงแบบ Bar Graph</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "OLED.h"
+
+#define SOUND_ADC PD2
+#define SOUND_DIG PC3
+#define NUM_LEVELS 8
+
+const char* level_labels[NUM_LEVELS] = {
+    "Silent","Whisper","Quiet","Normal",
+    "Loud","VeryLoud","Shout","Peak!"
+};
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    I2C_Init(PC1, PC2, I2C_SPEED_STANDARD);
+    ADC_Init(SOUND_ADC, ADC_CH0);
+    pinMode(SOUND_DIG, PIN_MODE_INPUT);
+    USART_Init(115200);
+
+    OLED_t oled;
+    OLED_Init(&oled, 0x3C, OLED_128x64);
+    OLED_SetFont(&oled, FONT_8x16);
+
+    uint16_t peaks[8] = {0};
+    uint16_t peak_max = 0;
+
+    USART_Print("Volume Meter Ready\r\n");
+
+    while(1) {
+        uint32_t sum = 0;
+        uint16_t peak_sample = 0;
+        for(uint8_t i = 0; i < 10; i++) {
+            uint16_t s = ADC_Read(SOUND_ADC);
+            sum += s;
+            if(s > peak_sample) peak_sample = s;
+            Delay_Ms(10);
+        }
+        uint16_t avg = sum / 10;
+
+        for(uint8_t i = 7; i > 0; i--) peaks[i] = peaks[i-1];
+        peaks[0] = avg;
+        if(peak_sample > peak_max) peak_max = peak_sample;
+
+        uint8_t level = avg / 128;
+        if(level > 7) level = 7;
+
+        OLED_Clear(&oled);
+        OLED_SetCursor(&oled, 0, 0);
+        OLED_Print(&oled, "VOLUME METER");
+
+        OLED_SetCursor(&oled, 0, 1);
+        OLED_Print(&oled, level_labels[level]);
+        OLED_Print(&oled, "   ");
+        OLED_PrintDec(&oled, avg);
+
+        OLED_SetCursor(&oled, 10, 3);
+        OLED_Print(&oled, "[");
+        for(uint8_t i = 0; i < 8; i++) {
+            if(i < level + 1)
+                OLED_Print(&oled, level >= 6 ? "#" : "|");
+            else
+                OLED_Print(&oled, " ");
+        }
+        OLED_Print(&oled, "]");
+
+        OLED_SetCursor(&oled, 0, 5);
+        OLED_Print(&oled, "History: ");
+        for(uint8_t i = 0; i < 8; i++) {
+            char c = peaks[i] > 700 ? '#' : peaks[i] > 400 ? '=' : peaks[i] > 200 ? '-' : '.';
+            OLED_PrintChar(&oled, c);
+        }
+
+        OLED_SetCursor(&oled, 0, 7);
+        OLED_Print(&oled, "Peak: ");
+        OLED_PrintDec(&oled, peak_max);
+        OLED_Print(&oled, " ");
+        OLED_Print(GPIO_Read(SOUND_DIG) ? "!" : " ");
+
+        OLED_Display(&oled);
+        Delay_Ms(50);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> Volume Meter 8 ระดับ — แบ่งช่วง 0-1023 เป็น 8 level (ละ ~128) — averaging 10 samples ลด flicker — History bar แสดงค่าเฉลี่ยย้อนหลัง 8 ครั้ง — Peak hold เก็บค่าสูงสุดที่เคยวัด — ใช้ labels แสดงระดับเสียง — level 6-7 (Shout/Peak) ใช้ "#" — level 0-5 ใช้ "|" — history ใช้อักษรต่างกันตามความดัง — Digital pin "!" เมื่อเกิน threshold</div>
+</div>
+
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_soundsensor_ky038.html">กลับบท</a><a href="chapx_lib_rainsensor_yl83_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

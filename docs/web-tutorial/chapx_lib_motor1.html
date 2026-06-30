@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>📦 มอเตอร์พื้นฐาน 6 ชนิด — Servo, ServoTester, Stepper, L298N, DRV8825, Relay — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_field.html">บทก่อน</a>
+    <a href="chapx_lib_motor2.html">บทถัดไป →</a>
+</nav>
+<h1>⚙️ มอเตอร์พื้นฐาน 6 ชนิด — Servo, ServoTester, Stepper, L298N, DRV8825, Relay</h1>
+<span class="level intermediate">ระดับกลาง</span>
+<p style="margin-top:0.5rem;color:#64748b">⏱️ ดูดัชนีทั้งหมดที่ <a href="chapx_lib_index.html">📦 คลังอุปกรณ์</a></p>
+
+<section>
+<h2>Servo — RC Servo ควบคุมด้วย PWM</h2>
+<pre class="ascii-circuit">
+PD2─Signal(orange)  5V external─VCC(servo,red)  GND─GND(common,brown)  ⚡ ห้ามจ่าย servo จาก WCH-Link!
+</pre>
+<p>Servo RC ใช้สัญญาณ PWM ความถี่ 50Hz (คาบ 20ms) ควบคุมมุมด้วยความกว้าง pulse:</p>
+<table>
+<tr><th>มุม</th><th>Pulse (SG90 มาตรฐาน)</th><th>Duty ที่ 50Hz</th></tr>
+<tr><td>0°</td><td>0.5ms</td><td>2.5%</td></tr>
+<tr><td>90°</td><td>1.5ms</td><td>7.5%</td></tr>
+<tr><td>180°</td><td>2.5ms</td><td>12.5%</td></tr>
+</table>
+<pre><code class="language-c">#include "Servo.h"
+PWM_SimpleInit(1, PD2, 50);   // TIM1 CH1, 50Hz (คาบ 20ms)
+PWM_Start(1);
+PWM_SetDuty(1, 2.5f); Delay_Ms(1000);  // 0°  (pulse 0.5ms)
+PWM_SetDuty(1, 7.5f); Delay_Ms(1000);  // 90° (pulse 1.5ms)
+PWM_SetDuty(1, 12.5f); Delay_Ms(1000); // 180°(pulse 2.5ms)
+
+// สูตรแปลงมุม→duty:
+// angle_to_duty = 2.5 + angle * 10.0 / 180   (0.5-2.5ms pulse — SG90)
+// angle_to_duty = 5.0 + angle * 5.0 / 180    (1.0-2.0ms pulse — servo บางรุ่น)
+float duty = 2.5f + (angle * 10.0f / 180.0f);
+PWM_SetDuty(1, duty);
+
+// ป้องกันมุมเกินขอบ (soft limit):
+if(angle < 0) angle = 0;
+if(angle > 180) angle = 180;</code></pre>
+<p class="explain">⚠️ <strong>50Hz = ค่าคงที่ ห้ามเปลี่ยน!</strong> — servo ทุกตัวใช้ 50Hz (20ms frame), pulse range 0.5-2.5ms เป็นค่ามาตรฐาน SG90 — servo บางตัวใช้ 1-2ms (เช็ค datasheet), servo กินไฟ ~500mA ตอน stall (มอเตอร์ติดขัด) → <strong>ต้องใช้ external 5V, ห้ามจ่ายจาก WCH-Link</strong> (Link จ่ายได้ ~100mA), GND ต้องต่อร่วมระหว่าง MCU กับ servo power supply, ควรมี min/max angle protection (soft limit) ป้องกัน servo พยายามหมุนเกินขอบเขตเชิงกล → servo พัง, ถ้าต่อ servo หลายตัว → ใช้ external 5V 2A+ และต่อ capacitor 470µF-1000µF ขนานกับ power rail ป้องกัน voltage sag</p>
+
+<h3>API หลัก</h3>
+<table>
+<tr><td><code>PWM_SimpleInit(ch, pin, freq)</code></td><td>Init PWM channel/chip/frequency</td><td><code>PWM_SetDuty(ch, duty%)</code></td><td>ตั้ง duty cycle 0-100%</td></tr>
+<tr><td><code>PWM_Start(ch)</code></td><td>เริ่มสร้างสัญญาณ PWM</td><td><code>PWM_Stop(ch)</code></td><td>หยุด PWM output</td></tr>
+<tr><td><code>PWM_SetPeriod(ch, freq)</code></td><td>เปลี่ยนความถี่ PWM</td><td><code>PWM_GetDuty(ch)</code></td><td>อ่านค่า duty ปัจจุบัน</td></tr>
+</table>
+
+<h2>ServoTester — เครื่องมือ Calibrate Servo (PWM)</h2>
+<pre><code class="language-c">#include "ServoTester.h"
+ServoTester_Init(1, PD2);          // PWM channel 1, pin PD2
+ServoTester_Sweep(0, 180, 2);      // 0° → 180° → 0°, ทีละ 2°/step
+ServoTester_SetCenter(90);          // ตั้ง center position (90°)
+ServoTester_TestRange(500, 2500);   // ทดสอบ pulse 500µs-2500µs ทีละ 100µs
+
+// ใช้ Sweep หา min/max จริงของ servo:
+ServoTester_Sweep(0, 180, 1);      // 1°/step — สังเกตว่า servo หยุดหมุนที่มุมไหน
+// ถ้า servo กระตุกที่ 0° → min pulse อาจต้องปรับเป็น 600µs
+// ถ้า servo กระตุกที่ 180° → max pulse อาจต้องปรับเป็น 2400µs</code></pre>
+<p class="explain">⚠️ ใช้หา min/max pulse ของ servo แต่ละตัว — servo แต่ละรุ่น/ยี่ห้อ pulse range ไม่เท่ากัน: บางตัว 0°=500µs บางตัว 0°=1000µs, center=1500µs ตามมาตรฐาน RC servo, วิธี calibrate: 1) เปิด Sweep(0,180,1) ดูว่า servo เริ่มกระตุกที่มุมไหน → บันทึกเป็น min/max, 2) ใช้ SetCenter(90) ดูว่า servo อยู่ตรงกลางจริงหรือไม่ → ถ้าไม่ → offset pulse, 3) ใช้ TestRange(min_us, max_us) ทดสอบช่วง pulse ที่บันทึกไว้ — servo ควรหมุนนุ่มนวลตลอดช่วง, ใช้ ServoTester ก่อนต่อ servo เข้ากับโปรเจกต์จริงเพื่อป้องกัน servo พัง</p>
+
+<h3>API หลัก</h3>
+<table>
+<tr><td><code>ServoTester_Init(ch, pin)</code></td><td>Init PWM + channel</td><td><code>ServoTester_Sweep(min,max,step)</code></td><td>Sweep angle ไป-กลับ</td></tr>
+<tr><td><code>ServoTester_SetCenter(deg)</code></td><td>Center position</td><td><code>ServoTester_TestRange(us_min,us_max)</code></td><td>ทดสอบช่วง pulse</td></tr>
+<tr><td><code>ServoTester_SetPulse(us)</code></td><td>ส่ง pulse แบบระบุ µs</td><td><code>ServoTester_Stop()</code></td><td>หยุด sweep</td></tr>
+</table>
+
+<h2>StepperMotor — 28BYJ-48 + ULN2003 (GPIO)</h2>
+<pre class="ascii-circuit">
+PC0─IN1(blue)  PC1─IN2(pink)  PC2─IN3(yellow)  PC3─IN4(orange)  5V external─VCC(ULN2003+)  GND─GND(ULN2003-)
+
+28BYJ-48 specs: 5V, 0.3 kg·cm torque, 1:64 gear ratio, 5-wire unipolar</pre>
+<pre><code class="language-c">#include "StepperMotor.h"
+Stepper_Init(PC0, PC1, PC2, PC3);
+Stepper_SetSpeed(5);              // 5 RPM
+Stepper_SetMode(STEPPER_FULL_STEP);
+
+// Full-step: 2048 steps = 1 revolution
+Stepper_Rotate(2048);             // หมุน 1 รอบ
+Stepper_RotateDegrees(90);       // หมุน 90°
+
+// Half-step: 4096 steps = 1 revolution (นุ่มนวลกว่า)
+Stepper_SetMode(STEPPER_HALF_STEP);
+Stepper_SetSpeed(3);              // ลด speed เพราะ step เพิ่ม 2 เท่า
+Stepper_Rotate(4096);             // หมุน 1 รอบ (half-step)
+
+// Direction control:
+Stepper_SetDirection(STEPPER_CW);     // clockwise
+Stepper_Rotate(1024);                 // หมุนครึ่งรอบ
+Stepper_SetDirection(STEPPER_CCW);    // counter-clockwise
+Stepper_Rotate(1024);                 // หมุนกลับครึ่งรอบ
+
+// Pattern: conveyor belt forward → pause → backward
+while(1) {
+    Stepper_SetDirection(STEPPER_CW);
+    Stepper_Rotate(8192);  // 4 รอบ (ระยะทาง conveyor)
+    Delay_Ms(2000);        // หยุด 2s
+    Stepper_SetDirection(STEPPER_CCW);
+    Stepper_Rotate(8192);  // กลับ
+    Delay_Ms(2000);
+}</code></pre>
+<p class="explain">⚠️ 28BYJ-48 = 2048 steps/rev (full-step), 4096 steps/rev (half-step) — gear ratio 1:64, torque ~0.3 kg·cm (เบามาก), ULN2003 รับ 5V logic (CH32V003 3.3V → marginal แต่ใช้งานได้ — ULN2003 threshold ~2.5V), <strong>ควรทำ acceleration (ramp speed)</strong>: ค่อยๆ เพิ่มความเร็วตอน start และลดความเร็วตอน stop → ป้องกัน step loss, Full-step vs Half-step: half-step torque ลดลง ~30% แต่หมุนนุ่มนวลกว่าและเพิ่ม resolution 2 เท่า, การคำนวณระยะทาง: 1 รอบ = 2048 steps → ถ้ารู้ระยะทางต่อรอบ (เช่น lead screw pitch) → ขั้นต่อ mm = 2048 / pitch_mm, 28BYJ-48 กินไฟ ~200mA ตอน full load → ใช้ external 5V 1A</p>
+
+<h3>API หลัก</h3>
+<table>
+<tr><td><code>Stepper_Init(in1..in4)</code></td><td>Init 4 GPIO pins</td><td><code>Stepper_SetSpeed(rpm)</code></td><td>ตั้งความเร็ว RPM</td></tr>
+<tr><td><code>Stepper_Rotate(steps)</code></td><td>หมุน N ขั้น (blocking)</td><td><code>Stepper_RotateDegrees(deg)</code></td><td>หมุน N องศา</td></tr>
+<tr><td><code>Stepper_SetMode(mode)</code></td><td>FULL_STEP/HALF_STEP</td><td><code>Stepper_SetDirection(dir)</code></td><td>CW/CCW</td></tr>
+<tr><td><code>Stepper_Stop()</code></td><td>หยุดมอเตอร์</td><td><code>Stepper_Release()</code></td><td>ปลด coil ทั้งหมด (free spin)</td></tr>
+</table>
+
+<h2>L298N — DC Motor Driver H-Bridge (GPIO+PWM)</h2>
+<pre class="ascii-circuit">
+Motor A: PC0─IN1  PC1─IN2  PC4(PWM)─ENA
+Motor B: PC2─IN3  PC3─IN4  PC5(PWM)─ENB (optional)
+5-12V external─VCC(motor, terminal block)  5V─VCC(logic)  GND─GND(common)
+
+⚠️ ถ้าใช้ไฟ motor >12V → ถอด jumper 5V regulator ออก!
+⚠️ 5V terminal ใช้จ่าย CH32V003 ได้ (ถ้า motor ≤12V, regulator in use)</pre>
+<pre><code class="language-c">#include "L298N.h"
+// Init motor A (IN1, IN2, ENA)
+pinMode(PC0, PIN_MODE_OUTPUT); pinMode(PC1, PIN_MODE_OUTPUT);
+PWM_SimpleInit(1, PC4, 1000);   // 1kHz PWM
+PWM_Start(1);
+
+// Forward 75% speed:
+digitalWrite(PC0, HIGH); digitalWrite(PC1, LOW);
+PWM_SetDuty(1, 75);
+Delay_Ms(2000);
+
+// Reverse 50% speed:
+digitalWrite(PC0, LOW); digitalWrite(PC1, HIGH);
+PWM_SetDuty(1, 50);
+Delay_Ms(2000);
+
+// Brake (motor short — หยุดเร็ว):
+digitalWrite(PC0, HIGH); digitalWrite(PC1, HIGH);
+PWM_SetDuty(1, 100);    // duty 100% = full brake force
+
+// Coast (free spin — ปล่อยให้ไหล):
+digitalWrite(PC0, LOW); digitalWrite(PC1, LOW);
+
+// === Differential Drive (2-wheel robot) ===
+// Left motor = IN1,IN2  Right motor = IN3,IN4
+// Turn right: left=forward, right=reverse
+void robot_turn_right(int speed) {
+    digitalWrite(IN1, HIGH); digitalWrite(IN2, LOW);   // left fwd
+    digitalWrite(IN3, LOW);  digitalWrite(IN4, HIGH);  // right rev
+    PWM_SetDuty(1, speed); PWM_SetDuty(2, speed);
+}
+// Turn left: left=reverse, right=forward
+// Stop: brake both</code></pre>
+<p class="explain">⚠️ L298N มี 2 motor channels (IN1-IN2 = Motor A, IN3-IN4 = Motor B), ENA/ENB = PWM speed control — ต่อกับ PWM pin ของ CH32V003 (ถ้าไม่ใช้ PWM → ต่อ ENA/ENB กับ 5V jumper → full speed ตลอด), มี flyback diode ในตัว (1N4007 × 8) — แต่ถ้ากระแสสูง (>1A) หรือ PWM ความถี่สูง (>10kHz) ควรเพิ่ม Schottky diode ภายนอก, VCC motor (6-12V) กับ VCC logic (5V) แยกกัน → ถ้าใช้ >12V ต้องถอด jumper 5V regulator ออกและจ่าย 5V logic แยก, duty cycle ต่ำ (<20%) motor อาจไม่หมุนเพราะแรงดันตก — minimum ~2V สำหรับ DC motor ทั่วไป, L298N voltage drop ~2V (Darlington transistor) → ถ้าใช้ 6V motor จริง motor ได้แค่ ~4V</p>
+
+<h3>API หลัก</h3>
+<table>
+<tr><td><code>pinMode(pin, PIN_MODE_OUTPUT)</code></td><td>ตั้ง GPIO เป็น output</td><td><code>digitalWrite(pin, HIGH/LOW)</code></td><td>เขียน logic level</td></tr>
+<tr><td><code>PWM_SimpleInit(ch, pin, freq)</code></td><td>Init PWM channel</td><td><code>PWM_SetDuty(ch, 0-100)</code></td><td>ปรับ speed 0-100%</td></tr>
+<tr><td><code>PWM_Start(ch)</code></td><td>เริ่ม PWM</td><td><code>PWM_Stop(ch)</code></td><td>หยุด PWM</td></tr>
+</table>
+
+<h2>DRV8825 — Stepper Driver Microstep (GPIO)</h2>
+<pre class="ascii-circuit">
+PC0─DIR    PC1─STEP   PC2─ENABLE(opt,LOW=on)   PC3─M0   PC4─M1   PC5─M2  (microstep select)
+12-24V external─VMOT  GND─GND(common)  Motor: A1/A2(1 coil)  B1/B2(1 coil)
+
+⚠️ ต้องตั้ง current limit pot ก่อนใช้! — หมุน Vref ให้ถูกต้อง ก่อนต่อ motor</pre>
+<pre><code class="language-c">#include "DRV8825.h"
+DRV8825_Init(PC0, PC1, PC2);             // DIR, STEP, ENABLE
+DRV8825_SetMicrostep(DRV8825_1_32_STEP);  // 1/32 microstep
+DRV8825_SetDirection(DRV8825_CW);
+DRV8825_Enable();                          // ENABLE=LOW → driver on
+
+// === Manual step pulse (speed control with delay) ===
+uint32_t steps = 6400;  // 1 rev with 1/32 microstep (200×32)
+uint32_t step_delay = 500; // µs between steps → speed
+for(uint32_t i = 0; i < steps; i++) {
+    DRV8825_Pulse();         // single step (toggles STEP pin)
+    Delay_Us(step_delay);    // longer delay = slower
+}
+
+// === RPM-based rotation (Lib handles timing) ===
+DRV8825_Rotate(60, DRV8825_1_16_STEP, 3200);  // 60RPM, 1/16, 3200 steps
+
+// === Direction change ===
+DRV8825_SetDirection(DRV8825_CW);
+DRV8825_Rotate(120, DRV8825_1_8_STEP, 800);
+Delay_Ms(500);
+DRV8825_SetDirection(DRV8825_CCW);
+DRV8825_Rotate(120, DRV8825_1_8_STEP, 800);   // back to start
+
+// === Microstep table ===
+// DRV8825_1_1_STEP  = 200 steps/rev  → 1.8°/step
+// DRV8825_1_2_STEP  = 400 steps/rev  → 0.9°/step
+// DRV8825_1_8_STEP  = 1600 steps/rev → 0.225°/step
+// DRV8825_1_16_STEP = 3200 steps/rev → 0.1125°/step
+// DRV8825_1_32_STEP = 6400 steps/rev → 0.05625°/step</code></pre>
+<p class="explain">⚠️ NEMA17 stepper (1.8°/step = 200 steps/rev full-step) — microstepping เพิ่ม resolution แต่ <strong>torque ลดลงตาม microstep</strong> (1/32 ≈ 5% torque!), VMOT 8.2-45V — higher voltage = faster max speed, <strong>current limit potentiometer ต้องตั้งก่อนใช้!</strong> สูตร: Vref = I_limit × 0.5 (DRV8825) — ใช้มัลติมิเตอร์วัด Vref ที่ pot pin เทียบ GND, logic 3.3V OK — CH32V003 ต่อตรงได้, STEP pin trigger on <strong>rising edge</strong>, min pulse width 1.9µs, DIR ต้องตั้งก่อน STEP pulse (timing: t_SU ≥ 650ns before step), DRV8825 ต่างจาก A4988: DRV8825 microstep ได้ละเอียดกว่า (1/32 vs 1/16) และ current rating สูงกว่า (2.5A vs 2A), heat sink จำเป็นที่กระแส >1A — DRV8825 ร้อนมาก</p>
+
+<h3>API หลัก</h3>
+<table>
+<tr><td><code>DRV8825_Init(dir,step,en)</code></td><td>Init GPIO pins</td><td><code>DRV8825_SetMicrostep(m)</code></td><td>เลือก microstep 1/1~1/32</td></tr>
+<tr><td><code>DRV8825_SetDirection(d)</code></td><td>CW/CCW</td><td><code>DRV8825_Pulse()</code></td><td>Generate 1 step pulse</td></tr>
+<tr><td><code>DRV8825_Rotate(rpm,m,steps)</code></td><td>หมุน N steps ที่ RPM</td><td><code>DRV8825_Enable()/Disable()</code></td><td>เปิด/ปิด driver</td></tr>
+<tr><td><code>DRV8825_Reset()</code></td><td>Reset driver</td><td><code>DRV8825_Sleep()</code></td><td>Sleep mode (ประหยัดไฟ)</td></tr>
+</table>
+
+<h2>Relay — Relay Module (GPIO)</h2>
+<pre class="ascii-circuit">
+PC0─IN(signal)  5V─VCC(power)  GND─GND
+COM─common  NO─normally open  NC─normally closed  → load
+
+Module ภายใน: optocoupler + transistor + flyback diode + relay coil
+Typical relay: SRD-05VDC (5V coil, 10A/250VAC or 10A/30VDC)</pre>
+<pre><code class="language-c">#include "Relay.h"
+Relay_Init(PC0, RELAY_ACTIVE_HIGH);
+
+// Basic on/off:
+Relay_On(PC0); Delay_Ms(5000); Relay_Off(PC0);
+
+// Toggle:
+Relay_Toggle(PC0);  // flip state
+Delay_Ms(1000);
+Relay_Toggle(PC0);  // flip back
+
+// === Pattern: Timer relay (on 5 min, off 5 min) ===
+uint32_t start = Timer_GetMillis();
+uint8_t relay_state = 0;  // 0=OFF, 1=ON
+while(1) {
+    uint32_t elapsed = Timer_GetMillis() - start;
+    if(elapsed > 300000) { // 5 minutes = 300,000ms
+        relay_state = !relay_state;
+        if(relay_state) Relay_On(PC0);
+        else Relay_Off(PC0);
+        start = Timer_GetMillis();
+    }
+    IWDG_Feed();
+}
+
+// === Active Low module (บางโมดูลใช้ LOW→ON) ===
+// Relay_Init(PC0, RELAY_ACTIVE_LOW);
+// HIGH = OFF, LOW = ON</code></pre>
+<p class="explain">⚠️ <strong>เช็ค ACTIVE_HIGH vs ACTIVE_LOW ก่อนใช้!</strong> — บางโมดูล HIGH→ON, บางโมดูล LOW→ON (ต้องอ่าน datasheet), flyback diode มีในโมดูลแล้ว (optocoupler + diode + transistor) → ไม่ต้องเพิ่ม external diode, switching inductive load (มอเตอร์, solenoid, pump) → <strong>ควรเพิ่ม snubber circuit</strong> (RC: 100Ω + 0.1µF ในอนุกรม ขนานกับ contact) — ลด arcing และ EMI, ⚡ <strong>ห้ามต่อ 220VAC ถ้าไม่รู้วิธี!</strong> — ไฟบ้านอันตรายถึงชีวิต ต้องมีความรู้และอุปกรณ์ป้องกัน (MCB, fuse, enclosure), รีเลย์ contact มีอายุการใช้งาน: electrical ~100,000 cycles (ที่ rated load), mechanical ~10,000,000 cycles, switching speed: ~5-10ms on, ~3-5ms off — ไม่เหมาะกับ PWM หรือ switching ความถี่สูง → ใช้ MOSFET/SSR แทน, ใช้ external 5V จ่าย relay module (coil กิน ~70mA) — CH32V003 pin จ่ายได้ ~8mA ไม่พอ</p>
+
+<h3>API หลัก</h3>
+<table>
+<tr><td><code>Relay_Init(pin, type)</code></td><td>Init GPIO + active level</td><td><code>Relay_On(pin)</code></td><td>เปิดรีเลย์</td></tr>
+<tr><td><code>Relay_Off(pin)</code></td><td>ปิดรีเลย์</td><td><code>Relay_Toggle(pin)</code></td><td>สลับสถานะ</td></tr>
+<tr><td><code>Relay_GetState(pin)</code></td><td>อ่านสถานะ (0/1)</td><td><code>Relay_Pulse(pin, ms)</code></td><td>เปิด N ms → ปิด</td></tr>
+</table>
+</section>
+
+<section>
+<h2>📋 เปรียบเทียบมอเตอร์ทั้ง 6 ชนิด</h2>
+<table>
+<tr><th>มอเตอร์/Driver</th><th>Interface</th><th>กำลังสูงสุด</th><th>ความแม่นยำ</th><th>Pin ที่ใช้</th><th>ราคา</th><th>เหมาะกับ</th></tr>
+<tr><td>Servo (SG90)</td><td>🟣 PWM</td><td>~1.2 kg·cm</td><td>~1°</td><td>1 GPIO/PWM</td><td>~40฿</td><td>Pan-tilt, robotic arm เล็ก, rudder</td></tr>
+<tr><td>ServoTester</td><td>🟣 PWM</td><td>N/A</td><td>N/A</td><td>1 GPIO/PWM</td><td>Tool</td><td>Calibrate servo ก่อนใช้งาน</td></tr>
+<tr><td>Stepper 28BYJ-48+ULN</td><td>🟢 GPIO</td><td>~0.3 kg·cm</td><td>0.18°/0.088°</td><td>4 GPIO</td><td>~60฿</td><td>Conveyor, หมุน precise, low torque</td></tr>
+<tr><td>L298N + DC motor</td><td>🟢GPIO+🟣PWM</td><td>2A/ch (25W)</td><td>ไม่มี (open loop)</td><td>3/ch (2PIN+1PWM)</td><td>~50฿</td><td>Robot car, pump, fan, actuator</td></tr>
+<tr><td>DRV8825+NEMA17</td><td>🟢 GPIO</td><td>2.5A (45V max)</td><td>0.056°/step (1/32)</td><td>3-6 GPIO</td><td>~200฿</td><td>CNC, 3D printer, high torque</td></tr>
+<tr><td>Relay Module</td><td>🟢 GPIO</td><td>10A/250VAC</td><td>N/A (ON/OFF)</td><td>1 GPIO</td><td>~30฿</td><td>เปิด-ปิด AC/DC load, home automation</td></tr>
+</table>
+</section>
+
+<section>
+<h2>✏️ ลองทำดู</h2>
+<ol>
+<li>Servo pan-tilt 2-axis — ใช้ joystick 2 ADC pots (PC4=x, PC5=y) ควบคุม servo PD2=pan, PD3=tilt → map ADC 0-4095 → angle 0-180 (อย่าลืม external 5V 2A)</li>
+<li>Stepper conveyor belt — forward 4096 steps (2 revs) → stop 2s → reverse 4096 → loop → เพิ่ม acceleration ramp (start slow, increase speed, slow before stop)</li>
+<li>L298N 2-wheel robot — differential drive: left wheel forward + right backward = turn right (ใช้ทั้ง 2 channel), ทำระยะไกล: เดินหน้า 2s, เลี้ยวขวา 1s, เดินหน้า 2s, หยุด</li>
+<li>DRV8825 CNC-style — absolute positioning ด้วย limit switch (PC3=limit X): home→move 5000 steps→check switch→reverse→home → ใช้ 1/16 microstep เพิ่มความแม่นยำ</li>
+<li>Relay timer — on 5 นาที, off 5 นาที, วน loop → ต่อ LED เป็น load → ถ้าต้องการความแม่นยำ ใช้ DS3231 RTC (<a href="chapx_lib_storage.html">บทจัดเก็บ</a>) แทน Timer_GetMillis()</li>
+</ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_field.html">บทก่อน</a>
+    <a href="chapx_lib_motor2.html">บทถัดไป →</a>
+</nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

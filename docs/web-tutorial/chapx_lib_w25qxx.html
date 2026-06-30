@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>W25Qxx SPI Flash — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_at24cxx.html">บทก่อน</a>
+    <a href="chapx_lib_ds3231.html">บทถัดไป →</a>
+</nav>
+<h1>W25Qxx SPI Flash — Sector Erase, JEDEC ID, 100K Endurance</h1>
+<span class="level advanced">ระดับสูง</span>
+
+<section class="flowchart">
+    <h2>🧭 แผนภาพการทำงาน</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["W25Q_Init(spi,cs)"] --> B["W25Q_ReadJEDEC()"]
+    B --> C{"Verify ID"}
+    C -->|"Correct"| D{"Operation"}
+    C -->|"Wrong/FF"| E["Check wiring/SPI"]
+    D -->|"Read"| F["W25Q_Read(addr,buf,len)"]
+    D -->|"Write"| G["W25Q_EraseSector(addr)"]
+    G --> H["W25Q_WritePage(addr,buf,len)"]
+    D -->|"ChipErase"| I["W25Q_EraseChip() (10+ sec!)"]
+    </pre>
+</section>
+
+<section>
+    <h2>🔌 การต่อวงจร</h2>
+    <pre class="ascii-circuit">
+               W25Qxx SPI NOR Flash Memory
+    ┌──────────────────────────────────────────────┐
+    │ CH32V003                        W25Q32/64    │
+    │ PC5(SCK)───────CLK              ┌───────────┤
+    │ PC6(MISO)──────DO(IO1)          │           │
+    │ PC7(MOSI)──────DI(IO0)          │ W25Q32=4MB│
+    │ PC3────────────CS               │ W25Q64=8MB│
+    │ 3.3V───────────VCC              │ W25Q128=  │
+    │ GND────────────GND              │ 16MB      │
+    │ 3.3V───────────HOLD# (pull-up) │           │
+    │ 3.3V───────────WP# (pull-up)   └───────────┤
+    │                                              │
+    │ ⚡ SPI Mode 0 (CPOL=0, CPHA=0)              │
+    │ ⚡ Write ต้อง Erase Sector ก่อน              │
+    │ ⚡ Endurance: 100K W/E cycles per sector    │
+    └──────────────────────────────────────────────┘
+    </pre>
+    <p>W25Qxx เป็น SPI NOR Flash — ความจุสูงกว่า EEPROM มาก (4-128MB), แต่อายุสั้นกว่า (100K vs 1M write cycles) และต้อง Erase ก่อนเขียนเสมอ, HOLD# และ WP# ต้อง pull-up ถ้าไม่ใช้</p>
+</section>
+
+<section>
+    <h2>📚 หลักการทำงาน</h2>
+    <p><strong>W25Qxx</strong> เป็น SPI NOR Flash — อ่านเขียนแบบ SPI ที่ความเร็วสูง (สูงสุด 80MHz แต่ CH32V003 limit ที่ ~24MHz), แบ่งเป็น sectors (4KB), blocks (32KB/64KB), และ chip</p>
+    <p><strong>กฎสำคัญของ Flash:</strong> Flash เปลี่ยนบิตจาก 1→0 ได้ แต่เปลี่ยน 0→1 ต้อง Erase ทั้ง Sector — การ Erase ใช้เวลานาน (~45ms/sector, ~10-80s/chip), เขียนได้ทีละ 1-256 bytes ต่อ page (Page Program)</p>
+    <p><strong>JEDEC ID:</strong> ทุก W25Qxx มี JEDEC ID 3-byte ไม่ซ้ำกัน — Manufacturer ID + Memory Type + Capacity — ใช้อ่านเพื่อ verify ว่าชิปที่ต่อถูกต้องและ SPI สื่อสารได้ดี</p>
+    <p><strong>Write Protect:</strong> Status Register มี BP bits (Block Protect) — ใช้ป้องกัน sector ไม่ให้ถูกเขียนทับ — สำคัญมากสำหรับ bootloader หรือ calibration data</p>
+</section>
+
+<section>
+    <h2>💻 เขียน Code ทีละขั้น</h2>
+
+    <div class="step"><h3>ขั้นที่ 1: Init + Verify JEDEC ID</h3>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "W25Qxx.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    SPI_Init(SPI1, SPI_BAUD_4MHZ, SPI_MODE0);
+    W25Q_Init(SPI1, PC3);  // CS=PC3
+    USART_Init(USART1, BAUD_115200);
+
+    uint32_t jedec = W25Q_ReadJEDEC();
+    USART_Print("JEDEC ID: 0x");
+    USART_PrintHex24(jedec);
+    USART_Println("");
+    // W25Q32: 0xEF4016, W25Q64: 0xEF4017
+    if((jedec & 0xFFFF) != 0x4016) {
+        USART_Println("Wrong chip!"); while(1);
+    }</code></pre>
+    <p class="explain">🔍 <code>W25Q_ReadJEDEC()</code> — อ่าน ID 3-byte ใช้ verify, Manufacturer ID W25Q=0xEF, Memory Type=0x40, Capacity=0x16 (32MBit)/0x17 (64MBit)</p></div>
+
+    <div class="step"><h3>ขั้นที่ 2: Erase Sector → เขียนข้อมูล</h3>
+    <pre><code class="language-c">    // === Erase Sector 0 (4KB) ===
+    W25Q_EraseSector(0x000000);  // erase sector 0
+    Delay_Ms(50);                // wait erase complete
+    // หรือ poll W25Q_IsBusy()
+
+    // === Write Page (max 256 bytes/page) ===
+    uint8_t data[32];
+    for(int i=0; i<32; i++) data[i] = i;
+    W25Q_WritePage(0x000000, data, 32);  // write page 0
+    Delay_Ms(5);</code></pre>
+    <p class="explain">🔍 เขียน Flash ต้อง Erase Sector ก่อนเสมอ — 1 sector = 4KB, ถ้าข้อมูลเดิมไม่สำคัญก็ Erase ได้เลย, <code>W25Q_WritePage(addr, buf, len)</code> — 1 page = 256 bytes, ห้ามเขียนข้าม page boundary</p></div>
+
+    <div class="step"><h3>ขั้นที่ 3: อ่านข้อมูล + Write Protect</h3>
+    <pre><code class="language-c">    // === Read back ===
+    uint8_t rbuf[32];
+    W25Q_Read(0x000000, rbuf, 32);  // read 32 bytes
+    for(int i=0; i<32; i++) {
+        USART_PrintInt(rbuf[i]); USART_Print(" ");
+    }
+    USART_Println("");
+
+    // === Write Protect Sector 0-3 (16KB) ===
+    W25Q_WriteProtect(0, 3);  // protect sectors 0-3
+    // ถ้าพยายามเขียน sector 0 → จะเงียบ (ไม่เขียน)
+    W25Q_WritePage(0x000000, data, 32);  // silently fails!
+    // ต้อง Unprotect ก่อนถึงเขียนได้
+    W25Q_WriteUnprotect(0, 3);</code></pre>
+    <p class="explain">🔍 <code>W25Q_Read(addr, buf, len)</code> — อ่านได้ไม่มี page boundary limit, <code>W25Q_WriteProtect(s,e)</code> — ป้องกัน sector ไม่ให้ถูกเขียนทับ (สำคัญสำหรับ critical data)</p></div>
+</section>
+
+<section>
+    <h2>📋 API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+        <tr><td><code>W25Q_Init(spi, cs)</code></td><td>เริ่มต้น SPI Flash</td><td><code>W25Q_Init(SPI1, PC3)</code></td></tr>
+        <tr><td><code>W25Q_ReadJEDEC()</code></td><td>อ่าน JEDEC ID 3-byte</td><td><code>uint32_t id = W25Q_ReadJEDEC()</code></td></tr>
+        <tr><td><code>W25Q_EraseSector(addr)</code></td><td>ลบ 1 sector (4KB)</td><td><code>W25Q_EraseSector(0x000000)</code></td></tr>
+        <tr><td><code>W25Q_EraseChip()</code></td><td>ลบทั้งชิป (ช้า! 10-80s)</td><td><code>W25Q_EraseChip()</code></td></tr>
+        <tr><td><code>W25Q_WritePage(addr,buf,len)</code></td><td>เขียนหน้า (≤256B)</td><td><code>W25Q_WritePage(0, buf, 256)</code></td></tr>
+        <tr><td><code>W25Q_Read(addr,buf,len)</code></td><td>อ่านข้อมูล</td><td><code>W25Q_Read(0, buf, 1024)</code></td></tr>
+        <tr><td><code>W25Q_WriteProtect(s,e)</code></td><td>ป้องกัน sector จากเขียน</td><td><code>W25Q_WriteProtect(0, 15)</code></td></tr>
+        <tr><td><code>W25Q_IsBusy()</code></td><td>เช็คสถานะ BUSY</td><td><code>while(W25Q_IsBusy());</code></td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>JEDEC ID = 0xFFFFFF</td><td>SPI ไม่ได้ต่อ หรือ CS ผิด pin</td><td>เช็คสาย MOSI/MISO/CLK/CS, ใช้ SPI Mode 0</td></tr>
+        <tr><td>อ่านข้อมูลแล้วได้ 0xFF ทั้งหมด</td><td>Sector ถูกลบ (ปกติหลัง erase) หรือยังไม่เคยเขียน</td><td>Erase → ค่าทั้งหมดเป็น 0xFF — ต้องเขียนทับก่อนอ่าน</td></tr>
+        <tr><td>เขียนแล้วค่าไม่เปลี่ยน</td><td>ลืม Erase sector ก่อนเขียน</td><td>Flash ต้อง Erase ก่อนเขียนทุกครั้ง — 0→1 ต้อง Erase</td></tr>
+        <tr><td>Erase Chip แล้วค้างนาน</td><td>Chip Erase ใช้เวลา 10-80 วินาที</td><td>ใช้ <code>W25Q_IsBusy()</code> poll แทน fixed delay</td></tr>
+        <tr><td>ข้อมูลต้น sector หาย</td><td>เขียนข้ามหน้า (page boundary)</td><td>แต่ละ page 256 bytes — อย่าเขียนเกินขอบ</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>🛠️ สร้าง Product: Data Logger with SPI Flash</h2>
+    <p>บันทึกค่าอุณหภูมิทุก 10 วินาทีลง W25Q32 (4096 sectors, 4MB) — วนเขียน sector ใหม่</p>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "W25Qxx.h"
+
+#define SECTOR_SIZE 4096
+#define TOTAL_SECTORS 1024  // W25Q32 = 1024 sectors
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    SPI_Init(SPI1, SPI_BAUD_4MHZ, SPI_MODE0);
+    W25Q_Init(SPI1, PC3);
+    USART_Init(USART1, BAUD_115200);
+
+    uint32_t current_sector = 0;
+    uint16_t offset = 0;
+    uint8_t buffer[256];
+
+    USART_Println("SPI Flash Logger Ready");
+
+    while(1)
+    {
+        // Prepare data
+        uint8_t hour = 12, min = 30, sec = 0;
+        uint16_t value = ADC_Read(ADC1, ADC_CH0);
+        uint8_t len = sprintf((char*)buffer,
+            "%02d:%02d:%02d,ADC=%d\n", hour, min, sec, value);
+
+        // Erase new sector when needed
+        if(offset == 0) {
+            W25Q_EraseSector(current_sector * SECTOR_SIZE);
+            while(W25Q_IsBusy());  // wait erase done
+        }
+
+        // Write
+        W25Q_WritePage(current_sector*SECTOR_SIZE + offset,
+                       buffer, len);
+        while(W25Q_IsBusy());
+
+        offset += len;
+        if(offset + 256 > SECTOR_SIZE) {
+            USART_Print("Sector "); USART_PrintInt(current_sector);
+            USART_Println(" full, moving to next");
+            current_sector = (current_sector + 1) % TOTAL_SECTORS;
+            offset = 0;
+        }
+        Delay_Ms(10000);
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>✏️ ลองทำดู</h2>
+    <ol>
+        <li>ทำ SPI Flash dump tool — อ่านทั้งชิปผ่าน USART → แสดง hex dump ทีละ 16 ไบต์</li>
+        <li>ทำ firmware storage — เก็บเฟิร์มแวร์เวอร์ชันใหม่ใน SPI Flash → bootloader อ่านไป flash ผ่าน IAP</li>
+        <li>ทำ file system อย่างง่าย — จอง sector 0 เป็น FAT (ตารางว่า sector ไหนใช้/ว่าง) → เขียน/อ่าน/ลบไฟล์</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_at24cxx.html">บทก่อน</a>
+    <a href="chapx_lib_ds3231.html">บทถัดไป →</a>
+</nav>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

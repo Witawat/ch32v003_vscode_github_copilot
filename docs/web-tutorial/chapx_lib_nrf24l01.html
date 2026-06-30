@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>nRF24L01 — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_hc05.html">บทก่อน</a>
+    <a href="chapx_lib_gps_neo6m.html">บทถัดไป →</a>
+</nav>
+<h1>nRF24L01 — 2.4GHz Wireless SPI, 6 Pipes, Multi-Node</h1>
+<span class="level advanced">ระดับสูง</span>
+
+<section class="flowchart">
+    <h2>🧭 แผนภาพการทำงาน</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["NRF24_Init(spi,ce,csn)"] --> B{"Role?"}
+    B -->|"TX"| C["NRF24_OpenPipe(tx_addr)"]
+    B -->|"RX"| D["NRF24_OpenPipe(pipe#,rx_addr)"]
+    C --> E["NRF24_Write(data,len)"]
+    E --> F["Check TX_DS (sent?)"]
+    F -->|"Yes"| G["Clear IRQ"]
+    F -->|"No/MaxRetry"| H["Retry/Error"]
+    D --> I["NRF24_Available()?"]
+    I -->|"Yes"| J["NRF24_Read(buf,len)"]
+    I -->|"No"| I
+    </pre>
+</section>
+
+<section>
+    <h2>🔌 การต่อวงจร</h2>
+    <pre class="ascii-circuit">
+               nRF24L01+ 2.4GHz Module (3.3V ONLY!)
+    ┌──────────────────────────────────────────────────┐
+    │ CH32V003                        nRF24L01+        │
+    │ PC5(SCK)───────SCK              ┌───────────────┤
+    │ PC6(MISO)──────MISO             │               │
+    │ PC7(MOSI)──────MOSI             │               │
+    │ PC3────────────CSN              │               │
+    │ PC4────────────CE               │               │
+    │ PC0────────────IRQ (opt)       │               │
+    │ 3.3V───────────VCC             │               │
+    │ GND────────────GND             │               │
+    │                                └───────────────┤
+    │ ⚡ 3.3V ONLY — 5V จะพังทันที!                   │
+    │ ⚡ ใช้ capacitor 10µF+0.1µF ขนาน VCC-GND       │
+    │ ⚡ ต่อ GND ให้แน่น — noise เยอะ                  │
+    └──────────────────────────────────────────────────┘
+    </pre>
+    <p>nRF24L01+ ใช้ SPI + 2 control pins (CE, CSN) + optional IRQ, ห้ามต่อ 5V เด็ดขาด — module พังทันที, capacitor ที่ VCC สำคัญมากเพราะ module กินกระแสกระชากตอน TX สูงถึง ~13mA</p>
+</section>
+
+<section>
+    <h2>📚 หลักการทำงาน</h2>
+    <p><strong>nRF24L01+</strong> เป็น 2.4GHz RF transceiver สื่อสารผ่าน SPI — รองรับ 125 channels, data rate 250kbps/1Mbps/2Mbps, ระยะ ~100m line-of-sight (พร้อม PCB antenna), ใช้ Enhanced ShockBurst protocol: auto-ACK, auto-retransmit</p>
+    <p><strong>6 Data Pipes:</strong> RX side รับข้อมูลจาก 6 address พร้อมกันได้ (Pipe 0-5) — Pipe 0-1 มี 5-byte address, Pipe 2-5 มี 1-byte unique + share 4-byte base address</p>
+    <p><strong>Auto-ACK:</strong> ทุก packet ที่ส่งไป TX จะรอ ACK จาก RX — ถ้าไม่ได้รับภายใน timeout (auto-retransmit delay + max retries) จะ set MAX_RT flag — ทำให้ส่งข้อมูลเชื่อถือได้สูง</p>
+    <p><strong>Payload:</strong> 1-32 bytes per packet — ถ้าต้องส่งข้อมูลมากต้องแบ่งเป็นหลาย packets เอง</p>
+</section>
+
+<section>
+    <h2>💻 เขียน Code ทีละขั้น</h2>
+
+    <div class="step"><h3>ขั้นที่ 1: Init + Setup (Transmitter)</h3>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "NRF24L01.h"
+
+uint8_t tx_addr[5] = {0xE7,0xE7,0xE7,0xE7,0xE7}; // 5-byte address
+
+int main(void) {
+    SystemCoreClockUpdate();
+    SPI_Init(SPI1, SPI_BAUD_4MHZ, SPI_MODE0);
+    NRF24_Init(SPI1, PC4, PC3);  // CE=PC4, CSN=PC3
+    USART_Init(USART1, BAUD_115200);</code></pre>
+    <p class="explain">🔍 <code>NRF24_Init(SPI, CE_pin, CSN_pin)</code> — ตั้งค่า SPI + control pins, address 5-byte ต้องตรงกันทั้ง TX และ RX, SPI Mode 0 (CPOL=0, CPHA=0)</p></div>
+
+    <div class="step"><h3>ขั้นที่ 2: TX — ส่งข้อมูล</h3>
+    <pre><code class="language-c">    NRF24_OpenPipe(tx_addr);               // set TX addr
+    NRF24_SetChannel(76);                   // channel 2.476GHz
+    NRF24_SetDataRate(NRF24_1MBPS);
+    NRF24_SetTXMode();                      // enter TX mode
+
+    uint8_t data[32];
+    sprintf((char*)data, "Hello from CH32V003!");
+    uint8_t len = strlen((char*)data);
+
+    if(NRF24_Write(data, len)) {
+        USART_Println("Sent OK!");
+    } else {
+        USART_Println("Send failed (MAX_RT)"); // max retransmit reached
+    }</code></pre>
+    <p class="explain">🔍 <code>NRF24_Write(data, len)</code> — เขียน payload ถึง 32 bytes, คืน 0 ถ้า MAX_RT (ส่งซ้ำจนเกิน limit), คืน 1 ถ้า TX_DS (ได้รับ ACK), ต้องตั้ง channel เดียวกันทั้ง TX และ RX</p></div>
+
+    <div class="step"><h3>ขั้นที่ 3: RX — รับข้อมูลหลาย Pipe</h3>
+    <pre><code class="language-c">    NRF24_OpenReadingPipe(0, tx_addr);     // pipe0 = same addr
+    uint8_t rx_addr2[5] = {0xC2,0xC2,0xC2,0xC2,0xC2};
+    NRF24_OpenReadingPipe(1, rx_addr2);     // pipe1 = different addr
+    NRF24_SetRXMode();
+    NRF24_StartListening();
+
+    while(1) {
+        if(NRF24_Available()) {             // data ready?
+            uint8_t rx_buf[32];
+            NRF24_Read(rx_buf, 32);         // read payload
+            USART_Print("RX: ");
+            USART_Println((char*)rx_buf);
+        }
+    }
+}</code></pre>
+    <p class="explain">🔍 <code>NRF24_Available()</code> — non-blocking เช็ค RX FIFO, <code>NRF24_Read(buf, len)</code> — อ่าน payload + clear RX_DR flag, RX รองรับ 6 pipes — ใช้ pipe ต่างกันรับข้อมูลจาก 6 nodes พร้อมกัน</p></div>
+</section>
+
+<section>
+    <h2>📋 API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+        <tr><td><code>NRF24_Init(spi, ce, csn)</code></td><td>เริ่มต้น nRF24L01</td><td><code>NRF24_Init(SPI1, PC4, PC3)</code></td></tr>
+        <tr><td><code>NRF24_OpenPipe(addr)</code></td><td>ตั้ง TX address</td><td><code>NRF24_OpenPipe(tx_addr)</code></td></tr>
+        <tr><td><code>NRF24_OpenReadingPipe(n,addr)</code></td><td>ตั้ง RX pipe address</td><td><code>NRF24_OpenReadingPipe(0, addr)</code></td></tr>
+        <tr><td><code>NRF24_Write(data, len)</code></td><td>ส่ง payload (สูงสุด 32B)</td><td><code>NRF24_Write(buf, 10)</code></td></tr>
+        <tr><td><code>NRF24_Read(buf, len)</code></td><td>อ่าน payload ที่รับ</td><td><code>NRF24_Read(buf, 32)</code></td></tr>
+        <tr><td><code>NRF24_Available()</code></td><td>เช็คข้อมูลใน RX FIFO</td><td><code>if(NRF24_Available()){...}</code></td></tr>
+        <tr><td><code>NRF24_SetChannel(ch)</code></td><td>เลือก channel 0-125</td><td><code>NRF24_SetChannel(76)</code></td></tr>
+        <tr><td><code>NRF24_SetTXMode()</code></td><td>เข้า TX mode</td><td><code>NRF24_SetTXMode()</code></td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>สื่อสารกันไม่ได้เลย</td><td>Address ไม่ตรงกัน TX/RX</td><td>เช็ค 5-byte address ให้ตรงกันเป๊ะทั้งสองฝั่ง</td></tr>
+        <tr><td>MAX_RT ทุกครั้ง</td><td>RX ไม่อยู่ใน listening mode</td><td>เรียก <code>NRF24_SetRXMode()</code> + <code>NRF24_StartListening()</code> ที่ฝั่ง RX</td></tr>
+        <tr><td>ส่งได้บางครั้ง หลุดบ่อย</td><td>ไฟ 3.3V ไม่สะอาด — noise</td><td>ต่อ capacitor 10µF + 0.1µF ขนาน VCC-GND ใกล้ module</td></tr>
+        <tr><td>อ่าน/เขียน register ไม่ได้</td><td>SPI mode ไม่ตรง (ต้อง Mode 0)</td><td>ใช้ <code>SPI_MODE0</code> (CPOL=0, CPHA=0) เท่านั้น</td></tr>
+        <tr><td>ระยะสั้นมาก <5m</td><td>PA+LNA module หรือ antenna พัง</td><td>ลด data rate เหลือ 250kbps เพิ่มระยะ, เช็ค antenna</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>🛠️ สร้าง Product: Multi-Sensor Wireless Star Network</h2>
+    <p>1 Receiver + 3 Transmitter nodes — TX แต่ละตัวส่งค่าอุณหภูมิไปยัง RX ผ่าน pipe แยกกัน</p>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "NRF24L01.h"
+
+// === RX Node (Collector) ===
+int main(void)
+{
+    SystemCoreClockUpdate();
+    SPI_Init(SPI1, SPI_BAUD_4MHZ, SPI_MODE0);
+    NRF24_Init(SPI1, PC4, PC3);
+    USART_Init(USART1, BAUD_115200);
+
+    uint8_t addr0[5] = {0xAA,0xAA,0xAA,0xAA,0xAA};
+    uint8_t addr1[5] = {0xBB,0xBB,0xBB,0xBB,0xBB};
+    uint8_t addr2[5] = {0xCC,0xCC,0xCC,0xCC,0xCC};
+
+    NRF24_OpenReadingPipe(0, addr0);  // Node 0
+    NRF24_OpenReadingPipe(1, addr1);  // Node 1
+    NRF24_OpenReadingPipe(2, addr2);  // Node 2
+    NRF24_SetRXMode();
+    NRF24_StartListening();
+
+    uint8_t buf[32]; uint8_t pipe;
+    while(1)
+    {
+        if(NRF24_Available(&pipe)) {
+            NRF24_Read(buf, 32);
+            USART_Print("Pipe "); USART_PrintInt(pipe);
+            USART_Print(": "); USART_Println((char*)buf);
+        }
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>✏️ ลองทำดู</h2>
+    <ol>
+        <li>ทำ wireless remote control — TX ส่ง joystick ADC (x,y) 2 bytes → RX รับ → ควบคุม servo 2 ตัว</li>
+        <li>ทำ mesh network อย่างง่าย — node A ส่งถึง node B, node B forward ไป node C (repeater)</li>
+        <li>ทำ ACK payload — RX แนบ response ไปกับ ACK packet (ใช้ <code>NRF24_WriteAckPayload()</code>)</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_hc05.html">บทก่อน</a>
+    <a href="chapx_lib_gps_neo6m.html">บทถัดไป →</a>
+</nav>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

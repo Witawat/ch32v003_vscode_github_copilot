@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>📦 มอเตอร์ขั้นสูง 4 ชนิด — ServoCluster, ESC, TMC220x, TMC5160 — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_motor1.html">บทก่อน</a>
+    <a href="chapx_lib_wireless.html">บทถัดไป →</a>
+</nav>
+<h1>📦 มอเตอร์ขั้นสูง 4 ชนิด — ServoCluster, ESC, TMC220x, TMC5160</h1>
+<span class="level advanced">ระดับสูง</span>
+
+<section>
+<h2>ServoCluster — Multi-Servo + 10 Easing Curves (PWM+I2C)</h2>
+<pre class="ascii-circuit">
+PCA9685 Board: PC1─SDA, PC2─SCL, 5V external─VCC(PCA9685+servos), GND common
+Servo SG90 x N: Signal→PCA9685 ch0-15, VCC→external 5V, GND→common
+</pre>
+<pre><code class="language-c">#include "ServoCluster.h"
+ServoCluster_Handle sc;
+
+int main(void) {
+    SystemCoreClockUpdate(); Timer_Init();
+    I2C_SimpleInit(I2C_SPEED_100K, I2C_PINS_DEFAULT);
+
+    ServoCluster_Init(&sc); // auto-detect PCA9685 addr=0x40
+    ServoCluster_AddServo(&sc, 0, 500, 2500);  // ch0, min=500µs, max=2500µs
+    ServoCluster_AddServo(&sc, 1, 800, 2200);  // ch1, different servo specs
+    ServoCluster_AddServo(&sc, 2, 500, 2500);  // ch2
+
+    // Move with easing: ch0→90°, 2 sec, cubic easing
+    ServoCluster_MoveTo(&sc, 0, 90, 2000, EASE_IN_OUT_CUBIC);
+    ServoCluster_MoveTo(&sc, 1, 45, 1500, EASE_OUT_BOUNCE);
+    ServoCluster_MoveTo(&sc, 2, 135, 2000, EASE_IN_OUT_QUAD);
+
+    while(1) {
+        ServoCluster_Update(&sc); // ★ non-blocking — ต้องเรียกบ่อย
+        if(ServoCluster_IsDone(&sc)) {
+            USART_Println("All servos reached target!");
+        }
+        IWDG_Feed();
+    }
+}</code></pre>
+<p class="explain">⚠️ PCA9685 = 16 PWM channels (คุม servo ได้ 16 ตัว), I2C addr 0x40-0x7F, external 5-6V power for servos (ห้ามจ่ายจาก WCH-Link!), 10 easing curves: LINEAR, EASE_IN/OUT/IN_OUT for QUAD/CUBIC/QUART/QUINT/SINE/EXPO/CIRC/BACK/ELASTIC/BOUNCE, non-blocking—ต้อง Update() ใน loop, IsDone() เช็คทุก servo ถึงตำแหน่งหรือยัง, MoveTo() บวกค่าได้โดยไม่ต้องรอ</p></div>
+
+<h3>API หลัก</h3>
+<table>
+<tr><td><code>ServoCluster_Init(sc)</code></td><td>Init PCA9685</td><td><code>ServoCluster_AddServo(sc, ch, minµs, maxµs)</code></td><td>เพิ่ม servo</td></tr>
+<tr><td><code>ServoCluster_MoveTo(sc, ch, deg, time_ms, ease)</code></td><td>เคลื่อนที่</td><td><code>ServoCluster_MoveAll(sc, deg, time_ms, ease)</code></td><td>ทุกตัวพร้อมกัน</td></tr>
+<tr><td><code>ServoCluster_Update(sc)</code></td><td>★ เรียกใน loop</td><td><code>ServoCluster_IsDone(sc)</code></td><td>ถึงเป้าหรือยัง</td></tr>
+<tr><td><code>ServoCluster_Stop(sc, ch)</code></td><td>หยุดทันที</td><td><code>ServoCluster_SetSpeed(sc, ch, deg_per_sec)</code></td><td>ความเร็ว</td></tr>
+</table>
+</section>
+
+<section>
+<h2>ESC — BLDC Motor (PWM)</h2>
+<pre class="ascii-circuit">
+PD2─Signal(ESC), Battery 7.4-14.8V─ESC power, Motor 3 wires─ESC output
+⚠️ ห้ามต่อ MCU กับ ESC battery GND โดยตรง — ใช้ BEC 5V output หรือแยก regulator
+</pre>
+<pre><code class="language-c">#include "ESC.h"
+ESC_Handle esc;
+
+int main(void) {
+    SystemCoreClockUpdate(); Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+
+    ESC_Init(&esc, 1, PD2); // PWM ch1, PD2
+
+    // === Calibration (ทำครั้งเดียว) ===
+    USART_Println("Disconnect battery, press button...");
+    while(digitalRead(PC1)); // wait for button
+    ESC_Calibrate(&esc);
+    USART_Println("Calibration done");
+
+    // === Normal use ===
+    ESC_Arm(&esc);
+    Delay_Ms(1000);
+
+    // Ramp throttle 0→80→0
+    for(int t=0; t<80; t+=5) {
+        ESC_SetThrottle(&esc, t); Delay_Ms(200);
+    }
+    for(int t=80; t>=0; t-=5) {
+        ESC_SetThrottle(&esc, t); Delay_Ms(200);
+    }
+
+    ESC_Disarm(&esc); // safety off
+    while(1) { IWDG_Feed(); }
+}</code></pre>
+<p class="explain">⚠️ อันตราย! ใบพัดหมุนเร็ว — ต้องถอด prop ตอนทดสอบโค้ด!, calibration sequence: full throttle→power on ESC→beep→zero throttle→beep done, PWM 50Hz (มาตรฐาน), pulse 1ms=stop, 2ms=full throttle, ESC BEC จ่าย 5V ให้ MCU ได้ (optional), ARM = safety lock — ป้องกันมอเตอร์หมุนโดยไม่ตั้งใจ, ควรต่อ kill switch แยก</p>
+</section>
+
+<section>
+<h2>TMC220x — Silent Stepper Driver (USART)</h2>
+<pre class="ascii-circuit">
+PD5(TX)─PDN_UART(TMC), PC0─ENABLE, PC1─DIR, PC2─STEP, 12-24V─VMOT, GND common
+MS1/MS2─GND (address 0)
+</pre>
+<pre><code class="language-c">#include "TMC220x.h"
+
+int main(void) {
+    SystemCoreClockUpdate(); Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+
+    TMC220x_Init(USART1, 0x00); // address 0
+    TMC220x_SetCurrent(800);     // 800mA RMS
+    TMC220x_EnableStealthChop(1); // silent mode!
+    TMC220x_SetMicrostep(16);    // 1/16 microstep
+
+    // Motion via STEP/DIR pins
+    digitalWrite(PC1, HIGH); // DIR=CW
+    for(uint32_t i=0; i<3200; i++) {
+        digitalWrite(PC2, HIGH); Delay_Us(5);
+        digitalWrite(PC2, LOW);  Delay_Us(step_delay);
+    }
+
+    // Diagnostics
+    uint32_t status = TMC220x_ReadRegister(TMC220x_DRV_STATUS);
+    if(status & TMC220x_OT)  USART_Println("Over-temp!");
+    if(status & TMC220x_S2G) USART_Println("Short to GND!");
+
+    while(1) { IWDG_Feed(); }
+}</code></pre>
+<p class="explain">⚠️ stealthChop = เงียบมาก (เหมาะ 3D printer), spreadCycle = torque สูงสุด, UART 1-wire (TX ต่อ PDN_UART pin), address 0-3 via MS1/MS2, current: Vref = RMS_current * 1.44V/A, registers: GCONF, IHOLD_IRUN, CHOPCONF, TPOWERDOWN (hold current reduction), TMC2209 มี sensorless homing (stallGuard) — ต่างจาก TMC2208</p>
+</section>
+
+<section>
+<h2>TMC5160 — High-Power Stepper with Motion Controller (SPI)</h2>
+<pre class="ascii-circuit">
+PC4─CSN, PC5─SCK, PC6─MOSI, PC7─MISO, PC0─ENABLE, 24-48V─VMOT, GND common
+</pre>
+<pre><code class="language-c">#include "TMC5160.h"
+
+int main(void) {
+    SystemCoreClockUpdate(); Timer_Init();
+    SPI_SimpleInit(SPI_SPEED_4MHZ, SPI_MODE_3, SPI_PINS_DEFAULT);
+
+    TMC5160_Init(PC4); // CS pin
+    TMC5160_SetCurrent(1500);   // 1.5A RMS
+    TMC5160_SetMicrostep(64);   // 1/64
+    TMC5160_EnableCoolStep(1);  // adaptive current save 30-75% energy
+    TMC5160_SetStallThreshold(100); // stallGuard trigger level
+
+    // Motion via internal ramp controller (no STEP pin needed!)
+    TMC5160_MoveTo(10000, 50000); // target=10000 steps, v=50000 µsteps/s
+    // Ramp: A1=1000, V1=50000, AMAX=2000, VMAX=100000, DMAX=2000, D1=1000
+
+    while(1) {
+        TMC5160_Update(); // check position status
+
+        uint32_t stall = TMC5160_ReadRegister(TMC5160_STALLGUARD_RESULT);
+        if(stall > 100) {
+            TMC5160_Stop();
+            USART_Println("Stall detected! Sensorless homing.");
+        }
+
+        if(TMC5160_IsDone()) {
+            USART_Println("Position reached");
+        }
+
+        IWDG_Feed();
+    }
+}</code></pre>
+<p class="explain">⚠️ ต่างจาก TMC220x: SPI = full register R/W, มี internal motion controller (ไม่ต้องใช้ STEP pin – SPI command control โดยตรง), coolStep = adaptive current (วัด load, reduce current เมื่อโหลดน้อย ประหยัด 30-75% energy), stallGuard2 = sensorless stall detection (ใช้เป็น limit switch ได้), DCstep = stall prevention (เพิ่ม current อัตโนมัติเมื่อเกือบ stall), 6-point ramp: A1,V1,AMAX,VMAX,DMAX,D1, max VMOT=60V, SPI daisy chain ได้หลายตัว</p>
+</section>
+
+<section>
+<h2>📊 เปรียบเทียบมอเตอร์</h2>
+<table>
+<tr><th>ประเภท</th><th>ความแม่น</th><th>แรงบิด</th><th>ความเร็ว</th><th>Interface</th><th>ราคา</th><th>เหมาะกับ</th></tr>
+<tr><td>Servo SG90</td><td>~1°</td><td>1.2 kg·cm</td><td>0.12s/60°</td><td>PWM 1pin</td><td>~50฿</td><td>Robot arm, pan-tilt</td></tr>
+<tr><td>ServoCluster</td><td>~0.1°</td><td>varies</td><td>ขึ้นกับ servo</td><td>I2C 2pin</td><td>+200฿</td><td>Multi-servo coordination</td></tr>
+<tr><td>28BYJ-48 Stepper</td><td>0.18°</td><td>0.3 kg·cm</td><td>ช้า</td><td>GPIO 4pin</td><td>~40฿</td><td>Slow precision, conveyor</td></tr>
+<tr><td>NEMA17+TMC2209</td><td>0.014°</td><td>4 kg·cm</td><td>เร็ว</td><td>USART 1pin</td><td>~500฿</td><td>3D printer, CNC</td></tr>
+<tr><td>NEMA23+TMC5160</td><td>0.0028°</td><td>20 kg·cm</td><td>เร็วมาก</td><td>SPI 3pin</td><td>~1500฿</td><td>Industrial CNC</td></tr>
+<tr><td>BLDC+ESC</td><td>N/A</td><td>สูง</td><td>สูงมาก</td><td>PWM 1pin</td><td>~200฿</td><td>Drone, propeller</td></tr>
+<tr><td>DC+L298N</td><td>N/A</td><td>ปานกลาง</td><td>ปานกลาง</td><td>GPIO+PWM</td><td>~50฿</td><td>Wheels, simple robot</td></tr>
+</table>
+</section>
+
+<section>
+<h2>✏️ ลองทำดู</h2>
+<ol>
+    <li>ServoCluster robot arm — 3 servos, pick-and-place sequence with easing</li>
+    <li>ESC thrust test — ramp 0→100→0, measure with INA219</li>
+    <li>TMC2209 silent homing — use stallGuard as limit switch (move until stall → set zero)</li>
+    <li>TMC5160 absolute position — multi-axis coordinated move (X=10000, Y=5000 simultaneously)</li>
+</ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_motor1.html">บทก่อน</a>
+    <a href="chapx_lib_wireless.html">บทถัดไป →</a>
+</nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

@@ -1,0 +1,118 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย PMS5003 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_pms5003.html">กลับบท</a><a href="chapx_lib_ntc10k_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — PMS5003 เซนเซอร์ฝุ่น PM2.5</h1>
+<div class="answer"><h2>ข้อ 1: Real-time AQI Dashboard บน OLED</h2><pre><code class="language-c">uint16_t pm25_to_aqi(uint16_t pm25) {
+    // EPA AQI formula — PM2.5 breakpoints (μg/m³)
+    if(pm25 <= 12)         return (uint16_t)(50.0f * pm25 / 12.0f);
+    if(pm25 <= 35.4f)      return (uint16_t)(50 + 50.0f * (pm25 - 12) / 23.4f);
+    if(pm25 <= 55.4f)      return (uint16_t)(100 + 50.0f * (pm25 - 35.4f) / 20.0f);
+    if(pm25 <= 150.4f)     return (uint16_t)(150 + 50.0f * (pm25 - 55.4f) / 95.0f);
+    if(pm25 <= 250.4f)     return (uint16_t)(200 + 100.0f * (pm25 - 150.4f) / 100.0f);
+    if(pm25 <= 350.4f)     return (uint16_t)(300 + 100.0f * (pm25 - 250.4f) / 100.0f);
+    return (uint16_t)(400 + 100.0f * (pm25 - 350.4f) / 149.6f);
+}
+
+void pms_aqi_dashboard(void) {
+    OLED_Init(I2C_PINS_DEFAULT);
+    PMS5003_Init(USART_PINS_PA2_PA3);
+
+    while(1) {
+        PMS5003_Data_t data;
+        if(!PMS5003_Read(&data)) {
+            OLED_SetCursor(0, 0); OLED_Print("PMS5003 No Data  ");
+            Delay_Ms(1000);
+            continue;
+        }
+
+        uint16_t aqi = pm25_to_aqi(data.pm25);
+
+        OLED_SetCursor(0, 0);
+        OLED_Print("PM2.5: "); OLED_PrintNum(data.pm25); OLED_Print(" ug/m3");
+        OLED_SetCursor(0, 1);
+        OLED_Print("PM10:  "); OLED_PrintNum(data.pm10);  OLED_Print(" ug/m3");
+        OLED_SetCursor(0, 2);
+        OLED_Print("AQI:   "); OLED_PrintNum(aqi); OLED_Print("     ");
+        OLED_SetCursor(0, 3);
+        if(aqi <= 50)        OLED_Print("Good      ");
+        else if(aqi <= 100)  OLED_Print("Moderate  ");
+        else if(aqi <= 150)  OLED_Print("Unhealthy S");
+        else                 OLED_Print("Unhealthy   ");
+
+        Delay_Ms(2000);
+    }
+}
+</code></pre><div class="approach"><strong>🧠 แนวคิด:</strong> EPA AQI formula แปลง PM2.5 μg/m³ → AQI 0–500 — OLED แสดง 4 บรรทัด: PM2.5, PM10, AQI, ระดับคุณภาพอากาศ — <code>PMS5003_Read</code> อ่านทีเดียวได้ทุกค่า PM1.0/PM2.5/PM10 — อัปเดตทุก 2 วิ (PMS5003 ส่งข้อมูลทุก ~800ms อยู่แล้ว)</div></div>
+<div class="answer"><h2>ข้อ 2: Active vs Passive Mode</h2><pre><code class="language-c">void pms5003_mode_compare(void) {
+    PMS5003_Init(USART_PINS_PA2_PA3);
+
+    // Test Active Mode (default)
+    USART_Println("=== Active Mode ===");
+    for(int i = 0; i < 5; i++) {
+        Delay_Ms(1000);
+        PMS5003_Data_t d;
+        if(PMS5003_Read(&d))
+            USART_Print("PM2.5: "); USART_PrintNum(d.pm25); USART_Println(" (auto)");
+    }
+
+    // Switch to Passive Mode
+    PMS5003_SetMode(PMS5003_MODE_PASSIVE);
+
+    USART_Println("=== Passive Mode ===");
+    for(int i = 0; i < 5; i++) {
+        PMS5003_WakeUp();
+        Delay_Ms(50);
+        PMS5003_RequestRead();
+        Delay_Ms(1000);
+        PMS5003_Data_t d;
+        if(PMS5003_Read(&d))
+            USART_Print("PM2.5: "); USART_PrintNum(d.pm25); USART_Println(" (req)");
+        PMS5003_Sleep();
+        Delay_Ms(2000);
+    }
+
+    PMS5003_SetMode(PMS5003_MODE_ACTIVE);  // กลับ active
+}
+</code></pre><div class="approach"><strong>🧠 แนวคิด:</strong> Active mode: เซนเซอร์ส่งข้อมูลอัตโนมัติตลอดเวลา — Passive mode: MCU ต้อง request แต่ละครั้ง — Passive ประหยัดไฟกว่าเพราะ sleep ได้ระหว่างวัด — ข้อเสียคือ latency สูงกว่าเพราะต้อง wake sensor ก่อน — เหมาะกับ battery-powered logger</div></div>
+<div class="answer"><h2>ข้อ 3: Fan Runtime Tracker</h2><pre><code class="language-c">uint32_t fan_runtime_min = 0;
+uint8_t  fan_state = 0;
+
+void pms_fan_tracker(void) {
+    PMS5003_Init(USART_PINS_PA2_PA3);
+    pinMode(PC0, PIN_MODE_OUTPUT);  // fan relay
+
+    while(1) {
+        PMS5003_Data_t data;
+        if(!PMS5003_Read(&data)) continue;
+
+        uint16_t aqi = pm25_to_aqi(data.pm25);
+
+        if(aqi > 100 && fan_state == 0) {
+            // Turn fan ON
+            digitalWrite(PC0, HIGH);
+            fan_state = 1;
+            USART_Println("Fan ON");
+        } else if(aqi <= 50 && fan_state == 1) {
+            // Turn fan OFF
+            digitalWrite(PC0, LOW);
+            fan_state = 0;
+            USART_Println("Fan OFF");
+        }
+
+        // Track runtime
+        static uint32_t last_tick = 0;
+        uint32_t now = millis();
+        if(fan_state && (now - last_tick >= 60000)) {
+            fan_runtime_min++;
+            last_tick = now;
+        }
+
+        USART_Print("Fan runtime: ");
+        USART_PrintNum(fan_runtime_min);
+        USART_Println(" min");
+
+        Delay_Ms(5000);
+    }
+}
+</code></pre><div class="approach"><strong>🧠 แนวคิด:</strong> AQI > 100 → เปิดพัดลม (relay), AQI ≤ 50 → ปิด — hysteresis ป้องกัน relay เด้ง — ใช้ <code>millis()</code> นับเวลาทุก 1 นาทีที่พัดลมทำงาน — แสดง runtime สะสมบน serial — เหมาะกับระบบกรองอากาศอัตโนมัติ</div></div>
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_pms5003.html">กลับบท</a><a href="chapx_lib_ntc10k_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

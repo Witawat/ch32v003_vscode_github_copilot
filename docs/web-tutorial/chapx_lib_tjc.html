@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TJC HMI — Touch Display USART — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_ws2815matrix.html">บทก่อน</a>
+    <a href="chapx_lib_shiftreg595.html">บทถัดไป →</a>
+</nav>
+<h1>TJC HMI — Touch Display USART</h1>
+<span class="level advanced">ระดับสูง</span>
+<section class="flowchart">
+    <h2>🧭 แผนภาพการทำงาน</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["USART_Init(9600bd)"] --> B["TJC_Init(&hmi, USART1, BAUD)"]
+    B --> C["TJC_SendCommand(&hmi, page cmd)"]
+    C --> D["TJC_SetText / SetValue"]
+    D --> E["TJC_RegisterCallbacks"]
+    E --> F["while(1): TJC_ProcessResponse(&hmi)"]
+    F --> G{"Event?"}
+    G -->|"Touch"| H["TouchCallback(page,id,event)"]
+    G -->|"Numeric"| I["NumericCallback(id,val)"]
+    G -->|"Page"| J["PageCallback(page)"]
+    H --> F
+    I --> F
+    J --> F
+    </pre>
+</section>
+<section>
+    <h2>🔌 การต่อวงจร</h2>
+    <pre class="ascii-circuit">
+          TJC HMI Touch Display (USART)
+    ┌────────────────────────────────┐
+    │ MCU                      TJC   │
+    │ 5V  ─────────────── VCC        │
+    │ GND ─────────────── GND        │
+    │ PD5 (TX) ───────── RX          │
+    │ PD6 (RX) ───────── TX          │
+    │ CH32V003 3.3V TX → TJC 5V RX  │
+    │ (marginal but usually works)   │
+    └────────────────────────────────┘
+    </pre>
+    <p>TJC HMI สื่อสารผ่าน USART 9600 baud — CH32V003 ใช้ PD5(TX)/PD6(RX) — ออกแบบ UI ด้วย TJC Editor บน PC แล้วโหลดลง SD card</p>
+</section>
+<section>
+    <h2>📚 หลักการทำงาน</h2>
+    <p><strong>USART 9600 Baud Protocol:</strong> TJC ใช้ USART ที่ 9600 bps — โปรโตคอลเป็น text-based — ส่ง command ห่อด้วย 0xFF 3 ไบต์หน้า-หลัง — เช่น "page 0" เปลี่ยนหน้า, "t0.txt=\"Hello\"" เขียนข้อความ</p>
+    <p><strong>Callback-Driven Architecture:</strong> TJC รับ event จากจอผ่าน USART RX — Library parse event แล้วเรียก callback ที่ลงทะเบียนไว้ — มี callback สำหรับ Touch, Numeric Input, Page Change, Command Result — ProcessResponse() ต้องถูกเรียกใน loop ตลอด</p>
+    <p><strong>UI Design in TJC Editor:</strong> หน้าจอทั้งหมดออกแบบใน TJC Editor (PC software) — วางปุ่ม, ข้อความ, ตัวเลข, กราฟ — ตั้งชื่อ object (เช่น t0, b1, n0, p0) — Export เป็นไฟล์ .tft → โหลดลง SD card ใส่จอ — MCU ไมได้ render UI</p>
+    <p><strong>MCU Role:</strong> MCU ส่ง command ควบคุมจอ (เปลี่ยนหน้า, เขียนข้อความ, อ่านค่า) — รับ event จากจอ (กดปุ่ม, เปลี่ยนค่า) — จอ render UI เองทั้งหมด — MCU แค่ประมวลผล logic และตอบสนอง event</p>
+</section>
+<section>
+    <h2>💻 เขียน Code ทีละขั้น</h2>
+    <div class="step"><h3>ขั้นที่ 1: Init + Setup</h3>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+TJC_Handle_t hmi;
+void OnTouch(uint8_t page, uint8_t id, uint8_t event) {
+    if(page == 0 && id == 1) TJC_SendCommand(&hmi, "page 1");
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_Init(USART1, BAUD_9600);
+    TJC_Init(&hmi, USART1, BAUD_9600);
+    TJC_RegisterTouchCallback(&hmi, OnTouch);
+    TJC_SendCommand(&hmi, "page 0");</code></pre>
+    <p class="explain">🔍 เริ่ม USART — TJC_Init(handle, usart, baud) — RegisterTouchCallback ลงทะเบียน callback — SendCommand ส่งคำสั่งเปลี่ยนหน้า</p></div>
+    <div class="step"><h3>ขั้นที่ 2: ส่งข้อมูล + อ่านค่า</h3>
+    <pre><code class="language-c">    TJC_SetText(&hmi, "t0", "Hello");
+    TJC_SetValue(&hmi, "n0", 123);
+    int32_t val = TJC_GetValue(&hmi, "n0");
+    TJC_SendCommand(&hmi, "page 1");</code></pre>
+    <p class="explain">🔍 SetText(obj, txt) เขียนข้อความ — SetValue(obj, n) ตั้งค่าตัวเลข — GetValue(obj) อ่านค่าจาก widget — SendCommand สำหรับคำสั่งที่ไม่มีฟังก์ชันสำเร็จ</p></div>
+    <div class="step"><h3>ขั้นที่ 3: Loop + ProcessResponse</h3>
+    <pre><code class="language-c">    while(1) {
+        TJC_ProcessResponse(&hmi);
+        // ทุกอย่างทำงานผ่าน callback
+        // main loop ต้องวนเร็วพอ ≥ 100Hz
+        Delay_Ms(5);
+    }
+}</code></pre>
+    <p class="explain">🔍 ProcessResponse() ต้องถูกเรียกใน loop — มันอ่าน USART RX buffer — parse event — เรียก callback ที่เกี่ยวข้อง — delay น้อยๆ เพื่อให้ตอบสนองไว</p></div>
+</section>
+<section>
+    <h2>📋 API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+        <tr><td><code>TJC_Init(h, usart, baud)</code></td><td>เริ่มต้น TJC HMI</td><td><code>TJC_Init(&hmi, USART1, BAUD_9600)</code></td></tr>
+        <tr><td><code>TJC_SendCommand(h, cmd)</code></td><td>ส่งคำสั่งไปจอ</td><td><code>TJC_SendCommand(&hmi, "page 0")</code></td></tr>
+        <tr><td><code>TJC_SetText(h, obj, txt)</code></td><td>เขียนข้อความบน object</td><td><code>TJC_SetText(&hmi, "t0", "Hello")</code></td></tr>
+        <tr><td><code>TJC_SetValue(h, obj, val)</code></td><td>ตั้งค่าตัวเลข</td><td><code>TJC_SetValue(&hmi, "n0", 123)</code></td></tr>
+        <tr><td><code>TJC_GetValue(h, obj)</code></td><td>อ่านค่าจาก widget</td><td><code>int v = TJC_GetValue(&hmi, "n0")</code></td></tr>
+        <tr><td><code>TJC_RegisterTouchCallback(h, fn)</code></td><td>ลงทะเบียน callback ปุ่มกด</td><td><code>TJC_RegisterTouchCallback(&hmi, OnTouch)</code></td></tr>
+        <tr><td><code>TJC_RegisterNumericCallback(h, fn)</code></td><td>ลงทะเบียน callback ตัวเลขเปลี่ยน</td><td><code>TJC_RegisterNumericCallback(&hmi, OnNum)</code></td></tr>
+        <tr><td><code>TJC_ProcessResponse(h)</code></td><td>ประมวลผล RX buffer</td><td><code>TJC_ProcessResponse(&hmi)</code></td></tr>
+    </table>
+</section>
+<section>
+    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>จอไม่ตอบสนองเลย</td><td>Baud rate ไม่ตรง — TJC default 9600</td><td>ตรวจสอบ baud rate เป็น 9600 ทั้ง MCU และ TJC — เช็คใน TJC Editor</td></tr>
+        <tr><td>USART_Print ใช้ไม่ได้</td><td>USART1 ถูก TJC แชร์ — ใช้ร่วมกันไม่ได้</td><td>ใช้ USART2 (PD7/PD8) สำหรับ debug print — อย่าใช้ USART1 ซ้อน</td></tr>
+        <tr><td>ตัวหนังสือไทยไม่แสดง</td><td>TJC ต้องใช้ font ที่มี glyph ไทย</td><td>ใน TJC Editor: เลือก font ที่รองรับไทย — ตั้ง encoding เป็น UTF-8</td></tr>
+        <tr><td>Touch callback ไม่ถูกเรียก</td><td>ไม่ได้เรียก ProcessResponse() หรือเรียกช้าเกิน</td><td>ต้องเรียก ProcessResponse() ใน main loop ตลอด — แนะนำทุก 5-10ms</td></tr>
+        <tr><td>จอรับคำสั่งแต่ไม่เปลี่ยน</td><td>ชื่อ object ไม่ตรงกับใน TJC Editor</td><td>ตรวจสอบชื่อ object (t0, b1, n0) ตรงกับที่ตั้งใน TJC Editor</td></tr>
+    </table>
+</section>
+<section>
+    <h2>🛠️ สร้าง Product: Smart Home Dashboard</h2>
+    <p>TJC HMI 2 หน้า — หน้า 1: แสดงอุณหภูมิ+ความชื้นจาก DHT11, หน้า 2: ตั้งค่า Threshold — ใช้ callback เปลี่ยนหน้าและปรับค่า</p>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+TJC_Handle_t hmi;
+DHT11_Data_t dht;
+uint8_t temp_threshold = 30;
+
+void OnTouch(uint8_t page, uint8_t id, uint8_t event) {
+    if(event == 1) { // Press
+        if(page == 0 && id == 1) TJC_SendCommand(&hmi, "page 1");
+        if(page == 1 && id == 0) TJC_SendCommand(&hmi, "page 0");
+    }
+}
+void OnNumeric(uint8_t id, int32_t val) {
+    if(id == 0) temp_threshold = val;
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    DHT11_Init(PC3);
+    USART_Init(USART1, BAUD_9600);
+    TJC_Init(&hmi, USART1, BAUD_9600);
+    TJC_RegisterTouchCallback(&hmi, OnTouch);
+    TJC_RegisterNumericCallback(&hmi, OnNumeric);
+    TJC_SendCommand(&hmi, "page 0");
+
+    Timer_t tmr;
+    Start_Timer(&tmr, 2000, 1);
+
+    while(1) {
+        TJC_ProcessResponse(&hmi);
+        if(Is_Timer_Expired(&tmr)) {
+            if(DHT11_Read(&dht) == DHT11_OK) {
+                TJC_SetValue(&hmi, "n0", dht.temp);
+                TJC_SetValue(&hmi, "n1", dht.hum);
+            }
+        }
+        Delay_Ms(5);
+    }
+}</code></pre>
+</section>
+<section>
+    <h2>✏️ ลองทำดู</h2>
+    <ol>
+        <li>สร้าง UI 2 หน้าใน TJC Editor — หน้าหลัก + ตั้งค่า — เพิ่มปุ่มกลับไปมาระหว่างหน้า</li>
+        <li>แสดงกราฟ Sensor — ส่งข้อมูล ADC ทุก 100ms — ใช้ Waveform widget ใน TJC</li>
+    </ol>
+</section>
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_ws2815matrix.html">บทก่อน</a>
+    <a href="chapx_lib_shiftreg595.html">บทถัดไป →</a>
+</nav>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

@@ -1,0 +1,175 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย P10 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_p10.html">กลับบท</a><a href="chapx_lib_tm1637_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — P10 LED Panel</h1>
+
+<div class="answer">
+<h2>ข้อ 1: Large Digit 16px (2×2 blocks)</h2>
+<pre><code class="language-c">#include "simple_p10.h"
+
+// Digit patterns 8x16 (2 blocks wide, 1 block tall)
+const uint8_t big_digit[10][16] = {
+    {0x3C,0x7E,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x7E,0x3C}, // 0
+    {0x18,0x38,0x78,0x18,0x18,0x18,0x18,0x18,0x18,0x18,0x18,0x18,0x18,0x18,0x7E,0x7E}, // 1
+    {0x3C,0x7E,0x66,0x06,0x06,0x0C,0x18,0x30,0x60,0x60,0x60,0x60,0x60,0x60,0x7E,0x7E}, // 2
+    {0x3C,0x7E,0x66,0x06,0x06,0x3C,0x3C,0x06,0x06,0x06,0x06,0x06,0x66,0x66,0x7E,0x3C}, // 3
+    {0x0C,0x1C,0x3C,0x6C,0x6C,0xCC,0xCC,0xFE,0xFE,0x0C,0x0C,0x0C,0x0C,0x0C,0x0C,0x0C}, // 4
+    {0x7E,0x7E,0x60,0x60,0x60,0x7C,0x7E,0x06,0x06,0x06,0x06,0x06,0x66,0x66,0x7E,0x3C}, // 5
+    {0x3C,0x7E,0x66,0x60,0x60,0x7C,0x7E,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x7E,0x3C}, // 6
+    {0x7E,0x7E,0x06,0x06,0x06,0x06,0x0C,0x0C,0x18,0x18,0x18,0x30,0x30,0x30,0x30,0x30}, // 7
+    {0x3C,0x7E,0x66,0x66,0x66,0x3C,0x3C,0x66,0x66,0x66,0x66,0x66,0x66,0x66,0x7E,0x3C}, // 8
+    {0x3C,0x7E,0x66,0x66,0x66,0x66,0x66,0x66,0x7E,0x3E,0x06,0x06,0x66,0x66,0x7E,0x3C}, // 9
+};
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    P10_Init(1, 1);
+
+    uint8_t count = 0;
+    while(1) {
+        P10_Clear();
+        for(uint8_t y = 0; y < 16; y++) {
+            P10_SetRow(y, big_digit[count % 10][y] << 0 |
+                          big_digit[count / 10][y] << 8);
+        }
+        count++;
+        if(count >= 100) count = 0;
+        Delay_Ms(500);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ตัวเลขใหญ่ใช้ 2 คอลัมน์ของ P10 (16px กว้าง) — เก็บ pattern เป็น 16 แถว ๆ ละ 16 บิต — คอลัมน์ซ้ายคือ bits 0-7 (หลักหน่วย) คอลัมน์ขวาคือ bits 8-15 (หลักสิบ) — ใช้ shift bit เพื่อรวมข้อมูล 2 หลักใน <code>SetRow</code> เดียว — ถ้าต้องการ 4 หลักให้ต่อ P10 4 panels แล้ว shift ข้อมูลตามลำดับ</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: Scrolling Text บน P10</h2>
+<pre><code class="language-c">#include "simple_p10.h"
+#include "string.h"
+
+const uint8_t font_5x7[][5] = {
+    {0x00,0x00,0x00,0x00,0x00}, // space
+    {0x7C,0x12,0x11,0x12,0x7C}, // A
+    {0x7F,0x49,0x49,0x49,0x36}, // B
+    {0x3E,0x41,0x41,0x41,0x22}, // C
+    // ... full alphabet
+};
+
+uint8_t buffer[32 * 8];  // frame buffer
+uint16_t msg_pixels;
+
+void render_text(const char *text) {
+    uint16_t pos = 0;
+    memset(buffer, 0, sizeof(buffer));
+    for(uint8_t i = 0; text[i]; i++) {
+        uint8_t idx = text[i] - 'A' + 1;
+        if(text[i] == ' ') idx = 0;
+        for(uint8_t col = 0; col < 5; col++) {
+            uint8_t data = font_5x7[idx][col];
+            for(uint8_t row = 0; row < 7; row++) {
+                if(data & (1 << row)) {
+                    uint16_t bit_pos = (uint16_t)(pos + col) * 16 + row;
+                    buffer[bit_pos / 8] |= (1 << (bit_pos % 8));
+                }
+            }
+        }
+        pos += 6;  // 5 cols + 1 gap
+    }
+    msg_pixels = pos - 1;
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    P10_Init(2, 1);  // 32 columns
+    render_text("HELLO");
+
+    int16_t offset = 0;
+    while(1) {
+        P10_Clear();
+        for(uint8_t row = 0; row < 16; row++) {
+            uint32_t row_data = 0;
+            for(uint8_t col = 0; col < 32; col++) {
+                int16_t src = col + offset;
+                if(src >= 0) {
+                    uint16_t bit_idx = (uint16_t)src * 16 + row;
+                    if(bit_idx / 8 < sizeof(buffer)) {
+                        if(buffer[bit_idx / 8] & (1 << (bit_idx % 8))) {
+                            row_data |= (1UL << col);
+                        }
+                    }
+                }
+            }
+            P10_SetRowLong(row, row_data);
+        }
+        offset++;
+        if(offset >= msg_pixels) offset = -32;
+        Delay_Ms(50);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ใช้ frame buffer (array) ขนาด panels×32×16 bits เก็บ bitmap ของข้อความทั้งหมด — <code>render_text</code> แปลง string เป็น bitmap โดยใช้ font 5×7 — offset เลื่อนหน้าต่างแสดงผลไปทางขวาทีละ 1 พิกเซล — <code>P10_SetRowLong</code> ส่งข้อมูล 32 บิตต่อ 1 แถวสำหรับ 2 panels — offset ติดลบทำให้ข้อความเลื่อนเข้ามาจากขอบขวา</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: Clock แสดงเวลา พร้อม Colon Blink</h2>
+<pre><code class="language-c">#include "simple_p10.h"
+#include "simple_timer.h"
+
+volatile uint8_t hours = 12, minutes = 34, seconds = 56;
+volatile uint8_t blink_colon = 1;
+
+void Timer_IRQ(void) {  // 1Hz interrupt
+    seconds++;
+    if(seconds >= 60) { seconds = 0; minutes++; }
+    if(minutes >= 60) { minutes = 0; hours++; }
+    if(hours >= 24)   { hours = 0; }
+    blink_colon = !blink_colon;
+}
+
+void draw_digit(uint8_t digit, uint8_t x) {
+    const uint8_t seg[10] = {
+        0x3F,0x06,0x5B,0x4F,0x66,0x6D,0x7D,0x07,0x7F,0x6F
+    };
+    uint8_t pattern = seg[digit];
+    for(uint8_t row = 0; row < 8; row++) {
+        uint8_t bits = 0;
+        // segment a (top)
+        if(pattern & 0x01 && row == 0) bits |= 0x7E;
+        // segment b (top right)
+        if(pattern & 0x02 && row >= 1 && row <= 6) bits |= (row <= 3) ? 0x40 : 0x40;
+        // segment c (bottom right)
+        if(pattern & 0x04 && row >= 8) bits |= 0x40;
+        // segment g (middle)
+        if(pattern & 0x40 && row == 7) bits |= 0x7E;
+        // segment f (top left)
+        if(pattern & 0x20 && row >= 1 && row <= 6) bits |= 0x02;
+        // segment e (bottom left)
+        if(pattern & 0x10 && row >= 8) bits |= 0x02;
+        // segment d (bottom)
+        if(pattern & 0x08 && row == 15) bits |= 0x7E;
+        P10_SetCol(x, row, bits);
+    }
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    P10_Init(4, 1);
+    Timer1_Init(TIM1_UP_COUNT, 47999, 999);  // ~1Hz
+
+    while(1) {
+        P10_Clear();
+        draw_digit(hours / 10, 0);
+        draw_digit(hours % 10, 8);
+        if(blink_colon) {
+            for(uint8_t r = 4; r <= 5; r++)  P10_SetPixel(16, r, 1);
+            for(uint8_t r = 10; r <= 11; r++) P10_SetPixel(16, r, 1);
+        }
+        draw_digit(minutes / 10, 18);
+        draw_digit(minutes % 10, 26);
+        Delay_Ms(200);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ใช้ Timer interrupt 1Hz เพื่อนับเวลา — <code>blink_colon</code> toggle ทุกวินาทีให้ colon กระพริบ — ตัวเลข 7-segment แสดงผลด้วยการคำนวณแต่ละ segment ตามตำแหน่ง row — segments a-g ใช้ bit flag ในการเปิด-ปิด — ถ้าต้องการตั้งเวลา ให้เพิ่มปุ่มกด 3 ปุ่ม (mode, up, down) เพื่อปรับชั่วโมง/นาทีในโหมดตั้งเวลา</div>
+</div>
+
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_p10.html">กลับบท</a><a href="chapx_lib_tm1637_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

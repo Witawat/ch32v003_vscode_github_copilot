@@ -1,0 +1,141 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย RELAY — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_relay.html">กลับบท</a><a href="chapx_lib_esp01_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — Relay Module</h1>
+
+<div class="answer">
+<h2>ข้อ 1: Timer Switch — เปิด 5 นาที / ปิด 5 นาที</h2>
+<pre><code class="language-c">#include "simple_relay.h"
+
+Relay_t relay;
+
+#define ON_TIME_MS   300000   // 5 นาที
+#define OFF_TIME_MS  300000
+
+typedef enum { STATE_ON, STATE_OFF } TimerState_t;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    Relay_Init(&relay, GPIOA, GPIO_Pin_0);
+
+    TimerState_t state = STATE_ON;
+    uint32_t     last_toggle = 0;
+
+    while (1) {
+        uint32_t now = Timer_GetMs();
+
+        if (state == STATE_ON) {
+            Relay_On(&relay);
+            if (now - last_toggle &gt;= ON_TIME_MS) {
+                state = STATE_OFF;
+                last_toggle = now;
+            }
+        } else {
+            Relay_Off(&relay);
+            if (now - last_toggle &gt;= OFF_TIME_MS) {
+                state = STATE_ON;
+                last_toggle = now;
+            }
+        }
+
+        Delay_Ms(100);  // ไม่ต้อง poll ถี่มาก
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ใช้สถานะ 2 state สลับไปมา — <code>Timer_GetMs</code> เป็น millisecond counter ใช้จับเวลาแบบ non-blocking — เมื่อครบเวลา 5 นาที state เปลี่ยนและ last_toggle ถูกรีเซ็ต — วิธี non-blocking ดีกว่า Delay_Ms เพราะระบบยังทำงานอื่นได้ — ถ้าต้องการปรับเวลาแบบ runtime: อ่านค่าจาก potentiometer หรือปุ่มกด — ระวัง millis overflow ทุก ~49 วัน — ใช้ unsigned subtraction <code>now - last_toggle</code> ทำให้ overflow-safe — สำหรับงานจริง: เพิ่ม RTC (DS3231) เพื่อความแม่นยำสูงข้ามการรีเซ็ต — ต่อ snubber diode ขนาน coil relay เพื่อป้องกันไฟ反向</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: Button Toggle — กดเปิด กดซ้ำปิด</h2>
+<pre><code class="language-c">#include "simple_relay.h"
+#include "simple_button.h"
+
+Relay_t  relay;
+Button_t btn;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    Relay_Init(&relay, GPIOA, GPIO_Pin_0);
+    Button_Init(&btn, GPIOA, GPIO_Pin_1);
+
+    uint8_t relay_state = 0;  // 0=OFF, 1=ON
+
+    while (1) {
+        Button_Update(&btn);
+
+        if (Button_WasPressed(&btn)) {
+            relay_state ^= 1;   // toggle
+            if (relay_state) Relay_On(&relay);
+            else             Relay_Off(&relay);
+        }
+
+        Delay_Ms(10);  // debounce processing
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ใช้ XOR toggle (<code>^= 1</code>) สลับสถานะทุกครั้งที่กดปุ่ม — <code>Button_WasPressed</code> ตรวจจับขอบขาขึ้นเพียงครั้งเดียว (ไม่ใช่การกดค้าง) — <code>Button_Update</code> ต้องเรียกใน loop หลักเพื่อทำ debounce — ถ้าใช้ปุ่มแบบ toggle switch (กดติด-ปล่อยดับ) ให้ใช้ <code>Button_IsDown</code> แทน — ควรเพิ่ม capacitor 0.1µF ที่ขา button เพื่อ hardware debounce ลด noise — ในตู้คอนโทรล: ต่อ LED แสดงสถานะ relay เพื่อให้ผู้ใช้เห็นว่าเปิดหรือปิด — ถ้า relay หลายตัวใช้หลายปุ่ม: เพิ่ม array of Button_t และ loop ตรวจสอบ</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: Countdown Timer พร้อม Relay — นับถอยหลังแล้วตัด</h2>
+<pre><code class="language-c">#include "simple_relay.h"
+#include "simple_oled.h"
+
+Relay_t relay;
+
+#define COUNTDOWN_SEC  30
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    Relay_Init(&relay, GPIOA, GPIO_Pin_0);
+    OLED_Init();
+
+    uint16_t remaining = COUNTDOWN_SEC;
+    uint32_t last_tick = 0;
+    uint8_t  running   = 0;
+
+    OLED_SetFont(FONT_8X16);
+    OLED_Print(0, 0, "Countdown:");
+    OLED_Display();
+
+    while (1) {
+        uint32_t now = Timer_GetMs();
+
+        // เริ่มนับถอยหลังด้วยปุ่ม (simulate)
+        if (!running) {
+            running  = 1;
+            remaining = COUNTDOWN_SEC;
+            Relay_On(&relay);
+            last_tick = now;
+        }
+
+        if (running &amp;&amp; now - last_tick &gt;= 1000) {
+            last_tick = now;
+            if (remaining &gt; 0) {
+                remaining--;
+            }
+            if (remaining == 0) {
+                Relay_Off(&relay);  // หมดเวลา → ตัด relay
+                running = 0;
+            }
+        }
+
+        // แสดงผลบน OLED
+        OLED_Clear();
+        OLED_Print(0, 0, "Countdown:");
+        OLED_SetFont(FONT_16X16_THAI);
+        OLED_PrintNum(20, 30, remaining);
+        OLED_Print(60, 30, "s");
+        OLED_SetFont(FONT_8X16);
+        if (!running &amp;&amp; remaining == 0)
+            OLED_Print(10, 50, "DONE!");
+        OLED_Display();
+
+        Delay_Ms(50);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ใช้ millisecond timer จับเวลา 1 วินาทีต่อครั้ง — ลด remaining ทุกวิ — เมื่อถึง 0: ปิดรีเลย์ + หยุดนับ — แสดงผลถอยหลังบน OLED — relay ทำหน้าที่เป็น switch ตัดกระแสอุปกรณ์เมื่อหมดเวลา — ถ้าต้องการเริ่มนับจากปุ่มกด: ใช้ Button_WasPressed ใน loop ตรวจสอบ — ถ้าต้องการ pause/resume: เพิ่ม state PAUSE แยกต่างหาก — ระวัง: <code>Relay_Off</code> ใช้กับ relay แบบ active-low (LOW=ON) ต้องเช็คชนิดของ relay module (HIGH trigger vs LOW trigger) — สำหรับ application จริง: ใช้กับเตารีด เครื่องชงกาแฟ หรือไฟส่องสว่างที่ต้องการปิดอัตโนมัติ — เพิ่มปุ่มยกเลิกกลางทางเพื่อปิดก่อนหมดเวลา</div>
+</div>
+
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_relay.html">กลับบท</a><a href="chapx_lib_esp01_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

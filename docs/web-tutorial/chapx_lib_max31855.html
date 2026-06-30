@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MAX31855/MAX6675 — Thermocouple K-Type SPI — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_sht3x.html">บทก่อน</a>
+    <a href="chapx_lib_buzzer.html">บทถัดไป →</a>
+</nav>
+
+<h1>MAX31855/MAX6675 — Thermocouple K-Type SPI</h1>
+<span class="level advanced">ระดับสูง</span>
+
+<section class="flowchart">
+    <h2>🧭 แผนภาพการทำงาน</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["MAX31855_Init(PC4)"] --> B["MAX31855_ReadCelsius()"]
+    B --> C{"ReadFault() != 0?"}
+    C -->|"Yes (Fault)"| D["Handle Fault: OC/SCG/SCV"]
+    C -->|"No (OK)"| E["Get Internal Temp (CJ)"]
+    D --> B
+    E --> F["Display Temp"]
+    F --> G["Delay 500ms"]
+    G --> B
+    </pre>
+</section>
+
+<section>
+    <h2>🔌 การต่อวงจร</h2>
+    <pre class="ascii-circuit">
+        MAX31855 / MAX6675 (SPI)
+┌────────────────────────────────────┐
+│ PC4 ──── CS                        │
+│ PC5 ──── SCK                       │
+│ PC7 ──── MISO                      │
+│ 3.3V ─── VCC                       │
+│ GND  ─── GND                       │
+│                                    │
+│ Thermocouple: K-Type (เหลือง+แดง)   │
+│ ขั้วเหลือง → T+, ขั้วแดง → T-      │
+│                                    │
+│ MAX6675: 16-bit, 0-1024°C          │
+│ MAX31855: 32-bit, -270-1372°C      │
+└────────────────────────────────────┘
+    </pre>
+    <p>SPI mode 0 — MAX31855 อ่าน 32-bit (14-bit TC + 12-bit CJ + fault), MAX6675 อ่าน 16-bit (12-bit TC) — ห้ามใช้ SOP-8 (ไม่มี SPI pin)</p>
+</section>
+
+<section>
+    <h2>📚 หลักการทำงาน</h2>
+    <p><strong>Thermocouple K-Type</strong>: วัดอุณหภูมิจากแรงดัน mV ที่เกิดขึ้นระหว่างโลหะ 2 ชนิด (Chromel-Alumel) — ช่วงกว้างมาก -270°C ถึง +1372°C</p>
+    <p><strong>Cold-Junction Compensation (CJC)</strong>: ฝังในชิป — วัดอุณหภูมิที่ขั้วต่อ PCB แล้วชดเชยอัตโนมัติ — ไม่ต้องใช้ lookup table</p>
+    <p><strong>ไม่ต้องใช้ ADC</strong>: MAX31855/MAX6675 อ่านแรงดัน mV โดยตรงจาก thermocouple — มี internal ADC 14-bit (MAX31855) หรือ 12-bit (MAX6675)</p>
+    <p><strong>MAX31855</strong>: 32-bit frame — thermocouple temp (14-bit) + internal/cold-junction temp (12-bit) + fault bits (OC/SCG/SCV) — range -270°C ถึง +1372°C, accuracy ±2°C</p>
+    <p><strong>MAX6675</strong>: 16-bit frame — thermocouple temp (12-bit) — range 0°C ถึง 1024°C, accuracy ±3°C, ถูกกว่าและง่ายกว่า MAX31855</p>
+    <p><strong>Fault Detection</strong>: OC = thermocouple หลุด (open circuit), SCG = short to GND, SCV = short to VCC — MAX31855 เท่านั้น</p>
+</section>
+
+<section>
+    <h2>💻 เขียน Code ทีละขั้น</h2>
+
+    <div class="step"><h3>ขั้นที่ 1: Init SPI + MAX31855</h3>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "MAX31855.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    SPI_SimpleInit(SPI_MODE0, SPI_SPEED_1M, SPI_PINS_DEFAULT);
+
+    MAX31855_Init(PC4);       // CS pin
+    USART_Println("MAX31855 Ready!");</code></pre>
+    <p class="explain">🔍 <code>SPI_SimpleInit(SPI_MODE0, ...)</code> — MAX31855/MAX6675 ใช้ SPI mode 0 (CPOL=0, CPHA=0), <code>MAX31855_Init(CS_PIN)</code> กำหนด chip-select — เลือกขาไหนก็ได้</p></div>
+
+    <div class="step"><h3>ขั้นที่ 2: อ่าน Thermocouple + Cold-Junction + Fault</h3>
+    <pre><code class="language-c">    float tc = MAX31855_ReadCelsius();     // thermocouple temp
+    float cj = MAX31855_ReadInternal();     // cold-junction temp
+    uint8_t fault = MAX31855_ReadFault();   // 0=OK, bit0=OC, bit1=SCG, bit2=SCV
+
+    USART_Print("TC: "); USART_PrintFloat(tc, 1);
+    USART_Print("C  CJ: "); USART_PrintFloat(cj, 1);
+    USART_Print("C  Fault: "); USART_PrintNum(fault);
+    USART_Println();
+
+    if(fault & 0x01) USART_Println("⚠️ Open Circuit!");
+    if(fault & 0x02) USART_Println("⚠️ Short to GND!");
+    if(fault & 0x04) USART_Println("⚠️ Short to VCC!");</code></pre>
+    <p class="explain">🔍 <code>ReadFault()</code> ตรวจสอบ fault — bit0=OC (thermocouple หลุด), bit1=SCG (ช็อต GND), bit2=SCV (ช็อต VCC) — มีเฉพาะ MAX31855, MAX6675 ไม่มี fault detection</p></div>
+
+    <div class="step"><h3>ขั้นที่ 3: Loop + MAX6675 variant</h3>
+    <pre><code class="language-c">    Timer_t tmr;
+    Start_Timer(&tmr, 500, 1);
+
+    while(1) {
+        if(Is_Timer_Expired(&tmr)) {
+            float tc = MAX31855_ReadCelsius();
+            float cj = MAX31855_ReadInternal();
+            uint8_t fault = MAX31855_ReadFault();
+
+            if(fault == 0) {
+                USART_Print("TC: "); USART_PrintFloat(tc, 1);
+                USART_Print("°C (CJ:"); USART_PrintFloat(cj, 1);
+                USART_Println("°C)");
+            } else {
+                USART_Print("Fault: "); USART_PrintNum(fault);
+                USART_Println(" — Check Thermocouple!");
+            }
+        }
+        IWDG_Feed();
+    }
+}
+
+// MAX6675 variant (ใช้แทน MAX31855):
+// #include "MAX6675.h"
+// MAX6675_Init(PC4);
+// float t = MAX6675_ReadCelsius();  // 0-1024°C, no fault</code></pre>
+    <p class="explain">🔍 MAX6675 API ง่ายกว่า — <code>Init(cs)</code> + <code>ReadCelsius()</code> เท่านั้น แต่ไม่มี fault detection และ range จำกัดแค่ 0-1024°C</p></div>
+</section>
+
+<section>
+    <h2>📋 API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+        <tr><td><code>MAX31855_Init(cs_pin)</code></td><td>Init SPI + กำหนด CS pin</td><td><code>MAX31855_Init(PC4)</code></td></tr>
+        <tr><td><code>MAX31855_ReadCelsius()</code></td><td>อ่าน thermocouple temperature (°C)</td><td><code>float tc = MAX31855_ReadCelsius()</code></td></tr>
+        <tr><td><code>MAX31855_ReadInternal()</code></td><td>อ่าน cold-junction temperature (°C)</td><td><code>float cj = MAX31855_ReadInternal()</code></td></tr>
+        <tr><td><code>MAX31855_ReadFault()</code></td><td>ตรวจ fault — 0=OK, bit0=OC, bit1=SCG, bit2=SCV</td><td><code>uint8_t f = MAX31855_ReadFault()</code></td></tr>
+        <tr><td><code>MAX6675_Init(cs_pin)</code></td><td>Init MAX6675 variant</td><td><code>MAX6675_Init(PC4)</code></td></tr>
+        <tr><td><code>MAX6675_ReadCelsius()</code></td><td>อ่าน temp (0-1024°C, no fault)</td><td><code>float t = MAX6675_ReadCelsius()</code></td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>อ่านได้ค่า ~0°C ตลอด</td><td>ต่อ thermocouple ผิดขั้ว — T+ กับ T- สลับกัน</td><td>K-Type: สีเหลือง → T+, สีแดง → T- — ถ้าสลับอุณหภูมิจะกลับทิศ</td></tr>
+        <tr><td>MAX31855 Fault bit 0 (OC) ตลอด</td><td>Thermocouple ขาด หรือต่อไม่แน่น</td><td>เช็คขั้วต่อ — thermocouple ต้องเชื่อมกับขั้วสกรูของ MAX31855 ให้แน่น</td></tr>
+        <tr><td>ใช้กับ SOP-8 Package ไม่ได้ — ไม่มี SPI</td><td>MAX31855 SOP-8 มีแต่ analog I/O ไม่มี SPI</td><td>ต้องใช้ SOP-16 หรือ QFN package ที่มี SPI — เช็ค datasheet package</td></tr>
+        <tr><td>อุณหภูมิกระโดด ±10°C ระหว่างอ่าน</td><td>Noise coupling บน thermocouple wire — สายยาวหรือใกล้มอเตอร์</td><td>ใช้ twisted-pair thermocouple wire, ใส่ ferrite bead, ใช้ averaging 4-8 ครั้ง</td></tr>
+        <tr><td>MAX6675 อ่านไม่ออก — คืน 0</td><td>MAX6675 ใช้ 16-bit SPI — mode 1 (ไม่ใช่ mode 0)</td><td>MAX6675 ใช้ SPI mode 1 (CPOL=0, CPHA=1) — ต่างจาก MAX31855 ที่ใช้ mode 0</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>🛠️ สร้าง Product: เครื่องวัดอุณหภูมิเตาเผา K-Type</h2>
+    <p>MAX31855 + OLED — แสดงอุณหภูมิ real-time + fault warning</p>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "MAX31855.h"
+#include "OLED.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    SPI_SimpleInit(SPI_MODE0, SPI_SPEED_1M, SPI_PINS_DEFAULT);
+
+    MAX31855_Init(PC4);
+
+    OLED_t oled;
+    OLED_Init(&oled, 0x3C, OLED_128x64);
+    OLED_SetFont(&oled, FONT_8x16);
+
+    Timer_t tmr;
+    Start_Timer(&tmr, 500, 1);
+
+    while(1) {
+        if(Is_Timer_Expired(&tmr)) {
+            float tc = MAX31855_ReadCelsius();
+            float cj = MAX31855_ReadInternal();
+            uint8_t fault = MAX31855_ReadFault();
+
+            OLED_Clear(&oled);
+            if(fault == 0) {
+                OLED_SetCursor(&oled, 0, 0);
+                OLED_PrintFloat(&oled, "TC:", tc, 1); OLED_Print(&oled, " C");
+                OLED_SetCursor(&oled, 0, 2);
+                OLED_PrintFloat(&oled, "CJ:", cj, 1); OLED_Print(&oled, " C");
+            } else {
+                OLED_SetCursor(&oled, 0, 1);
+                OLED_Print(&oled, "FAULT! Check");
+                OLED_SetCursor(&oled, 0, 2);
+                OLED_Print(&oled, "Thermocouple!");
+            }
+            OLED_Display(&oled);
+        }
+        IWDG_Feed();
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>✏️ ลองทำดู</h2>
+    <ol>
+        <li>วัดอุณหภูมิหัวแร้งบัดกรี — แตะ thermocouple ที่ tip หัวแร้ง — สังเกต response time (fast!)</li>
+        <li>ทดลองสลับขั้ว T+ / T- — ดูว่าอุณหภูมิกลับทิศ — ทำความเข้าใจ thermocouple polarity</li>
+        <li>ทำ PID Temperature Controller — MAX31855 + Relay/SSR — ควบคุมอุณหภูมิเตาเผาให้คงที่</li>
+        <li>เทียบ MAX31855 vs MAX6675 — ต่อบน SPI บัสเดียวกัน (คนละ CS) — สังเกต accuracy และ fault detection</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_sht3x.html">บทก่อน</a>
+    <a href="chapx_lib_buzzer.html">บทถัดไป →</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

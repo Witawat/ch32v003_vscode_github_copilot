@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PCA9685 — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_rc522.html">บทก่อน</a>
+    <a href="chapx_lib_pcf8574.html">บทถัดไป →</a>
+</nav>
+<h1>PCA9685 — 16ch PWM I2C, 12-bit, Servo Driver</h1>
+<span class="level advanced">ระดับสูง</span>
+
+<section class="flowchart">
+    <h2>🧭 แผนภาพการทำงาน</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["PCA9685_Init(i2c,addr,freq)"] --> B["PCA9685_SetFreq(50)"]
+    B --> C["For each channel 0-15"]
+    C --> D["PCA9685_SetPWM(ch, on, off)"]
+    D --> E{"More channels?"}
+    E -->|"Yes"| C
+    E -->|"No"| F["PCA9685_Sleep() / Wake()"]
+    F --> G["Done"]
+    </pre>
+</section>
+
+<section>
+    <h2>🔌 การต่อวงจร</h2>
+    <pre class="ascii-circuit">
+              PCA9685 16-Channel PWM Driver I2C
+    ┌──────────────────────────────────────────────┐
+    │ CH32V003                         PCA9685     │
+    │ PC1(SDA)────────SDA   ┌─────────────────────┤
+    │ PC2(SCL)────────SCL   │ 16ch x 12-bit PWM  │
+    │ 3.3V───────────VCC   │ Freq: 24-1526 Hz   │
+    │ GND────────────GND    │                     │
+    │                        │ I2C addr: 0x40-0x7F │
+    │ ⚡ External Power:      │ (A0-A5 select)     │
+    │ 5-6V───V+ (terminal)   │                     │
+    │ GND────GND              │ PWM0──Servo1       │
+    │                         │ PWM1──Servo2       │
+    │ ⚡ VCC logic = 3.3V     │ PWM2──LED3         │
+    │ ⚡ V+ motor = 5-6V      │ ...                │
+    │ ⚡ ห้ามจ่าย servo จาก    │ PWM15──Servo16     │
+    │    WCH-Link 3.3V!       └─────────────────────┤
+    └──────────────────────────────────────────────┘
+    </pre>
+    <p>PCA9685 มี 2 แหล่งจ่ายไฟแยกอิสระ — VCC (logic) 3.3V จาก CH32V003, V+ (motor/servo power) 5-6V external — ต้องต่อ GND ร่วมกัน, แต่ละ channel รับโหลดได้ 25mA, จ่าย servo 16 ตัวพร้อมกันต้องใช้ external 5V 2A+</p>
+</section>
+
+<section>
+    <h2>📚 หลักการทำงาน</h2>
+    <p><strong>PCA9685</strong> เป็น I2C 16-channel PWM controller — แต่ละ channel ความละเอียด 12-bit (4096 steps), ความถี่ PWM ปรับได้ 24Hz-1526Hz, ใช้ internal oscillator 25MHz + prescaler</p>
+    <p><strong>การตั้งค่า PWM:</strong> ใช้ค่า ON และ OFF — ON = เวลาเริ่ม pulse, OFF = เวลาหยุด pulse (ทั้งคู่ 0-4095) — ความกว้าง pulse = (OFF - ON) / 4096 * period</p>
+    <p><strong>ตัวอย่าง 50Hz (servo):</strong></p>
+    <ul>
+        <li>Period = 20ms (50Hz), Prescaler ~121</li>
+        <li>0° = pulse 0.5ms → ON=0, OFF=102 (0.5/20*4096)</li>
+        <li>90° = pulse 1.5ms → ON=0, OFF=307</li>
+        <li>180° = pulse 2.5ms → ON=0, OFF=512</li>
+    </ul>
+    <p><strong>OE Pin:</strong> Output Enable — LOW = เปิด output, HIGH = ปิดทุก channel (high impedance) — ใช้ hardware shutdown</p>
+</section>
+
+<section>
+    <h2>💻 เขียน Code ทีละขั้น</h2>
+
+    <div class="step"><h3>ขั้นที่ 1: Init + Setup</h3>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "PCA9685.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    I2C_Init(I2C1, I2C_SPEED_STANDARD);  // 100kHz
+    PCA9685_Init(I2C1, 0x40, 50);        // addr=0x40, 50Hz
+    USART_Init(USART1, BAUD_115200);
+    USART_Println("PCA9685 Ready @ 50Hz!");</code></pre>
+    <p class="explain">🔍 <code>PCA9685_Init(i2c, addr, freq)</code> — 0x40 = default address (A0-A5=GND ทั้งหมด), freq=50Hz มาตรฐานสำหรับ servo RC, ต้องต่อ V+ 5V external สำหรับ servo</p></div>
+
+    <div class="step"><h3>ขั้นที่ 2: ควบคุม Servo — แปลงมุมเป็น pulse</h3>
+    <pre><code class="language-c">    // Servo 3 ตัวบน channel 0, 1, 2
+    // SG90: 0.5-2.5ms pulse → 2.5% - 12.5% duty @ 50Hz
+    uint16_t servo_min = 102;   // 0.5ms → 0 degree
+    uint16_t servo_max = 512;   // 2.5ms → 180 degree
+
+    // ตั้ง servo0 ที่ 0 degrees
+    PCA9685_SetPWM(0, 0, servo_min);
+    Delay_Ms(1000);
+
+    // ตั้ง servo0 ที่ 90 degrees (center)
+    uint16_t center = 307;  // 1.5ms
+    PCA9685_SetPWM(0, 0, center);
+    Delay_Ms(1000);
+
+    // ตั้ง servo0 ที่ 180 degrees
+    PCA9685_SetPWM(0, 0, servo_max);
+    Delay_Ms(1000);</code></pre>
+    <p class="explain">🔍 <code>PCA9685_SetPWM(ch, on, off)</code> — ch=0-15, on/off=0-4095, on มักเป็น 0 (เริ่มที่ต้นเฟรม), off กำหนดความกว้าง pulse, 50Hz: off=102=0.5ms, off=307=1.5ms, off=512=2.5ms</p></div>
+
+    <div class="step"><h3>ขั้นที่ 3: Sweep Servo + Multiple Channels</h3>
+    <pre><code class="language-c">    // ฟังก์ชันแปลงมุม → off value (SG90 @ 50Hz)
+    uint16_t angle_to_off(uint8_t angle) {
+        if(angle > 180) angle = 180;
+        return 102 + (uint16_t)((uint32_t)angle * 410 / 180);
+    }
+
+    // Sweep servo 0 ไปมา 3 รอบ
+    for(int round=0; round<3; round++) {
+        for(uint8_t angle=0; angle<=180; angle+=5) {
+            PCA9685_SetPWM(0, 0, angle_to_off(angle));
+            Delay_Ms(50);  // ให้ servo ทันหมุน
+        }
+        for(uint8_t angle=180; angle>0; angle-=5) {
+            PCA9685_SetPWM(0, 0, angle_to_off(angle));
+            Delay_Ms(50);
+        }
+    }
+
+    // ควบคุมหลาย channel พร้อมกัน
+    while(1) {
+        PCA9685_SetPWM(0, 0, angle_to_off(0));    // ch0 = 0°
+        PCA9685_SetPWM(1, 0, angle_to_off(90));   // ch1 = 90°
+        PCA9685_SetPWM(2, 0, angle_to_off(180));  // ch2 = 180°
+        Delay_Ms(2000);
+        PCA9685_SetPWM(0, 0, angle_to_off(180));  // ch0 = 180°
+        PCA9685_SetPWM(1, 0, angle_to_off(0));    // ch1 = 0°
+        PCA9685_SetPWM(2, 0, angle_to_off(90));   // ch2 = 90°
+        Delay_Ms(2000);
+    }
+}</code></pre>
+    <p class="explain">🔍 <code>angle_to_off(angle)</code> — แปลงมุม 0-180 เป็น off value (102-512), สูตร: off = min + angle × (max-min) / 180, อย่าลืม delay ให้ servo มีเวลาหมุน (50-100ms)</p></div>
+</section>
+
+<section>
+    <h2>📋 API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+        <tr><td><code>PCA9685_Init(i2c,addr,freq)</code></td><td>เริ่มต้น PWM driver</td><td><code>PCA9685_Init(I2C1, 0x40, 50)</code></td></tr>
+        <tr><td><code>PCA9685_SetFreq(freq)</code></td><td>ตั้งความถี่ PWM</td><td><code>PCA9685_SetFreq(50)</code></td></tr>
+        <tr><td><code>PCA9685_SetPWM(ch, on, off)</code></td><td>ตั้ง PWM channel</td><td><code>PCA9685_SetPWM(0, 0, 307)</code></td></tr>
+        <tr><td><code>PCA9685_SetAllPWM(on, off)</code></td><td>ตั้งทุก channel พร้อมกัน</td><td><code>PCA9685_SetAllPWM(0, 512)</code></td></tr>
+        <tr><td><code>PCA9685_Sleep()</code></td><td>เข้า sleep mode</td><td><code>PCA9685_Sleep()</code></td></tr>
+        <tr><td><code>PCA9685_Wake()</code></td><td>ปลุกจาก sleep</td><td><code>PCA9685_Wake()</code></td></tr>
+        <tr><td><code>PCA9685_Reset()</code></td><td>รีเซ็ต register</td><td><code>PCA9685_Reset()</code></td></tr>
+        <tr><td><code>PCA9685_SetDuty(ch, percent)</code></td><td>ตั้ง duty cycle %</td><td><code>PCA9685_SetDuty(5, 75)</code></td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>Servo ไม่ขยับเลย</td><td>ลืมต่อ V+ 5V external power</td><td>VCC (logic) 3.3V กับ V+ (power) 5-6V ต้องต่อแยก — V+ ต้อง external</td></tr>
+        <tr><td>Servo กระตุก/สั่น</td><td>ความถี่ PWM ไม่ใช่ 50Hz</td><td>Servo ต้อง 50Hz เท่านั้น — <code>PCA9685_Init(I2C1, 0x40, 50)</code></td></tr>
+        <tr><td>Servo หมุนสุดไปด้านเดียว</td><td>ค่า off ผิด — pulse กว้าง/แคบเกิน</td><td>เช็ค off value — SG90: 102-512, servo อื่นอาจต่างกัน</td></tr>
+        <tr><td>I2C ไม่ตอบ</td><td>Address ผิด (default 0x40)</td><td>เช็ค A0-A5 ต่อ GND = 0x40, A0=VCC = 0x41, ใช้ I2C scan</td></tr>
+        <tr><td>Servo ร้อน/ไหม้</td><td>Stall current — หมุนติดขอบเกิน</td><td>ตั้ง soft limit ใน code, ป้องกัน angle < 0 หรือ > 180</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>🛠️ สร้าง Product: 4-Axis Robotic Arm Controller</h2>
+    <p>PCA9685 ควบคุม servo 4 ตัว (base, shoulder, elbow, gripper) — sweep อัตโนมัติ</p>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "PCA9685.h"
+
+uint16_t angle_to_off(uint8_t a) {
+    if(a>180)a=180; return 102+(uint16_t)((uint32_t)a*410/180);
+}
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    I2C_Init(I2C1, I2C_SPEED_STANDARD);
+    PCA9685_Init(I2C1, 0x40, 50);
+    USART_Init(USART1, BAUD_115200);
+
+    // Base=ch0, Shoulder=ch1, Elbow=ch2, Gripper=ch3
+    uint8_t base=90, shoulder=90, elbow=90, gripper=90;
+
+    while(1)
+    {
+        // Move base: 0→180→0
+        for(uint8_t a=0; a<=180; a+=2) {
+            PCA9685_SetPWM(0,0,angle_to_off(a));
+            Delay_Ms(20);
+        }
+        // Move shoulder up
+        for(uint8_t a=90; a<=150; a+=2) {
+            PCA9685_SetPWM(1,0,angle_to_off(a));
+            Delay_Ms(20);
+        }
+        // Close gripper
+        for(uint8_t a=90; a>=30; a-=2) {
+            PCA9685_SetPWM(3,0,angle_to_off(a));
+            Delay_Ms(20);
+        }
+        Delay_Ms(500);
+        // Return to home
+        PCA9685_SetPWM(0,0,angle_to_off(90));
+        PCA9685_SetPWM(1,0,angle_to_off(90));
+        PCA9685_SetPWM(2,0,angle_to_off(90));
+        PCA9685_SetPWM(3,0,angle_to_off(90));
+        Delay_Ms(1000);
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>✏️ ลองทำดู</h2>
+    <ol>
+        <li>ทำ servo sequencer — ตั้งลำดับ servo หลายตัวเคลื่อนไหวเป็น sequence (dance) แบบ time-coded</li>
+        <li>ทำระบบรดน้ำต้นไม้อัตโนมัติ — PCA9685 ควบคุม solenoid valve ผ่าน MOSFET หลายตัว</li>
+        <li>ควบคุม LED RGB 16 แถบ — แต่ละ channel ต่อ LED strip ผ่าน MOSFET — สร้าง effect วิ่งแบบต่างๆ</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_rc522.html">บทก่อน</a>
+    <a href="chapx_lib_pcf8574.html">บทถัดไป →</a>
+</nav>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

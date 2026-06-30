@@ -1,0 +1,144 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย RCWL-0516 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_rcwl0516.html">กลับบท</a><a href="chapx_lib_ina219_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — RCWL-0516 Doppler Radar Motion</h1>
+<div class="answer"><h2>ข้อ 1: Through-Wall Detection Test</h2><pre><code class="language-c">#define RCWL_PIN  PC0
+#define LED_PIN   PC4
+
+void rcwl_through_wall_test(void) {
+    pinMode(RCWL_PIN, PIN_MODE_INPUT);
+    pinMode(LED_PIN, PIN_MODE_OUTPUT);
+
+    USART_Println("Through-wall detection test");
+    USART_Println("Test scenarios:");
+    USART_Println("1. Direct line-of-sight");
+    USART_Println("2. Behind 1cm wood");
+    USART_Println("3. Behind drywall (gypsum)");
+    USART_Println("4. Behind concrete/brick");
+    USART_Println("");
+    USART_Println("Move hand at ~2m — note range");
+
+    while(1) {
+        uint8_t state = digitalRead(RCWL_PIN);
+
+        static uint32_t last_edge = 0;
+        static uint8_t last_state = 0;
+
+        if(state != last_state) {
+            uint32_t now = millis();
+            uint32_t elapsed = now - last_edge;
+            last_edge = now;
+            last_state = state;
+
+            digitalWrite(LED_PIN, state);
+
+            if(state == HIGH) {
+                USART_Print("RISING  — ");
+            } else {
+                USART_Print("FALLING — pulse width: ");
+                USART_PrintNum(elapsed);
+                USART_Print(" ms");
+            }
+            USART_Println("");
+        }
+        Delay_Ms(5);
+    }
+}
+</code></pre><div class="approach"><strong>🧠 แนวคิด:</strong> RCWL-0516 ใช้ Doppler radar ~3.18GHz — ทะลุวัสดุที่ไม่ใช่โลหะได้ดี — ไม้/gypsum ทะลุได้เกือบ 100% — ผนังปูน range ลดลง ~50% — โลหะ → สะท้อนกลับ range เพิ่ม — จับทั้ง rising และ falling edge วัด pulse width — pulse กว้าง = วัตถุเคลื่อนที่ช้า, pulse แคบ = เร็ว</div></div>
+<div class="answer"><h2>ข้อ 2: Dual PIR + RCWL-0516 System</h2><pre><code class="language-c">#define PIR_PIN   PC0
+#define RCWL_PIN  PC1
+#define RELAY_PIN PC4
+
+uint8_t pir_state = 0, rcwl_state = 0;
+uint32_t pir_last = 0, rcwl_last = 0;
+
+void dual_motion_system(void) {
+    pinMode(PIR_PIN, PIN_MODE_INPUT);
+    pinMode(RCWL_PIN, PIN_MODE_INPUT);
+    pinMode(RELAY_PIN, PIN_MODE_OUTPUT);
+
+    USART_Println("Dual PIR+RCWL System");
+    USART_Println("Relay ON when both agree, OFF when both silent");
+
+    while(1) {
+        uint32_t now = millis();
+        uint8_t pir_now  = digitalRead(PIR_PIN);
+        uint8_t rcwl_now = digitalRead(RCWL_PIN);
+
+        // Rising edge detection
+        if(pir_now && !pir_state)  pir_last = now;
+        if(rcwl_now && !rcwl_state) rcwl_last = now;
+
+        pir_state  = pir_now;
+        rcwl_state = rcwl_now;
+
+        // Both detected within 3 seconds → confirmed motion
+        uint8_t both_recent = (now - pir_last < 3000) && (now - rcwl_last < 3000);
+
+        // Either silent for 5 seconds → no motion
+        static uint32_t last_confirm = 0;
+        if(both_recent) last_confirm = now;
+
+        uint8_t motion_confirmed = (now - last_confirm < 5000);
+
+        digitalWrite(RELAY_PIN, motion_confirmed);
+
+        USART_Print("PIR:"); USART_PrintNum(pir_now);
+        USART_Print(" RCWL:"); USART_PrintNum(rcwl_now);
+        USART_Print(" Both:"); USART_PrintNum(both_recent);
+        USART_Print(" Relay:"); USART_PrintNum(motion_confirmed);
+        USART_Println("");
+
+        Delay_Ms(100);
+    }
+}
+</code></pre><div class="approach"><strong>🧠 แนวคิด:</strong> AND logic: เปิด relay เมื่อทั้ง PIR และ RCWL ตรวจจับภายใน 3 วิ — ลด false positive จาก PIR (สัตว์เล็ก/ความร้อน) และ RCWL (พัดลม/lamp flicker) — OFF delay 5 วิหลังสัญญาณสุดท้าย — ระบบนี้แม่นยำกว่าใช้เซนเซอร์เดี่ยวมาก — เหมาะกับระบบรักษาความปลอดภัย</div></div>
+<div class="answer"><h2>ข้อ 3: Sensitivity Comparison — Range vs Object Size</h2><pre><code class="language-c">typedef struct {
+    const char *obj_name;
+    float       range_m;
+} rcwl_test_t;
+
+void rcwl_sensitivity_test(void) {
+    pinMode(RCWL_PIN, PIN_MODE_INPUT);
+
+    USART_Println("RCWL-0516 Sensitivity Test");
+    USART_Println("Start at 5m, walk slowly toward sensor");
+    USART_Println("Note distance when LED first triggers");
+    USART_Println("Distance(m), Triggered");
+    USART_Println("");
+
+    // Test with different objects
+    USART_Println("Test 1: Human walking");
+    USART_Println("Test 2: Human hand wave");
+    USART_Println("Test 3: Metal object");
+    USART_Println("Test 4: Small animal (cat/dog)");
+
+    float distance = 5.0f;
+
+    while(1) {
+        uint8_t triggered = digitalRead(RCWL_PIN);
+
+        static uint8_t last_trig = 0;
+        if(triggered && !last_trig) {
+            USART_Print("TRIGGER at ~");
+            USART_PrintFloat(distance, 1);
+            USART_Println("m");
+        }
+        last_trig = triggered;
+
+        // Press button to decrease distance manually
+        static uint32_t last_btn = 0;
+        if(digitalRead(PC2) == LOW && millis() - last_btn > 500) {
+            distance -= 0.5f;
+            if(distance < 0.5f) distance = 5.0f;
+            last_btn = millis();
+            USART_Print("Set distance: ");
+            USART_PrintFloat(distance, 1);
+            USART_Println("m");
+        }
+
+        Delay_Ms(30);
+    }
+}
+</code></pre><div class="approach"><strong>🧠 แนวคิด:</strong> RCWL sensitivity ขึ้นกับ: ขนาดวัตถุ, ความเร็ว, วัสดุ (โลหะสะท้อนดี) — มนุษย์เดิน: ~4–5m — โบกมือ: ~2–3m — สัตว์เล็ก: ~1–2m — โลหะ: 5–7m — Doppler shift ∝ ความเร็ววัตถุ → วัตถุเร็ว trigger ง่ายกว่าวัตถุช้า — ปรับ sensitivity ได้ด้วยการเปลี่ยน R-GN (default 1MΩ → ~7m range)</div></div>
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_rcwl0516.html">กลับบท</a><a href="chapx_lib_ina219_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

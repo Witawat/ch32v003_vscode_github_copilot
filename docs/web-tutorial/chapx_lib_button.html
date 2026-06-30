@@ -1,0 +1,149 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Button — ปุ่มกด Debounce — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head><body>
+
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_i2cscan.html">บทก่อน</a><a href="chapx_lib_keymatrix.html">บทถัดไป →</a></nav>
+
+<h1>Button — ปุ่มกด Debounce</h1><span class="level-beginner">ระดับเริ่มต้น</span>
+
+<section class="flowchart"><h2>🧭 แผนภาพการทำงาน</h2><pre class="mermaid">
+flowchart TD
+    A["Button_Init(pin,mode,debounce)"] --> B["SetCallbacks"]
+    B --> C["Button_Update(&amp;btn) in loop"]
+    C --> D{"State Machine"}
+    D -->|"กดสั้น"| E["Fire on_press()"]
+    D -->|"กดค้าง &gt;1s"| F["Fire on_long()"]
+    D -->|"ดับเบิลคลิก"| G["Fire on_double()"]
+    E --> C
+    F --> C
+    G --> C
+</pre></section>
+
+<section><h2>🔌 การต่อวงจร</h2><pre class="ascii-circuit">
+     ปุ่มกด 1 ปุ่ม (Active LOW)
+┌────────────────────────────────┐
+│ MCU                     CH32V003│
+│ PC1 ─── Button ─── GND         │
+│                                │
+│ ใช้ internal pull-up (~40kΩ)   │
+│ กด = LOW (0), ปล่อย = HIGH (1) │
+│ ACTIVE_HIGH: Button ─── VCC    │
+│ แล้วใช้ internal pull-down     │
+└────────────────────────────────┘
+</pre><p>ขา PC1 ต่อกับปุ่มกดที่ต่อลง GND — เมื่อกดจะอ่านค่าเป็น 0 (ACTIVE_LOW) ใช้ตัวต้านทาน pull-up ภายใน MCU ไม่ต้องต่อ R ภายนอก</p></section>
+
+<section><h2>📚 หลักการทำงาน</h2>
+<p><strong>Debounce</strong>: หน้าสัมผัสทางกลของปุ่มกดจะกระเด้ง (bounce) ประมาณ 5-20ms เมื่อกดหรือปล่อย — ต้องใช้ซอฟต์แวร์กรองสัญญาณรบกวนนี้ ค่า default 50ms ครอบคลุมเกือบทุกปุ่ม</p>
+<p><strong>Callback-based</strong>: แทนที่จะเช็ค <code>digitalRead()</code> เอง ผู้ใช้ลงทะเบียน callback function — เมื่อเหตุการณ์เกิดขึ้น (กด/กดค้าง/ดับเบิลคลิก) ฟังก์ชันจะถูกเรียกอัตโนมัติ</p>
+<p><strong>Long Press Threshold</strong>: กำหนดเวลาที่ถือว่า "กดค้าง" — default 1000ms — เหมาะสำหรับ secondary action เช่น long=select, short=next</p>
+<p><strong>Double Click Window</strong>: กรอบเวลาสำหรับการกด 2 ครั้งติดกัน — default 400ms — ถ้ากดครั้งที่ 2 ภายใน window จะนับเป็นดับเบิลคลิกแทนการกดเดี่ยว 2 ครั้ง</p>
+<p><strong>ต้องเรียก Update() ใน loop</strong>: State machine จะไม่ทำงานถ้าไม่เรียก <code>Button_Update(&btn)</code> เป็นประจำใน main loop — ไม่สามารถใช้ใน ISR ได้เพราะใช้ <code>Delay_Ms()</code> ภายใน</p>
+<p><strong>ISR-safe (indirect)</strong>: ถ้าต้องการตรวจจับจาก ISR ให้ใช้ <code>Button_DebounceISR()</code> variant ซึ่งไม่ใช้ delay — หรือใช้ GPIO interrupt แล้ว set flag ให้ main loop อ่าน</p>
+</section>
+
+<section><h2>💻 เขียน Code ทีละขั้น</h2>
+
+<div class="step"><h3>ขั้นที่ 1: Init + ตั้งค่า Callbacks</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "Button.h"
+
+Button_Handle btn;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_Init(115200);
+
+    Button_Init(&btn, PC1, BUTTON_ACTIVE_LOW, 50);
+    Button_OnPress(&btn, on_press);
+    Button_OnLongPress(&btn, on_long, 1000);
+    Button_OnDoubleClick(&btn, on_double, 400);
+    USART_Println("Button Ready!");</code></pre>
+<p class="explain">🔍 <code>Button_Init(&btn, pin, mode, debounce_ms)</code> — mode เป็น <code>BUTTON_ACTIVE_LOW</code> (ปุ่มต่อ GND) หรือ <code>BUTTON_ACTIVE_HIGH</code> (ปุ่มต่อ VCC) debounce 50ms คือค่ามาตรฐานที่ใช้ได้กับปุ่มทั่วไป</p></div>
+
+<div class="step"><h3>ขั้นที่ 2: สร้าง Callback Functions</h3>
+<pre><code class="language-c">void on_press(void) {
+    USART_Println("Pressed!");
+}
+void on_long(void) {
+    USART_Println("Long Press 1s!");
+}
+void on_double(void) {
+    USART_Println("Double Click!");
+}</code></pre>
+<p class="explain">🔍 Callback ทั้ง 3 ตัวแยกกันอิสระ — <code>on_press</code> เรียกเมื่อกดสั้น, <code>on_long</code> เรียกเมื่อกดค้างเกิน 1000ms, <code>on_double</code> เรียกเมื่อกด 2 ครั้งภายใน 400ms — แต่ละ callback รับ void ไม่มี parameter</p></div>
+
+<div class="step"><h3>ขั้นที่ 3: Loop + Update</h3>
+<pre><code class="language-c">    while(1) {
+        Button_Update(&btn);
+        IWDG_Feed();
+    }
+}</code></pre>
+<p class="explain">🔍 <code>Button_Update(&btn)</code> ต้องถูกเรียกทุก loop iteration — ตัว state machine ภายในจะเช็คเวลาที่ผ่านไปและสถานะขา GPIO เพื่อตัดสินใจว่าเหตุการณ์ไหนเกิดขึ้น — <code>IWDG_Feed()</code> เลี้ยง watchdog กันลืม</p></div>
+</section>
+
+<section><h2>📋 API Reference</h2><table><tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+<tr><td><code>Button_Init(&btn, pin, mode, ms)</code></td><td>เริ่มต้นปุ่ม — mode=ACTIVE_LOW/ACTIVE_HIGH, debounce=20-100ms</td><td><code>Button_Init(&btn, PC1, BUTTON_ACTIVE_LOW, 50)</code></td></tr>
+<tr><td><code>Button_OnPress(&btn, cb)</code></td><td>ตั้ง callback เมื่อกดสั้น (ปล่อยภายใน threshold)</td><td><code>Button_OnPress(&btn, on_press)</code></td></tr>
+<tr><td><code>Button_OnLongPress(&btn, cb, ms)</code></td><td>ตั้ง callback เมื่อกดค้างเกิน ms (default 1000)</td><td><code>Button_OnLongPress(&btn, on_long, 1000)</code></td></tr>
+<tr><td><code>Button_OnDoubleClick(&btn, cb, ms)</code></td><td>ตั้ง callback เมื่อดับเบิลคลิกภายใน window ms</td><td><code>Button_OnDoubleClick(&btn, on_double, 400)</code></td></tr>
+<tr><td><code>Button_Update(&btn)</code></td><td>อัปเดต state machine — ต้องเรียกใน loop</td><td><code>while(1){Button_Update(&btn);}</code></td></tr>
+<tr><td><code>Button_IsPressed(&btn)</code></td><td>เช็คสถานะปัจจุบัน — true=กดอยู่</td><td><code>if(Button_IsPressed(&btn)){...}</code></td></tr>
+<tr><td><code>Button_GetPressCount(&btn)</code></td><td>อ่านจำนวนครั้งที่กดสะสม (เคลียร์ได้)</td><td><code>uint16_t n = Button_GetPressCount(&btn)</code></td></tr>
+</table></section>
+
+<section><h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2><table><tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+<tr><td>กด 1 ครั้ง แต่ callback ทำงาน 2-3 รอบ</td><td>Debounce น้อยเกินไป (เช่น 10ms)</td><td>เพิ่ม debounce เป็น 50-80ms — ปุ่มโลหะอาจต้อง 80ms</td></tr>
+<tr><td>Long Press ไม่เคยถูกเรียก</td><td>ลืมตั้ง <code>Button_OnLongPress()</code> หรือ threshold สั้นไป</td><td>เพิ่ม <code>Button_OnLongPress(&btn, cb, 1000)</code> และเช็คค่า threshold ≥ 500ms</td></tr>
+<tr><td>Callback ไม่ทำงานเลย</td><td>ลืม <code>Button_Update(&btn)</code> ใน while(1)</td><td>เพิ่มใน main loop ทุกรอบ — state machine ต้องถูกเรียกจึงจะทำงาน</td></tr>
+<tr><td>Active High/Low กลับด้าน</td><td>ตั้ง mode ไม่ตรงกับวงจร — ACTIVE_LOW แต่ต่อปุ่มเข้า VCC</td><td>เช็ควงจร: ACTIVE_LOW → ปุ่มต่อ GND, ACTIVE_HIGH → ปุ่มต่อ VCC</td></tr>
+<tr><td>Double Click ไม่ติด</td><td>Window แคบเกิน หรือกดไม่ทัน</td><td>เพิ่ม window เป็น 400-600ms — double click ต้องกด 2 ครั้งเร็ว</td></tr>
+<tr><td>โปรแกรมค้างตอนเรียกใน ISR</td><td><code>Button_Update()</code> ใช้ Delay — ห้ามใช้ใน ISR</td><td>ย้ายมา main loop — ใช้ GPIO interrupt set flag แล้ว main loop อ่าน flag</td></tr>
+</table></section>
+
+<section><h2>🛠️ สร้าง Product: Single-button Menu</h2><p>1 ปุ่ม 3 ท่า: กดสั้น=เลือกเมนูถัดไป, กดค้าง=ยืนยันเลือก, ดับเบิลคลิก=ย้อนกลับ — แสดงผลทาง USART</p>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "Button.h"
+
+Button_Handle btn;
+uint8_t menu_idx = 0;
+const char* menu[] = {"LED ON", "LED OFF", "BLINK", "EXIT"};
+
+void on_press(void) {
+    menu_idx = (menu_idx + 1) % 4;
+    USART_Print("> "); USART_Println(menu[menu_idx]);
+}
+void on_long(void) {
+    USART_Print("SELECT: "); USART_Println(menu[menu_idx]);
+    if(menu_idx == 0) pinMode(PC0, PIN_MODE_OUTPUT); digitalWrite(PC0, HIGH);
+    if(menu_idx == 1) digitalWrite(PC0, LOW);
+    if(menu_idx == 3) USART_Println("Goodbye!");
+}
+void on_double(void) {
+    menu_idx = (menu_idx == 0) ? 3 : menu_idx - 1;
+    USART_Print("BACK> "); USART_Println(menu[menu_idx]);
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_Init(115200);
+    Button_Init(&btn, PC1, BUTTON_ACTIVE_LOW, 50);
+    Button_OnPress(&btn, on_press);
+    Button_OnLongPress(&btn, on_long, 1000);
+    Button_OnDoubleClick(&btn, on_double, 400);
+    USART_Println("=== Single-Button Menu ===");
+    USART_Println(menu[0]);
+    while(1) { Button_Update(&btn); IWDG_Feed(); }
+}</code></pre></section>
+
+<section><h2>✏️ ลองทำดู</h2><ol>
+<li>ตัวนับ Double-Click — นับจำนวนครั้งที่ดับเบิลคลิก แสดงผลผ่าน USART ทุกครั้งที่กด</li>
+<li>Hold-to-Dim LED — กดค้างเพื่อลด brightness ของ LED (PWM) ทีละ 10% ทุก 200ms — ใช้ <code>Button_IsPressed()</code> เช็คใน callback</li>
+<li>Combo Lock Sequence — ต้องกด sequence เช่น สั้น-สั้น-ยาว ให้ถูกต้องถึงปลดล็อก LED — ใช้ตัวแปรนับ state และ <code>Button_GetPressCount()</code></li>
+</ol></section>
+
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_i2cscan.html">บทก่อน</a><a href="chapx_lib_keymatrix.html">บทถัดไป →</a></nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script><script>mermaid.initialize({startOnLoad:true,theme:'base'});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

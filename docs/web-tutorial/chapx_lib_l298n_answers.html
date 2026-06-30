@@ -1,0 +1,139 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย L298N — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_l298n.html">กลับบท</a><a href="chapx_lib_drv8825_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — L298N Motor Driver</h1>
+
+<div class="answer">
+<h2>ข้อ 1: Differential Drive — 2-Wheel Robot เลี้ยวซ้าย-ขวา</h2>
+<pre><code class="language-c">#include "simple_l298n.h"
+
+L298N_t motor_left, motor_right;
+
+void forward(uint8_t speed) {
+    L298N_SetSpeed(&motor_left,  speed);
+    L298N_SetSpeed(&motor_right, speed);
+    L298N_Forward(&motor_left);
+    L298N_Forward(&motor_right);
+}
+
+void backward(uint8_t speed) {
+    L298N_SetSpeed(&motor_left,  speed);
+    L298N_SetSpeed(&motor_right, speed);
+    L298N_Backward(&motor_left);
+    L298N_Backward(&motor_right);
+}
+
+void turn_left(uint8_t speed) {
+    L298N_SetSpeed(&motor_left,  speed);
+    L298N_SetSpeed(&motor_right, speed);
+    L298N_Backward(&motor_left);
+    L298N_Forward(&motor_right);
+}
+
+void turn_right(uint8_t speed) {
+    L298N_SetSpeed(&motor_left,  speed);
+    L298N_SetSpeed(&motor_right, speed);
+    L298N_Forward(&motor_left);
+    L298N_Backward(&motor_right);
+}
+
+void stop(void) {
+    L298N_Brake(&motor_left);
+    L298N_Brake(&motor_right);
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    L298N_Init(&motor_left,  GPIOA, GPIO_Pin_0, GPIOA, GPIO_Pin_1, GPIOA, GPIO_Pin_2);
+    L298N_Init(&motor_right, GPIOA, GPIO_Pin_3, GPIOA, GPIO_Pin_4, GPIOA, GPIO_Pin_5);
+
+    while (1) {
+        forward(80);     Delay_Ms(2000);
+        turn_left(60);   Delay_Ms(500);   // เลี้ยวซ้าย 90°
+        forward(80);     Delay_Ms(1500);
+        turn_right(60);  Delay_Ms(500);   // เลี้ยวขวา 90°
+        backward(60);    Delay_Ms(2000);
+        stop();          Delay_Ms(1000);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> Differential drive ใช้ 2 ล้ออิสระ — เดินหน้า/ถอยหลัง: ทั้งสองล้อหมุนทิศทางเดียวกัน — เลี้ยวซ้าย: ล้อซ้ายถอยหลัง ล้อขวาเดินหน้า (pivot turn) — เลี้ยวขวา: ล้อซ้ายเดินหน้า ล้อขวาถอยหลัง — <code>L298N_Brake</code> เบรก (short motor terminal) หยุดเร็วกว่า coasting — ความเร็วเลี้ยวต่ำกว่าเดินหน้าเพื่อป้องกันการไถล — ระยะเวลา delay กำหนดมุมเลี้ยว ต้อง calibrate กับพื้นผิวและแบตจริง — สำหรับเลี้ยวแบบนุ่มนวล ให้ลดความเร็วล้อหนึ่งแทนการกลับทิศ (spin turn vs pivot turn)</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: Speed Control ด้วย PWM แบบ Smooth Ramp</h2>
+<pre><code class="language-c">#include "simple_l298n.h"
+
+L298N_t motor;
+
+void smooth_ramp(L298N_t *m, uint8_t from, uint8_t to) {
+    int16_t step = (from &lt; to) ? 1 : -1;
+    int16_t val = from;
+    while (val != to) {
+        val += step;
+        L298N_SetSpeed(m, (uint8_t)val);
+        Delay_Ms(10);
+    }
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    L298N_Init(&motor, GPIOA, GPIO_Pin_0, GPIOA, GPIO_Pin_1, GPIOA, GPIO_Pin_2);
+
+    L298N_Forward(&motor);
+
+    while (1) {
+        smooth_ramp(&motor, 0, 100);   Delay_Ms(500);
+        smooth_ramp(&motor, 100, 50);  Delay_Ms(500);
+        smooth_ramp(&motor, 50, 100);  Delay_Ms(500);
+        smooth_ramp(&motor, 100, 0);   Delay_Ms(1000);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ฟังก์ชัน <code>smooth_ramp</code> เปลี่ยนความเร็วทีละ 1% หน่วง 10ms ต่อ step — เวลารวมในการ ramp จาก 0→100 = 100×10ms = 1 วินาที — PWM duty cycle ถูกควบคุมโดย <code>L298N_SetSpeed</code> ผ่าน hardware timer — การเพิ่มความเร็วแบบ smooth ช่วยลดกระแสกระชากและป้องกัน gearbox เสียหาย — ถ้าใช้ motor 2 ตัวแบบ differential ให้เรียก smooth_ramp พร้อมกันทั้ง 2 ตัว — ปรับ delay ต่อ step ได้: ลดลงเพื่อ ramp เร็วขึ้น เพิ่มขึ้นเพื่อ ramp นุ่มนวลกว่า — วิธีนี้ใช้ CPU น้อยกว่าแบบ non-blocking แต่ block การทำงานอื่นระหว่าง ramp</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: Obstacle Avoidance ด้วย HC-SR04</h2>
+<pre><code class="language-c">#include "simple_l298n.h"
+#include "simple_hcsr04.h"
+
+L298N_t left, right;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    L298N_Init(&left,  GPIOA, GPIO_Pin_0, GPIOA, GPIO_Pin_1, GPIOA, GPIO_Pin_2);
+    L298N_Init(&right, GPIOA, GPIO_Pin_3, GPIOA, GPIO_Pin_4, GPIOA, GPIO_Pin_5);
+    HCSR04_Init(GPIOA, GPIO_Pin_6, GPIOA, GPIO_Pin_7);
+
+    while (1) {
+        L298N_SetSpeed(&left,  70);
+        L298N_SetSpeed(&right, 70);
+        L298N_Forward(&left);
+        L298N_Forward(&right);
+
+        uint32_t dist_mm = HCSR04_Read();
+        if (dist_mm &lt; 200) {   // ตรวจพบสิ่งกีดขวาง &lt; 20cm
+            // ถอยหลัง
+            L298N_Backward(&left);
+            L298N_Backward(&right);
+            Delay_Ms(600);
+
+            // เลี้ยวหลบ
+            L298N_Forward(&left);
+            L298N_Backward(&right);
+            Delay_Ms(400);
+
+            // หยุดเช็คอีกครั้ง
+            L298N_Brake(&left);
+            L298N_Brake(&right);
+            Delay_Ms(100);
+        }
+        Delay_Ms(50);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ใช้ ultrasonic sensor HC-SR04 วัดระยะ — เมื่อระยะต่ำกว่า threshold (200mm) ให้ถอยหลัง 600ms แล้ว pivot turn 400ms หลบ — loop หลักวิ่งต่อเนื่อง อ่านค่าระยะทุก 50ms — <code>L298N_Brake</code> ใช้หยุดก่อนเลี้ยวหลบเพื่อลด momentum — การตั้ง threshold ต้องไม่ต่ำเกินไป (ชนก่อนเบรก) และไม่สูงเกินไป (หลบทั้งที่ไม่มี obstacle) — สำหรับ robot จริง: เพิ่ม random เลือกเลี้ยวซ้ายหรือขวา — ใช้หลาย sensor รอบทิศทาง (หน้า, ซ้าย, ขวา) — ใช้ moving average filter ลดสัญญาณรบกวนจาก ultrasonic</div>
+</div>
+
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_l298n.html">กลับบท</a><a href="chapx_lib_drv8825_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

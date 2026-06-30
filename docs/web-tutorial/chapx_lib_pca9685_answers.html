@@ -1,0 +1,198 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย PCA9685 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_pca9685.html">กลับบท</a><a href="chapx_lib_pcf8574_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — PCA9685 16-Ch PWM</h1>
+
+<div class="answer">
+<h2>ข้อ 1: 16-Channel LED Dimmer อิสระ</h2>
+<pre><code class="language-c">#define PCA_ADDR    0x40
+
+void pca9685_led_dimmer(void) {
+    PCA9685_Init(PCA_ADDR, 1000);  // 1kHz PWM
+
+    uint16_t brightness[16] = {0};
+    uint8_t active[16] = {
+        1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1
+    };
+
+    while(1) {
+        // Fade up channel 0-7
+        for(uint8_t ch=0; ch<8; ch++) {
+            if(!active[ch]) continue;
+            brightness[ch] += 16;
+            if(brightness[ch] >= 4096) brightness[ch] = 0;
+            PCA9685_SetPWM(ch, 0, brightness[ch]);
+            Delay_Ms(15);
+        }
+
+        // Fade down channel 8-15
+        for(uint8_t ch=8; ch<16; ch++) {
+            if(!active[ch]) continue;
+            brightness[ch] += 8;
+            if(brightness[ch] >= 4096) brightness[ch] = 0;
+            PCA9685_SetPWM(ch, 0, brightness[ch]);
+            Delay_Ms(10);
+        }
+
+        // แสดงค่า channel 0 ทาง serial
+        static uint32_t last = 0;
+        if(Timer_GetMs() - last > 2000) {
+            USART_Print("CH0:");
+            USART_PrintNum(brightness[0]);
+            USART_Print(" CH8:");
+            USART_PrintNum(brightness[8]);
+            USART_Println(" (0-4095)");
+            last = Timer_GetMs();
+        }
+    }
+}
+
+// ควบคุมทีละช่องจาก serial command
+void pca9685_cmd_handler(char ch, uint16_t val) {
+    if(ch >= '0' && ch <= '9') {
+        uint8_t chan = ch - '0';
+        PCA9685_SetPWM(chan, 0, val);
+        USART_Print("CH"); USART_PrintNum(chan);
+        USART_Print(" = "); USART_PrintNum(val);
+        USART_Println("");
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> PCA9685 มี 16 ช่อง PWM 12-bit (0-4095) — ใช้ I2C address 0x40 (default) — PCA9685_SetPWM(channel, on_time, off_time) — on_time=0 เริ่มต้นที่ต้นคาบ — แยก 2 กลุ่ม fade เร็ว/ช้าต่างกัน — 16 LEDs ควบคุมอิสระโดยใช้ GPIO ไม่กี่ขา (แค่ I2C 2 ขา) — ความถี่ 1kHz มองไม่เห็นการกระพริบ</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: Servo Array 8-Channel — ควบคุมเซอร์โวพร้อมกัน</h2>
+<pre><code class="language-c">#define SERVO_MIN_US    500    // 0°
+#define SERVO_MAX_US    2500   // 180°
+#define SERVO_FREQ_HZ   50     // เซอร์โวต้องการ ~50Hz
+
+void pca9685_servo_init(void) {
+    PCA9685_Init(0x40, SERVO_FREQ_HZ);
+
+    // คำนวณค่า PCA9685 ticks สำหรับ servo pulse
+    // PCA9685 clock = 25MHz, prescaler สร้างจากความถี่
+    // 1 tick ≈ 0.8μs ที่ 50Hz (คำนวณภายใน PCA9685_Init)
+}
+
+// แปลงมุม 0-180° เป็น pulse width (ticks)
+uint16_t servo_angle_to_ticks(uint8_t angle) {
+    if(angle > 180) angle = 180;
+    // 0°≈1000μs, 180°≈2000μs (common servo range)
+    // ticks = μs * 4096 / 20000
+    uint32_t pulse_us = 1000 + (uint32_t)angle * 1000 / 180;
+    return (uint16_t)(pulse_us * 4096 / 20000);
+}
+
+void pca9685_servo_array(void) {
+    pca9685_servo_init();
+
+    // 8 เซอร์โว: channel 0-3 และ 8-11
+    uint8_t servo_ch[8] = {0,1,2,3,8,9,10,11};
+    uint8_t angles[8] = {90,90,90,90,90,90,90,90};  // center
+
+    // ตั้ง center ทุกตัว
+    for(uint8_t i=0; i<8; i++)
+        PCA9685_SetPWM(servo_ch[i], 0,
+                       servo_angle_to_ticks(angles[i]));
+
+    USART_Println("[SERVO] 8-ch ready");
+
+    while(1) {
+        // รูปแบบ: ค่อย ๆ ขยับทุกตัว
+        for(uint8_t i=0; i<8; i++) {
+            // wave pattern
+            float phase = (float)i * 3.14159f / 4.0f;
+            uint32_t ms = Timer_GetMs();
+            angles[i] = 90 + (uint8_t)(60.0f *
+                sinf(phase + ms * 0.001f));
+
+            PCA9685_SetPWM(servo_ch[i], 0,
+                           servo_angle_to_ticks(angles[i]));
+        }
+
+        // แสดงมุม
+        static uint32_t last = 0;
+        if(Timer_GetMs() - last > 1000) {
+            USART_Print("Angles: ");
+            for(uint8_t i=0; i<8; i++) {
+                USART_PrintNum(angles[i]);
+                USART_Print(" ");
+            }
+            USART_Println("");
+            last = Timer_GetMs();
+        }
+
+        Delay_Ms(20);  // 50Hz = 20ms/circle
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> เซอร์โวต้องการสัญญาณ PWM 50Hz (20ms period) — pulse width 1000-2000μs ควบคุมมุม 0-180° — PCA9685_SetPWM(ch, on, off) ตั้ง on=0 (เริ่มที่ต้นคาบ), off=pulse_ticks — แปลง pulse_us → ticks ด้วย pulse_us × 4096 / 20000 — ใช้ channel ที่ไม่ต่อกัน (0-3, 8-11) เพราะบางรุ่น channel 4-7 อาจมีข้อจำกัด — sin wave สร้างลวดลายเคลื่อนไหว — หน่วง 20ms เท่ากับ 1 คาบ servo</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: LED Chaser แบบ PWM Fade</h2>
+<pre><code class="language-c">void pca9685_led_chaser(void) {
+    PCA9685_Init(0x40, 1000);  // 1kHz
+
+    uint8_t  pos = 0;
+    uint16_t fade[16] = {0};
+
+    while(1) {
+        // ลดความสว่างทุกช่อง (decay)
+        for(uint8_t i=0; i<16; i++) {
+            if(fade[i] > 0) {
+                fade[i] = (fade[i] * 7) / 8;  // decay 87.5%
+                PCA9685_SetPWM(i, 0, fade[i]);
+            }
+        }
+
+        // ตำแหน่งปัจจุบันสว่างเต็ม
+        fade[pos] = 4095;
+        PCA9685_SetPWM(pos, 0, 4095);
+
+        // เลื่อนตำแหน่ง
+        pos = (pos + 1) % 16;
+
+        // แสดงผล
+        static uint32_t cnt = 0;
+        cnt++;
+        if(cnt % 50 == 0) {
+            USART_Print("Pos: ");
+            USART_PrintNum(pos);
+            USART_Print(" CH0: ");
+            USART_PrintNum(fade[0]);
+            USART_Println("");
+        }
+
+        Delay_Ms(40);  // ปรับความเร็ว chaser
+    }
+}
+
+// Knight Rider / Cylon effect
+void pca9685_knight_rider(void) {
+    PCA9685_Init(0x40, 1000);
+
+    int8_t pos = 0, dir = 1;
+
+    while(1) {
+        // ดับทุกช่อง
+        for(uint8_t i=0; i<16; i++)
+            PCA9685_SetPWM(i, 0, 0);
+
+        // ติดช่องหลัก + ข้างเคียง
+        PCA9685_SetPWM(pos, 0, 4095);
+        if(pos > 0)  PCA9685_SetPWM(pos-1, 0, 1024);
+        if(pos < 15) PCA9685_SetPWM(pos+1, 0, 1024);
+        if(pos > 1)  PCA9685_SetPWM(pos-2, 0, 256);
+        if(pos < 14) PCA9685_SetPWM(pos+2, 0, 256);
+
+        pos += dir;
+        if(pos >= 15) dir = -1;
+        if(pos <= 0)  dir = 1;
+
+        Delay_Ms(60);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> LED chaser: ไล่ LED ทีละดวง โดยดวงก่อนหน้าค่อย ๆ จาง (fade×7/8) — ใช้ exponential decay แทน linear fade ดูเป็นธรรมชาติ — Knight Rider: LED สว่าง 3 ดวง พร้อม tail ทั้ง 2 ข้าง — เปลี่ยนทิศทางเมื่อถึงขอบ — PCA9685 12-bit resolution (4096 steps) ให้การ fade ที่ละเอียดมาก — ไม่ต้องใช้ PWM hardware ของ MCU เลย ใช้แค่ I2C 2 ขา</div>
+</div>
+
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_pca9685.html">กลับบท</a><a href="chapx_lib_pcf8574_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

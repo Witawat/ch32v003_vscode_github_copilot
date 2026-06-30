@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SHT3x — High-Accuracy Temp+Hum I2C — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_aht10.html">บทก่อน</a>
+    <a href="chapx_lib_max31855.html">บทถัดไป →</a>
+</nav>
+
+<h1>SHT3x — High-Accuracy Temp+Hum I2C</h1>
+<span class="level advanced">ระดับสูง</span>
+
+<section class="flowchart">
+    <h2>🧭 แผนภาพการทำงาน</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["SHT3x_Init(0x44)"] --> B{"Mode?"}
+    B -->|"Single"| C["SHT3x_ReadSingle()"]
+    B -->|"Periodic"| D["SHT3x_StartPeriodic(1MPS)"]
+    C --> E["GetTemperature + GetHumidity"]
+    D --> F["SHT3x_ReadPeriodic()"]
+    F --> G["GetTemperature + GetHumidity"]
+    G --> F
+    E --> H["Display / Process"]
+    H --> C
+    </pre>
+</section>
+
+<section>
+    <h2>🔌 การต่อวงจร</h2>
+    <pre class="ascii-circuit">
+        SHT3x (I2C)
+┌────────────────────────────────────┐
+│ PC1 ──── SDA                       │
+│ PC2 ──── SCL                       │
+│ 3.3V ─── VCC                       │
+│ GND  ─── GND                       │
+│                                    │
+│ ADDR ─── GND → addr = 0x44         │
+│ ADDR ─── VCC → addr = 0x45         │
+│ ALERT ─── (optional) PC3           │
+│                                    │
+│ Heater pin (internal) — ไล่น้ำแข็ง   │
+│ ต่อ 2 ตัวบน I2C เดียวได้             │
+└────────────────────────────────────┘
+    </pre>
+    <p>ADDR pin เลือก address — 0x44 (GND) หรือ 0x45 (VCC) — ALERT pin แจ้งเตือน threshold (optional)</p>
+</section>
+
+<section>
+    <h2>📚 หลักการทำงาน</h2>
+    <p><strong>I2C Interface</strong>: Address 0x44 หรือ 0x45 — เลือกด้วยขา ADDR, สื่อสารเร็วสูงสุด 1MHz</p>
+    <p><strong>Single-Shot Mode</strong>: วัด 1 ครั้งเมื่อสั่ง — เสร็จใน ~15ms (เร็วกว่า DHT22 ที่ 25ms และ AHT10 ที่ 80ms มาก)</p>
+    <p><strong>Periodic Mode</strong>: ตั้งความถี่ (0.5/1/2/4/10 MPS) — ชิปวัดอัตโนมัติตามจังหวะ, อ่านค่าได้ทันทีไม่ต้องรอ — เหมาะกับ logging ต่อเนื่อง</p>
+    <p><strong>Heater</strong>: ไล่ condensation / de-icing — ใช้ในสภาพแวดล้อมความชื้นสูง หรือหลังจากเกิดน้ำแข็งเกาะ</p>
+    <p><strong>Alert Pin</strong>: ตั้ง threshold อุณหภูมิ/ความชื้น — MCU อ่านจาก interrupt pin แทนการ polling</p>
+    <p><strong>Accuracy</strong>: ±0.3°C / ±2%RH — repeatability สูงมาก, response time ~8s (tau 63%)</p>
+    <p><strong>Range</strong>: -40°C ถึง +125°C, 0-100%RH — กว้างกว่า AHT10 มาก</p>
+</section>
+
+<section>
+    <h2>💻 เขียน Code ทีละขั้น</h2>
+
+    <div class="step"><h3>ขั้นที่ 1: Init I2C + SHT3x</h3>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "SHT3x.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    I2C_SimpleInit(I2C_SPEED_100K, I2C_PINS_DEFAULT);
+
+    SHT3x_Init(0x44);    // ADDR=GND → 0x44
+    USART_Println("SHT3x Ready!");</code></pre>
+    <p class="explain">🔍 <code>SHT3x_Init(addr)</code> ตรวจสอบ sensor status — ถ้า ADDR pin ต่อ GND ใช้ 0x44, ต่อ VCC ใช้ 0x45, ต่อ 2 ตัวบน I2C เดียวกันได้</p></div>
+
+    <div class="step"><h3>ขั้นที่ 2: Single-Shot Mode — วัดเมื่อต้องการ</h3>
+    <pre><code class="language-c">    SHT3x_ReadSingle();               // วัด 1 ครั้ง (~15ms)
+    float t = SHT3x_GetTemperature();  // °C
+    float h = SHT3x_GetHumidity();     // %
+
+    USART_Print("T: "); USART_PrintFloat(t, 2);
+    USART_Print("C  H: "); USART_PrintFloat(h, 2);
+    USART_Println("%");
+
+    // เปิด Heater ไล่ condensation (1 ครั้ง)
+    SHT3x_Heater(1);
+    Delay_Ms(1000);
+    SHT3x_Heater(0);</code></pre>
+    <p class="explain">🔍 <code>ReadSingle()</code> วัดครั้งเดียว บล็อก ~15ms — เร็วกว่า DHT22 และ AHT10 มาก, <code>Heater(1)</code> เปิด heater ชั่วคราว — ใช้ไล่ความชื้นหลังเจอ condensation</p></div>
+
+    <div class="step"><h3>ขั้นที่ 3: Periodic Mode — อ่านต่อเนื่องไม่ต้อง Trigger</h3>
+    <pre><code class="language-c">    SHT3x_StartPeriodic(SHT3x_1MPS);  // 1 measurement/sec
+    Timer_t tmr;
+    Start_Timer(&tmr, 1000, 1);
+
+    while(1) {
+        if(Is_Timer_Expired(&tmr)) {
+            SHT3x_ReadPeriodic();          // อ่านค่าล่าสุด (ไม่ต้องรอ)
+            float t = SHT3x_GetTemperature();
+            float h = SHT3x_GetHumidity();
+            USART_Print("T:"); USART_PrintFloat(t, 2);
+            USART_Print(" H:"); USART_PrintFloat(h, 2);
+            USART_Println("%");
+        }
+        // Alert pin (PC3) — interrupt-driven
+        if(digitalRead(PC3) == LOW) {
+            USART_Println("⚠️ ALERT: Threshold exceeded!");
+        }
+        IWDG_Feed();
+    }
+}</code></pre>
+    <p class="explain">🔍 Periodic mode = ชิปวัดเองตลอด — <code>ReadPeriodic()</code> ไม ่ต้องรอ, <code>digitalRead(PC3)</code> เช็ค alert pin แบบ polling — หรือใช้ interrupt edge detection</p></div>
+</section>
+
+<section>
+    <h2>📋 API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+        <tr><td><code>SHT3x_Init(addr)</code></td><td>Init sensor + check status</td><td><code>SHT3x_Init(0x44)</code></td></tr>
+        <tr><td><code>SHT3x_ReadSingle()</code></td><td>Single-shot measurement (~15ms)</td><td><code>SHT3x_ReadSingle()</code></td></tr>
+        <tr><td><code>SHT3x_GetTemperature()</code></td><td>อ่านอุณหภูมิล่าสุด (°C)</td><td><code>float t = SHT3x_GetTemperature()</code></td></tr>
+        <tr><td><code>SHT3x_GetHumidity()</code></td><td>อ่านความชื้นล่าสุด (%)</td><td><code>float h = SHT3x_GetHumidity()</code></td></tr>
+        <tr><td><code>SHT3x_StartPeriodic(mps)</code></td><td>เริ่ม periodic mode (0.5/1/2/4/10 MPS)</td><td><code>SHT3x_StartPeriodic(SHT3x_1MPS)</code></td></tr>
+        <tr><td><code>SHT3x_ReadPeriodic()</code></td><td>อ่านค่าจาก periodic buffer</td><td><code>SHT3x_ReadPeriodic()</code></td></tr>
+        <tr><td><code>SHT3x_Heater(en)</code></td><td>เปิด/ปิด heater (1=ON, 0=OFF)</td><td><code>SHT3x_Heater(1)</code></td></tr>
+        <tr><td><code>SHT3x_SetMPS(mps)</code></td><td>เปลี่ยน sampling rate ใน periodic</td><td><code>SHT3x_SetMPS(SHT3x_2MPS)</code></td></tr>
+        <tr><td><code>SHT3x_SetAlertTH(t_hi, t_lo, h_hi, h_lo)</code></td><td>ตั้ง alert threshold</td><td><code>SHT3x_SetAlertTH(40,0,90,10)</code></td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>Init fail — SHT3x ไม่ตอบ</td><td>ADDR เลือกผิด — ใช้ 0x44 แต่ต่อ ADDR ที่ VCC</td><td>เช็คขา ADDR — GND=0x44, VCC=0x45 — หรือใช้ I2C Scan</td></tr>
+        <tr><td>Periodic mode ไม่อ่านค่าใหม่</td><td>ลืมเรียก <code>ReadPeriodic()</code> — หรือความถี่ MPS ต่ำเกิน</td><td>ต้องเรียก <code>ReadPeriodic()</code> ก่อน <code>GetTemperature()</code> ทุกครั้งที่ต้องการค่าล่าสุด</td></tr>
+        <tr><td>Alert pin ไม่ toggle</td><td>ยังไม่ได้ตั้ง threshold ด้วย <code>SetAlertTH()</code></td><td>เรียก <code>SetAlertTH(t_hi, t_lo, h_hi, h_lo)</code> ก่อน — ตัวเลขอยู่ใน raw units (ไม่ใช่ °C/%)</td></tr>
+        <tr><td>Heater ทำให้ค่าพุ่ง 5-10°C</td><td>Self-heating — heater อุ่น sensor element โดยตรง</td><td>ใช้ heater แค่ 100-500ms ต่อครั้ง — ห้ามเปิด heater แล้วอ่านค่าทันที</td></tr>
+        <tr><td>Single-shot mode ใช้แล้ว I2C hang</td><td>Clock stretching ระหว่าง measurement</td><td>เพิ่ม I2C timeout handling — ใช้ <code>SHT3x_SoftReset()</code> ถ้า timeout</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>🛠️ สร้าง Product: Weather Station ความแม่นยำสูง</h2>
+    <p>SHT3x + BMP280 + OLED — แสดง Temp, Hum, Pressure, Altitude บนจอเดียว</p>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "SHT3x.h"
+#include "BMP280.h"
+#include "OLED.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    I2C_SimpleInit(I2C_SPEED_100K, I2C_PINS_DEFAULT);
+
+    SHT3x_Init(0x44);
+    SHT3x_StartPeriodic(SHT3x_1MPS);
+    BMP280_Init(0x76);
+    BMP280_SetMode(BMP280_MODE_NORMAL);
+    Delay_Ms(100);
+
+    OLED_t oled;
+    OLED_Init(&oled, 0x3C, OLED_128x64);
+    OLED_SetFont(&oled, FONT_8x16);
+
+    Timer_t tmr;
+    Start_Timer(&tmr, 1000, 1);
+
+    while(1) {
+        if(Is_Timer_Expired(&tmr)) {
+            SHT3x_ReadPeriodic();
+            float st = SHT3x_GetTemperature();
+            float sh = SHT3x_GetHumidity();
+            float bp = BMP280_ReadPressure() / 100.0f;
+
+            OLED_Clear(&oled);
+            OLED_SetCursor(&oled, 0, 0);
+            OLED_PrintFloat(&oled, "T:", st, 1); OLED_Print(&oled, "C");
+            OLED_SetCursor(&oled, 0, 1);
+            OLED_PrintFloat(&oled, "H:", sh, 1); OLED_Print(&oled, "%");
+            OLED_SetCursor(&oled, 0, 2);
+            OLED_PrintFloat(&oled, "P:", bp, 1); OLED_Print(&oled, "hPa");
+            OLED_Display(&oled);
+        }
+        IWDG_Feed();
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>✏️ ลองทำดู</h2>
+    <ol>
+        <li>เทียบ Single-shot vs Periodic mode — วัด sampling rate ต่างกัน ดู response time และ power consumption</li>
+        <li>ใช้ Alert pin แบบ interrupt — ต่อ PC3 เข้า EXTI — เมื่อ temp > 40°C → LED แดง + Buzzer ดัง</li>
+        <li>Heater test — ใส่ SHT3x ในตู้เย็น → อ่านค่า → เปิด heater 1 วิ → อ่านอีกที — ดู self-heating effect</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_aht10.html">บทก่อน</a>
+    <a href="chapx_lib_max31855.html">บทถัดไป →</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

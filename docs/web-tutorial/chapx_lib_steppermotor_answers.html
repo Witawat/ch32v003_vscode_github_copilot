@@ -1,0 +1,150 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย STEPPERMOTOR — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_steppermotor.html">กลับบท</a><a href="chapx_lib_l298n_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — Stepper Motor</h1>
+
+<div class="answer">
+<h2>ข้อ 1: Absolute Positioning ด้วย Limit Switch</h2>
+<pre><code class="language-c">#include "simple_stepper.h"
+
+Stepper_t motor;
+
+#define LIMIT_SW_PIN  GPIO_Pin_1
+#define LIMIT_SW_PORT GPIOA
+
+int32_t position = 0;
+const int32_t MAX_POS = 5000;
+
+void home(void) {
+    // หมุนถอยหลังจนชน limit switch
+    while (GPIO_ReadInputDataBit(LIMIT_SW_PORT, LIMIT_SW_PIN)) {
+        Stepper_Step(&motor, -1);
+        Delay_Ms(3);
+    }
+    // ถอยออกนิดหน่อย
+    for (uint16_t i = 0; i &lt; 50; i++) {
+        Stepper_Step(&motor, 1);
+        Delay_Ms(3);
+    }
+    position = 0;
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    Stepper_Init(&motor, GPIOA, GPIO_Pin_2,
+                 GPIOA, GPIO_Pin_3,
+                 GPIOA, GPIO_Pin_4,
+                 GPIOA, GPIO_Pin_5);
+
+    GPIO_InitTypeDef g = {0};
+    g.GPIO_Pin  = LIMIT_SW_PIN;
+    g.GPIO_Mode = GPIO_Mode_IPU;
+    GPIO_Init(LIMIT_SW_PORT, &g);
+
+    home();  // หาตำแหน่งศูนย์ก่อนทำงาน
+
+    while (1) {
+        // ไปตำแหน่ง 1000
+        while (position &lt; 1000) {
+            Stepper_Step(&motor, 1);
+            position++;
+            Delay_Ms(2);
+        }
+        Delay_Ms(500);
+
+        // กลับตำแหน่ง 0
+        while (position &gt; 0) {
+            Stepper_Step(&motor, -1);
+            position--;
+            Delay_Ms(2);
+        }
+        Delay_Ms(500);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> Limit switch ใช้ homing หาตำแหน่งอ้างอิง — หมุนกลับจน switch ถูกกดแล้วถอยออกนิดหน่อย — ใช้ตัวแปร <code>position</code> ติดตามตำแหน่งปัจจุบัน — การย้ายตำแหน่งใช้ while loop เทียบกับ target — เหมาะกับงานที่ต้องการตำแหน่งแม่นยำแบบ open-loop เช่น 3D printer, CNC — ข้อควรระวัง: ถ้า motor stall (เสีย step) ตำแหน่งจะคลาดเคลื่อน ควร homing ใหม่เป็นระยะ — ใช้ <code>GPIO_Mode_IPU</code> สำหรับ limit switch แบบ NC (ปกติต่อกราวด์ กดแล้วเปิดวงจร)</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: Acceleration Ramp — ค่อย ๆ เพิ่มความเร็ว</h2>
+<pre><code class="language-c">#include "simple_stepper.h"
+
+Stepper_t motor;
+
+#define MIN_DELAY  1200   // us, ความเร็วสูงสุด
+#define MAX_DELAY  8000   // us, ความเร็วเริ่มต้น
+#define ACCEL_STEP 100    // us, ลด delay ทีละเท่าไหร่
+
+void step_with_accel(int32_t steps, int8_t dir) {
+    uint16_t delay_us = MAX_DELAY;
+    uint32_t halfway = (steps &gt; 0 ? steps : -steps) / 2;
+
+    for (int32_t i = 0; i &lt; (steps &gt; 0 ? steps : -steps); i++) {
+        Stepper_Step(&motor, dir);
+
+        // Accelerate first half, decelerate second half
+        if (i &lt; halfway) {
+            if (delay_us &gt; MIN_DELAY) delay_us -= ACCEL_STEP;
+        } else {
+            if (delay_us &lt; MAX_DELAY) delay_us += ACCEL_STEP;
+        }
+
+        Delay_Us(delay_us);
+    }
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    Stepper_Init(&motor, GPIOA, GPIO_Pin_2, GPIOA, GPIO_Pin_3,
+                 GPIOA, GPIO_Pin_4, GPIOA, GPIO_Pin_5);
+
+    while (1) {
+        step_with_accel(2000, 1);   // ไปทางบวก 2000 step
+        Delay_Ms(500);
+        step_with_accel(2000, -1);  // กลับ 2000 step
+        Delay_Ms(500);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> แบ่งการเดินทางเป็น 2 ช่วง — ครึ่งแรก: ลด delay (เร่งความเร็ว), ครึ่งหลัง: เพิ่ม delay (ชะลอ) — ใช้ <code>Delay_Us</code> แทน Delay_Ms เพื่อความละเอียดระดับ microsecond — MIN_DELAY กำหนดความเร็วสูงสุดที่มอเตอร์รับได้โดยไม่ stall — MAX_DELAY กำหนดความเร็วเริ่มต้นที่มอเตอร์ออกตัวได้ — ถ้าต้องการโปรไฟล์ S-curve ให้ใช้สมการกำลังสองหรือ lookup table แทน linear ramp — acceleration ramp ป้องกันการเสีย step โดยเฉพาะที่ความเร็วสูงหรือโหลดมาก — ถ้าพื้นที่จำกัด ให้เพิ่ม acceleration steeper (ACCEL_STEP ใหญ่ขึ้น) แต่เสี่ยง stall มากขึ้น</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: Conveyor Sequence — ทำซ้ำ N รอบ</h2>
+<pre><code class="language-c">#include "simple_stepper.h"
+
+Stepper_t motor;
+#define CONVEYOR_STEPS 800   // ต่อ 1 รอบของสายพาน
+#define CYCLES         5
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    Stepper_Init(&motor, GPIOA, GPIO_Pin_2, GPIOA, GPIO_Pin_3,
+                 GPIOA, GPIO_Pin_4, GPIOA, GPIO_Pin_5);
+
+    for (uint8_t cycle = 0; cycle &lt; CYCLES; cycle++) {
+        // เดินหน้า 1 รอบ
+        for (uint32_t i = 0; i &lt; CONVEYOR_STEPS; i++) {
+            Stepper_Step(&motor, 1);
+            Delay_Ms(2);
+        }
+
+        Delay_Ms(1000);  // หยุดให้ object ถูก processed
+
+        // รีเซ็ตสายพาน — เดินต่ออีก 1 รอบ (หรือถอยหลังตามงาน)
+        for (uint32_t i = 0; i &lt; CONVEYOR_STEPS; i++) {
+            Stepper_Step(&motor, 1);
+            Delay_Ms(2);
+        }
+
+        Delay_Ms(500);
+    }
+
+    // จบงาน — หยุด
+    while (1) {}
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ใช้ outer loop ควบคุมจำนวนรอบการทำงาน — CONVEYOR_STEPS คำนวณจาก steps/revolution ของมอเตอร์ × microstepping × gear ratio — ระหว่างรอบมี delay ให้กลไกอื่นทำงาน (เช่น sensor ตรวจจับ object, actuator ผลักชิ้นงาน) — รีเซ็ตโดยเดินต่ออีก 1 รอบแทนการถอยหลัง เพื่อรักษาความแม่นยำ (ลด backlash) — ถ้าต้องการหยุดฉุกเฉิน ให้ใช้ external interrupt จากปุ่ม stop — ในระบบจริง ควรใช้ sensor (photo interrupter) ตรวจจับตำแหน่ง object แทนการนับ step ล้วน ๆ</div>
+</div>
+
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_steppermotor.html">กลับบท</a><a href="chapx_lib_l298n_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

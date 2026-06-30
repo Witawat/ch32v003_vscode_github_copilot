@@ -1,0 +1,184 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย GPS NEO6M — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_gps_neo6m.html">กลับบท</a><a href="chapx_lib_ir_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — GPS NEO-6M</h1>
+
+<div class="answer">
+<h2>ข้อ 1: Position Logger — บันทึกตำแหน่งลง Flash ทุก N เมตร</h2>
+<pre><code class="language-c">#define FLASH_LOG_START  0x08004000
+#define FLASH_LOG_END    0x08008000
+#define LOG_DIST_M       10.0f   // บันทึกทุก 10m
+
+typedef struct {
+    float lat, lon;
+    uint32_t timestamp;
+} gps_log_entry_t;
+
+volatile uint32_t log_addr = FLASH_LOG_START;
+float last_lat, last_lon;
+
+void gps_position_logger(void) {
+    GPS_Init(BAUD_9600, USART_PINS_DEFAULT);
+
+    while(1) {
+        if(!GPS_IsUpdated()) { Delay_Ms(100); continue; }
+
+        float lat = GPS_GetLat();
+        float lon = GPS_GetLon();
+
+        if(lat == 0 && lon == 0) continue;  // ยังไม่มี fix
+
+        // คำนวณระยะทางจากจุดก่อนหน้า (Haversine)
+        float dist = gps_distance(last_lat, last_lon, lat, lon);
+
+        if(dist >= LOG_DIST_M) {
+            gps_log_entry_t entry;
+            entry.lat = lat;
+            entry.lon = lon;
+            entry.timestamp = Timer_GetMs() / 1000;
+
+            FLASH_Unlock();
+            FLASH_ProgramHalfWord_Array(
+                log_addr,
+                (uint16_t *)&entry,
+                sizeof(entry) / 2
+            );
+            FLASH_Lock();
+
+            log_addr += sizeof(entry);
+            if(log_addr >= FLASH_LOG_END) {
+                USART_Println("[LOG] Memory full! Cycling...");
+                log_addr = FLASH_LOG_START;
+                FLASH_ErasePage(FLASH_LOG_START);
+            }
+
+            USART_Print("Logged: ");
+            USART_PrintFloat(lat, 6);
+            USART_Print(",");
+            USART_PrintFloat(lon, 6);
+            USART_Print(" dist=");
+            USART_PrintFloat(dist, 1);
+            USART_Println("m");
+
+            last_lat = lat;
+            last_lon = lon;
+        }
+        Delay_Ms(200);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ใช้ GPS_IsUpdated เช็คข้อมูลใหม่ — GPS_GetLat/Lon ดึงค่าพิกัด — คำนวณ Haversine distance เทียบจุดก่อนหน้า ถ้าเดินเกิน 10m จึงบันทึก — บันทึกลง Flash เป็น struct (12 ไบต์) — คำนวณ log_addr เลื่อนขึ้น ถ้าเต็มก็วนกลับแต่ต้อง erase page ก่อน — Flash เขียนเป็น half-word (16-bit) ต้องคำนวณจำนวน half-word ให้ถูก</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: Speed Alert — เตือนเมื่อความเร็วเกินกำหนด</h2>
+<pre><code class="language-c">#define SPEED_LIMIT_KPH  80.0f
+#define ALERT_BUZZER_PIN PC0
+
+void gps_speed_alert(void) {
+    GPS_Init(BAUD_9600, USART_PINS_DEFAULT);
+    GPIO_SimpleInit(ALERT_BUZZER_PIN, GPIO_OUT_PP);
+    PWM_SimpleInit(ALERT_BUZZER_PIN, 1, 2000, 0);
+
+    float speed_kph;
+    uint8_t over_limit = 0;
+
+    while(1) {
+        if(!GPS_IsUpdated()) { Delay_Ms(200); continue; }
+
+        speed_kph = GPS_GetSpeedKph();
+        uint8_t sats = GPS_GetSatellites();
+
+        USART_Print("Speed: ");
+        USART_PrintFloat(speed_kph, 1);
+        USART_Print(" km/h  Sats: ");
+        USART_PrintNum(sats);
+        USART_Println("");
+
+        if(sats < 4) {
+            USART_Println("[GPS] Waiting for fix...");
+            PWM_SetDuty(ALERT_BUZZER_PIN, 1, 0);
+            Delay_Ms(1000);
+            continue;
+        }
+
+        if(speed_kph > SPEED_LIMIT_KPH && !over_limit) {
+            over_limit = 1;
+            PWM_SetDuty(ALERT_BUZZER_PIN, 1, 1000);
+            USART_Println("⚠ OVER SPEED!");
+        }
+        else if(speed_kph <= SPEED_LIMIT_KPH - 5.0f && over_limit) {
+            // hysteresis 5 kph ป้องกันการกระพริบ
+            over_limit = 0;
+            PWM_SetDuty(ALERT_BUZZER_PIN, 1, 0);
+            USART_Println("✓ Speed normal");
+        }
+
+        // แสดงระดับความเร็วด้วย LED bar
+        uint16_t led_duty = (uint16_t)(speed_kph * 1000 / 120);
+        if(led_duty > 1000) led_duty = 1000;
+        PWM_SetDuty(PA1, 2, led_duty);
+
+        Delay_Ms(500);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> GPS_GetSpeedKph อ่านความเร็วภาคพื้นดิน (SOG) จาก NMEA — ใช้ hysteresis 5 kph ป้องกัน buzzer เปิดปิดถี่เมื่ออยู่ตรงขีดจำกัด — เช็คจำนวนดาวเทียมก่อน (≥4 ถึงจะแม่น) — PWM buzzer เป็นสัญญาณเตือน — LED dimmer แสดงระดับความเร็วเทียบ 120 km/h — ใช้ขาต่าง PWM channel แยก buzzer กับ LED</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: Time Sync — ตั้งเวลา DS3231 จาก GPS</h2>
+<pre><code class="language-c">void gps_sync_ds3231(void) {
+    GPS_Init(BAUD_9600, USART_PINS_DEFAULT);
+    DS3231_Init(I2C_PINS_DEFAULT);
+
+    uint8_t synced = 0;
+
+    while(1) {
+        if(!GPS_IsUpdated()) { Delay_Ms(200); continue; }
+
+        if(GPS_GetFix() && !synced) {
+            // อ่านวันเวลาจาก GPS
+            uint16_t y; uint8_t m, d, h, min, s;
+            GPS_GetDateTime(&y, &m, &d, &h, &min, &s);
+
+            // GPS ให้เวลา UTC ต้องปรับ timezone (+7 สำหรับไทย)
+            h += 7;
+            if(h >= 24) { h -= 24; d += 1; }
+
+            DS3231_SetTime(h, min, s);
+            DS3231_SetDate(y, m, d);
+
+            USART_Print("GPS→DS3231: ");
+            USART_PrintNum(y);
+            USART_Print("-");
+            USART_PrintNum(m);
+            USART_Print("-");
+            USART_PrintNum(d);
+            USART_Print(" ");
+            USART_PrintNum(h);
+            USART_Print(":");
+            USART_PrintNum(min);
+            USART_Print(":");
+            USART_PrintNum(s);
+            USART_Println(" (UTC+7)");
+
+            synced = 1;
+        }
+
+        // แสดงเวลา DS3231 ทุก 5 วิ
+        static uint32_t last = 0;
+        if(Timer_GetMs() - last > 5000) {
+            uint8_t hh, mm, ss;
+            DS3231_GetTime(&hh, &mm, &ss);
+            USART_Print("DS3231: ");
+            USART_PrintNum(hh); USART_Print(":");
+            USART_PrintNum(mm); USART_Print(":");
+            USART_PrintNum(ss); USART_Println("");
+            last = Timer_GetMs();
+        }
+        Delay_Ms(100);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> GPS ให้เวลาแบบ UTC แม่นยำระดับอะตอม — GPS_GetFix เช็คว่ามี 3D fix หรือยัง — GPS_GetDateTime ดึงปี-เดือน-วัน-ชั่วโมง-นาที-วินาที — ปรับ timezone +7 (ไทย) ก่อนเขียนลง DS3231 — sync แค่ครั้งเดียวตอนแรก (synced flag) — DS3231 มี RTC แบตเตอรี่ในตัว เก็บเวลาได้แม้ไฟดับ — GPS ใช้ sync ตอนเริ่มต้นเท่านั้น RTC เดินเองต่อ</div>
+</div>
+
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_gps_neo6m.html">กลับบท</a><a href="chapx_lib_ir_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

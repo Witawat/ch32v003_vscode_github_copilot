@@ -1,0 +1,227 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย PZEM-004T v3 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_pzem004tv3.html">กลับบท</a><a href="chapx_lib_oh49e_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — PZEM-004T v3</h1>
+
+<div class="answer">
+<h2>ข้อ 1: ReadAll — อ่านทีเดียว 10 registers แบบเร็ว</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "PZEM004Tv3.h"
+#include "OLED.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    I2C_Init(PC1, PC2, I2C_SPEED_STANDARD);
+    USART_Init(115200);
+
+    PZEM004Tv3_t pzem;
+    PZEM004Tv3_Init(&pzem, PD6, PD5, 0x01);
+
+    OLED_t oled;
+    OLED_Init(&oled, 0x3C, OLED_128x64);
+    OLED_SetFont(&oled, FONT_8x16);
+
+    Timer_t tmr;
+    Start_Timer(&tmr, 1000, 1);
+    uint32_t read_count = 0, fail_count = 0;
+
+    USART_Print("PZEM v3 ReadAll Benchmark\r\n");
+
+    while(1) {
+        if(Is_Timer_Expired(&tmr)) {
+            PZEM_Data_t d;
+            uint32_t t0 = Get_CurrentMs();
+
+            if(PZEM004Tv3_ReadAll(&pzem, &d)) {
+                uint32_t elapsed = Get_CurrentMs() - t0;
+                read_count++;
+
+                OLED_Clear(&oled);
+                OLED_SetCursor(&oled, 0, 0);
+                OLED_PrintFloat(&oled, "", d.voltage, 1);
+                OLED_Print(&oled, "V ");
+                OLED_PrintFloat(&oled, "", d.current, 2);
+                OLED_Print(&oled, "A");
+
+                OLED_SetCursor(&oled, 0, 2);
+                OLED_PrintFloat(&oled, "", d.power, 1);
+                OLED_Print(&oled, "W ");
+                OLED_PrintFloat(&oled, "PF:", d.pf, 2);
+
+                OLED_SetCursor(&oled, 0, 4);
+                OLED_PrintFloat(&oled, "", d.frequency, 1);
+                OLED_Print(&oled, "Hz ");
+                OLED_PrintFloat(&oled, "", d.energy, 2);
+                OLED_Print(&oled, "kWh");
+
+                OLED_SetCursor(&oled, 0, 6);
+                OLED_PrintDec(&oled, elapsed);
+                OLED_Print(&oled, "ms ");
+                OLED_PrintDec(&oled, read_count);
+                OLED_Print(&oled, "/");
+                OLED_PrintDec(&oled, fail_count);
+
+                OLED_Display(&oled);
+
+                USART_Print("OK "); USART_PrintDec(elapsed);
+                USART_Print("ms V:"); USART_PrintFloat(d.voltage, 1);
+                USART_Print(" A:"); USART_PrintFloat(d.current, 2);
+                USART_Print("\r\n");
+            } else {
+                fail_count++;
+                USART_Print("ReadAll FAILED\r\n");
+            }
+        }
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ใช้ ReadAll อ่านทั้ง 10 registers ในคำขอเดียว (~200ms vs ~600ms สำหรับ v1) — จับเวลาด้วย Get_CurrentMs() — struct <code>PZEM_Data_t</code> มี voltage, current, power, energy, frequency, pf, alarm — แสดงผล OLED + USART — นับ success/fail เพื่อดูความน่าเชื่อถือ — เร็วกว่า v1 ประมาณ 3 เท่า</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: Alarm Register Monitoring — ตรวจจับ Over-Voltage/Current/Power</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "PZEM004Tv3.h"
+
+#define RELAY_PIN PC0
+#define BUZZER_PIN PC1
+#define WARN_LED PC2
+
+uint8_t alarm_level = 0;
+
+void handle_alarm(PZEM_Data_t *d) {
+    if(d->alarm == 0) { alarm_level = 0; return; }
+
+    if(d->alarm & 0x04) {
+        alarm_level = 3;
+        digitalWrite(BUZZER_PIN, HIGH);
+        digitalWrite(RELAY_PIN, HIGH);
+    } else if(d->alarm & 0x02) {
+        alarm_level = 2;
+        digitalWrite(BUZZER_PIN, HIGH);
+    } else if(d->alarm & 0x01) {
+        alarm_level = 1;
+        digitalWrite(WARN_LED, HIGH);
+    }
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_Init(115200);
+
+    PZEM004Tv3_t pzem;
+    PZEM004Tv3_Init(&pzem, PD6, PD5, 0x01);
+
+    PZEM004Tv3_SetAlarmThreshold(&pzem, 2500, 10000, 20000);
+
+    pinMode(RELAY_PIN, PIN_MODE_OUTPUT);
+    pinMode(BUZZER_PIN, PIN_MODE_OUTPUT);
+    pinMode(WARN_LED, PIN_MODE_OUTPUT);
+    digitalWrite(RELAY_PIN, LOW);
+    digitalWrite(BUZZER_PIN, LOW);
+    digitalWrite(WARN_LED, LOW);
+
+    Timer_t tmr;
+    Start_Timer(&tmr, 1000, 1);
+
+    USART_Print("PZEM v3 Alarm Monitor\r\n");
+    USART_Print("Thresh: 250V, 10A, 2000W\r\n");
+
+    while(1) {
+        if(Is_Timer_Expired(&tmr)) {
+            PZEM_Data_t d;
+            if(!PZEM004Tv3_ReadAll(&pzem, &d)) {
+                USART_Print("Comm error\r\n");
+                continue;
+            }
+
+            USART_Print("V:"); USART_PrintFloat(d.voltage, 1);
+            USART_Print(" A:"); USART_PrintFloat(d.current, 2);
+            USART_Print(" W:"); USART_PrintFloat(d.power, 1);
+            USART_Print(" AL:0x"); USART_PrintHex(d.alarm);
+            USART_Print(" LV:"); USART_PrintDec(alarm_level);
+
+            handle_alarm(&d);
+
+            switch(alarm_level) {
+                case 0: USART_Print(" OK\r\n"); break;
+                case 1: USART_Print(" WARN(V)\r\n"); break;
+                case 2: USART_Print(" CRITICAL(A)\r\n"); break;
+                case 3: USART_Print(" DANGER(W)! CUT\r\n"); break;
+            }
+
+            if(alarm_level == 0) {
+                digitalWrite(BUZZER_PIN, LOW);
+                digitalWrite(WARN_LED, LOW);
+                if(d.alarm == 0) digitalWrite(RELAY_PIN, LOW);
+            }
+        }
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> แบ่ง alarm เป็น 3 ระดับ: Lv1=OV (เตือน), Lv2=OC (buzzer), Lv3=OP (ตัด relay) — <code>SetAlarmThreshold(v×10, a×10, w)</code> — 2500=250V, 10000=10A, 20000=2000W — <code>handle_alarm()</code> ตรวจสอบ bitwise alarm register (bit0=OV, bit1=OC, bit2=OP) — เมื่อ alarm หาย → reset อุปกรณ์กลับสู่ปกติ — แสดง alarm_level + hex alarm register บน USART</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: Multi-PZEM — อ่าน PZEM v3 หลายตัวผ่าน RS485</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "PZEM004Tv3.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_Init(115200);
+
+    PZEM004Tv3_t pzem1, pzem2;
+
+    PZEM004Tv3_Init(&pzem1, PD6, PD5, 0x01);
+    PZEM004Tv3_Init(&pzem2, PD6, PD5, 0x02);
+
+    USART_Print("Dual PZEM v3 via RS485\r\n");
+    USART_Print("Addr 0x01 = Main, 0x02 = Sub\r\n");
+
+    Timer_t tmr;
+    Start_Timer(&tmr, 3000, 1);
+
+    while(1) {
+        if(Is_Timer_Expired(&tmr)) {
+            PZEM_Data_t d1, d2;
+
+            USART_Print("--- PZEM #1 (0x01) ---\r\n");
+            if(PZEM004Tv3_ReadAll(&pzem1, &d1)) {
+                USART_Print("V:"); USART_PrintFloat(d1.voltage, 1);
+                USART_Print(" A:"); USART_PrintFloat(d1.current, 2);
+                USART_Print(" W:"); USART_PrintFloat(d1.power, 1);
+                USART_Print(" kWh:"); USART_PrintFloat(d1.energy, 2);
+            } else {
+                USART_Print("Timeout\r\n");
+            }
+
+            USART_Print("\r\n--- PZEM #2 (0x02) ---\r\n");
+            if(PZEM004Tv3_ReadAll(&pzem2, &d2)) {
+                USART_Print("V:"); USART_PrintFloat(d2.voltage, 1);
+                USART_Print(" A:"); USART_PrintFloat(d2.current, 2);
+                USART_Print(" W:"); USART_PrintFloat(d2.power, 1);
+                USART_Print(" kWh:"); USART_PrintFloat(d2.energy, 2);
+            } else {
+                USART_Print("Timeout\r\n");
+            }
+
+            float total_w = 0, total_kwh = 0;
+            if(d1.voltage == d1.voltage) { total_w += d1.power; total_kwh += d1.energy; }
+            if(d2.voltage == d2.voltage) { total_w += d2.power; total_kwh += d2.energy; }
+
+            USART_Print("\r\n=== TOTAL ===\r\n");
+            USART_Print("W:"); USART_PrintFloat(total_w, 1);
+            USART_Print(" kWh:"); USART_PrintFloat(total_kwh, 2);
+            USART_Print("\r\n");
+        }
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ต่อ PZEM 2 ตัวบน RS485 bus เดียว — แต่ละตัวตั้ง slave address ต่างกัน (0x01, 0x02) ด้วย <code>SetAddress()</code> — ใช้ RX/TX pins เดียวกัน (PD6/PD5) — อ่านทีละตัว แสดงผลแยก + ผลรวม — เนื่องจาก RS485 เป็น half-duplex จึงอ่านทีละตัวตามธรรมชาติ — ตรวจสอบ NaN (ค่าผิดของ float) เพื่อตรวจว่า timeout หรือไม่ — ใช้สำหรับวัดไฟบ้าน 2 เฟส หรือวัด main+sub panel</div>
+</div>
+
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_pzem004tv3.html">กลับบท</a><a href="chapx_lib_oh49e_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

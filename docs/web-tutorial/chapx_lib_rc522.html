@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RC522 RFID — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_ds3231.html">บทก่อน</a>
+    <a href="chapx_lib_pca9685.html">บทถัดไป →</a>
+</nav>
+<h1>RC522 RFID — SPI, ISO14443A, MIFARE Classic, UID Read</h1>
+<span class="level advanced">ระดับสูง</span>
+
+<section class="flowchart">
+    <h2>🧭 แผนภาพการทำงาน</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["RC522_Init(spi,cs,rst)"] --> B["RC522_SelfTest()"]
+    B --> C{"Pass?"}
+    C -->|"Yes"| D["RC522_Request(PICC_REQIDL)"]
+    C -->|"No"| E["Check wiring"]
+    D --> F{"Card Present?"}
+    F -->|"Yes"| G["RC522_Anticoll(uid)"]
+    F -->|"No"| D
+    G --> H["RC522_SelectTag(uid)"]
+    H --> I["RC522_Auth(KEY_A, block, key)"]
+    I --> J{"Operation"}
+    J -->|"Read"| K["RC522_Read(block, buf)"]
+    J -->|"Write"| L["RC522_Write(block, data)"]
+    </pre>
+</section>
+
+<section>
+    <h2>🔌 การต่อวงจร</h2>
+    <pre class="ascii-circuit">
+                 RC522 RFID Module SPI
+    ┌──────────────────────────────────────────────┐
+    │ CH32V003                          RC522      │
+    │ PC5(SCK)───────SCK               ┌──────────┤
+    │ PC6(MISO)──────MISO              │          │
+    │ PC7(MOSI)──────MOSI              │13.56MHz  │
+    │ PC3────────────SDA(CS)           │ISO14443A │
+    │ PC4────────────RST               │          │
+    │ PC0────────────IRQ (opt)        │MIFARE    │
+    │ 3.3V───────────VCC              │Classic   │
+    │ GND────────────GND              │1K/4K     │
+    │                                   └──────────┤
+    │ ⚡ 3.3V ONLY — ห้าม 5V!                    │
+    │ ⚡ SPI Mode 0, ~4MHz max                   │
+    │ ⚡ ทำ SelfTest ก่อนใช้ทุกครั้ง                │
+    └──────────────────────────────────────────────┘
+    </pre>
+    <p>RC522 เป็น RFID reader/writer 13.56MHz — อ่านบัตร MIFARE Classic 1K/4K, ISO14443A, รองรับการเข้ารหัส (authentication) ด้วย key A/B, ต้องทำ self-test เพื่อตรวจสอบการเชื่อมต่อ SPI</p>
+</section>
+
+<section>
+    <h2>📚 หลักการทำงาน</h2>
+    <p><strong>MFRC522</strong> เป็น RFID IC ที่สื่อสารผ่าน SPI — รองรับ ISO/IEC 14443A/MIFARE, ระยะอ่าน ~5-8cm กับบัตรมาตรฐาน, ใช้ไฟ 3.3V</p>
+    <p><strong>ขั้นตอนอ่านบัตร MIFARE Classic:</strong></p>
+    <ul>
+        <li><strong>Request (REQA):</strong> ส่งคำสั่งถามว่ามีบัตรอยู่ในสนามหรือไม่</li>
+        <li><strong>Anticollision (AntiColl):</strong> อ่าน UID (Unique ID) 4 หรือ 7 bytes</li>
+        <li><strong>Select Tag:</strong> เลือกบัตรที่จะสื่อสาร (กรณีหลายใบทับกัน)</li>
+        <li><strong>Authentication:</strong> พิสูจน์ตัวตนด้วย Key A หรือ Key B (default: 0xFFFFFFFFFFFF)</li>
+        <li><strong>Read/Write Block:</strong> อ่านหรือเขียนข้อมูล block ละ 16 bytes</li>
+    </ul>
+    <p><strong>MIFARE Classic 1K:</strong> 1024 bytes แบ่งเป็น 16 sectors, sector ละ 4 blocks, block สุดท้ายของแต่ละ sector = Sector Trailer (เก็บ key + access bits)</p>
+</section>
+
+<section>
+    <h2>💻 เขียน Code ทีละขั้น</h2>
+
+    <div class="step"><h3>ขั้นที่ 1: Init + SelfTest</h3>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "RC522.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    SPI_Init(SPI1, SPI_BAUD_4MHZ, SPI_MODE0);
+    RC522_Init(SPI1, PC3, PC4);  // CS=PC3, RST=PC4
+    USART_Init(USART1, BAUD_115200);
+
+    if(RC522_SelfTest()) {
+        USART_Println("RC522 Ready!");
+    } else {
+        USART_Println("RC522 SelfTest FAILED!");
+        while(1);
+    }</code></pre>
+    <p class="explain">🔍 <code>RC522_Init(SPI, CS, RST)</code> — ตั้งค่า SPI + control pins, <code>RC522_SelfTest()</code> — ทำ self-test ภายใน RC522 ตรวจสอบ SPI communication และ register response</p></div>
+
+    <div class="step"><h3>ขั้นที่ 2: ตรวจจับบัตร + อ่าน UID</h3>
+    <pre><code class="language-c">    uint8_t uid[7], uid_len;
+    while(1) {
+        // Step 1: Request — มีบัตรไหม?
+        if(RC522_Request(PICC_REQIDL, &uid_len) == MI_OK) {
+            USART_Println("Card detected!");
+
+            // Step 2: Anticollision — อ่าน UID
+            if(RC522_Anticoll(uid, &uid_len) == MI_OK) {
+                USART_Print("UID: ");
+                for(uint8_t i=0; i<uid_len; i++) {
+                    USART_PrintHex(uid[i]); USART_Print(" ");
+                }
+                USART_Println("");
+
+                // Step 3: Select Tag
+                RC522_SelectTag(uid, uid_len);
+            }
+        }
+        Delay_Ms(200);
+    }
+}</code></pre>
+    <p class="explain">🔍 <code>PICC_REQIDL</code> — request บัตรที่ยังไม่ได้เข้า sleep (idle state), <code>RC522_Anticoll(uid, &len)</code> — อ่าน UID, ความยาว 4 byte (single size) หรือ 7 byte (double size)</p></div>
+
+    <div class="step"><h3>ขั้นที่ 3: Authenticate + Read/Write Block</h3>
+    <pre><code class="language-c">    // Default Key A for MIFARE Classic (new cards)
+    uint8_t default_key[6] = {0xFF,0xFF,0xFF,0xFF,0xFF,0xFF};
+    uint8_t block = 4;  // sector 1, block 0 (first user block)
+    uint8_t buf[16];
+
+    // Auth with Key A
+    if(RC522_Auth(PICC_AUTHENT1A, block, default_key, uid) == MI_OK) {
+        USART_Println("Auth OK!");
+
+        // Read block 4 (16 bytes)
+        uint8_t size = 16;
+        if(RC522_Read(block, buf, &size) == MI_OK) {
+            USART_Print("Block 4: ");
+            for(int i=0; i<16; i++) {
+                USART_PrintHex(buf[i]); USART_Print(" ");
+            }
+        }
+
+        // Write to block 4
+        uint8_t data[16] = "HELLO CH32V003!";
+        if(RC522_Write(block, data) == MI_OK) {
+            USART_Println("Write OK!");
+        }
+
+        RC522_Halt();  // put card to sleep
+    }</code></pre>
+    <p class="explain">🔍 <code>RC522_Auth(mode, block, key, uid)</code> — authenticate ด้วย Key A หรือ B ก่อนเขียน/อ่าน, <code>RC522_Read(block, buf, &len)</code> — อ่าน 16 bytes, <code>RC522_Write(block, data)</code> — เขียน 16 bytes</p></div>
+</section>
+
+<section>
+    <h2>📋 API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+        <tr><td><code>RC522_Init(spi, cs, rst)</code></td><td>เริ่มต้น RC522</td><td><code>RC522_Init(SPI1, PC3, PC4)</code></td></tr>
+        <tr><td><code>RC522_SelfTest()</code></td><td>ทดสอบ SPI + RC522</td><td><code>if(RC522_SelfTest()){...}</code></td></tr>
+        <tr><td><code>RC522_Request(mode, &len)</code></td><td>ตรวจจับการ์ด</td><td><code>RC522_Request(PICC_REQIDL, &len)</code></td></tr>
+        <tr><td><code>RC522_Anticoll(uid, &len)</code></td><td>อ่าน UID การ์ด</td><td><code>RC522_Anticoll(uid, &uid_len)</code></td></tr>
+        <tr><td><code>RC522_SelectTag(uid, len)</code></td><td>เลือกการ์ด</td><td><code>RC522_SelectTag(uid, 4)</code></td></tr>
+        <tr><td><code>RC522_Auth(mode,blk,key,uid)</code></td><td>ยืนยันตัวตนด้วย key</td><td><code>RC522_Auth(AUTH1A, 4, key, uid)</code></td></tr>
+        <tr><td><code>RC522_Read(block, buf, &len)</code></td><td>อ่าน block 16B</td><td><code>RC522_Read(4, buf, &size)</code></td></tr>
+        <tr><td><code>RC522_Write(block, data)</code></td><td>เขียน block 16B</td><td><code>RC522_Write(4, data)</code></td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>SelfTest ล้มเหลว</td><td>SPI mode ผิด หรือ CS/RST สลับ</td><td>ต้องใช้ SPI_MODE0 (CPOL=0,CPHA=0), เช็ค SPI clock <10MHz</td></tr>
+        <tr><td>ไม่เจอการ์ดเลย</td><td>ไฟ 3.3V ไม่พอ — RC522 กิน ~100mA</td><td>ใช้ external 3.3V regulator, อย่าจ่ายจาก WCH-Link</td></tr>
+        <tr><td>Auth ล้มเหลว (MI_ERR)</td><td>Key ไม่ถูกต้อง</td><td>การ์ดใหม่ใช้ default key 0xFFFFFFFFFFFF — ถ้าเปลี่ยนแล้วต้องรู้ key</td></tr>
+        <tr><td>เขียนแล้ว block อ่านไม่ได้อีก</td><td>เขียนทับ Sector Trailer โดยไม่ตั้งใจ</td><td>Block 3,7,11,15... = Sector Trailer — ห้ามเขียนทับโดยไม่ตั้งใจ</td></tr>
+        <tr><td>อ่าน UID ได้แต่ Auth ไม่ผ่าน</td><td>ลืม SelectTag ก่อน Auth</td><td>ต้องเรียก RC522_SelectTag() หลังจาก Anticoll และก่อน Auth</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>🛠️ สร้าง Product: RFID Access Control</h2>
+    <p>อ่าน UID บัตร → เทียบกับ whitelist → เปิด servo (ปลดล็อค) ถ้าตรง</p>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "RC522.h"
+#include <string.h>
+
+uint8_t whitelist[2][4] = {
+    {0xA1,0xB2,0xC3,0xD4},  // card 1
+    {0xE5,0xF6,0xA7,0xB8}   // card 2
+};
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    SPI_Init(SPI1, SPI_BAUD_4MHZ, SPI_MODE0);
+    RC522_Init(SPI1, PC3, PC4);
+    USART_Init(USART1, BAUD_115200);
+    pinMode(PC0, PIN_MODE_OUTPUT);  // lock solenoid
+
+    if(!RC522_SelfTest()) { USART_Println("RC522 FAIL"); while(1); }
+
+    uint8_t uid[7], uid_len;
+    uint8_t default_key[6] = {0xFF,0xFF,0xFF,0xFF,0xFF,0xFF};
+
+    while(1)
+    {
+        if(RC522_Request(PICC_REQIDL, &uid_len) != MI_OK) {
+            Delay_Ms(100); continue;
+        }
+        if(RC522_Anticoll(uid, &uid_len) != MI_OK) continue;
+        RC522_SelectTag(uid, uid_len);
+
+        USART_Print("UID: ");
+        for(int i=0;i<uid_len;i++){ USART_PrintHex(uid[i]); }
+
+        // Check whitelist
+        uint8_t access = 0;
+        for(int i=0;i<2;i++) {
+            if(memcmp(uid, whitelist[i], 4) == 0) {
+                access = 1; break;
+            }
+        }
+        if(access) {
+            USART_Println(" => ACCESS GRANTED");
+            digitalWrite(PC0, HIGH); Delay_Ms(3000);  // unlock 3s
+            digitalWrite(PC0, LOW);
+        } else {
+            USART_Println(" => ACCESS DENIED");
+        }
+        RC522_Halt();
+        Delay_Ms(500);
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>✏️ ลองทำดู</h2>
+    <ol>
+        <li>ทำ RFID wallet — อ่าน balance จาก block 4 (เก็บเป็น uint32) → ลดค่าเมื่อแตะ → เขียนกลับ</li>
+        <li>ทำ multi-card reader — วนอ่าน UID ทุก 200ms → แสดง UID การ์ดล่าสุดบน OLED</li>
+        <li>ทำ key changer — เปลี่ยน default key ของ sector 1 เป็น custom key → ใช้ new key auth ครั้งต่อไป</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_ds3231.html">บทก่อน</a>
+    <a href="chapx_lib_pca9685.html">บทถัดไป →</a>
+</nav>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

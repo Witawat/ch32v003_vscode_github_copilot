@@ -1,0 +1,195 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย SIMPLE SCHEDULER — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_simplescheduler.html">กลับบท</a><a href="chapx_lib_dht_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — Simple Scheduler</h1>
+<div class="answer"><h2>ข้อ 1: 3-Task System — sensor 2s, display 0.5s, button 50ms</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "SimpleScheduler.h"
+#include "DHT.h"
+#include "Button.h"
+#include "simple_oled.h"
+
+float temp, hum;
+bool sensor_ok = false;
+uint8_t btn_state = 0;
+
+void task_sensor(void) {
+    if(DHT_Read(PC0, &temp, &hum) == DHT_OK) sensor_ok = true;
+    else sensor_ok = false;
+}
+
+void task_display(void) {
+    OLED_Clear();
+    OLED_SetFont(FONT_8X16);
+    OLED_SetCursor(0, 0); OLED_Print("Temp/Humid");
+    OLED_SetCursor(0, 1);
+    if(sensor_ok) {
+        char buf[32]; snprintf(buf, 32, "T:%.1fC H:%.1f%%", temp, hum);
+        OLED_Print(buf);
+    } else OLED_Print("Sensor ERR");
+    OLED_Display();
+}
+
+void task_button(void) {
+    Button_Process();
+    if(Button_WasPressed(PC1, BTN_EVENT_SHORT)) btn_state = (btn_state + 1) % 3;
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    DHT_Init(PC0, DHT11);
+    Button_Init(PC1, BTN_PULLUP);
+    OLED_Init();
+
+    Scheduler_Init();
+    Scheduler_AddTask(task_sensor,  2000);   // ทุก 2 วินาที
+    Scheduler_AddTask(task_display, 500);    // ทุก 0.5 วินาที
+    Scheduler_AddTask(task_button,  50);     // ทุก 50 มิลลิวินาที
+
+    while(1) {
+        Scheduler_Run();
+        IWDG_Feed();
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>Scheduler_AddTask</code> เพิ่ม task 3 ตัว ด้วย interval ต่างกัน — sensor อ่านช้าสุด (DHT ต้องเว้น ≥ 2s), display อัปเดตถี่เพื่อความลื่น, button poll ถี่สุดเพื่อไม่พลาดการกด — <code>Scheduler_Run()</code> ใน main loop ตรวจสอบว่าถึงเวลารัน task ไหน — task ต้องสั้น ไม่ block loop — ใช้ <code>Button_Process()</code> + <code>Button_WasPressed</code> แทน callback สำหรับ scheduler — <code>IWDG_Feed()</code> ทุกรอบ loop — interval ควรมากกว่าเวลาที่แต่ละ task ใช้จริงอย่างน้อย 2× เพื่อป้องกัน overlap</div></div>
+<div class="answer"><h2>ข้อ 2: Task Priority — ให้งานสำคัญมาก่อน</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "SimpleScheduler.h"
+
+typedef enum { PRIO_LOW = 0, PRIO_MED = 5, PRIO_HIGH = 10, PRIO_CRIT = 15 } Priority_t;
+
+typedef struct {
+    void (*func)(void);
+    uint32_t interval;
+    uint32_t last_run;
+    Priority_t priority;
+} Task_t;
+
+#define MAX_TASKS 8
+Task_t tasks[MAX_TASKS];
+uint8_t task_cnt = 0;
+
+void Sched_AddTask(void (*func)(void), uint32_t interval, Priority_t prio) {
+    if(task_cnt < MAX_TASKS) {
+        tasks[task_cnt].func     = func;
+        tasks[task_cnt].interval = interval;
+        tasks[task_cnt].last_run = 0;
+        tasks[task_cnt].priority = prio;
+        task_cnt++;
+    }
+}
+
+void Sched_RunWithPriority(void) {
+    uint32_t now = Timer_GetMs();
+
+    // เรียงตาม priority → ค้นหา task ที่ถึงเวลาจาก priority สูงสุดก่อน
+    for(int8_t prio = PRIO_CRIT; prio >= PRIO_LOW; prio -= 5) {
+        for(uint8_t i = 0; i < task_cnt; i++) {
+            if(tasks[i].priority == prio &&
+               (now - tasks[i].last_run) >= tasks[i].interval)
+            {
+                tasks[i].last_run = now;
+                tasks[i].func();
+                return;  // รันทีละ 1 task แล้วออก
+            }
+        }
+    }
+}
+
+void task_alarm(void)  { /* ตรวจสอบสัญญาณเตือน — สำคัญสุด */ }
+void task_sensor(void) { /* อ่านเซนเซอร์ */ }
+void task_display(void){ /* อัปเดตจอ */ }
+void task_idle(void)   { /* LED กะพริบ idle */ }
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    Sched_AddTask(task_alarm,  100,  PRIO_CRIT);  // เดี๋ยวก่อน!
+    Sched_AddTask(task_sensor, 2000, PRIO_HIGH);
+    Sched_AddTask(task_display,500,  PRIO_MED);
+    Sched_AddTask(task_idle,   1000, PRIO_LOW);
+
+    while(1) {
+        Sched_RunWithPriority();
+        IWDG_Feed();
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> แทนที่จะใช้ <code>Scheduler_AddTask</code> เดิม — ออกแบบเองโดยเพิ่ม <code>Priority_t</code> — <code>Sched_RunWithPriority</code> วนตรวจจาก priority สูงสุด → ต่ำสุด — ถ้าเจอ task ที่ถึงเวลา → รันทันที ไม่ต้องเช็ค task ต่ำกว่า — ใช้ <code>return</code> หลังรัน 1 task เพื่อให้ priority สูงได้รันก่อนเรื่อย ๆ — ข้อเสีย: task ต่ำอาจอดรัน (starvation) → แก้โดยนับ missed tick แล้วบังคับรัน — สำหรับระบบ real-time จริง ควรใช้ RTOS เช่น FreeRTOS — สำหรับ MCU เล็ก CH32V003 scheduler พื้นฐานพอเพียง</div></div>
+<div class="answer"><h2>ข้อ 3: IWDG Integration — Feed watchdog ในทุก task cycle</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "SimpleScheduler.h"
+
+#define IWDG_TIMEOUT_MS  4000
+
+volatile uint32_t last_feed = 0;
+volatile uint32_t task_max_time = 0;
+
+void task_heavy_sensor(void) {
+    uint32_t t0 = Timer_GetMs();
+
+    float t, h;
+    DHT_Read(PC0, &t, &h);        // อาจใช้ถึง 25ms
+    // ประมวลผล filter + averaging
+    for(uint8_t i = 0; i < 8; i++) {
+        float tmp; DHT_Read(PC0, &tmp, &h);
+        t = (t * 0.8f) + (tmp * 0.2f);
+    }
+
+    uint32_t elapsed = Timer_GetMs() - t0;
+    if(elapsed > task_max_time) task_max_time = elapsed;
+}
+
+void task_report(void) {
+    static Timer_t tmr;
+    Start_Timer(&tmr, 5000, 1);
+    if(Is_Timer_Expired(&tmr)) {
+        USART_Printf("Max task time: %ld ms\n", task_max_time);
+        if(task_max_time > IWDG_TIMEOUT_MS / 2) {
+            USART_Println("⚠ Task time approaching IWDG limit!");
+        }
+    }
+}
+
+void iwdg_feed_check(void) {
+    uint32_t now = Timer_GetMs();
+    if((now - last_feed) > IWDG_TIMEOUT_MS - 100) {
+        USART_Println("⚠ IWDG near expiry — force feed");
+    }
+    IWDG_Feed();
+    last_feed = now;
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_Init(115200);
+    DHT_Init(PC0, DHT11);
+
+    IWDG_Init(IWDG_TIMEOUT_MS);    // ตั้งเวลา 4 วิ
+    last_feed = Timer_GetMs();
+
+    Scheduler_Init();
+    Scheduler_AddTask(task_heavy_sensor, 3000);
+    Scheduler_AddTask(task_report,        5000);
+
+    USART_Println("Scheduler with IWDG started");
+
+    while(1) {
+        Scheduler_Run();
+
+        // Feed watchdog ทุกรอบ loop — สำคัญที่สุด
+        iwdg_feed_check();
+
+        // Timing overlap check
+        if(task_max_time > 3000) {   // งานใช้เวลาเกิน interval ของตัวเอง
+            USART_Println("⚠ TASK OVERLAP — reduce interval or optimize task");
+        }
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>IWDG_Init(4000)</code> ตั้ง watchdog 4 วิ — <code>iwdg_feed_check()</code> feed ทุกรอบ main loop — วัด <code>task_max_time</code> (เวลาที่ task ใช้จริง) — ถ้า task_max_time เกิน interval ของตัวเอง → task overlap → scheduler อาจทำงานไม่ทัน — เตือนเมื่อ task ใช้เวลา > 50% ของ IWDG timeout (อาจทำให้ watchdog reset) — defensive: feed ก่อนหมดเวลา 100ms เพื่อความปลอดภัย — ใช้ <code>DHT_Read</code> ใน task ถ้าเกิน 25ms → IWDG ยังรอดเพราะ feed ทุกรอบ loop — หลักการ: task ใน scheduler ควรสั้นเสมอ งานนานให้แยกเป็น state machine หรือใช้ non-blocking delay</div></div>
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_simplescheduler.html">กลับบท</a><a href="chapx_lib_dht_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

@@ -1,0 +1,189 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย SoftUART — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_softuart.html">กลับบท</a><a href="chapx_lib_at24cxx_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — SoftUART</h1>
+
+<div class="answer">
+<h2>ข้อ 1: SoftUART เชื่อม ESP01 สำหรับดีบัก — ใช้ 2 UART พร้อมกัน</h2>
+<pre><code class="language-c">// HW UART1 (PD5=TX, PD6=RX) → PC terminal
+// SoftUART (PD3=TX, PD4=RX) → ESP01
+
+volatile char suart_rx_buf[128];
+volatile uint8_t suart_rx_idx = 0;
+
+void softuart_esp01_debug(void) {
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    SoftUART_Init(PD3, PD4, BAUD_9600);  // ESP01 default 9600
+
+    USART_Println("=== Dual UART Debug Mode ===");
+    USART_Println("HW UART1 → PC Terminal");
+    USART_Println("SoftUART → ESP01");
+
+    while(1) {
+        // === ส่ง AT command ไป ESP01 ผ่าน SoftUART ===
+        SoftUART_Print("AT\r\n");
+        Delay_Ms(500);
+
+        // อ่าน response จาก SoftUART แล้วส่งออก HW UART
+        while(SoftUART_Available()) {
+            char c = SoftUART_Read();
+            USART_Write(c);  // แสดงบน terminal
+
+            // เก็บลง buffer สำหรับ parse
+            if(suart_rx_idx < sizeof(suart_rx_buf) - 1) {
+                suart_rx_buf[suart_rx_idx++] = c;
+                if(c == '\n') {
+                    suart_rx_buf[suart_rx_idx] = '\0';
+
+                    // ตรวจจับ response สำคัญ
+                    if(strstr((char *)suart_rx_buf, "OK"))
+                        USART_Println("  ← ESP01 OK");
+                    else if(strstr((char *)suart_rx_buf, "ERROR"))
+                        USART_Println("  ← ESP01 ERROR");
+
+                    suart_rx_idx = 0;
+                }
+            }
+        }
+
+        Delay_Ms(3000);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> CH32V003 มี HW UART 1 ช่อง — SoftUART ใช้ขา GPIO ธรรมดา + timer interrupt สร้าง UART เพิ่ม — HW UART คุยกับ PC 115200 bps — SoftUART คุยกับ ESP01 9600 bps — ใช้ SoftUART_Available/Read แบบ polling — แสดง traffic ทั้งสองทางบน terminal ผ่าน HW UART — เหมาะสำหรับดีบัก WiFi module โดยไม่ต้องใช้ USB-to-Serial แยก</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: Bridge HW UART ↔ SoftUART</h2>
+<pre><code class="language-c">// เชื่อมต่อ PC ↔ ESP01 ผ่าน CH32V003
+// HW UART (PD5,PD6) ↔ PC
+// SoftUART (PD3,PD4) ↔ ESP01
+
+#define BRIDGE_BUF_SIZE  128
+
+char hw_buf[BRIDGE_BUF_SIZE];
+char sw_buf[BRIDGE_BUF_SIZE];
+uint8_t hw_idx = 0, sw_idx = 0;
+
+void uart_bridge(void) {
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    SoftUART_Init(PD3, PD4, BAUD_115200);
+
+    USART_Println("[Bridge] HW↔Soft UART Bridge Active");
+
+    while(1) {
+        // === HW→Soft: PC ส่งไป ESP01 ===
+        while(USART_Available()) {
+            char c = USART_Read();
+            SoftUART_Write(c);
+
+            // echo กลับ PC ด้วย (ให้เห็นว่าส่งอะไรไป)
+            if(hw_idx < BRIDGE_BUF_SIZE - 1)
+                hw_buf[hw_idx++] = c;
+            if(c == '\n') {
+                hw_buf[hw_idx] = '\0';
+                USART_Print("[TX→ESP] ");
+                USART_Print(hw_buf);
+                hw_idx = 0;
+            }
+        }
+
+        // === Soft→HW: ESP01 ตอบกลับ PC ===
+        while(SoftUART_Available()) {
+            char c = SoftUART_Read();
+            USART_Write(c);
+
+            if(sw_idx < BRIDGE_BUF_SIZE - 1)
+                sw_buf[sw_idx++] = c;
+            if(c == '\n') {
+                sw_buf[sw_idx] = '\0';
+                // แสดง tag เฉพาะบรรทัดแรก
+                sw_idx = 0;
+            }
+        }
+
+        Delay_Ms(1);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> Bridge ทำหน้าที่ส่งต่อ byte แบบ transparent — HW UART รับจาก PC → ส่งออก SoftUART — SoftUART รับจาก ESP → ส่งออก HW UART — ใส่ tag "[TX→ESP]" ให้ PC เห็นว่าส่งอะไรไป — อ่านทีละ byte ให้ latency ต่ำ — เหมาะสำหรับใช้ PC terminal คุยกับ ESP01 ผ่าน CH32V003 โดยตรง — ข้อจำกัด: baudrate ต้องเท่ากันทั้งสองข้าง</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: Packet Protocol บน SoftUART พร้อม CRC</h2>
+<pre><code class="language-c">#define PKT_START   0xAA
+#define PKT_END     0x55
+#define PKT_BUF_LEN 64
+
+typedef struct {
+    uint8_t start;
+    uint8_t len;
+    uint8_t cmd;
+    uint8_t data[56];
+    uint8_t crc;
+    uint8_t end;
+} soft_pkt_t;
+
+uint8_t suart_crc8(const uint8_t *data, uint8_t len) {
+    uint8_t crc = 0xFF;
+    while(len--) {
+        crc ^= *data++;
+        for(uint8_t i=0; i<8; i++)
+            crc = (crc & 0x80) ? (crc << 1) ^ 0x07 : crc << 1;
+    }
+    return crc;
+}
+
+void suart_send_pkt(uint8_t cmd, uint8_t *data, uint8_t len) {
+    if(len > 56) return;
+
+    soft_pkt_t pkt;
+    pkt.start = PKT_START;
+    pkt.len = len;
+    pkt.cmd = cmd;
+    if(len > 0) memcpy(pkt.data, data, len);
+    pkt.end = PKT_END;
+
+    // CRC ครอบคลุม cmd + len + data
+    uint8_t crc_in[2 + len];
+    crc_in[0] = len;
+    crc_in[1] = cmd;
+    if(len > 0) memcpy(&crc_in[2], data, len);
+    pkt.crc = suart_crc8(crc_in, 2 + len);
+
+    // ส่ง packet
+    SoftUART_Write(PKT_START);
+    SoftUART_Write(len);
+    SoftUART_Write(cmd);
+    for(uint8_t i=0; i<len; i++) SoftUART_Write(data[i]);
+    SoftUART_Write(pkt.crc);
+    SoftUART_Write(PKT_END);
+}
+
+int8_t suart_recv_pkt(soft_pkt_t *pkt) {
+    uint8_t state = 0, idx = 0;
+    uint8_t raw[64];
+
+    while(SoftUART_Available()) {
+        uint8_t b = SoftUART_Read();
+
+        switch(state) {
+            case 0: if(b == PKT_START) { state=1; raw[0]=b; idx=1; } break;
+            case 1: pkt->len = b; raw[idx++]=b; state=2; break;
+            case 2: pkt->cmd = b; raw[idx++]=b; state=3;
+                    if(pkt->len == 0) state=4; break;
+            case 3: pkt->data[idx-3] = b; raw[idx++]=b;
+                    if(idx - 3 >= pkt->len) state=4; break;
+            case 4: pkt->crc = b; raw[idx++]=b; state=5; break;
+            case 5: pkt->end = b; raw[idx++]=b; state=0;
+                    if(pkt->end == PKT_END) {
+                        uint8_t crc_calc = suart_crc8(&raw[1], idx-3);
+                        return (crc_calc == pkt->crc) ? 1 : -1;
+                    }
+                    return -1;  // invalid end marker
+        }
+    }
+    return 0;  // ยังรับไม่เสร็จ
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> สร้างโปรโตคอล packet แบบง่าย — start byte (0xAA) + len + cmd + data + crc + end byte (0x55) — CRC-8-CCITT ตรวจสอบความถูกต้อง — ใช้ state machine แยกแพ็กเก็ตที่ไม่สมบูรณ์ออก — ฟังก์ชัน recv_pkt return: 1=packet OK, -1=CRC/format error, 0=ยังไม่จบ — เหมาะกับ SoftUART ที่อาจมี noise มากกว่า HW UART</div>
+</div>
+
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_softuart.html">กลับบท</a><a href="chapx_lib_at24cxx_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

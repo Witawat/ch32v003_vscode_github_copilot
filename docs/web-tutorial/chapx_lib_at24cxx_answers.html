@@ -1,0 +1,177 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย AT24Cxx — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_at24cxx.html">กลับบท</a><a href="chapx_lib_w25qxx_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — AT24Cxx EEPROM</h1>
+
+<div class="answer">
+<h2>ข้อ 1: Config Store — เก็บ WiFi SSID/PASS ใน EEPROM</h2>
+<pre><code class="language-c">#define EE_CONFIG_ADDR   0x0000
+#define EE_MAGIC         0xA55A
+#define SSID_MAX_LEN     32
+#define PASS_MAX_LEN     32
+
+typedef struct {
+    uint16_t magic;
+    uint16_t crc;
+    char ssid[SSID_MAX_LEN];
+    char pass[PASS_MAX_LEN];
+    uint8_t  reserved[28];  // เผื่ออนาคต
+} ee_config_t;  // รวม 96 bytes
+
+ee_config_t ee_config;
+
+uint16_t ee_crc16(const uint8_t *data, uint16_t len) {
+    uint16_t crc = 0xFFFF;
+    while(len--) {
+        crc ^= (uint16_t)*data++ << 8;
+        for(uint8_t i=0; i<8; i++)
+            crc = (crc & 0x8000) ? (crc<<1)^0x1021 : crc<<1;
+    }
+    return crc;
+}
+
+void ee_config_save(void) {
+    ee_config.magic = EE_MAGIC;
+    ee_config.crc = ee_crc16((uint8_t *)&ee_config + 4,
+                             sizeof(ee_config) - 4);
+
+    AT24C_Write(EE_CONFIG_ADDR, (uint8_t *)&ee_config,
+                sizeof(ee_config));
+    USART_Println("[EEPROM] Config saved");
+}
+
+uint8_t ee_config_load(void) {
+    AT24C_Read(EE_CONFIG_ADDR, (uint8_t *)&ee_config,
+               sizeof(ee_config));
+
+    if(ee_config.magic != EE_MAGIC) {
+        USART_Println("[EEPROM] No valid config — use defaults");
+        memset(&ee_config, 0, sizeof(ee_config));
+        strcpy(ee_config.ssid, "DEFAULT_SSID");
+        strcpy(ee_config.pass, "DEFAULT_PASS");
+        return 0;
+    }
+
+    uint16_t calc = ee_crc16((uint8_t *)&ee_config + 4,
+                             sizeof(ee_config) - 4);
+    if(calc != ee_config.crc) {
+        USART_Println("[EEPROM] CRC error — config corrupt");
+        return 0;
+    }
+
+    USART_Print("SSID: ");
+    USART_Println(ee_config.ssid);
+    return 1;
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ใช้ struct เก็บ config มี magic number ตรวจว่าเคยเขียนหรือยัง — CRC-16 ตรวจ integrity (CCITT polynomial 0x1021) — AT24C_Write/Read เขียน/อ่านทั้ง struct ในครั้งเดียว — magic=0xA55A ป้องกันการอ่านค่า random ตอน EEPROM ว่าง — reserved bytes เผื่อขยาย struct ในอนาคตโดยไม่ต้องย้าย address — AT24C02 มี 256 bytes ใช้ 96 bytes ต่อ config เหลืออีก 160 bytes</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: Wear Leveling — กระจายการเขียนข้ามหลายหน้า</h2>
+<pre><code class="language-c">#define EE_WEAR_PAGES    8     // ใช้ 8 หน้า
+#define EE_PAGE_SIZE     16    // AT24Cxx: 16 bytes/page
+#define EE_WEAR_START    0x00
+#define EE_SLOT_SIZE     16
+
+typedef struct {
+    uint32_t write_count;
+    uint8_t  data[8];
+    uint8_t  valid;   // 0xFF = ว่าง, 0x00 = ใช้แล้ว
+} ee_slot_t;
+
+uint8_t ee_find_next_slot(void) {
+    ee_slot_t slot;
+
+    for(uint8_t i=0; i<EE_WEAR_PAGES; i++) {
+        AT24C_Read(EE_WEAR_START + i * EE_SLOT_SIZE,
+                   (uint8_t *)&slot, sizeof(slot));
+
+        if(slot.valid == 0xFF) {
+            USART_Print("Slot ");
+            USART_PrintNum(i);
+            USART_Println(" FREE");
+            return i;
+        }
+    }
+
+    // ทุก slot เต็ม — หาตัวเก่าสุดมา reuse
+    uint32_t oldest = 0xFFFFFFFF;
+    uint8_t  oldest_idx = 0;
+    for(uint8_t i=0; i<EE_WEAR_PAGES; i++) {
+        AT24C_Read(EE_WEAR_START + i * EE_SLOT_SIZE,
+                   (uint8_t *)&slot, sizeof(slot));
+        if(slot.write_count < oldest) {
+            oldest = slot.write_count;
+            oldest_idx = i;
+        }
+    }
+    USART_Print("Reuse slot ");
+    USART_PrintNum(oldest_idx);
+    USART_Println("");
+    return oldest_idx;
+}
+
+void ee_wear_write(uint8_t *data, uint8_t len) {
+    uint8_t idx = ee_find_next_slot();
+    ee_slot_t slot;
+
+    // อ่าน write_count เก่า (ใช้ seed)
+    AT24C_Read(EE_WEAR_START + idx * EE_SLOT_SIZE,
+               (uint8_t *)&slot, sizeof(slot));
+
+    slot.write_count = (slot.valid == 0xFF)
+                     ? 1 : slot.write_count + 1;
+    slot.valid = 0x00;
+    memcpy(slot.data, data, len < 8 ? len : 8);
+
+    AT24C_Write(EE_WEAR_START + idx * EE_SLOT_SIZE,
+                (uint8_t *)&slot, sizeof(slot));
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> Wear leveling กระจายการเขียนไป 8 slots แทนเขียนที่เดิมซ้ำ — แต่ละ slot มี write_count และ valid flag — 0xFF = EEPROM erased state (ว่าง) — เมื่อทุก slot เต็ม เลือก slot ที่ write_count ต่ำสุด reuse — AT24Cxx ทนเขียน ~1 ล้านครั้งต่อ cell, wear leveling 8 ช่อง เพิ่มอายุเป็น ~8 เท่า — เหมาะกับข้อมูลที่อัปเดตบ่อย (counter, sensor log)</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: Byte Write vs Page Write — เปรียบเทียบความเร็ว</h2>
+<pre><code class="language-c">void ee_speed_compare(void) {
+    uint8_t data[16];
+    uint32_t t_start, t_elapsed;
+
+    // เตรียม test data
+    for(uint8_t i=0; i<16; i++) data[i] = i;
+
+    // === Byte Write: เขียนทีละ 1 byte 16 ครั้ง ===
+    t_start = Timer_GetUs();
+    for(uint8_t i=0; i<16; i++) {
+        AT24C_WriteByte(0x00 + i, data[i]);
+        Delay_Ms(5);  // AT24Cxx write cycle ~5ms
+    }
+    t_elapsed = Timer_GetUs() - t_start;
+
+    USART_Print("Byte Write (16x): ");
+    USART_PrintNum((uint16_t)(t_elapsed / 1000));
+    USART_Println(" ms");
+
+    // === Page Write: เขียน 16 bytes ในครั้งเดียว ===
+    t_start = Timer_GetUs();
+    AT24C_WritePage(0x10, data, 16);
+    Delay_Ms(5);
+    t_elapsed = Timer_GetUs() - t_start;
+
+    USART_Print("Page Write (1x):  ");
+    USART_PrintNum((uint16_t)(t_elapsed / 1000));
+    USART_Println(" ms");
+
+    // สรุป
+    USART_Println("---");
+    USART_Println("Page write เร็วกว่า ~16 เท่า");
+    USART_Println("เพราะ wait 5ms ครั้งเดียว vs 16 ครั้ง");
+}
+
+// AT24C02 page size = 8 bytes
+// AT24C08 page size = 16 bytes
+// AT24C16 page size = 16 bytes
+// AT24C32 page size = 32 bytes</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> AT24Cxx มี write cycle time ~5ms ต่อรอบ — Byte write: 16 ครั้ง × 5ms = 80ms — Page write: 1 ครั้ง × 5ms = 5ms — เร็วกว่า ~16 เท่า — ข้อจำกัด: เขียนข้าม page boundary ไม่ได้ (ต้องเขียนภายใน page เดียว) — page size ขึ้นกับรุ่น: AT24C02=8B, AT24C04/08/16=16B, AT24C32+=32B — ถ้าข้อมูลอยู่ข้าม page ต้องแบ่งเขียนทีละ page</div>
+</div>
+
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_at24cxx.html">กลับบท</a><a href="chapx_lib_w25qxx_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

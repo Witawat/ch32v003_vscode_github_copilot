@@ -1,0 +1,122 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย SERVOCLUSTER — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_servocluster.html">กลับบท</a><a href="chapx_lib_esc_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — Servo Cluster</h1>
+
+<div class="answer">
+<h2>ข้อ 1: Robot Arm 3-DOF Pick &amp; Place</h2>
+<pre><code class="language-c">#include "simple_servocluster.h"
+
+ServoCluster_t arm;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    ServoCluster_Init(&arm, 3);
+    ServoCluster_Attach(&arm, 0, GPIOA, GPIO_Pin_0);  // base
+    ServoCluster_Attach(&arm, 1, GPIOA, GPIO_Pin_1);  // shoulder
+    ServoCluster_Attach(&arm, 2, GPIOA, GPIO_Pin_2);  // gripper
+
+    while (1) {
+        // Home position
+        ServoCluster_MoveTo(&arm, 0, 90,  EASE_LINEAR);
+        ServoCluster_MoveTo(&arm, 1, 45,  EASE_LINEAR);
+        ServoCluster_MoveTo(&arm, 2, 160, EASE_LINEAR);
+        while (!ServoCluster_IsDone(&arm)) { Delay_Ms(5); }
+        Delay_Ms(300);
+
+        // Reach for object
+        ServoCluster_MoveTo(&arm, 0, 135, EASE_IN_OUT_CUBIC);
+        ServoCluster_MoveTo(&arm, 1, 30,  EASE_IN_OUT_CUBIC);
+        ServoCluster_MoveTo(&arm, 2, 160, EASE_LINEAR);
+        while (!ServoCluster_IsDone(&arm)) { Delay_Ms(5); }
+        Delay_Ms(200);
+
+        // Gripper close
+        ServoCluster_MoveTo(&arm, 2, 90, EASE_LINEAR);
+        while (!ServoCluster_IsDone(&arm)) { Delay_Ms(5); }
+
+        // Lift
+        ServoCluster_MoveTo(&arm, 0, 90,  EASE_IN_OUT_CUBIC);
+        ServoCluster_MoveTo(&arm, 1, 135, EASE_IN_OUT_CUBIC);
+        while (!ServoCluster_IsDone(&arm)) { Delay_Ms(5); }
+        Delay_Ms(200);
+
+        // Place
+        ServoCluster_MoveTo(&arm, 0, 45,  EASE_IN_OUT_CUBIC);
+        ServoCluster_MoveTo(&arm, 1, 30,  EASE_IN_OUT_CUBIC);
+        while (!ServoCluster_IsDone(&arm)) { Delay_Ms(5); }
+
+        // Gripper open
+        ServoCluster_MoveTo(&arm, 2, 160, EASE_LINEAR);
+        while (!ServoCluster_IsDone(&arm)) { Delay_Ms(5); }
+
+        Delay_Ms(1000);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ใช้ <code>ServoCluster</code> จัดการ 3 servo พร้อมกัน — base หมุนซ้าย-ขวา, shoulder ก้ม-เงย, gripper จับ-ปล่อย — <code>MoveTo</code> แบบ non-blocking เรียก 3 ตัวพร้อมกันได้ — ใช้ <code>IsDone()</code> เช็คว่าทุก servo เคลื่อนที่เสร็จก่อนไปขั้นตอนถัดไป — เลือก easing ต่างกัน: LINEAR สำหรับ gripper (แรงบิดตรง ๆ), CUBIC สำหรับ arm (ลดแรงกระชาก) — ต้องรอ delay ระหว่างท่าเพื่อให้ servo มีเวลาจับวัตถุจริง</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: Synchronized Movement — หลาย Servo ขยับพร้อมกัน</h2>
+<pre><code class="language-c">#include "simple_servocluster.h"
+
+ServoCluster_t cluster;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    ServoCluster_Init(&cluster, 4);
+    for (uint8_t i = 0; i &lt; 4; i++)
+        ServoCluster_Attach(&cluster, i, GPIOA, GPIO_Pin_0 + i);
+
+    uint8_t wave[4] = {0, 45, 90, 135};
+    int8_t  dir[4]  = {1, 1, 1, 1};
+
+    while (1) {
+        for (uint8_t i = 0; i &lt; 4; i++) {
+            ServoCluster_MoveTo(&cluster, i, wave[i], EASE_LINEAR);
+
+            wave[i] += dir[i];
+            if (wave[i] &gt;= 180) { wave[i] = 180; dir[i] = -1; }
+            if (wave[i] == 0)   { dir[i] = 1; }
+        }
+        Delay_Ms(30);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> เรียก <code>MoveTo</code> ให้ทุก servo ทุกรอบ loop — ใช้ array เก็บค่ามุมและทิศทางของแต่ละตัว — แต่ละ servo เริ่มที่มุมต่างกันเล็กน้อย ทำให้เกิดเอฟเฟกต์คลื่น (wave) — <code>MoveTo</code> แบบ non-blocking ทำให้ทุกตัวขยับพร้อมกันโดยไม่ต้องรอตัวใดตัวหนึ่ง — ถ้าต้องการ synchronized ที่แม่นยำระดับเฟรม ให้ใช้ <code>ServoCluster_SyncUpdate</code> หรือคำนวณ trajectory ล่วงหน้าใน buffer — เพิ่ม condition เช็ค IsDone เพื่อเปลี่ยนท่าถัดไปเมื่อทุกตัวถึงเป้าหมาย</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: Easing Comparison — LINEAR vs EASE_IN_OUT_CUBIC</h2>
+<pre><code class="language-c">#include "simple_servocluster.h"
+
+ServoCluster_t cluster;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    ServoCluster_Init(&cluster, 2);
+    ServoCluster_Attach(&cluster, 0, GPIOA, GPIO_Pin_0);
+    ServoCluster_Attach(&cluster, 1, GPIOA, GPIO_Pin_1);
+
+    const uint8_t targets[] = {0, 180};
+    uint8_t idx = 0;
+
+    while (1) {
+        // Servo 0: LINEAR (ความเร็วคงที่)
+        ServoCluster_MoveTo(&cluster, 0, targets[idx], EASE_LINEAR);
+        // Servo 1: EASE_IN_OUT_CUBIC (เร่ง-ชะลอ นุ่มนวล)
+        ServoCluster_MoveTo(&cluster, 1, targets[idx], EASE_IN_OUT_CUBIC);
+
+        while (!ServoCluster_IsDone(&cluster))
+            Delay_Ms(5);
+
+        Delay_Ms(500);
+        idx ^= 1;  // toggle 0 ↔ 1
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ใช้ servo 2 ตัวเดินทางจาก 0↔180 เหมือนกัน แต่คนละ easing — LINEAR มีความเร็วคงที่ตลอดการเดินทาง กระชากตอนเริ่มและหยุด — EASE_IN_OUT_CUBIC เร่งช้า → เร็วกลางทาง → ชะลอก่อนถึง รู้สึกนุ่มนวลกว่า — สังเกตด้วยตาเปล่า: LINEAR จะกระตุกตอนออกตัว EASE จะลื่นไหล — ในการใช้งานจริง: LINEAR เหมาะกับ gripper/linear slide, EASE เหมาะกับ camera pan-tilt/robot arm — ความเร็วรวม (ระยะเวลา) ควรเท่ากันทั้ง 2 easing เพื่อเปรียบเทียบได้ยุติธรรม</div>
+</div>
+
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_servocluster.html">กลับบท</a><a href="chapx_lib_esc_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

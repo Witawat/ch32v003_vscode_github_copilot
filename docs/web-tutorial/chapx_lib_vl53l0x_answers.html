@@ -1,0 +1,107 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย VL53L0X — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_vl53l0x.html">กลับบท</a><a href="chapx_lib_mpu6050_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — VL53L0X ToF Laser Distance</h1>
+<div class="answer"><h2>ข้อ 1: Continuous Measurement พร้อม Threshold Alert</h2><pre><code class="language-c">#define DIST_NEAR    100   // mm
+#define DIST_MEDIUM  500
+#define DIST_FAR     1200
+
+void vl53l0x_continuous_alert(void) {
+    VL53L0X_Init(VL53L0X_ADDR_DEFAULT, I2C_PINS_DEFAULT);
+    VL53L0X_StartContinuous();
+
+    pinMode(PC4, PIN_MODE_OUTPUT);
+    pinMode(PC5, PIN_MODE_OUTPUT);
+    pinMode(PC3, PIN_MODE_OUTPUT);
+
+    while(1) {
+        uint16_t dist = VL53L0X_ReadContinuous();
+
+        if(dist > DIST_FAR || dist == 0) {
+            USART_Println("Out of range");
+            digitalWrite(PC4, LOW);
+            digitalWrite(PC5, LOW);
+            digitalWrite(PC3, HIGH); Delay_Ms(100);
+            digitalWrite(PC3, LOW);
+        } else {
+            USART_Print("Distance: ");
+            USART_PrintNum(dist);
+            USART_Println(" mm");
+
+            digitalWrite(PC4, dist <= DIST_NEAR);          // ใกล้ → แดง
+            digitalWrite(PC5, dist > DIST_NEAR && dist <= DIST_MEDIUM); // ปานกลาง → เหลือง
+            digitalWrite(PC3, dist > DIST_MEDIUM && dist <= DIST_FAR);  // ไกล → เขียว
+        }
+        Delay_Ms(50);
+    }
+}
+</code></pre><div class="approach"><strong>🧠 แนวคิด:</strong> <code>VL53L0X_StartContinuous</code> เปิดโหมดวัดต่อเนื่อง — <code>VL53L0X_ReadContinuous</code> อ่านค่าโดยไม่ต้อง init รอบใหม่ เร็วกว่า — 3 LED ตามระยะ — dist=0 มักเกิดจาก target ไกลเกิน 2m หรือ surface มืดเกินไป</div></div>
+<div class="answer"><h2>ข้อ 2: Threshold Alert พร้อม Hysteresis</h2><pre><code class="language-c">#define ALARM_THRESHOLD   300  // mm
+#define HYSTERESIS        20
+
+uint8_t alarm_active = 0;
+
+void vl53l0x_threshold_hysteresis(void) {
+    VL53L0X_Init(VL53L0X_ADDR_DEFAULT, I2C_PINS_DEFAULT);
+    VL53L0X_StartContinuous();
+    pinMode(PC0, PIN_MODE_OUTPUT);  // alarm relay/LED
+
+    while(1) {
+        uint16_t dist = VL53L0X_ReadContinuous();
+        if(dist == 0) { Delay_Ms(30); continue; }
+
+        if(!alarm_active && dist < ALARM_THRESHOLD - HYSTERESIS) {
+            alarm_active = 1;
+            digitalWrite(PC0, HIGH);
+            USART_Print("ALARM ON  @ "); USART_PrintNum(dist); USART_Println("mm");
+        } else if(alarm_active && dist > ALARM_THRESHOLD + HYSTERESIS) {
+            alarm_active = 0;
+            digitalWrite(PC0, LOW);
+            USART_Print("ALARM OFF @ "); USART_PrintNum(dist); USART_Println("mm");
+        }
+
+        USART_PrintNum(dist); USART_Print("mm alarm="); USART_PrintNum(alarm_active);
+        USART_Println("");
+        Delay_Ms(100);
+    }
+}
+</code></pre><div class="approach"><strong>🧠 แนวคิด:</strong> Hysteresis ป้องกัน alarm เปิด-ปิดกระพริบที่ค่า threshold — ON ที่ 280mm แต่ OFF ที่ 320mm สร้าง deadband 40mm — ใช้ state variable <code>alarm_active</code> แทนการเช็คค่าเดียว — รูปแบบนี้ใช้ได้กับเซนเซอร์ทุกชนิดที่มี noise ใกล้ threshold</div></div>
+<div class="answer"><h2>ข้อ 3: Indoor vs Outdoor Accuracy</h2><pre><code class="language-c">void vl53l0x_accuracy_test(void) {
+    VL53L0X_Init(VL53L0X_ADDR_DEFAULT, I2C_PINS_DEFAULT);
+    VL53L0X_StartContinuous();
+
+    USART_Println("Place at known distances: 100, 200, 500, 1000 mm");
+    USART_Println("Test in indoor & outdoor condition");
+    USART_Println("Expected(mm), Indoor(mm), Outdoor(mm)");
+
+    const uint16_t targets[] = {100, 200, 500, 1000, 1500};
+
+    for(int t = 0; t < 5; t++) {
+        USART_Print("Place target at ");
+        USART_PrintNum(targets[t]);
+        USART_Println(" mm — then press Enter");
+        while(USART_Available() == 0) {
+            // แสดงค่าปัจจุบันรอผู้ใช้กด
+            uint16_t d = VL53L0X_ReadContinuous();
+            USART_PrintNum(d); USART_Print(" mm\r");
+            Delay_Ms(100);
+        }
+        USART_Read();  // consume Enter
+
+        // เก็บ 20 samples
+        float sum = 0; int valid = 0;
+        for(int i = 0; i < 20; i++) {
+            uint16_t d = VL53L0X_ReadContinuous();
+            if(d > 0) { sum += d; valid++; }
+            Delay_Ms(30);
+        }
+        float avg = valid > 0 ? sum / valid : 0;
+
+        USART_PrintNum(targets[t]); USART_Print(", ");
+        USART_PrintFloat(avg, 1);
+        USART_Println("");
+    }
+    USART_Println("Done — repeat in other lighting, copy to Excel");
+}
+</code></pre><div class="approach"><strong>🧠 แนวคิด:</strong> VL53L0X ใช้ infrared 940nm — แสงแดดมี IR เยอะ → outdoor accuracy ลดลงที่ระยะไกล — indoor แม่นยำสูงสุด — ทดสอบหลายระยะและสภาพแสงแล้ว export CSV — 940nm ทะลุกระจกไม่ได้ ถ้าวัดผ่าน glass cover ต้อง calibrate ใหม่ — ข้อดี VL53L0X: ไม่สนสีและพื้นผิว target เท่า ultrasonic</div></div>
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_vl53l0x.html">กลับบท</a><a href="chapx_lib_mpu6050_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

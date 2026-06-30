@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HC-05 — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_esp01.html">บทก่อน</a>
+    <a href="chapx_lib_nrf24l01.html">บทถัดไป →</a>
+</nav>
+<h1>HC-05 — Bluetooth USART, AT Mode, Pairing</h1>
+<span class="level intermediate">ระดับกลาง</span>
+
+<section class="flowchart">
+    <h2>🧭 แผนภาพการทำงาน</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["HC05_Init(USART,baud)"] --> B{"ต้องการ AT Mode?"}
+    B -->|"ใช่"| C["กดปุ่มค้าง + ตอน power on"]
+    B -->|"ไม่"| D["Normal Mode — เชื่อมต่อ Bluetooth"]
+    C --> E["ส่ง AT Commands @ 38400"]
+    D --> F["สมาร์ทโฟน/PC ค้นหา HC-05"]
+    F --> G["Pair (PIN: 1234)"]
+    G --> H["ส่ง/รับข้อมูลผ่าน USART"]
+    </pre>
+</section>
+
+<section>
+    <h2>🔌 การต่อวงจร</h2>
+    <pre class="ascii-circuit">
+                  HC-05 Bluetooth Module
+    ┌──────────────────────────────────────────────┐
+    │ CH32V003                          HC-05      │
+    │ PD5(TX)──────────RX               ┌─────────┤
+    │ PD6(RX)──────────TX               │         │
+    │ PC0──────────────EN/KEY (opt)     │         │
+    │ 5V───────────────VCC   ┌──STATE──┤LED opt   │
+    │ GND──────────────GND   │         │         │
+    │                         │        └─────────┤
+    │ ⚡ HC-05 ใช้ไฟ 5V ได้ —  │                 │
+    │ แต่ RX รับ 3.3V logic OK│                 │
+    │ STATE=HIGH → connected  │                 │
+    └──────────────────────────────────────────────┘
+    </pre>
+    <p>HC-05 TX 5V output → ควรใช้ voltage divider (1k+2k) ลดเหลือ 3.3V ก่อนเข้า CH32V003 RX เพื่อความปลอดภัย, EN pin HIGH = AT Mode (38400 baud), EN pin LOW/ลอย = Data Mode</p>
+</section>
+
+<section>
+    <h2>📚 หลักการทำงาน</h2>
+    <p><strong>HC-05</strong> เป็น Bluetooth SPP (Serial Port Profile) module — เมื่อจับคู่กับสมาร์ทโฟน/PC แล้ว จะทำงานเหมือน serial cable ไร้สาย: ข้อมูลที่ CH32V003 ส่งผ่าน USART จะไปออกที่ Bluetooth client และข้อมูลที่ client ส่งมาก็จะมาออกที่ขา TX ของ HC-05</p>
+    <p><strong>2 โหมดการทำงาน:</strong></p>
+    <ul>
+        <li><strong>Data Mode</strong> (default, baud 9600): สื่อสารปกติ — ส่งข้อมูลไปมาระหว่าง MCU ↔ Bluetooth client</li>
+        <li><strong>AT Mode</strong> (EN=HIGH ตอน power on, baud 38400): ตั้งค่า module — เปลี่ยนชื่อ, PIN, baud rate, master/slave</li>
+    </ul>
+    <p><strong>Master vs Slave:</strong> Default HC-05 เป็น Slave — รอให้อุปกรณ์อื่นมาเชื่อมต่อ ถ้าต้องการให้ HC-05 เป็นฝ่ายเชื่อมต่อไปหา device อื่น ต้องตั้งเป็น Master ด้วย AT+ROLE=1</p>
+</section>
+
+<section>
+    <h2>💻 เขียน Code ทีละขั้น</h2>
+
+    <div class="step"><h3>ขั้นที่ 1: Init + Setup</h3>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "HC05.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    USART_Init(USART1, BAUD_115200);       // debug
+    USART_Init(USART2, BAUD_9600);         // HC-05 default baud
+    pinMode(PC0, PIN_MODE_OUTPUT);         // EN/KEY pin
+    digitalWrite(PC0, LOW);                 // normal mode
+    HC05_Init(USART2, BAUD_9600);
+    USART_Println("HC-05 Ready!");</code></pre>
+    <p class="explain">🔍 HC-05 default baud = 9600, AT Mode baud = 38400 — ต้องใช้ให้ตรง, ตั้ง EN=LOW เพื่อเข้าสู่ Data Mode ปกติ, USART1 แสดง debug, USART2 ต่อกับ HC-05</p></div>
+
+    <div class="step"><h3>ขั้นที่ 2: AT Mode — ตั้งค่า HC-05</h3>
+    <pre><code class="language-c">    // === เข้า AT Mode ===
+    digitalWrite(PC0, HIGH);          // EN=HIGH
+    Delay_Ms(100);
+    HC05_EnterATMode(USART2);         // เปลี่ยน baud เป็น 38400 ชั่วคราว
+
+    HC05_SendAT("AT");                // test
+    HC05_SendAT("AT+NAME=CH32V003");  // เปลี่ยนชื่อ Bluetooth
+    HC05_SendAT("AT+PSWD=4321");      // เปลี่ยน PIN
+    HC05_SendAT("AT+UART=9600,0,0");  // ตั้ง baud=9600
+
+    digitalWrite(PC0, LOW);           // กลับ Data Mode
+    Delay_Ms(500);</code></pre>
+    <p class="explain">🔍 <code>HC05_SendAT(cmd)</code> — ส่ง AT command + รอ <code>OK</code> response, EN=HIGH แล้ว power-on ถึงเข้า AT Mode (ถ้า EN สลับระหว่างรันไทม์ อาจต้องรีเซ็ต HC-05 ก่อน)</p></div>
+
+    <div class="step"><h3>ขั้นที่ 3: รับ-ส่งข้อมูลใน Loop</h3>
+    <pre><code class="language-c">    char rx_buf[64];
+    uint8_t idx = 0;
+    while(1) {
+        if(USART_Available(USART2)) {   // มีข้อมูลจาก HC-05
+            char c = USART_Read(USART2);
+            USART_Write(USART1, c);     // echo ไป debug
+            rx_buf[idx++] = c;
+            if(c == '\n' || idx >= 63) {
+                rx_buf[idx] = '\0';
+                // รับคำสั่ง: "LED1" → toggle PC1
+                if(strstr(rx_buf, "LED1")) digitalToggle(PC1);
+                idx = 0;
+            }
+        }
+    }
+}</code></pre>
+    <p class="explain">🔍 ใช้ <code>USART_Available()</code> เช็คก่อนอ่าน — non-blocking, รับทีละ char สะสมใน buffer, เมื่อเจอ <code>\n</code> หรือเต็ม buffer → ประมวลผลคำสั่ง, สามารถใช้ Serial Bluetooth Terminal app บนมือถือทดสอบได้</p></div>
+</section>
+
+<section>
+    <h2>📋 API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+        <tr><td><code>HC05_Init(uart, baud)</code></td><td>เริ่มต้น HC-05</td><td><code>HC05_Init(USART2, BAUD_9600)</code></td></tr>
+        <tr><td><code>HC05_EnterATMode(uart)</code></td><td>สลับเป็น AT Mode (38400)</td><td><code>HC05_EnterATMode(USART2)</code></td></tr>
+        <tr><td><code>HC05_SendAT(cmd)</code></td><td>ส่ง AT command</td><td><code>HC05_SendAT("AT+VERSION")</code></td></tr>
+        <tr><td><code>HC05_SetName(name)</code></td><td>เปลี่ยนชื่อ Bluetooth</td><td><code>HC05_SetName("MyDevice")</code></td></tr>
+        <tr><td><code>HC05_SetPin(pin)</code></td><td>เปลี่ยน PIN code</td><td><code>HC05_SetPin("4321")</code></td></tr>
+        <tr><td><code>HC05_SetRole(role)</code></td><td>Master(1) / Slave(0)</td><td><code>HC05_SetRole(HC05_MASTER)</code></td></tr>
+        <tr><td><code>HC05_Available()</code></td><td>เช็คข้อมูลรออ่าน</td><td><code>if(HC05_Available()){...}</code></td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>AT ไม่ตอบ</td><td>EN ไม่ได้ HIGH ตอน power on</td><td>กดปุ่มค้างไว้ตอนเสียบไฟ หรือต่อ EN กับ VCC แล้วรีเซ็ต</td></tr>
+        <tr><td>AT ตอบแต่บอดไม่ตรง</td><td>AT Mode ใช้ baud 38400 เสมอ</td><td>ต้องเปลี่ยน USART baud เป็น 38400 ก่อนเข้า AT Mode</td></tr>
+        <tr><td>Pair ได้แต่ส่งข้อมูลไม่ได้</td><td>RX/TX สลับข้าง</td><td>MCU TX → HC-05 RX, MCU RX → HC-05 TX — ไขว้สาย</td></tr>
+        <tr><td>ข้อมูลเพี้ยน/ขยะ</td><td>HC-05 TX 5V เข้า CH32V003 RX เกิน</td><td>ใช้ voltage divider 1k+2k ลดจาก 5V → 3.3V</td></tr>
+        <tr><td>เชื่อมต่อได้ครั้งเดียวแล้วหลุด</td><td>State pin ต่อผิด หรือไฟไม่เสถียร</td><td>เช็ค STATE pin, เพิ่ม capacitor 10µF ที่ VCC</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>🛠️ สร้าง Product: Bluetooth LED Controller</h2>
+    <p>ควบคุม LED 4 ดวงผ่าน Bluetooth จากสมาร์ทโฟน — ส่งข้อความ "LED1 ON", "LED2 OFF" ฯลฯ</p>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "HC05.h"
+#include <string.h>
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    USART_Init(USART1, BAUD_115200);
+    USART_Init(USART2, BAUD_9600);
+    HC05_Init(USART2, BAUD_9600);
+
+    pinMode(PC0, PIN_MODE_OUTPUT);  // LED1
+    pinMode(PC1, PIN_MODE_OUTPUT);  // LED2
+    pinMode(PC2, PIN_MODE_OUTPUT);  // LED3
+    pinMode(PC3, PIN_MODE_OUTPUT);  // LED4
+
+    char buf[32]; uint8_t idx = 0;
+    USART_Println("BT LED Controller Ready");
+
+    while(1)
+    {
+        if(USART_Available(USART2)) {
+            char c = USART_Read(USART2);
+            if(c == '\n' || c == '\r') {
+                buf[idx] = '\0';
+                if(strstr(buf, "LED1 ON"))  digitalWrite(PC0, HIGH);
+                if(strstr(buf, "LED1 OFF")) digitalWrite(PC0, LOW);
+                if(strstr(buf, "LED2 ON"))  digitalWrite(PC1, HIGH);
+                if(strstr(buf, "LED2 OFF")) digitalWrite(PC1, LOW);
+                if(strstr(buf, "LED3 ON"))  digitalWrite(PC2, HIGH);
+                if(strstr(buf, "LED3 OFF")) digitalWrite(PC2, LOW);
+                if(strstr(buf, "LED4 ON"))  digitalWrite(PC3, HIGH);
+                if(strstr(buf, "LED4 OFF")) digitalWrite(PC3, LOW);
+                if(strstr(buf, "ALL ON")) {
+                    digitalWrite(PC0, HIGH); digitalWrite(PC1, HIGH);
+                    digitalWrite(PC2, HIGH); digitalWrite(PC3, HIGH);
+                }
+                if(strstr(buf, "ALL OFF")) {
+                    digitalWrite(PC0, LOW); digitalWrite(PC1, LOW);
+                    digitalWrite(PC2, LOW); digitalWrite(PC3, LOW);
+                }
+                idx = 0;
+            } else if(idx < 31) {
+                buf[idx++] = c;
+            }
+        }
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>✏️ ลองทำดู</h2>
+    <ol>
+        <li>ทำ Bluetooth echo server — ส่งข้อความจากมือถือ → CH32V003 รับ → ส่งกลับข้อความเดิม + "ECHO:" นำหน้า</li>
+        <li>ทำ password door lock — รับรหัส 4 หลักผ่าน Bluetooth → ถ้าถูกต้อง → servo หมุนปลดล็อค → ส่ง "UNLOCKED" กลับ</li>
+        <li>ทำ Bluetooth sensor monitor — อ่าน ADC ทุก 1 วินาที → ส่งค่าไปยัง serial Bluetooth app (เช่ือมต่อถาวร)</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_esp01.html">บทก่อน</a>
+    <a href="chapx_lib_nrf24l01.html">บทถัดไป →</a>
+</nav>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

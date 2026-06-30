@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ServoTester — Calibration & Sweep Tool — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_servo.html">บทก่อน</a>
+    <a href="chapx_lib_servocluster.html">บทถัดไป →</a>
+</nav>
+
+<h1>ServoTester — Calibration & Sweep Tool</h1>
+<span class="level intermediate">ระดับกลาง</span>
+
+<section class="flowchart">
+    <h2>🧭 แผนภาพการทำงาน</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["Button Press: Mode Select"] --> B{"Mode?"}
+    B -->|"Sweep"| C["Sweep 0°→180°→0°"]
+    B -->|"Center"| D["Set PWM 7.5% = 90°"]
+    B -->|"Manual"| E["Potentiometer = Angle"]
+    B -->|"Step"| F["+10° per press"]
+    C --> G["OLED: Mode + Angle"]
+    D --> G
+    E --> G
+    F --> G
+    G --> A
+    </pre>
+</section>
+
+<section>
+    <h2>🔌 การต่อวงจร</h2>
+    <pre class="ascii-circuit">
+            ServoTester Station
+    ┌──────────────────────────────────┐
+    │ MCU                         5V ⚠️ │
+    │ PC0───BTN1 (Mode Select)         │
+    │ PC1───BTN2 (Step / Confirm)      │
+    │ PA1───POT (10kΩ ADC, Manual)     │
+    │ PD2───Signal → Servo             │
+    │ PC2───SCL, PC1───SDA → OLED      │
+    │                  ┌───Servo──┐    │
+    │ GND──┬───GND─────┤ GND  VCC─┤─5V │
+    │      │            │     Sig─┘    │
+    └──────────────────────────────────┘
+    </pre>
+    <p>Station สำหรับทดสอบและ calibrate servo — มี 4 โหมด: Sweep อัตโนมัติ, Center หาจุดกึ่งกลาง, Manual ปรับด้วย Pot, Step ทีละ 10° — แสดงผลผ่าน OLED จอ 128x64</p>
+</section>
+
+<section>
+    <h2>📚 หลักการทำงาน</h2>
+    <p><strong>ServoTester</strong> เป็น utility library สำหรับตรวจสอบว่า servo แต่ละตัวทำงานถูกต้องหรือไม่ — ใช้ก่อนติดตั้ง servo ลงใน project จริง</p>
+    <p><strong>4 โหมดการทำงาน:</strong> (1) <strong>Sweep Mode</strong> — กวาด 0°→180°→0° อัตโนมัติ ใช้ตรวจสอบ smoothness; (2) <strong>Center Mode</strong> — สั่ง 90° เพื่อ calibrate horn ให้ตรงกลาง; (3) <strong>Manual Mode</strong> — ควบคุมด้วย potentiometer ปรับมุมละเอียด; (4) <strong>Step Mode</strong> — กดปุ่มเพิ่ม/ลดทีละ 10° วัด min/max angle</p>
+    <p><strong>OLED Display</strong> แสดง: โหมดปัจจุบัน, มุม servo, duty cycle %, pulse width μs — ทำให้ calibrate ได้โดยไม่ต้องต่อ serial monitor</p>
+    <p><strong>ใช้ Non-Blocking</strong> ทั้งปุ่มและ servo ทำให้ UI ตอบสนองทันที ไม่มีค้าง</p>
+</section>
+
+<section>
+    <h2>💻 เขียน Code ทีละขั้น</h2>
+
+    <div class="step"><h3>ขั้นที่ 1: Init อุปกรณ์ทั้งหมด</h3>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+typedef enum {SWEEP, CENTER, MANUAL, STEP} Mode_t;
+Mode_t mode = SWEEP;
+uint8_t angle = 90;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    OLED_Init_I2C(0x3C, PC2, PC1);
+    ADC_Init_Single(PA1);
+    pinMode(PC0, PIN_MODE_INPUT_PULLUP);  // BTN1 Mode
+    pinMode(PC3, PIN_MODE_INPUT_PULLUP);  // BTN2 Step
+    PWM_SimpleInit(1, PD2, 50);
+    PWM_Start(1);</code></pre>
+    <p class="explain">🔍 ตั้งค่า OLED I²C, ADC สำหรับ Pot, ปุ่มแบบ INPUT_PULLUP (กด = LOW), และ PWM 50Hz บน PD2</p></div>
+
+    <div class="step"><h3>ขั้นที่ 2: State Machine 4 โหมด</h3>
+    <pre><code class="language-c">    void update_servo() {
+        switch(mode) {
+            case SWEEP: {
+                static uint8_t dir = 1;
+                angle += dir;
+                if(angle >= 180) dir = -1;
+                if(angle == 0) dir = 1;
+                break;
+            }
+            case CENTER: angle = 90; break;
+            case MANUAL: {
+                uint16_t adc = ADC_Read(PA1);
+                angle = (uint8_t)(adc * 180 / 4095);
+                break;
+            }
+            case STEP: break; // ปรับด้วยปุ่ม
+        }
+        float duty = 2.5f + (angle * 10.0f / 180.0f);
+        PWM_SetDuty(1, duty);
+    }</code></pre>
+    <p class="explain">🔍 แต่ละโหมดคำนวณ angle ต่างกัน — Sweep ใช้ static dir กลับทิศ, Center ตั้ง 90° ตลอด, Manual อ่าน ADC เปลี่ยนเป็นมุม 0–180, Step รอปุ่มใน loop</p></div>
+
+    <div class="step"><h3>ขั้นที่ 3: Main Loop + OLED Display</h3>
+    <pre><code class="language-c">    Timer_t tmr_display;
+    Start_Timer(&tmr_display, 100, 1);
+    while(1) {
+        if(!digitalRead(PC0)) {  // BTN1: เปลี่ยนโหมด
+            mode = (mode + 1) % 4;
+            Delay_Ms(200); // debounce
+        }
+        if(mode == STEP && !digitalRead(PC3)) {
+            angle = (angle + 10) % 190; if(angle > 180) angle = 0;
+            Delay_Ms(150);
+        }
+        update_servo();
+        if(Is_Timer_Expired(&tmr_display)) {
+            OLED_Clear();
+            OLED_Printf(0,0,"Mode:%d Ang:%d", mode, angle);
+            OLED_Printf(0,2,"Duty:%.1f%%", 2.5+angle*10.0/180);
+            OLED_Update();
+        }
+        Delay_Ms(5); // Sweep speed control
+    }
+}</code></pre>
+    <p class="explain">🔍 Main loop ตรวจสอบปุ่มเปลี่ยนโหมดและ step, เรียก update_servo() ทุก loop, OLED refresh ทุก 100ms ด้วย Non-Blocking Timer — Debounce ใช้ Delay_Ms สั้น ๆ</p></div>
+</section>
+
+<section>
+    <h2>📋 API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+        <tr><td><code>ServoTester_Init(pin)</code></td><td>เริ่ม ServoTester บน pin ที่กำหนด</td><td><code>ServoTester_Init(PD2)</code></td></tr>
+        <tr><td><code>ServoTester_SetMode(mode)</code></td><td>เปลี่ยนโหมด: SWEEP/CENTER/MANUAL/STEP</td><td><code>ServoTester_SetMode(SWEEP)</code></td></tr>
+        <tr><td><code>ServoTester_SetAngle(a)</code></td><td>ตั้งมุมโดยตรง (ใช้ใน Manual/Step)</td><td><code>ServoTester_SetAngle(45)</code></td></tr>
+        <tr><td><code>ServoTester_Update()</code></td><td>เรียกทุก loop — non-blocking update</td><td><code>ServoTester_Update()</code></td></tr>
+        <tr><td><code>ServoTester_GetAngle()</code></td><td>อ่านมุมปัจจุบันของ servo</td><td><code>uint8_t a = ServoTester_GetAngle()</code></td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>กดปุ่มแล้วโหมดไม่เปลี่ยน</td><td>Debounce ไม่พอ — อ่านค่าซ้ำหลายครั้ง</td><td>เพิ่ม <code>Delay_Ms(150–200)</code> หลัง detect press</td></tr>
+        <tr><td>Sweep สะดุดกลางทาง</td><td>servo ถึง limit แล้วพยายามหมุนต่อ</td><td>ตรวจสอบ boundary — <code>if(angle >= 180) dir = -1</code></td></tr>
+        <tr><td>Manual Mode angle กระโดด</td><td>ADC noise จาก pot ราคาถูก</td><td>ใช้ Low-Pass Filter: <code>angle = angle*0.9 + new*0.1</code> หรือเพิ่ม cap 100nF</td></tr>
+        <tr><td>OLED ไม่แสดงผล</td><td>I²C address ผิด หรือลืมต่อ pull-up</td><td>ตรวจสอบ address (ปกติ 0x3C) และต่อ R pull-up 4.7kΩ ที่ SDA/SCL</td></tr>
+        <tr><td>Servo ไม่เคลื่อนที่ Step Mode</td><td>ไม่ได้กดปุ่มค้างนานพอ</td><td>ใช้ auto-repeat — กดค้างขยับต่อเนื่องทุก 50ms</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>🛠️ สร้าง Product: Servo Diagnostic Station</h2>
+    <p>เครื่องมือทดสอบ servo แบบพกพา — 4 โหมดครบ + OLED แสดงผล + เก็บค่า min/max angle + ทดสอบ deadband</p>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+typedef enum {SWEEP=0, CENTER, MANUAL, STEP, SPEED_TEST} Mode_t;
+Mode_t mode = SWEEP;
+uint8_t angle = 90, step_size = 10;
+uint8_t min_angle = 180, max_angle = 0;
+float speed_result = 0;
+
+float angle2duty(uint8_t a) { return 2.5f + (a * 10.0f / 180.0f); }
+
+int main(void) {
+    SystemCoreClockUpdate(); Timer_Init();
+    OLED_Init_I2C(0x3C, PC2, PC1);
+    ADC_Init_Single(PA1);
+    pinMode(PC0, PIN_MODE_INPUT_PULLUP);
+    pinMode(PC3, PIN_MODE_INPUT_PULLUP);
+    pinMode(PC4, PIN_MODE_INPUT_PULLUP);
+    PWM_SimpleInit(1, PD2, 50); PWM_Start(1);
+
+    uint8_t btn_prev = 1, btn2_prev = 1, btn3_prev = 1;
+    while(1) {
+        uint8_t b1 = digitalRead(PC0); // Mode
+        uint8_t b2 = digitalRead(PC3); // Step+
+        uint8_t b3 = digitalRead(PC4); // Step-
+        if(!b1 && btn_prev) { mode = (mode+1)%5; Delay_Ms(200); }
+        if(!b2 && btn2_prev) { if(mode==STEP){angle=angle+step_size>180?180:angle+step_size;} Delay_Ms(150); }
+        if(!b3 && btn3_prev) { if(mode==STEP){angle=angle<step_size?0:angle-step_size;} Delay_Ms(150); }
+        btn_prev=b1; btn2_prev=b2; btn3_prev=b3;
+
+        switch(mode) {
+            case SWEEP: { static int8_t d=1; angle+=d; if(angle>=180)d=-1; if(angle==0)d=1; break; }
+            case CENTER: angle=90; break;
+            case MANUAL: angle=(uint8_t)(ADC_Read(PA1)*180/4095); break;
+            case SPEED_TEST: { static uint8_t phase=0; if(phase==0){angle=0;phase=1;} else{angle=180;phase=0;} break; }
+        }
+        PWM_SetDuty(1, angle2duty(angle));
+        if(angle<min_angle)min_angle=angle; if(angle>max_angle)max_angle=angle;
+
+        OLED_Clear();
+        OLED_Printf(0,0,"M:%d A:%3d", mode, angle);
+        OLED_Printf(0,2,"min:%d max:%d", min_angle, max_angle);
+        OLED_Update();
+        Delay_Ms(mode==SPEED_TEST?500:10);
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>✏️ ลองทำดู</h2>
+    <ol>
+        <li>เพิ่มโหมด Deadband Test — สั่ง angle=90 แล้วลองขยับทีละ 1° ดูว่า servo เริ่มขยับที่กี่องศา</li>
+        <li>เพิ่มฟีเจอร์บันทึกค่า Calibration ลง Flash — ให้ station จำ min/max ของ servo แต่ละตัวได้หลังปิดเครื่อง</li>
+        <li>ทำ Auto-Calibration — กดปุ่มเดียวให้ station สแกน min/max อัตโนมัติโดยใช้ current sensing</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_servo.html">บทก่อน</a>
+    <a href="chapx_lib_servocluster.html">บทถัดไป →</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

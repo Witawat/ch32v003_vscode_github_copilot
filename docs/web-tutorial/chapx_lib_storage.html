@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>📦 จัดเก็บ/IO/นาฬิกา 7 ชนิด — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_wireless.html">บทก่อน</a>
+    <a href="chapx_lib_input.html">บทถัดไป →</a>
+</nav>
+<h1>📦 จัดเก็บ/IO/นาฬิกา 7 ชนิด — AT24Cxx, W25Qxx, DS3231, RC522, PCA9685, PCF8574, I2CScan</h1>
+<span class="level advanced">ระดับสูง</span>
+<p style="margin-top:0.5rem;color:#64748b">⏱️ ดูดัชนีทั้งหมดที่ <a href="chapx_lib_index.html">📦 คลังอุปกรณ์</a></p>
+
+<section>
+<h2>AT24Cxx — EEPROM I2C</h2>
+<pre class="ascii-circuit">
+PC1─SDA  PC2─SCL  3.3V─VCC  GND─GND  A0─GND  A1─GND  A2─GND
+A0/A1/A2 = GND → I2C addr 0x50 (ต่อ VCC/VCC/VCC = 0x57)</pre>
+<pre><code class="language-c">#include "AT24Cxx.h"
+AT24Cxx_Init(0x50, AT24C32); // addr, size (AT24C32=32Kbit/4KB)
+AT24Cxx_WriteByte(0x50, 0, 42); // addr=0x50, mem_addr=0, data=42
+uint8_t val = AT24Cxx_ReadByte(0x50, 0);
+AT24Cxx_WritePage(0x50, 0, buffer, 32); // write 32 bytes (หาเขียนข้าม page!)
+AT24Cxx_ReadPage(0x50, 0, buffer, 32);</code></pre>
+<p class="explain">⚠️ I2C addr 0x50-0x57 (เลือกด้วย A0/A1/A2 pins), page size: AT24C01=8B / AT24C02=8B / AT24C32=32B / AT24C256=64B, write cycle time ~5ms (ต้องรอ — ห้ามอ่าน/เขียนต่อทันที), endurance ~1M writes, page boundary: อย่าเขียนข้าม page (เช่น AT24C32 page 32B → เขียนที่ addr 30 ได้แค่ 2 byte ก่อนตีกลับ), ต่อได้หลายตัวผ่าน A0-A2</p>
+
+<h3>API หลัก</h3>
+<table>
+<tr><td><code>AT24Cxx_Init(addr, type)</code></td><td>Init I2C + detect chip</td><td><code>AT24Cxx_WriteByte(addr, mem, val)</code></td><td>เขียน 1 byte</td></tr>
+<tr><td><code>AT24Cxx_ReadByte(addr, mem)</code></td><td>อ่าน 1 byte</td><td><code>AT24Cxx_WritePage(addr, mem, buf, len)</code></td><td>เขียน page (≤page_size)</td></tr>
+<tr><td><code>AT24Cxx_ReadPage(addr, mem, buf, len)</code></td><td>อ่านยาวตามต้องการ</td><td><code>AT24Cxx_EraseAll(addr)</code></td><td>ลบทั้ง chip</td></tr>
+<tr><td><code>AT24Cxx_WriteString(addr, mem, str)</code></td><td>เขียนข้อความ</td><td><code>AT24Cxx_ReadString(addr, mem, buf, max)</code></td><td>อ่านข้อความ</td></tr>
+</table>
+
+<h2>W25Qxx — SPI Flash</h2>
+<pre class="ascii-circuit">
+PC4─CS  PC5─SCK  PC6─MOSI  PC7─MISO  3.3V─VCC  GND─GND
+/WP pin → 3.3V (disable write protect)  /HOLD pin → 3.3V</pre>
+<pre><code class="language-c">#include "W25Qxx.h"
+W25Qxx_Init(PC4); // CS pin, auto-detect via JEDEC ID
+uint32_t id = W25Qxx_ReadID();
+USART_Print("Flash: "); USART_PrintHex(id, 6); USART_Println("");
+W25Qxx_EraseSector(0);  // erase sector 0 (4KB) — ต้องทำก่อนเขียน!
+W25Qxx_WritePage(0, "Hello SPI Flash", 15);
+char buf[32];
+W25Qxx_ReadData(0, (uint8_t*)buf, 15);
+buf[15] = 0; USART_Println(buf);</code></pre>
+<p class="explain">⚠️ ต้อง erase sector ก่อนเขียนเสมอ (Nor Flash property — เขียนได้เฉพาะจาก 1→0, erase เปลี่ยน 0→1), sector=4KB / block=32KB/64KB, JEDEC ID auto-detect capacity (W25Q32=4MB / W25Q64=8MB / W25Q128=16MB), endurance ~100K writes per sector, write protection: /WP pin + status register block protect bits, page size 256B, chip erase takes ~40s (อย่าใช้ถ้าไม่จำเป็น), SPI max 80MHz (CH32V003 ทำได้ ~24MHz)</p>
+
+<h3>API หลัก</h3>
+<table>
+<tr><td><code>W25Qxx_Init(cs)</code></td><td>Init SPI + detect</td><td><code>W25Qxx_ReadID()</code></td><td>อ่าน JEDEC ID (3 bytes)</td></tr>
+<tr><td><code>W25Qxx_EraseSector(addr)</code></td><td>ลบ 4KB sector</td><td><code>W25Qxx_EraseBlock(addr)</code></td><td>ลบ 64KB block</td></tr>
+<tr><td><code>W25Qxx_WritePage(addr, buf, len)</code></td><td>เขียน ≤256B</td><td><code>W25Qxx_ReadData(addr, buf, len)</code></td><td>อ่าน (ไม่จำกัดความยาว)</td></tr>
+<tr><td><code>W25Qxx_EraseChip()</code></td><td>ลบทั้ง chip (~40s)</td><td><code>W25Qxx_GetCapacity()</code></td><td>คืนขนาดเป็น MB</td></tr>
+</table>
+
+<h2>DS3231 — RTC Module I2C</h2>
+<pre class="ascii-circuit">
+PC1─SDA  PC2─SCL  3.3V─VCC  GND─GND  CR2032─battery holder
+SQW pin → PC0 (optional, 1Hz square wave output)</pre>
+<pre><code class="language-c">#include "DS3231.h"
+DS3231_DateTime_t dt;
+// Set: dt.year=26; dt.month=6; dt.day=29;
+//      dt.hour=14; dt.minute=30; dt.second=0; dt.weekday=1;
+// DS3231_SetDateTime(&dt);
+DS3231_GetDateTime(&dt);
+USART_PrintNum(dt.hour); USART_Print(":"); USART_PrintNum(dt.minute);
+// Alarm:
+DS3231_SetAlarm1(ALARM1_EVERY_SECOND, 0, 0, 0);
+DS3231_EnableAlarm1(1);
+// Temperature:
+float t = DS3231_GetTemperature();</code></pre>
+<p class="explain">⚠️ I2C addr 0x68, accuracy ±2ppm (~1min error ต่อปี), CR2032 battery backup → เก็บเวลาขณะไฟดับ, SQW pin output: 1Hz/1kHz/4kHz/8kHz (ใช้ interrupt บอกเวลา), alarm 1+2 (match second/minute/hour/day), 24hr format, century bit (ปี 2000-2099), aging register สำหรับ calibrate crystal, temperature-compensated → แม่นกว่า DS1307 มาก, DS3231_GetTemperature() อ่าน sensor ในตัว (±3°C)</p>
+
+<h3>API หลัก</h3>
+<table>
+<tr><td><code>DS3231_GetDateTime(&dt)</code></td><td>อ่านวันเวลา</td><td><code>DS3231_SetDateTime(&dt)</code></td><td>ตั้งวันเวลา</td></tr>
+<tr><td><code>DS3231_GetTemperature()</code></td><td>อ่านอุณหภูมิ °C</td><td><code>DS3231_SetAlarm1(mode, s, m, h)</code></td><td>ตั้ง alarm 1</td></tr>
+<tr><td><code>DS3231_EnableAlarm1(en)</code></td><td>เปิด/ปิด alarm 1</td><td><code>DS3231_ClearAlarm1()</code></td><td>ล้าง alarm flag</td></tr>
+<tr><td><code>DS3231_EnableSQW(freq)</code></td><td>เปิด square wave</td><td><code>DS3231_GetUnixTime()</code></td><td>Unix timestamp</td></tr>
+</table>
+
+<h2>RC522 — RFID Reader SPI</h2>
+<pre class="ascii-circuit">
+PC4─SDA(CS)  PC5─SCK  PC6─MOSI  PC7─MISO  PC3─RST  3.3V─VCC  GND─GND
+⚠️ 3.3V ONLY — 5V kills chip (เหมือน nRF24L01)</pre>
+<pre><code class="language-c">#include "RC522.h"
+RC522_Init(PC4, PC3); // CS, RST
+uint8_t uid[10], uid_len;
+if(RC522_Request(PICC_REQIDL) == MI_OK) {
+    if(RC522_AntiColl(uid, &uid_len) == MI_OK) {
+        USART_Print("Card UID: ");
+        for(uint8_t i=0; i<uid_len; i++) { USART_PrintHex(uid[i], 2); }
+        USART_Println("");
+        // Authenticate: RC522_Auth(PICC_AUTHENT1A, 4, default_key, uid);
+        // Read block:   RC522_Read(4, buffer);
+        // Write block:  RC522_Write(4, data);
+    }
+}
+RC522_Halt();</code></pre>
+<p class="explain">⚠️ ISO14443A (MIFARE Classic 1K/4K + Ultralight), 13.56MHz, SPI max 10MHz, reading range ~5cm, default key = 0xFFFFFFFFFFFF (6 bytes FF), MIFARE 1K = 16 sectors × 4 blocks (block 0-2 = data, block 3 = sector trailer: keyA + access bits + keyB), UID 4/7/10 bytes ขึ้นกับ card type, ต้อง authenticate ทุก sector ก่อนอ่าน/เขียน, เขียนผิด access bits → sector lock ถาวร (ระวัง!)</p>
+
+<h3>API หลัก</h3>
+<table>
+<tr><td><code>RC522_Init(cs, rst)</code></td><td>Init SPI + self-test</td><td><code>RC522_Request(mode)</code></td><td>ตรวจหาบัตร</td></tr>
+<tr><td><code>RC522_AntiColl(uid, &len)</code></td><td>อ่าน UID (anti-collision)</td><td><code>RC522_SelectTag(uid)</code></td><td>เลือกบัตร</td></tr>
+<tr><td><code>RC522_Auth(mode, blk, key, uid)</code></td><td>Authenticate sector</td><td><code>RC522_Read(blk, buf)</code></td><td>อ่าน 16B block</td></tr>
+<tr><td><code>RC522_Write(blk, data)</code></td><td>เขียน 16B block</td><td><code>RC522_Halt()</code></td><td>หยุดการสื่อสาร</td></tr>
+</table>
+
+<h2>PCA9685 — 16-Ch PWM Driver I2C</h2>
+<pre class="ascii-circuit">
+PC1─SDA  PC2─SCL  GND─GND common
+5V external─VCC(power)  3.3V─VCC(logic)  OE─GND (enable, LOW=on)
+⚠️ ต่อ power/logic VCC แยก — power ใช้ external 5V, logic ใช้ 3.3V จาก CH32V003</pre>
+<pre><code class="language-c">#include "PCA9685.h"
+PCA9685_Init(0x40); // I2C addr 0x40-0x7F (A0-A5 pins)
+PCA9685_SetPWMFreq(50); // 50Hz for servo
+PCA9685_SetPWM(0, 0, 307); // ch0, on=0, off=307 → 1.5ms (servo center)
+// 12-bit: off = 0-4095, duty = off/4096
+// Servo calc:
+uint16_t pwm = (uint16_t)((angle/180.0f)*(max-min) + min);
+// All off: PCA9685_SetAllPWM(0, 0);</code></pre>
+<p class="explain">⚠️ 16 channels (ใช้กับ ServoCluster ได้หลายตัว), 12-bit PWM (4096 steps), external power 5-6V สำหรับขับ servo/LED, logic supply 2.3-5.5V (ต่อกับ CH32V003 3.3V), OE pin = output enable (LOW=enabled / HIGH=all off), I2C addr เลือกด้วย A0-A5 pins (0x40 baseline → 0x7F max, up to 62 modules!), frequency range 24Hz-1526Hz, 50Hz ใช้กับ servo (20ms period), สำหรับ LED dimming ใช้ ≥200Hz (ไม่กระพริบ), output totem-pole 25mA sink/source per channel</p>
+
+<h3>API หลัก</h3>
+<table>
+<tr><td><code>PCA9685_Init(addr)</code></td><td>Init I2C + reset</td><td><code>PCA9685_SetPWMFreq(hz)</code></td><td>ตั้งความถี่ PWM</td></tr>
+<tr><td><code>PCA9685_SetPWM(ch, on, off)</code></td><td>ตั้ง PWM 1 channel</td><td><code>PCA9685_SetAllPWM(on, off)</code></td><td>ตั้งทุก channel พร้อมกัน</td></tr>
+<tr><td><code>PCA9685_CalcPWM(deg, min, max)</code></td><td>คำนวณ servo PWM</td><td><code>PCA9685_Sleep()</code></td><td>เข้า sleep mode</td></tr>
+</table>
+
+<h2>PCF8574 — IO Expander 8-bit I2C</h2>
+<pre class="ascii-circuit">
+PC1─SDA  PC2─SCL  3.3V─VCC  GND─GND  A0─GND  A1─GND  A2─GND (=addr 0x20)
+INT─PC0 (optional — interrupt when any input changes)</pre>
+<pre><code class="language-c">#include "PCF8574.h"
+PCF8574_Init(0x20); // addr 0x20-0x27 (A0-A2 pins)
+PCF8574_WriteByte(0x20, 0xFF); // all pins HIGH
+PCF8574_WriteBit(0x20, 0, 0);  // P0 = LOW
+uint8_t state = PCF8574_ReadByte(0x20); // read all
+uint8_t bit3  = PCF8574_ReadBit(0x20, 3); // read P3
+// Interrupt on any change:
+PCF8574_EnableInterrupt(0x20, PC0, my_callback);</code></pre>
+<p class="explain">⚠️ 8 I/O pins (quasi-bidirectional — ต้องเขียน 1 ก่อนอ่านทุกครั้ง), I2C addr 0x20-0x27 (เลือกด้วย A0-A2), interrupt-on-change (INT pin LOW เมื่อ input ใดๆเปลี่ยน → ใช้ external interrupt บน CH32V003), output latch (คงค่าสุดท้ายไว้), sink current 25mA per pin / source ~100µA (weak pull-up — ขับ LED ต้องต่อแบบ active-low), quasi-bidirectional requirement: เขียน 0xFF → ถึงจะอ่าน input ได้, PCF8574A = addr 0x38-0x3F (คนละรุ่น)</p>
+
+<h3>API หลัก</h3>
+<table>
+<tr><td><code>PCF8574_Init(addr)</code></td><td>Init I2C</td><td><code>PCF8574_WriteByte(addr, val)</code></td><td>เขียน 8 bits พร้อมกัน</td></tr>
+<tr><td><code>PCF8574_ReadByte(addr)</code></td><td>อ่าน 8 bits</td><td><code>PCF8574_WriteBit(addr, bit, val)</code></td><td>เขียน 1 bit</td></tr>
+<tr><td><code>PCF8574_ReadBit(addr, bit)</code></td><td>อ่าน 1 bit</td><td><code>PCF8574_EnableInterrupt(addr, pin, cb)</code></td><td>ตั้ง interrupt handler</td></tr>
+</table>
+
+<h2>I2CScan — Bus Scanner I2C</h2>
+<pre class="ascii-circuit">
+ต่ออุปกรณ์ I2C ตามปกติ → ใช้ I2CScan หา address ก่อนใช้งาน
+PC1─SDA  PC2─SCL — scanner จะ scan 1-127 แล้วพิมพ์ address ที่พบทาง USART</pre>
+<pre><code class="language-c">#include "I2CScan.h"
+I2C_SimpleInit(I2C_SPEED_100K, I2C_PINS_DEFAULT);
+I2CScan_Scan(); // scans 1-127, prints found addresses to USART
+// Manual scan:
+for(uint8_t addr=1; addr<127; addr++) {
+    I2C_Start(); I2C_WriteAddr(addr<<1);
+    if(I2C_WaitAck()) {
+        USART_Print("Found: 0x"); USART_PrintHex(addr, 2); USART_Println("");
+    }
+    I2C_Stop();
+}</code></pre>
+<p class="explain">⚠️ ใช้หา address อุปกรณ์ I2C ก่อนใช้งาน sensor ใหม่, address conflicts detection (ถ้ามี 2 ตัว address เดียวกัน → ทั้งคู่ตอบ ACK), scan range 1-127 (0=general call, ไม่ scan), ใช้ USART_Print แสดงผล → ต้อง init USART1 ก่อน, I2C_SPEED_100K หรือ I2C_SPEED_400K, มีประโยชน์มากเวลา debugging: ต่ออุปกรณ์ไม่รู้ address → กด I2CScan ดูก่อน</p>
+
+<h3>API หลัก</h3>
+<table>
+<tr><td><code>I2C_SimpleInit(speed, pins)</code></td><td>Init I2C bus</td><td><code>I2CScan_Scan()</code></td><td>Scan + print address ทั้งหมด</td></tr>
+<tr><td><code>I2CScan_Check(addr)</code></td><td>เช็ค 1 address</td><td><code>I2CScan_GetCount()</code></td><td>จำนวนอุปกรณ์ที่พบ</td></tr>
+</table>
+</section>
+
+<section>
+<h2>📋 เปรียบเทียบอุปกรณ์จัดเก็บ/IO/นาฬิกาทั้ง 7 ชนิด</h2>
+<table>
+<tr><th>อุปกรณ์</th><th>Interface</th><th>หน้าที่</th><th>ขนาด/สเปค</th><th>ราคา</th><th>ใช้ดีที่สุดกับ</th></tr>
+<tr><td>AT24Cxx</td><td>I2C</td><td>EEPROM จัดเก็บ</td><td>1Kbit-256Kbit</td><td>~20฿</td><td>Config store, calibration data, serial no.</td></tr>
+<tr><td>W25Qxx</td><td>SPI</td><td>Flash จัดเก็บ</td><td>4MB-16MB</td><td>~30฿</td><td>Datalogger, firmware OTA, file storage</td></tr>
+<tr><td>DS3231</td><td>I2C</td><td>RTC นาฬิกา</td><td>±2ppm (±1min/yr)</td><td>~60฿</td><td>Clock, alarm, timestamp, scheduler</td></tr>
+<tr><td>RC522</td><td>SPI</td><td>RFID Reader</td><td>13.56MHz, ~5cm</td><td>~50฿</td><td>Door lock, attendance, inventory</td></tr>
+<tr><td>PCA9685</td><td>I2C</td><td>16ch PWM Driver</td><td>12-bit, 24-1526Hz</td><td>~45฿</td><td>Servo driver, LED dimmer, multi-motor</td></tr>
+<tr><td>PCF8574</td><td>I2C</td><td>8-bit IO Expander</td><td>8 I/O, INT output</td><td>~25฿</td><td>Keypad, extra GPIO, LCD parallel→I2C</td></tr>
+<tr><td>I2CScan</td><td>I2C</td><td>Bus Scanner</td><td>Scan 1-127</td><td>ฟรี (SW)</td><td>Debug I2C, หา address อุปกรณ์</td></tr>
+</table>
+<p style="margin-top:1rem;color:#64748b"><strong>เลือกยังไง?</strong> เก็บบ configuration เล็กๆ → AT24Cxx, เก็บข้อมูลใหญ่ (log, firmware) → W25Qxx, ต้องการเวลานาฬิกาแม่น → DS3231, ระบบ RFID ประตู/บัตร → RC522, ขับ servo หลายตัว → PCA9685, ขยายขา GPIO → PCF8574, หา address อุปกรณ์ I2C → I2CScan</p>
+</section>
+
+<section>
+<h2>✏️ ลองทำดู</h2>
+<ol>
+<li>AT24Cxx config store — บันทึก WiFi SSID/PASS ลง EEPROM, อ่านกลับตอน boot (auto-connect), มีฟังก์ชัน factory reset (ลบ EEPROM)</li>
+<li>W25Qxx data logger — อ่านเซนเซอร์ทุก 1s → append ลง Flash (1000 readings), กดปุ่ม → dump ทั้งหมดเป็น CSV ทาง USART, แสดงพื้นที่คงเหลือ</li>
+<li>DS3231 alarm clock — ตั้งเวลา+ปลุกผ่าน serial command, เมื่อถึงเวลาปลุก → เปิด buzzer 10s + LED flash, แสดงเวลาบน OLED</li>
+<li>RC522 door lock — whitelist UID 5 บัตรใน EEPROM, แตะบัตร → ตรงกับ whitelist → relay ปลดล็อก 3s + OLED แสดงชื่อ, ไม่ตรง → buzzer ปิ๊ด</li>
+<li>PCA9685 LED dimmer — 16 LEDs แยก dim อิสระ, รับคำสั่ง serial: "CH5=2048" → ตั้ง PWM channel 5, รองรับ fade effect (ค่อยๆเปลี่ยน)</li>
+<li>PCF8574 keypad — ต่อ matrix keypad 4x3 ผ่าน PCF8574 (7 pins → I2C), อ่าน key press + debounce, ส่ง key ทาง USART</li>
+</ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_wireless.html">บทก่อน</a>
+    <a href="chapx_lib_input.html">บทถัดไป →</a>
+</nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

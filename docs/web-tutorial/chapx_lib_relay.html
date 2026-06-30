@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Relay Module — GPIO AC/DC Switch — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_tmc5160.html">บทก่อน</a>
+    <a href="chapx_lib_esp01.html">บทถัดไป →</a>
+</nav>
+
+<h1>Relay Module — GPIO AC/DC Switch</h1>
+<span class="level beginner">ระดับเริ่มต้น</span>
+
+<section class="flowchart">
+    <h2>🧭 แผนภาพการทำงาน</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["GPIO → Optocoupler"] --> B["Transistor Driver"]
+    B --> C["Relay Coil Energized"]
+    C --> D["Mechanical Contacts Close"]
+    D --> E["Load Circuit Complete"]
+    E --> F{"GPIO = LOW?"}
+    F -->|"Yes"| G["Coil De-energized"]
+    F -->|"No"| D
+    G --> H["Contacts Open → Load OFF"]
+    H --> I["Flyback Diode absorbs spike"]
+    </pre>
+</section>
+
+<section>
+    <h2>🔌 การต่อวงจร</h2>
+    <pre class="ascii-circuit">
+         Relay Module (Active LOW)
+    ┌──────────────────────────────────┐
+    │ MCU                    Relay Mod │
+    │ PC0──────IN (Signal)  ⚡ ⚡ ⚡    │
+    │ 5V───────VCC          ⚠️DANGER  │
+    │ GND──────GND           AC LINE  │
+    │              ┌─Relay──┐220V     │
+    │              │ NO─┬───┤ Load    │
+    │              │ COM┤   │         │
+    │              │ NC │   │         │
+    │              │    │   │         │
+    │              └────┘   │         │
+    └──────────────────────────────────┘
+    ⚡ ห้ามจับขณะต่อ AC! ใช้ความระมัดระวังสูงสุด
+    </pre>
+    <p><strong>⚡ อันตรายถึงชีวิต!</strong> ห้ามสัมผัสขั้ว Relay ขณะต่อกับไฟ AC 220V — ตรวจสอบให้แน่ใจว่าถอดปลั๊กก่อนแก้ไขวงจร — ต่อสายดินให้เรียบร้อย — ผู้เริ่มต้นควรใช้ Relay กับโหลด DC 12V ก่อน</p>
+</section>
+
+<section>
+    <h2>📚 หลักการทำงาน</h2>
+    <p><strong>Relay Module</strong> ใช้ GPIO ควบคุมสวิตช์กล — ภายในประกอบด้วย <strong>Optocoupler</strong> (แยกสัญญาณไฟฟ้า), <strong>Transistor Driver</strong> (ขยายกระแส), <strong>Flyback Diode</strong> (ป้องกันแรงดันย้อนกลับจาก coil), และ <strong>Relay</strong> (สวิตช์กล)</p>
+    <p><strong>Active LOW vs HIGH:</strong> Relay module ส่วนใหญ่เป็น <strong>Active LOW</strong> — GPIO=0 → Relay ON (COM เชื่อมกับ NO), GPIO=1 → Relay OFF — ต้องเช็ค datasheet ของ module ก่อน — บางรุ่นเป็น Active HIGH ใช้ jumper เลือกได้</p>
+    <p><strong>Optocoupler</strong> แยกวงจร MCU ออกจากวงจร Relay ด้วยแสง — ป้องกัน noise และ voltage spike จาก coil ไม่ให้กลับมาทำลาย MCU</p>
+    <p><strong>Flyback Diode</strong> ต่อขนานกับ coil — เมื่อ transistor ปิด coil จะคายพลังงานกลับ — diode ลัดวงจรพลังงานนี้ไม่ให้ spike ทำลาย transistor</p>
+</section>
+
+<section>
+    <h2>💻 เขียน Code ทีละขั้น</h2>
+
+    <div class="step"><h3>ขั้นที่ 1: Init GPIO + ตรวจสอบ Logic</h3>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+#define RELAY1 PC0  // Relay 1
+#define RELAY2 PC1  // Relay 2 (2-channel module)
+
+int main(void) {
+    SystemCoreClockUpdate();
+    pinMode(RELAY1, PIN_MODE_OUTPUT);
+    pinMode(RELAY2, PIN_MODE_OUTPUT);
+
+    // ตรวจสอบว่า module เป็น Active LOW หรือ HIGH
+    // Active LOW: LOW=ON, HIGH=OFF (ส่วนใหญ่)
+    // Active HIGH: HIGH=ON, LOW=OFF
+    digitalWrite(RELAY1, HIGH);  // เริ่มต้น OFF
+    digitalWrite(RELAY2, HIGH);</code></pre>
+    <p class="explain">🔍 เริ่มต้นด้วย HIGH เพื่อให้ relay OFF (สำหรับ Active LOW module) — ฟังเสียง "click" เพื่อยืนยัน — relay ที่ ON จะมีเสียง click และไฟ LED ติด</p></div>
+
+    <div class="step"><h3>ขั้นที่ 2: ON/OFF + Delay Control</h3>
+    <pre><code class="language-c">    // ทดสอบเปิด-ปิด relay ด้วย Non-Blocking Timer
+    Timer_t tmr_relay;
+    Start_Timer(&tmr_relay, 2000, 1);  // toggle ทุก 2 วิ
+
+    uint8_t relay_state = 0;
+    while(1) {
+        if(Is_Timer_Expired(&tmr_relay)) {
+            relay_state = !relay_state;
+            if(relay_state) {
+                digitalWrite(RELAY1, LOW);   // ON (Active LOW)
+                digitalWrite(RELAY2, LOW);
+            } else {
+                digitalWrite(RELAY1, HIGH);  // OFF
+                digitalWrite(RELAY2, HIGH);
+            }
+        }
+        // main loop ทำงานอื่นได้อิสระ
+    }
+}</code></pre>
+    <p class="explain">🔍 ใช้ Non-Blocking Timer สลับ relay ทุก 2 วิ — LOW=ON สำหรับ Active LOW — ได้ยินเสียง click ทุกครั้งที่เปลี่ยนสถานะ — relay เป็น mechanical device อายุใช้งาน ~100,000 ครั้ง</p></div>
+
+    <div class="step"><h3>ขั้นที่ 3: Multi-Relay + Button + Safety</h3>
+    <pre><code class="language-c">// 2-channel relay + 2 buttons (toggle)
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    pinMode(RELAY1, PIN_MODE_OUTPUT);
+    pinMode(RELAY2, PIN_MODE_OUTPUT);
+    pinMode(PC3, PIN_MODE_INPUT_PULLUP);  // BTN1
+    pinMode(PC4, PIN_MODE_INPUT_PULLUP);  // BTN2
+    digitalWrite(RELAY1, HIGH);
+    digitalWrite(RELAY2, HIGH);
+
+    uint8_t btn1_prev = 1, btn2_prev = 1;
+    uint8_t r1 = 0, r2 = 0;  // relay states
+
+    while(1) {
+        uint8_t b1 = digitalRead(PC3);
+        uint8_t b2 = digitalRead(PC4);
+
+        // กดปุ่ม toggle relay (falling edge)
+        if(!b1 && btn1_prev) {
+            r1 = !r1;
+            digitalWrite(RELAY1, r1 ? LOW : HIGH);
+            Delay_Ms(50); // debounce
+        }
+        if(!b2 && btn2_prev) {
+            r2 = !r2;
+            digitalWrite(RELAY2, r2 ? LOW : HIGH);
+            Delay_Ms(50);
+        }
+        btn1_prev = b1; btn2_prev = b2;
+
+        // Safety: auto-off after 30 seconds if both on
+        static Timer_t tmr_safety;
+        static uint8_t safety_started = 0;
+        if(r1 && r2 && !safety_started) {
+            Start_Timer(&tmr_safety, 30000, 0);
+            safety_started = 1;
+        }
+        if(safety_started && Is_Timer_Expired(&tmr_safety)) {
+            r1 = r2 = 0;
+            digitalWrite(RELAY1, HIGH);
+            digitalWrite(RELAY2, HIGH);
+            safety_started = 0;
+        }
+        if(!r1 && !r2) safety_started = 0;
+    }
+}</code></pre>
+    <p class="explain">🔍 Toggle relay ด้วยปุ่ม — debounce 50ms — Safety timer: ถ้า relay ทั้งสอง ON พร้อมกันเกิน 30 วิ ให้ปิดอัตโนมัติ — ป้องกันอุปกรณ์เสียหายหรือไฟไหม้</p></div>
+</section>
+
+<section>
+    <h2>📋 API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+        <tr><td><code>Relay_Init(pin, active)</code></td><td>เริ่ม relay — ระบุ active LOW/HIGH</td><td><code>Relay_Init(PC0, ACTIVE_LOW)</code></td></tr>
+        <tr><td><code>Relay_On(pin)</code></td><td>เปิด relay</td><td><code>Relay_On(PC0)</code></td></tr>
+        <tr><td><code>Relay_Off(pin)</code></td><td>ปิด relay</td><td><code>Relay_Off(PC0)</code></td></tr>
+        <tr><td><code>Relay_Toggle(pin)</code></td><td>กลับสถานะ relay</td><td><code>Relay_Toggle(PC0)</code></td></tr>
+        <tr><td><code>Relay_Read(pin)</code></td><td>อ่านสถานะ (ON=1, OFF=0)</td><td><code>if(Relay_Read(PC0)){...}</code></td></tr>
+        <tr><td><code>Relay_Pulse(pin, ms)</code></td><td>เปิด relay เป็นเวลา ms</td><td><code>Relay_Pulse(PC0, 500)</code></td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>Relay ไม่ ON — ไม่มีเสียง click</td><td>GPIO logic กลับด้าน — module เป็น Active HIGH</td><td>ลองกลับ logic: LOW->HIGH, HIGH->LOW — หรือใช้ jumper บนบอร์ดเลือกโหมด</td></tr>
+        <tr><td>Relay ON ค้าง ปิดไม่ได้</td><td>MCU GPIO ไม่พอจ่ายกระแส — transistor ไม่ fully off</td><td>ตรวจสอบ GPIO output voltage — ใช้ pull-down resistor 10kΩ ที่ IN pin</td></tr>
+        <tr><td>MCU รีเซ็ตเองเวลา relay เปลี่ยนสถานะ</td><td>Flyback spike จาก relay coil รบกวนไฟ MCU</td><td>ใช้ capacitor 100μF + 100nF ขนาน VCC-GND ใกล้ MCU — แยก supply relay กับ MCU</td></tr>
+        <tr><td>Relay ติด ๆ ดับ ๆ (chattering)</td><td>GPIO noise — สัญญาณรบกวนจาก AC line</td><td>ใช้ shielded cable — ต่อ snubber circuit (100Ω + 100nF series) ขนาน contact — แยกสายไฟ AC ห่างจาก MCU</td></tr>
+        <tr><td>ไฟดูด — บาดเจ็บ</td><td>จับขั้ว relay ขณะต่อ AC 220V</td><td>⚡ ใส่กล่องพลาสติกปิดมิด — ใช้ screw terminal — ถอดปลั๊กก่อนแก้ไขทุกครั้ง — ห้ามทำคนเดียว</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>🛠️ สร้าง Product: Smart Home Timer Switch</h2>
+    <p>ใช้ Relay + OLED + RTC DS1307 — ตั้งเวลาเปิด-ปิดไฟอัตโนมัติ — ปุ่มปรับเวลา — Non-Blocking timer</p>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+#define RELAY PC0
+uint8_t schedule_h = 18, schedule_m = 30; // เปิด 18:30
+uint8_t duration_min = 120;  // ปิดหลัง 120 นาที
+uint8_t relay_on = 0;
+uint32_t auto_off_time = 0;
+
+int main(void) {
+    SystemCoreClockUpdate(); Timer_Init();
+    OLED_Init_I2C(0x3C, PC2, PC1);
+    pinMode(RELAY, PIN_MODE_OUTPUT);
+    pinMode(PC3, PIN_MODE_INPUT_PULLUP); // BTN: manual toggle
+    digitalWrite(RELAY, HIGH); // Off
+
+    uint8_t btn_prev = 1;
+    uint8_t hour = 12, min = 0;  // simulated time (use RTC in real)
+    Timer_t tmr_clock;
+    Start_Timer(&tmr_clock, 1000, 1);  // tick every "minute"
+
+    while(1) {
+        // Simulate clock (replace with DS1307_ReadTime in real)
+        if(Is_Timer_Expired(&tmr_clock)) {
+            min++; if(min >= 60) { min = 0; hour++; if(hour >= 24) hour = 0; }
+        }
+
+        // Auto ON at schedule time
+        if(hour == schedule_h && min == schedule_m && !relay_on) {
+            digitalWrite(RELAY, LOW);  // ON
+            relay_on = 1;
+            auto_off_time = Get_CurrentMs() + (uint32_t)duration_min * 60000;
+        }
+
+        // Auto OFF after duration
+        if(relay_on && Get_CurrentMs() >= auto_off_time) {
+            digitalWrite(RELAY, HIGH);
+            relay_on = 0;
+        }
+
+        // Manual toggle button
+        uint8_t btn = digitalRead(PC3);
+        if(!btn && btn_prev) {
+            relay_on = !relay_on;
+            digitalWrite(RELAY, relay_on ? LOW : HIGH);
+            Delay_Ms(50);
+        }
+        btn_prev = btn;
+
+        // Update OLED
+        OLED_Clear();
+        OLED_Printf(0,0,"Time: %02d:%02d", hour, min);
+        OLED_Printf(0,2,"Relay: %s", relay_on ? "ON " : "OFF");
+        OLED_Printf(0,4,"Sched: %02d:%02d +%dm", schedule_h, schedule_m, duration_min);
+        OLED_Update();
+        Delay_Ms(100);
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>✏️ ลองทำดู</h2>
+    <ol>
+        <li>ทำ Automatic Curtain — ใช้ Relay เปิด-ปิดมอเตอร์ AC ตามแสงที่อ่านจาก LDR (ADC) — เปิดเช้า ปิดเย็น</li>
+        <li>ทำ Water Pump Timer — ใช้ Relay เปิดปั๊มน้ำวันละ 2 รอบ (เช้า-เย็น) — ตรวจสอบระดับน้ำด้วย float switch ก่อนเปิด</li>
+        <li>ควบคุม Relay ผ่าน Bluetooth — ใช้ HC-05 + มือถือ — สร้างแอพสั่งเปิด-ปิดไฟในบ้าน — เพิ่ม feedback แสดงสถานะ</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_tmc5160.html">บทก่อน</a>
+    <a href="chapx_lib_esp01.html">บทถัดไป →</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

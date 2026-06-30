@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WS2812Matrix — 8×8 RGB Matrix GPIO — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_neopixel.html">บทก่อน</a>
+    <a href="chapx_lib_ws2815matrix.html">บทถัดไป →</a>
+</nav>
+<h1>WS2812Matrix — 8×8 RGB Matrix GPIO</h1>
+<span class="level intermediate">ระดับกลาง</span>
+<section class="flowchart">
+    <h2>🧭 แผนภาพการทำงาน</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["WS2812Matrix_Init(PC0, W, H)"] --> B["WS2812Matrix_Clear()"]
+    B --> C{"Display Mode"}
+    C -->|"Text"| D["WS2812Matrix_Print + WS2812Matrix_Show"]
+    C -->|"Bitmap"| E["WS2812Matrix_DrawBitmap + Show"]
+    C -->|"Effect"| F["WS2812Matrix_ScrollText / Sparkle / Rainbow"]
+    D --> G["while(1) loop"]
+    E --> G
+    F --> G
+    </pre>
+</section>
+<section>
+    <h2>🔌 การต่อวงจร</h2>
+    <pre class="ascii-circuit">
+          WS2812B 8x8 RGB Matrix
+    ┌────────────────────────────────┐
+    │ MCU                    Matrix  │
+    │ 5V (External 2A+) ───── VCC    │
+    │ GND ──────────────── GND      │
+    │ PC0 ──[LEVEL SHIFT]── DIN     │
+    │                                │
+    │ ⚠️ Level Shifter Required!     │
+    │ 64 LEDs × 60mA = ~3.8A max    │
+    │ ต่อ 5V แยก — อย่าพึ่ง MCU!     │
+    └────────────────────────────────┘
+    </pre>
+    <p>WS2812B 8×8 Matrix มี LED 64 ดวงเรียงแบบ Serpentine (S-curve) — ใช้ protocol เดียวกับ NeoPixel — ต้องต่อ 5V แยก ≥ 2A — Level Shifter จำเป็น</p>
+</section>
+<section>
+    <h2>📚 หลักการทำงาน</h2>
+    <p><strong>Built-in Font Engine:</strong> WS2812Matrix มีระบบฟอนต์ 5×7 ในตัว — รองรับอักษร A-Z, 0-9 และสัญลักษณ์ — WS2812Matrix_Print() คล้าย OLED — มี SetCursor, Print, PrintChar — ฟอนต์ไทยผ่าน custom bitmap</p>
+    <p><strong>Serpentine Mapping:</strong> 8×8 Matrix เรียง LED แบบซิกแซก (แถว 0 ซ้าย→ขวา, แถว 1 ขวา→ซ้าย, ...) — Library จัดการ mapping ภายใน — ระบุตำแหน่งด้วย (x, y) แบบ Cartesian ปกติ</p>
+    <p><strong>Effects Engine:</strong> มี effect ในตัว — ScrollText (เลื่อนข้อความ), Sparkle (ระยิบระยับ), Rainbow (รุ้งวน), ColorWipe (กวาดสี) — ใช้ Non-Blocking state machine ในแต่ละ effect</p>
+    <p><strong>Color Support:</strong> 24-bit RGB ต่อ LED — RGB(), HSV(), SetPixel(x, y, color) — 16.7 ล้านสี — แต่ละ LED กินกระแสสูงสุด 60mA (RGB full white)</p>
+</section>
+<section>
+    <h2>💻 เขียน Code ทีละขั้น</h2>
+    <div class="step"><h3>ขั้นที่ 1: Init + Setup</h3>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    WS2812Matrix_Init(PC0, 8, 8);   // DIN, width, height
+    WS2812Matrix_SetBrightness(100);
+    WS2812Matrix_Clear();
+    WS2812Matrix_Show();</code></pre>
+    <p class="explain">🔍 WS2812Matrix_Init(pin, w, h) — รองรับ matrix ขนาดต่างๆ — SetBrightness ปรับความสว่าง — Clear+Show ล้างหน้าจอ</p></div>
+    <div class="step"><h3>ขั้นที่ 2: แสดงข้อความ + Effect</h3>
+    <pre><code class="language-c">    // แสดงข้อความ
+    WS2812Matrix_SetCursor(0, 0);
+    WS2812Matrix_SetTextColor(RGB(255, 0, 0));  // Red
+    WS2812Matrix_Print("HI");
+    WS2812Matrix_Show();
+
+    // Effect: Scroll Text
+    WS2812Matrix_ScrollText("CH32V003", 150, RGB(0, 255, 0));
+
+    // Effect: Rainbow
+    WS2812Matrix_Rainbow(50);
+
+    // Custom Bitmap
+    WS2812Matrix_DrawBitmap(my_bitmap, 8, 8, RGB(255, 255, 0));</code></pre>
+    <p class="explain">🔍 SetTextColor กำหนดสีข้อความ — ScrollText เลื่อนข้อความสีเขียว — Rainbow วิ่งรุ้ง — DrawBitmap รับ array 2D + สี</p></div>
+    <div class="step"><h3>ขั้นที่ 3: Loop สลับ Effect</h3>
+    <pre><code class="language-c">    Timer_t tmr;
+    Start_Timer(&tmr, 5000, 1);
+    uint8_t fx = 0;
+
+    while(1) {
+        if(Is_Timer_Expired(&tmr)) {
+            WS2812Matrix_Clear();
+            if(fx == 0) {
+                WS2812Matrix_SetCursor(0, 0);
+                WS2812Matrix_Print("1");
+            } else if(fx == 1) {
+                WS2812Matrix_ScrollText("HELLO", 100, RGB(0,255,0));
+            } else {
+                WS2812Matrix_Rainbow(30);
+            }
+            fx = (fx + 1) % 3;
+        }
+    }
+}</code></pre>
+    <p class="explain">🔍 สลับ 3 effect ทุก 5 วินาที — ScrollText ทำงานแบบ blocking ในตัวอย่าง (มี Non-Blocking variant ด้วย) — Rainbow ทำงานต่อเนื่อง</p></div>
+</section>
+<section>
+    <h2>📋 API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+        <tr><td><code>WS2812Matrix_Init(pin, w, h)</code></td><td>เริ่มต้น matrix จอง buffer</td><td><code>WS2812Matrix_Init(PC0, 8, 8)</code></td></tr>
+        <tr><td><code>WS2812Matrix_SetBrightness(v)</code></td><td>ความสว่าง 0-255</td><td><code>WS2812Matrix_SetBrightness(100)</code></td></tr>
+        <tr><td><code>WS2812Matrix_Clear()</code></td><td>ล้างทุก LED</td><td><code>WS2812Matrix_Clear()</code></td></tr>
+        <tr><td><code>WS2812Matrix_Show()</code></td><td>ส่ง buffer ไป matrix</td><td><code>WS2812Matrix_Show()</code></td></tr>
+        <tr><td><code>WS2812Matrix_SetPixel(x, y, color)</code></td><td>ตั้งสี 1 pixel</td><td><code>WS2812Matrix_SetPixel(3,3,RGB(255,0,0))</code></td></tr>
+        <tr><td><code>WS2812Matrix_SetCursor(r, c)</code></td><td>ตั้ง cursor ข้อความ</td><td><code>WS2812Matrix_SetCursor(0, 0)</code></td></tr>
+        <tr><td><code>WS2812Matrix_Print(str)</code></td><td>พิมพ์ข้อความ</td><td><code>WS2812Matrix_Print("HI")</code></td></tr>
+        <tr><td><code>WS2812Matrix_ScrollText(s, ms, c)</code></td><td>เลื่อนข้อความ</td><td><code>WS2812Matrix_ScrollText("HI",100,RGB(0,255,0))</code></td></tr>
+        <tr><td><code>WS2812Matrix_Rainbow(ms)</code></td><td>Effect รุ้งวน</td><td><code>WS2812Matrix_Rainbow(50)</code></td></tr>
+        <tr><td><code>WS2812Matrix_DrawBitmap(bmp, w, h, c)</code></td><td>วาด bitmap ตามสี</td><td><code>WS2812Matrix_DrawBitmap(bmp,8,8,RGB(255,255,0))</code></td></tr>
+    </table>
+</section>
+<section>
+    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>Matrix ไม่ติดเลย</td><td>ขาด Level Shifter — 3.3V logic ไม่พอ</td><td>ใช้ 74HCT125 — หรือใช้โมดูลที่มี level shifter ในตัว</td></tr>
+        <tr><td>Matrix ติดบางส่วน สีผิดเพี้ยน</td><td>ไฟเลี้ยงไม่พอ — ต้องการ 5V ≥ 2A</td><td>ใช้ external PSU 5V 2A+ — ต่อไฟเข้าขั้ว Matrix โดยตรง</td></tr>
+        <tr><td>ข้อความแสดงตำแหน่งผิด</td><td>Serpentine mapping ไม่ตรงกับโมดูล</td><td>ตรวจสอบว่า library mapping ตรงกับโมดูล — บางตัวเริ่มมุมต่างกัน</td></tr>
+        <tr><td>สีจางเมื่อเปิดหลาย LED</td><td>Voltage drop — สายไฟเล็กเกิน</td><td>ใช้สาย AWG 20-22 — ต่อ 5V + GND ทั้งด้านเข้าและออก</td></tr>
+        <tr><td>Effect กระตุก</td><td>Show() ใช้เวลานานสำหรับ 64 LEDs</td><td>64 LEDs = ~1.9ms — ใช้ Non-Blocking effect variant ที่มี state machine</td></tr>
+    </table>
+</section>
+<section>
+    <h2>🛠️ สร้าง Product: ป้ายไฟ RGB 3 Effect สลับ</h2>
+    <p>8×8 Matrix แสดง 3 โหมด — Scroll Text → Rainbow → Sparkle — กดปุ่มเปลี่ยนโหมด</p>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    WS2812Matrix_Init(PC0, 8, 8);
+    WS2812Matrix_SetBrightness(100);
+
+    pinMode(PC3, PIN_MODE_INPUT_PULLUP);
+    uint8_t mode = 0;
+    Timer_t tmr;
+    Start_Timer(&tmr, 1, 1);
+
+    while(1) {
+        if(digitalRead(PC3) == 0) {
+            Delay_Ms(50);
+            if(digitalRead(PC3) == 0) {
+                mode = (mode + 1) % 3;
+                while(digitalRead(PC3) == 0);
+            }
+        }
+
+        switch(mode) {
+            case 0: WS2812Matrix_ScrollText("HELLO", 150, RGB(0, 255, 0)); break;
+            case 1: WS2812Matrix_Rainbow(30); break;
+            case 2: WS2812Matrix_Sparkle(RGB(255, 255, 0), 10); break;
+        }
+    }
+}</code></pre>
+</section>
+<section>
+    <h2>✏️ ลองทำดู</h2>
+    <ol>
+        <li>สร้าง Thai Font Bitmap 5×7 สำหรับ 10 ตัวอักษร — แสดงชื่อภาษาไทยบน matrix</li>
+        <li>ทำเกม Tetris — ใช้ 8×8 grid — 4 ปุ่มควบคุม (ซ้าย, ขวา, หมุน, ลงเร็ว)</li>
+        <li>Matrix Clock — แสดงเวลาแบบเลื่อน 2 ตัว — ใช้ DS3231 RTC</li>
+    </ol>
+</section>
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_neopixel.html">บทก่อน</a>
+    <a href="chapx_lib_ws2815matrix.html">บทถัดไป →</a>
+</nav>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

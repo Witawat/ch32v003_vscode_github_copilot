@@ -1,0 +1,238 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย I2C Scan — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_i2cscan.html">กลับบท</a><a href="chapx_lib_button_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — I2C Scanner</h1>
+
+<div class="answer">
+<h2>ข้อ 1: Scan I2C Bus + Map อุปกรณ์ที่พบ</h2>
+<pre><code class="language-c">#define I2C_MAX_DEV  16
+
+typedef struct {
+    uint8_t  addr;
+    char     name[20];
+    uint8_t  detected;
+} i2c_device_t;
+
+i2c_device_t i2c_map[I2C_MAX_DEV];
+uint8_t i2c_map_cnt = 0;
+
+void i2c_register_device(uint8_t addr, const char *name) {
+    if(i2c_map_cnt >= I2C_MAX_DEV) return;
+    i2c_map[i2c_map_cnt].addr = addr;
+    strncpy(i2c_map[i2c_map_cnt].name, name, 19);
+    i2c_map[i2c_map_cnt].detected = 0;
+    i2c_map_cnt++;
+}
+
+void i2c_scan_bus(void) {
+    I2C_SimpleInit(I2C_PINS_DEFAULT);
+
+    USART_Println("=== I2C Bus Scan ===");
+    uint8_t found = 0;
+
+    for(uint8_t addr=1; addr<127; addr++) {
+        I2C_Start();
+        I2C_SendAddr(addr << 1);  // write address
+        if(I2C_WaitAck(2)) {
+            found++;
+            USART_Print("Found: 0x");
+            USART_PrintHexByte(addr);
+            USART_Print(" (");
+            USART_PrintNum(addr);
+            USART_Print(")");
+
+            // ตรวจ match กับทะเบียน
+            for(uint8_t i=0; i<i2c_map_cnt; i++) {
+                if(i2c_map[i].addr == addr) {
+                    USART_Print(" → ");
+                    USART_Print(i2c_map[i].name);
+                    i2c_map[i].detected = 1;
+                    break;
+                }
+            }
+            USART_Println("");
+        }
+        I2C_Stop();
+    }
+
+    USART_Print("Total: ");
+    USART_PrintNum(found);
+    USART_Println(" devices\n");
+
+    // รายงานอุปกรณ์ที่ลงทะเบียนไว้แต่ไม่พบ
+    for(uint8_t i=0; i<i2c_map_cnt; i++) {
+        if(!i2c_map[i].detected) {
+            USART_Print("MISSING: 0x");
+            USART_PrintHexByte(i2c_map[i].addr);
+            USART_Print(" (");
+            USART_Print(i2c_map[i].name);
+            USART_Println(")");
+        }
+    }
+}
+
+void i2c_scan_demo(void) {
+    i2c_register_device(0x3C, "OLED SSD1306");
+    i2c_register_device(0x27, "LCD1602 I2C");
+    i2c_register_device(0x68, "DS3231 RTC");
+    i2c_register_device(0x40, "PCA9685 PWM");
+    i2c_register_device(0x23, "BH1750 LUX");
+    i2c_register_device(0x50, "AT24C32 EEPROM");
+    i2c_register_device(0x77, "BMP280");
+    i2c_register_device(0x76, "BMP280 (alt)");
+
+    i2c_scan_bus();
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> Scan ทุก I2C address 1-127 — ส่ง start + address + read/write bit — ถ้า ACK แสดงว่ามีอุปกรณ์ — ใช้ทะเบียน i2c_register_device ลงทะเบียนอุปกรณ์ที่คาดว่าจะเจอ — รายงานทั้งที่พบและไม่พบ (MISSING) — I2C address ต้อง << 1 ก่อนส่ง (R/W bit ต่อท้าย) — บางอุปกรณ์ตอบ ACK ช้า ต้อง wait อย่างน้อย 2ms</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: Address Conflict Detector</h2>
+<pre><code class="language-c">typedef struct {
+    uint8_t addr;
+    uint8_t count;
+    uint8_t ack_speed;
+} i2c_conflict_t;
+
+i2c_conflict_t conflicts[127];
+
+void i2c_conflict_scan(void) {
+    I2C_SimpleInit(I2C_PINS_DEFAULT);
+    memset(conflicts, 0, sizeof(conflicts));
+
+    USART_Println("=== Address Conflict Check ===");
+
+    for(uint8_t addr=0x03; addr<0x78; addr++) {
+        // เช็ค 3 ครั้งกัน false positive
+        uint8_t ack_cnt = 0;
+        for(uint8_t attempt=0; attempt<3; attempt++) {
+            I2C_Start();
+            I2C_SendAddr(addr << 1);
+            if(I2C_WaitAck(3)) ack_cnt++;
+            I2C_Stop();
+            Delay_Ms(1);
+        }
+        if(ack_cnt >= 2) {
+            conflicts[addr].addr = addr;
+            conflicts[addr].count = ack_cnt;
+        }
+    }
+
+    // แสดงอุปกรณ์ที่เจอ
+    for(uint8_t a=0x03; a<0x78; a++) {
+        if(conflicts[a].count > 0) {
+            USART_Print("0x");
+            USART_PrintHexByte(a);
+            USART_Print(" ack=");
+            USART_PrintNum(conflicts[a].count);
+            USART_Println("/3");
+        }
+    }
+
+    // ตรวจ address ที่ซ้ำกัน (พบมากกว่า 1 อุปกรณ์)
+    USART_Println("---");
+    i2c_check_conflict_pairs();
+}
+
+void i2c_check_conflict_pairs(void) {
+    // ตรวจ I2C addresses ที่รู้ว่าซ้ำกันบ่อย
+    uint8_t conflict_pairs[][2] = {
+        {0x50, 0x57},  // EEPROM series
+        {0x68, 0x69},  // DS3231 / MPU6050
+        {0x76, 0x77},  // BMP280 / BME280
+        {0x3C, 0x3D},  // OLED
+        {0x27, 0x3F},  // LCD I2C
+    };
+
+    for(uint8_t i=0; i<5; i++) {
+        uint8_t a1 = conflict_pairs[i][0];
+        uint8_t a2 = conflict_pairs[i][1];
+        if(conflicts[a1].count > 0 && conflicts[a2].count > 0) {
+            USART_Print("WARNING: Both 0x");
+            USART_PrintHexByte(a1);
+            USART_Print(" and 0x");
+            USART_PrintHexByte(a2);
+            USART_Println(" found!");
+        }
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> Scan 3 ครั้งต่อ address กัน false positive — ถ้า ACK >= 2 ครั้งถือว่ามีอุปกรณ์ — เก็บผลลง array conflicts — conflict_pairs เก็บคู่ address ที่รู้ว่ามักชนกัน — ตัวอย่าง: OLED (0x3C) กับ (0x3D), BMP280 (0x76) กับ BME280 (0x77) — ถ้าเจอทั้งคู่ให้ WARNING — บางอุปกรณ์เปลี่ยน address ได้ผ่าน hardware pin (A0, A1) หรือ jumper</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: Auto-Config — ตรวจจับและตั้งค่าอุปกรณ์อัตโนมัติ</h2>
+<pre><code class="language-c">typedef enum {
+    DEV_NONE = 0,
+    DEV_OLED,
+    DEV_DS3231,
+    DEV_BH1750,
+    DEV_BMP280,
+    DEV_EEPROM,
+} i2c_dev_type_t;
+
+typedef struct {
+    i2c_dev_type_t type;
+    uint8_t  addr;
+    uint8_t  detected;
+} dev_config_t;
+
+dev_config_t devs[8];
+uint8_t dev_count = 0;
+
+void i2c_auto_discover(void) {
+    dev_count = 0;
+
+    // OLED (0x3C, 0x3D)
+    if(i2c_probe(0x3C)) add_dev(DEV_OLED, 0x3C);
+    else if(i2c_probe(0x3D)) add_dev(DEV_OLED, 0x3D);
+
+    // DS3231 (0x68)
+    if(i2c_probe(0x68)) add_dev(DEV_DS3231, 0x68);
+
+    // BH1750 (0x23, 0x5C)
+    if(i2c_probe(0x23)) add_dev(DEV_BH1750, 0x23);
+    else if(i2c_probe(0x5C)) add_dev(DEV_BH1750, 0x5C);
+
+    // BMP280 (0x76, 0x77)
+    if(i2c_probe(0x76)) add_dev(DEV_BMP280, 0x76);
+    else if(i2c_probe(0x77)) add_dev(DEV_BMP280, 0x77);
+
+    // EEPROM (0x50-0x57)
+    for(uint8_t a=0x50; a<=0x57; a++)
+        if(i2c_probe(a)) { add_dev(DEV_EEPROM, a); break; }
+}
+
+void i2c_auto_init_all(void) {
+    i2c_auto_discover();
+
+    for(uint8_t i=0; i<dev_count; i++) {
+        USART_Print("Init: ");
+        USART_Print(i2c_dev_name(devs[i].type));
+        USART_Print(" @0x");
+        USART_PrintHexByte(devs[i].addr);
+        USART_Println("");
+
+        switch(devs[i].type) {
+            case DEV_OLED:
+                OLED_Init(devs[i].addr, I2C_PINS_DEFAULT);
+                break;
+            case DEV_DS3231:
+                DS3231_Init(I2C_PINS_DEFAULT);
+                break;
+            case DEV_BH1750:
+                BH1750_Init(devs[i].addr, BH1750_CONT_HIRES);
+                break;
+            case DEV_BMP280:
+                BMP280_Init(devs[i].addr);
+                break;
+            default: break;
+        }
+    }
+    USART_Print("Auto-config: ");
+    USART_PrintNum(dev_count);
+    USART_Println(" devices init");
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> Auto-discover: probe ทีละ address ที่รู้ — ใช้ i2c_probe(addr) เช็ค ACK — เก็บผลลง array devs — Auto-init: วนลูปผ่าน devs แล้ว init ตามชนิด — รองรับอุปกรณ์ที่มีหลาย address (OLED 0x3C/0x3D, BH1750 0x23/0x5C) — ลดการ hardcode address — เหมาะกับระบบที่เปลี่ยนอุปกรณ์บ่อย — ใช้ enum + switch สำหรับ init แต่ละชนิด</div>
+</div>
+
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_i2cscan.html">กลับบท</a><a href="chapx_lib_button_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

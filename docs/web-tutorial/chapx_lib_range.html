@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>📦 วัดระยะ/ตรวจจับ 6 ชนิด — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_env2.html">บทก่อน</a>
+    <a href="chapx_lib_elec.html">บทถัดไป →</a>
+</nav>
+<h1>📦 วัดระยะ/ตรวจจับ 6 ชนิด — HCSR04, VL53L0X, MPU6050, AS5600, PIR, RCWL0516</h1>
+<span class="level intermediate">ระดับกลาง</span>
+<p style="margin-top:0.5rem;color:#64748b">⏱️ ดูดัชนีทั้งหมดที่ <a href="chapx_lib_index.html">📦 คลังอุปกรณ์</a></p>
+
+<section>
+<h2>HCSR04 — Ultrasonic Distance (GPIO)</h2>
+<pre class="ascii-circuit">
+PC0─TRIG  PC1─ECHO  5V─VCC  GND─GND
+⚠️ ECHO 5V → voltage divider 2.2kΩ+3.3kΩ ลดเหลือ ~3.3V</pre>
+<pre><code class="language-c">#include "HCSR04.h"
+HCSR04_Init(PC0, PC1);
+float dist = HCSR04_ReadCm();
+if(dist > 0) { USART_PrintFloat(dist, 1); USART_Println(" cm"); }
+// Average: float avg = HCSR04_ReadAvgCm(5); // 5 samples</code></pre>
+<p class="explain">⚠️ Range 2-400cm, angle ~15°, ECHO 5V → ต้องใช้ voltage divider (2.2kΩ+3.3kΩ), pulseIn timeout 30ms, ห้ามวัดถี่กว่า 60ms (รอ echo decay), sound speed varies with temp → 0.6% error per 1°C, ถ้าคืน 0 = object อยู่นอกระยะ / timeout</p>
+
+<h3>API หลัก</h3>
+<table>
+<tr><td><code>HCSR04_Init(trig, echo)</code></td><td>ตั้ง pin TRIG + ECHO</td><td><code>HCSR04_ReadCm()</code></td><td>อ่านระยะ cm</td></tr>
+<tr><td><code>HCSR04_ReadAvgCm(n)</code></td><td>เฉลี่ย n samples</td><td><code>HCSR04_ReadInch()</code></td><td>อ่านระยะนิ้ว</td></tr>
+</table>
+
+<h2>VL53L0X — ToF Laser Distance (I2C)</h2>
+<pre class="ascii-circuit">
+PC1─SDA  PC2─SCL  3.3V─VCC  GND─GND  XSHUT─3.3V (หรือ GPIO สำหรับ multi-sensor)
+</pre>
+<pre><code class="language-c">#include "VL53L0X.h"
+VL53L0X_Init(0x29); // I2C addr (เปลี่ยน XSHUT สำหรับ multiple)
+uint16_t mm = VL53L0X_ReadRange();
+// Continuous mode: VL53L0X_StartContinuous(); VL53L0X_ReadRangeContinuous();</code></pre>
+<p class="explain">⚠️ Range 3-200cm (indoor, dark surface), accuracy ±3%, แสงแดดจัดอ่านไม่ได้ — ใช้ในที่ร่ม/ในห้อง, I2C addr 0x29 (single), multi-sensor: toggle XSHUT → assign address ใหม่ทีละตัว, เร็วกว่า+แม่นกว่าอัลตราโซนิคสำหรับระยะ <2m, range mode: default/long/high speed เลือกได้</p>
+
+<h3>API หลัก</h3>
+<table>
+<tr><td><code>VL53L0X_Init(addr)</code></td><td>Init + calibration</td><td><code>VL53L0X_ReadRange()</code></td><td>Single-shot (mm)</td></tr>
+<tr><td><code>VL53L0X_StartContinuous()</code></td><td>เริ่ม continuous</td><td><code>VL53L0X_ReadRangeContinuous()</code></td><td>อ่านต่อเนื่อง</td></tr>
+<tr><td><code>VL53L0X_SetRangeMode(mode)</code></td><td>Default/Long/HighSpeed</td><td><code>VL53L0X_SetTimeout(ms)</code></td><td>Timeout</td></tr>
+</table>
+
+<h2>MPU6050 — Gyro+Accel 6-axis (I2C)</h2>
+<pre class="ascii-circuit">
+PC1─SDA  PC2─SCL  3.3V─VCC  GND─GND  AD0─GND (=0x68, หรือ VCC =0x69)
+</pre>
+<pre><code class="language-c">#include "MPU6050.h"
+MPU6050_Data_t data;
+MPU6050_Init(0x68);
+MPU6050_ReadAll(&data);
+// Accel (raw → g): float ax = data.ax / 16384.0f;
+// Gyro (raw → °/s): float gx = data.gx / 131.0f;
+// Complementary filter:
+float angle = 0.98f * (angle + gx*dt) + 0.02f * (atan2(ay, az)*57.3f);</code></pre>
+<p class="explain">⚠️ I2C addr 0x68 (AD0=GND) หรือ 0x69 (AD0=VCC), gyro drift ~0.05°/s → ใช้ complementary filter ชดเชย, accel noise ±0.01g, calibration: อ่าน 100 samples ตอนอยู่กับที่ → หัก bias, DMP (Digital Motion Processor) → CH32V003 RAM 2KB ไม่พอ (ต้องใช้ MCU ที่ RAM ≥16KB), range configurable: accel ±2/4/8/16g, gyro ±250/500/1000/2000°/s</p>
+
+<h3>API หลัก</h3>
+<table>
+<tr><td><code>MPU6050_Init(addr)</code></td><td>Init + wake up</td><td><code>MPU6050_ReadAll(&data)</code></td><td>อ่าน accel+gyro+temp</td></tr>
+<tr><td><code>MPU6050_ReadAccel(&data)</code></td><td>อ่านเฉพาะ accel</td><td><code>MPU6050_ReadGyro(&data)</code></td><td>อ่านเฉพาะ gyro</td></tr>
+<tr><td><code>MPU6050_Calibrate(n)</code></td><td>หัก bias จาก n samples</td><td><code>MPU6050_SetRange(acc, gyr)</code></td><td>ตั้ง range</td></tr>
+</table>
+
+<h2>AS5600 — Magnetic Encoder 12-bit (I2C)</h2>
+<pre class="ascii-circuit">
+PC1─SDA  PC2─SCL  3.3V─VCC  GND─GND  DIR─GND (clockwise, หรือ VCC กลับทิศ)
+</pre>
+<pre><code class="language-c">#include "AS5600.h"
+AS5600_Init();
+uint16_t raw = AS5600_ReadAngle();        // 0-4095
+float deg = AS5600_ReadAngleDegrees();    // 0.0-359.9
+// Zero position: AS5600_SetZeroPosition(current_angle);
+// Detect magnet: if(AS5600_GetStatus() & AS5600_MAGNET_DETECT)</code></pre>
+<p class="explain">⚠️ ต้องมีแม่เหล็ก diametrically magnetized อยู่เหนือ IC ~1-2mm, 12-bit = 0.088° resolution, I2C addr 0x36 (fix), PWM/analog output modes ใช้แทน I2C ได้ (แต่ CH32V003 อ่าน I2C แม่นกว่า), แม่เหล็กแรงเกิน/อ่อนเกิน → reading error, DIR pin กลับทิศการนับ, no-contact → ทนทานกว่า potentiometer, zero position ตั้งด้วยการเขียน register หรือ ZPOS pin</p>
+
+<h3>API หลัก</h3>
+<table>
+<tr><td><code>AS5600_Init()</code></td><td>Init + check magnet</td><td><code>AS5600_ReadAngle()</code></td><td>Raw 0-4095</td></tr>
+<tr><td><code>AS5600_ReadAngleDegrees()</code></td><td>0.0-359.9°</td><td><code>AS5600_SetZeroPosition(raw)</code></td><td>ตั้งตำแหน่งศูนย์</td></tr>
+<tr><td><code>AS5600_GetStatus()</code></td><td>Status register</td><td><code>AS5600_GetMagnetStrength()</code></td><td>AGAIN + magnitude</td></tr>
+</table>
+
+<h2>PIR — Motion Sensor (GPIO)</h2>
+<pre class="ascii-circuit">
+PC1─OUT  5V─VCC  GND─GND  (OUT 3.3V compatible — ต่อตรงได้)
+</pre>
+<pre><code class="language-c">volatile uint8_t motion = 0;
+void pir_isr(void) { motion = 1; }
+pinMode(PC1, PIN_MODE_INPUT);
+attachInterrupt(PC1, pir_isr, RISING);
+while(1) {
+    if(motion) { motion=0; USART_Println("Motion!"); digitalWrite(PC0,HIGH); Delay_Ms(3000); digitalWrite(PC0,LOW); }
+    PWR_Sleep(); // sleep until next motion
+}</code></pre>
+<p class="explain">⚠️ 2 potentiometer บนโมดูล: sensitivity (ปรับระยะ detect) + delay time (HIGH output duration), ใช้ interrupt ดีกว่า polling — ประหยัดพลังงาน, ต้องมี warm-up 30-60s หลังจ่ายไฟ (sensor stabilize), false trigger ในที่มีลม/ความร้อนเปลี่ยนแปลงเร็ว/แสงแดด, detect infrared จากคน/สัตว์เท่านั้น — ไม่ทะลุกำแพง, OUT pulse = HIGH เมื่อ detect → 2-200s (ขึ้นกับ delay pot)</p>
+
+<h3>API หลัก</h3>
+<table>
+<tr><td><code>attachInterrupt(pin, isr, edge)</code></td><td>ตั้ง interrupt</td><td><code>pinMode(pin, INPUT)</code></td><td>ตั้งขาเป็น input</td></tr>
+<tr><td><code>PWR_Sleep()</code></td><td>MCU เข้า sleep</td><td><code>digitalRead(pin)</code></td><td>อ่านสถานะ (polling)</td></tr>
+</table>
+
+<h2>RCWL0516 — Microwave Radar (GPIO)</h2>
+<pre class="ascii-circuit">
+PC1─OUT  3.3-5V─VCC  GND─GND  (OUT 3.3V compatible)
+</pre>
+<pre><code class="language-c">volatile uint8_t radar = 0;
+void radar_isr(void) { radar = 1; }
+pinMode(PC1, PIN_MODE_INPUT);
+attachInterrupt(PC1, radar_isr, RISING);
+while(1) {
+    if(radar) { radar=0; USART_Println("Movement detected!"); digitalWrite(PC0,HIGH); Delay_Ms(2000); digitalWrite(PC0,LOW); }
+    PWR_Sleep();
+}</code></pre>
+<p class="explain">⚠️ ผ่านกำแพงได้ (ต่างจาก PIR) — detect movement หลังผนังบาง/พลาสติก/กระจก, range ~5-7m, Doppler effect → ตรวจจับเฉพาะ movement (ไม่ใช่ presence — คนยืนนิ่งไม่ detect), กินไฟมากกว่า PIR (~3mA vs <0.1mA) — ไม่เหมาะกับ battery, ไม่มี delay adjust → OUT pulse ต่อเนื่องตราบที่ detect movement, 3.3-5V wide range input, CDS pin สำหรับปิดเมื่อมีแสง (ต่อ photoresistor)</p>
+
+<h3>API หลัก</h3>
+<table>
+<tr><td><code>attachInterrupt(pin, isr, edge)</code></td><td>ตั้ง interrupt</td><td><code>pinMode(pin, INPUT)</code></td><td>ตั้งขาเป็น input</td></tr>
+<tr><td><code>PWR_Sleep()</code></td><td>MCU เข้า sleep</td><td><code>digitalRead(pin)</code></td><td>อ่านสถานะ (polling)</td></tr>
+</table>
+</section>
+
+<section>
+<h2>📋 เปรียบเทียบเซนเซอร์ตรวจจับทั้ง 6 ชนิด</h2>
+<table>
+<tr><th>เซนเซอร์</th><th>Interface</th><th>Range</th><th>In/Outdoor</th><th>ราคา</th><th>ใช้ดีที่สุดกับ</th></tr>
+<tr><td>HCSR04</td><td>GPIO</td><td>2-400cm</td><td>ทั้งคู่</td><td>~30฿</td><td>วัดระยะ, parking sensor, วัดระดับน้ำ</td></tr>
+<tr><td>VL53L0X</td><td>I2C</td><td>3-200cm</td><td>ในร่ม</td><td>~120฿</td><td>หุ่นยนต์หลบสิ่งกีดขวาง, gesture detection</td></tr>
+<tr><td>MPU6050</td><td>I2C</td><td>±16g / ±2000°/s</td><td>ทั้งคู่</td><td>~60฿</td><td>Tilt sensing, gimbal, pedometer, ทรงตัวหุ่นยนต์</td></tr>
+<tr><td>AS5600</td><td>I2C</td><td>360° (0.088° res)</td><td>ทั้งคู่</td><td>~80฿</td><td>Knob encoder, motor position, wind vane</td></tr>
+<tr><td>PIR</td><td>GPIO</td><td>~7m, 120° angle</td><td>ในร่ม</td><td>~35฿</td><td>ไฟอัตโนมัติ, alarm, ประหยัดพลังงาน</td></tr>
+<tr><td>RCWL0516</td><td>GPIO</td><td>~5-7m (ทะลุกำแพง)</td><td>ในร่ม</td><td>~50฿</td><td>Detect หลังผนัง, หลอดไฟซ่อน, ประตูอัตโนมัติ</td></tr>
+</table>
+<p style="margin-top:1rem;color:#64748b"><strong>เลือกยังไง?</strong> วัดระยะแม่น → VL53L0X (ในร่ม) / HCSR04 (ทั่วไป), ตรวจจับการเคลื่อนไหวคน → PIR (ประหยัด) / RCWL0516 (ทะลุกำแพง), วัดมุม/การหมุน → AS5600 (no-contact) / MPU6050 (6-axis), สร้าง motion controller → MPU6050</p>
+</section>
+
+<section>
+<h2>✏️ ลองทำดู</h2>
+<ol>
+<li>HC-SR04 parking sensor — LED สีเขียว >50cm, เหลือง 20-50cm, แดง <20cm, buzzer ดังถี่ขึ้นเมื่อใกล้ พร้อมแสดงค่าระยะ cm บน OLED</li>
+<li>MPU6050 tilt alarm — buzzer เมื่อเอียง > 30° (คำนวณจาก complementary filter), แสดงองศาบน OLED</li>
+<li>AS5600 knob controller — อ่านมุม → ส่งค่า serial + ใช้ OLED แสดงมุมแบบกราฟิก (แถบหมุน), ใช้เปิด/ปิด LED ตาม quadrant</li>
+<li>PIR + RCWL0516 dual detection — PIR จับคนภายใน (in) / RCWL0516 จับผ่านผนังด้านนอก (out), แยกแสดงผล 2 Channel, LED แยกสี</li>
+<li>รวม VL53L0X + MPU6050 — ทำหุ่นยนต์หลบสิ่งกีดขวาง + ตรวจจับการเอียงล้ม แล้วหยุด motor</li>
+</ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_env2.html">บทก่อน</a>
+    <a href="chapx_lib_elec.html">บทถัดไป →</a>
+</nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

@@ -1,0 +1,176 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>KY-026 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_soilmoisture_yl69.html">บทก่อน</a><a href="chapx_lib_soundsensor_ky038.html">บทถัดไป →</a></nav>
+<h1>KY-026 — Flame Sensor ตรวจจับเปลวไฟ IR + Digital</h1><span class="level intermediate">ระดับกลาง</span>
+<section class="flowchart"><h2>🧭 แผนภาพการทำงาน</h2><pre class="mermaid">
+flowchart TD
+    A["Init ADC + GPIO"] --> B["อ่าน Analog (PD2)"]
+    B --> C["อ่าน Digital (PC3)"]
+    C --> D{"DIGITAL == HIGH?"}
+    D -->|"Yes"| E["ไฟไหม้! ใกล้มาก"]
+    D -->|"No"| F["ตรวจสอบ Analog"]
+    F --> G{"ADC > threshold?"}
+    G -->|"สูงกว่า"| H["มีเปลวไฟ (ระยะไกล)"]
+    G -->|"ต่ำกว่า"| I["ไม่มีไฟ — ปกติ"]
+    E --> J["แจ้งเตือน / ตัดแก๊ส"]
+    H --> J
+    I --> B
+</pre></section>
+<section><h2>🔌 การต่อวงจร</h2><pre class="ascii-circuit">
+          KY-026 Flame Sensor (IR 760-1100nm)
+   ┌────────────────────────────────────┐
+   │  MCU              KY-026           │
+   │  3.3V───────────── VCC (+)         │
+   │  GND────────────── GND (-)         │
+   │  PD2─ADC ───────── A0 (Analog Out) │
+   │  PC3─GPIO ──────── D0 (Digital Out)│
+   │                                    │
+   │  🔥 เปลวไฟ → เซนเซอร์ (60°)        │
+   │  ⚠ ตรวจจับ IR ย่าน 760-1100nm      │
+   │  ⚠ Digital Threshold ปรับด้วย Pot  │
+   └────────────────────────────────────┘
+</pre><p>KY-026 ใช้ IR Photodiode ตรวจจับเปลวไฟในช่วงความยาวคลื่น 760-1100nm — มี LM393 Comparator สำหรับ Digital Output — Pot ปรับ sensitivity — มุมตรวจจับ ~60° ระยะไกลสุด ~1m สำหรับไฟแช็ก</p></section>
+<section><h2>📚 หลักการทำงาน</h2><p><strong>KY-026 Flame Sensor</strong> ใช้ Infrared Photodiode ตรวจจับรังสี IR จากเปลวไฟ — เปลวไฟปล่อย IR ในช่วง 760-1100nm — เซนเซอร์กรองแสง visible ออก — เมื่อมีเปลวไฟ ADC จะสูงขึ้น (แสง IR มากขึ้น)</p><p><strong>2 Outputs:</strong> Analog (A0) — ใช้ ADC อ่านความเข้ม IR (0-3.3V) — Digital (D0) — LM393 Comparator เทียบกับ threshold ที่ปรับด้วย Pot — D0 = HIGH เมื่อ IR เกิน threshold — ใช้ขัดจังหวะ MCU ได้</p><p><strong>Digital vs Analog:</strong> Digital ใช้ตรวจจับเร็ว (GPIO interrupt) — Analog ใช้บอกระยะทาง/ความแรงของไฟ — การใช้ทั้งคู่ช่วยลด False Positive (แสงแดด vs เปลวไฟจริง)</p><p><strong>ข้อควรระวัง:</strong> แสงแดดมี IR สูง อาจ trigger false positive — หลีกเลี่ยงการติดตั้งที่โดนแดดตรง — ใช้ Analog threshold หลายระดับเพื่อยืนยัน</p></section>
+<section><h2>💻 เขียน Code ทีละขั้น</h2>
+<div class="step"><h3>ขั้นที่ 1: Init ADC + GPIO สำหรับ Digital</h3><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+#define FLAME_ADC PD2
+#define FLAME_DIG PC3
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    ADC_Init(FLAME_ADC, ADC_CH0);
+    pinMode(FLAME_DIG, PIN_MODE_INPUT); // Digital input
+    USART_Init(115200);
+
+    USART_Print("Flame Sensor Ready\r\n");</code></pre><p class="explain">🔍 ใช้ทั้ง Analog (PD2) และ Digital (PC3) — Digital อ่านด้วย GPIO — Analog วัดความเข้ม IR ผ่าน ADC</p></div>
+<div class="step"><h3>ขั้นที่ 2: อ่านทั้ง Analog + Digital</h3><pre><code class="language-c">    uint16_t adc = ADC_Read(FLAME_ADC);
+    uint8_t dig = GPIO_Read(FLAME_DIG);
+
+    USART_Print("ADC:"); USART_PrintDec(adc);
+    USART_Print(" Digital:");
+    USART_Print(dig ? "FIRE!" : "Normal");
+    USART_Print("\r\n");
+
+    // ADC > 800 = มีไฟใกล้
+    if(adc > 800) {
+        USART_Print(">>> FLAME DETECTED (strong) <<<\r\n");
+    } else if(adc > 500) {
+        USART_Print(">>> Possible flame (weak) <<<\r\n");
+    }</code></pre><p class="explain">🔍 <code>GPIO_Read(PC3)</code> อ่าน digital status — HIGH = มีไฟ — Analog แบ่งเป็น 3 ระดับ: >800 (ไฟใกล้/แรง), >500 (ไฟไกล/อ่อน), <500 (ปกติ) — ปรับ threshold ตามสภาพแวดล้อม</p></div>
+<div class="step"><h3>ขั้นที่ 3: ตรวจจับไฟ + แจ้งเตือน + ป้องกัน False Alarm</h3><pre><code class="language-c">    pinMode(PC0, PIN_MODE_OUTPUT); // Buzzer
+    pinMode(PC1, PIN_MODE_OUTPUT); // Relay ตัดแก๊ส
+
+    uint8_t fire_count = 0;
+    Timer_t tmr;
+    Start_Timer(&tmr, 200, 1);
+
+    while(1) {
+        if(Is_Timer_Expired(&tmr)) {
+            uint16_t adc = ADC_Read(FLAME_ADC);
+            uint8_t dig = GPIO_Read(FLAME_DIG);
+
+            if(dig && adc > 700) {
+                fire_count++;
+                if(fire_count > 5) { // ยืนยัน 5 ครั้งติด
+                    USART_Print("FIRE CONFIRMED!\r\n");
+                    digitalWrite(PC0, HIGH); // Buzzer ON
+                    digitalWrite(PC1, HIGH); // ตัดแก๊ส
+                }
+            } else {
+                if(fire_count > 0) fire_count--;
+                if(fire_count == 0) {
+                    digitalWrite(PC0, LOW);
+                    digitalWrite(PC1, LOW);
+                }
+            }
+            USART_Print("ADC:"); USART_PrintDec(adc);
+            USART_Print(" DIG:"); USART_PrintDec(dig);
+            USART_Print(" CNT:"); USART_PrintDec(fire_count);
+            USART_Print("\r\n");
+        }
+    }
+}</code></pre><p class="explain">🔍 Debounce ตรวจจับไฟ — ต้องเจอต่อเนื่อง 5 ครั้ง (1 วินาที) จึงยืนยัน — ลด false positive จากแสงแดด/ไฟแช็ก — เมื่อยืนยัน → Buzzer + ตัดแก๊ส</p></div>
+</section>
+<section><h2>📋 API Reference</h2><table><tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+<tr><td><code>ADC_Init(pin, ch)</code></td><td>เริ่มต้น ADC</td><td><code>ADC_Init(PD2, ADC_CH0)</code></td></tr>
+<tr><td><code>ADC_Read(pin)</code></td><td>อ่านค่า ADC 0-1023</td><td><code>uint16_t v = ADC_Read(PD2)</code></td></tr>
+<tr><td><code>GPIO_Read(pin)</code></td><td>อ่านสถานะ GPIO</td><td><code>uint8_t s = GPIO_Read(PC3)</code></td></tr>
+<tr><td><code>FLAME_Init(adc_pin, dig_pin)</code></td><td>เริ่มต้น Flame Sensor</td><td><code>FLAME_Init(PD2, PC3)</code></td></tr>
+<tr><td><code>FLAME_ReadAnalog(pin)</code></td><td>อ่าน Analog IR intensity</td><td><code>uint16_t a = FLAME_ReadAnalog(PD2)</code></td></tr>
+<tr><td><code>FLAME_ReadDigital(pin)</code></td><td>อ่าน Digital threshold</td><td><code>uint8_t d = FLAME_ReadDigital(PC3)</code></td></tr>
+<tr><td><code>FLAME_IsFire(analog, thresh)</code></td><td>ตรวจสอบว่าตรวจพบไฟหรือไม่</td><td><code>if(FLAME_IsFire(800, 600))</code></td></tr>
+</table></section>
+<section><h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2><table><tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+<tr><td>ตรวจจับตลอดทั้งที่ไม่มีไฟ</td><td>แสงแดด/หลอดไฟมี IR — false trigger</td><td>หลีกเลี่ยงแดดตรง — ใช้ Analog threshold สูงขึ้น — เพิ่ม debounce</td></tr>
+<tr><td>Digital ไม่เคย HIGH</td><td>Pot sensitivity ต่ำเกินไป</td><td>หมุน Pot ทวนเข็มจน LED สีแดงติดตอนมีไฟ — แล้วหมุนกลับเล็กน้อย</td></tr>
+<tr><td>ตรวจจับระยะใกล้มากเท่านั้น</td><td>เซนเซอร์ sensitivity ต่ำ / เปลวไฟเล็ก</td><td>ใช้เลนส์รวมแสง — เปลวไฟยิ่งใหญ่ยิ่งตรวจจับไกล — ระยะปกติ 20-100cm</td></tr>
+<tr><td>ADC ค่านิ่งไม่เปลี่ยน</td><td>เซนเซอร์เสีย / ต่อสายผิด</td><td>ตรวจสอบ VCC=3.3V — A0 ควรเปลี่ยนเมื่อโบกมือผ่านหรือจุดไฟแช็ก</td></tr>
+<tr><td>False alarm ตอนกลางคืน</td><td>หลอดไฟ Incandescent ปล่อย IR</td><td>ใช้ Analog + Digital ร่วม — ตรวจสอบ pattern ของเปลวไฟ (flicker 10-20Hz)</td></tr>
+</table></section>
+<section><h2>🛠️ สร้าง Product: Fire Alarm System</h2><p>KY-026 + Buzzer + Relay — ตรวจจับไฟ 3 จุด — แจ้งเตือน 2 ระดับ (Warning / Fire) — ตัดแก๊สอัตโนมัติ</p><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+#define FLAME_A PD2
+#define FLAME_D PC3
+#define BUZZER PC0
+#define GAS_RELAY PC1
+#define LED_OK PC2
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+    ADC_Init(FLAME_A, ADC_CH0);
+    pinMode(FLAME_D, PIN_MODE_INPUT);
+    pinMode(BUZZER, PIN_MODE_OUTPUT);
+    pinMode(GAS_RELAY, PIN_MODE_OUTPUT);
+    pinMode(LED_OK, PIN_MODE_OUTPUT);
+    USART_Init(115200);
+
+    digitalWrite(LED_OK, HIGH);
+    uint8_t fire_streak = 0;
+    Timer_t tmr;
+    Start_Timer(&tmr, 250, 1);
+
+    while(1)
+    {
+        if(Is_Timer_Expired(&tmr))
+        {
+            uint16_t adc = ADC_Read(FLAME_A);
+            uint8_t dig = GPIO_Read(FLAME_D);
+
+            if(dig && adc > 700) {
+                fire_streak++;
+                if(fire_streak >= 8) { // 2 seconds confirm
+                    digitalWrite(BUZZER, HIGH);
+                    digitalWrite(GAS_RELAY, HIGH);
+                    digitalWrite(LED_OK, LOW);
+                    USART_Print("FIRE! GAS CUT!\r\n");
+                }
+            } else if(adc > 500) {
+                USART_Print("WARNING: Heat detected\r\n");
+                fire_streak = 0;
+            } else {
+                if(fire_streak > 0) fire_streak--;
+                if(fire_streak == 0) {
+                    digitalWrite(BUZZER, LOW);
+                    digitalWrite(LED_OK, HIGH);
+                }
+            }
+
+            USART_Print("ADC:"); USART_PrintDec(adc);
+            USART_Print(" D:"); USART_PrintDec(dig);
+            USART_Print(" S:"); USART_PrintDec(fire_streak);
+            USART_Print("\r\n");
+        }
+    }
+}</code></pre></section>
+<section><h2>✏️ ลองทำดู</h2><ol>
+<li>ตรวจจับ flicker ของเปลวไฟ — วัดความถี่ 10-20Hz — แยกเปลวไฟจากแสงคงที่</li>
+<li>ใช้ EXTI interrupt จาก Digital pin — ขัดจังหวะทันทีเมื่อมีไฟ — ลด polling overhead</li>
+<li>หลายเซนเซอร์ — ใช้ Analog Mux หรือ GPIO หลายตัว — ตรวจจับทิศทางของไฟ</li>
+<li>ส่ง SMS alert ผ่าน SIM800L — เมื่อตรวจจับไฟ → ส่ง SMS + โทรแจ้งเตือน</li></ol></section>
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_soilmoisture_yl69.html">บทก่อน</a><a href="chapx_lib_soundsensor_ky038.html">บทถัดไป →</a></nav>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script><script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script><script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

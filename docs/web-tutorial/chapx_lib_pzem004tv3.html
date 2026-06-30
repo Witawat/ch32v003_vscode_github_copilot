@@ -1,0 +1,172 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>PZEM-004T v3 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_pzem004t.html">บทก่อน</a><a href="chapx_lib_oh49e.html">บทถัดไป →</a></nav>
+<h1>PZEM-004T v3 — Modbus-RTU แบบ ReadAll ในครั้งเดียว</h1><span class="level advanced">ระดับสูง</span>
+<section class="flowchart"><h2>🧭 แผนภาพการทำงาน</h2><pre class="mermaid">
+flowchart TD
+    A["PZEMv3_Init(USART, addr)"] --> B["ReadAll() — อ่าน 10 registers"]
+    B --> C["ส่ง 1 Modbus Request (reg 0-9)"]
+    C --> D["รับ Response 25 bytes"]
+    D --> E{"CRC16 OK?"}
+    E -->|"Yes"| F["Parse ทั้งหมด: V,A,W,Wh,Hz,PF,Alarm"]
+    E -->|"No"| G["Retry / Report Error"]
+    F --> H["เก็บใน struct PZEM_Data_t"]
+    H --> I["แสดงผล / เปรียบเทียบ Alarm"]
+</pre></section>
+<section><h2>🔌 การต่อวงจร</h2><pre class="ascii-circuit">
+   ⚡ WARNING: 220VAC! อันตรายถึงชีวิต!
+   ┌────────────────────────────────────────────┐
+   │  MCU              PZEM-004T v3.0           │
+   │  PD5─TX ────────── RX   VCC──5V            │
+   │  PD6─RX ────────── TX   GND──GND           │
+   │                                            │
+   │  CT Clamp 100A ─── CT ──|Load|── L(220V)   │
+   │  (ทิศทางลูกศร → โหลด)                       │
+   └────────────────────────────────────────────┘
+</pre><p>⚠️ <strong>220VAC!</strong> วงจรเหมือน PZEM-004T v1 — แต่ v3 ใช้โปรโตคอลต่างกัน — รองรับ ReadAll ในคำขอเดียว — มี Alarm registers เพิ่ม</p></section>
+<section><h2>📚 หลักการทำงาน</h2><p><strong>PZEM-004T v3</strong> เป็นรุ่นอัพเกรดจาก v1 — ความแตกต่างหลักคือโปรโตคอล Modbus ที่เปลี่ยนไป — v3 รองรับ <code>ReadAll</code> ในคำขอเดียว (อ่าน 10 registers รวดเดียว) แทนการอ่านทีละ register — ทำให้เร็วขึ้นและลด traffic บน USART</p><p><strong>ReadAll Request</strong> ส่งคำสั่งอ่าน registers 0x0000 ถึง 0x0009 ในครั้งเดียว — Response มี 25 bytes (1 addr + 1 func + 1 byteCount + 20 data + 2 CRC) — ลด overhead จาก 8 คำขอเหลือ 1 คำขอ</p><p><strong>Alarm Registers</strong> เพิ่มจาก v1 — มี alarm status (0x0009) และ alarm threshold (0x000A-0x000F) — ตั้งค่า over-voltage, over-current, over-power thresholds ได้</p><p><strong>Data Structure</strong> ใช้ <code>PZEM_Data_t</code> struct เก็บค่าทั้งหมดไว้ในตัวแปรเดียว — อ่านครั้งเดียว ได้ข้อมูลครบ — ไม่ต้องเรียกทีละฟังก์ชันเหมือน v1</p></section>
+<section><h2>💻 เขียน Code ทีละขั้น</h2>
+<div class="step"><h3>ขั้นที่ 1: Init PZEM v3</h3><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "PZEM004Tv3.h"
+
+PZEM004Tv3_t pzem;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_Init(115200);
+
+    PZEM004Tv3_Init(&pzem, PD6, PD5, 0x01); // 9600 8N1
+    USART_Print("PZEM v3 Ready\r\n");</code></pre><p class="explain">🔍 Init เหมือน v1 — แต่ใช้ lib แยก — 9600 baud 8N1 — address default 0x01</p></div>
+<div class="step"><h3>ขั้นที่ 2: ReadAll — อ่านทีเดียวครบ</h3><pre><code class="language-c">    PZEM_Data_t data;
+    if(PZEM004Tv3_ReadAll(&pzem, &data)) {
+        USART_Print("Voltage: "); USART_PrintFloat(data.voltage, 1);
+        USART_Print("V\r\n");
+        USART_Print("Current: "); USART_PrintFloat(data.current, 2);
+        USART_Print("A\r\n");
+        USART_Print("Power: "); USART_PrintFloat(data.power, 1);
+        USART_Print("W\r\n");
+        USART_Print("Energy: "); USART_PrintFloat(data.energy, 1);
+        USART_Print("kWh\r\n");
+        USART_Print("Freq: "); USART_PrintFloat(data.frequency, 1);
+        USART_Print("Hz\r\n");
+        USART_Print("PF: "); USART_PrintFloat(data.pf, 2);
+        USART_Print("\r\n");
+    } else {
+        USART_Print("ReadAll failed\r\n");
+    }</code></pre><p class="explain">🔍 <code>ReadAll(dev, &data)</code> คืน bool — true = สำเร็จ — data struct มี voltage, current, power, energy, frequency, pf, alarm — อ่าน 10 registers ใน 1 คำขอ ~200ms</p></div>
+<div class="step"><h3>ขั้นที่ 3: Loop + Alarm Threshold</h3><pre><code class="language-c">    PZEM004Tv3_SetAlarmThreshold(&pzem, 2500, 5000, 20000);
+    // over-V > 250V, over-A > 5A, over-W > 2000W
+
+    Timer_t tmr;
+    Start_Timer(&tmr, 2000, 1);
+
+    while(1) {
+        if(Is_Timer_Expired(&tmr)) {
+            PZEM_Data_t d;
+            if(PZEM004Tv3_ReadAll(&pzem, &d)) {
+                USART_Print("V:"); USART_PrintFloat(d.voltage, 1);
+                USART_Print(" A:"); USART_PrintFloat(d.current, 2);
+                USART_Print(" W:"); USART_PrintFloat(d.power, 1);
+                USART_Print(" kWh:"); USART_PrintFloat(d.energy, 2);
+
+                if(d.alarm) {
+                    USART_Print(" !ALARM!");
+                    if(d.alarm & 0x01) USART_Print(" OV");
+                    if(d.alarm & 0x02) USART_Print(" OC");
+                    if(d.alarm & 0x04) USART_Print(" OP");
+                }
+                USART_Print("\r\n");
+            }
+        }
+    }
+}</code></pre><p class="explain">🔍 ตั้งค่า alarm threshold ด้วย <code>SetAlarmThreshold()</code> — ค่าที่ส่งเป็น ×10 (2500 = 250.0V) — alarm bit0=over-V, bit1=over-A, bit2=over-W — ใช้ Non-Blocking Timer อ่านทุก 2 วิ</p></div>
+</section>
+<section><h2>📋 API Reference</h2><table><tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+<tr><td><code>PZEM004Tv3_Init(dev, rx, tx, addr)</code></td><td>เริ่มต้น PZEM v3</td><td><code>PZEM004Tv3_Init(&pzem, PD6, PD5, 0x01)</code></td></tr>
+<tr><td><code>PZEM004Tv3_ReadAll(dev, &data)</code></td><td>อ่านทุกค่าในคำขอเดียว</td><td><code>PZEM004Tv3_ReadAll(&pzem, &d)</code></td></tr>
+<tr><td><code>PZEM004Tv3_ReadRegister(dev, reg)</code></td><td>อ่าน register เดี่ยว</td><td><code>float v = PZEM004Tv3_ReadRegister(&pzem, 0)</code></td></tr>
+<tr><td><code>PZEM004Tv3_SetAlarmThreshold(dev, v, a, w)</code></td><td>ตั้ง alarm threshold</td><td><code>PZEM004Tv3_SetAlarmThreshold(&pzem, 2500, 5000, 20000)</code></td></tr>
+<tr><td><code>PZEM004Tv3_ReadAlarm(dev)</code></td><td>อ่าน alarm status</td><td><code>uint16_t al = PZEM004Tv3_ReadAlarm(&pzem)</code></td></tr>
+<tr><td><code>PZEM004Tv3_ResetEnergy(dev)</code></td><td>รีเซ็ตค่าพลังงานสะสม</td><td><code>PZEM004Tv3_ResetEnergy(&pzem)</code></td></tr>
+<tr><td><code>PZEM004Tv3_SetAddress(dev, new_addr)</code></td><td>เปลี่ยน slave address</td><td><code>PZEM004Tv3_SetAddress(&pzem, 0x02)</code></td></tr>
+</table></section>
+<section><h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2><table><tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+<tr><td>ReadAll คืน false ตลอด</td><td>ใช้ PZEM v1 กับ lib v3 หรือกลับกัน</td><td>เช็ค sticker ที่ตัว PZEM — ต้องตรงรุ่น — v3 มีข้อความ "V3.0"</td></tr>
+<tr><td>ค่าที่อ่านได้ไม่ตรง</td><td>ใช้ scaling factor ผิดรุ่น</td><td>v3 ใช้ scaling ต่างจาก v1 — ต้องใช้ lib v3 โดยเฉพาะ</td></tr>
+<tr><td>Alarm ไม่ทำงาน</td><td>ไม่ได้ตั้ง Alarm Threshold</td><td>ต้องเรียก SetAlarmThreshold ก่อน — ค่าเป็น ×10</td></tr>
+<tr><td>Timeout ในการอ่าน</td><td>Baud rate ไม่ตรง (9600 vs 4800)</td><td>v3 ใช้ 9600 baud — ถ้าใช้ v1 lib อาจเป็น 4800</td></tr>
+<tr><td>Energy reset ไม่ได้</td><td>Register write-protected</td><td>ต้องส่งคำสั่ง reset ตามโปรโตคอล v3 — ห้าม power-cycle ระหว่าง reset</td></tr>
+</table></section>
+<section><h2>🛠️ สร้าง Product: Smart Power Monitor</h2><p>PZEM v3 + OLED + EEPROM — บันทึกข้อมูลรายชั่วโมง — ตั้ง alarm ตัดไฟอัตโนมัติ</p><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "PZEM004Tv3.h"
+#include "OLED.h"
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+    I2C_Init(PC1, PC2, I2C_SPEED_STANDARD);
+    USART_Init(115200);
+
+    PZEM004Tv3_t pzem;
+    PZEM004Tv3_Init(&pzem, PD6, PD5, 0x01);
+    PZEM004Tv3_SetAlarmThreshold(&pzem, 2500, 10000, 22000);
+
+    OLED_t oled;
+    OLED_Init(&oled, 0x3C, OLED_128x64);
+    OLED_SetFont(&oled, FONT_8x16);
+
+    Timer_t tmr;
+    Start_Timer(&tmr, 2000, 1);
+    pinMode(PC0, PIN_MODE_OUTPUT); // Relay control
+
+    while(1)
+    {
+        if(Is_Timer_Expired(&tmr))
+        {
+            PZEM_Data_t d;
+            if(!PZEM004Tv3_ReadAll(&pzem, &d)) continue;
+
+            OLED_Clear(&oled);
+            OLED_SetCursor(&oled, 0, 0);
+            OLED_PrintFloat(&oled, "", d.voltage, 1);
+            OLED_Print(&oled, "V  ");
+
+            OLED_SetCursor(&oled, 60, 0);
+            OLED_PrintFloat(&oled, "", d.current, 2);
+            OLED_Print(&oled, "A");
+
+            OLED_SetCursor(&oled, 0, 2);
+            OLED_PrintFloat(&oled, "", d.power, 1);
+            OLED_Print(&oled, "W  ");
+
+            OLED_SetCursor(&oled, 60, 2);
+            OLED_PrintFloat(&oled, "PF:", d.pf, 2);
+
+            OLED_SetCursor(&oled, 0, 4);
+            OLED_PrintFloat(&oled, "", d.frequency, 1);
+            OLED_Print(&oled, "Hz");
+
+            OLED_SetCursor(&oled, 0, 6);
+            OLED_PrintFloat(&oled, "", d.energy, 2);
+            OLED_Print(&oled, "kWh");
+
+            if(d.alarm) {
+                digitalWrite(PC0, HIGH); // ตัด relay
+                OLED_SetCursor(&oled, 90, 0);
+                OLED_Print(&oled, "CUT!");
+            }
+
+            OLED_Display(&oled);
+        }
+    }
+}</code></pre></section>
+<section><h2>✏️ ลองทำดู</h2><ol>
+<li>เปลี่ยน Slave Address เป็น 0x02 — ต่อ PZEM 2 ตัวบนบัส USART เดียว (ผ่าน RS485) — อ่านทั้ง 2 ตัว</li>
+<li>ส่งข้อมูล JSON ผ่าน USART ไปยัง ESP01 — สร้าง Web Dashboard ด้วย WiFi</li>
+<li>บันทึกค่า kWh รายวันลง RTC + EEPROM — สร้างกราฟแท่งแสดงการใช้ไฟ 7 วัน</li>
+<li>ตั้ง Alarm แบบ 2 ระดับ — Warning ที่ 80% และ Critical ตัดไฟที่ 100%</li></ol></section>
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_pzem004t.html">บทก่อน</a><a href="chapx_lib_oh49e.html">บทถัดไป →</a></nav>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script><script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script><script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

@@ -1,0 +1,160 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย ROTARY ENCODER — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_rotaryencoder.html">กลับบท</a><a href="chapx_lib_pid_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — Rotary Encoder</h1>
+<div class="answer"><h2>ข้อ 1: Volume Control — หมุนปรับ PWM 0–100%, กด mute</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "RotaryEncoder.h"
+#include "PWM.h"
+
+#define ENC_CLK PC0
+#define ENC_DT  PC1
+#define ENC_SW  PC2
+#define SPK_PIN PC3
+#define PWM_CH  1
+
+volatile int16_t volume = 50;      // 0–100%
+volatile bool muted = false;
+int16_t saved_vol = 50;
+
+void enc_cw_cb(void)  { if(volume < 100) volume++; }
+void enc_ccw_cb(void) { if(volume > 0)   volume--; }
+void enc_sw_cb(void) {
+    if(muted) { muted = false; volume = saved_vol; }
+    else      { muted = true;  saved_vol = volume; volume = 0; }
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_Init(115200);
+
+    RotaryEncoder_Init(ENC_CLK, ENC_DT, ENC_SW);
+    RotaryEncoder_AttachCW(enc_cw_cb);
+    RotaryEncoder_AttachCCW(enc_ccw_cb);
+    RotaryEncoder_AttachSW(enc_sw_cb);
+
+    PWM_SimpleInit(SPK_PIN, PWM_CH, 1000, 0);
+    Timer_t update_tmr;
+    Start_Timer(&update_tmr, 100, 1);
+
+    while(1) {
+        RotaryEncoder_Process();
+
+        if(Is_Timer_Expired(&update_tmr)) {
+            uint16_t duty = (uint16_t)((uint32_t)volume * 1000 / 100);
+            PWM_SetDuty(SPK_PIN, PWM_CH, muted ? 0 : duty);
+            USART_Printf("Vol:%d%% %s\n", volume, muted ? "[MUTED]" : "");
+        }
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>volume</code> เก็บเป็น % (0–100) — callback CW/CCW เพิ่มลดค่า clamp 0–100 — <code>enc_sw_cb</code> สลับ mute: เซฟค่าเก่าไว้ <code>saved_vol</code> ก่อนเซ็ต 0, unmute ก็ดึงค่ากลับ — map 0–100 → duty 0–1000 ด้วย <code>(vol*1000/100)</code> — Timer 100ms อัปเดต PWM ป้องกัน jitter — <code>USART_Printf</code> แสดงสถานะ volume พร้อม MUTED flag</div></div>
+<div class="answer"><h2>ข้อ 2: Menu Scroll — เลือกรายการด้วย rotary</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "RotaryEncoder.h"
+#include "simple_oled.h"
+
+#define ENC_CLK PC0
+#define ENC_DT  PC1
+#define ENC_SW  PC2
+
+const char *menu[] = {"LED ON", "LED OFF", "BLINK 1Hz", "BLINK 5Hz", "EXIT"};
+#define MENU_COUNT 5
+volatile int8_t idx = 0;
+volatile bool selected = false;
+
+void enc_cw_cb(void)  { idx = (idx + 1) % MENU_COUNT; }
+void enc_ccw_cb(void) { idx = (idx - 1 + MENU_COUNT) % MENU_COUNT; }
+void enc_sw_cb(void)  { selected = true; }
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    OLED_Init();
+    RotaryEncoder_Init(ENC_CLK, ENC_DT, ENC_SW);
+    RotaryEncoder_AttachCW(enc_cw_cb);
+    RotaryEncoder_AttachCCW(enc_ccw_cb);
+    RotaryEncoder_AttachSW(enc_sw_cb);
+
+    while(1) {
+        RotaryEncoder_Process();
+
+        OLED_Clear();
+        OLED_SetFont(FONT_8X16);
+        OLED_Print(0, 0, "-- Menu --");
+        for(uint8_t i = 0; i < MENU_COUNT; i++) {
+            OLED_SetCursor(0, 1 + i);
+            if(i == idx) { OLED_Print(">"); OLED_Print(menu[i]); }
+            else          OLED_Printf(" %s", menu[i]);
+        }
+        OLED_Display();
+
+        if(selected) {
+            selected = false;
+            OLED_Clear();
+            OLED_SetCursor(0, 0); OLED_Print("Selected:");
+            OLED_SetCursor(0, 1); OLED_Print(menu[idx]);
+            OLED_Display();
+            Delay_Ms(1500);
+        }
+
+        Delay_Ms(30);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ใช้ rotary เลือก index ใน array <code>menu[]</code> — CW/CCW เลื่อนขึ้นลงด้วย modulo — แสดงผลด้วย <code>></code> prefix หน้ารายการที่เลือก — กดปุ่ม → <code>selected</code> flag → แสดงข้อความ selected ค้าง 1.5 วิ — สำหรับการนำไปใช้จริง ควรเปลี่ยนจาก delay เป็น state machine และสั่ง action จริงตาม <code>menu[idx]</code></div></div>
+<div class="answer"><h2>ข้อ 3: Acceleration — หมุนเร็วขึ้น step เพิ่มอัตโนมัติ</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "RotaryEncoder.h"
+
+#define ENC_CLK PC0
+#define ENC_DT  PC1
+
+volatile int32_t value = 0;
+uint32_t last_tick = 0;
+int8_t   tick_count = 0;
+
+void enc_tick_cb(int8_t dir) {
+    uint32_t now = Timer_GetMs();
+    uint32_t dt = now - last_tick;
+    last_tick = now;
+
+    tick_count = (dir > 0) ? tick_count + 1 : tick_count - 1;
+
+    int16_t step;
+    if(dt < 20)       step = 100;      // เร็วมาก → กระโดด 100
+    else if(dt < 50)  step = 10;       // เร็ว → กระโดด 10
+    else if(dt < 120) step = 5;        // ปานกลาง → 5
+    else              step = 1;        // ช้า → ทีละ 1
+
+    value += dir * step;
+
+    // clamp 0–5000
+    if(value < 0)    value = 0;
+    if(value > 5000) value = 5000;
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_Init(115200);
+
+    RotaryEncoder_Init(ENC_CLK, ENC_DT, 0xFF);  // ไม่มีปุ่มกด
+    RotaryEncoder_AttachTick(enc_tick_cb);
+
+    Timer_t print_tmr;
+    Start_Timer(&print_tmr, 200, 1);
+
+    while(1) {
+        RotaryEncoder_Process();
+
+        if(Is_Timer_Expired(&print_tmr)) {
+            USART_Printf("Value: %ld  (speed: %dms)\n", value,
+                         tick_count ? (int)(Timer_GetMs() - last_tick) : 0);
+        }
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> วัด <code>dt</code> (เวลาระหว่าง tick) → ถ้า dt สั้น = หมุนเร็ว → เพิ่ม step ให้ใหญ่ขึ้น — threshold: <20ms→step 100, <50ms→10, <120ms→5, else→1 — ทำให้หมุนช้า ๆ ได้ precision สูง และหมุนเร็ว ๆ เปลี่ยนค่าไว — clamp <code>value</code> 0–5000 ป้องกัน overflow — <code>RotaryEncoder_AttachTick</code> รับ callback พร้อมทิศทาง — ใช้ Timer จับเวลาแทน delay ไม่บล็อก loop — สำหรับ UI จริง เพิ่ม acceleration curve แบบ exponential: step = 1 << (speed_level)</div></div>
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_rotaryencoder.html">กลับบท</a><a href="chapx_lib_pid_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>📦 สื่อสารไร้สาย 6 ชนิด — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_motor2.html">บทก่อน</a>
+    <a href="chapx_lib_storage.html">บทถัดไป →</a>
+</nav>
+<h1>📦 สื่อสารไร้สาย 6 ชนิด — ESP01, HC05, nRF24L01, GPS, IR, SoftUART</h1>
+<span class="level advanced">ระดับสูง</span>
+<p style="margin-top:0.5rem;color:#64748b">⏱️ ดูดัชนีทั้งหมดที่ <a href="chapx_lib_index.html">📦 คลังอุปกรณ์</a></p>
+
+<section>
+<h2>ESP01 (ESP8266) — WiFi (USART)</h2>
+<pre class="ascii-circuit">
+PD5(TX)─RX(ESP01)  PD6(RX)─TX(ESP01)  3.3V─VCC+CH_PD  GND─GND+GPIO0
+⚠️ ESP01 กินไฟ 300mA peak → ใช้ external 3.3V regulator (AMS1117-3.3, 500mA+)</pre>
+<pre><code class="language-c">#include "ESP01.h"
+ESP01_Handle wifi;
+ESP01_Init(&wifi, USART1, BAUD_115200);
+ESP01_Reset(&wifi); Delay_Ms(2000);
+ESP01_ConnectWiFi(&wifi, "SSID", "PASSWORD");
+// HTTP GET:
+ESP01_HTTPGet(&wifi, "api.thingspeak.com", "/update?api_key=XXX&field1=25", 80);
+// TCP:
+ESP01_ConnectTCP(&wifi, "192.168.1.100", 8080);
+ESP01_Send(&wifi, "hello");
+// Check connection:
+if(ESP01_IsConnected(&wifi)) ESP01_GetIP(&wifi);</code></pre>
+<p class="explain">⚠️ ESP01 กินไฟ 300mA peak → ต้องมี 3.3V regulator แยก (AMS1117-3.3, 500mA+), CH_PD ต้อง HIGH, GPIO0 LOW = flash mode / GPIO2 HIGH = normal, firmware AT v1.7+, ใช้ CPU ประมวลผล AT responses (~100ms), heap 36KB บน ESP, 3.3V เท่านั้น ห้ามต่อ 5V — ESP01 ไม่ทน 5V, voltage divider 5V→3.3V บน RX ของ ESP01 (ถ้า CH32V003 เป็น 5V)</p>
+
+<h3>API หลัก</h3>
+<table>
+<tr><td><code>ESP01_Init(&h, usart, baud)</code></td><td>Init USART + test AT</td><td><code>ESP01_Reset(&h)</code></td><td>Hardware reset</td></tr>
+<tr><td><code>ESP01_ConnectWiFi(&h, ssid, pass)</code></td><td>เชื่อม WiFi</td><td><code>ESP01_HTTPGet(&h, host, path, port)</code></td><td>HTTP GET request</td></tr>
+<tr><td><code>ESP01_ConnectTCP(&h, ip, port)</code></td><td>เปิด TCP connection</td><td><code>ESP01_Send(&h, data)</code></td><td>ส่งข้อมูลผ่าน TCP</td></tr>
+<tr><td><code>ESP01_IsConnected(&h)</code></td><td>เช็ค WiFi connection</td><td><code>ESP01_GetIP(&h)</code></td><td>อ่าน IP address</td></tr>
+</table>
+
+<h2>HC05 — Bluetooth (USART)</h2>
+<pre class="ascii-circuit">
+PD5(TX)─RX(HC05)  PD6(RX)─TX(HC05)  5V─VCC  GND─GND  EN─PC3 (HIGH=AT mode)
+HC05 TX 3.3V OK → CH32V003 RX, CH32V003 TX 3.3V → HC05 RX OK</pre>
+<pre><code class="language-c">#include "HC05.h"
+HC05_Handle bt;
+HC05_Init(&bt, USART1, BAUD_38400);
+// AT Mode (EN=HIGH):
+HC05_ATMode(&bt, 1);
+HC05_SendAT(&bt, "AT+NAME=MyCH32V003\r\n");
+HC05_SendAT(&bt, "AT+PSWD=1234\r\n");
+HC05_SendAT(&bt, "AT+ROLE=0\r\n"); // 0=slave
+HC05_ATMode(&bt, 0); // back to data mode
+// Data Mode (EN=LOW or floating):
+while(1) {
+    if(HC05_Available(&bt)) { char c = HC05_Read(&bt); USART_WriteByte(c); }
+    if(USART_Available()) { char c = USART_Read(); HC05_Write(&bt, c); }
+}</code></pre>
+<p class="explain">⚠️ default baud 38400 (HC05), AT mode: EN pin HIGH ก่อน power-on, baud=38400 8N1, pairing: ค้นหาจากมือถือ → ใส่รหัส 1234, HC05 TX 3.3V OK → CH32V003 RX รับได้, CH32V003 TX 3.3V → HC05 RX รับได้ (HC05 RX ทน 3.3V), โหมด master/slave เลือกด้วย AT+ROLE, range ~10m (class 2)</p>
+
+<h3>API หลัก</h3>
+<table>
+<tr><td><code>HC05_Init(&h, usart, baud)</code></td><td>Init USART</td><td><code>HC05_ATMode(&h, en)</code></td><td>สลับ AT/Data mode</td></tr>
+<tr><td><code>HC05_SendAT(&h, cmd)</code></td><td>ส่งคำสั่ง AT</td><td><code>HC05_Available(&h)</code></td><td>เช็คข้อมูลรอรับ</td></tr>
+<tr><td><code>HC05_Read(&h)</code></td><td>อ่าน 1 byte</td><td><code>HC05_Write(&h, c)</code></td><td>เขียน 1 byte</td></tr>
+<tr><td><code>HC05_SetName(&h, name)</code></td><td>ตั้งชื่อ Bluetooth</td><td><code>HC05_SetPin(&h, pin)</code></td><td>ตั้งรหัส PIN</td></tr>
+</table>
+
+<h2>nRF24L01 — 2.4GHz Radio (SPI)</h2>
+<pre class="ascii-circuit">
+PC4─CSN  PC5─SCK  PC6─MOSI  PC7─MISO  PC3─CE  3.3V─VCC (ห้าม 5V!)
+Decoupling 100nF ceramic ใกล้ขา VCC</pre>
+<pre><code class="language-c">#include "nRF24L01.h"
+uint8_t tx_addr[] = {0xE7,0xE7,0xE7,0xE7,0xE7};
+uint8_t rx_addr[] = {0xC2,0xC2,0xC2,0xC2,0xC2};
+// === SENDER ===
+nRF24_Init(PC4, PC3); // CSN, CE
+nRF24_TXMode(tx_addr, 0x60); // RF channel 0x60
+char msg[] = "Hello CH32V003";
+nRF24_Send((uint8_t*)msg, sizeof(msg));
+// === RECEIVER ===
+nRF24_Init(PC4, PC3);
+nRF24_RXMode(rx_addr, 0x60);
+while(1) {
+    if(nRF24_Available()) {
+        char buf[32];
+        nRF24_Read((uint8_t*)buf, 32);
+        USART_Print("RX: "); USART_Println(buf);
+    }
+}</code></pre>
+<p class="explain">⚠️ 3.3V ONLY — 5V kills chip ทันที, 6 pipes (0-5) สำหรับ multi-node network, auto-ACK + auto-retransmit ใน TX mode, range ~50-100m (module +PA+LNA แบบมี antenna), address 5 bytes, RF channel 0-125 (2.4GHz + channel MHz), max payload 32 bytes, SPI max 10MHz, ต้องใช้ capacitor 100nF ใกล้ขา VCC ป้องกัน noise</p>
+
+<h3>API หลัก</h3>
+<table>
+<tr><td><code>nRF24_Init(csn, ce)</code></td><td>Init SPI + config</td><td><code>nRF24_TXMode(addr, ch)</code></td><td>เข้าโหมดส่ง</td></tr>
+<tr><td><code>nRF24_RXMode(addr, ch)</code></td><td>เข้าโหมดรับ</td><td><code>nRF24_Send(buf, len)</code></td><td>ส่ง packet</td></tr>
+<tr><td><code>nRF24_Available()</code></td><td>เช็คข้อมูลรอรับ</td><td><code>nRF24_Read(buf, len)</code></td><td>อ่าน packet</td></tr>
+<tr><td><code>nRF24_SetChannel(ch)</code></td><td>เปลี่ยน RF channel</td><td><code>nRF24_SetPower(db)</code></td><td>ตั้งกำลังส่ง (0/-6/-12/-18dBm)</td></tr>
+</table>
+
+<h2>GPS NEO6M — GPS Module (USART)</h2>
+<pre class="ascii-circuit">
+PD5(RX)─TX(GPS)  PD6(TX)─RX(GPS) optional  3.3-5V─VCC  GND─GND
+ต้องมี active antenna — indoor = no signal</pre>
+<pre><code class="language-c">#include "GPS_NEO6M.h"
+GPS_Handle gps;
+GPS_Init(&gps, USART1, BAUD_9600);
+while(1) {
+    GPS_Update(&gps); // process NMEA sentences
+    if(GPS_HasFix(&gps)) {
+        USART_Print("Lat:");  USART_PrintFloat(GPS_GetLatitude(&gps), 6);
+        USART_Print(" Lon:"); USART_PrintFloat(GPS_GetLongitude(&gps), 6);
+        USART_Print(" Alt:"); USART_PrintFloat(GPS_GetAltitude(&gps), 1);
+        USART_Print(" Spd:"); USART_PrintFloat(GPS_GetSpeed(&gps), 1);
+        USART_Println(" km/h");
+        // Time: GPS_GetHour(&gps) / GetMin / GetSec
+        // Date: GPS_GetDay(&gps) / GetMonth / GetYear
+    }
+}</code></pre>
+<p class="explain">⚠️ ต้องมี antenna (active or passive), cold start ~30s / hot start ~1s, NMEA sentences: GGA=fix data / RMC=min recommended, UBX protocol for advanced features (not supported), baud 9600 default, update rate 1Hz default, indoor = no signal (ต้อง outdoor เท่านั้น), GPS_Update() ต้องเรียกทุกรอบเพื่อ parse NMEA, GPS_HasFix() = satellite lock ≥3 ดวง</p>
+
+<h3>API หลัก</h3>
+<table>
+<tr><td><code>GPS_Init(&h, usart, baud)</code></td><td>Init USART 9600</td><td><code>GPS_Update(&h)</code></td><td>Parse NMEA (ต้องเรียกบ่อย)</td></tr>
+<tr><td><code>GPS_HasFix(&h)</code></td><td>เช็คว่ามีสัญญาณหรือไม่</td><td><code>GPS_GetLatitude(&h)</code></td><td>ละติจูด (decimal degrees)</td></tr>
+<tr><td><code>GPS_GetLongitude(&h)</code></td><td>ลองจิจูด</td><td><code>GPS_GetAltitude(&h)</code></td><td>ความสูง (m)</td></tr>
+<tr><td><code>GPS_GetSpeed(&h)</code></td><td>ความเร็ว (km/h)</td><td><code>GPS_GetSatellites(&h)</code></td><td>จำนวนดาวเทียมที่เชื่อม</td></tr>
+</table>
+
+<h2>IR — Infrared Remote (GPIO)</h2>
+<pre class="ascii-circuit">
+PC0─OUT(IR receiver)  3.3V─VCC  GND─GND
+ใช้ VS1838B หรือ TSOP38238 (38kHz carrier)</pre>
+<pre><code class="language-c">#include "IR.h"
+IR_Handle ir;
+IR_Init(&ir, PC0);
+while(1) {
+    if(IR_Available(&ir)) {
+        uint32_t code = IR_Read(&ir);
+        USART_Print("IR code: 0x");
+        USART_PrintHex(code, 8);
+        USART_Println("");
+        // NEC format: address(8bit) + ~address(8bit) + command(8bit) + ~command(8bit)
+        uint8_t cmd = (code >> 8) & 0xFF;
+        USART_Print("Command: "); USART_PrintNum(cmd); USART_Println("");
+    }
+}</code></pre>
+<p class="explain">⚠️ NEC protocol (ใช้มากที่สุด — รีโมท TV/Audio/DVD), VS1838B receiver (38kHz carrier), 9ms leading pulse + 4.5ms space, address+command+inverted bytes (32-bit total), timing: logic 0 = 562µs pulse + 562µs space / logic 1 = 562µs + 1687µs, repeat code = 9ms + 2.25ms (ไม่มี data), ใช้ GPIO interrupt จับ timing — แม่นกว่า polling</p>
+
+<h3>API หลัก</h3>
+<table>
+<tr><td><code>IR_Init(&h, pin)</code></td><td>Init GPIO + interrupt</td><td><code>IR_Available(&h)</code></td><td>เช็คมี code รอ</td></tr>
+<tr><td><code>IR_Read(&h)</code></td><td>อ่าน IR code (32-bit)</td><td><code>IR_GetCommand(code)</code></td><td>แยก command byte</td></tr>
+<tr><td><code>IR_GetAddress(code)</code></td><td>แยก address byte</td><td><code>IR_IsRepeat(code)</code></td><td>เช็คว่าเป็น repeat code</td></tr>
+</table>
+
+<h2>SoftUART — Software Serial (GPIO)</h2>
+<pre class="ascii-circuit">
+PC0─TX(soft)  PC1─RX(soft)  (pin ไหนก็ได้ — software bit-bang)
+ใช้เมื่อ USART1 ถูกใช้แล้ว → 1 USART HW + 1 SoftUART = 2 UART ports</pre>
+<pre><code class="language-c">#include "SoftUART.h"
+SoftUART_Handle suart;
+SoftUART_Init(&suart, PC0, PC1, BAUD_9600); // TX, RX, baud
+SoftUART_Print(&suart, "Hello from soft UART!\r\n");
+SoftUART_PrintNum(&suart, 42);
+// Receive:
+while(1) {
+    if(SoftUART_Available(&suart)) {
+        char c = SoftUART_Read(&suart);
+        SoftUART_Write(&suart, c); // echo
+    }
+}</code></pre>
+<p class="explain">⚠️ software bit-bang → CPU intensive (ใช้ CPU 100% ขณะ send/receive), baud limit ~19200, ห้ามมี interrupt ขัดจังหวะตอน send/receive (เช่น TIM interrupt), ใช้เมื่อ USART1 ถูกใช้แล้ว, timing depends on SystemCoreClock accuracy, TX pin idle = LOW → HIGH, 1 USART HW + 1 SoftUART = 2 UART ports บน CH32V003, เหมาะกับ debug print ระหว่างที่ USART1 คุยกับ ESP01/HC05</p>
+
+<h3>API หลัก</h3>
+<table>
+<tr><td><code>SoftUART_Init(&h, tx, rx, baud)</code></td><td>Init GPIO + timer</td><td><code>SoftUART_Print(&h, str)</code></td><td>ส่ง string</td></tr>
+<tr><td><code>SoftUART_PrintNum(&h, n)</code></td><td>ส่งตัวเลข (decimal)</td><td><code>SoftUART_PrintHex(&h, n, d)</code></td><td>ส่งเลขฐาน 16</td></tr>
+<tr><td><code>SoftUART_Available(&h)</code></td><td>เช็คข้อมูลรอรับ</td><td><code>SoftUART_Read(&h)</code></td><td>อ่าน 1 byte</td></tr>
+<tr><td><code>SoftUART_Write(&h, c)</code></td><td>ส่ง 1 byte</td><td><code>SoftUART_SetBaud(&h, baud)</code></td><td>เปลี่ยน baud</td></tr>
+</table>
+</section>
+
+<section>
+<h2>📋 เปรียบเทียบการสื่อสารไร้สายทั้ง 6 ชนิด</h2>
+<table>
+<tr><th>อุปกรณ์</th><th>Interface</th><th>Protocol</th><th>Range</th><th>ความเร็ว</th><th>ใช้ดีที่สุดกับ</th></tr>
+<tr><td>ESP01 (ESP8266)</td><td>USART (AT)</td><td>TCP/HTTP/MQTT</td><td>ทั่วโลก (WiFi)</td><td>115200 bps</td><td>IoT cloud, web API, WiFi bridge</td></tr>
+<tr><td>HC05</td><td>USART</td><td>Bluetooth SPP</td><td>~10m</td><td>38400 bps</td><td>มือถือ→MCU, wireless debug, data link</td></tr>
+<tr><td>nRF24L01</td><td>SPI</td><td>2.4GHz RF</td><td>50-100m</td><td>2Mbps (RF)</td><td>Sensor mesh, RC control, low-power net</td></tr>
+<tr><td>GPS NEO6M</td><td>USART</td><td>NMEA over UART</td><td>ทั่วโลก (รับอย่างเดียว)</td><td>9600 bps</td><td>Tracking, time sync, navigation</td></tr>
+<tr><td>IR (VS1838B)</td><td>GPIO</td><td>NEC Infrared</td><td>~10m (line-of-sight)</td><td>~1.1kbps</td><td>Remote control, short beam command</td></tr>
+<tr><td>SoftUART</td><td>GPIO (bit-bang)</td><td>UART 8N1</td><td>สาย</td><td>ถึง 19200 bps</td><td>2nd debug port, USART1 busy fallback</td></tr>
+</table>
+<p style="margin-top:1rem;color:#64748b"><strong>เลือกยังไง?</strong> ต้องการ cloud/IoT → ESP01, มือถือเชื่อมต่อ → HC05, สื่อสาร MCU-to-MCU ระยะไกล → nRF24L01, ต้องการพิกัดโลก → GPS NEO6M, รีโมทคอนโทรลถูกๆ → IR VS1838B, ต้องการ serial port ที่สอง → SoftUART</p>
+</section>
+
+<section>
+<h2>✏️ ลองทำดู</h2>
+<ol>
+<li>ESP01 IoT weather station — อ่าน BMP280 ทุก 30s → ส่งอุณหภูมิ+ความชื้นไป ThingSpeak (HTTP GET), แสดงค่าล่าสุดบน OLED</li>
+<li>nRF24L01 remote control — 2 บอร์ด CH32V003: transmitter ต่อ 4 ปุ่ม → receiver ขับ LED 4 ดวง, เช็ค lost connection (heartbeat ทุก 1s)</li>
+<li>GPS tracker — อ่าน GPS ทุก 10s → log lat/lon ลง W25Qxx Flash, กดปุ่ม → ดึงข้อมูลทั้งหมดออกทาง USART เป็น CSV</li>
+<li>IR universal remote — learn mode: กดรีโมท → เก็บ IR code ใน EEPROM, play mode: กดปุ่ม → replay IR code, รองรับ 10 ปุ่ม</li>
+<li>ESP01 + SoftUART combo — ESP01 บน SoftUART (PC0,PC1) สื่อสาร WiFi → USART1 ใช้เป็น debug console (Serial Monitor), bridge ข้อมูลระหว่าง ESP01 ↔ USART1</li>
+</ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_motor2.html">บทก่อน</a>
+    <a href="chapx_lib_storage.html">บทถัดไป →</a>
+</nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

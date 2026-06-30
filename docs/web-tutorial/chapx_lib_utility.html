@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>📦 บูรณาการระบบ — Full Product ด้วย Scheduler, PID, Menu, OLED — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_input.html">บทก่อน</a>
+    <a href="chapx_recipes.html">บทถัดไป →</a>
+</nav>
+<h1>📦 บูรณาการระบบ — Full Product ด้วย Scheduler + PID + Menu + OLED</h1>
+<span class="level expert">ระดับผู้เชี่ยวชาญ</span>
+
+<section>
+<h2>🧭 4 Layers ของ Product จริง</h2>
+<pre class="mermaid">
+flowchart TD
+    L1["Layer 4: Display & UI — OLED + LCDMenu + RotaryEncoder"] --> L2
+    L2["Layer 3: Control Logic — PID + State Machine"] --> L3
+    L3["Layer 2: Sensor/Actuator — BMP280 + DS18B20 + Relay + Servo"] --> L4
+    L4["Layer 1: Timing — SimpleScheduler + IWDG_Feed + PWR_Sleep"]
+    style L1 fill:#e0e7ff
+    style L3 fill:#dcfce7
+    style L4 fill:#fef3c7
+</pre>
+</section>
+
+<section>
+<h2>🛠️ Full Product — Temperature Controller with OLED UI</h2>
+<pre class="ascii-circuit">
+CH32V003 TSSOP-20
+├── I2C Bus (PC1=SDA, PC2=SCL)
+│   ├── BMP280 (addr 0x76) — measure room temp
+│   └── OLED SSD1306 (addr 0x3C) — display
+├── 1-Wire (PC0) ── DS18B20 — measure target zone temp
+├── Relay (PC5) ── Heater — activate when cold
+├── RotaryEncoder (PC3=CLK, PC4=DT, PC6=SW) — adjust setpoint
+├── Buzzer (PA1) — alarm when over-temp
+├── USART (PD5=TX, PD6=RX) — serial monitor / IoT extension
+└── WCH-Link (PD1=SWIO) — flash + debug
+</pre>
+
+<h3>โค้ดสมบูรณ์ (~140 บรรทัด)</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#define ENABLE_USART_PRINTLN  1
+#define ENABLE_USART_PRINTFLOAT 1
+#include "SimpleHAL.h"
+#include "BMP280.h"
+#include "DS18B20.h"
+#include "OLED.h"
+#include "Relay.h"
+#include "RotaryEncoder.h"
+#include "PID.h"
+#include "SimpleScheduler.h"
+#include "Buzzer.h"
+
+OLED_t oled;
+PID_Handle pid;
+float setpoint = 25.0f, current_temp = 0, pid_output = 0;
+uint8_t heater_on = 0, alarm_active = 0;
+uint32_t alarm_start = 0;
+
+// ---- Tasks (called by Scheduler) ----
+void task_read_sensors(void) {
+    float t1 = BMP280_ReadTemperature();           // room
+    DS18B20_RequestTemperatures(); Delay_Ms(750);
+    float t2 = DS18B20_GetTempCByIndex(0);        // target zone
+    current_temp = (t1 + t2) / 2.0f;
+}
+
+void task_pid_control(void) {
+    pid_output = PID_Compute(&pid, current_temp);
+    if(pid_output > 5) { Relay_On(PC5); heater_on = 1; }
+    else { Relay_Off(PC5); heater_on = 0; }
+    // Alarm if 2°C above setpoint for 10 seconds
+    if(current_temp > setpoint + 2.0f) {
+        if(!alarm_active) { alarm_active = 1; alarm_start = Get_CurrentMs(); }
+        else if(Get_CurrentMs() - alarm_start > 10000) {
+            Buzzer_Beep(PA1, 200); // beep every 2s
+            USART_Println("WARNING: Over temperature!");
+            alarm_start = Get_CurrentMs();
+        }
+    } else { alarm_active = 0; }
+}
+
+void task_update_display(void) {
+    OLED_Clear(&oled);
+    OLED_SetCursor(&oled, 0, 0);
+    OLED_PrintFloat(&oled, "T:", current_temp, 1);
+    OLED_Print(&oled, "C  ");
+    OLED_Print(&oled, heater_on ? "[ON]" : "[  ]");
+
+    OLED_SetCursor(&oled, 0, 2);
+    OLED_PrintFloat(&oled, "Set:", setpoint, 1);
+    OLED_Print(&oled, "C");
+
+    OLED_SetCursor(&oled, 0, 4);
+    OLED_PrintFloat(&oled, "PWR:", pid_output, 1);
+    OLED_Print(&oled, "% ");
+    OLED_PrintFloat(&oled, "", (float)(Get_CurrentMs()/1000), 0);
+    OLED_Print(&oled, "s");
+
+    OLED_Display(&oled);
+}
+
+// ---- Rotary Encoder Callbacks ----
+void on_rotate(int8_t dir) {
+    setpoint += dir * 0.5f;
+    if(setpoint < 0)  setpoint = 0;
+    if(setpoint > 50) setpoint = 50;
+    PID_SetSetpoint(&pid, setpoint);
+    USART_Print("Setpoint: "); USART_PrintFloat(setpoint, 1); USART_Println("C");
+    Buzzer_Tone(PA1, 1000, 20); // short click feedback
+}
+
+void on_button(void) {
+    heater_on = !heater_on;
+    USART_Println(heater_on ? "Controller ON" : "Controller OFF");
+}
+
+// ---- Main ----
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    // Init communication
+    I2C_SimpleInit(I2C_SPEED_400K, I2C_PINS_DEFAULT);
+    OneWire_Init(PC0);
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+
+    // Init sensors
+    BMP280_Init(0x76);
+    BMP280_SetMode(BMP280_MODE_NORMAL);
+    DS18B20_Init();
+
+    // Init display
+    OLED_Init(&oled, 0x3C, OLED_128x64);
+    OLED_Clear(&oled); OLED_SetCursor(&oled, 0, 2);
+    OLED_Print(&oled, "Temp Controller"); OLED_SetCursor(&oled, 0, 4);
+    OLED_Print(&oled, "Booting..."); OLED_Display(&oled);
+    Delay_Ms(2000);
+
+    // Init actuators
+    Relay_Init(PC5, RELAY_ACTIVE_HIGH);
+    Buzzer_Init(PA1, BUZZER_ACTIVE);
+
+    // Init PID
+    PID_Init(&pid, PID_DIRECT);
+    PID_SetTunings(&pid, 2.0f, 3.0f, 0.5f);
+    PID_SetOutputLimits(&pid, 0, 100);
+    PID_SetSetpoint(&pid, setpoint);
+
+    // Init input
+    RotaryEncoder_Init(PC3, PC4, PC6);
+    RotaryEncoder_OnRotate(on_rotate);
+    RotaryEncoder_OnButton(on_button);
+
+    // Init scheduler
+    SimpleScheduler_Init();
+    SimpleScheduler_AddTask(task_read_sensors,  2000); // 2s
+    SimpleScheduler_AddTask(task_pid_control,   1000); // 1s
+    SimpleScheduler_AddTask(task_update_display, 500); // 0.5s
+
+    Buzzer_Beep(PA1, 100); // startup beep
+    USART_Println("=== Temp Controller Ready ===");
+
+    while(1) {
+        RotaryEncoder_Update();  // fast poll for responsiveness
+        SimpleScheduler_Run();   // run timed tasks
+        yield();                 // feed IWDG
+
+        // Optional: sleep when idle
+        // PWR_Sleep();
+    }
+}</code></pre>
+</section>
+
+<section>
+<h2>📊 Resource Budget</h2>
+<table>
+<tr><th>Product Level</th><th>Components</th><th>Flash</th><th>RAM</th></tr>
+<tr><td>Simple</td><td>1 sensor + USART</td><td>~3-4KB</td><td>~200B</td></tr>
+<tr><td>Medium</td><td>2 sensors + OLED</td><td>~6-7KB</td><td>~1.2KB</td></tr>
+<tr><td>This Project</td><td>2 sensors + OLED + PID + Scheduler + Menu</td><td>~9-10KB</td><td>~1.6KB</td></tr>
+<tr><td>CH32V003 Max</td><td>—</td><td>16KB</td><td>2KB</td></tr>
+</table>
+<p class="explain">⚠️ ให้เหลือ Flash > 15%, RAM > 20% สำหรับ stack และการเพิ่มฟีเจอร์ทีหลัง — เปิด <code>ENABLE_PRINTF=0</code> ใน release จะประหยัด ~2KB Flash</p>
+</section>
+
+<section>
+<h2>🧩 Design Patterns สรุป</h2>
+<table>
+<tr><th>Pattern</th><th>Init</th><th>Loop</th><th>เหมาะกับ</th></tr>
+<tr><td><strong>Sensor</strong></td><td><code>Lib_Init → Lib_SetMode</code></td><td><code>Lib_Read → Process</code></td><td>BMP280, DHT, MQGas</td></tr>
+<tr><td><strong>Actuator</strong></td><td><code>Lib_Init → Lib_Start</code></td><td><code>Lib_Set/MoveTo → Update → CheckDone</code></td><td>Servo, Stepper, ESC</td></tr>
+<tr><td><strong>Display</strong></td><td><code>Lib_Init → Lib_Clear</code></td><td><code>Clear → Draw → Display</code></td><td>OLED, MAX7219, TJC</td></tr>
+<tr><td><strong>Control</strong></td><td><code>PID_Init → PID_SetTunings</code></td><td><code>Read → Compute → Output</code></td><td>PID, SimpleScheduler</td></tr>
+<tr><td><strong>Input</strong></td><td><code>Lib_Init → Lib_OnCallback</code></td><td><code>Lib_Update → event fires callback</code></td><td>Button, RotaryEncoder, KeyMatrix</td></tr>
+</table>
+</section>
+
+<section>
+<h2>✏️ ลองทำดู</h2>
+<ol>
+    <li>เพิ่ม WiFi logging — ESP01 send data to ThingSpeak every 30s</li>
+    <li>บันทึก setpoint ลง Flash — โหลดกลับตอน boot</li>
+    <li>เพิ่ม alarm escalation — เกิน setpoint+2=beep, +5=relay off (emergency stop)</li>
+    <li>เปลี่ยน RotaryEncoder เป็น KeyMatrix — input setpoint เป็นเลข 4 หลัก</li>
+    <li>ทำ battery-powered version — Standby+AWU 10s, wake→measure→control→sleep</li>
+</ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_input.html">บทก่อน</a>
+    <a href="chapx_recipes.html">บทถัดไป →</a>
+</nav>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>
