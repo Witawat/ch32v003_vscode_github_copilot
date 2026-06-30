@@ -9,7 +9,8 @@
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    OLED_Init();
+    OLED_Handle oled;
+    OLED_Init(&oled, OLED_128x64, 0x3C);
 
     OLED_SetFont(FONT_16X16_THAI);
     OLED_Print(0, 0, "สวัสดี");
@@ -20,7 +21,7 @@ int main(void) {
     OLED_SetFont(FONT_6X8);
     OLED_PrintFloat(72, 20, 25.5f, 1);
     OLED_Print(0, 40, "Celsius");
-    OLED_Display();
+    OLED_Update(&oled);
 
     while(1) {}
 }</code></pre>
@@ -35,7 +36,8 @@ int main(void) {
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    OLED_Init();
+    OLED_Handle oled;
+    OLED_Init(&oled, OLED_128x64, 0x3C);
     ADC_SimpleInit(ADC_CH0);
 
     while(1) {
@@ -49,7 +51,7 @@ int main(void) {
         OLED_SetFont(FONT_6X8);
         OLED_Print(45, 20, "ADC:");
         OLED_PrintNum(45, 30, adc);
-        OLED_Display();
+        OLED_Update(&oled);
 
         Delay_Ms(100);
     }
@@ -66,7 +68,8 @@ int main(void) {
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    OLED_Init();
+    OLED_Handle oled;
+    OLED_Init(&oled, OLED_128x64, 0x3C);
 
     int16_t x = 32, y = 24;
     int16_t vx = 2, vy = 1;
@@ -92,7 +95,7 @@ int main(void) {
 
         // วาดบอลใหม่
         OLED_DrawCircle(x, y, BALL_R, 1);
-        OLED_Display();
+        OLED_Update(&oled);
         Delay_Ms(20);
     }
 }</code></pre>
@@ -138,7 +141,8 @@ const uint8_t qr[29][29] = {
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    OLED_Init();
+    OLED_Handle oled;
+    OLED_Init(&oled, OLED_128x64, 0x3C);
 
     OLED_Clear();
     for(uint8_t y = 0; y < 29; y++) {
@@ -148,7 +152,7 @@ int main(void) {
             }
         }
     }
-    OLED_Display();
+    OLED_Update(&oled);
 
     while(1) {}
 }</code></pre>

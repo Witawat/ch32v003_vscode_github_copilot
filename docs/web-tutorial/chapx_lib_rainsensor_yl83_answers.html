@@ -9,6 +9,7 @@
 #include "RainSensor.h"
 #include "oled_i2c.h"
 
+RainSensor_Instance r;
 #define RAIN_VCC PC0
 #define RAIN_ADC PD2
 #define RAIN_DIG PC3
@@ -19,16 +20,16 @@ int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
     I2C_Init(PC1, PC2, I2C_SPEED_STANDARD);
-    ADC_Init(RAIN_ADC, ADC_CH0);
-    pinMode(RAIN_VCC, PIN_MODE_OUTPUT);
-    pinMode(RAIN_DIG, PIN_MODE_INPUT);
-    pinMode(BUZZER, PIN_MODE_OUTPUT);
-    pinMode(LED_WARN, PIN_MODE_OUTPUT);
+    RainSensor_Init(&r, ADC_CH0);
+    GPIO_SimpleInit(RAIN_VCC, GPIO_OUT_PP);
+    GPIO_SimpleInit(RAIN_DIG, GPIO_IN_PU);
+    GPIO_SimpleInit(BUZZER, GPIO_OUT_PP);
+    GPIO_SimpleInit(LED_WARN, GPIO_OUT_PP);
     USART_Init(115200);
 
-    digitalWrite(RAIN_VCC, LOW);
-    digitalWrite(BUZZER, LOW);
-    digitalWrite(LED_WARN, LOW);
+    GPIO_WriteBit(RAIN_VCC, 0);
+    GPIO_WriteBit(BUZZER, 0);
+    GPIO_WriteBit(LED_WARN, 0);
 
     OLED_Handle oled;
     OLED_Init(&oled, OLED_128x64, 0x3C);
@@ -44,11 +45,11 @@ int main(void) {
 
     while(1) {
         if(Is_Timer_Expired(&tmr)) {
-            digitalWrite(RAIN_VCC, HIGH);
+            GPIO_WriteBit(RAIN_VCC, 1);
             Delay_Ms(50);
             uint16_t adc = ADC_Read(RAIN_ADC);
-            uint8_t dig = GPIO_Read(RAIN_DIG);
-            digitalWrite(RAIN_VCC, LOW);
+            uint8_t dig = GPIO_ReadBit(RAIN_DIG);
+            GPIO_WriteBit(RAIN_VCC, 0);
 
             const char* status;
             if(dig && adc > 800) {
@@ -58,8 +59,8 @@ int main(void) {
 
                 if(rain_streak >= 3 && !alert_active) {
                     alert_active = 1;
-                    digitalWrite(BUZZER, HIGH);
-                    digitalWrite(LED_WARN, HIGH);
+                    GPIO_WriteBit(BUZZER, 1);
+                    GPIO_WriteBit(LED_WARN, 1);
                     USART_Print("RAIN ALERT! Bring laundry in!\r\n");
                 }
             } else if(adc > 500) {
@@ -78,8 +79,8 @@ int main(void) {
 
             if(last_dry_streak >= 6 && alert_active) {
                 alert_active = 0;
-                digitalWrite(BUZZER, LOW);
-                digitalWrite(LED_WARN, LOW);
+                GPIO_WriteBit(BUZZER, 0);
+                GPIO_WriteBit(LED_WARN, 0);
                 USART_Print("Rain stopped, alert cleared\r\n");
             }
 
@@ -117,6 +118,8 @@ int main(void) {
 #include "SimpleHAL.h"
 #include "RainSensor.h"
 
+RainSensor_Instance r;
+SoilMoisture_Instance s;
 #define RAIN_VCC   PC0
 #define RAIN_ADC   PD2
 #define RAIN_DIG   PC3
@@ -126,11 +129,11 @@ int main(void) {
 #define PUMP_PIN   PC5
 #define ALERT_LED  PC1
 
-uint16_t read_sensor(uint8_t vcc_pin, uint8_t adc_pin) {
-    digitalWrite(vcc_pin, HIGH);
+uint16_t read_sensor_raw(uint8_t vcc_pin, uint8_t adc_pin) {
+    GPIO_WriteBit(vcc_pin, 1);
     Delay_Ms(60);
     uint16_t val = ADC_Read(adc_pin);
-    digitalWrite(vcc_pin, LOW);
+    GPIO_WriteBit(vcc_pin, 0);
     return val;
 }
 
@@ -139,17 +142,19 @@ int main(void) {
     Timer_Init();
     ADC_Init(RAIN_ADC, ADC_CH0);
     ADC_Init(SOIL_ADC, SOIL_CH);
-    pinMode(RAIN_VCC, PIN_MODE_OUTPUT);
-    pinMode(RAIN_DIG, PIN_MODE_INPUT);
-    pinMode(SOIL_VCC, PIN_MODE_OUTPUT);
-    pinMode(PUMP_PIN, PIN_MODE_OUTPUT);
-    pinMode(ALERT_LED, PIN_MODE_OUTPUT);
+    RainSensor_Init(&r, ADC_CH0);
+    SoilMoisture_Init(&s, SOIL_CH);
+    GPIO_SimpleInit(RAIN_VCC, GPIO_OUT_PP);
+    GPIO_SimpleInit(RAIN_DIG, GPIO_IN_PU);
+    GPIO_SimpleInit(SOIL_VCC, GPIO_OUT_PP);
+    GPIO_SimpleInit(PUMP_PIN, GPIO_OUT_PP);
+    GPIO_SimpleInit(ALERT_LED, GPIO_OUT_PP);
     USART_Init(115200);
 
-    digitalWrite(RAIN_VCC, LOW);
-    digitalWrite(SOIL_VCC, LOW);
-    digitalWrite(PUMP_PIN, LOW);
-    digitalWrite(ALERT_LED, LOW);
+    GPIO_WriteBit(RAIN_VCC, 0);
+    GPIO_WriteBit(SOIL_VCC, 0);
+    GPIO_WriteBit(PUMP_PIN, 0);
+    GPIO_WriteBit(ALERT_LED, 0);
 
     Timer_t tmr;
     Start_Timer(&tmr, 30000, 1);
@@ -161,15 +166,13 @@ int main(void) {
 
     while(1) {
         if(Is_Timer_Expired(&tmr)) {
-            uint16_t rain_adc = read_sensor(RAIN_VCC, RAIN_ADC);
-            uint8_t  rain_dig = GPIO_Read(RAIN_DIG);
-            uint16_t soil_adc = read_sensor(SOIL_VCC, SOIL_ADC);
+            uint16_t rain_adc = read_sensor_raw(RAIN_VCC, RAIN_ADC);
+            uint8_t  rain_dig = GPIO_ReadBit(RAIN_DIG);
+            float soil_moisture = SoilMoisture_Read(&s);
 
-            uint8_t is_raining = (rain_dig || rain_adc > 400);
+            uint8_t is_raining = RainSensor_IsRaining(&r);
             if(is_raining) rain_today = 1;
 
-            float soil_moisture = 100.0f - ((float)(soil_adc - 200) /
-                                  (float)(950 - 200)) * 100.0f;
             if(soil_moisture < 0) soil_moisture = 0;
             if(soil_moisture > 100) soil_moisture = 100;
 
@@ -181,18 +184,18 @@ int main(void) {
             if(is_raining && !pump_blocked) {
                 pump_blocked = 1;
                 USART_Print(" RAIN - Pump blocked\r\n");
-                digitalWrite(ALERT_LED, HIGH);
+                GPIO_WriteBit(ALERT_LED, 1);
             } else if(!is_raining && pump_blocked && !rain_today) {
                 pump_blocked = 0;
                 USART_Print(" Dry - Pump unblocked\r\n");
-                digitalWrite(ALERT_LED, LOW);
+                GPIO_WriteBit(ALERT_LED, 0);
             }
 
             if(!is_raining && soil_moisture < 30.0f && !pump_blocked) {
                 USART_Print(" WATERING\r\n");
-                digitalWrite(PUMP_PIN, HIGH);
+                GPIO_WriteBit(PUMP_PIN, 1);
                 Delay_Ms(5000);
-                digitalWrite(PUMP_PIN, LOW);
+                GPIO_WriteBit(PUMP_PIN, 0);
             } else {
                 USART_Print("\r\n");
             }
@@ -208,6 +211,7 @@ int main(void) {
 #include "SimpleHAL.h"
 #include "RainSensor.h"
 
+RainSensor_Instance r;
 #define RAIN_VCC  PC0
 #define RAIN_ADC  PD2
 #define RAIN_DIG  PC3
@@ -221,17 +225,17 @@ int main(void) {
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    ADC_Init(RAIN_ADC, ADC_CH0);
-    pinMode(RAIN_VCC, PIN_MODE_OUTPUT);
-    pinMode(RAIN_DIG, PIN_MODE_INPUT);
+    RainSensor_Init(&r, ADC_CH0);
+    GPIO_SimpleInit(RAIN_VCC, GPIO_OUT_PP);
+    GPIO_SimpleInit(RAIN_DIG, GPIO_IN_PU);
     USART_Init(115200);
 
-    digitalWrite(RAIN_VCC, LOW);
+    GPIO_WriteBit(RAIN_VCC, 0);
 
-    digitalWrite(RAIN_VCC, HIGH);
+    GPIO_WriteBit(RAIN_VCC, 1);
     Delay_Ms(50);
     uint16_t baseline_adc = ADC_Read(RAIN_ADC);
-    digitalWrite(RAIN_VCC, LOW);
+    GPIO_WriteBit(RAIN_VCC, 0);
 
     float total_rain_mm = 0;
     uint16_t prev_adc = baseline_adc;
@@ -245,11 +249,11 @@ int main(void) {
 
     while(1) {
         if(Is_Timer_Expired(&tmr)) {
-            digitalWrite(RAIN_VCC, HIGH);
+            GPIO_WriteBit(RAIN_VCC, 1);
             Delay_Ms(50);
             uint16_t adc = ADC_Read(RAIN_ADC);
-            uint8_t dig = GPIO_Read(RAIN_DIG);
-            digitalWrite(RAIN_VCC, LOW);
+            uint8_t dig = GPIO_ReadBit(RAIN_DIG);
+            GPIO_WriteBit(RAIN_VCC, 0);
 
             if(adc > prev_adc + 5) {
                 float rain_added = (adc - prev_adc) * 0.015f;

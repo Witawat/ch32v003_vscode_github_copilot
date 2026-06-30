@@ -2,15 +2,16 @@
 <nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_as5600.html">กลับบท</a><a href="chapx_lib_pir_answers.html">เฉลยถัดไป →</a></nav>
 <h1>📝 เฉลย — AS5600 Magnetic Rotary Encoder</h1>
 <div class="answer"><h2>ข้อ 1: Knob → Serial Angle Output</h2><pre><code class="language-c">void as5600_knob_serial(void) {
-    AS5600_Init(I2C_PINS_DEFAULT);
+    AS5600_Instance enc;
+    AS5600_Init(&enc);
 
     uint16_t last_angle = 0xFFFF;
 
     while(1) {
-        uint16_t angle = AS5600_ReadAngle();
+        uint16_t angle = AS5600_ReadRawAngle(&enc);
 
         if(angle != last_angle) {
-            float degrees = angle * 360.0f / 4096.0f;
+            float degrees = AS5600_ReadAngleDegrees(&enc);
 
             USART_Print("Angle: ");
             USART_PrintNum(angle);
@@ -32,9 +33,9 @@
 </code></pre><div class="approach"><strong>🧠 แนวคิด:</strong> AS5600 ให้ค่า 0–4095 (12-bit) ต่อรอบ — แปลงเป็นองศา: angle × 360 / 4096 — ส่งเฉพาะเมื่อค่าเปลี่ยน ลด serial spam — แปลงเป็นเปอร์เซ็นต์สำหรับ knob UI — I2C address 0x36 fixed — ใช้แม่เหล็ก diametrically magnetized ให้ได้ linear output</div></div>
 <div class="answer"><h2>ข้อ 2: Zero Position Setting</h2><pre><code class="language-c">uint16_t as5600_zero_offset = 0;
 
-void as5600_set_zero(void) {
+void as5600_set_zero(AS5600_Instance *enc) {
     // อ่านตำแหน่งปัจจุบันมาเป็น zero
-    uint16_t current = AS5600_ReadRawAngle();
+    uint16_t current = AS5600_ReadRawAngle(enc);
 
     // Burn ลง OTP (ทำครั้งเดียว!)
     // วิธีทางซอฟต์แวร์ — เก็บ offset ใน software ดีกว่า
@@ -45,8 +46,8 @@ void as5600_set_zero(void) {
     USART_Println("");
 }
 
-uint16_t as5600_read_angle_zeroed(void) {
-    uint16_t raw = AS5600_ReadRawAngle();
+uint16_t as5600_read_angle_zeroed(AS5600_Instance *enc) {
+    uint16_t raw = AS5600_ReadRawAngle(enc);
 
     // Handle wraparound
     if(raw >= as5600_zero_offset) {
@@ -56,8 +57,8 @@ uint16_t as5600_read_angle_zeroed(void) {
     }
 }
 
-float as5600_read_degrees(void) {
-    return as5600_read_angle_zeroed() * 360.0f / 4096.0f;
+float as5600_read_degrees(AS5600_Instance *enc) {
+    return as5600_read_angle_zeroed(enc) * 360.0f / 4096.0f;
 }
 </code></pre><div class="approach"><strong>🧠 แนวคิด:</strong> เก็บ offset ในซอฟต์แวร์แทนการ burn OTP (แก้ไขภายหลังได้) — handle wraparound: ถ้า raw < offset แสดงว่าหมุนข้าม 0 → บวก 4096 ชดเชย — AS5600 มี zero position register ในฮาร์ดแวร์ด้วย แต่ burn OTP ทำครั้งเดียว ไม่ควรใช้ระหว่างพัฒนา</div></div>
 <div class="answer"><h2>ข้อ 3: Magnet Detect Validation</h2><pre><code class="language-c">typedef enum {
@@ -67,8 +68,8 @@ float as5600_read_degrees(void) {
     MAGNET_NOT_DETECTED
 } magnet_status_t;
 
-magnet_status_t as5600_check_magnet(void) {
-    uint8_t status = AS5600_ReadStatus();
+magnet_status_t as5600_check_magnet(AS5600_Instance *enc) {
+    uint8_t status = AS5600_ReadStatus(enc);
 
     // Bit 3 = magnet detected, Bit 4 = magnet too weak, Bit 5 = magnet too strong
     if(!(status & 0x08)) return MAGNET_NOT_DETECTED;
@@ -78,16 +79,17 @@ magnet_status_t as5600_check_magnet(void) {
 }
 
 void as5600_magnet_monitor(void) {
-    AS5600_Init(I2C_PINS_DEFAULT);
+    AS5600_Instance enc;
+    AS5600_Init(&enc);
     pinMode(PC0, PIN_MODE_OUTPUT);
 
     while(1) {
-        magnet_status_t ms = as5600_check_magnet();
+        magnet_status_t ms = as5600_check_magnet(&enc);
 
         switch(ms) {
             case MAGNET_OK:
                 digitalWrite(PC0, HIGH);
-                uint16_t angle = AS5600_ReadAngle();
+                uint16_t angle = AS5600_ReadRawAngle(&enc);
                 USART_Print("OK — Angle: ");
                 USART_PrintNum(angle);
                 USART_Println("");

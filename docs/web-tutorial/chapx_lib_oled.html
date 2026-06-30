@@ -17,10 +17,10 @@
     <h2>🧭 แผนภาพการทำงาน</h2>
     <pre class="mermaid">
 flowchart TD
-    A["I2C_SimpleInit()"] --> B["OLED_Init(&oled, OLED_128x64, 0x3C)"]
-    B --> C["OLED_Clear(&oled)"]
-    C --> D["OLED_SetCursor + Drawing"]
-    D --> E["OLED_Update(&oled)"]
+    A["I2C_SimpleInit()"] --> B["OLED_Init(&amp;oled, OLED_128x64, 0x3C)"]
+    B --> C["OLED_Clear(&amp;oled)"]
+    C --> D["OLED_SetFont + OLED_DrawStringAlign"]
+    D --> E["OLED_Update(&amp;oled)"]
     E --> F["while(1) loop"]
     F --> D
     </pre>
@@ -42,17 +42,19 @@ flowchart TD
 </section>
 <section>
     <h2>📚 หลักการทำงาน</h2>
-    <p><strong>Buffer-based Graphics:</strong> OLED_Init() จอง RAM buffer ขนาด (width × height) / 8 ไบต์ — สำหรับ 128×64 = 1,024 ไบต์ (1KB) การวาดทั้งหมดทำใน buffer ก่อน แล้วเรียก OLED_Display() ส่งทั้งจอไปที่ SSD1306 ผ่าน I2C</p>
-    <p><strong>Pipeline: Clear → Draw → Display:</strong> ทุกเฟรมเริ่มด้วย Clear() ล้าง buffer → วาดข้อความ/รูปทรงด้วยฟังก์ชันต่างๆ → สั่ง Display() เพื่อส่งข้อมูล I2C ขึ้นจอ การแยกขั้นตอนทำให้วาดหลายอย่างก่อนแสดงผลครั้งเดียว ลด flicker</p>
-    <p><strong>Font System:</strong> รองรับฟอนต์ 6×8 (small) และ 8×16 (normal/bold) — เปลี่ยนได้ด้วย OLED_SetFont() ระบบ font จัดเก็บเป็น bitmap ใน Flash ROM — รองรับอักขระ UTF-8 ภาษาไทย</p>
-    <p><strong>Graphic Primitives:</strong> DrawPixel, DrawLine, DrawRect (filled/unfilled), DrawCircle — ทุกอย่างทำงานบน buffer ก่อน ใช้ algorithm ของ Bresenham สำหรับเส้นและวงกลม</p>
+    <p><strong>Buffer-based Graphics:</strong> OLED_Init() จอง RAM buffer ขนาด (width × height) / 8 ไบต์ — สำหรับ 128×64 = 1,024 ไบต์ (1KB) การวาดทั้งหมดทำใน buffer ก่อน แล้วเรียก OLED_Update() ส่งทั้งจอไปที่ SSD1306 ผ่าน I2C</p>
+    <p><strong>Pipeline: Clear → Draw → Update:</strong> ทุกเฟรมเริ่มด้วย Clear() ล้าง buffer → วาดข้อความ/รูปทรงด้วยฟังก์ชันต่างๆ → สั่ง Update() เพื่อส่งข้อมูล I2C ขึ้นจอ การแยกขั้นตอนทำให้วาดหลายอย่างก่อนแสดงผลครั้งเดียว ลด flicker</p>
+    <p><strong>Font System:</strong> รองรับฟอนต์ 6×8 และ 8×16 — เปลี่ยนได้ด้วย OLED_SetFont() ระบบ font จัดเก็บเป็น bitmap ใน Flash ROM — ใช้ OLED_DrawStringAlign() สำหรับจัดตำแหน่งข้อความแบบซ้าย/กลาง/ขวา</p>
+    <p><strong>Graphic Primitives:</strong> OLED_SetPixel, OLED_DrawLine, OLED_DrawRect, OLED_DrawCircle — ทุกอย่างทำงานบน buffer ก่อน ใช้ algorithm ของ Bresenham สำหรับเส้นและวงกลม</p>
 </section>
 <section>
     <h2>💻 เขียน Code ทีละขั้น</h2>
     <div class="step"><h3>ขั้นที่ 1: Init + Setup</h3>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
-#include "oled_i2c.h"`n#include "oled_graphics.h"
+#include "oled_i2c.h"
+#include "oled_graphics.h"
+#include "oled_fonts.h"
 
 OLED_Handle oled;
 
@@ -61,57 +63,54 @@ int main(void) {
     Timer_Init();
     I2C_SimpleInit(I2C_SPEED_400K, I2C_PINS_DEFAULT);
 
-    OLED_Init(&oled, OLED_128x64, 0x3C);
-    OLED_Clear(&oled);
-    OLED_SetFont(&oled, FONT_8x16);</code></pre>
-    <p class="explain">🔍 เริ่มต้นระบบด้วย I2C ความเร็ว 400kHz — OLED_Init() รับ address 0x3C และขนาดจอ OLED_128x64 (มี OLED_128x32 และ OLED_96x16 ด้วย) — ตามด้วย Clear ล้าง buffer</p></div>
+    OLED_Init(&amp;oled, OLED_128x64, 0x3C);
+    OLED_Clear(&amp;oled);
+    OLED_SetFont(&amp;oled, FONT_8x16);</code></pre>
+    <p class="explain">🔍 เริ่มต้นระบบด้วย I2C ความเร็ว 400kHz — OLED_Init() รับ size ก่อน address (OLED_128x64, 0x3C) — มี OLED_128x32 และ OLED_96x16 ด้วย — ตามด้วย Clear ล้าง buffer</p></div>
     <div class="step"><h3>ขั้นที่ 2: วาดข้อความและรูปทรง</h3>
-    <pre><code class="language-c">    OLED_SetCursor(&oled, 0, 0);
-    OLED_Print(&oled, "สวัสดี!");
-    OLED_SetCursor(&oled, 1, 0);
-    OLED_Print(&oled, "CH32V003");
+    <pre><code class="language-c">    OLED_SetFont(&amp;oled, FONT_6x8);
+    OLED_DrawStringAlign(&amp;oled, 0, 0, "สวัสดี!", ALIGN_LEFT);
+    OLED_SetFont(&amp;oled, FONT_8x16);
+    OLED_DrawStringAlign(&amp;oled, 20, 0, "CH32V003", ALIGN_LEFT);
 
-    OLED_DrawRect(&oled, 10, 10, 50, 30, 1);
-    OLED_DrawCircle(&oled, 100, 50, 15, 1);
-    OLED_DrawLine(&oled, 0, 63, 127, 0, 1);
+    OLED_DrawRect(&amp;oled, 10, 10, 50, 30);
+    OLED_DrawCircle(&amp;oled, 100, 50, 15);
+    OLED_DrawLine(&amp;oled, 0, 63, 127, 63);
 
-    OLED_Update(&oled);</code></pre>
-    <p class="explain">🔍 SetCursor กำหนดแถว-คอลัมน์ (row, col) สำหรับข้อความ — Print() รองรับ UTF-8 ภาษาไทยโดยตรง — DrawRect/DrawCircle/DrawLine พารามิเตอร์สุดท้ายคือ color (1=ขาว, 0=ลบ) — อย่าลืม OLED_Display() ส่งข้อมูลขึ้นจอ!</p></div>
+    OLED_Update(&amp;oled);</code></pre>
+    <p class="explain">🔍 OLED_DrawStringAlign รับพิกัด (x,y) แบบ pixel พร้อม alignment (ALIGN_LEFT/CENTER/RIGHT) — DrawRect/DrawCircle/DrawLine ทำงานบน buffer — อย่าลืม OLED_Update() ส่งข้อมูลขึ้นจอ!</p></div>
     <div class="step"><h3>ขั้นที่ 3: Loop + อัปเดตข้อมูล</h3>
     <pre><code class="language-c">    Timer_t tmr;
-    Start_Timer(&tmr, 2000, 1);
+    Start_Timer(&amp;tmr, 2000, 1);
     int count = 0;
+    char buf[16];
 
     while(1) {
-        if(Is_Timer_Expired(&tmr)) {
-            OLED_Clear(&oled);
-            OLED_SetCursor(&oled, 2, 0);
-            OLED_Print(&oled, "Count: ");
-            OLED_PrintNum(&oled, count);
-            OLED_Update(&oled);
+        if(Is_Timer_Expired(&amp;tmr)) {
+            OLED_Clear(&amp;oled);
+            SimpleHAL_Sprintf(buf, "Count: %d", count);
+            OLED_SetFont(&amp;oled, FONT_8x16);
+            OLED_DrawStringAlign(&amp;oled, 20, 0, buf, ALIGN_LEFT);
+            OLED_Update(&amp;oled);
             count++;
         }
     }
 }</code></pre>
-    <p class="explain">🔍 ใช้ Non-Blocking Timer อัปเดตทุก 2 วินาที — Clear() + Print() + Display() เป็น pattern มาตรฐาน — OLED_PrintNum() แสดงตัวเลข — loop ไม่เคยหยุดรอ</p></div>
+    <p class="explain">🔍 ใช้ Non-Blocking Timer อัปเดตทุก 2 วินาที — Clear() + DrawStringAlign() + Update() เป็น pattern มาตรฐาน — ใช้ sprintf สร้างข้อความพร้อมตัวเลข — loop ไม่เคยหยุดรอ</p></div>
 </section>
 <section>
     <h2>📋 API Reference</h2>
     <table>
         <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
-        <tr><td><code>OLED_Init(oled, addr, size)</code></td><td>เริ่มต้น OLED + จอง buffer</td><td><code>OLED_Init(&oled, OLED_128x64, 0x3C)</code></td></tr>
-        <tr><td><code>OLED_Clear(oled)</code></td><td>ล้าง buffer ทั้งหมด</td><td><code>OLED_Clear(&oled)</code></td></tr>
-        <tr><td><code>OLED_SetCursor(oled, row, col)</code></td><td>ตั้งตำแหน่ง cursor สำหรับข้อความ</td><td><code>OLED_SetCursor(&oled, 0, 0)</code></td></tr>
-        <tr><td><code>OLED_Print(oled, str)</code></td><td>พิมพ์ข้อความ (UTF-8 ไทยได้)</td><td><code>OLED_Print(&oled, "สวัสดี")</code></td></tr>
-        <tr><td><code>OLED_PrintNum(oled, n)</code></td><td>พิมพ์ตัวเลขจำนวนเต็ม</td><td><code>OLED_PrintNum(&oled, 1234)</code></td></tr>
-        <tr><td><code>OLED_PrintFloat(oled, f, dec)</code></td><td>พิมพ์ทศนิยม</td><td><code>OLED_PrintFloat(&oled, 3.14, 2)</code></td></tr>
-        <tr><td><code>OLED_SetPixel(oled, x, y, c)</code></td><td>วาด 1 พิกเซล</td><td><code>OLED_SetPixel(&oled, 64, 32, 1)</code></td></tr>
-        <tr><td><code>OLED_DrawLine(oled, x1,y1,x2,y2,c)</code></td><td>วาดเส้นตรง</td><td><code>OLED_DrawLine(&oled, 0,0, 127,63, 1)</code></td></tr>
-        <tr><td><code>OLED_DrawRect(oled, x,y,w,h,c)</code></td><td>วาดสี่เหลี่ยม</td><td><code>OLED_DrawRect(&oled, 10,10, 50,30, 1)</code></td></tr>
-        <tr><td><code>OLED_DrawCircle(oled, x,y,r,c)</code></td><td>วาดวงกลม</td><td><code>OLED_DrawCircle(&oled, 64,32, 20, 1)</code></td></tr>
-        <tr><td><code>OLED_Display(oled)</code></td><td>ส่ง buffer ขึ้นจอผ่าน I2C</td><td><code>OLED_Update(&oled)</code></td></tr>
-        <tr><td><code>OLED_SetFont(oled, font)</code></td><td>เลือกฟอนต์ (FONT_6x8 / FONT_8x16)</td><td><code>OLED_SetFont(&oled, FONT_6x8)</code></td></tr>
-        <tr><td><code>OLED_Invert(oled, invert)</code></td><td>กลับสีจอ (invert=1)</td><td><code>OLED_Invert(&oled, 1)</code></td></tr>
+        <tr><td><code>OLED_Init(oled, size, addr)</code></td><td>เริ่มต้น OLED + จอง buffer</td><td><code>OLED_Init(&amp;oled, OLED_128x64, 0x3C)</code></td></tr>
+        <tr><td><code>OLED_Clear(oled)</code></td><td>ล้าง buffer ทั้งหมด</td><td><code>OLED_Clear(&amp;oled)</code></td></tr>
+        <tr><td><code>OLED_SetFont(oled, font)</code></td><td>เลือกฟอนต์ (FONT_6x8 / FONT_8x16)</td><td><code>OLED_SetFont(&amp;oled, FONT_6x8)</code></td></tr>
+        <tr><td><code>OLED_DrawStringAlign(oled, x, y, str, align)</code></td><td>วาดข้อความพร้อมจัดตำแหน่ง</td><td><code>OLED_DrawStringAlign(&amp;oled, 10, 0, "Hello", ALIGN_LEFT)</code></td></tr>
+        <tr><td><code>OLED_SetPixel(oled, x, y, color)</code></td><td>วาด 1 พิกเซล</td><td><code>OLED_SetPixel(&amp;oled, 64, 32, OLED_COLOR_WHITE)</code></td></tr>
+        <tr><td><code>OLED_DrawLine(oled, x1,y1,x2,y2)</code></td><td>วาดเส้นตรง</td><td><code>OLED_DrawLine(&amp;oled, 0,0, 127,63)</code></td></tr>
+        <tr><td><code>OLED_DrawRect(oled, x,y,w,h)</code></td><td>วาดสี่เหลี่ยม</td><td><code>OLED_DrawRect(&amp;oled, 10,10, 50,30)</code></td></tr>
+        <tr><td><code>OLED_DrawCircle(oled, cx,cy,radius)</code></td><td>วาดวงกลม</td><td><code>OLED_DrawCircle(&amp;oled, 64,32, 20)</code></td></tr>
+        <tr><td><code>OLED_Update(oled)</code></td><td>ส่ง buffer ขึ้นจอผ่าน I2C</td><td><code>OLED_Update(&amp;oled)</code></td></tr>
     </table>
 </section>
 <section>
@@ -119,9 +118,9 @@ int main(void) {
     <table>
         <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
         <tr><td>จอไม่ติด / ดำสนิท</td><td>I2C address ผิด (0x3C vs 0x3D)</td><td>ใช้ <code>I2C_Scan()</code> สแกนหา address ที่ถูกต้อง</td></tr>
-        <tr><td>ตัวหนังสือไม่ขึ้น</td><td>ลืมเรียก <code>OLED_Display()</code> หลังวาด</td><td>ต้องเรียก Display() ทุกครั้งที่ต้องการให้ข้อมูลแสดงบนจอ</td></tr>
+        <tr><td>ตัวหนังสือไม่ขึ้น</td><td>ลืมเรียก <code>OLED_Update()</code> หลังวาด</td><td>ต้องเรียก Update() ทุกครั้งที่ต้องการให้ข้อมูลแสดงบนจอ</td></tr>
         <tr><td>RAM ไม่พอ (compile error)</td><td>OLED buffer 128x64 = 1KB — CH32V003 มี RAM แค่ 2KB</td><td>ลดขนาดเหลือ OLED_128x32 (512B) หรือ OLED_96x16 (192B)</td></tr>
-        <tr><td>จอ flicker / กระพริบ</td><td>เรียก OLED_Display() บ่อยเกินไป</td><td>ควรเรียก Display() ไม่เกิน 20fps — ใช้ Timer ควบคุม</td></tr>
+        <tr><td>จอ flicker / กระพริบ</td><td>เรียก OLED_Update() บ่อยเกินไป</td><td>ควรเรียก Update() ไม่เกิน 20fps — ใช้ Timer ควบคุม</td></tr>
         <tr><td>ข้อความภาษาไทยไม่แสดง</td><td>ใช้ฟอนต์ที่ไม่มี glyph ไทย หรือไฟล์ .c ไม่ include</td><td>ใช้ FONT_8x16 และ include font_thai.h ถูกต้อง</td></tr>
     </table>
 </section>
@@ -130,7 +129,9 @@ int main(void) {
     <p>แสดงเวลาและวันที่ภาษาไทยบน OLED 128x64 ด้วย DS3231 RTC ผ่าน I2C — ใช้ Non-Blocking Timer อัปเดตทุก 1 วินาที</p>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
-#include "oled_i2c.h"`n#include "oled_graphics.h"
+#include "oled_i2c.h"
+#include "oled_graphics.h"
+#include "oled_fonts.h"
 
 OLED_Handle oled;
 RTC_DS3231_t rtc;
@@ -140,41 +141,33 @@ int main(void) {
     Timer_Init();
     I2C_SimpleInit(I2C_SPEED_400K, I2C_PINS_DEFAULT);
 
-    OLED_Init(&oled, OLED_128x64, 0x3C);
-    OLED_SetFont(&oled, FONT_8x16);
+    OLED_Init(&amp;oled, OLED_128x64, 0x3C);
+    OLED_SetFont(&amp;oled, FONT_8x16);
 
-    if(DS3231_Init(&rtc) != DS3231_OK) {
-        OLED_Clear(&oled);
-        OLED_SetCursor(&oled, 3, 0);
-        OLED_Print(&oled, "RTC Error!");
-        OLED_Update(&oled);
+    if(DS3231_Init(&amp;rtc) != DS3231_OK) {
+        OLED_Clear(&amp;oled);
+        OLED_DrawStringAlign(&amp;oled, 0, 24, "RTC Error!", ALIGN_CENTER);
+        OLED_Update(&amp;oled);
         while(1);
     }
 
     Timer_t tmr;
-    Start_Timer(&tmr, 1000, 1);
+    Start_Timer(&amp;tmr, 1000, 1);
+    char buf[32];
 
     while(1) {
-        if(Is_Timer_Expired(&tmr)) {
+        if(Is_Timer_Expired(&amp;tmr)) {
             RTC_DateTime_t dt;
-            DS3231_GetDateTime(&rtc, &dt);
+            DS3231_GetDateTime(&amp;rtc, &amp;dt);
 
-            OLED_Clear(&oled);
-            OLED_SetCursor(&oled, 1, 2);
-            OLED_PrintNumZero(&oled, dt.hour, 2);
-            OLED_Print(&oled, ":");
-            OLED_PrintNumZero(&oled, dt.minute, 2);
-            OLED_Print(&oled, ":");
-            OLED_PrintNumZero(&oled, dt.second, 2);
+            OLED_Clear(&amp;oled);
+            SimpleHAL_Sprintf(buf, "%02d:%02d:%02d", dt.hour, dt.minute, dt.second);
+            OLED_DrawStringAlign(&amp;oled, 10, 0, buf, ALIGN_CENTER);
 
-            OLED_SetCursor(&oled, 3, 1);
-            OLED_PrintNumZero(&oled, dt.day, 2);
-            OLED_Print(&oled, "/");
-            OLED_PrintNumZero(&oled, dt.month, 2);
-            OLED_Print(&oled, "/");
-            OLED_PrintNum(&oled, dt.year);
+            SimpleHAL_Sprintf(buf, "%02d/%02d/%04d", dt.day, dt.month, dt.year);
+            OLED_DrawStringAlign(&amp;oled, 48, 0, buf, ALIGN_CENTER);
 
-            OLED_Update(&oled);
+            OLED_Update(&amp;oled);
         }
     }
 }</code></pre>
@@ -182,10 +175,10 @@ int main(void) {
 <section>
     <h2>✏️ ลองทำดู</h2>
     <ol>
-        <li>แสดงข้อความ 2 ภาษาไทย+อังกฤษสลับทุก 3 วินาที</li>
+        <li>แสดงข้อความ 2 ภาษาไทย+อังกฤษสลับทุก 3 วินาที — เปลี่ยนตำแหน่งด้วย OLED_DrawStringAlign</li>
         <li>วาดกราฟแท่งแสดงค่า ADC อ่านจากโพเทนชิโอมิเตอร์ — อัปเดต 10fps</li>
-        <li>ทำ animation ลูกบอลกระเด้ง — ใช้ OLED_DrawCircle + Clear+Display pattern</li>
-        <li>แสดง QR code ด้วยการไล่ DrawPixel ทีละจุด — ใช้ array เก็บ QR matrix</li>
+        <li>ทำ animation ลูกบอลกระเด้ง — ใช้ OLED_DrawCircle + Clear+Update pattern</li>
+        <li>แสดง QR code ด้วยการไล่ OLED_SetPixel ทีละจุด — ใช้ array เก็บ QR matrix</li>
     </ol>
 </section>
 <nav class="bottom-nav">

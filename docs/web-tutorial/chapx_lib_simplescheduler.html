@@ -7,8 +7,7 @@
 <section class="flowchart"><h2>🧭 แผนภาพการทำงาน</h2><pre class="mermaid">
 flowchart TD
     A["Scheduler_Init()"] --> B["Scheduler_AddTask(cb, interval_ms)"]
-    B --> C["Scheduler_Start()"]
-    C --> D["Scheduler_Run() in loop"]
+    B --> D["Scheduler_Run() in loop"]
     D --> E{"Task expired?"}
     E -->|"Yes"| F["Execute task callback"]
     E -->|"No"| G["Check next task"]
@@ -34,7 +33,7 @@ flowchart TD
 
 <section><h2>📚 หลักการทำงาน</h2>
 <p><strong>Cooperative Multitasking</strong>: ต่างจาก RTOS แบบ preemptive — ไม่มีการขัดจังหวะกลางคัน — แต่ละ task ต้อง "ให้ความร่วมมือ" โดยการ return เร็ว — ถ้า task ไหนใช้เวลานาน task อื่นจะ delay</p>
-<p><strong>8 Tasks Max</strong>: scheduler รองรับสูงสุด 8 tasks — เพียงพอสำหรับระบบฝังตัวส่วนใหญ่ — task 0-7 — เพิ่ม task ได้ด้วย <code>Scheduler_AddTask()</code> ก่อน <code>Scheduler_Start()</code></p>
+<p><strong>8 Tasks Max</strong>: scheduler รองรับสูงสุด 8 tasks — เพียงพอสำหรับระบบฝังตัวส่วนใหญ่ — task 0-7 — เพิ่ม task ได้ด้วย <code>Scheduler_AddTask()</code> หลัง <code>Scheduler_Init()</code></p>
 <p><strong>Interval-Based</strong>: แต่ละ task มี interval ของตัวเอง — scheduler จะเรียก task เมื่อถึงเวลา — ไม่จำเป็นต้องเท่ากัน — เช่น sensor=2000ms, display=500ms, button=50ms</p>
 <p><strong>AddTask → Run → Yield Pattern</strong>: ลงทะเบียน task function + interval — scheduler จะวนเรียกตามลำดับ — task ทำงานเสร็จแล้ว return — scheduler จับเวลารอบถัดไป — ไม่มี stack switching แบบ RTOS (lightweight มาก)</p>
 <p><strong>ข้อจำกัด</strong>: ไม่เหมาะกับ task ที่ใช้เวลานาน (>interval) — ถ้า task 1 ใช้ 80ms แต่ interval 50ms → task อื่นจะถูกลดเวลา — ต้องออกแบบให้แต่ละ task จบภายใน 1-5ms</p>
@@ -77,9 +76,8 @@ void task_button(void) {
     Scheduler_Init();
     Scheduler_AddTask(task_sensor,  2000);  // ทุก 2 วิ
     Scheduler_AddTask(task_display,  500);  // ทุก 0.5 วิ
-    Scheduler_AddTask(task_button,    50);  // ทุก 50ms
-    Scheduler_Start();</code></pre>
-<p class="explain">🔍 <code>Scheduler_AddTask(callback, interval_ms)</code> — เพิ่ม task ก่อน Start — ต้องเรียก <code>Scheduler_Init()</code> ก่อน — interval ควรเป็นเท่าของ task ที่ถี่ที่สุดเพื่อให้ predictable — 8 tasks max</p></div>
+    Scheduler_AddTask(task_button,    50);  // ทุก 50ms</code></pre>
+<p class="explain">🔍 <code>Scheduler_AddTask(callback, interval_ms)</code> — เพิ่ม task หลัง Init — interval ควรเป็นเท่าของ task ที่ถี่ที่สุดเพื่อให้ predictable — 8 tasks max</p></div>
 
 <div class="step"><h3>ขั้นที่ 3: Run Loop</h3>
 <pre><code class="language-c">    while(1) {
@@ -93,21 +91,19 @@ void task_button(void) {
 <section><h2>📋 API Reference</h2><table><tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
 <tr><td><code>Scheduler_Init()</code></td><td>เริ่มต้น scheduler — เคลียร์ task ทั้งหมด</td><td><code>Scheduler_Init()</code></td></tr>
 <tr><td><code>Scheduler_AddTask(cb, ms)</code></td><td>เพิ่ม task — cb=void(void), interval เป็น ms</td><td><code>Scheduler_AddTask(task_led, 500)</code></td></tr>
-<tr><td><code>Scheduler_Start()</code></td><td>เริ่ม scheduler — ต้องเรียกหลัง AddTask ทั้งหมด</td><td><code>Scheduler_Start()</code></td></tr>
 <tr><td><code>Scheduler_Run()</code></td><td>เรียกใน while(1) — เช็คและรัน task ที่ถึงเวลา</td><td><code>while(1){Scheduler_Run();}</code></td></tr>
-<tr><td><code>Scheduler_Stop()</code></td><td>หยุด scheduler — task จะไม่ถูกรัน</td><td><code>Scheduler_Stop()</code></td></tr>
-<tr><td><code>Scheduler_RemoveTask(index)</code></td><td>ลบ task ตาม index (0-7)</td><td><code>Scheduler_RemoveTask(2)</code></td></tr>
-<tr><td><code>Scheduler_SetInterval(index, ms)</code></td><td>เปลี่ยน interval ของ task ใน runtime</td><td><code>Scheduler_SetInterval(0, 1000)</code></td></tr>
-<tr><td><code>Scheduler_GetTaskCount()</code></td><td>คืนจำนวน task ที่ลงทะเบียน</td><td><code>uint8_t n = Scheduler_GetTaskCount()</code></td></tr>
+<tr><td><code>Scheduler_RemoveTask(index)</code></td><td>ลบ task ตาม index (0-7)</td><td><code>Scheduler_RemoveTask(0)</code></td></tr>
+<tr><td><code>Scheduler_EnableTask(index)</code></td><td>เปิดใช้งาน task ตาม index</td><td><code>Scheduler_EnableTask(0)</code></td></tr>
+<tr><td><code>Scheduler_DisableTask(index)</code></td><td>ปิดใช้งาน task ตาม index</td><td><code>Scheduler_DisableTask(0)</code></td></tr>
 </table></section>
 
 <section><h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2><table><tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
-<tr><td>Task ไม่ถูกรันเลย</td><td>ลืม <code>Scheduler_Start()</code> — หรือ <code>Scheduler_Run()</code> ใน loop</td><td>ต้องเรียกทั้ง Start และ Run — Check: Init → AddTask → Start → while(Run)</td></tr>
+<tr><td>Task ไม่ถูกรันเลย</td><td>ลืม <code>Scheduler_Run()</code> ใน loop</td><td>ต้องเรียก Scheduler_Run() ใน while(1) — Check: Init → AddTask → while(Run)</td></tr>
 <tr><td>Task ทำงานไม่ตรงเวลา — ดีเลย์สะสม</td><td>Task ใช้เวลานานกว่า interval — task อื่นถูก delay</td><td>แบ่งงานหนักเป็น state machine — ใช้ Timer_t แบบ async — ลด interval ให้เหลือ 1ms/รอบ</td></tr>
 <tr><td>Task A block แล้ว Task B ไม่ทำงาน</td><td>ใช้ <code>Delay_Ms()</code> ใน task callback</td><td>ห้ามใช้ Blocking Delay ใน task — ใช้ flag + state machine — หรือตั้ง Timer_t แยก</td></tr>
 <tr><td>เพิ่ม task เกิน 8 แล้วไม่แจ้ง error</td><td>ลิมิต 8 tasks — task ที่ 9+ ถูกละเลย</td><td>เช็ค <code>Scheduler_AddTask</code> return 0 — หรือเพิ่ม MAX_TASKS ใน header</td></tr>
 <tr><td>Stack overflow — MCU reset</td><td>Task ใช้ local variable เยอะเกิน — stack พอก</td><td>ลด local var — ใช้ global/static — CH32V003 มี RAM แค่ 2KB</td></tr>
-<tr><td>Task ทำงานซ้ำซ้อน — 2 รอบติดกัน</td><td>Interval สั้นเกิน + task ช้า — scheduler คิดว่าถึงเวลา 2 รอบ</td><td>เพิ่ม interval ให้มากกว่า execution time — หรือใช้ <code>Scheduler_ResetTask(index)</code></td></tr>
+<tr><td>Task ทำงานซ้ำซ้อน — 2 รอบติดกัน</td><td>Interval สั้นเกิน + task ช้า — scheduler คิดว่าถึงเวลา 2 รอบ</td><td>เพิ่ม interval ให้มากกว่า execution time — หรือใช้ <code>Scheduler_DisableTask(index)</code> ชั่วคราว</td></tr>
 </table></section>
 
 <section><h2>🛠️ สร้าง Product: 3-Task System</h2><p>Task 1: อ่านเซนเซอร์ทุก 2 วิ — Task 2: อัปเดตจอ OLED ทุก 0.5 วิ — Task 3: เช็คปุ่มกดทุก 50ms — LED heartbeat</p>
@@ -153,8 +149,6 @@ int main(void) {
     Scheduler_AddTask(task_sensor,  2000);
     Scheduler_AddTask(task_display,  500);
     Scheduler_AddTask(task_button,    50);
-    Scheduler_Start();
-
     while(1) { Scheduler_Run(); IWDG_Feed(); }
 }</code></pre></section>
 

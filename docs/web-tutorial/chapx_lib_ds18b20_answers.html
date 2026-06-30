@@ -10,29 +10,29 @@ int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
     USART_Init(115200);
-    DS18B20_SearchDevices(PC0);
 
-    uint8_t n = DS18B20_GetDeviceCount();
-    USART_Print("Found "); USART_PrintNum(n);
-    USART_Println(" device(s)");
+    DS18B20_Device* dev = DS18B20_Init(PC0);
 
-    for(uint8_t i = 0; i < n; i++) {
-        DS18B20_ROM_t rom;
-        DS18B20_GetROM(i, &rom);
-        USART_Print("ROM["); USART_PrintNum(i);
-        USART_Print("]: ");
-        for(uint8_t j = 0; j < 8; j++) {
-            USART_PrintHex(rom.bytes[j]);
-            USART_Print(" ");
-        }
-        USART_Println("");
-
-        if(rom.family == 0x28) USART_Println("  → DS18B20");
-        else if(rom.family == 0x22) USART_Println("  → DS1822");
-        else USART_Println("  → Unknown");
+    USART_Print("Device initialized\r\n");
+    USART_Print("DS18B20 ROM: ");
+    uint8_t rom[8];
+    DS18B20_GetROM(dev, rom);
+    for(uint8_t j = 0; j < 8; j++) {
+        USART_PrintHex(rom[j]);
+        USART_Print(" ");
     }
+    USART_Println("");
 
-    while(1);
+    if(rom[0] == 0x28) USART_Println("  → DS18B20");
+    else if(rom[0] == 0x22) USART_Println("  → DS1822");
+    else USART_Println("  → Unknown");
+
+    while(1) {
+        float t = DS18B20_ReadTemperatureBlocking(dev);
+        USART_Print("T:"); USART_PrintFloat(t, 1);
+        USART_Println("C");
+        Delay_Ms(2000);
+    }
 }</code></pre>
 <div class="approach"><strong>🧠 แนวคิด:</strong> <code>DS18B20_GetDeviceCount()</code> นับจำนวนเซนเซอร์บนบัส — วน loop ตามจำนวน device — <code>DS18B20_GetROM(i, &rom)</code> ดึง 8-byte ROM ID ของแต่ละตัว — <code>USART_PrintHex()</code> พิมพ์ทีละ byte — เช็ค <code>rom.family</code> เพื่อระบุรุ่น — ใช้ <code>DS18B20_GetTempCByROM()</code> ด้วย ROM ได้ถ้าต้องการอ่านเฉพาะตัว</div></div>
 <div class="answer"><h2>ข้อ 2: Parasite Power Mode (2-wire)</h2>
@@ -44,9 +44,9 @@ int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
     USART_Init(115200);
-    DS18B20_SearchDevices(PC0);
 
-    DS18B20_SetParasiteMode(1);   // เปิด parasite (2-wire)
+    DS18B20_Device* dev = DS18B20_Init(PC0);
+    DS18B20_SetParasiteMode(dev, 1);   // เปิด parasite (2-wire)
     USART_Println("Parasite Power Mode Enabled");
     USART_Println("Wiring: DQ+PC0, VCC+GND tied to GND");
 
@@ -55,18 +55,9 @@ int main(void) {
 
     while(1) {
         if(Is_Timer_Expired(&tmr)) {
-            DS18B20_RequestTemperatures();
-            Delay_Ms(1000);  // parasite ต้องรอนานกว่า เพราะใช้ capacitor charge
-
-            uint8_t n = DS18B20_GetDeviceCount();
-            for(uint8_t i = 0; i < n; i++) {
-                DS18B20_ROM_t rom;
-                DS18B20_GetROM(i, &rom);
-                float t = DS18B20_GetTempC(&rom);
-                USART_Print("T"); USART_PrintNum(i+1);
-                USART_Print(": "); USART_PrintFloat(t, 1);
-                USART_Println("C");
-            }
+            float t = DS18B20_ReadTemperatureBlocking(dev);
+            USART_Print("T: "); USART_PrintFloat(t, 1);
+            USART_Println("C");
         }
     }
 }</code></pre>
@@ -90,11 +81,13 @@ int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
     USART_Init(115200);
-    DS18B20_SearchDevices(PC0);
 
-    uint8_t n = DS18B20_GetDeviceCount();
-    USART_Print("Found "); USART_PrintNum(n);
-    USART_Println(" sensor(s)");
+    DS18B20_Device* dev1 = DS18B20_Init(PC0);
+    DS18B20_Device* dev2 = DS18B20_Init(PC1);
+    DS18B20_Device* dev3 = DS18B20_Init(PC2);
+
+    DS18B20_Device* devs[3] = {dev1, dev2, dev3};
+    uint8_t n = 3;
 
     Timer_t tmr;
     Start_Timer(&tmr, 60000, 1);  // ทุก 1 นาที
@@ -102,17 +95,12 @@ int main(void) {
 
     while(1) {
         if(Is_Timer_Expired(&tmr)) {
-            DS18B20_RequestTemperatures();
-            Delay_Ms(750);
-
             LogEntry_t entry;
             entry.timestamp = Timer_GetMs();
-            entry.count = (n > 3) ? 3 : n;
+            entry.count = n;
 
             for(uint8_t i = 0; i < entry.count; i++) {
-                DS18B20_ROM_t rom;
-                DS18B20_GetROM(i, &rom);
-                entry.temps[i] = DS18B20_GetTempC(&rom);
+                entry.temps[i] = DS18B20_ReadTemperatureBlocking(devs[i]);
                 USART_Print("#"); USART_PrintNum(i+1);
                 USART_Print(":"); USART_PrintFloat(entry.temps[i], 1);
                 USART_Print("C ");

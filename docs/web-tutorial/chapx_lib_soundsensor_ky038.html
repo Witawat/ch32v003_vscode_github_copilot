@@ -3,15 +3,12 @@
 <h1>KY-038 — Sound Sensor ตรวจจับเสียงผ่าน ADC + LM393</h1><span class="level intermediate">ระดับกลาง</span>
 <section class="flowchart"><h2>🧭 แผนภาพการทำงาน</h2><pre class="mermaid">
 flowchart TD
-    A["Init ADC + GPIO"] --> B["อ่าน Analog (PD2)"]
-    B --> C["อ่าน Digital (PC3)"]
-    C --> D{"Digital == HIGH?"}
-    D -->|"Yes"| E["เสียงดังเกิน threshold"]
-    D -->|"No"| F["ตรวจสอบ Analog amplitude"]
-    F --> G["คำนวณ peak/avg amplitude"]
-    G --> H{"Pattern = Clap?"}
-    H -->|"Yes"| I["Clap detected! Action"]
-    H -->|"No"| J["Sound level display"]
+    A["SoundSensor_Init(&s, ADC_CH_PC4)"] --> B["SoundSensor_ReadLevel(&s)"]
+    B --> C{"Level > threshold?"}
+    C -->|"Yes"| D["เสียงดัง! ตรวจจับ clap"]
+    D --> E["Clap Pattern Detection"]
+    E --> F["Double clap → Action"]
+    C -->|"No"| G["Quiet — วนกลับ"]
 </pre></section>
 <section><h2>🔌 การต่อวงจร</h2><pre class="ascii-circuit">
           KY-038 Sound Sensor (Electret Mic)
@@ -19,59 +16,55 @@ flowchart TD
    │  MCU              KY-038           │
    │  3.3V───────────── VCC (+)         │
    │  GND────────────── GND (-)         │
-   │  PD2─ADC ───────── A0 (Analog Out) │
-   │  PC3─GPIO ──────── D0 (Digital Out)│
+   │  PC4─ADC ───────── A0 (Analog Out) │
+   │  PC1─GPIO ──────── D0 (Digital Out)│
    │                                    │
    │  Mic → LM393 Comparator            │
    └────────────────────────────────────┘
-</pre><p>KY-038 ใช้ Electret Microphone + LM393 Comparator — Analog output เป็นสัญญาณเสียงขยาย — Digital output เป็น comparator เทียบกับ threshold (ปรับด้วย Pot) — HIGH เมื่อเสียงดังเกิน threshold</p></section>
-<section><h2>📚 หลักการทำงาน</h2><p><strong>KY-038 Sound Sensor</strong> ใช้ Electret Microphone จับเสียง → ขยายผ่าน Op-Amp → แบ่งเป็น 2 outputs — Analog (A0): ค่าแรงดันตาม amplitude ของเสียง — Digital (D0): LM393 comparator — HIGH เมื่อเสียงเกิน threshold</p><p><strong>Analog Output</strong> วัด amplitude ของเสียง — ปกติ ~1.5V (เงียบ) — ดังสูงสุด ~3.3V — ใช้ ADC อ่านเพื่อวัดระดับเสียงแบบ continuous — ใช้ FFT พื้นฐานแยกความถี่ได้</p><p><strong>Clap Detection:</strong> วัด pattern ของเสียง — ตบมือ 1 ครั้ง = peak สั้น ~100ms — ตบ 2 ครั้ง = peak 2 ครั้งห่าง ~200-500ms — ตรวจจับด้วย state machine</p><p><strong>Digital Output</strong> ใช้ตรวจจับเสียงดังด้วย GPIO interrupt — ไม่ต้อง polling ต่อเนื่อง — เหมาะกับงานที่ต้องการ low latency (ตบมือปิดไฟ)</p></section>
+</pre><p>KY-038 ใช้ Electret Microphone + LM393 Comparator — Analog output เป็นสัญญาณเสียงขยาย — Digital output เป็น comparator เทียบกับ threshold (ปรับด้วย Pot)</p></section>
+<section><h2>📚 หลักการทำงาน</h2><p><strong>KY-038 Sound Sensor</strong> ใช้ Electret Microphone จับเสียง → ขยายผ่าน Op-Amp → แบ่งเป็น 2 outputs — Analog (A0): ค่าแรงดันตาม amplitude ของเสียง — Digital (D0): LM393 comparator — HIGH เมื่อเสียงเกิน threshold</p><p><strong>Analog Output</strong> วัด amplitude ของเสียง — ใช้ ADC อ่านเพื่อวัดระดับเสียงแบบ continuous</p><p><strong>Clap Detection:</strong> วัด pattern ของเสียง — ตบมือ 1 ครั้ง = peak สั้น ~100ms — ตบ 2 ครั้ง = peak 2 ครั้งห่าง ~200-500ms — ตรวจจับด้วย state machine</p></section>
 <section><h2>💻 เขียน Code ทีละขั้น</h2>
-<div class="step"><h3>ขั้นที่ 1: Init ADC + Digital</h3><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+<div class="step"><h3>ขั้นที่ 1: Init SoundSensor</h3><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "SoundSensor.h"
 
-#define SOUND_ADC PD2
-#define SOUND_DIG PC3
+SoundSensor_Instance s;
 
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    ADC_Init(SOUND_ADC, ADC_CH0);
-    pinMode(SOUND_DIG, PIN_MODE_INPUT);
     USART_Init(115200);
 
-    USART_Print("Sound Sensor Ready\r\n");</code></pre><p class="explain">🔍 ใช้ทั้ง Analog (PD2) สำหรับวัดระดับเสียง — Digital (PC3) สำหรับตรวจจับเสียงดังแบบ interrupt ได้</p></div>
-<div class="step"><h3>ขั้นที่ 2: อ่านระดับเสียง + จับ Digital</h3><pre><code class="language-c">    uint16_t adc = ADC_Read(SOUND_ADC);
-    uint8_t dig = GPIO_Read(SOUND_DIG);
+    SoundSensor_Init(&s, ADC_CH_PC4);
+    USART_Println("Sound Sensor Ready!");</code></pre>
+<p class="explain">🔍 <code>SoundSensor_Init(&s, ADC_CH_PC4)</code> — ตั้งค่า ADC ที่ขา PC4 — พร้อมใช้งานทันที</p></div>
+<div class="step"><h3>ขั้นที่ 2: อ่านระดับเสียง</h3>
+<pre><code class="language-c">    float level = SoundSensor_ReadLevel(&s);
 
-    if(dig) {
-        USART_Print(">> LOUD! << ");
-    }
+    USART_Print("Sound Level: ");
+    USART_PrintFloat(level, 1);
 
-    USART_Print("Sound ADC:"); USART_PrintDec(adc);
-
-    if(adc > 900)  USART_Print(" VERY LOUD\r\n");
-    else if(adc > 700) USART_Print(" Loud\r\n");
-    else if(adc > 500) USART_Print(" Normal\r\n");
-    else USART_Print(" Quiet\r\n");</code></pre><p class="explain">🔍 อ่านทั้ง Analog แสดงระดับเสียง (Quiet/Normal/Loud/Very Loud) — Digital บอกว่าเกิน threshold หรือไม่ — Analog ใช้บอกความดังต่อเนื่องแม้ไม่ถึง threshold</p></div>
-<div class="step"><h3>ขั้นที่ 3: Clap Detection State Machine</h3><pre><code class="language-c">    pinMode(PC0, PIN_MODE_OUTPUT); // LED ตอบสนอง
-    uint8_t state = 0, clap_count = 0;
+    if(level > 0.8f)       USART_Println(" VERY LOUD!");
+    else if(level > 0.6f)  USART_Println(" Loud");
+    else if(level > 0.4f)  USART_Println(" Normal");
+    else                   USART_Println(" Quiet");</code></pre>
+<p class="explain">🔍 <code>SoundSensor_ReadLevel(&s)</code> — อ่านระดับเสียง normalized (0.0-1.0) — เงียบ ~0.3, ปกติ ~0.5, ดัง ~0.8+</p></div>
+<div class="step"><h3>ขั้นที่ 3: Clap Detection State Machine</h3>
+<pre><code class="language-c">    pinMode(PC0, PIN_MODE_OUTPUT); // LED ตอบสนอง
+    uint8_t clap_count = 0;
     Timer_t tmr_clap;
-    Start_Timer(&tmr_clap, 600, 0); // timeout 600ms
     uint32_t last_clap = 0;
 
     while(1) {
-        uint16_t adc = ADC_Read(SOUND_ADC);
-        uint8_t dig = GPIO_Read(SOUND_DIG);
+        float level = SoundSensor_ReadLevel(&s);
 
-        if(dig && (Get_CurrentMs() - last_clap > 200)) {
+        if(level > 0.7f && (Get_CurrentMs() - last_clap > 200)) {
             last_clap = Get_CurrentMs();
             clap_count++;
             Start_Timer(&tmr_clap, 600, 0);
 
             if(clap_count == 2) {
-                USART_Print("DOUBLE CLAP!\r\n");
+                USART_Println("DOUBLE CLAP!");
                 digitalToggle(PC0); // toggle LED
                 clap_count = 0;
             }
@@ -79,35 +72,29 @@ int main(void) {
 
         if(Is_Timer_Expired(&tmr_clap)) {
             if(clap_count == 1) {
-                USART_Print("Single clap\r\n");
+                USART_Println("Single clap");
             }
             clap_count = 0;
         }
         Delay_Ms(10);
     }
-}</code></pre><p class="explain">🔍 ตรวจจับการตบมือ — debounce 200ms ระหว่าง clap — timeout 600ms รอ clap ครั้งที่ 2 — double clap = toggle LED — single clap = print — ใช้ Timer_t timeout แทน Delay เพื่อ non-blocking</p></div>
+}</code></pre>
+<p class="explain">🔍 ตรวจจับการตบมือ — debounce 200ms ระหว่าง clap — timeout 600ms รอ clap ครั้งที่ 2 — double clap = toggle LED</p></div>
 </section>
 <section><h2>📋 API Reference</h2><table><tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
-<tr><td><code>ADC_Init(pin, ch)</code></td><td>เริ่มต้น ADC</td><td><code>ADC_Init(PD2, ADC_CH0)</code></td></tr>
-<tr><td><code>ADC_Read(pin)</code></td><td>อ่านค่า ADC 0-1023</td><td><code>uint16_t v = ADC_Read(PD2)</code></td></tr>
-<tr><td><code>SOUND_Init(adc_pin, dig_pin)</code></td><td>เริ่มต้น Sound Sensor</td><td><code>SOUND_Init(PD2, PC3)</code></td></tr>
-<tr><td><code>SOUND_ReadLevel(pin)</code></td><td>อ่านระดับเสียง (0-1023)</td><td><code>uint16_t lv = SOUND_ReadLevel(PD2)</code></td></tr>
-<tr><td><code>SOUND_IsLoud(pin, thresh)</code></td><td>ตรวจสอบว่าเสียงดังเกิน threshold</td><td><code>if(SOUND_IsLoud(PC3, 800))</code></td></tr>
-<tr><td><code>SOUND_DetectClap(pin, timeout)</code></td><td>ตรวจจับการตบมือ</td><td><code>uint8_t n = SOUND_DetectClap(PD2, 600)</code></td></tr>
+<tr><td><code>SoundSensor_Init(&s, adc_ch)</code></td><td>เริ่มต้น Sound Sensor</td><td><code>SoundSensor_Init(&s, ADC_CH_PC4)</code></td></tr>
+<tr><td><code>SoundSensor_ReadLevel(&s)</code></td><td>อ่านระดับเสียง (0.0-1.0)</td><td><code>float lv = SoundSensor_ReadLevel(&s)</code></td></tr>
 </table></section>
 <section><h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2><table><tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
 <tr><td>Digital ไม่เคย HIGH</td><td>Pot sensitivity ต่ำเกินไป</td><td>หมุน Pot ทวนเข็ม — ดู LED บนโมดูล — หมุนจน LED ติดเมื่อมีเสียงดัง</td></tr>
 <tr><td>Clap ไม่เคย detect</td><td>Debounce 200ms น้อยไป / มากไป</td><td>ปรับจาก 200ms → 150ms — ตบให้ดังและใกล้เซนเซอร์</td></tr>
-<tr><td>False trigger ตลอดเวลา</td><td>Noise จากสิ่งแวดล้อม / Pot ไวเกิน</td><td>หมุน Pot ตามเข็มลด sensitivity — ใช้เฉพาะ Analog + threshold ใน code</td></tr>
-<tr><td>ADC ค่านิ่งไม่เปลี่ยน</td><td>mic เสีย / ต่อสายผิด</td><td>ตรวจสอบ A0 ด้วย Oscilloscope — ควรเห็น waveform ตอนมีเสียง</td></tr>
+<tr><td>False trigger ตลอดเวลา</td><td>Noise จากสิ่งแวดล้อม / Pot ไวเกิน</td><td>หมุน Pot ตามเข็มลด sensitivity — ใช้ threshold ใน code</td></tr>
 <tr><td>Double clap ตรวจจับเป็น single</td><td>Timeout สั้นเกิน / หน่วงระหว่าง clap นานเกิน</td><td>เพิ่ม timeout เป็น 800ms — ตบ 2 ครั้งให้เร็วขึ้น (~300ms)</td></tr>
 </table></section>
-<section><h2>🛠️ สร้าง Product: Clap Switch — ตบมือเปิด/ปิดไฟ</h2><p>KY-038 + Relay — Double clap = toggle ไฟ — Single clap = ignore — แสดงสถานะด้วย LED</p><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+<section><h2>🛠️ สร้าง Product: Clap Switch — ตบมือเปิด/ปิดไฟ</h2><p>KY-038 + Relay — Double clap = toggle ไฟ — Single clap = ignore</p><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "SoundSensor.h"
 
-#define SOUND_ADC PD2
-#define SOUND_DIG PC3
 #define RELAY_PIN PC0
 #define LED_PIN PC1
 
@@ -115,12 +102,13 @@ int main(void)
 {
     SystemCoreClockUpdate();
     Timer_Init();
-    ADC_Init(SOUND_ADC, ADC_CH0);
-    pinMode(SOUND_DIG, PIN_MODE_INPUT);
-    pinMode(RELAY_PIN, PIN_MODE_OUTPUT);
-    pinMode(LED_PIN, PIN_MODE_OUTPUT);
     USART_Init(115200);
 
+    SoundSensor_Instance s;
+    SoundSensor_Init(&s, ADC_CH_PC4);
+
+    pinMode(RELAY_PIN, PIN_MODE_OUTPUT);
+    pinMode(LED_PIN, PIN_MODE_OUTPUT);
     digitalWrite(RELAY_PIN, LOW);
     digitalWrite(LED_PIN, LOW);
 
@@ -131,10 +119,9 @@ int main(void)
 
     while(1)
     {
-        uint16_t adc = ADC_Read(SOUND_ADC);
-        uint8_t dig = GPIO_Read(SOUND_DIG);
+        float level = SoundSensor_ReadLevel(&s);
 
-        if(dig && adc > 800 && (Get_CurrentMs() - last_clap > 200)) {
+        if(level > 0.7f && (Get_CurrentMs() - last_clap > 200)) {
             last_clap = Get_CurrentMs();
             clap_count++;
             Start_Timer(&tmr_timeout, 500, 0);
@@ -143,14 +130,14 @@ int main(void)
                 light_on = !light_on;
                 digitalWrite(RELAY_PIN, light_on);
                 digitalWrite(LED_PIN, light_on);
-                USART_Print(light_on ? "LIGHT ON\r\n" : "LIGHT OFF\r\n");
+                USART_Println(light_on ? "LIGHT ON" : "LIGHT OFF");
                 clap_count = 0;
             }
         }
 
         if(clap_count > 0 && Is_Timer_Expired(&tmr_timeout)) {
             if(clap_count == 1) {
-                USART_Print("Single clap (ignored)\r\n");
+                USART_Println("Single clap (ignored)");
             }
             clap_count = 0;
         }
@@ -158,9 +145,8 @@ int main(void)
     }
 }</code></pre></section>
 <section><h2>✏️ ลองทำดู</h2><ol>
-<li>ทำ Sound Level Meter — อ่าน ADC แสดงเป็น Bar Graph บน OLED — อัพเดท real-time</li>
+<li>ทำ Sound Level Meter — อ่าน level แสดงเป็น Bar Graph บน OLED — อัพเดท real-time</li>
 <li>ทำ Voice-Activated Recorder — เริ่มบันทึกเสียงเมื่อดังเกิน threshold — หยุดเมื่อเงียบ > 5 วิ</li>
-<li>ใช้ FFT แยกความถี่ — ตรวจจับเสียงพูด vs เสียงปรบมือ — ใช้ต่างฟังก์ชันกัน</li>
 <li>ทำ Knock Pattern Lock — เคาะ 3 ครั้งด้วยจังหวะที่กำหนด → ปลดล็อก</li></ol></section>
 <nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_flamesensor_ky026.html">บทก่อน</a><a href="chapx_lib_rainsensor_yl83.html">บทถัดไป →</a></nav>
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script><script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script><script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

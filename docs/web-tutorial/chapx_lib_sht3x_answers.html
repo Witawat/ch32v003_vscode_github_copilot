@@ -10,7 +10,9 @@ int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
     USART_Init(115200);
-    SHT3x_Init(0x44);
+
+    SHT3x_Instance sht;
+    SHT3x_Init(&sht, 0x44);
 
     USART_Println("Mode,SamplingRate(ms),T(C),H(%)");
 
@@ -19,9 +21,8 @@ int main(void) {
     uint32_t t0 = Timer_GetMs();
     for(uint8_t i = 0; i < 10; i++) {
         uint32_t t1 = Timer_GetMs();
-        SHT3x_ReadSingle();
-        float t = SHT3x_GetTemperature();
-        float h = SHT3x_GetHumidity();
+        float t, h;
+        SHT3x_Read(&sht, &t, &h);
         uint32_t dt = Timer_GetMs() - t1;
 
         USART_Print("SINGLE,");
@@ -34,13 +35,12 @@ int main(void) {
 
     // === Periodic Mode ===
     USART_Println("--- Periodic (1 MPS) ---");
-    SHT3x_StartPeriodic(SHT3x_1MPS);  // 1 measurement per second
+    SHT3x_StartPeriodic(&sht, SHT3x_1MPS);
     t0 = Timer_GetMs();
     for(uint8_t i = 0; i < 10; i++) {
         uint32_t t1 = Timer_GetMs();
-        SHT3x_ReadPeriodic();
-        float t = SHT3x_GetTemperature();
-        float h = SHT3x_GetHumidity();
+        float t, h;
+        SHT3x_ReadPeriodic(&sht, &t, &h);
         uint32_t dt = Timer_GetMs() - t1;
 
         USART_Print("PERIODIC,");
@@ -50,7 +50,7 @@ int main(void) {
         Delay_Ms(1000);
     }
     uint32_t periodic_total = Timer_GetMs() - t0;
-    SHT3x_StopPeriodic();
+    SHT3x_StopPeriodic(&sht);
 
     USART_Print("Single total: "); USART_PrintNum(single_total);
     USART_Println("ms");
@@ -92,8 +92,9 @@ int main(void) {
     EXTI_Init(ALERT_PIN, EXTI_Trigger_Falling);
     NVIC_EnableIRQ(EXTI7_0_IRQn);
 
-    SHT3x_Init(0x44);
-    SHT3x_SetAlertLimits(40.0f, 5.0f, 80.0f, 5.0f);  // T>40°C or H>80%
+    SHT3x_Instance sht;
+    SHT3x_Init(&sht, 0x44);
+    SHT3x_SetAlertLimits(&sht, 40.0f, 5.0f, 80.0f, 5.0f);
 
     Timer_t tmr;
     Start_Timer(&tmr, 2000, 1);
@@ -101,21 +102,20 @@ int main(void) {
     while(1) {
         if(alert_flag) {
             alert_flag = 0;
-            SHT3x_ReadSingle();
-            float t = SHT3x_GetTemperature();
+            float t, h;
+            SHT3x_Read(&sht, &t, &h);
             USART_Print("ALERT! T="); USART_PrintFloat(t, 1);
             USART_Println("C > 40°C!");
 
             digitalWrite(LED_RED, HIGH);
-            Buzzer_Beep(BUZZER_PIN, 500);
+            Buzzer_Beep(500);
             Delay_Ms(200);
             digitalWrite(LED_RED, LOW);
         }
 
         if(Is_Timer_Expired(&tmr)) {
-            SHT3x_ReadSingle();
-            float t = SHT3x_GetTemperature();
-            float h = SHT3x_GetHumidity();
+            float t, h;
+            SHT3x_Read(&sht, &t, &h);
             USART_Print("T:"); USART_PrintFloat(t, 1);
             USART_Print(" H:"); USART_PrintFloat(h, 1);
             USART_Println("%");
@@ -133,7 +133,9 @@ int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
     USART_Init(115200);
-    SHT3x_Init(0x44);
+
+    SHT3x_Instance sht;
+    SHT3x_Init(&sht, 0x44);
 
     USART_Println("Time(s),T(C),H(%),Heater");
 
@@ -142,9 +144,8 @@ int main(void) {
     while(1) {
         // --- Phase 1: Normal reading (60s) ---
         for(uint8_t i = 0; i < 60; i++) {
-            SHT3x_ReadSingle();
-            float t = SHT3x_GetTemperature();
-            float h = SHT3x_GetHumidity();
+            float t, h;
+            SHT3x_Read(&sht, &t, &h);
             uint32_t elapsed = (Timer_GetMs() - start) / 1000;
 
             USART_PrintNum(elapsed); USART_Print(",");
@@ -156,14 +157,13 @@ int main(void) {
 
         // --- Phase 2: Heater ON 1 second ---
         USART_Println(">>> HEATER ON <<<");
-        SHT3x_HeaterOn();
+        SHT3x_HeaterOn(&sht);
         Delay_Ms(1000);
 
         // --- Phase 3: Immediate read after heater ---
-        SHT3x_ReadSingle();
-        float t_after = SHT3x_GetTemperature();
-        float h_after = SHT3x_GetHumidity();
-        SHT3x_HeaterOff();
+        float t_after, h_after;
+        SHT3x_Read(&sht, &t_after, &h_after);
+        SHT3x_HeaterOff(&sht);
 
         uint32_t elapsed = (Timer_GetMs() - start) / 1000;
         USART_PrintNum(elapsed); USART_Print(",");
@@ -174,9 +174,8 @@ int main(void) {
 
         // --- Phase 4: Cool-down observation (10s) ---
         for(uint8_t i = 0; i < 10; i++) {
-            SHT3x_ReadSingle();
-            float t = SHT3x_GetTemperature();
-            float h = SHT3x_GetHumidity();
+            float t, h;
+            SHT3x_Read(&sht, &t, &h);
             elapsed = (Timer_GetMs() - start) / 1000;
 
             USART_PrintNum(elapsed); USART_Print(",");

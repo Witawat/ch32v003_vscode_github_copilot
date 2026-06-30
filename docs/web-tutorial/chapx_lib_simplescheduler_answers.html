@@ -12,10 +12,16 @@
 float temp, hum;
 bool sensor_ok = false;
 uint8_t btn_state = 0;
+DHT_Instance dht;
+Button_Instance btn;
+OLED_Handle oled;
 
 void task_sensor(void) {
-    if(DHT_Read(PC0, &temp, &hum) == DHT_OK) sensor_ok = true;
-    else sensor_ok = false;
+    if(DHT_Read(&dht) == DHT_OK) {
+        temp = DHT_GetTemperature(&dht);
+        hum = DHT_GetHumidity(&dht);
+        sensor_ok = true;
+    } else sensor_ok = false;
 }
 
 void task_display(void) {
@@ -27,20 +33,23 @@ void task_display(void) {
         char buf[32]; snprintf(buf, 32, "T:%.1fC H:%.1f%%", temp, hum);
         OLED_Print(buf);
     } else OLED_Print("Sensor ERR");
-    OLED_Display();
+    OLED_Update(&oled);
 }
 
+volatile bool btn_pressed_flag = false;
+void btn_press_cb(void) { btn_pressed_flag = true; }
+
 void task_button(void) {
-    Button_Process();
-    if(Button_WasPressed(PC1, BTN_EVENT_SHORT)) btn_state = (btn_state + 1) % 3;
+    if(btn_pressed_flag) { btn_state = (btn_state + 1) % 3; btn_pressed_flag = false; }
 }
 
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    DHT_Init(PC0, DHT11);
-    Button_Init(PC1, BTN_PULLUP);
-    OLED_Init();
+    DHT_Init(&dht, PC0, DHT_TYPE_DHT11);
+    Button_Init(&btn, PC1, BUTTON_ACTIVE_LOW);
+    Button_SetCallback(&btn, BUTTON_EVENT_PRESS, btn_press_cb);
+    OLED_Init(&oled, OLED_128x64, 0x3C);
 
     Scheduler_Init();
     Scheduler_AddTask(task_sensor,  2000);   // ทุก 2 วินาที
@@ -128,14 +137,17 @@ int main(void) {
 volatile uint32_t last_feed = 0;
 volatile uint32_t task_max_time = 0;
 
+    DHT_Instance dht;
+
 void task_heavy_sensor(void) {
     uint32_t t0 = Timer_GetMs();
 
     float t, h;
-    DHT_Read(PC0, &t, &h);        // อาจใช้ถึง 25ms
+    DHT_Read(&dht);  // อาจใช้ถึง 25ms
+    t = DHT_GetTemperature(&dht);
     // ประมวลผล filter + averaging
     for(uint8_t i = 0; i < 8; i++) {
-        float tmp; DHT_Read(PC0, &tmp, &h);
+        float tmp; DHT_Read(&dht); tmp = DHT_GetTemperature(&dht);
         t = (t * 0.8f) + (tmp * 0.2f);
     }
 
@@ -167,7 +179,7 @@ int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
     USART_Init(115200);
-    DHT_Init(PC0, DHT11);
+    DHT_Init(&dht, PC0, DHT_TYPE_DHT11);
 
     IWDG_Init(IWDG_TIMEOUT_MS);    // ตั้งเวลา 4 วิ
     last_feed = Timer_GetMs();

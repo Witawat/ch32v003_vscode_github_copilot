@@ -30,7 +30,7 @@ void hsv_to_rgb(uint8_t h, uint8_t s, uint8_t v,
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    NeoPixel_Init(LED_COUNT);
+    NeoPixel_Init(GPIOC, GPIO_Pin_0, LED_COUNT);
 
     uint8_t hue = 0;
     while(1) {
@@ -38,7 +38,7 @@ int main(void) {
             uint8_t h = hue + (i * 255 / LED_COUNT);
             uint8_t r, g, b;
             hsv_to_rgb(h, 255, 128, &r, &g, &b);
-            NeoPixel_SetRGB(i, r, g, b);
+            NeoPixel_SetPixelColor(i, r, g, b);
         }
         NeoPixel_Show();
         hue += 2;
@@ -57,7 +57,7 @@ int main(void) {
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    NeoPixel_Init(LED_COUNT);
+    NeoPixel_Init(GPIOC, GPIO_Pin_0, LED_COUNT);
 
     uint8_t pos = 0;
     int8_t dir = 1;
@@ -66,14 +66,14 @@ int main(void) {
         NeoPixel_Clear();
 
         // LED หลัก — สีขาวสว่าง
-        NeoPixel_SetRGB(pos, 255, 255, 255);
+        NeoPixel_SetPixelColor(pos, 255, 255, 255);
 
         // หางไล่สี — fade ออก 3 ดวง
         for(uint8_t i = 1; i <= 3; i++) {
             int8_t tail_pos = pos - dir * i;
             if(tail_pos >= 0 && tail_pos < LED_COUNT) {
                 uint8_t brightness = 80 >> i;  // 40, 20, 10
-                NeoPixel_SetRGB(tail_pos, brightness, brightness, brightness);
+                NeoPixel_SetPixelColor(tail_pos, brightness, brightness, brightness);
             }
         }
 
@@ -97,7 +97,7 @@ int main(void) {
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    NeoPixel_Init(LED_COUNT);
+    NeoPixel_Init(GPIOC, GPIO_Pin_0, LED_COUNT);
     ADC_SimpleInit(ADC_CH0);
 
     while(1) {
@@ -130,7 +130,7 @@ int main(void) {
                 g = 255 - (i - LED_COUNT/2) * 255 / (LED_COUNT/2);
                 b = 0;
             }
-            NeoPixel_SetRGB(i, r, g, b);
+            NeoPixel_SetPixelColor(i, r, g, b);
         }
         NeoPixel_Show();
         Delay_Ms(30);

@@ -16,12 +16,14 @@ typedef struct {
 
 uint16_t log_index = 0;   // จำนวนที่บันทึกแล้ว
 
+W25Qxx_Instance flash;
+
 void flash_logger_init(void) {
-    W25Q_Init();
+    W25Qxx_Init(&flash, PC4);
 
     // อ่าน index จาก address สุดท้ายของ sector
-    W25Q_Read(FLASH_LOG_SECTOR + MAX_READINGS * READING_SIZE,
-              (uint8_t *)&log_index, 2);
+    W25Qxx_Read(&flash, FLASH_LOG_SECTOR + MAX_READINGS * READING_SIZE,
+                (uint8_t *)&log_index, 2);
 
     if(log_index > MAX_READINGS) log_index = 0;
 
@@ -33,7 +35,7 @@ void flash_logger_init(void) {
 void flash_log_append(int16_t temp, uint16_t hum) {
     if(log_index >= MAX_READINGS) {
         USART_Println("[LOG] Full — erase and restart");
-        W25Q_SectorErase(FLASH_LOG_SECTOR);
+        W25Qxx_EraseSector(&flash, FLASH_LOG_SECTOR);
         log_index = 0;
     }
 
@@ -43,12 +45,12 @@ void flash_log_append(int16_t temp, uint16_t hum) {
     r.hum = hum;
 
     uint32_t addr = FLASH_LOG_SECTOR + log_index * READING_SIZE;
-    W25Q_Write(addr, (uint8_t *)&r, READING_SIZE);
+    W25Qxx_Write(&flash, addr, (uint8_t *)&r, READING_SIZE);
 
     // บันทึก index
     log_index++;
-    W25Q_Write(FLASH_LOG_SECTOR + MAX_READINGS * READING_SIZE,
-               (uint8_t *)&log_index, 2);
+    W25Qxx_Write(&flash, FLASH_LOG_SECTOR + MAX_READINGS * READING_SIZE,
+                 (uint8_t *)&log_index, 2);
 
     USART_Print("Logged #");
     USART_PrintNum(log_index);
@@ -76,13 +78,15 @@ void flash_logger_loop(void) {
 
 <div class="answer">
 <h2>ข้อ 2: Dump ข้อมูลทั้งหมดออก Serial</h2>
-<pre><code class="language-c">void flash_dump_all(void) {
-    W25Q_Init();
+<pre><code class="language-c">W25Qxx_Instance flash;
+
+void flash_dump_all(void) {
+    W25Qxx_Init(&flash, PC4);
 
     // อ่าน index
     uint16_t count;
-    W25Q_Read(FLASH_LOG_SECTOR + MAX_READINGS * READING_SIZE,
-              (uint8_t *)&count, 2);
+    W25Qxx_Read(&flash, FLASH_LOG_SECTOR + MAX_READINGS * READING_SIZE,
+                (uint8_t *)&count, 2);
 
     USART_Println("=== Flash Dump ===");
     USART_Print("Records: ");
@@ -96,8 +100,8 @@ void flash_logger_loop(void) {
     USART_Println("-----------------------------------");
 
     for(uint16_t i=0; i<count; i++) {
-        W25Q_Read(start_addr + i * READING_SIZE,
-                  (uint8_t *)&r, READING_SIZE);
+        W25Qxx_Read(&flash, start_addr + i * READING_SIZE,
+                    (uint8_t *)&r, READING_SIZE);
 
         USART_PrintNum(i + 1);
         USART_Print("\t");
@@ -118,7 +122,7 @@ void flash_logger_loop(void) {
 // Dump แบบ RAW hex สำหรับ debug
 void flash_hexdump(uint32_t addr, uint16_t len) {
     uint8_t buf[32];
-    W25Q_Init();
+    W25Qxx_Init(&flash, PC4);
 
     USART_Print("Hexdump 0x");
     USART_PrintHex(addr);
@@ -130,7 +134,7 @@ void flash_hexdump(uint32_t addr, uint16_t len) {
         USART_PrintHex(addr + off);
         USART_Print(": ");
 
-        W25Q_Read(addr + off, buf, 16);
+        W25Qxx_Read(&flash, addr + off, buf, 16);
         for(uint8_t j=0; j<16 && (off+j)<len; j++) {
             USART_PrintHexByte(buf[j]);
             USART_Print(" ");
@@ -157,10 +161,12 @@ typedef struct {
 
 flash_config_t flash_cfg;
 
+W25Qxx_Instance flash;
+
 void flash_config_load(void) {
-    W25Q_Init();
-    W25Q_Read(CONFIG_SECTOR, (uint8_t *)&flash_cfg,
-              sizeof(flash_cfg));
+    W25Qxx_Init(&flash, PC4);
+    W25Qxx_Read(&flash, CONFIG_SECTOR, (uint8_t *)&flash_cfg,
+                sizeof(flash_cfg));
 
     if(flash_cfg.magic != CONFIG_MAGIC) {
         USART_Println("[CONFIG] No config — load defaults");
@@ -182,12 +188,12 @@ void flash_config_save(void) {
     flash_cfg.version++;
 
     USART_Println("[CONFIG] Erasing sector...");
-    W25Q_SectorErase(CONFIG_SECTOR);
+    W25Qxx_EraseSector(&flash, CONFIG_SECTOR);
     Delay_Ms(100);  // รอ erase จริง (W25Qxx ~30-100ms)
 
     USART_Println("[CONFIG] Writing new config...");
-    W25Q_Write(CONFIG_SECTOR, (uint8_t *)&flash_cfg,
-               sizeof(flash_cfg));
+    W25Qxx_Write(&flash, CONFIG_SECTOR, (uint8_t *)&flash_cfg,
+                 sizeof(flash_cfg));
 
     USART_Println("[CONFIG] Saved OK");
 }
@@ -196,8 +202,8 @@ void flash_sector_verify(void) {
     USART_Println("Verifying...");
     flash_config_t verify;
 
-    W25Q_Read(CONFIG_SECTOR, (uint8_t *)&verify,
-              sizeof(verify));
+    W25Qxx_Read(&flash, CONFIG_SECTOR, (uint8_t *)&verify,
+                sizeof(verify));
 
     if(memcmp(&flash_cfg, &verify, sizeof(flash_cfg)) == 0)
         USART_Println("✓ Verify PASS");

@@ -67,22 +67,20 @@ Speed of Sound = 0.0343 cm/µs (@ 20°C)
 #include "SimpleHAL.h"
 #include "HCSR04.h"
 
-#define TRIG_PIN  PC0
-#define ECHO_PIN  PC1
+HCSR04_Instance s;
 
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();  // สำหรับ pulseIn
     USART_Init(USART1, BAUD_115200);
 
-    HCSR04_Init(TRIG_PIN, ECHO_PIN, 38000);
-    //              trig     echo    timeout(µs)
-    // 38000µs = 38ms = ระยะสูงสุด ~650cm</code></pre>
-    <p class="explain">🔍 <code>HCSR04_Init(trig, echo, timeout_us)</code> — timeout ป้องกันโปรแกรมค้างถ้าไม่มีวัตถุสะท้อน — 38000µs ~650cm (ปลอดภัยสำหรับ range 400cm) — CH32V003 3.3V อาจต้องใช้ level shifter ที่ ECHO</p></div>
+    HCSR04_Init(&s, PC0, PC1);
+    //              inst  trig echo
+    // timeout = 38ms = ระยะสูงสุด ~650cm (ภายใน lib)</code></pre>
+    <p class="explain">🔍 <code>HCSR04_Init(&s, trig, echo)</code> — timeout ป้องกันโปรแกรมค้างถูกตั้งภายใน lib (~38ms) — CH32V003 3.3V อาจต้องใช้ level shifter ที่ ECHO</p></div>
 
     <div class="step"><h3>ขั้นที่ 2: อ่าน/เขียนค่า</h3>
-    <pre><code class="language-c">    float distanceCm = HCSR04_ReadDistance(HCSR04_UNIT_CM);
-    float distanceIn = HCSR04_ReadDistance(HCSR04_UNIT_INCH);
+    <pre><code class="language-c">    float distanceCm = HCSR04_MeasureCm(&s);
 
     if(distanceCm < 0) {
         USART_Println("Out of range (TOO_CLOSE / TOO_FAR)");
@@ -91,14 +89,14 @@ int main(void) {
         USART_PrintFloat(distanceCm, 1);
         USART_Println(" cm");
     }</code></pre>
-    <p class="explain">🔍 <code>HCSR04_ReadDistance()</code> — คืนค่าลบ (-1) ถ้า timeout หรือพัลส์ผิดปกติ — <code>pulseIn(ECHO_PIN, HIGH, timeout)</code> วัดความกว้างพัลส์ขาขึ้นในหน่วย µs</p></div>
+    <p class="explain">🔍 <code>HCSR04_MeasureCm(&s)</code> — คืนค่าลบ (-1) ถ้า timeout หรือพัลส์ผิดปกติ — ใช้ <code>pulseIn(ECHO_PIN, HIGH, timeout)</code> วัดความกว้างพัลส์ขาขึ้นในหน่วย µs</p></div>
 
     <div class="step"><h3>ขั้นที่ 3: Loop + แสดงผล</h3>
     <pre><code class="language-c">    OLED_Handle oled;
     OLED_Init(&oled, OLED_128x64, 0x3C);
 
     while(1) {
-        float dist = HCSR04_ReadDistance(HCSR04_UNIT_CM);
+        float dist = HCSR04_MeasureCm(&s);
 
         OLED_Clear(&oled);
         OLED_SetCursor(&oled, 0, 0);
@@ -120,18 +118,18 @@ int main(void) {
         Delay_Ms(100);  // 10 readings/sec
     }
 }</code></pre>
-    <p class="explain">🔍 แสดงระยะทางบน OLED แบบ real-time — ใช้ Timer_t + Non-Blocking ก็ได้ถ้าต้องการทำอย่างอื่นพร้อมกัน — <code>HCSR04_ReadDistance()</code> ใช้ <code>Delay_Us()</code> ภายใน — blocking ~40ms max</p></div>
+    <p class="explain">🔍 แสดงระยะทางบน OLED แบบ real-time — ใช้ Timer_t + Non-Blocking ก็ได้ถ้าต้องการทำอย่างอื่นพร้อมกัน — <code>HCSR04_MeasureCm()</code> ใช้ <code>Delay_Us()</code> ภายใน — blocking ~40ms max</p></div>
 </section>
 
 <section>
     <h2>📋 API Reference</h2>
     <table>
         <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
-        <tr><td><code>HCSR04_Init(trig, echo, timeout)</code></td><td>เริ่มต้นเซนเซอร์</td><td><code>HCSR04_Init(PC0, PC1, 38000)</code></td></tr>
-        <tr><td><code>HCSR04_ReadDistance(unit)</code></td><td>วัดระยะทาง (CM/INCH)</td><td><code>float d = HCSR04_ReadDistance(HCSR04_UNIT_CM)</code></td></tr>
-        <tr><td><code>HCSR04_ReadRaw()</code></td><td>อ่าน pulse width (µs) ดิบ</td><td><code>uint32_t pw = HCSR04_ReadRaw()</code></td></tr>
-        <tr><td><code>HCSR04_SetTimeout(us)</code></td><td>ตั้ง timeout ใหม่</td><td><code>HCSR04_SetTimeout(25000)</code></td></tr>
-        <tr><td><code>HCSR04_Trigger()</code></td><td>ส่ง trigger pulse อย่างเดียว</td><td><code>HCSR04_Trigger()</code></td></tr>
+        <tr><td><code>HCSR04_Init(&s, trig, echo)</code></td><td>เริ่มต้นเซนเซอร์</td><td><code>HCSR04_Init(&s, PC0, PC1)</code></td></tr>
+        <tr><td><code>HCSR04_MeasureCm(&s)</code></td><td>วัดระยะทาง (cm)</td><td><code>float d = HCSR04_MeasureCm(&s)</code></td></tr>
+        <tr><td><code>HCSR04_MeasureInch(&s)</code></td><td>วัดระยะทาง (inch)</td><td><code>float d = HCSR04_MeasureInch(&s)</code></td></tr>
+        <tr><td><code>HCSR04_ReadRaw(&s)</code></td><td>อ่าน pulse width (µs) ดิบ</td><td><code>uint32_t pw = HCSR04_ReadRaw(&s)</code></td></tr>
+        <tr><td><code>HCSR04_SetTimeout(&s, us)</code></td><td>ตั้ง timeout ใหม่</td><td><code>HCSR04_SetTimeout(&s, 25000)</code></td></tr>
     </table>
 </section>
 
@@ -167,11 +165,13 @@ int main(void)
 
     OLED_Handle oled;
     OLED_Init(&oled, OLED_128x64, 0x3C);
-    HCSR04_Init(PC0, PC1, 38000);
+
+    HCSR04_Instance s;
+    HCSR04_Init(&s, PC0, PC1);
 
     while(1)
     {
-        float dist = HCSR04_ReadDistance(HCSR04_UNIT_CM);
+        float dist = HCSR04_MeasureCm(&s);
         if(dist < 0) { Delay_Ms(200); continue; }
 
         float waterLevel = TANK_HEIGHT - dist + SENSOR_OFFSET;

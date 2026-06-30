@@ -20,8 +20,8 @@
     <h2>🧭 แผนภาพการทำงาน</h2>
     <pre class="mermaid">
 flowchart TD
-    A["PCA9685_Init(addr)"] --> B["Cluster_AddServo(ch, min, max)"]
-    B --> C["Cluster_MoveTo(ch, angle, time_ms, curve)"]
+    A["ServoCluster_Init(&sc, PCA9685, 16)"] --> B["ServoCluster_AddServo(&sc, ch, min, max)"]
+    B --> C["ServoCluster_MoveTo(ch, angle, time_ms, curve)"]
     C --> D{"Easing Curve"}
     D -->|"Linear"| E1["t"]
     D -->|"EaseInOut"| E2["t<0.5?2t²:-1+(4-2t)t"]
@@ -31,7 +31,7 @@ flowchart TD
     E2 --> F
     E3 --> F
     E4 --> F
-    F --> G["Cluster_Update() Non-Blocking"]
+    F --> G["ServoCluster_Update() Non-Blocking"]
     G --> H{"All servos done?"}
     H -->|"No"| G
     H -->|"Yes"| I["Callback onComplete()"]
@@ -64,7 +64,7 @@ flowchart TD
     <h2>📚 หลักการทำงาน</h2>
     <p><strong>PCA9685</strong> คือ I²C 16-channel 12-bit PWM driver — สร้าง PWM 50Hz ได้ 16 ช่องพร้อมกันจาก hardware ตัวเดียว ทำให้ CH32V003 ควบคุม servo จำนวนมากได้โดยไม่เปลือง GPIO</p>
     <p><strong>ServoCluster</strong> ห่อหุ้ม PCA9685 + เพิ่มระบบ <strong>Easing Curves</strong> 10 แบบ: Linear, QuadEaseIn, QuadEaseOut, QuadEaseInOut, Cubic, Elastic, Bounce, Back, Sine, Expo — ทำให้การเคลื่อนไหวดูเป็นธรรมชาติ</p>
-    <p><strong>Non-Blocking Update():</strong> <code>Cluster_MoveTo(ch, target_angle, duration_ms, curve)</code> ตั้งเป้าหมายแล้ว <code>Cluster_Update()</code> ใน main loop จะคำนวณตำแหน่งระหว่างทางอัตโนมัติ — ไม่ต้องใช้ Delay</p>
+    <p><strong>Non-Blocking Update():</strong> <code>ServoCluster_MoveTo(ch, target_angle, duration_ms, curve)</code> ตั้งเป้าหมายแล้ว <code>ServoCluster_Update()</code> ใน main loop จะคำนวณตำแหน่งระหว่างทางอัตโนมัติ — ไม่ต้องใช้ Delay</p>
     <p><strong>Callback:</strong> เมื่อ servo ถึงเป้าหมาย จะเรียกฟังก์ชัน callback — ใช้ทำ Animation Sequence หรือ Pick-and-Place</p>
 </section>
 
@@ -76,42 +76,42 @@ flowchart TD
 #include "SimpleHAL.h"
 #include "ServoCluster.h"
 
-ServoCluster_t cluster;
+ServoCluster_Instance sc;
 
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
     I2C_Init(PC2, PC1);  // SCL, SDA
 
-    Cluster_Init(&cluster, 0x40);  // PCA9685 address
-    Cluster_AddServo(&cluster, 0, 500, 2500);   // CH0: 0.5-2.5ms
-    Cluster_AddServo(&cluster, 1, 600, 2400);   // CH1: custom range
-    Cluster_AddServo(&cluster, 2, 500, 2500);   // CH2
-    Cluster_AddServo(&cluster, 3, 500, 2500);   // CH3</code></pre>
-    <p class="explain">🔍 <code>Cluster_Init(cluster, i2c_addr)</code> ตั้งค่า PCA9685 50Hz — <code>Cluster_AddServo(cluster, channel, us_min, us_max)</code> กำหนด pulse width range ของ servo แต่ละตัว (calibrate ได้)</p></div>
+    ServoCluster_Init(&sc, SERVOCLUSTER_PCA9685, 16);
+    ServoCluster_AddServo(&sc, 0, 500, 2500);   // CH0: 0.5-2.5ms
+    ServoCluster_AddServo(&sc, 1, 600, 2400);   // CH1: custom range
+    ServoCluster_AddServo(&sc, 2, 500, 2500);   // CH2
+    ServoCluster_AddServo(&sc, 3, 500, 2500);   // CH3</code></pre>
+    <p class="explain">🔍 <code>ServoCluster_Init(cluster, i2c_addr)</code> ตั้งค่า PCA9685 50Hz — <code>ServoCluster_AddServo(cluster, channel, us_min, us_max)</code> กำหนด pulse width range ของ servo แต่ละตัว (calibrate ได้)</p></div>
 
     <div class="step"><h3>ขั้นที่ 2: MoveTo พร้อม Easing</h3>
     <pre><code class="language-c">    // ย้าย servo 4 ตัวไปคนละมุมด้วย easing ต่างกัน
-    Cluster_MoveTo(&cluster, 0, 180, 1000, EASE_IN_OUT_QUAD);
-    Cluster_MoveTo(&cluster, 1, 90,  1500, EASE_ELASTIC_OUT);
-    Cluster_MoveTo(&cluster, 2, 45,  800,  EASE_BOUNCE_OUT);
-    Cluster_MoveTo(&cluster, 3, 135, 1200, EASE_LINEAR);
+    ServoCluster_MoveTo(&sc, 0, 180, 1000, EASE_IN_OUT_QUAD);
+    ServoCluster_MoveTo(&sc, 1, 90,  1500, EASE_ELASTIC_OUT);
+    ServoCluster_MoveTo(&sc, 2, 45,  800,  EASE_BOUNCE_OUT);
+    ServoCluster_MoveTo(&sc, 3, 135, 1200, EASE_LINEAR);
 
     // ใช้ callback เมื่อ CH0 ถึงเป้าหมาย
-    cluster.servos[0].onComplete = on_servo0_done;</code></pre>
-    <p class="explain">🔍 <code>Cluster_MoveTo(cluster, ch, angle, duration_ms, curve)</code> — กำหนดมุมเป้าหมาย, เวลาที่ใช้เดินทาง, และ easing curve — แต่ละ servo เคลื่อนไหวอิสระพร้อมกัน</p></div>
+    sc.servos[0].onComplete = on_servo0_done;</code></pre>
+    <p class="explain">🔍 <code>ServoCluster_MoveTo(cluster, ch, angle, duration_ms, curve)</code> — กำหนดมุมเป้าหมาย, เวลาที่ใช้เดินทาง, และ easing curve — แต่ละ servo เคลื่อนไหวอิสระพร้อมกัน</p></div>
 
     <div class="step"><h3>ขั้นที่ 3: Non-Blocking Update Loop</h3>
     <pre><code class="language-c">    while(1) {
-        Cluster_Update(&cluster);  // Non-Blocking — คำนวณทุก servo
+        ServoCluster_Update(&sc);  // Non-Blocking — คำนวณทุก servo
 
         // ตรวจสอบว่า servo ทั้งหมดถึงเป้าหมายหรือยัง
-        if(Cluster_AllDone(&cluster)) {
+        if(ServoCluster_IsAllDone(&sc)) {
             Delay_Ms(500);
-            Cluster_MoveTo(&cluster, 0, 0, 1000, EASE_IN_OUT_CUBIC);
-            Cluster_MoveTo(&cluster, 1, 0, 1000, EASE_IN_OUT_CUBIC);
-            Cluster_MoveTo(&cluster, 2, 180, 1000, EASE_IN_OUT_CUBIC);
-            Cluster_MoveTo(&cluster, 3, 180, 1000, EASE_IN_OUT_CUBIC);
+            ServoCluster_MoveTo(&sc, 0, 0, 1000, EASE_IN_OUT_CUBIC);
+            ServoCluster_MoveTo(&sc, 1, 0, 1000, EASE_IN_OUT_CUBIC);
+            ServoCluster_MoveTo(&sc, 2, 180, 1000, EASE_IN_OUT_CUBIC);
+            ServoCluster_MoveTo(&sc, 3, 180, 1000, EASE_IN_OUT_CUBIC);
         }
     }
 }
@@ -119,19 +119,19 @@ int main(void) {
 void on_servo0_done(void) {
     // Trigger sequence ถัดไปเมื่อ servo 0 ถึงเป้าหมาย
 }</code></pre>
-    <p class="explain">🔍 <code>Cluster_Update()</code> ต้องเรียกใน main loop ตลอด — มันคำนวณตำแหน่ง interpolated จาก elapsed time และ easing curve — <code>Cluster_AllDone()</code> เช็คว่าทุก servo ถึง target หมด</p></div>
+    <p class="explain">🔍 <code>ServoCluster_Update()</code> ต้องเรียกใน main loop ตลอด — มันคำนวณตำแหน่ง interpolated จาก elapsed time และ easing curve — <code>ServoCluster_IsAllDone()</code> เช็คว่าทุก servo ถึง target หมด</p></div>
 </section>
 
 <section>
     <h2>📋 API Reference</h2>
     <table>
         <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
-        <tr><td><code>Cluster_Init(c, addr)</code></td><td>เริ่ม PCA9685 ที่ I²C address</td><td><code>Cluster_Init(&c, 0x40)</code></td></tr>
-        <tr><td><code>Cluster_AddServo(c,ch,min,max)</code></td><td>เพิ่ม servo พร้อม pulse range (μs)</td><td><code>Cluster_AddServo(&c, 0, 500, 2500)</code></td></tr>
-        <tr><td><code>Cluster_MoveTo(c,ch,ang,ms,curve)</code></td><td>เคลื่อนที่ไปมุมเป้าหมายด้วย easing</td><td><code>Cluster_MoveTo(&c,0,90,1000,EASE_LINEAR)</code></td></tr>
-        <tr><td><code>Cluster_Update(c)</code></td><td>Non-blocking update — เรียกทุก loop</td><td><code>Cluster_Update(&c)</code></td></tr>
-        <tr><td><code>Cluster_AllDone(c)</code></td><td>เช็คว่าทุก servo ถึง target</td><td><code>if(Cluster_AllDone(&c))</code></td></tr>
-        <tr><td><code>Cluster_Stop(c, ch)</code></td><td>หยุด servo channel ที่กำหนด</td><td><code>Cluster_Stop(&c, 0)</code></td></tr>
+        <tr><td><code>ServoCluster_Init(&sc, type, ch)</code></td><td>เริ่ม PCA9685 16-channel</td><td><code>ServoCluster_Init(&sc, SERVOCLUSTER_PCA9685, 16)</code></td></tr>
+        <tr><td><code>ServoCluster_AddServo(&sc,ch,min,max)</code></td><td>เพิ่ม servo พร้อม pulse range (μs)</td><td><code>ServoCluster_AddServo(&sc, 0, 500, 2500)</code></td></tr>
+        <tr><td><code>ServoCluster_MoveTo(&sc,ch,ang,ms,curve)</code></td><td>เคลื่อนที่ไปมุมเป้าหมายด้วย easing</td><td><code>ServoCluster_MoveTo(&sc,0,90,2000,EASE_IN_OUT_CUBIC)</code></td></tr>
+        <tr><td><code>ServoCluster_Update(&sc)</code></td><td>Non-blocking update — เรียกทุก loop</td><td><code>ServoCluster_Update(&sc)</code></td></tr>
+        <tr><td><code>ServoCluster_IsAllDone(&sc)</code></td><td>เช็คว่าทุก servo ถึง target</td><td><code>if(ServoCluster_IsAllDone(&sc))</code></td></tr>
+        <tr><td><code>ServoCluster_Stop(&sc, ch)</code></td><td>หยุด servo channel ที่กำหนด</td><td><code>ServoCluster_Stop(&sc, 0)</code></td></tr>
     </table>
 </section>
 
@@ -139,10 +139,10 @@ void on_servo0_done(void) {
     <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
     <table>
         <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
-        <tr><td>Servo ไม่ขยับเลย</td><td>ลืมเรียก <code>Cluster_Update()</code> ใน loop</td><td>ต้องเรียก <code>Cluster_Update(&cluster)</code> ใน main while(1) ทุกรอบ</td></tr>
+        <tr><td>Servo ไม่ขยับเลย</td><td>ลืมเรียก <code>ServoCluster_Update()</code> ใน loop</td><td>ต้องเรียก <code>ServoCluster_Update(&sc)</code> ใน main while(1) ทุกรอบ</td></tr>
         <tr><td>PCA9685 ไม่ตอบสนอง</td><td>I²C address ไม่ตรง หรือไม่ได้ต่อ pull-up</td><td>ตรวจสอบ address (0x40 default) — ถ้าใช้หลายบอร์ดต้องตั้ง address ให้ไม่ชนกัน</td></tr>
         <tr><td>Servo สั่นระหว่างเคลื่อนที่</td><td>External 5V จ่ายกระแสไม่พอสำหรับหลาย servo</td><td>ใช้ 5V supply ≥ 3A สำหรับ 16 servo — ต่อ capacitor 1000μF ขนาน V+</td></tr>
-        <tr><td>Easing ไม่ smooth</td><td>เรียก Cluster_Update() ช้าเกินไป</td><td>loop ต้องวน ≥ 50Hz — ห้ามมี Delay_Ms นาน ๆ ใน loop</td></tr>
+        <tr><td>Easing ไม่ smooth</td><td>เรียก ServoCluster_Update() ช้าเกินไป</td><td>loop ต้องวน ≥ 50Hz — ห้ามมี Delay_Ms นาน ๆ ใน loop</td></tr>
         <tr><td>Timer overflow ในการคำนวณ</td><td>duration นานเกิน 65 วินาที (uint16_ms)</td><td>แบ่งการเคลื่อนที่เป็นช่วง ๆ — หรือใช้ uint32_t สำหรับ long moves</td></tr>
     </table>
 </section>
@@ -154,48 +154,48 @@ void on_servo0_done(void) {
 #include "SimpleHAL.h"
 #include "ServoCluster.h"
 
-ServoCluster_t arm;
+ServoCluster_Instance arm;
 uint8_t step = 0;
 
 void next_step(void) {
     step = (step + 1) % 6;
     switch(step) {
         case 0: // Home
-            Cluster_MoveTo(&arm,0,90,1000,EASE_IN_OUT_QUAD);
-            Cluster_MoveTo(&arm,1,45,1000,EASE_IN_OUT_QUAD);
-            Cluster_MoveTo(&arm,2,90,1000,EASE_IN_OUT_QUAD);
-            Cluster_MoveTo(&arm,3,90,500,EASE_LINEAR); break;
+            ServoCluster_MoveTo(&arm,0,90,1000,EASE_IN_OUT_QUAD);
+            ServoCluster_MoveTo(&arm,1,45,1000,EASE_IN_OUT_QUAD);
+            ServoCluster_MoveTo(&arm,2,90,1000,EASE_IN_OUT_QUAD);
+            ServoCluster_MoveTo(&arm,3,90,500,EASE_LINEAR); break;
         case 1: // Move to pick
-            Cluster_MoveTo(&arm,0,30,1200,EASE_IN_OUT_QUAD);
-            Cluster_MoveTo(&arm,1,120,1200,EASE_IN_OUT_QUAD);
-            Cluster_MoveTo(&arm,2,150,1200,EASE_IN_OUT_QUAD); break;
+            ServoCluster_MoveTo(&arm,0,30,1200,EASE_IN_OUT_QUAD);
+            ServoCluster_MoveTo(&arm,1,120,1200,EASE_IN_OUT_QUAD);
+            ServoCluster_MoveTo(&arm,2,150,1200,EASE_IN_OUT_QUAD); break;
         case 2: // Grab
-            Cluster_MoveTo(&arm,3,0,500,EASE_IN_BACK); break;
+            ServoCluster_MoveTo(&arm,3,0,500,EASE_IN_BACK); break;
         case 3: // Lift
-            Cluster_MoveTo(&arm,1,60,800,EASE_OUT_QUAD);
-            Cluster_MoveTo(&arm,2,90,800,EASE_OUT_QUAD); break;
+            ServoCluster_MoveTo(&arm,1,60,800,EASE_OUT_QUAD);
+            ServoCluster_MoveTo(&arm,2,90,800,EASE_OUT_QUAD); break;
         case 4: // Move to place
-            Cluster_MoveTo(&arm,0,150,1500,EASE_IN_OUT_QUAD);
-            Cluster_MoveTo(&arm,1,130,1500,EASE_IN_OUT_QUAD);
-            Cluster_MoveTo(&arm,2,160,1500,EASE_IN_OUT_QUAD); break;
+            ServoCluster_MoveTo(&arm,0,150,1500,EASE_IN_OUT_QUAD);
+            ServoCluster_MoveTo(&arm,1,130,1500,EASE_IN_OUT_QUAD);
+            ServoCluster_MoveTo(&arm,2,160,1500,EASE_IN_OUT_QUAD); break;
         case 5: // Release
-            Cluster_MoveTo(&arm,3,90,300,EASE_LINEAR); break;
+            ServoCluster_MoveTo(&arm,3,90,300,EASE_LINEAR); break;
     }
 }
 
 int main(void) {
     SystemCoreClockUpdate(); Timer_Init();
     I2C_Init(PC2, PC1);
-    Cluster_Init(&arm, 0x40);
-    Cluster_AddServo(&arm, 0, 500, 2500); // Base
-    Cluster_AddServo(&arm, 1, 600, 2400); // Shoulder
-    Cluster_AddServo(&arm, 2, 500, 2500); // Elbow
-    Cluster_AddServo(&arm, 3, 700, 2300); // Gripper
+    ServoCluster_Init(&arm, SERVOCLUSTER_PCA9685, 16);
+    ServoCluster_AddServo(&arm, 0, 500, 2500); // Base
+    ServoCluster_AddServo(&arm, 1, 600, 2400); // Shoulder
+    ServoCluster_AddServo(&arm, 2, 500, 2500); // Elbow
+    ServoCluster_AddServo(&arm, 3, 700, 2300); // Gripper
     arm.servos[3].onComplete = next_step; // Auto-advance
     next_step(); // Start sequence
 
     while(1) {
-        Cluster_Update(&arm);
+        ServoCluster_Update(&arm);
     }
 }</code></pre>
 </section>

@@ -7,7 +7,7 @@
 #include "CircularBuffer.h"
 
 #define BUF_SIZE 128
-CircularBuffer_t rx_buf;
+CircularBuffer rx_buf;
 uint8_t buf_data[BUF_SIZE];
 
 void USART1_IRQHandler(void) __attribute__((interrupt("WCH-Interrupt-fast")));
@@ -50,7 +50,7 @@ int main(void) {
 #include "CircularBuffer.h"
 
 #define CMD_BUF_SIZE 256
-CircularBuffer_t cmd_buf;
+CircularBuffer cmd_buf;
 uint8_t cmd_data[CMD_BUF_SIZE];
 
 char line[64];
@@ -114,7 +114,7 @@ int main(void) {
 #include "CircularBuffer.h"
 
 #define BUF_SIZE  64
-CircularBuffer_t rx;
+CircularBuffer rx;
 uint8_t rx_data[BUF_SIZE];
 
 volatile uint16_t overflow_cnt = 0;

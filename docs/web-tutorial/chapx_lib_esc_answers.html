@@ -6,16 +6,15 @@
 <h2>ข้อ 1: Thrust Test Ramp — ค่อย ๆ เพิ่มกำลังวัดแรงขับ</h2>
 <pre><code class="language-c">#include "simple_esc.h"
 
-ESC_t esc;
+ESC_Instance esc;
 
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    ESC_Init(&esc, GPIOA, GPIO_Pin_0);
+    ESC_Init(&esc, PWM1_CH1, 1000, 2000);
 
     // Arm ESC
-    ESC_SetThrottle(&esc, 0);
-    Delay_Ms(3000);
+    ESC_Arm(&esc);
 
     // Ramp จาก 0% → 100% ทีละ 1%
     for (uint8_t throttle = 0; throttle &lt;= 100; throttle++) {
@@ -48,7 +47,7 @@ int main(void) {
 <pre><code class="language-c">#include "simple_esc.h"
 #include "simple_adc.h"
 
-ESC_t esc;
+ESC_Instance esc;
 
 #define BAT_LOW_MV   3300   // 3.3V per cell (3S = 9.9V)
 #define BAT_CRIT_MV  3000   // 3.0V per cell — cut off
@@ -65,7 +64,7 @@ int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
     ADC_SimpleInit(ADC_CH0);
-    ESC_Init(&esc, GPIOA, GPIO_Pin_0);
+    ESC_Init(&esc, PWM1_CH1, 1000, 2000);
 
     ESC_SetThrottle(&esc, 0);
     Delay_Ms(3000);
@@ -94,14 +93,14 @@ int main(void) {
 #include "simple_adc.h"
 #include "simple_uart.h"
 
-ESC_t esc;
+ESC_Instance esc;
 
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
     ADC_SimpleInit(ADC_CH0);
     UART_Init(USART1, 115200);
-    ESC_Init(&esc, GPIOA, GPIO_Pin_0);
+    ESC_Init(&esc, PWM1_CH1, 1000, 2000);
 
     ESC_SetThrottle(&esc, 0);
     Delay_Ms(3000);

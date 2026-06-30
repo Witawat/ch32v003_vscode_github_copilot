@@ -6,7 +6,7 @@
 <h2>ข้อ 1: Absolute Positioning ด้วย Limit Switch</h2>
 <pre><code class="language-c">#include "simple_stepper.h"
 
-Stepper_t motor;
+StepperMotor_Instance motor;
 
 #define LIMIT_SW_PIN  GPIO_Pin_1
 #define LIMIT_SW_PORT GPIOA
@@ -17,12 +17,12 @@ const int32_t MAX_POS = 5000;
 void home(void) {
     // หมุนถอยหลังจนชน limit switch
     while (GPIO_ReadInputDataBit(LIMIT_SW_PORT, LIMIT_SW_PIN)) {
-        Stepper_Step(&motor, -1);
+        StepperMotor_Move(&motor, -1);
         Delay_Ms(3);
     }
     // ถอยออกนิดหน่อย
     for (uint16_t i = 0; i &lt; 50; i++) {
-        Stepper_Step(&motor, 1);
+        StepperMotor_Move(&motor, 1);
         Delay_Ms(3);
     }
     position = 0;
@@ -31,10 +31,7 @@ void home(void) {
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    StepperMotor_InitULN2003(&motor, GPIOA, GPIO_Pin_2,
-                 GPIOA, GPIO_Pin_3,
-                 GPIOA, GPIO_Pin_4,
-                 GPIOA, GPIO_Pin_5);
+    StepperMotor_InitULN2003(&motor, PC0, PC1, PC2, PC3, 2048);
 
     GPIO_InitTypeDef g = {0};
     g.GPIO_Pin  = LIMIT_SW_PIN;
@@ -46,7 +43,7 @@ int main(void) {
     while (1) {
         // ไปตำแหน่ง 1000
         while (position &lt; 1000) {
-            Stepper_Step(&motor, 1);
+            StepperMotor_Move(&motor, 1);
             position++;
             Delay_Ms(2);
         }
@@ -54,7 +51,7 @@ int main(void) {
 
         // กลับตำแหน่ง 0
         while (position &gt; 0) {
-            Stepper_Step(&motor, -1);
+            StepperMotor_Move(&motor, -1);
             position--;
             Delay_Ms(2);
         }
@@ -68,7 +65,7 @@ int main(void) {
 <h2>ข้อ 2: Acceleration Ramp — ค่อย ๆ เพิ่มความเร็ว</h2>
 <pre><code class="language-c">#include "simple_stepper.h"
 
-Stepper_t motor;
+StepperMotor_Instance motor;
 
 #define MIN_DELAY  1200   // us, ความเร็วสูงสุด
 #define MAX_DELAY  8000   // us, ความเร็วเริ่มต้น
@@ -79,7 +76,7 @@ void step_with_accel(int32_t steps, int8_t dir) {
     uint32_t halfway = (steps &gt; 0 ? steps : -steps) / 2;
 
     for (int32_t i = 0; i &lt; (steps &gt; 0 ? steps : -steps); i++) {
-        Stepper_Step(&motor, dir);
+        StepperMotor_Move(&motor, dir);
 
         // Accelerate first half, decelerate second half
         if (i &lt; halfway) {
@@ -95,8 +92,7 @@ void step_with_accel(int32_t steps, int8_t dir) {
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    StepperMotor_InitULN2003(&motor, GPIOA, GPIO_Pin_2, GPIOA, GPIO_Pin_3,
-                 GPIOA, GPIO_Pin_4, GPIOA, GPIO_Pin_5);
+    StepperMotor_InitULN2003(&motor, PC0, PC1, PC2, PC3, 2048);
 
     while (1) {
         step_with_accel(2000, 1);   // ไปทางบวก 2000 step
@@ -112,20 +108,19 @@ int main(void) {
 <h2>ข้อ 3: Conveyor Sequence — ทำซ้ำ N รอบ</h2>
 <pre><code class="language-c">#include "simple_stepper.h"
 
-Stepper_t motor;
+StepperMotor_Instance motor;
 #define CONVEYOR_STEPS 800   // ต่อ 1 รอบของสายพาน
 #define CYCLES         5
 
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    StepperMotor_InitULN2003(&motor, GPIOA, GPIO_Pin_2, GPIOA, GPIO_Pin_3,
-                 GPIOA, GPIO_Pin_4, GPIOA, GPIO_Pin_5);
+    StepperMotor_InitULN2003(&motor, PC0, PC1, PC2, PC3, 2048);
 
     for (uint8_t cycle = 0; cycle &lt; CYCLES; cycle++) {
         // เดินหน้า 1 รอบ
         for (uint32_t i = 0; i &lt; CONVEYOR_STEPS; i++) {
-            Stepper_Step(&motor, 1);
+            StepperMotor_Move(&motor, 1);
             Delay_Ms(2);
         }
 
@@ -133,7 +128,7 @@ int main(void) {
 
         // รีเซ็ตสายพาน — เดินต่ออีก 1 รอบ (หรือถอยหลังตามงาน)
         for (uint32_t i = 0; i &lt; CONVEYOR_STEPS; i++) {
-            Stepper_Step(&motor, 1);
+            StepperMotor_Move(&motor, 1);
             Delay_Ms(2);
         }
 

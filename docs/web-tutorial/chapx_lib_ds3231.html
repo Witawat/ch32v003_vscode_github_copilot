@@ -18,145 +18,118 @@
     <h2>🧭 แผนภาพการทำงาน</h2>
     <pre class="mermaid">
 flowchart TD
-    A["DS3231_Init(i2c)"] --> B["DS3231_SetTime(hr,min,sec)"]
-    B --> C["DS3231_SetDate(d,m,y)"]
-    C --> D["DS3231_GetTime(&tm)"]
-    D --> E{"Check Alarm?"}
-    E -->|"Yes"| F["DS3231_SetAlarm1(hr,min,sec)"]
-    E -->|"No"| G["Display Time"]
-    F --> H["DS3231_AlarmFired()?"]
-    H -->|"Yes"| I["Trigger Event / Wakeup"]
-    H -->|"No"| D
-    G --> D
+    A["DS3231_Init(&rtc)"] --> B["DS3231_SetDateTime(&rtc, &dt)"]
+    B --> C["DS3231_GetDateTime(&rtc, &dt)"]
+    C --> D{"Check Alarm?"}
+    D -->|"Yes"| E["DS3231_SetAlarm1(...)"]
+    D -->|"No"| F["Display Time"]
+    E --> H["DS3231_AlarmFired(&rtc, n)?"]
+    H -->|"Yes"| I["Trigger Event"]
+    H -->|"No"| C
+    F --> C
     </pre>
 </section>
 
-<section>
-    <h2>🔌 การต่อวงจร</h2>
-    <pre class="ascii-circuit">
+<section><h2>🔌 การต่อวงจร</h2>
+<pre class="ascii-circuit">
                 DS3231 RTC Module I2C
     ┌──────────────────────────────────────────────┐
     │ CH32V003                         DS3231      │
     │ PC1(SDA)────────SDA   ┌─────────────────────┤
     │ PC2(SCL)────────SCL   │                     │
     │ 3.3V───────────VCC    │ Address = 0x68      │
-    │ GND────────────GND    │ Accuracy: +-2ppm    │
-    │ 3.3V--4.7k--SDA      │ (~1 min/year)      │
-    │ 3.3V--4.7k--SCL      │                     │
+    │ GND────────────GND    │ Accuracy: ±2ppm     │
     │                        │ +--BAT--CR2032---┐ │
-    │ ⚡ ตองตอ battery backup│ │   (keep time)  │ │
-    │    ไมงั้นเวลา reset    │ +---------------+ │
-    │    ทุกครั้งที่ไฟดับ!     └─────────────────────┤
-    │                                              │
-    │ SQW-(opt)-PC3: square wave out               │
-    │ 32K-(opt)-PC4: 32.768kHz out                │
     └──────────────────────────────────────────────┘
-    </pre>
-    <p>DS3231 มี TCXO (Temperature Compensated Crystal Oscillator) ในตัว — แม่น ±2ppm (ผิดไม่เกิน 1 นาทีต่อปี), ต่อ battery backup CR2032 เพื่อให้เวลาเดินต่อแม้ไฟหลักดับ, I2C address 0x68 (fixed)</p>
-</section>
+</pre></section>
 
-<section>
-    <h2>📚 หลักการทำงาน</h2>
-    <p><strong>DS3231</strong> เป็น RTC (Real-Time Clock) แบบ I2C — แม่นยำสูงเพราะมี TCXO ในตัวชดเชยอุณหภูมิ, เก็บวินาที-นาที-ชั่วโมง-วัน-เดือน-ปี (BCD format), จัดการ leap year อัตโนมัติถึงปี 2100</p>
-    <p><strong>2 Alarms:</strong> Alarm 1 ตั้งได้ละเอียดถึงวินาที, Alarm 2 ตั้งได้ถึงนาที — เมื่อ alarm ตรงจะ set flag และสามารถขับ SQW pin เป็น LOW เพื่อ wake up MCU</p>
-    <p><strong>Temperature Sensor:</strong> DS3231 มี temperature sensor ในตัว (±3°C) — อ่านได้ผ่าน register 0x11-0x12 — ใช้ตรวจสอบอุณหภูมิแวดล้อมและ TCXO compensation</p>
-    <p><strong>SQW Output:</strong> สร้าง square wave ความถี่ 1Hz, 1.024kHz, 4.096kHz, 8.192kHz — ใช้เป็น interrupt ให้ MCU อ่านเวลาทุก 1 วินาทีได้</p>
-</section>
+<section><h2>📚 หลักการทำงาน</h2>
+<p><strong>DS3231</strong> เป็น RTC (Real-Time Clock) แบบ I2C — แม่นยำสูง TCXO ในตัว, เก็บวินาที-นาที-ชั่วโมง-วัน-เดือน-ปี, จัดการ leap year อัตโนมัติ, มี temperature sensor ในตัว</p></section>
 
-<section>
-    <h2>💻 เขียน Code ทีละขั้น</h2>
+<section><h2>💻 เขียน Code ทีละขั้น</h2>
 
-    <div class="step"><h3>ขั้นที่ 1: Init + ตั้งเวลาเริ่มต้น</h3>
-    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+<div class="step"><h3>ขั้นที่ 1: Init + ตั้งเวลาเริ่มต้น</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "DS3231.h"
+
+DS3231_Instance rtc;
 
 int main(void) {
     SystemCoreClockUpdate();
     I2C_Init(I2C1, I2C_SPEED_STANDARD);
-    DS3231_Init(I2C1);  // addr 0x68 fixed
     USART_Init(USART1, BAUD_115200);
 
-    // ตั้งเวลา (ทำครั้งเดียว หรือเมื่อเปลี่ยน battery)
-    // DS3231_SetTime(14, 30, 0);  // 14:30:00
-    // DS3231_SetDate(15, 6, 2025); // 15 Jun 2025
+    DS3231_Init(&rtc);  // addr 0x68 fixed
     USART_Println("DS3231 RTC Ready!");</code></pre>
-    <p class="explain">🔍 <code>DS3231_Init(I2C1)</code> — I2C address 0x68 fixed, <code>DS3231_SetTime()</code> และ <code>DS3231_SetDate()</code> — ตั้งค่าเริ่มต้น หลังจากนั้นแบตเตอรี่จะรักษาเวลาไว้</p></div>
+<p class="explain">🔍 <code>DS3231_Init(&rtc)</code> — instance-based, I2C address 0x68 fixed</p></div>
 
-    <div class="step"><h3>ขั้นที่ 2: อ่านเวลา + ตั้ง Alarm</h3>
-    <pre><code class="language-c">    RTC_Time tm;
-    DS3231_GetTime(&tm);  // อ่านเวลาปัจจุบัน
+<div class="step"><h3>ขั้นที่ 2: อ่านเวลา + ตั้ง Alarm</h3>
+<pre><code class="language-c">    RTC_DateTime_t dt;
+    DS3231_GetDateTime(&rtc, &dt);
+
     USART_Print("Time: ");
-    USART_PrintInt(tm.hour); USART_Print(":");
-    USART_PrintInt(tm.min);  USART_Print(":");
-    USART_PrintInt(tm.sec);  USART_Println("");
+    USART_PrintInt(dt.hour); USART_Print(":");
+    USART_PrintInt(dt.minute); USART_Print(":");
+    USART_PrintInt(dt.second); USART_Println("");
+
+    USART_Print("Date: ");
+    USART_PrintInt(dt.day); USART_Print("/");
+    USART_PrintInt(dt.month); USART_Print("/");
+    USART_PrintInt(dt.year); USART_Println("");
 
     // ตั้ง Alarm 1: ทุกวัน 08:00:00
-    DS3231_SetAlarm1(DS3231_ALARM1_EVERYDAY, 8, 0, 0);
-    // ตั้ง Alarm 2: ทุกนาทีที่ 30
-    DS3231_SetAlarm2(DS3231_ALARM2_PERMINUTE, 0, 30);</code></pre>
-    <p class="explain">🔍 <code>DS3231_GetTime(&tm)</code> — อ่านเวลาเป็น struct, <code>DS3231_SetAlarm1(mode, hr, min, sec)</code> — mode: EVERYDAY, DATE, PER SECOND/MINUTE/HOUR</p></div>
+    DS3231_SetAlarm1(&rtc, DS3231_ALARM1_EVERYDAY, 8, 0, 0);</code></pre>
+<p class="explain">🔍 <code>DS3231_GetDateTime(&rtc, &dt)</code> — อ่านวัน/เวลาเป็น struct, <code>DS3231_SetAlarm1()</code> — ตั้ง alarm</p></div>
 
-    <div class="step"><h3>ขั้นที่ 3: Loop — แสดงผล + ตรวจสอบ Alarm</h3>
-    <pre><code class="language-c">    while(1) {
-        DS3231_GetTime(&tm);
-        USART_PrintInt(tm.hour); USART_Print(":");
-        USART_PrintInt(tm.min);  USART_Print(":");
-        USART_PrintInt(tm.sec);
-        USART_Print(" | ");
-        USART_PrintInt(tm.day); USART_Print("/");
-        USART_PrintInt(tm.month); USART_Print("/");
-        USART_PrintInt(tm.year); USART_Println("");
+<div class="step"><h3>ขั้นที่ 3: Loop — แสดงผล + ตรวจสอบ Alarm</h3>
+<pre><code class="language-c">    while(1) {
+        DS3231_GetDateTime(&rtc, &dt);
+        USART_PrintInt(dt.hour); USART_Print(":");
+        USART_PrintInt(dt.minute); USART_Print(":");
+        USART_PrintInt(dt.second); USART_Print(" | ");
+        USART_PrintInt(dt.day); USART_Print("/");
+        USART_PrintInt(dt.month); USART_Print("/");
+        USART_PrintInt(dt.year); USART_Println("");
 
-        // เช็ค Alarm
-        if(DS3231_AlarmFired(1)) {
+        if(DS3231_AlarmFired(&rtc, 1)) {
             USART_Println("ALARM 1 FIRED!");
-            digitalToggle(PC0);  // blink LED
-            DS3231_ClearAlarm(1);
+            digitalToggle(PC0);
+            DS3231_ClearAlarm(&rtc, 1);
         }
 
-        // อ่านอุณหภูมิจาก DS3231
-        float temp = DS3231_ReadTemp();
+        float temp = DS3231_GetTemperature(&rtc);
         USART_Print("Temp: "); USART_PrintFloat(temp, 1);
         USART_Println(" C");
 
         Delay_Ms(1000);
     }
 }</code></pre>
-    <p class="explain">🔍 <code>DS3231_AlarmFired(n)</code> — เช็ค flag alarm 1 หรือ 2, <code>DS3231_ClearAlarm(n)</code> — ล้าง flag หลัง alarm fired (ไม่งั้นจะ fired ตลอด), <code>DS3231_ReadTemp()</code> — อ่านอุณหภูมิภายในชิป (±3°C)</p></div>
+<p class="explain">🔍 <code>DS3231_GetTemperature(&rtc)</code> — อ่านอุณหภูมิภายในชิป, <code>DS3231_AlarmFired(&rtc, n)</code> — เช็ค flag alarm</p></div>
 </section>
 
-<section>
-    <h2>📋 API Reference</h2>
-    <table>
-        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
-        <tr><td><code>DS3231_Init(i2c)</code></td><td>เริ่มต้น RTC (addr 0x68)</td><td><code>DS3231_Init(I2C1)</code></td></tr>
-        <tr><td><code>DS3231_SetTime(h,m,s)</code></td><td>ตั้งเวลา</td><td><code>DS3231_SetTime(14, 30, 0)</code></td></tr>
-        <tr><td><code>DS3231_SetDate(d,m,y)</code></td><td>ตั้งวันที่</td><td><code>DS3231_SetDate(15, 6, 2025)</code></td></tr>
-        <tr><td><code>DS3231_GetTime(&tm)</code></td><td>อ่านเวลา</td><td><code>DS3231_GetTime(&tm)</code></td></tr>
-        <tr><td><code>DS3231_SetAlarm1(mode,h,m,s)</code></td><td>ตั้ง Alarm 1</td><td><code>DS3231_SetAlarm1(EVERYDAY,8,0,0)</code></td></tr>
-        <tr><td><code>DS3231_AlarmFired(n)</code></td><td>เช็ค alarm 1/2</td><td><code>if(DS3231_AlarmFired(1)){...}</code></td></tr>
-        <tr><td><code>DS3231_ReadTemp()</code></td><td>อ่านอุณหภูมิ °C</td><td><code>float t = DS3231_ReadTemp()</code></td></tr>
-        <tr><td><code>DS3231_EnableSQW(freq)</code></td><td>เปิด Square Wave output</td><td><code>DS3231_EnableSQW(SQW_1HZ)</code></td></tr>
-    </table>
+<section><h2>📋 API Reference</h2>
+<table>
+    <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+    <tr><td><code>DS3231_Init(&rtc)</code></td><td>เริ่มต้น RTC (addr 0x68)</td><td><code>DS3231_Init(&rtc)</code></td></tr>
+    <tr><td><code>DS3231_GetDateTime(&rtc, &dt)</code></td><td>อ่านวัน/เวลา</td><td><code>DS3231_GetDateTime(&rtc, &dt)</code></td></tr>
+    <tr><td><code>DS3231_SetDateTime(&rtc, &dt)</code></td><td>ตั้งวัน/เวลา</td><td><code>DS3231_SetDateTime(&rtc, &dt)</code></td></tr>
+    <tr><td><code>DS3231_GetTemperature(&rtc)</code></td><td>อ่านอุณหภูมิ (°C)</td><td><code>float t = DS3231_GetTemperature(&rtc)</code></td></tr>
+    <tr><td><code>DS3231_SetAlarm1(&rtc, mode, h, m, s)</code></td><td>ตั้ง Alarm 1</td><td><code>DS3231_SetAlarm1(&rtc, EVERYDAY, 8, 0, 0)</code></td></tr>
+    <tr><td><code>DS3231_AlarmFired(&rtc, n)</code></td><td>เช็ค alarm 1/2</td><td><code>if(DS3231_AlarmFired(&rtc, 1))</code></td></tr>
+</table>
 </section>
 
-<section>
-    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
-    <table>
-        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
-        <tr><td>เวลารีเซ็ตทุกครั้งที่เปิดไฟ</td><td>ไม่มี battery backup หรือ battery หมด</td><td>ต่อ CR2032 ที่ขา BAT — ไม่งั้นเวลาเริ่ม 00:00:00 ทุกครั้ง</td></tr>
-        <tr><td>อ่านเวลาได้ 0x00 หรือ 0xFF</td><td>Oscillator หยุด (OSF bit set)</td><td>เช็ค DS3231_IsOscillatorStopped(), ตั้งเวลาใหม่เพื่อ clear OSF</td></tr>
-        <tr><td>เวลาเพี้ยนเร็ว/ช้า</td><td>Aging crystal หรืออุณหภูมิสุดขั้ว</td><td>DS3231 TCXO ชดเชยอัตโนมัติ — ถ้ายังเพี้ยน >2ppm → ชิปเสีย</td></tr>
-        <tr><td>Alarm ไม่เคยดัง</td><td>Alarm flag ไม่ได้เคลียร์ หรือ SQW pin ไม่ได้ตั้ง</td><td>ต้อง DS3231_ClearAlarm() หลัง alarm fired, เช็ค INTCN bit</td></tr>
-        <tr><td>I2C address ไม่เจอ</td><td>DS3231 address 0x68 fixed — ต่อผิด</td><td>ใช้ I2C scanner (I2C_Scan()) ยืนยัน address, เช็ค pull-up 4.7k</td></tr>
-    </table>
+<section><h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+<table>
+    <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+    <tr><td>เวลารีเซ็ตทุกครั้งที่เปิดไฟ</td><td>ไม่มี battery backup หรือ battery หมด</td><td>ต่อ CR2032 ที่ขา BAT</td></tr>
+    <tr><td>Alarm ไม่เคยดัง</td><td>Alarm flag ไม่ได้เคลียร์</td><td>ต้อง DS3231_ClearAlarm() หลัง alarm fired</td></tr>
+</table>
 </section>
 
-<section>
-    <h2>🛠️ สร้าง Product: Digital Alarm Clock</h2>
-    <p>DS3231 RTC + USART display — แสดงเวลา อุณหภูมิ และตั้งปลุกได้</p>
-    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+<section><h2>🛠️ สร้าง Product: Digital Alarm Clock</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "DS3231.h"
 
@@ -164,50 +137,46 @@ int main(void)
 {
     SystemCoreClockUpdate();
     I2C_Init(I2C1, I2C_SPEED_STANDARD);
-    DS3231_Init(I2C1);
     USART_Init(USART1, BAUD_115200);
-    pinMode(PC0, PIN_MODE_OUTPUT);  // alarm LED
+    pinMode(PC0, PIN_MODE_OUTPUT);
 
-    DS3231_SetTime(12, 0, 0);      // 12:00:00
-    DS3231_SetDate(1, 1, 2025);    // 1 Jan 2025
-    DS3231_SetAlarm1(DS3231_ALARM1_EVERYDAY, 8, 0, 0);
+    DS3231_Instance rtc;
+    DS3231_Init(&rtc);
 
-    RTC_Time tm;
-    Timer_t tmr_display;
-    Start_Timer(&tmr_display, 1000, 1);
+    RTC_DateTime_t dt = {12, 0, 0, 1, 1, 2025};
+    DS3231_SetDateTime(&rtc, &dt);
+    DS3231_SetAlarm1(&rtc, DS3231_ALARM1_EVERYDAY, 8, 0, 0);
+
+    Timer_t tmr;
+    Start_Timer(&tmr, 1000, 1);
 
     while(1)
     {
-        if(Is_Timer_Expired(&tmr_display)) {
-            DS3231_GetTime(&tm);
-            USART_PrintInt(tm.hour); USART_Print(":");
-            USART_PrintInt(tm.min);  USART_Print(":");
-            USART_PrintInt(tm.sec);  USART_Print(" | ");
-            USART_PrintInt(tm.day);  USART_Print("/");
-            USART_PrintInt(tm.month); USART_Print("/");
-            USART_PrintInt(tm.year); USART_Print(" | ");
-            float temp = DS3231_ReadTemp();
+        if(Is_Timer_Expired(&tmr)) {
+            DS3231_GetDateTime(&rtc, &dt);
+            USART_PrintInt(dt.hour); USART_Print(":");
+            USART_PrintInt(dt.minute); USART_Print(":");
+            USART_PrintInt(dt.second); USART_Print(" | ");
+            float temp = DS3231_GetTemperature(&rtc);
             USART_PrintFloat(temp, 1); USART_Println(" C");
         }
 
-        if(DS3231_AlarmFired(1)) {
-            digitalWrite(PC0, HIGH);    // LED ON
+        if(DS3231_AlarmFired(&rtc, 1)) {
+            digitalWrite(PC0, HIGH);
             USART_Println("*** ALARM ***");
-            Delay_Ms(10000);             // ring 10s
-            digitalWrite(PC0, LOW);     // LED OFF
-            DS3231_ClearAlarm(1);
+            Delay_Ms(10000);
+            digitalWrite(PC0, LOW);
+            DS3231_ClearAlarm(&rtc, 1);
         }
     }
 }</code></pre>
 </section>
 
-<section>
-    <h2>✏️ ลองทำดู</h2>
-    <ol>
-        <li>ทำนาฬิกาจับเวลาถอยหลัง (countdown timer) — ตั้งเวลาเป้าหมาย → DS3231 อ่านเวลาปัจจุบัน → คำนวณเวลาคงเหลือ</li>
-        <li>ทำ data logger พร้อม timestamp — บันทึกค่าเซนเซอร์ + เวลาจาก DS3231 ลง EEPROM หรือ SPI Flash</li>
-        <li>ใช้ SQW 1Hz interrupt — ตั้ง SQW output → ต่อกับ EXTI pin → interrupt ทุก 1 วินาที → อ่านเวลา</li>
-    </ol>
+<section><h2>✏️ ลองทำดู</h2>
+<ol>
+    <li>ทำ data logger พร้อม timestamp — บันทึกค่าเซนเซอร์ + เวลาจาก DS3231 ลง EEPROM</li>
+    <li>ใช้ SQW 1Hz interrupt — ตั้ง SQW output → ต่อกับ EXTI pin → interrupt ทุก 1 วิ</li>
+</ol>
 </section>
 
 <nav class="bottom-nav">

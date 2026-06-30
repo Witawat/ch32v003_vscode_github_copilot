@@ -21,9 +21,9 @@
     <pre class="mermaid">
 flowchart TD
     A["Button Press: Mode Select"] --> B{"Mode?"}
-    B -->|"Sweep"| C["Sweep 0°→180°→0°"]
-    B -->|"Center"| D["Set PWM 7.5% = 90°"]
-    B -->|"Manual"| E["Potentiometer = Angle"]
+    B -->|"Sweep"| C["ServoTester_Sweep(&tester, 0, 180, 2)"]
+    B -->|"Center"| D["ServoTester_FindCenter(&tester)"]
+    B -->|"Manual"| E["ServoTester_SetPulse(&tester, pulse_us)"]
     B -->|"Step"| F["+10° per press"]
     C --> G["OLED: Mode + Angle"]
     D --> G
@@ -74,12 +74,12 @@ uint8_t angle = 90;
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
+    ServoTester_Instance tester;
+    ServoTester_Init(&tester, PWM1_CH4);
     OLED_Init_I2C(0x3C, PC2, PC1);
     ADC_Init_Single(PA1);
     pinMode(PC0, PIN_MODE_INPUT_PULLUP);  // BTN1 Mode
-    pinMode(PC3, PIN_MODE_INPUT_PULLUP);  // BTN2 Step
-    PWM_SimpleInit(1, PD2, 50);
-    PWM_Start(1);</code></pre>
+    pinMode(PC3, PIN_MODE_INPUT_PULLUP);  // BTN2 Step</code></pre>
     <p class="explain">🔍 ตั้งค่า OLED I²C, ADC สำหรับ Pot, ปุ่มแบบ INPUT_PULLUP (กด = LOW), และ PWM 50Hz บน PD2</p></div>
 
     <div class="step"><h3>ขั้นที่ 2: State Machine 4 โหมด</h3>
@@ -90,18 +90,19 @@ int main(void) {
                 angle += dir;
                 if(angle >= 180) dir = -1;
                 if(angle == 0) dir = 1;
+                ServoTester_Sweep(&tester, angle, angle, 1);
                 break;
             }
-            case CENTER: angle = 90; break;
+            case CENTER: ServoTester_FindCenter(&tester); angle = 90; break;
             case MANUAL: {
                 uint16_t adc = ADC_Read(PA1);
                 angle = (uint8_t)(adc * 180 / 4095);
+                uint16_t pulse = 1000 + (uint16_t)((uint32_t)angle * 1000 / 180);
+                ServoTester_SetPulse(&tester, pulse);
                 break;
             }
-            case STEP: break; // ปรับด้วยปุ่ม
+            case STEP: break;
         }
-        float duty = 2.5f + (angle * 10.0f / 180.0f);
-        PWM_SetDuty(1, duty);
     }</code></pre>
     <p class="explain">🔍 แต่ละโหมดคำนวณ angle ต่างกัน — Sweep ใช้ static dir กลับทิศ, Center ตั้ง 90° ตลอด, Manual อ่าน ADC เปลี่ยนเป็นมุม 0–180, Step รอปุ่มใน loop</p></div>
 
@@ -109,22 +110,23 @@ int main(void) {
     <pre><code class="language-c">    Timer_t tmr_display;
     Start_Timer(&tmr_display, 100, 1);
     while(1) {
-        if(!digitalRead(PC0)) {  // BTN1: เปลี่ยนโหมด
+        if(!digitalRead(PC0)) {
             mode = (mode + 1) % 4;
-            Delay_Ms(200); // debounce
+            Delay_Ms(200);
         }
         if(mode == STEP && !digitalRead(PC3)) {
             angle = (angle + 10) % 190; if(angle > 180) angle = 0;
+            uint16_t pulse = 1000 + (uint16_t)((uint32_t)angle * 1000 / 180);
+            ServoTester_SetPulse(&tester, pulse);
             Delay_Ms(150);
         }
         update_servo();
         if(Is_Timer_Expired(&tmr_display)) {
             OLED_Clear();
             OLED_Printf(0,0,"Mode:%d Ang:%d", mode, angle);
-            OLED_Printf(0,2,"Duty:%.1f%%", 2.5+angle*10.0/180);
             OLED_Update();
         }
-        Delay_Ms(5); // Sweep speed control
+        Delay_Ms(5);
     }
 }</code></pre>
     <p class="explain">🔍 Main loop ตรวจสอบปุ่มเปลี่ยนโหมดและ step, เรียก update_servo() ทุก loop, OLED refresh ทุก 100ms ด้วย Non-Blocking Timer — Debounce ใช้ Delay_Ms สั้น ๆ</p></div>
@@ -134,11 +136,10 @@ int main(void) {
     <h2>📋 API Reference</h2>
     <table>
         <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
-        <tr><td><code>ServoTester_Init(pin)</code></td><td>เริ่ม ServoTester บน pin ที่กำหนด</td><td><code>ServoTester_Init(PD2)</code></td></tr>
-        <tr><td><code>ServoTester_SetMode(mode)</code></td><td>เปลี่ยนโหมด: SWEEP/CENTER/MANUAL/STEP</td><td><code>ServoTester_SetMode(SWEEP)</code></td></tr>
-        <tr><td><code>ServoTester_SetAngle(a)</code></td><td>ตั้งมุมโดยตรง (ใช้ใน Manual/Step)</td><td><code>ServoTester_SetAngle(45)</code></td></tr>
-        <tr><td><code>ServoTester_Update()</code></td><td>เรียกทุก loop — non-blocking update</td><td><code>ServoTester_Update()</code></td></tr>
-        <tr><td><code>ServoTester_GetAngle()</code></td><td>อ่านมุมปัจจุบันของ servo</td><td><code>uint8_t a = ServoTester_GetAngle()</code></td></tr>
+        <tr><td><code>ServoTester_Init(&tester, ch)</code></td><td>เริ่ม ServoTester บน PWM channel</td><td><code>ServoTester_Init(&tester, PWM1_CH4)</code></td></tr>
+        <tr><td><code>ServoTester_Sweep(&tester, min, max, spd)</code></td><td>กวาดมุม min ถึง max</td><td><code>ServoTester_Sweep(&tester, 0, 180, 2)</code></td></tr>
+        <tr><td><code>ServoTester_SetPulse(&tester, us)</code></td><td>ตั้ง pulse width โดยตรง</td><td><code>ServoTester_SetPulse(&tester, 1500)</code></td></tr>
+        <tr><td><code>ServoTester_FindCenter(&tester)</code></td><td>หาจุดกึ่งกลาง (90°)</td><td><code>ServoTester_FindCenter(&tester)</code></td></tr>
     </table>
 </section>
 
@@ -165,18 +166,16 @@ typedef enum {SWEEP=0, CENTER, MANUAL, STEP, SPEED_TEST} Mode_t;
 Mode_t mode = SWEEP;
 uint8_t angle = 90, step_size = 10;
 uint8_t min_angle = 180, max_angle = 0;
-float speed_result = 0;
-
-float angle2duty(uint8_t a) { return 2.5f + (a * 10.0f / 180.0f); }
 
 int main(void) {
     SystemCoreClockUpdate(); Timer_Init();
+    ServoTester_Instance tester;
+    ServoTester_Init(&tester, PWM1_CH4);
     OLED_Init_I2C(0x3C, PC2, PC1);
     ADC_Init_Single(PA1);
     pinMode(PC0, PIN_MODE_INPUT_PULLUP);
     pinMode(PC3, PIN_MODE_INPUT_PULLUP);
     pinMode(PC4, PIN_MODE_INPUT_PULLUP);
-    PWM_SimpleInit(1, PD2, 50); PWM_Start(1);
 
     uint8_t btn_prev = 1, btn2_prev = 1, btn3_prev = 1;
     while(1) {
@@ -190,11 +189,13 @@ int main(void) {
 
         switch(mode) {
             case SWEEP: { static int8_t d=1; angle+=d; if(angle>=180)d=-1; if(angle==0)d=1; break; }
-            case CENTER: angle=90; break;
-            case MANUAL: angle=(uint8_t)(ADC_Read(PA1)*180/4095); break;
+            case CENTER: ServoTester_FindCenter(&tester); angle=90; break;
+            case MANUAL: { angle=(uint8_t)(ADC_Read(PA1)*180/4095);
+                ServoTester_SetPulse(&tester, 1000+(uint16_t)((uint32_t)angle*1000/180)); break; }
             case SPEED_TEST: { static uint8_t phase=0; if(phase==0){angle=0;phase=1;} else{angle=180;phase=0;} break; }
         }
-        PWM_SetDuty(1, angle2duty(angle));
+        uint16_t pulse = 1000 + (uint16_t)((uint32_t)angle * 1000 / 180);
+        ServoTester_SetPulse(&tester, pulse);
         if(angle<min_angle)min_angle=angle; if(angle>max_angle)max_angle=angle;
 
         OLED_Clear();

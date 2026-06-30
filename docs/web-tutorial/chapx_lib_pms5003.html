@@ -18,18 +18,15 @@
     <h2>🧭 แผนภาพการทำงาน</h2>
     <pre class="mermaid">
 flowchart TD
-    A["PMS5003_Init(mode)"] --> B["PMS5003_ReadFrame()"]
-    B --> C["Frame valid?"]
-    C -->|"OK"| D["Get PM1.0/2.5/10"]
-    C -->|"Err"| B
-    D --> E["Display / Log"]
-    E --> B
+    A["PMS5003_Init(&sensor, USART_PINS_DEFAULT)"] --> B["PMS5003_GetData(&sensor, &data)"]
+    B --> C["data.pm1_0_std, pm2_5_std, pm10_std"]
+    C --> D["Display / Log"]
+    D --> B
     </pre>
 </section>
 
-<section>
-    <h2>🔌 การต่อวงจร</h2>
-    <pre class="ascii-circuit">
+<section><h2>🔌 การต่อวงจร</h2>
+<pre class="ascii-circuit">
            PMS5003 — PM2.5 Laser Particle Sensor
     ┌────────────────────────────────────┐
     │ MCU                         PMS5003│
@@ -39,114 +36,87 @@ flowchart TD
     │ 5V──────────VCC(pin1)   └─────────┤
     │                                    │
     │ Frame: 32 bytes, baud=9600         │
-    │ Start bytes: 0x42 0x4D             │
     └────────────────────────────────────┘
-    </pre>
-    <p>PD6(RX)─TX(sensor), PD5(TX)─RX(sensor) — USART 9600 baud, ไฟเลี้ยง 5V, Frame 32-byte แบบ binary</p>
-</section>
+</pre></section>
 
-<section>
-    <h2>📚 หลักการทำงาน</h2>
-    <p><strong>PMS5003</strong> เป็นเซนเซอร์วัดฝุ่นละออง PM1.0/PM2.5/PM10 แบบ laser scattering — พัดลมดูดอากาศผ่านลำแสงเลเซอร์ → วัดอนุภาคที่กระเจิงแสง — แม่นยำกว่าเซนเซอร์ IR ราคาถูก</p>
-    <p><strong>32-byte Frame Protocol:</strong></p>
-    <ul>
-        <li>Start: <code>0x42 0x4D</code> (2 bytes)</li>
-        <li>Frame Length: <code>2 bytes</code> (always 0x00 0x1C = 28)</li>
-        <li>Data: <code>26 bytes</code> — PM1.0, PM2.5, PM10 (หน่วย μg/m³), particle counts per 0.1L</li>
-        <li>Checksum: <code>2 bytes</code> — sum of all previous bytes</li>
-    </ul>
-    <p><strong>Active vs Passive Mode:</strong></p>
-    <ul>
-        <li><strong>Active:</strong> เซนเซอร์ส่ง data ทุก ~800ms อัตโนมัติ — ง่ายสุด ไม่ต้องควบคุม</li>
-        <li><strong>Passive:</strong> ต้องส่ง command ขอ data ทุกครั้ง — ประหยัดไฟ, ควบคุมจังหวะได้</li>
-    </ul>
-</section>
+<section><h2>📚 หลักการทำงาน</h2>
+<p><strong>PMS5003</strong> เป็นเซนเซอร์วัดฝุ่นละออง PM1.0/PM2.5/PM10 แบบ laser scattering — สื่อสารผ่าน USART 9600 baud — 32-byte binary frame</p></section>
 
-<section>
-    <h2>💻 เขียน Code ทีละขั้น</h2>
+<section><h2>💻 เขียน Code ทีละขั้น</h2>
 
-    <div class="step"><h3>ขั้นที่ 1: Init + Setup</h3>
-    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+<div class="step"><h3>ขั้นที่ 1: Init + Setup</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "PMS5003.h"
+
+PMS5003_Instance sensor;
+PMS5003_Data_t data;
 
 int main(void) {
     SystemCoreClockUpdate();
     USART_Init(USART1, BAUD_9600);  // PMS5003 = 9600 fixed
 
-    PMS5003_Data_t data;
-    PMS5003_Init(PMS5003_MODE_ACTIVE);  // auto send ทุก ~800ms</code></pre>
-    <p class="explain">🔍 <code>PMS5003_Init(mode)</code> — ACTIVE: เซนเซอร์ส่ง data อัตโนมัติ, PASSIVE: ต้องสั่ง <code>PMS5003_RequestRead()</code> ทุกครั้ง — ACTIVE ง่ายกว่าและแนะนำสำหรับงานทั่วไป</p></div>
+    PMS5003_Init(&sensor, USART_PINS_DEFAULT);
+    USART_Println("PMS5003 Ready!");</code></pre>
+<p class="explain">🔍 <code>PMS5003_Init(&sensor, USART_PINS_DEFAULT)</code> — instance-based, ใช้ USART pins default — ตั้งค่า baud 9600 อัตโนมัติ</p></div>
 
-    <div class="step"><h3>ขั้นที่ 2: อ่าน/เขียนค่า</h3>
-    <pre><code class="language-c">    if(PMS5003_ReadFrame(&data)) {
+<div class="step"><h3>ขั้นที่ 2: อ่านค่า</h3>
+<pre><code class="language-c">    if(PMS5003_GetData(&sensor, &data)) {
         USART_Print("PM1.0: "); USART_PrintInt(data.pm1_0_std);
         USART_Print(" PM2.5: "); USART_PrintInt(data.pm2_5_std);
         USART_Print(" PM10: "); USART_PrintInt(data.pm10_std);
         USART_Println(" ug/m3");
 
-        // เช็คคุณภาพอากาศ
-        if(data.pm2_5_std <= 25)      USART_Println("✓ Air Quality: GOOD");
-        else if(data.pm2_5_std <= 50) USART_Println("⚡ Air Quality: MODERATE");
-        else                          USART_Println("⚠️ Air Quality: UNHEALTHY!");
-    } else {
-        USART_Println("Frame error / timeout");
+        if(data.pm2_5_std <= 25)      USART_Println("Air: GOOD");
+        else if(data.pm2_5_std <= 50) USART_Println("Air: MODERATE");
+        else                          USART_Println("Air: UNHEALTHY!");
     }</code></pre>
-    <p class="explain">🔍 <code>PMS5003_ReadFrame()</code> รอ start byte 0x42 0x4D → อ่าน 32 bytes → verify checksum — คืน TRUE ถ้า valid — timeout ~2 วิ — frame error เกิดจาก baud ผิดหรือสายหลวม</p></div>
+<p class="explain">🔍 <code>PMS5003_GetData(&sensor, &data)</code> — อ่าน frame 32-byte + verify checksum — คืน TRUE ถ้า valid</p></div>
 
-    <div class="step"><h3>ขั้นที่ 3: Loop + แสดงผล</h3>
-    <pre><code class="language-c">    OLED_Handle oled;
+<div class="step"><h3>ขั้นที่ 3: Loop + แสดงผล</h3>
+<pre><code class="language-c">    OLED_Handle oled;
     OLED_Init(&oled, OLED_128x64, 0x3C);
 
     while(1) {
-        if(PMS5003_ReadFrame(&data)) {
+        if(PMS5003_GetData(&sensor, &data)) {
             OLED_Clear(&oled);
             OLED_SetCursor(&oled, 0, 0);
             OLED_PrintFloat(&oled, "PM2.5:", (float)data.pm2_5_std, 0);
             OLED_Print(&oled, " ug/m3");
 
             OLED_SetCursor(&oled, 0, 2);
-            if(data.pm2_5_std <= 25)      OLED_Print(&oled, "AIR: GOOD      ");
-            else if(data.pm2_5_std <= 50) OLED_Print(&oled, "AIR: MODERATE  ");
+            if(data.pm2_5_std <= 25)      OLED_Print(&oled, "AIR: GOOD");
+            else if(data.pm2_5_std <= 50) OLED_Print(&oled, "AIR: MODERATE");
             else                          OLED_Print(&oled, "AIR: UNHEALTHY!");
 
             OLED_Update(&oled);
         }
-        Delay_Ms(1000);  // PMS5003 update ~800ms
+        Delay_Ms(1000);
     }
 }</code></pre>
-    <p class="explain">🔍 PMS5003 อัพเดททุก ~800ms ใน active mode — หน่วง 1 วิเพื่อ sync — แสดงผลบน OLED ทำให้พกพาได้ เป็นเครื่องวัดฝุ่นขนาดเล็ก</p></div>
+<p class="explain">🔍 PMS5003 อัพเดททุก ~800ms — หน่วง 1 วิเพื่อ sync</p></div>
 </section>
 
-<section>
-    <h2>📋 API Reference</h2>
-    <table>
-        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
-        <tr><td><code>PMS5003_Init(mode)</code></td><td>เริ่มต้นเซนเซอร์ (ACTIVE/PASSIVE)</td><td><code>PMS5003_Init(PMS5003_MODE_ACTIVE)</code></td></tr>
-        <tr><td><code>PMS5003_ReadFrame(&data)</code></td><td>อ่าน frame (32 bytes) แบบ blocking</td><td><code>if(PMS5003_ReadFrame(&d))</code></td></tr>
-        <tr><td><code>PMS5003_RequestRead()</code></td><td>ขอ data ใน passive mode</td><td><code>PMS5003_RequestRead()</code></td></tr>
-        <tr><td><code>PMS5003_Sleep()</code></td><td>เข้า sleep mode (ประหยัดไฟ)</td><td><code>PMS5003_Sleep()</code></td></tr>
-        <tr><td><code>PMS5003_WakeUp()</code></td><td>ปลุกจาก sleep</td><td><code>PMS5003_WakeUp()</code></td></tr>
-        <tr><td><code>PMS5003_SetMode(mode)</code></td><td>เปลี่ยน active/passive ระหว่างรัน</td><td><code>PMS5003_SetMode(PMS5003_MODE_PASSIVE)</code></td></tr>
-    </table>
+<section><h2>📋 API Reference</h2>
+<table>
+    <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+    <tr><td><code>PMS5003_Init(&sensor, pins)</code></td><td>เริ่มต้นเซนเซอร์</td><td><code>PMS5003_Init(&sensor, USART_PINS_DEFAULT)</code></td></tr>
+    <tr><td><code>PMS5003_GetData(&sensor, &data)</code></td><td>อ่าน frame + verify checksum</td><td><code>if(PMS5003_GetData(&sensor, &d))</code></td></tr>
+    <tr><td><code>PMS5003_Sleep(&sensor)</code></td><td>เข้า sleep mode</td><td><code>PMS5003_Sleep(&sensor)</code></td></tr>
+    <tr><td><code>PMS5003_WakeUp(&sensor)</code></td><td>ปลุกจาก sleep</td><td><code>PMS5003_WakeUp(&sensor)</code></td></tr>
+</table>
 </section>
 
-<section>
-    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
-    <table>
-        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
-        <tr><td>ReadFrame คืน FALSE ตลอด</td><td>Baud ผิด (ต้อง 9600) หรือ RX/TX สลับ</td><td>เช็ค PD6→TX(sensor), PD5→RX(sensor), baud=9600</td></tr>
-        <tr><td>ค่าที่อ่านได้เกินจริงมาก</td><td>รบกวนจากพัดลมเซนเซอร์ (เสียง/แรงสั่น)</td><td>แยกเซนเซอร์จากแหล่งสั่น, ใช้ housing ป้องกันลม</td></tr>
-        <tr><td>PM2.5 = 0 ตลอดเวลา</td><td>Active mode แต่ USART buffer ยังไม่เต็ม</td><td>รออย่างน้อย 1 วิหลัง init, frame มาทุก ~800ms</td></tr>
-        <tr><td>Checksum error บ่อย</td><td>USART noise หรือสายยาวเกิน</td><td>ใช้สายสั้น (<30cm), ลด baud, ต่อ GND ให้แน่น</td></tr>
-        <tr><td>เซนเซอร์ร้อน/พัดลมเสียงดังผิดปกติ</td><td>พัดลมสกปรกหรือลูกปืนเสื่อม</td><td>ทำความสะอาดพัดลม, เปลี่ยนเซนเซอร์ใหม่ (อายุ ~8000 ชม.)</td></tr>
-    </table>
+<section><h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+<table>
+    <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+    <tr><td>GetData คืน FALSE ตลอด</td><td>Baud ผิด (ต้อง 9600) หรือ RX/TX สลับ</td><td>เช็ค PD6→TX(sensor), PD5→RX(sensor), baud=9600</td></tr>
+    <tr><td>PM2.5 = 0 ตลอดเวลา</td><td>Buffer ยังไม่เต็ม</td><td>รออย่างน้อย 1 วิหลัง init</td></tr>
+</table>
 </section>
 
-<section>
-    <h2>🛠️ สร้าง Product: เครื่องวัดฝุ่น PM2.5 พกพา</h2>
-    <p>PMS5003 + OLED — แสดง PM2.5 แบบ real-time พร้อม AQI ระดับสี</p>
-    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+<section><h2>🛠️ สร้าง Product: เครื่องวัดฝุ่น PM2.5 พกพา</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "PMS5003.h"
 #include "oled_i2c.h"
@@ -160,8 +130,9 @@ int main(void)
     OLED_Handle oled;
     OLED_Init(&oled, OLED_128x64, 0x3C);
 
+    PMS5003_Instance sensor;
     PMS5003_Data_t data;
-    PMS5003_Init(PMS5003_MODE_ACTIVE);
+    PMS5003_Init(&sensor, USART_PINS_DEFAULT);
 
     OLED_Clear(&oled);
     OLED_SetCursor(&oled, 0, 0);
@@ -169,31 +140,18 @@ int main(void)
     OLED_SetCursor(&oled, 0, 2);
     OLED_Print(&oled, "Warming up...");
     OLED_Update(&oled);
-    Delay_Ms(5000);  // รอเซนเซอร์ warm-up
+    Delay_Ms(5000);
 
     while(1)
     {
-        if(PMS5003_ReadFrame(&data)) {
+        if(PMS5003_GetData(&sensor, &data)) {
             OLED_Clear(&oled);
-
             OLED_SetCursor(&oled, 0, 0);
             OLED_PrintFloat(&oled, "PM1.0:", (float)data.pm1_0_std, 0);
-            OLED_Print(&oled, " ug/m3");
-
             OLED_SetCursor(&oled, 0, 1);
             OLED_PrintFloat(&oled, "PM2.5:", (float)data.pm2_5_std, 0);
-            OLED_Print(&oled, " ug/m3");
-
             OLED_SetCursor(&oled, 0, 2);
             OLED_PrintFloat(&oled, "PM10:", (float)data.pm10_std, 0);
-            OLED_Print(&oled, " ug/m3");
-
-            OLED_SetCursor(&oled, 0, 4);
-            if(data.pm2_5_std <= 12)       OLED_Print(&oled, "<GOOD>");
-            else if(data.pm2_5_std <= 35)   OLED_Print(&oled, "<MODERATE>");
-            else if(data.pm2_5_std <= 55)   OLED_Print(&oled, "<UNHEALTHY SEN>");
-            else                            OLED_Print(&oled, "<UNHEALTHY>");
-
             OLED_Update(&oled);
         }
         Delay_Ms(1000);
@@ -201,13 +159,11 @@ int main(void)
 }</code></pre>
 </section>
 
-<section>
-    <h2>✏️ ลองทำดู</h2>
-    <ol>
-        <li>ทำ PM2.5 logger — บันทึกค่า PM2.5 ทุก 1 นาที เก็บ 24 ชม. (1440 จุด) แสดงกราฟผ่าน USART</li>
-        <li>เพิ่ม NeoPixel แสดงไฟสถานะ — เขียว (PM2.5<25), เหลือง (25-50), แดง (>50)</li>
-        <li>ใช้ Passive Mode — วัดทุก 10 นาทีเพื่อประหยัดไฟ (battery-powered)</li>
-    </ol>
+<section><h2>✏️ ลองทำดู</h2>
+<ol>
+    <li>ทำ PM2.5 logger — บันทึกค่า PM2.5 ทุก 1 นาที</li>
+    <li>เพิ่ม NeoPixel แสดงไฟสถานะ — เขียว/เหลือง/แดง</li>
+</ol>
 </section>
 
 <nav class="bottom-nav">

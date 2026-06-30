@@ -20,13 +20,12 @@
     <h2>🧭 แผนภาพการทำงาน</h2>
     <pre class="mermaid">
 flowchart TD
-    A["OneWire_Init"] --> B["DS18B20_Init"]
-    B --> C["RequestTemperatures"]
-    C --> D["Delay 750ms"]
-    D --> E["GetTempCByIndex"]
-    E --> F{"Multi?"}
-    F -->|Yes| E
-    F -->|No| C
+    A["DS18B20_Init(PD2)"] --> B{"Single?"}
+    B -->|"เดี่ยว"| C["DS18B20_ReadTemperatureBlocking(sensor)"]
+    B -->|"หลายตัว"| D["DS18B20_SearchDevices(sensor)"]
+    D --> E["อ่านทีละตัว: DS18B20_ReadTemperature(sensor[i])"]
+    C --> F["แสดงผล / Loop"]
+    E --> F
     </pre>
 </section>
 
@@ -35,7 +34,7 @@ flowchart TD
     <pre class="ascii-circuit">
         DS18B20 (1-Wire)
 ┌────────────────────────────────────┐
-│ PC0 ──── DQ (Data)                 │
+│ PD2 ──── DQ (Data)                 │
 │ 3.3V ─── VCC                       │
 │ GND  ─── GND                       │
 │                                    │
@@ -54,7 +53,7 @@ flowchart TD
     <p><strong>1-Wire Protocol</strong>: สื่อสารผ่านสายเส้นเดียว (DQ) — ใช้ timing แบบ bit-bang โดย MCU สร้างพัลส์ความกว้างต่างๆ เพื่อส่งคำสั่งและอ่านข้อมูล</p>
     <p><strong>Unique 64-bit ROM</strong>: DS18B20 ทุกตัวมีรหัส 64-bit ที่ไม่ซ้ำกันจากโรงงาน — ทำให้ต่อหลายตัวบนบัสเดียวกันได้ (Multi-drop)</p>
     <p><strong>ความละเอียด 9-12 bit</strong>: เลือกได้ — 9bit = 0.5°C/resolution, 12bit = 0.0625°C/resolution</p>
-    <p><strong>Conversion time</strong>: 93.75ms (9bit) ถึง 750ms (12bit) — ต้องรอให้เสร็จก่อนอ่านค่า</p>
+    <p><strong>DS18B20_Device Pointer</strong>: <code>DS18B20_Init(pin)</code> คืน <code>DS18B20_Device*</code> — ใช้ pointer นี้ในการอ่านค่า — <code>DS18B20_ReadTemperatureBlocking()</code> อ่านแบบบล็อก (รอจนเสร็จ) — <code>DS18B20_ReadTemperature()</code> อ่านแบบ non-blocking</p>
     <p><strong>Parasite Power</strong>: ใช้ไฟจากบัส DQ ระหว่าง conversion — ประหยัดสาย 1 เส้น (2-wire แทน 3-wire) แต่ต้องใช้ strong pull-up</p>
     <p><strong>Accuracy</strong>: ±0.5°C, ช่วง -55°C ถึง +125°C — กันน้ำได้ถ้าใช้รุ่นสาย (probe)</p>
 </section>
@@ -62,7 +61,7 @@ flowchart TD
 <section>
     <h2>💻 เขียน Code ทีละขั้น</h2>
 
-    <div class="step"><h3>ขั้นที่ 1: Init 1-Wire + ค้นหา Devices</h3>
+    <div class="step"><h3>ขั้นที่ 1: Init 1-Wire (Single Sensor)</h3>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "DS18B20.h"
@@ -70,59 +69,52 @@ flowchart TD
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    OneWire_Init(PC0);         // ตั้งขา DQ
-    DS18B20_SearchDevices();            // ค้นหาทุกตัวบนบัส
-    uint8_t count = DS18B20_GetDeviceCount();
-    USART_Print("Found: "); USART_PrintNum(count);
-    USART_Println(" devices");</code></pre>
-    <p class="explain">🔍 <code>OneWire_Init(PC0)</code> กำหนดขา DQ, <code>DS18B20_SearchDevices()</code> จะ auto-scan ค้นหาทุกตัวที่ต่ออยู่บนบัส — <code>DS18B20_GetDeviceCount()</code> บอกจำนวนที่เจอ</p></div>
 
-    <div class="step"><h3>ขั้นที่ 2: สั่งวัด + รอ + อ่านผล</h3>
-    <pre><code class="language-c">    DS18B20_RequestTemperatures();   // สั่ง convert ทั้งหมด
-    Delay_Ms(750);                    // รอ 12-bit conversion
-    float t = DS18B20_GetTempCByIndex(0);  // อ่านตัวแรก
+    DS18B20_Device* sensor = DS18B20_Init(PD2);
+    if(sensor == NULL) {
+        USART_Println("No DS18B20 found!");
+        while(1);
+    }
+    USART_Println("DS18B20 Ready!");</code></pre>
+    <p class="explain">🔍 <code>DS18B20_Init(pin)</code> คืน <code>DS18B20_Device*</code> — ถ้าไม่เจอเซนเซอร์จะคืน NULL — ไม่ต้องเรียก OneWire_Init แยก — library จัดการให้เอง</p></div>
+
+    <div class="step"><h3>ขั้นที่ 2: อ่านอุณหภูมิ (Blocking)</h3>
+    <pre><code class="language-c">    float temp = DS18B20_ReadTemperatureBlocking(sensor);
     USART_Print("Temp: ");
-    USART_PrintFloat(t, 2);
+    USART_PrintFloat(temp, 2);
     USART_Println(" C");</code></pre>
-    <p class="explain">🔍 <code>RequestTemperatures()</code> สั่งให้ทุกตัวเริ่มวัดพร้อมกัน, <code>Delay_Ms(750)</code> ต้องรอให้วัดเสร็จ (ใช้เวลา 93.75ms ที่ 9bit ถึง 750ms ที่ 12bit), <code>GetTempCByIndex(0)</code> อ่านเซนเซอร์ตัวแรก</p></div>
+    <p class="explain">🔍 <code>DS18B20_ReadTemperatureBlocking(sensor)</code> — สั่งวัดและรอจนเสร็จ (บล็อก ~750ms สำหรับ 12-bit) — คืนค่าอุณหภูมิ °C โดยตรง — ไม่ต้องเรียก RequestTemperatures แยก</p></div>
 
-    <div class="step"><h3>ขั้นที่ 3: วนอ่านหลายตัว + Loop</h3>
-    <pre><code class="language-c">    Timer_t tmr;
-    Start_Timer(&tmr, 1000, 1);  // อ่านทุก 1 วิ
+    <div class="step"><h3>ขั้นที่ 3: Loop (Multi-Sensor + Non-Blocking)</h3>
+    <pre><code class="language-c">    // สำหรับหลายเซนเซอร์: ใช้ SearchDevices
+    DS18B20_SearchDevices(sensor);
+    // อ่านทีละตัวแบบ non-blocking:
+    float t = DS18B20_ReadTemperature(sensor);
+
+    Timer_t tmr;
+    Start_Timer(&amp;tmr, 2000, 1);
 
     while(1) {
-        if(Is_Timer_Expired(&tmr)) {
-            DS18B20_RequestTemperatures();
-            Delay_Ms(750);
-            uint8_t n = DS18B20_GetDeviceCount();
-            for(uint8_t i = 0; i < n; i++) {
-                DS18B20_ROM_t rom;
-                DS18B20_GetROM(i, &rom);
-                float ti = DS18B20_GetTempC(&rom);
-                USART_Print("Sensor "); USART_PrintNum(i);
-                USART_Print(": "); USART_PrintFloat(ti, 2);
-                USART_Println(" C");
-            }
+        if(Is_Timer_Expired(&amp;tmr)) {
+            float temp = DS18B20_ReadTemperatureBlocking(sensor);
+            USART_Print("Temp: ");
+            USART_PrintFloat(temp, 2);
+            USART_Println(" C");
         }
         IWDG_Feed();
     }
 }</code></pre>
-    <p class="explain">🔍 วนอ่านทุกตัวด้วย <code>GetROM(i, &rom)</code> และ <code>GetTempC(&rom)</code> — ใช้ ROM ID อ้างอิงแต่ละตัว, <code>IWDG_Feed()</code> ป้องกัน watchdog reset ระหว่างรอ 750ms</p></div>
+    <p class="explain">🔍 <code>DS18B20_SearchDevices(sensor)</code> ค้นหาทุกตัวบนบัส — <code>DS18B20_ReadTemperature(sensor)</code> เป็น non-blocking — <code>DS18B20_ReadTemperatureBlocking(sensor)</code> เป็น blocking — ใช้ Timer_t กำหนดช่วงอ่าน</p></div>
 </section>
 
 <section>
     <h2>📋 API Reference</h2>
     <table>
         <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
-        <tr><td><code>OneWire_Init(pin)</code></td><td>เริ่มต้นบัส 1-Wire ที่ขาที่กำหนด</td><td><code>OneWire_Init(PC0)</code></td></tr>
-        <tr><td><code>DS18B20_SearchDevices()</code></td><td>ค้นหา DS18B20 ทั้งหมดบนบัส</td><td><code>DS18B20_SearchDevices()</code></td></tr>
-        <tr><td><code>DS18B20_RequestTemperatures()</code></td><td>สั่งให้ทุกตัวเริ่มวัดอุณหภูมิ</td><td><code>DS18B20_RequestTemperatures()</code></td></tr>
-        <tr><td><code>DS18B20_GetTempCByIndex(i)</code></td><td>อ่านอุณหภูมิตัวที่ i (°C)</td><td><code>float t = DS18B20_GetTempCByIndex(0)</code></td></tr>
-        <tr><td><code>DS18B20_GetTempC(&rom)</code></td><td>อ่านอุณหภูมิตาม ROM ID</td><td><code>DS18B20_GetTempC(&rom)</code></td></tr>
-        <tr><td><code>DS18B20_GetDeviceCount()</code></td><td>คืนจำนวนเซนเซอร์ที่เจอ</td><td><code>uint8_t n = DS18B20_GetDeviceCount()</code></td></tr>
-        <tr><td><code>DS18B20_GetROM(i, &rom)</code></td><td>อ่าน ROM ID ตัวที่ i</td><td><code>DS18B20_GetROM(0, &rom)</code></td></tr>
-        <tr><td><code>DS18B20_SetResolution(bits)</code></td><td>ตั้งความละเอียด (9/10/11/12)</td><td><code>DS18B20_SetResolution(9)</code></td></tr>
-        <tr><td><code>DS18B20_ReadScratchpad(i, &scr)</code></td><td>อ่าน scratchpad register</td><td><code>DS18B20_ReadScratchpad(0, &scr)</code></td></tr>
+        <tr><td><code>DS18B20_Init(pin)</code></td><td>เริ่มต้น 1-Wire — คืน Device pointer</td><td><code>DS18B20_Device* s = DS18B20_Init(PD2)</code></td></tr>
+        <tr><td><code>DS18B20_SearchDevices(dev)</code></td><td>ค้นหา DS18B20 ทั้งหมดบนบัส</td><td><code>DS18B20_SearchDevices(sensor)</code></td></tr>
+        <tr><td><code>DS18B20_ReadTemperatureBlocking(dev)</code></td><td>อ่านอุณหภูมิแบบบล็อก (รอจนเสร็จ)</td><td><code>float t = DS18B20_ReadTemperatureBlocking(s)</code></td></tr>
+        <tr><td><code>DS18B20_ReadTemperature(dev)</code></td><td>อ่านอุณหภูมิ non-blocking</td><td><code>float t = DS18B20_ReadTemperature(s)</code></td></tr>
     </table>
 </section>
 
@@ -130,18 +122,17 @@ int main(void) {
     <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
     <table>
         <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
-        <tr><td>อ่านได้ 85°C ตลอด</td><td>ยังไม่ได้เรียก <code>RequestTemperatures()</code> หรือรอไม่ครบ 750ms</td><td>ต้องเรียก <code>RequestTemperatures()</code> ก่อน — แล้ว <code>Delay_Ms(750)</code> ก่อนอ่าน</td></tr>
-        <tr><td><code>GetDeviceCount()</code> คืน 0</td><td>ไม่มี pull-up resistor หรือสายหลวม</td><td>ต่อ R 4.7kΩ ระหว่าง DQ ↔ 3.3V, เช็คสายทุกเส้น</td></tr>
-        <tr><td>Parasite mode ไม่อ่านค่า</td><td>ขาด strong pull-up ระหว่าง conversion</td><td>ใช้ MOSFET/transistor strong pull-up ช่วงรอ 750ms หรือใช้โหมด 3-wire (VCC จริง)</td></tr>
-        <tr><td>ต่อหลายตัวแต่ ROM ซ้ำ / หายบางตัว</td><td>Power-on ใหม่โดยไม่ Init ซ้ำ</td><td>เรียก <code>DS18B20_SearchDevices()</code> ใหม่ทุกครั้งหลังเปิดไฟ — รายการ ROM อาจเปลี่ยน</td></tr>
+        <tr><td>DS18B20_Init คืน NULL</td><td>ไม่มี pull-up resistor หรือสายหลวม</td><td>ต่อ R 4.7kΩ ระหว่าง DQ ↔ 3.3V, เช็คสายทุกเส้น</td></tr>
+        <tr><td>อ่านได้ 85°C ตลอด</td><td>ยังไม่ได้ทำ power-on reset หรือเซนเซอร์ยังไม่พร้อม</td><td>เรียก DS18B20_Init ใหม่ — รอให้เซนเซอร์พร้อมหลังเปิดไฟ</td></tr>
+        <tr><td>Parasite mode ไม่อ่านค่า</td><td>ขาด strong pull-up ระหว่าง conversion</td><td>ใช้ MOSFET/transistor strong pull-up — หรือใช้โหมด 3-wire (VCC จริง)</td></tr>
+        <tr><td>ต่อหลายตัวแต่ไม่เจอ</td><td>Power-on ใหม่โดยไม่ Init ซ้ำ</td><td>เรียก <code>DS18B20_SearchDevices()</code> ใหม่ทุกครั้งหลังเปิดไฟ</td></tr>
         <tr><td>อ่านค่าเพี้ยน ±1-2°C</td><td>สายยาวเกิน 3m หรือ noise บนบัส</td><td>ใช้ shielded cable, twisted pair, ลด pull-up เหลือ 2.2kΩ สำหรับสายยาว</td></tr>
-        <tr><td>Conversion ไม่เสร็จ — อ่านค่าค้าง</td><td>ใช้ความละเอียด 12bit แต่รอแค่ 93ms</td><td>รอ 750ms สำหรับ 12bit — หรือใช้ <code>SetResolution(9)</code> ลดเวลารอ</td></tr>
     </table>
 </section>
 
 <section>
     <h2>🛠️ สร้าง Product: เครื่องวัดอุณหภูมิ 3 จุด</h2>
-    <p>DS18B20 3 ตัวบน 1-Wire บัสเดียว — แสดงผลบน LCD1602 I2C</p>
+    <p>DS18B20 3 ตัวแยกพอร์ต — แสดงผลบน LCD1602 I2C</p>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "DS18B20.h"
@@ -152,27 +143,31 @@ int main(void) {
     Timer_Init();
     I2C_SimpleInit(I2C_SPEED_100K, I2C_PINS_DEFAULT);
 
-    OneWire_Init(PC0);
-    DS18B20_SearchDevices();
-    LCD_Init(0x27);
+    DS18B20_Device* s1 = DS18B20_Init(PD2);
+    DS18B20_Device* s2 = DS18B20_Init(PC0);
+    DS18B20_Device* s3 = DS18B20_Init(PC1);
+
+    LCD1602_Handle lcd;
+    LCD_Init(&amp;lcd, 0x27, LCD_16x2);
+    LCD_Backlight(&amp;lcd, 1);
 
     Timer_t tmr;
-    Start_Timer(&tmr, 2000, 1);
+    Start_Timer(&amp;tmr, 2000, 1);
+    char buf[16];
 
     while(1) {
-        if(Is_Timer_Expired(&tmr)) {
-            DS18B20_RequestTemperatures();
-            Delay_Ms(750);
-            uint8_t n = DS18B20_GetDeviceCount();
-            for(uint8_t i = 0; i < n && i < 3; i++) {
-                DS18B20_ROM_t rom;
-                DS18B20_GetROM(i, &rom);
-                float t = DS18B20_GetTempC(&rom);
-                LCD_SetCursor(i, 0);
-                LCD_Print("S"); LCD_Print(i+1);
-                LCD_Print(":"); LCD_Print(t, 1);
-                LCD_Print("C   ");
-            }
+        if(Is_Timer_Expired(&amp;tmr)) {
+            float t1 = DS18B20_ReadTemperatureBlocking(s1);
+            float t2 = DS18B20_ReadTemperatureBlocking(s2);
+            float t3 = DS18B20_ReadTemperatureBlocking(s3);
+
+            LCD_Clear(&amp;lcd);
+            SimpleHAL_Sprintf(buf, "S1:%.1f S2:%.1f", t1, t2);
+            LCD_SetCursor(&amp;lcd, 0, 0);
+            LCD_Print(&amp;lcd, buf);
+            SimpleHAL_Sprintf(buf, "S3:%.1f C", t3);
+            LCD_SetCursor(&amp;lcd, 1, 0);
+            LCD_Print(&amp;lcd, buf);
         }
         IWDG_Feed();
     }
@@ -182,7 +177,7 @@ int main(void) {
 <section>
     <h2>✏️ ลองทำดู</h2>
     <ol>
-        <li>แสดง ROM ID ทั้งหมดของทุกเซนเซอร์ — ใช้ <code>USART_PrintHex(rom.bytes, 8)</code> พิมพ์ 8 byte ROM ID</li>
+        <li>แสดง ROM ID ของเซนเซอร์ที่เจอบนบัส — ใช้ USART_PrintHex แสดง 8 byte ROM ID</li>
         <li>ทดลอง Parasite Power mode — ต่อ DS18B20 แบบ 2-wire (DQ+GND เท่านั้น) เปรียบเทียบกับ 3-wire ปกติ</li>
         <li>ทำ Data Logger + Flash — บันทึกอุณหภูมิจาก 3 จุดทุก 1 นาที เก็บลง Flash แล้วอ่านกลับมาดูภายหลังผ่าน USART</li>
     </ol>

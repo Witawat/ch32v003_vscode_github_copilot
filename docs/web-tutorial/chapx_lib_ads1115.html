@@ -1,17 +1,14 @@
 <!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>ADS1115 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head><body>
 <nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_ina219.html">บทก่อน</a><a href="chapx_lib_mcp4725.html">บทถัดไป →</a></nav>
-<h1>ADS1115 — ADC 16-Bit 4 ช่อง I2C พร้อม Comparator</h1><span class="level advanced">ระดับสูง</span>
+<h1>ADS1115 — ADC 16-Bit 4 ช่อง I2C</h1><span class="level advanced">ระดับสูง</span>
 <section class="flowchart"><h2>🧭 แผนภาพการทำงาน</h2><pre class="mermaid">
 flowchart TD
-    A["ADS1115_Init(addr)"] --> B["ตั้งค่า PGA Gain ±0.256V ~ ±6.144V"]
-    B --> C["เลือก Channel (0-3) Single/Differential"]
-    C --> D["ตั้งค่า Data Rate 8~860 SPS"]
-    D --> E["ADS1115_Read(ch) → int16_t raw"]
-    E --> F["แปลงเป็นแรงดัน: V = raw × (FSR/32768)"]
-    F --> G["Comparator? Alert Pin?"]
-    G -->|"Yes"| H["ตั้ง Threshold Hi/Lo → ALERT/RDY"]
-    G -->|"No"| I["แสดงผล / บันทึก"]
-    I --> E
+    A["ADS1115_Init(&ads, addr)"] --> B["ตั้งค่า PGA Gain"]
+    B --> C["เลือก Channel (0-3)"]
+    C --> D["ADS1115_ReadVoltage(&ads, ch)"]
+    D --> E["float voltage (V)"]
+    E --> F["Display / Use"]
+    F --> D
 </pre></section>
 <section><h2>🔌 การต่อวงจร</h2><pre class="ascii-circuit">
           ADS1115 4-Channel ADC
@@ -27,14 +24,14 @@ flowchart TD
    │  Sensor3 ─────── AIN2              │
    │  Sensor4 ─────── AIN3              │
    └────────────────────────────────────┘
-</pre><p>ต่อ I2C ปกติ — ADDR pin เลือก 4 address (GND=0x48, VDD=0x49, SDA=0x4A, SCL=0x4B) — ALRT pin (optional) ใช้ขัดจังหวะเมื่อค่าผ่าน threshold</p></section>
-<section><h2>📚 หลักการทำงาน</h2><p><strong>ADS1115</strong> เป็น ADC แบบ Delta-Sigma ความละเอียด 16-bit สื่อสารผ่าน I2C มี 4 ช่องสัญญาณ Analog Input — วัดได้ทั้งแบบ Single-Ended (เทียบ GND) และ Differential (AIN0-AIN1, AIN0-AIN3, AIN1-AIN3, AIN2-AIN3)</p><p><strong>PGA (Programmable Gain Amplifier)</strong> ขยายสัญญาณก่อนเข้า ADC — มี 6 ระดับ: ±6.144V (gain 1), ±4.096V (2), ±2.048V (4), ±1.024V (8), ±0.512V (16), ±0.256V (16) — เลือกให้ครอบคลุม range สัญญาณ จะได้ความละเอียดสูงสุด</p><p><strong>Data Rate</strong> 8, 16, 32, 64, 128, 250, 475, 860 SPS — ยิ่งเร็ว noise ยิ่งมาก — ใช้ 128 SPS สำหรับงานทั่วไป</p><p><strong>Comparator + Alert</strong> ตั้งค่า Threshold High/Low — เมื่อค่าผ่าน threshold ALRT pin จะเปลี่ยน state — ใช้ตรวจจับ over/under voltage ได้โดยไม่ต้อง polling</p></section>
+</pre><p>ต่อ I2C ปกติ — ADDR pin เลือก 4 address (GND=0x48, VDD=0x49, SDA=0x4A, SCL=0x4B)</p></section>
+<section><h2>📚 หลักการทำงาน</h2><p><strong>ADS1115</strong> เป็น ADC แบบ Delta-Sigma ความละเอียด 16-bit สื่อสารผ่าน I2C มี 4 ช่องสัญญาณ Analog Input — ADS1115_ReadVoltage() คืนค่าแรงดันเป็น float โดยตรง — PGA gain ตั้งด้วย ADS1115_SetGain()</p></section>
 <section><h2>💻 เขียน Code ทีละขั้น</h2>
-<div class="step"><h3>ขั้นที่ 1: Init ADS1115 + Config</h3><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+<div class="step"><h3>ขั้นที่ 1: Init ADS1115</h3><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "ADS1115.h"
 
-ADS1115_t adc;
+ADS1115_Instance ads;
 
 int main(void) {
     SystemCoreClockUpdate();
@@ -42,63 +39,47 @@ int main(void) {
     I2C_Init(PC1, PC2, I2C_SPEED_STANDARD);
     USART_Init(115200);
 
-    ADS1115_Init(&adc, 0x48);                   // addr=0x48 (ADDR=GND)
-    ADS1115_SetGain(&adc, ADS1115_PGA_4096);    // ±4.096V
-    ADS1115_SetDataRate(&adc, ADS1115_DR_128);  // 128 SPS
-    USART_Print("ADS1115 Ready\r\n");</code></pre><p class="explain">🔍 <code>ADS1115_Init(dev, addr)</code> — ตั้งค่าเริ่มต้นด้วย I2C address — <code>SetGain()</code> เลือก PGA gain ให้เหมาะกับช่วงแรงดัน — <code>SetDataRate()</code> กำหนด sampling speed</p></div>
+    ADS1115_Init(&ads, 0x48);
+    ADS1115_SetGain(&ads, ADS1115_GAIN_1);  // ±4.096V
+    USART_Print("ADS1115 Ready\r\n");</code></pre><p class="explain">🔍 <code>ADS1115_Init(&ads, addr)</code> — ตั้งค่าเริ่มต้นด้วย I2C address — <code>SetGain()</code> เลือก PGA gain — ADS1115_GAIN_1 = ±4.096V</p></div>
 <div class="step"><h3>ขั้นที่ 2: อ่านค่า ADC ทั้ง 4 ช่อง</h3><pre><code class="language-c">    for(int ch = 0; ch < 4; ch++) {
-        int16_t raw = ADS1115_Read(&adc, ch);
-        float voltage = raw * (4.096f / 32768.0f);
+        float v = ADS1115_ReadVoltage(&ads, ch);
         USART_Print("CH"); USART_PrintDec(ch);
-        USART_Print(": "); USART_PrintDec(raw);
-        USART_Print(" → "); USART_PrintFloat(voltage, 4);
+        USART_Print(": "); USART_PrintFloat(v, 4);
         USART_Print("V\r\n");
         Delay_Ms(10);
-    }</code></pre><p class="explain">🔍 <code>ADS1115_Read(dev, channel)</code> อ่าน raw value 16-bit signed — แปลงเป็นแรงดัน: V = raw × (FSR / 2^15) — FSR คือ PGA full-scale range — ค่า raw เป็น signed (+32767 ถึง -32768)</p></div>
-<div class="step"><h3>ขั้นที่ 3: Differential Mode + Comparator</h3><pre><code class="language-c">    ADS1115_SetChannel(&adc, ADS1115_CH_DIFF_0_1);
-    ADS1115_SetComparator(&adc, 1000, 2000, ADS1115_COMP_TRAD);
-    // ALRT pin LOW เมื่อค่า > 2000 หรือ < 1000
+    }</code></pre><p class="explain">🔍 <code>ADS1115_ReadVoltage(&ads, ch)</code> อ่านแรงดันเป็น float โดยตรง (V) — ไม่ต้องคำนวณ raw → voltage เอง</p></div>
+<div class="step"><h3>ขั้นที่ 3: Loop + Data Logger</h3><pre><code class="language-c">    Timer_t tmr;
+    Start_Timer(&tmr, 1000, 1);
 
     while(1) {
-        int16_t diff = ADS1115_ReadDiff(&adc);
-        float v = diff * (4.096f / 32768.0f);
-        USART_Print("Diff A0-A1: ");
-        USART_PrintFloat(v, 4);
-        USART_Print("V\r\n");
-
-        if(GPIO_Read(PD4) == 0) {
-            USART_Print("ALERT!\r\n");
+        if(Is_Timer_Expired(&tmr)) {
+            for(int i = 0; i < 4; i++) {
+                float v = ADS1115_ReadVoltage(&ads, i);
+                USART_Print("CH"); USART_PrintDec(i);
+                USART_Print("="); USART_PrintFloat(v, 4);
+                USART_Print("V  ");
+            }
+            USART_Print("\r\n");
         }
-        Delay_Ms(500);
     }
-}</code></pre><p class="explain">🔍 Differential Mode วัดผลต่างระหว่าง 2 ช่อง — <code>SetComparator()</code> ตั้ง threshold hi/lo — ALRT pin active LOW เมื่อผ่าน threshold — ไม่ต้อง polling เองตลอดเวลา</p></div>
+}</code></pre><p class="explain">🔍 อ่าน 4 ช่องทุก 1 วินาที — ADS1115_ReadVoltage จัดการแปลง raw เป็นแรงดันให้ — สะดวกกว่าใช้ raw value</p></div>
 </section>
 <section><h2>📋 API Reference</h2><table><tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
-<tr><td><code>ADS1115_Init(dev, addr)</code></td><td>เริ่มต้น ADS1115</td><td><code>ADS1115_Init(&adc, 0x48)</code></td></tr>
-<tr><td><code>ADS1115_SetGain(dev, gain)</code></td><td>ตั้ง PGA gain</td><td><code>ADS1115_SetGain(&adc, ADS1115_PGA_4096)</code></td></tr>
-<tr><td><code>ADS1115_SetDataRate(dev, dr)</code></td><td>ตั้งความเร็ว sampling</td><td><code>ADS1115_SetDataRate(&adc, ADS1115_DR_128)</code></td></tr>
-<tr><td><code>ADS1115_Read(dev, ch)</code></td><td>อ่าน single-ended channel</td><td><code>int16_t r = ADS1115_Read(&adc, 0)</code></td></tr>
-<tr><td><code>ADS1115_ReadDiff(dev)</code></td><td>อ่าน differential (channel ที่ตั้งไว้)</td><td><code>int16_t d = ADS1115_ReadDiff(&adc)</code></td></tr>
-<tr><td><code>ADS1115_SetComparator(dev, lo, hi, mode)</code></td><td>ตั้ง comparator threshold + mode</td><td><code>ADS1115_SetComparator(&adc, 1000, 2000, ADS1115_COMP_TRAD)</code></td></tr>
-<tr><td><code>ADS1115_ReadVoltage(dev, ch)</code></td><td>อ่านเป็นแรงดันโดยตรง (float)</td><td><code>float v = ADS1115_ReadVoltage(&adc, 2)</code></td></tr>
+<tr><td><code>ADS1115_Init(&ads, addr)</code></td><td>เริ่มต้น ADS1115</td><td><code>ADS1115_Init(&ads, 0x48)</code></td></tr>
+<tr><td><code>ADS1115_SetGain(&ads, gain)</code></td><td>ตั้ง PGA gain</td><td><code>ADS1115_SetGain(&ads, ADS1115_GAIN_1)</code></td></tr>
+<tr><td><code>ADS1115_ReadVoltage(&ads, ch)</code></td><td>อ่านแรงดันเป็น float (V)</td><td><code>float v = ADS1115_ReadVoltage(&ads, 0)</code></td></tr>
+<tr><td><code>ADS1115_ReadRaw(&ads, ch)</code></td><td>อ่าน raw int16_t</td><td><code>int16_t r = ADS1115_ReadRaw(&ads, 0)</code></td></tr>
 </table></section>
 <section><h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2><table><tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
-<tr><td>ค่าที่อ่านได้กระโดดไปมา</td><td>Data Rate สูงเกินไป / Noise จาก supply</td><td>ใช้ 64-128 SPS, เพิ่ม 0.1µF cap ที่ input, ใช้ averaging</td></tr>
-<tr><td>แรงดันที่คำนวณผิดเพี้ยน</td><td>ใช้ FSR ผิดจาก PGA gain ที่ตั้งไว้</td><td>ตรวจสอบ PGA gain — FSR = 6.144/(gain) เช่น gain=4 → FSR=1.536V? ไม่ใช่! FSR=±4.096V</td></tr>
-<tr><td>I2C address ไม่เจอ</td><td>ADDR pin ต่อผิด</td><td>0x48(GND), 0x49(VDD), 0x4A(SDA), 0x4B(SCL) — ใช้ I2C Scanner ตรวจสอบ</td></tr>
-<tr><td>อ่าน channel ไม่ได้ค่า</td><td>Input ลอย (floating)</td><td>ทุก channel ที่ไม่ได้ใช้ควรต่อ GND — อย่าปล่อยลอย</td></tr>
-<tr><td>Differential อ่านค่าแปลก</td><td>Input เกิน common-mode range</td><td>Differential ต้องอยู่ในช่วง GND ถึง VDD — PGA=±6.144V แต่ common-mode ต้อง ≤ VDD</td></tr>
-<tr><td>ALRT pin ไม่ทำงาน</td><td>Comparator ไม่ได้ตั้งค่าหรือ mode ผิด</td><td>เรียก SetComparator ก่อน — เลือก mode TRAD (traditional) หรือ WINDOW</td></tr>
+<tr><td>ค่าที่อ่านได้กระโดดไปมา</td><td>Noise จาก supply</td><td>เพิ่ม 0.1µF cap ที่ input, ใช้ averaging</td></tr>
+<tr><td>I2C address ไม่เจอ</td><td>ADDR pin ต่อผิด</td><td>0x48(GND), 0x49(VDD), 0x4A(SDA), 0x4B(SCL)</td></tr>
+<tr><td>อ่าน channel ไม่ได้ค่า</td><td>Input ลอย (floating)</td><td>ทุก channel ที่ไม่ได้ใช้ควรต่อ GND</td></tr>
 </table></section>
-<section><h2>🛠️ สร้าง Product: 4-Channel Data Logger</h2><p>ADS1115 วัด 4 ช่อง + บันทึกลง W25Qxx Flash ทุก 1 วิ — อ่านข้อมูลภายหลังผ่าน USART</p><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+<section><h2>🛠️ สร้าง Product: 4-Channel Data Logger</h2><p>ADS1115 วัด 4 ช่อง + บันทึกลง W25Qxx Flash ทุก 1 วิ</p><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "ADS1115.h"
 #include "W25Qxx.h"
-
-#define LOG_INTERVAL_MS 1000
-#define MAX_LOGS 512
-
-typedef struct { uint32_t timestamp; int16_t ch[4]; } LogEntry_t;
 
 int main(void)
 {
@@ -108,46 +89,37 @@ int main(void)
     SPI_Init(PC4, PC5, PC6, SPI_MODE0);
     USART_Init(115200);
 
-    ADS1115_t adc;
-    ADS1115_Init(&adc, 0x48);
-    ADS1115_SetGain(&adc, ADS1115_PGA_4096);
-    ADS1115_SetDataRate(&adc, ADS1115_DR_128);
+    ADS1115_Instance ads;
+    ADS1115_Init(&ads, 0x48);
+    ADS1115_SetGain(&ads, ADS1115_GAIN_1);
 
-    W25Qxx_Init();
-    W25Qxx_EraseSector(0);
-    USART_Print("Data Logger Ready\r\n");
+    W25Qxx_Instance flash;
+    W25Qxx_Init(&flash, PC4);
+    W25Qxx_EraseSector(&flash, 0);
 
     Timer_t tmr;
-    Start_Timer(&tmr, LOG_INTERVAL_MS, 1);
-    uint32_t addr = 0;
-    uint16_t count = 0;
+    Start_Timer(&tmr, 1000, 1);
 
     while(1) {
-        if(Is_Timer_Expired(&tmr) && count < MAX_LOGS) {
-            LogEntry_t log;
-            log.timestamp = Get_CurrentMs();
+        if(Is_Timer_Expired(&tmr)) {
+            float values[4];
             for(int i = 0; i < 4; i++) {
-                log.ch[i] = ADS1115_Read(&adc, i);
+                values[i] = ADS1115_ReadVoltage(&ads, i);
             }
+            W25Qxx_Write(&flash, 0, (uint8_t*)values, sizeof(values));
 
-            W25Qxx_WritePage(addr, (uint8_t*)&log, sizeof(LogEntry_t));
-            addr += sizeof(LogEntry_t);
-            count++;
-
-            USART_Print("Logged #"); USART_PrintDec(count);
-            USART_Print(" t="); USART_PrintDec(log.timestamp);
+            USART_Print("Logged: ");
             for(int i = 0; i < 4; i++) {
-                USART_Print(" CH"); USART_PrintDec(i);
-                USART_Print("="); USART_PrintDec(log.ch[i]);
+                USART_PrintFloat(values[i], 3);
+                USART_Print(" ");
             }
             USART_Print("\r\n");
         }
     }
 }</code></pre></section>
 <section><h2>✏️ ลองทำดู</h2><ol>
-<li>วัด Load Cell แบบ Differential — ต่อ Wheatstone Bridge เข้า AIN0-AIN1 ใช้ PGA=±0.512V เพื่อความละเอียดสูงสุด</li>
-<li>Alert เมื่อแรงดันเกิน 3.0V — ใช้ Comparator + ALRT pin ขัดจังหวะ MCU ด้วย EXTI</li>
-<li>วัด Thermocouple Type-K — ใช้ Differential + Cold Junction Compensation ผ่าน CH2</li>
-<li>ทำ Oscilloscope อย่างง่าย — sample 860 SPS ต่อเนื่อง เก็บ buffer ใน RAM แล้วส่งผ่าน USART ทีเดียว</li></ol></section>
+<li>วัด Load Cell — ใช้ ADS1115_ReadVoltage อ่านแรงดันจาก Wheatstone Bridge</li>
+<li>วัด Thermocouple — ใช้ ADS1115 อ่านแรงดันเล็กๆ จาก thermocouple</li>
+<li>ทำ Oscilloscope อย่างง่าย — sample ต่อเนื่อง เก็บ buffer ใน RAM</li></ol></section>
 <nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_ina219.html">บทก่อน</a><a href="chapx_lib_mcp4725.html">บทถัดไป →</a></nav>
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script><script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script><script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

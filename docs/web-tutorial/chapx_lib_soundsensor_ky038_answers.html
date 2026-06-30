@@ -9,6 +9,7 @@
 #include "SoundSensor.h"
 #include "oled_i2c.h"
 
+SoundSensor_Instance s;
 #define SOUND_ADC PD2
 #define SOUND_DIG PC3
 #define CLAP_DEBOUNCE_MS 250
@@ -18,8 +19,8 @@ int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
     I2C_Init(PC1, PC2, I2C_SPEED_STANDARD);
-    ADC_Init(SOUND_ADC, ADC_CH0);
-    pinMode(SOUND_DIG, PIN_MODE_INPUT);
+    SoundSensor_Init(&s, ADC_CH0);
+    GPIO_SimpleInit(SOUND_DIG, GPIO_IN_PU);
     USART_Init(115200);
 
     OLED_Handle oled;
@@ -34,17 +35,17 @@ int main(void) {
     USART_Print("Clap Counter Ready\r\n");
 
     while(1) {
-        uint16_t adc = ADC_Read(SOUND_ADC);
-        uint8_t dig = GPIO_Read(SOUND_DIG);
+        uint16_t level = SoundSensor_ReadLevel(&s);
+        uint8_t dig = GPIO_ReadBit(SOUND_DIG);
         uint32_t now = Get_CurrentMs();
 
-        if(dig && adc > 750 && (now - last_clap_ms > CLAP_DEBOUNCE_MS)) {
+        if(dig && level > 750 && (now - last_clap_ms > CLAP_DEBOUNCE_MS)) {
             last_clap_ms = now;
             clap_count++;
             Start_Timer(&tmr_timeout, TIMEOUT_MS, 0);
 
             USART_Print("Clap #"); USART_PrintDec(clap_count);
-            USART_Print(" (ADC:"); USART_PrintDec(adc); USART_Print(")\r\n");
+            USART_Print(" (Level:"); USART_PrintDec(level); USART_Print(")\r\n");
         }
 
         if(clap_count > 0 && Is_Timer_Expired(&tmr_timeout)) {
@@ -67,7 +68,7 @@ int main(void) {
         OLED_PrintDec(&oled, clap_count);
 
         OLED_SetCursor(&oled, 0, 6);
-        OLED_PrintDec(&oled, adc);
+        OLED_PrintDec(&oled, level);
         OLED_Print(&oled, " ");
         OLED_Print(dig ? "LOUD" : "---");
 
@@ -84,6 +85,7 @@ int main(void) {
 #include "SimpleHAL.h"
 #include "SoundSensor.h"
 
+SoundSensor_Instance s;
 #define SOUND_ADC PD2
 #define SOUND_DIG PC3
 #define LED_PIN   PC0
@@ -91,17 +93,17 @@ int main(void) {
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    ADC_Init(SOUND_ADC, ADC_CH0);
-    pinMode(SOUND_DIG, PIN_MODE_INPUT);
-    pinMode(LED_PIN, PIN_MODE_OUTPUT);
+    SoundSensor_Init(&s, ADC_CH0);
+    GPIO_SimpleInit(SOUND_DIG, GPIO_IN_PU);
+    GPIO_SimpleInit(LED_PIN, GPIO_OUT_PP);
     USART_Init(115200);
 
-    digitalWrite(LED_PIN, LOW);
+    GPIO_WriteBit(LED_PIN, 0);
 
     uint16_t quiet_level = 0;
     USART_Print("Calibrating ambient noise...\r\n");
     for(int i = 0; i < 50; i++) {
-        quiet_level += ADC_Read(SOUND_ADC);
+        quiet_level += SoundSensor_ReadLevel(&s);
         Delay_Ms(20);
     }
     quiet_level /= 50;
@@ -118,12 +120,12 @@ int main(void) {
     uint8_t beat_count = 0;
 
     while(1) {
-        uint16_t adc = ADC_Read(SOUND_ADC);
-        uint8_t dig = GPIO_Read(SOUND_DIG);
+        uint16_t level = SoundSensor_ReadLevel(&s);
+        uint8_t dig = GPIO_ReadBit(SOUND_DIG);
 
-        if(adc > threshold) {
+        if(level > threshold) {
             led_state = !led_state;
-            digitalWrite(LED_PIN, led_state);
+            GPIO_WriteBit(LED_PIN, led_state);
             beat_count++;
 
             if(beat_count % 4 == 0) {
@@ -145,6 +147,7 @@ int main(void) {
 #include "SoundSensor.h"
 #include "oled_i2c.h"
 
+SoundSensor_Instance s;
 #define SOUND_ADC PD2
 #define SOUND_DIG PC3
 #define NUM_LEVELS 8
@@ -158,8 +161,8 @@ int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
     I2C_Init(PC1, PC2, I2C_SPEED_STANDARD);
-    ADC_Init(SOUND_ADC, ADC_CH0);
-    pinMode(SOUND_DIG, PIN_MODE_INPUT);
+    SoundSensor_Init(&s, ADC_CH0);
+    GPIO_SimpleInit(SOUND_DIG, GPIO_IN_PU);
     USART_Init(115200);
 
     OLED_Handle oled;
@@ -175,7 +178,7 @@ int main(void) {
         uint32_t sum = 0;
         uint16_t peak_sample = 0;
         for(uint8_t i = 0; i < 10; i++) {
-            uint16_t s = ADC_Read(SOUND_ADC);
+            uint16_t s = SoundSensor_ReadLevel(&s);
             sum += s;
             if(s > peak_sample) peak_sample = s;
             Delay_Ms(10);
@@ -219,7 +222,7 @@ int main(void) {
         OLED_Print(&oled, "Peak: ");
         OLED_PrintDec(&oled, peak_max);
         OLED_Print(&oled, " ");
-        OLED_Print(GPIO_Read(SOUND_DIG) ? "!" : " ");
+        OLED_Print(GPIO_ReadBit(SOUND_DIG) ? "!" : " ");
 
         OLED_Update(&oled);
         Delay_Ms(50);

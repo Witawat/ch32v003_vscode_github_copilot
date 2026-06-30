@@ -18,13 +18,13 @@
     <h2>🧭 แผนภาพการทำงาน</h2>
     <pre class="mermaid">
 flowchart TD
-    A["ESP_Init(baud)"] --> B["AT Test — AT\\r\\n"]
-    B -->|"OK"| C["ESP_ConnectWiFi(ssid,pwd)"]
+    A["ESP01_Init(&esp, baud, pins)"] --> B["AT Test — AT\\r\\n"]
+    B -->|"OK"| C["ESP01_JoinAP(&esp, ssid, pwd)"]
     B -->|"ERR"| D["Check wiring/power"]
-    C --> E["WIFI GOT IP?"]
-    E -->|"Yes"| F["ESP_ConnectTCP(host,port)"]
-    F --> G["ESP_Send(data)"]
-    G --> H["ESP_Read()"]
+    C --> E["ESP01_IsConnected(&esp)?"]
+    E -->|"Yes"| F["ESP01_TCPConnect(&esp, host, port)"]
+    F --> G["Send TCP data"]
+    G --> H["Read response"]
     H --> G
     E -->|"No"| C
     </pre>
@@ -67,56 +67,53 @@ flowchart TD
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "ESP01.h"
-#include "ESP01.h"
 
 int main(void) {
     SystemCoreClockUpdate();
+    ESP01_Instance esp;
     USART_Init(USART1, BAUD_115200);      // debug console
-    USART_Init(USART2, BAUD_115200);      // ESP communication
-    ESP_Init(USART2, BAUD_115200);
+    ESP01_Init(&esp, BAUD_115200, USART_PINS_DEFAULT);
     pinMode(PC1, PIN_MODE_OUTPUT);         // CH_PD pin
     digitalWrite(PC1, HIGH);               // enable ESP</code></pre>
-    <p class="explain">🔍 ใช้ USART2 สำหรับ ESP8266, USART1 สำหรับ debug console — CH32V003 มี 2 USART พอดี, CH_PD ต้อง HIGH ก่อน ESP จะเริ่มทำงาน</p></div>
+    <p class="explain">🔍 <code>ESP01_Init(&esp, BAUD_115200, USART_PINS_DEFAULT)</code> — ใช้ default pins สำหรับ ESP01, CH_PD ต้อง HIGH ก่อน ESP จะเริ่มทำงาน</p></div>
 
     <div class="step"><h3>ขั้นที่ 2: ต่อ WiFi + TCP</h3>
     <pre><code class="language-c">    USART_Println("Connecting WiFi...");
-    if(!ESP_ConnectWiFi("MyWiFi", "password123")) {
+    if(!ESP01_JoinAP(&esp, "MyWiFi", "password123")) {
         USART_Println("WiFi Failed!"); while(1);
     }
-    USART_Println("WiFi Connected!");
-    USART_Print(ESP_GetIP());  // print IP address
+    if(ESP01_IsConnected(&esp)) {
+        USART_Print("IP: "); USART_Println(ESP01_GetIP(&esp));
+    }
 
-    if(!ESP_ConnectTCP("api.thingspeak.com", 80)) {
+    if(!ESP01_TCPConnect(&esp, "api.thingspeak.com", 80)) {
         USART_Println("TCP Failed!"); while(1);
     }</code></pre>
-    <p class="explain">🔍 <code>ESP_ConnectWiFi(ssid, pwd)</code> — ใช้ AT+CWJAP ภายใน, ต้องรอจนกว่า ESP ตอบ WIFI GOT IP, <code>ESP_ConnectTCP(host, port)</code> — เปิด TCP connection</p></div>
+    <p class="explain">🔍 <code>ESP01_JoinAP(&esp, ssid, pwd)</code> — ใช้ AT+CWJAP ภายใน, <code>ESP01_IsConnected(&esp)</code> เช็คสถานะ, <code>ESP01_TCPConnect(&esp, host, port)</code> — เปิด TCP connection</p></div>
 
     <div class="step"><h3>ขั้นที่ 3: ส่งข้อมูล HTTP + Loop</h3>
     <pre><code class="language-c">    while(1) {
-        // HTTP GET request to ThingSpeak
-        ESP_Send("GET /update?api_key=xxx&field1=25 HTTP/1.1\r\n");
-        ESP_Send("Host: api.thingspeak.com\r\n");
-        ESP_Send("Connection: close\r\n\r\n");
+        // Send HTTP GET via AT+CIPSEND
+        USART_Print(USART2, "AT+CIPSEND=");
+        USART_Println(USART2, "GET /update?api_key=xxx&field1=25 HTTP/1.1\r\nHost: api.thingspeak.com\r\n\r\n");
         Delay_Ms(1000);
-        USART_Println(ESP_Read());  // read response
+        // Read ESP response
         Delay_Ms(15000);  // ThingSpeak limit: 1 update/15s
     }
 }</code></pre>
-    <p class="explain">🔍 <code>ESP_Send(str)</code> — ส่ง raw data ผ่าน TCP (ใช้ AT+CIPSEND), <code>ESP_Read()</code> — อ่านข้อมูลที่ ESP ได้รับและคืนเป็น string, ThingSpeak จำกัด 15 วินาทีต่อ 1 update</p></div>
+    <p class="explain">🔍 ส่ง raw data ผ่าน USART โดยตรง (AT+CIPSEND) — ThingSpeak จำกัด 15 วินาทีต่อ 1 update</p></div>
 </section>
 
 <section>
     <h2>📋 API Reference</h2>
     <table>
         <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
-        <tr><td><code>ESP_Init(uart, baud)</code></td><td>เริ่มต้น ESP8266</td><td><code>ESP_Init(USART2, BAUD_115200)</code></td></tr>
-        <tr><td><code>ESP_Test()</code></td><td>ทดสอบการสื่อสาร (AT)</td><td><code>if(ESP_Test()) {...}</code></td></tr>
-        <tr><td><code>ESP_ConnectWiFi(ssid,pwd)</code></td><td>ต่อ WiFi AP</td><td><code>ESP_ConnectWiFi("home","pass")</code></td></tr>
-        <tr><td><code>ESP_ConnectTCP(host, port)</code></td><td>เปิด TCP connection</td><td><code>ESP_ConnectTCP("192.168.1.5", 8080)</code></td></tr>
-        <tr><td><code>ESP_Send(data)</code></td><td>ส่งข้อมูลผ่าน TCP</td><td><code>ESP_Send("Hello World")</code></td></tr>
-        <tr><td><code>ESP_Read()</code></td><td>อ่านข้อมูลจาก ESP buffer</td><td><code>char* resp = ESP_Read()</code></td></tr>
-        <tr><td><code>ESP_Reset()</code></td><td>Software reset ESP</td><td><code>ESP_Reset()</code></td></tr>
-        <tr><td><code>ESP_GetIP()</code></td><td>อ่าน IP address</td><td><code>USART_Print(ESP_GetIP())</code></td></tr>
+        <tr><td><code>ESP01_Init(&esp, baud, pins)</code></td><td>เริ่มต้น ESP8266</td><td><code>ESP01_Init(&esp, BAUD_115200, USART_PINS_DEFAULT)</code></td></tr>
+        <tr><td><code>ESP01_TestAT(&esp)</code></td><td>ทดสอบการสื่อสาร (AT)</td><td><code>if(ESP01_TestAT(&esp)) {...}</code></td></tr>
+        <tr><td><code>ESP01_JoinAP(&esp, ssid, pwd)</code></td><td>ต่อ WiFi AP</td><td><code>ESP01_JoinAP(&esp, "home", "pass")</code></td></tr>
+        <tr><td><code>ESP01_IsConnected(&esp)</code></td><td>เช็คสถานะเชื่อมต่อ WiFi</td><td><code>if(ESP01_IsConnected(&esp)) {...}</code></td></tr>
+        <tr><td><code>ESP01_GetIP(&esp)</code></td><td>อ่าน IP address</td><td><code>ESP01_GetIP(&esp)</code></td></tr>
+        <tr><td><code>ESP01_TCPConnect(&esp, host, port)</code></td><td>เปิด TCP connection</td><td><code>ESP01_TCPConnect(&esp, "192.168.1.5", 8080)</code></td></tr>
     </table>
 </section>
 
@@ -127,8 +124,8 @@ int main(void) {
         <tr><td>ESP ไม่ตอบ AT</td><td>ไฟ 3.3V ไม่พอ — ESP ดับขณะ TX</td><td>ใช้ external 3.3V ≥500mA, ต่อ capacitor 100µF ขนาน VCC-GND</td></tr>
         <tr><td>บอดไม่ตรงกัน</td><td>ESP default baud 115200, แต่ CH32V003 ตั้งผิด</td><td>เช็ค <code>USART_Init(USART2, BAUD_115200)</code> ให้ตรงกันทั้งสองฝั่ง</td></tr>
         <tr><td>WiFi เชื่อมทุกครั้งตก</td><td>ไฟกระเพื่อมตอน TX (current spike)</td><td>เพิ่ม capacitor 470µF + 0.1µF ที่ขา VCC, ใช้ regulator แยก</td></tr>
-        <tr><td>TCP ส่งข้อมูลไม่ครบ</td><td>ส่งเร็วเกินไป buffer overflow</td><td>delay 50-100ms ระหว่าง <code>ESP_Send()</code> แต่ละครั้ง</td></tr>
-        <tr><td>RX buffer เต็ม ค้าง</td><td>ลืมอ่านข้อมูลจาก ESP</td><td>เรียก <code>ESP_Read()</code> หลังแต่ละการส่งเพื่อ clear buffer</td></tr>
+        <tr><td>TCP ส่งข้อมูลไม่ครบ</td><td>ส่งเร็วเกินไป buffer overflow</td><td>delay 50-100ms ระหว่างส่งข้อมูลแต่ละครั้ง</td></tr>
+        <tr><td>RX buffer เต็ม ค้าง</td><td>ลืมอ่านข้อมูลจาก ESP</td><td>อ่าน response หลังแต่ละการส่งเพื่อ clear buffer</td></tr>
     </table>
 </section>
 
@@ -138,20 +135,19 @@ int main(void) {
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "ESP01.h"
-#include "ESP01.h"
 
 int main(void)
 {
     SystemCoreClockUpdate();
+    ESP01_Instance esp;
     USART_Init(USART1, BAUD_115200);
-    USART_Init(USART2, BAUD_115200);
     ADC_Init(ADC1, ADC_CH_TEMP);
-    ESP_Init(USART2, BAUD_115200);
+    ESP01_Init(&esp, BAUD_115200, USART_PINS_DEFAULT);
     pinMode(PC1, PIN_MODE_OUTPUT);
     digitalWrite(PC1, HIGH);
     Delay_Ms(3000);
 
-    if(!ESP_ConnectWiFi("MyWiFi", "pass")) {
+    if(!ESP01_JoinAP(&esp, "MyWiFi", "pass")) {
         USART_Println("WiFi Fail"); while(1);
     }
 
@@ -161,13 +157,11 @@ int main(void)
         float temp = (float)adc * 3300.0 / 4096.0;  // mV
         temp = (temp - 1430.0) / 4.3 + 25.0;        // °C
 
-        ESP_ConnectTCP("api.thingspeak.com", 80);
+        ESP01_TCPConnect(&esp, "api.thingspeak.com", 80);
         char buf[128];
         sprintf(buf, "GET /update?api_key=XXXXXXXX&field1=%.1f HTTP/1.1\r\nHost: api.thingspeak.com\r\n\r\n", temp);
-        ESP_Send(buf);
+        USART_Print(USART2, buf);
         Delay_Ms(1000);
-        ESP_Read();
-        ESP_Disconnect();
 
         USART_Print("Temp: "); USART_PrintFloat(temp, 1); USART_Println(" C");
         Delay_Ms(20000);

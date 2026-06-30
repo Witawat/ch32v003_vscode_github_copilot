@@ -7,7 +7,7 @@
 <pre><code class="language-c">#include "simple_servo.h"
 #include "simple_adc.h"
 
-Servo_t pan, tilt;
+Servo_Instance pan, tilt;
 
 static uint8_t map_adc_to_angle(uint16_t adc) {
     return (uint8_t)((uint32_t)adc * 180 / 4095);
@@ -17,8 +17,10 @@ int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
     ADC_SimpleInit(ADC_CH0 | ADC_CH1);
-    Servo_Attach(&pan, GPIOA, GPIO_Pin_0);
-    Servo_Attach(&tilt, GPIOA, GPIO_Pin_1);
+    Servo_Init(&pan, PWM1_CH1);
+    Servo_Attach(&pan);
+    Servo_Init(&tilt, PWM1_CH2);
+    Servo_Attach(&tilt);
 
     while (1) {
         uint8_t pan_angle  = map_adc_to_angle(ADC_Read(ADC_CH0));
@@ -35,12 +37,13 @@ int main(void) {
 <h2>ข้อ 2: Servo Sweep 0→180→0 อัตโนมัติ</h2>
 <pre><code class="language-c">#include "simple_servo.h"
 
-Servo_t servo;
+Servo_Instance servo;
 
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    Servo_Attach(&servo, GPIOA, GPIO_Pin_0);
+    Servo_Init(&servo, PWM1_CH1);
+    Servo_Attach(&servo);
 
     uint8_t angle = 0;
     int8_t  step  = 1;
@@ -65,7 +68,7 @@ int main(void) {
 #define LASER_PIN  GPIO_Pin_2
 #define LASER_PORT GPIOA
 
-Servo_t servo;
+Servo_Instance servo;
 
 void laser_on(void)  { GPIO_WriteBit(LASER_PORT, LASER_PIN, Bit_SET); }
 void laser_off(void) { GPIO_WriteBit(LASER_PORT, LASER_PIN, Bit_RESET); }
@@ -73,7 +76,8 @@ void laser_off(void) { GPIO_WriteBit(LASER_PORT, LASER_PIN, Bit_RESET); }
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    Servo_Attach(&servo, GPIOA, GPIO_Pin_0);
+    Servo_Init(&servo, PWM1_CH1);
+    Servo_Attach(&servo);
 
     GPIO_InitTypeDef g = {0};
     g.GPIO_Pin   = LASER_PIN;
@@ -102,7 +106,7 @@ int main(void) {
 <pre><code class="language-c">#include "simple_servo.h"
 #include &lt;math.h&gt;
 
-Servo_t s1, s2;
+Servo_Instance s1, s2;
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846f
@@ -111,8 +115,8 @@ Servo_t s1, s2;
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    Servo_Attach(&s1, GPIOA, GPIO_Pin_0);
-    Servo_Attach(&s2, GPIOA, GPIO_Pin_1);
+    Servo_Init(&s1, PWM1_CH1); Servo_Attach(&s1);
+    Servo_Init(&s2, PWM1_CH2); Servo_Attach(&s2);
 
     float phase = 0;
     while (1) {

@@ -20,19 +20,19 @@
     <h2>🧭 แผนภาพการทำงาน</h2>
     <pre class="mermaid">
 flowchart TD
-    A["Motor_Init(IN1,IN2,ENA)"] --> B{"Command"}
-    B -->|"Forward"| C["IN1=HIGH, IN2=LOW, ENA=PWM"]
-    B -->|"Reverse"| D["IN1=LOW, IN2=HIGH, ENA=PWM"]
-    B -->|"Brake"| E["IN1=HIGH, IN2=HIGH"]
-    B -->|"Coast"| F["IN1=LOW, IN2=LOW, ENA=0"]
-    C --> G["Motor spins CW"]
-    D --> H["Motor spins CCW"]
-    E --> I["Motor stops fast (short brake)"]
-    F --> J["Motor coasts freely"]
-    G --> B
+    A["L298N_Init(&motor, IN1, IN2, PWM_CH)"] --> B{"Command"}
+    B -->|"Forward"| C["L298N_SetDirection(&motor, L298N_FWD); L298N_Run(&motor)"]
+    B -->|"Reverse"| D["L298N_SetDirection(&motor, L298N_REV); L298N_Run(&motor)"]
+    B -->|"Speed"| F["L298N_SetSpeed(&motor, 0-100%)"]
+    B -->|"Stop"| G["L298N_Stop(&motor)"]
+    C --> H["Motor spins CW"]
+    D --> I["Motor spins CCW"]
+    F --> J["Adjust PWM duty"]
+    G --> K["Motor stops"]
     H --> B
     I --> B
     J --> B
+    K --> B
     </pre>
 </section>
 
@@ -78,92 +78,62 @@ flowchart TD
 #include "SimpleHAL.h"
 #include "L298N.h"
 
-#define IN1 PC0
-#define IN2 PC1
-#define ENA PD2  // PWM channel 1
-#define IN3 PC2
-#define IN4 PC3
-#define ENB PD3  // PWM channel 2
+L298N_Instance motor_a;
 
 int main(void) {
     SystemCoreClockUpdate();
-    // Motor A
-    pinMode(IN1, PIN_MODE_OUTPUT);
-    pinMode(IN2, PIN_MODE_OUTPUT);
-    PWM_SimpleInit(1, ENA, 10000);  // 10kHz
-    PWM_Start(1);
-    // Motor B
-    pinMode(IN3, PIN_MODE_OUTPUT);
-    pinMode(IN4, PIN_MODE_OUTPUT);
-    PWM_SimpleInit(2, ENB, 10000);
-    PWM_Start(2);</code></pre>
-    <p class="explain">🔍 10kHz PWM — หูคนไม่ได้ยิน — 2 channels อิสระ — แต่ละ channel มี IN pins 2 pins + ENA PWM pin</p></div>
+    L298N_Init(&motor_a, PC0, PC1, PWM1_CH4);  // IN1, IN2, PWM channel</code></pre>
+    <p class="explain">🔍 <code>L298N_Init(&motor, IN1, IN2, PWM_CH)</code> — ตั้งค่า GPIO + PWM อัตโนมัติที่ ~10kHz</p></div>
 
     <div class="step"><h3>ขั้นที่ 2: Forward/Reverse/Brake/Coast</h3>
-    <pre><code class="language-c">    void motor_a_forward(uint8_t speed) {
-        digitalWrite(IN1, HIGH);
-        digitalWrite(IN2, LOW);
-        PWM_SetDuty(1, speed);  // 0-100%
+    <pre><code class="language-c">    void motor_forward(uint8_t speed) {
+        L298N_SetDirection(&motor_a, L298N_FWD);
+        L298N_SetSpeed(&motor_a, speed);  // 0-100%
+        L298N_Run(&motor_a);
     }
-    void motor_a_reverse(uint8_t speed) {
-        digitalWrite(IN1, LOW);
-        digitalWrite(IN2, HIGH);
-        PWM_SetDuty(1, speed);
+    void motor_reverse(uint8_t speed) {
+        L298N_SetDirection(&motor_a, L298N_REV);
+        L298N_SetSpeed(&motor_a, speed);
+        L298N_Run(&motor_a);
     }
-    void motor_a_brake() {
-        digitalWrite(IN1, HIGH);
-        digitalWrite(IN2, HIGH);  // Short brake
-        PWM_SetDuty(1, 0);
-    }
-    void motor_a_coast() {
-        digitalWrite(IN1, LOW);
-        digitalWrite(IN2, LOW);   // Free spin
-        PWM_SetDuty(1, 0);
+    void motor_stop(void) {
+        L298N_Stop(&motor_a);
     }</code></pre>
-    <p class="explain">🔍 Forward: IN1 high, IN2 low + PWM — Reverse: สลับ logic — Brake: ทั้งคู่ high (มอเตอร์กลายเป็น generator, พลังงานถูก short → หยุดเร็ว) — Coast: ทั้งคู่ low (ปล่อยอิสระ)</p></div>
+    <p class="explain">🔍 <code>L298N_SetDirection(&motor, dir)</code> — ตั้ง FWD/REV — <code>L298N_Run(&motor)</code> เริ่มหมุน — <code>L298N_SetSpeed(&motor, pct)</code> ปรับความเร็ว — <code>L298N_Stop(&motor)</code> หยุด</p></div>
 
     <div class="step"><h3>ขั้นที่ 3: Speed Ramp + Loop Demo</h3>
     <pre><code class="language-c">    while(1) {
         // Motor A: ramp up forward
         for(uint8_t s = 0; s <= 100; s += 5) {
-            motor_a_forward(s);
+            motor_forward(s);
             Delay_Ms(100);
         }
         Delay_Ms(1000);
-        motor_a_brake();  // หยุดแบบ brake
+        L298N_Stop(&motor_a);  // หยุด
         Delay_Ms(2000);
 
         // Motor A: ramp up reverse
         for(uint8_t s = 0; s <= 80; s += 5) {
-            motor_a_reverse(s);
+            motor_reverse(s);
             Delay_Ms(100);
         }
         Delay_Ms(1000);
-        motor_a_coast();  // ปล่อย coast
+        L298N_Stop(&motor_a);  // หยุด
         Delay_Ms(3000);
-
-        // Motor B: ไปพร้อมกัน
-        motor_a_forward(60);
-        motor_b_forward(30);  // ต้อง implement คล้าย motor_a
-        Delay_Ms(3000);
-        motor_a_brake();
-        motor_b_brake();
-        Delay_Ms(2000);
     }
 }</code></pre>
-    <p class="explain">🔍 Ramp speed ขึ้นทีละ 5% — ป้องกันไฟกระชาก — Brake vs Coast ใช้ต่างสถานการณ์: brake ตอนต้องการหยุดแม่น, coast ตอนปล่อยอิสระ (เช่น robot coasting)</p></div>
+    <p class="explain">🔍 Ramp speed ขึ้นทีละ 5% — ป้องกันไฟกระชาก — L298N_Stop หยุดมอเตอร์ — เหมาะกับ robot movement</p></div>
 </section>
 
 <section>
     <h2>📋 API Reference</h2>
     <table>
         <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
-        <tr><td><code>L298N_Init(ch, in1, in2, en)</code></td><td>เริ่ม channel พร้อม PWM pin</td><td><code>L298N_Init(A, PC0, PC1, PD2)</code></td></tr>
-        <tr><td><code>L298N_Forward(ch, speed)</code></td><td>หมุนเดินหน้า speed 0-100%</td><td><code>L298N_Forward(A, 75)</code></td></tr>
-        <tr><td><code>L298N_Reverse(ch, speed)</code></td><td>หมุนถอยหลัง speed 0-100%</td><td><code>L298N_Reverse(B, 50)</code></td></tr>
-        <tr><td><code>L298N_Brake(ch)</code></td><td>หยุดทันที (short brake)</td><td><code>L298N_Brake(A)</code></td></tr>
-        <tr><td><code>L298N_Coast(ch)</code></td><td>ปล่อยมอเตอร์หมุนอิสระ</td><td><code>L298N_Coast(A)</code></td></tr>
-        <tr><td><code>L298N_SetSpeed(ch, pct)</code></td><td>เปลี่ยนความเร็วโดยไม่เปลี่ยนทิศทาง</td><td><code>L298N_SetSpeed(A, 40)</code></td></tr>
+        <tr><td><code>L298N_Init(&motor, in1, in2, pwm)</code></td><td>เริ่มต้น motor channel</td><td><code>L298N_Init(&motor, PC0, PC1, PWM1_CH4)</code></td></tr>
+        <tr><td><code>L298N_SetDirection(&motor, dir)</code></td><td>ตั้งทิศทาง L298N_FWD / L298N_REV</td><td><code>L298N_SetDirection(&motor, L298N_FWD)</code></td></tr>
+        <tr><td><code>L298N_Run(&motor)</code></td><td>เริ่มหมุนมอเตอร์</td><td><code>L298N_Run(&motor)</code></td></tr>
+        <tr><td><code>L298N_SetSpeed(&motor, pct)</code></td><td>เปลี่ยนความเร็ว 0-100%</td><td><code>L298N_SetSpeed(&motor, 75)</code></td></tr>
+        <tr><td><code>L298N_Stop(&motor)</code></td><td>หยุดมอเตอร์</td><td><code>L298N_Stop(&motor)</code></td></tr>
     </table>
 </section>
 
@@ -171,7 +141,7 @@ int main(void) {
     <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
     <table>
         <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
-        <tr><td>มอเตอร์ไม่หมุนเลย</td><td>ลืมต่อ VMS (Motor Supply) หรือ ENA PWM ไม่ start</td><td>ตรวจสอบ 12V/VMS ขั้ว L298N — <code>PWM_Start(ch)</code> — วัดไฟที่ OUT1/OUT2 ด้วย multimeter</td></tr>
+        <tr><td>มอเตอร์ไม่หมุนเลย</td><td>ลืมต่อ VMS (Motor Supply) หรือไม่ได้เรียก L298N_Run</td><td>ตรวจสอบ 12V/VMS ขั้ว L298N — <code>L298N_Run(&motor)</code> — วัดไฟที่ OUT1/OUT2 ด้วย multimeter</td></tr>
         <tr><td>มอเตอร์หมุนทิศทางเดียวเสมอ</td><td>IN1/IN2 สลับ — หรือต่อสายมอเตอร์กลับขั้ว</td><td>ตรวจสอบ logic: IN1=1,IN2=0 = Forward — ลองสลับสายมอเตอร์ที่ OUT1/OUT2</td></tr>
         <tr><td>L298N ร้อนมาก (thermal shutdown)</td><td>มอเตอร์กินกระแสเกิน 2A — ไม่มี heatsink</td><td>ใช้ heatsink + fan — หรือเปลี่ยนเป็น driver ที่ทนกระแสสูงกว่าเช่น BTS7960</td></tr>
         <tr><td>ความเร็วไม่ linear — 0-30% ไม่ขยับ</td><td>Deadband ของมอเตอร์ — ต้องใช้แรงดันขั้นต่ำก่อนหมุน</td><td>ใช้ lookup table ปรับ throttle curve — หรือใช้ closed-loop PID</td></tr>
@@ -186,34 +156,43 @@ int main(void) {
 #include "SimpleHAL.h"
 #include "L298N.h"
 
-void motor_left(int16_t speed) {  // -100..0..+100
-    if(speed > 0) { digitalWrite(PC0,HIGH); digitalWrite(PC1,LOW); PWM_SetDuty(1,speed); }
-    else if(speed < 0) { digitalWrite(PC0,LOW); digitalWrite(PC1,HIGH); PWM_SetDuty(1,-speed); }
-    else { digitalWrite(PC0,LOW); digitalWrite(PC1,LOW); PWM_SetDuty(1,0); }
-}
-void motor_right(int16_t speed) {
-    if(speed > 0) { digitalWrite(PC2,LOW); digitalWrite(PC3,HIGH); PWM_SetDuty(2,speed); }
-    else if(speed < 0) { digitalWrite(PC2,HIGH); digitalWrite(PC3,LOW); PWM_SetDuty(2,-speed); }
-    else { digitalWrite(PC2,LOW); digitalWrite(PC3,LOW); PWM_SetDuty(2,0); }
+L298N_Instance motor_left, motor_right;
+
+void drive(int16_t left, int16_t right) {
+    if(left > 0) {
+        L298N_SetDirection(&motor_left, L298N_FWD);
+        L298N_SetSpeed(&motor_left, left);
+    } else if(left < 0) {
+        L298N_SetDirection(&motor_left, L298N_REV);
+        L298N_SetSpeed(&motor_left, -left);
+    } else { L298N_Stop(&motor_left); }
+    L298N_Run(&motor_left);
+
+    if(right > 0) {
+        L298N_SetDirection(&motor_right, L298N_FWD);
+        L298N_SetSpeed(&motor_right, right);
+    } else if(right < 0) {
+        L298N_SetDirection(&motor_right, L298N_REV);
+        L298N_SetSpeed(&motor_right, -right);
+    } else { L298N_Stop(&motor_right); }
+    L298N_Run(&motor_right);
 }
 
 int main(void) {
     SystemCoreClockUpdate();
-    USART1_Init(115200);  // Bluetooth HC-05
-    pinMode(PC0,PIN_MODE_OUTPUT); pinMode(PC1,PIN_MODE_OUTPUT);
-    pinMode(PC2,PIN_MODE_OUTPUT); pinMode(PC3,PIN_MODE_OUTPUT);
-    PWM_SimpleInit(1,PD2,10000); PWM_Start(1);
-    PWM_SimpleInit(2,PD3,10000); PWM_Start(2);
+    USART1_Init(115200);
+    L298N_Init(&motor_left, PC0, PC1, PWM1_CH4);
+    L298N_Init(&motor_right, PC2, PC3, PWM1_CH3);
 
     while(1) {
         if(USART1_Available()) {
             char cmd = USART1_Read();
             switch(cmd) {
-                case 'F': motor_left(80); motor_right(80); break;
-                case 'B': motor_left(-80); motor_right(-80); break;
-                case 'L': motor_left(-50); motor_right(50); break;
-                case 'R': motor_left(50); motor_right(-50); break;
-                case 'S': motor_left(0); motor_right(0); break;
+                case 'F': drive(80, 80); break;
+                case 'B': drive(-80, -80); break;
+                case 'L': drive(-50, 50); break;
+                case 'R': drive(50, -50); break;
+                case 'S': drive(0, 0); break;
             }
         }
     }

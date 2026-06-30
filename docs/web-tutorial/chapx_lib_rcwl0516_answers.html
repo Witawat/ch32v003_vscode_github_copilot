@@ -5,7 +5,8 @@
 #define LED_PIN   PC4
 
 void rcwl_through_wall_test(void) {
-    pinMode(RCWL_PIN, PIN_MODE_INPUT);
+    RCWL0516_Instance r;
+    RCWL0516_Init(&r, RCWL_PIN);
     pinMode(LED_PIN, PIN_MODE_OUTPUT);
 
     USART_Println("Through-wall detection test");
@@ -18,7 +19,8 @@ void rcwl_through_wall_test(void) {
     USART_Println("Move hand at ~2m — note range");
 
     while(1) {
-        uint8_t state = digitalRead(RCWL_PIN);
+        RCWL0516_Update(&r);
+        uint8_t state = RCWL0516_IsTriggered(&r);
 
         static uint32_t last_edge = 0;
         static uint8_t last_state = 0;
@@ -52,23 +54,25 @@ uint8_t pir_state = 0, rcwl_state = 0;
 uint32_t pir_last = 0, rcwl_last = 0;
 
 void dual_motion_system(void) {
-    pinMode(PIR_PIN, PIN_MODE_INPUT);
-    pinMode(RCWL_PIN, PIN_MODE_INPUT);
+    RCWL0516_Instance r;
+    RCWL0516_Init(&r, RCWL_PIN);
+    PIR_Init(PIR_PIN);
     pinMode(RELAY_PIN, PIN_MODE_OUTPUT);
+
+    void on_pir(void) { pir_last = millis(); pir_state = 1; }
+    void on_pir_clear(void) { pir_state = 0; }
+    PIR_SetCallback(on_pir);
 
     USART_Println("Dual PIR+RCWL System");
     USART_Println("Relay ON when both agree, OFF when both silent");
 
     while(1) {
         uint32_t now = millis();
-        uint8_t pir_now  = digitalRead(PIR_PIN);
-        uint8_t rcwl_now = digitalRead(RCWL_PIN);
+        PIR_Update();
+        RCWL0516_Update(&r);
 
-        // Rising edge detection
-        if(pir_now && !pir_state)  pir_last = now;
+        uint8_t rcwl_now = RCWL0516_IsTriggered(&r);
         if(rcwl_now && !rcwl_state) rcwl_last = now;
-
-        pir_state  = pir_now;
         rcwl_state = rcwl_now;
 
         // Both detected within 3 seconds → confirmed motion
@@ -82,7 +86,7 @@ void dual_motion_system(void) {
 
         digitalWrite(RELAY_PIN, motion_confirmed);
 
-        USART_Print("PIR:"); USART_PrintNum(pir_now);
+        USART_Print("PIR:"); USART_PrintNum(pir_state);
         USART_Print(" RCWL:"); USART_PrintNum(rcwl_now);
         USART_Print(" Both:"); USART_PrintNum(both_recent);
         USART_Print(" Relay:"); USART_PrintNum(motion_confirmed);
@@ -98,7 +102,8 @@ void dual_motion_system(void) {
 } rcwl_test_t;
 
 void rcwl_sensitivity_test(void) {
-    pinMode(RCWL_PIN, PIN_MODE_INPUT);
+    RCWL0516_Instance r;
+    RCWL0516_Init(&r, RCWL_PIN);
 
     USART_Println("RCWL-0516 Sensitivity Test");
     USART_Println("Start at 5m, walk slowly toward sensor");
@@ -115,7 +120,8 @@ void rcwl_sensitivity_test(void) {
     float distance = 5.0f;
 
     while(1) {
-        uint8_t triggered = digitalRead(RCWL_PIN);
+        RCWL0516_Update(&r);
+        uint8_t triggered = RCWL0516_IsTriggered(&r);
 
         static uint8_t last_trig = 0;
         if(triggered && !last_trig) {

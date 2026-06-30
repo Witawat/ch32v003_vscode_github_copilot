@@ -17,8 +17,9 @@
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    ADC_Init(FLAME_A, ADC_CH0);
-    pinMode(FLAME_D, PIN_MODE_INPUT);
+
+    FlameSensor_Instance f;
+    FlameSensor_Init(&f, FLAME_A, FLAME_D);
     pinMode(BUZZER, PIN_MODE_OUTPUT);
     pinMode(GAS_RELAY, PIN_MODE_OUTPUT);
     pinMode(LED_OK, PIN_MODE_OUTPUT);
@@ -37,8 +38,8 @@ int main(void) {
 
     while(1) {
         if(Is_Timer_Expired(&tmr)) {
-            uint16_t adc = ADC_Read(FLAME_A);
-            uint8_t dig = GPIO_Read(FLAME_D);
+            uint16_t adc = FlameSensor_ReadIntensity(&f);
+            uint8_t dig = FlameSensor_ReadDigital(&f);
 
             if(dig && adc > 700) {
                 fire_streak++;
@@ -84,8 +85,9 @@ int main(void) {
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    ADC_Init(FLAME_A, ADC_CH0);
-    pinMode(FLAME_D, PIN_MODE_INPUT);
+
+    FlameSensor_Instance f;
+    FlameSensor_Init(&f, FLAME_A, FLAME_D);
     pinMode(BUZZER, PIN_MODE_OUTPUT);
     USART_Init(115200);
 
@@ -100,7 +102,7 @@ int main(void) {
 
     while(1) {
         if(Is_Timer_Expired(&tmr)) {
-            samples[s_idx] = ADC_Read(FLAME_A);
+            samples[s_idx] = FlameSensor_ReadIntensity(&f);
             s_idx = (s_idx + 1) % 20;
 
             uint16_t min_val = 1023, max_val = 0;
@@ -112,7 +114,7 @@ int main(void) {
             }
             uint16_t avg = sum / 20;
             uint16_t flicker = max_val - min_val;
-            uint8_t dig = GPIO_Read(FLAME_D);
+            uint8_t dig = FlameSensor_ReadDigital(&f);
 
             uint8_t is_fire = (dig && flicker > 80 && avg > 500);
             uint8_t is_sunlight = (!dig && flicker < 40 && avg > 400);
@@ -156,9 +158,11 @@ int main(void) {
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    ADC_Init(FLAME_A, ADC_CH0);
     ADC_Init(MQ2_ADC, MQ2_CH);
-    pinMode(FLAME_D, PIN_MODE_INPUT);
+
+    FlameSensor_Instance f;
+    FlameSensor_Init(&f, FLAME_A, FLAME_D);
+
     pinMode(BUZZER, PIN_MODE_OUTPUT);
     pinMode(GAS_VALVE, PIN_MODE_OUTPUT);
     pinMode(EXHAUST, PIN_MODE_OUTPUT);
@@ -175,8 +179,8 @@ int main(void) {
 
     while(1) {
         if(Is_Timer_Expired(&tmr)) {
-            uint16_t flame_adc = ADC_Read(FLAME_A);
-            uint8_t  flame_dig = GPIO_Read(FLAME_D);
+            uint16_t flame_adc = FlameSensor_ReadIntensity(&f);
+            uint8_t  flame_dig = FlameSensor_ReadDigital(&f);
             uint16_t mq2_adc   = ADC_Read(MQ2_ADC);
 
             uint8_t fire_detected  = (flame_dig && flame_adc > 700);

@@ -17,8 +17,8 @@ int main(void) {
     I2C_Init(PC1, PC2, I2C_SPEED_STANDARD);
     USART_Init(115200);
 
-    PZEM004T_t pzem;
-    PZEM004T_Init(&pzem, PD6, PD5, 0x01);
+    PZEM004T pzem;
+    PZEM004T_Init(&pzem, USART_PINS_DEFAULT);
 
     OLED_Handle oled;
     OLED_Init(&oled, OLED_128x64, 0x3C);
@@ -29,41 +29,38 @@ int main(void) {
 
     while(1) {
         if(Is_Timer_Expired(&tmr)) {
-            float v = PZEM004T_ReadVoltage(&pzem);
-            float a = PZEM004T_ReadCurrent(&pzem);
-            float w = PZEM004T_ReadPower(&pzem);
-            float e = PZEM004T_ReadEnergy(&pzem);
-            float pf = PZEM004T_ReadPowerFactor(&pzem);
-            float hz = PZEM004T_ReadFrequency(&pzem);
-
-            if(v != v) { USART_Print("Timeout\r\n"); continue; }
+            PZEM004T_Data_t d;
+            if(!PZEM004T_ReadAll(&pzem, &d)) {
+                USART_Print("Timeout\r\n");
+                continue;
+            }
 
             OLED_Clear(&oled);
 
             OLED_SetCursor(&oled, 0, 0);
-            OLED_PrintFloat(&oled, "", v, 1);
+            OLED_PrintFloat(&oled, "", d.voltage, 1);
             OLED_Print(&oled, "V ");
 
             OLED_SetCursor(&oled, 55, 0);
-            OLED_PrintFloat(&oled, "", a, 2);
+            OLED_PrintFloat(&oled, "", d.current, 2);
             OLED_Print(&oled, "A");
 
             OLED_SetCursor(&oled, 0, 2);
-            OLED_PrintFloat(&oled, "", w, 1);
+            OLED_PrintFloat(&oled, "", d.power, 1);
             OLED_Print(&oled, "W ");
 
             OLED_SetCursor(&oled, 55, 2);
-            OLED_PrintFloat(&oled, "PF:", pf, 2);
+            OLED_PrintFloat(&oled, "PF:", d.pf, 2);
 
             OLED_SetCursor(&oled, 0, 4);
-            OLED_PrintFloat(&oled, "", hz, 1);
+            OLED_PrintFloat(&oled, "", d.frequency, 1);
             OLED_Print(&oled, "Hz ");
 
             OLED_SetCursor(&oled, 55, 4);
-            OLED_PrintFloat(&oled, "", e, 2);
+            OLED_PrintFloat(&oled, "", d.energy, 2);
             OLED_Print(&oled, "kWh");
 
-            float cost = e * COST_PER_KWH;
+            float cost = d.energy * COST_PER_KWH;
             OLED_SetCursor(&oled, 0, 6);
             OLED_PrintFloat(&oled, "Cost:", cost, 2);
             OLED_Print(&oled, "B");
@@ -91,11 +88,13 @@ int main(void) {
     I2C_Init(PC1, PC2, I2C_SPEED_STANDARD);
     USART_Init(115200);
 
-    PZEM004T_t pzem;
-    PZEM004T_Init(&pzem, PD6, PD5, 0x01);
+    PZEM004T pzem;
+    PZEM004T_Init(&pzem, USART_PINS_DEFAULT);
     AT24Cxx_Init(0x50, 256);
 
-    float start_energy = PZEM004T_ReadEnergy(&pzem);
+    PZEM004T_Data_t d;
+    PZEM004T_ReadAll(&pzem, &d);
+    float start_energy = d.energy;
     uint16_t log_count = 0;
     uint16_t eeprom_addr = 0;
 
@@ -109,9 +108,10 @@ int main(void) {
 
     while(1) {
         if(Is_Timer_Expired(&tmr_log) && log_count < LOGS_PER_DAY) {
-            float energy_now = PZEM004T_ReadEnergy(&pzem);
-            float v = PZEM004T_ReadVoltage(&pzem);
-            float a = PZEM004T_ReadCurrent(&pzem);
+            PZEM004T_Data_t d;
+            if(!PZEM004T_ReadAll(&pzem, &d)) continue;
+
+            float energy_now = d.energy;
 
             if(energy_now != energy_now) continue;
 
@@ -124,8 +124,8 @@ int main(void) {
             USART_Print("] t="); USART_PrintDec(ts);
             USART_Print("s kWh="); USART_PrintFloat(energy_now, 2);
             USART_Print(" diff="); USART_PrintFloat(diff_kwh, 3);
-            USART_Print(" V="); USART_PrintFloat(v, 1);
-            USART_Print(" A="); USART_PrintFloat(a, 2);
+            USART_Print(" V="); USART_PrintFloat(d.voltage, 1);
+            USART_Print(" A="); USART_PrintFloat(d.current, 2);
             USART_Print("\r\n");
 
             AT24Cxx_WriteByte(eeprom_addr++, (uint8_t)(energy_now * 10));
@@ -174,8 +174,8 @@ int main(void) {
     Timer_Init();
     USART_Init(115200);
 
-    PZEM004T_t pzem;
-    PZEM004T_Init(&pzem, PD6, PD5, 0x01);
+    PZEM004T pzem;
+    PZEM004T_Init(&pzem, USART_PINS_DEFAULT);
 
     pinMode(RELAY_PIN, PIN_MODE_OUTPUT);
     pinMode(BUZZER_PIN, PIN_MODE_OUTPUT);
@@ -194,10 +194,13 @@ int main(void) {
 
     while(1) {
         if(Is_Timer_Expired(&tmr)) {
-            float v = PZEM004T_ReadVoltage(&pzem);
-            float a = PZEM004T_ReadCurrent(&pzem);
-            float w = PZEM004T_ReadPower(&pzem);
-            uint16_t alarm = PZEM004T_ReadAlarm(&pzem);
+            PZEM004T_Data_t d;
+            if(!PZEM004T_ReadAll(&pzem, &d)) continue;
+
+            float v = d.voltage;
+            float a = d.current;
+            float w = d.power;
+            uint16_t alarm = d.alarm;
 
             if(v != v) continue;
 

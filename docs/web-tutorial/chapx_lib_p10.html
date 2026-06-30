@@ -17,8 +17,8 @@
     <h2>🧭 แผนภาพการทำงาน</h2>
     <pre class="mermaid">
 flowchart TD
-    A["P10_Init(6 pins)"] --> B["P10_Clear()"]
-    B --> C["P10_SetCursor + P10_Print"]
+    A["P10_Init(&inst, &cfg) with config struct"] --> B["P10_Clear(&inst)"]
+    B --> C["P10_SetPixel / P10_Print"]
     C --> D["TIM2 ISR (auto scan)"]
     D --> E["Row A/B select → Shift CLK → OE"]
     E --> D
@@ -40,17 +40,14 @@ flowchart TD
     │ PC3 ──────────────── SCLK (latch)
     │ PC4 ──────────────── R1 (data) │
     │ PC5 ──────────────── OE        │
-    │ (CH32V003 3.3V logic → 5V P10)│
     └────────────────────────────────┘
     </pre>
-    <p>P10 ต้องใช้ external 5V 2A+ จ่ายไฟ — CH32V003 ใช้ 3.3V logic ซึ่ง marginal แต่ใช้งานได้กับ P10 ส่วนใหญ่ — 6 GPIO ขาควบคุม</p>
+    <p>P10 ต้องใช้ external 5V 2A+ จ่ายไฟ — CH32V003 ใช้ 3.3V logic — ใช้ config struct กำหนดขา</p>
 </section>
 <section>
     <h2>📚 หลักการทำงาน</h2>
-    <p><strong>Multiplexed LED Panel:</strong> P10 32×16 ใช้การสแกน 1/4 scan — แบ่งจอเป็น 4 แถว (A,B เลือก 00,01,10,11) — แต่ละแถวมี 32×4 LEDs — CPU ต้องส่งข้อมูล 32 คอลัมน์ต่อ 1 แถว แล้วเลื่อนไปแถวถัดไป — ทำซ้ำเร็วพอให้ตาเห็นเป็นภาพนิ่ง</p>
-    <p><strong>TIM2 Auto Scan:</strong> P10_Init() ตั้ง TIM2 interrupt ให้ทำงานอัตโนมัติที่ ~2kHz — ISR ของ TIM2 จะวนสแกน 4 แถว — CLK shift ข้อมูลเข้า shift register — SCLK latch — OE เปิด LED ช่วงสั้นๆ</p>
-    <p><strong>64-Byte Buffer:</strong> buffer ขนาด 32×16 = 64 ไบต์ — 1 ไบต์ = 8 pixels ในแนวตั้ง — การเปลี่ยนแปลงข้อมูลใน main loop จะถูกแสดงผลโดยอัตโนมัติผ่าน ISR — ไม่มี flicker เพราะ ISR ทำงานสม่ำเสมอ</p>
-    <p><strong>5V Logic Challenge:</strong> CH32V003 output 3.3V — P10 รับ 5V logic — แรงดัน 3.3V มักพอให้ P10 ตีความเป็น HIGH — ถ้าไม่เวิร์กให้ใช้ level shifter 74HCT245</p>
+    <p><strong>Multiplexed LED Panel:</strong> P10 32×16 ใช้การสแกน 1/4 scan — แบ่งจอเป็น 4 แถว (A,B เลือก) — P10_Init() ตั้ง TIM2 interrupt ให้ทำงานอัตโนมัติ — ISR จะวนสแกน 4 แถว</p>
+    <p><strong>64-Byte Buffer:</strong> buffer ขนาด 32×16 = 64 ไบต์ — การเปลี่ยนแปลงข้อมูลใน main loop จะถูกแสดงผลโดยอัตโนมัติผ่าน ISR</p>
 </section>
 <section>
     <h2>💻 เขียน Code ทีละขั้น</h2>
@@ -59,65 +56,61 @@ flowchart TD
 #include "SimpleHAL.h"
 #include "P10.h"
 
+P10_Instance inst;
+
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
 
-    // P10_Init(CLK, R1, A, B, SCLK, OE)
-    P10_Init(PC2, PC4, PC0, PC1, PC3, PC5);
-    P10_Clear();</code></pre>
-    <p class="explain">🔍 P10_Init() รับ 6 พารามิเตอร์ตามลำดับ — ฟังก์ชันตั้งค่า GPIO และ TIM2 interrupt โดยอัตโนมัติ — เมื่อ Init แล้ว P10 จะเริ่มสแกนอัตโนมัติใน background</p></div>
-    <div class="step"><h3>ขั้นที่ 2: แสดงข้อความ</h3>
-    <pre><code class="language-c">    P10_SetCursor(0, 0);
-    P10_Print("Hello");
-    P10_SetCursor(0, 8);
-    P10_Print("P10");
+    P10_Config cfg = {
+        .pin_a   = PC0,
+        .pin_b   = PC1,
+        .pin_clk  = PC2,
+        .pin_sclk = PC3,
+        .pin_r1   = PC4,
+        .pin_oe   = PC5
+    };
+    P10_Init(&inst, &cfg);
+    P10_Clear(&inst);</code></pre>
+    <p class="explain">🔍 ใช้ <code>P10_Config</code> struct กำหนดขา — <code>P10_Init(&inst, &cfg)</code> — ฟังก์ชันตั้งค่า GPIO และ TIM2 interrupt โดยอัตโนมัติ</p></div>
+    <div class="step"><h3>ขั้นที่ 2: แสดงข้อความ + กราฟิก</h3>
+    <pre><code class="language-c">    P10_SetPixel(&inst, 0, 0, 1);   // เปิด pixel ที่ (0,0)
+    P10_SetPixel(&inst, 16, 8, 1);  // เปิด pixel ตรงกลาง
 
-    // วาดเส้นและรูปทรง
-    P10_DrawLine(0, 15, 31, 0, 1);
-    P10_DrawRect(2, 2, 28, 12, 1);</code></pre>
-    <p class="explain">🔍 P10_SetCursor(row, col) — row 0-15, col 0-31 — Print() เขียนข้อความบน buffer — DrawLine, DrawRect วาดบน buffer — ข้อมูลจะแสดงบนจอทันทีผ่าน ISR</p></div>
-    <div class="step"><h3>ขั้นที่ 3: Loop อัปเดตข้อความ</h3>
+    USART_Println("P10 Ready!");</code></pre>
+    <p class="explain">🔍 <code>P10_SetPixel(&inst, x, y, 1)</code> — เปิด/ปิด pixel เดี่ยว — <code>P10_Clear(&inst)</code> ล้างจอทั้งหมด</p></div>
+    <div class="step"><h3>ขั้นที่ 3: Loop อัปเดต</h3>
     <pre><code class="language-c">    Timer_t tmr;
     Start_Timer(&tmr, 1000, 1);
     uint8_t sec = 0;
 
     while(1) {
         if(Is_Timer_Expired(&tmr)) {
-            P10_Clear();
-            P10_SetCursor(0, 0);
-            P10_PrintNum(sec);
+            P10_Clear(&inst);
             sec++;
         }
-        // ไม่ต้องเรียก update — TIM2 ISR จัดการให้
+        // TIM2 ISR จัดการสแกนจออัตโนมัติ
     }
 }</code></pre>
-    <p class="explain">🔍 P10 auto-updates ผ่าน TIM2 ISR — main loop แค่เปลี่ยน buffer ก็พอ — Clear() ก่อนเขียนใหม่ — ไม่ต้องเรียก Display()</p></div>
+    <p class="explain">🔍 P10 auto-updates ผ่าน TIM2 ISR — main loop แค่เปลี่ยน buffer ก็พอ — ไม่ต้องเรียก Display()</p></div>
 </section>
 <section>
     <h2>📋 API Reference</h2>
     <table>
         <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
-        <tr><td><code>P10_Init(CLK,R1,A,B,SCLK,OE)</code></td><td>เริ่มต้น P10 6 ขา + TIM2 ISR</td><td><code>P10_Init(PC2,PC4,PC0,PC1,PC3,PC5)</code></td></tr>
-        <tr><td><code>P10_Clear()</code></td><td>ล้าง buffer ทั้งหมด</td><td><code>P10_Clear()</code></td></tr>
-        <tr><td><code>P10_SetCursor(r, c)</code></td><td>ตั้ง cursor แถว r, คอลัมน์ c</td><td><code>P10_SetCursor(0, 0)</code></td></tr>
-        <tr><td><code>P10_Print(str)</code></td><td>พิมพ์ข้อความ</td><td><code>P10_Print("Hello")</code></td></tr>
-        <tr><td><code>P10_PrintChar(c)</code></td><td>แสดง 1 ตัวอักษร</td><td><code>P10_PrintChar('A')</code></td></tr>
-        <tr><td><code>P10_SetPixel(x, y, v)</code></td><td>เปิด/ปิด 1 pixel</td><td><code>P10_SetPixel(16, 8, 1)</code></td></tr>
-        <tr><td><code>P10_DrawLine(x1,y1,x2,y2,v)</code></td><td>วาดเส้นตรง</td><td><code>P10_DrawLine(0,0,31,15,1)</code></td></tr>
-        <tr><td><code>P10_DrawRect(x,y,w,h,v)</code></td><td>วาดสี่เหลี่ยม</td><td><code>P10_DrawRect(2,2,28,12,1)</code></td></tr>
-        <tr><td><code>P10_SetBrightness(v)</code></td><td>ปรับความสว่าง 0-255</td><td><code>P10_SetBrightness(128)</code></td></tr>
+        <tr><td><code>P10_Init(&inst, &cfg)</code></td><td>เริ่มต้น P10 ด้วย config struct</td><td><code>P10_Init(&inst, &cfg)</code></td></tr>
+        <tr><td><code>P10_Clear(&inst)</code></td><td>ล้าง buffer ทั้งหมด</td><td><code>P10_Clear(&inst)</code></td></tr>
+        <tr><td><code>P10_SetPixel(&inst, x, y, v)</code></td><td>เปิด/ปิด 1 pixel</td><td><code>P10_SetPixel(&inst, 16, 8, 1)</code></td></tr>
     </table>
 </section>
 <section>
     <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
     <table>
         <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
-        <tr><td>จอไม่มีไฟเลย</td><td>P10 ต้องใช้ external 5V 2A+ — CH32V003 จ่ายเองไม่พอ</td><td>ใช้ adapter 5V 2A ขึ้นไป — อย่าพึ่งไฟจาก MCU หรือ USB</td></tr>
-        <tr><td>ครึ่งจอดับ / บางแถวไม่ติด</td><td>A/B pin ผิด — เลือกแถวไม่ถูกต้อง</td><td>ตรวจสอบการต่อ A (PC0) และ B (PC1) — อาจสลับกัน</td></tr>
-        <tr><td>จอ flicker / กระพริบ</td><td>Scan rate ต่ำ — TIM2 interrupt ไม่ทำงาน</td><td>ตรวจสอบว่า SystemCoreClockUpdate() ถูกเรียกก่อน P10_Init()</td></tr>
-        <tr><td>CH32V003 3.3V logic กับ P10 5V</td><td>3.3V อาจไม่พอให้ P10 ตีความเป็น HIGH</td><td>Marginal แต่ใช้ได้กับ P10 ส่วนใหญ่ — ถ้าไม่เวิร์กใช้ 74HCT245 level shifter</td></tr>
-        <tr><td>ข้อความแสดงไม่ครบ</td><td>Buffer size 32×16 — ข้อความเกินจอ</td><td>จัดการ wrapping เอง หรือใช้ scrolling algorithm</td></tr>
+        <tr><td>จอไม่มีไฟเลย</td><td>P10 ต้องใช้ external 5V 2A+</td><td>ใช้ adapter 5V 2A ขึ้นไป — อย่าพึ่งไฟจาก MCU</td></tr>
+        <tr><td>ครึ่งจอดับ / บางแถวไม่ติด</td><td>A/B pin ผิด</td><td>ตรวจสอบ config การต่อ A (PC0) และ B (PC1)</td></tr>
+        <tr><td>จอ flicker / กระพริบ</td><td>Scan rate ต่ำ</td><td>ตรวจสอบว่า SystemCoreClockUpdate() ถูกเรียกก่อน P10_Init()</td></tr>
+        <tr><td>3.3V logic กับ P10 5V</td><td>3.3V อาจไม่พอให้ P10 ตีความเป็น HIGH</td><td>Marginal แต่ใช้ได้กับ P10 ส่วนใหญ่ — ถ้าไม่เวิร์กใช้ 74HCT245 level shifter</td></tr>
     </table>
 </section>
 <section>
@@ -132,11 +125,16 @@ RTC_DS3231_t rtc;
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    I2C_SimpleInit(I2C_SPEED_100K, I2C_PINS_DEFAULT);
+    I2C_SimpleInit(I2C_100KHZ, I2C_PINS_DEFAULT);
     DS3231_Init(&rtc);
 
-    P10_Init(PC2, PC4, PC0, PC1, PC3, PC5);
-    P10_Clear();
+    P10_Instance inst;
+    P10_Config cfg = {
+        .pin_a=PC0, .pin_b=PC1, .pin_clk=PC2,
+        .pin_sclk=PC3, .pin_r1=PC4, .pin_oe=PC5
+    };
+    P10_Init(&inst, &cfg);
+    P10_Clear(&inst);
 
     RTC_DateTime_t dt;
     Timer_t tmr;
@@ -145,13 +143,6 @@ int main(void) {
     while(1) {
         if(Is_Timer_Expired(&tmr)) {
             DS3231_GetDateTime(&rtc, &dt);
-            P10_Clear();
-            P10_SetCursor(0, 2);
-            P10_PrintNumZero(&dt.hour, 2);
-            P10_Print(":");
-            P10_PrintNumZero(&dt.minute, 2);
-            P10_Print(":");
-            P10_PrintNumZero(&dt.second, 2);
         }
     }
 }</code></pre>
@@ -159,9 +150,9 @@ int main(void) {
 <section>
     <h2>✏️ ลองทำดู</h2>
     <ol>
-        <li>แสดงเลขขนาดใหญ่ 16px — ใช้ DrawRect + DrawLine วาดเลข 0-9 บนพื้นที่ 16×10 pixels</li>
-        <li>ทำ Scrolling Text ที่เลื่อนซ้าย-ขวา — ใช้ buffer offset + P10_Print</li>
-        <li>ทำนาฬิกาพร้อม colon blink — ใช้ Non-Blocking Timer สลับแสดง/ซ่อน colon (:)</li>
+        <li>แสดงเลขขนาดใหญ่ — ใช้ SetPixel วาดเลขบนพื้นที่ 16×10 pixels</li>
+        <li>ทำ Scrolling Text ที่เลื่อนซ้าย-ขวา</li>
+        <li>ทำนาฬิกาพร้อม colon blink — ใช้ Non-Blocking Timer สลับแสดง/ซ่อน</li>
     </ol>
 </section>
 <nav class="bottom-nav">

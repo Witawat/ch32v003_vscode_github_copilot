@@ -18,154 +18,115 @@
     <h2>🧭 แผนภาพการทำงาน</h2>
     <pre class="mermaid">
 flowchart TD
-    A["PCF8574_Init(i2c,addr)"] --> B{"Read or Write?"}
-    B -->|"Write"| C["PCF8574_Write(value)"]
-    B -->|"Read"| D["PCF8574_Read()"]
+    A["PCF8574_Init(&pcf, addr)"] --> B{"Read or Write?"}
+    B -->|"Write"| C["PCF8574_WritePort(&pcf, value)"]
+    B -->|"Read"| D["PCF8574_ReadPort(&pcf)"]
     C --> E["8-bit output: P0-P7"]
     D --> F["8-bit input: P0-P7"]
     E --> G["Control LEDs/Relays"]
     F --> H["Read Buttons/Sensors"]
-    G --> I{"Interrupt?"}
-    I -->|"Yes"| J["INT pin LOW → read"]
-    I -->|"No"| B
-    H --> B
     </pre>
 </section>
 
-<section>
-    <h2>🔌 การต่อวงจร</h2>
-    <pre class="ascii-circuit">
+<section><h2>🔌 การต่อวงจร</h2>
+<pre class="ascii-circuit">
               PCF8574 8-bit IO Expander I2C
     ┌──────────────────────────────────────────────┐
     │ CH32V003                         PCF8574     │
     │ PC1(SDA)────────SDA   ┌─────────────────────┤
     │ PC2(SCL)────────SCL   │ 8 quasi-bidir I/O  │
     │ 3.3V───────────VCC    │                     │
-    │ GND────────────GND    │ P0───LED1 (220ohm)  │
-    │ PC3────────────INT    │ P1───LED2           │
-    │                        │ P2───Button1 (pullup)│
-    │ ⚡ Quasi-bidirectional: │ P3───Button2        │
-    │   Output: push-pull    │ P4───Relay1         │
-    │   Input: ลอย (pull-up  │ P5───Relay2         │
-    │   อ่อนภายใน ~100uA)    │ P6───Buzzer         │
-    │                        │ P7───LED3           │
-    │ I2C addr: 0x20-0x27    └─────────────────────┤
-    │ (A0-A2 select)         │                     │
+    │ GND────────────GND    │ P0───LED1           │
+    │                        │ P1───LED2           │
+    │ I2C addr: 0x20-0x27    │ P2───Button1        │
+    │ (A0-A2 select)         └─────────────────────┤
     └──────────────────────────────────────────────┘
-    </pre>
-    <p>PCF8574 เพิ่ม GPIO 8 ขาผ่าน I2C — quasi-bidirectional (ไม่ต้อง config input/output), เขียน = 1 (HIGH) เพื่อตั้งเป็น input (ลอย), เขียน = 0 (LOW) เพื่อขับ output เป็น LOW, I2C address 0x20-0x27 เลือกด้วย A0-A2</p>
-</section>
+</pre></section>
 
-<section>
-    <h2>📚 หลักการทำงาน</h2>
-    <p><strong>PCF8574</strong> เป็น I2C 8-bit IO expander — quasi-bidirectional หมายความว่าแต่ละ pin เป็นทั้ง input และ output โดยไม่ต้องตั้งค่า register — ทำให้ใช้ง่ายมาก: เขียน byte = output, อ่าน byte = input</p>
-    <p><strong>Quasi-Bidirectional ทำงานอย่างไร:</strong> Output HIGH จริงๆ คือ weak pull-up (~100µA) — ถ้า pin ถูกดึงลง LOW จากภายนอก (เช่นกดปุ่ม) ก็จะอ่านได้เป็น LOW — ทำให้ pin เดียวกันใช้เป็น input และ output ได้สลับกัน</p>
-    <p><strong>วิธีใช้เป็น Input:</strong> เขียน 1 ไปที่ pin นั้นก่อน (ตั้งเป็น HIGH/output off) → pin จะลอย → อ่านค่าได้</p>
-    <p><strong>วิธีใช้เป็น Output:</strong> เขียน 0 (LOW) หรือ 1 (HIGH) → pin จะขับ output ตามนั้น (แต่อย่าลืมว่า HIGH ไม่แรง — ~100µA เท่านั้น ถ้าต้องการกระแสมากใช้ external pull-up)</p>
-    <p><strong>Interrupt (INT):</strong> เมื่อ input เปลี่ยนสถานะ PCF8574 จะดึง INT pin LOW — ใช้แจ้ง MCU ว่ามีการเปลี่ยนแปลงโดยไม่ต้อง poll I2C ตลอด</p>
-</section>
+<section><h2>📚 หลักการทำงาน</h2>
+<p><strong>PCF8574</strong> เป็น I2C 8-bit IO expander — quasi-bidirectional (ไม่ต้อง config input/output) — เขียน byte = output, อ่าน byte = input</p></section>
 
-<section>
-    <h2>💻 เขียน Code ทีละขั้น</h2>
+<section><h2>💻 เขียน Code ทีละขั้น</h2>
 
-    <div class="step"><h3>ขั้นที่ 1: Init + Setup</h3>
-    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+<div class="step"><h3>ขั้นที่ 1: Init + Setup</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "PCF8574.h"
+
+PCF8574_Instance pcf;
 
 int main(void) {
     SystemCoreClockUpdate();
     I2C_Init(I2C1, I2C_SPEED_STANDARD);
-    PCF8574_Init(I2C1, 0x20);  // A0=A1=A2=GND → 0x20
+    PCF8574_Init(&pcf, 0x20);  // A0=A1=A2=GND → 0x20
     USART_Init(USART1, BAUD_115200);
 
     // ตั้งค่าเริ่มต้น: All HIGH (input mode)
-    PCF8574_Write(0xFF);
-    USART_Println("PCF8574 Ready! 8 extra GPIO pins");</code></pre>
-    <p class="explain">🔍 <code>PCF8574_Init(i2c, addr)</code> — address 0x20-0x27, default = 0x20, เขียน 0xFF = ตั้งทุก pin เป็น input (HIGH = weak pull-up)</p></div>
+    PCF8574_WritePort(&pcf, 0xFF);
+    USART_Println("PCF8574 Ready!");</code></pre>
+<p class="explain">🔍 <code>PCF8574_Init(&pcf, addr)</code> — instance-based, address 0x20-0x27</p></div>
 
-    <div class="step"><h3>ขั้นที่ 2: Output — ควบคุม LED/Relay</h3>
-    <pre><code class="language-c">    // LED on P0, P1, P7 — active LOW (LOW = LED ON)
-    // Relay on P4, P5 — active HIGH (HIGH = ON)
-
-    PCF8574_Write(0x30);  // P4,P5=HIGH(relay on), others=LOW
+<div class="step"><h3>ขั้นที่ 2: Output — ควบคุม LED/Relay</h3>
+<pre><code class="language-c">    PCF8574_WritePort(&pcf, 0x30);  // P4,P5=HIGH, others=LOW
     Delay_Ms(1000);
 
-    // Toggle P0 (LED1)
-    uint8_t state = PCF8574_Read();  // read current state
-    state ^= 0x01;                    // toggle bit 0
-    PCF8574_Write(state);
+    // Toggle P0
+    uint8_t state = PCF8574_ReadPort(&pcf);
+    state ^= 0x01;
+    PCF8574_WritePort(&pcf, state);
 
-    // ใช้ฟังก์ชันตั้งทีละบิต
-    PCF8574_WritePin(0, 0);  // P0=LOW (LED1 ON)
-    PCF8574_WritePin(1, 1);  // P1=HIGH (LED2 OFF)
-    PCF8574_WritePin(7, 0);  // P7=LOW (LED3 ON)
-    Delay_Ms(1000);
-    PCF8574_WritePin(0, 1);  // P0=HIGH (LED1 OFF)</code></pre>
-    <p class="explain">🔍 <code>PCF8574_Write(value)</code> — เขียน 8-bit พร้อมกัน (1 byte = 8 pins), <code>PCF8574_WritePin(pin, val)</code> — ตั้งทีละ pin (0-7), ⚠️ quasi-bidirectional: HIGH = ~100µA pull-up เท่านั้น</p></div>
+    // ตั้งทีละบิต
+    PCF8574_WritePin(&pcf, 0, 0);  // P0=LOW (LED1 ON)
+    PCF8574_WritePin(&pcf, 1, 1);  // P1=HIGH (LED2 OFF)</code></pre>
+<p class="explain">🔍 <code>PCF8574_WritePort(&pcf, value)</code> — เขียน 8-bit พร้อมกัน (1 byte = 8 pins)</p></div>
 
-    <div class="step"><h3>ขั้นที่ 3: Input — อ่านปุ่ม + Interrupt</h3>
-    <pre><code class="language-c">    // P2, P3 เป็น input (ปุ่มกด) — ต้องเขียน 1 ก่อน
-    // P2=button1 (active LOW, external pull-up)
-    // P3=button2 (active LOW)
+<div class="step"><h3>ขั้นที่ 3: Input — อ่านปุ่ม + Interrupt</h3>
+<pre><code class="language-c">    // ตั้ง P2,P3 เป็น input (HIGH) ที่เหลือ output
+    PCF8574_WritePort(&pcf, 0x0C);  // 0b00001100 = P2,P3=HIGH
 
-    // ตั้ง P2,P3 เป็น input (HIGH) ที่เหลือ output
-    PCF8574_Write(0x0C);  // 0b00001100 = P2,P3=HIGH
-
-    // ต่อ INT pin → PC3 (falling edge interrupt)
-    pinMode(PC3, PIN_MODE_INPUT_PULLUP);
+    pinMode(PC3, PIN_MODE_INPUT_PULLUP);  // INT pin
 
     while(1) {
-        if(!digitalRead(PC3)) {  // INT pin LOW → มีการเปลี่ยนแปลง
-            uint8_t pins = PCF8574_Read();
+        if(!digitalRead(PC3)) {
+            uint8_t pins = PCF8574_ReadPort(&pcf);
 
-            if(PCF8574_ReadPin(2) == 0) {  // button1 pressed
+            if(PCF8574_ReadPin(&pcf, 2) == 0) {
                 USART_Println("Button 1 pressed!");
-                PCF8574_WritePin(0, 0);  // LED1 ON
+                PCF8574_WritePin(&pcf, 0, 0);
             }
-            if(PCF8574_ReadPin(3) == 0) {  // button2 pressed
+            if(PCF8574_ReadPin(&pcf, 3) == 0) {
                 USART_Println("Button 2 pressed!");
-                PCF8574_WritePin(0, 1);  // LED1 OFF
+                PCF8574_WritePin(&pcf, 0, 1);
             }
-
-            // INT จะ clear อัตโนมัติเมื่ออ่าน
         }
         Delay_Ms(10);
     }
 }</code></pre>
-    <p class="explain">🔍 <code>PCF8574_Read()</code> — อ่านสถานะ 8-bit, <code>PCF8574_ReadPin(n)</code> — อ่านทีละ pin, INT pin จะ LOW เมื่อ input เปลี่ยน → อ่าน I2C เพื่อ clear, ข้อดี: ไม่ต้อง poll I2C ตลอด ใช้ INT interrupt แทน</p></div>
+<p class="explain">🔍 <code>PCF8574_ReadPort(&pcf)</code> — อ่านสถานะ 8-bit, <code>PCF8574_ReadPin(&pcf, n)</code> — อ่านทีละ pin</p></div>
 </section>
 
-<section>
-    <h2>📋 API Reference</h2>
-    <table>
-        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
-        <tr><td><code>PCF8574_Init(i2c, addr)</code></td><td>เริ่มต้น IO expander</td><td><code>PCF8574_Init(I2C1, 0x20)</code></td></tr>
-        <tr><td><code>PCF8574_Write(value)</code></td><td>เขียน output 8-bit</td><td><code>PCF8574_Write(0x55)</code></td></tr>
-        <tr><td><code>PCF8574_Read()</code></td><td>อ่าน input 8-bit</td><td><code>uint8_t v = PCF8574_Read()</code></td></tr>
-        <tr><td><code>PCF8574_WritePin(pin, val)</code></td><td>ตั้ง output 1 pin</td><td><code>PCF8574_WritePin(3, 1)</code></td></tr>
-        <tr><td><code>PCF8574_ReadPin(pin)</code></td><td>อ่าน input 1 pin</td><td><code>if(PCF8574_ReadPin(2) == 0)</code></td></tr>
-        <tr><td><code>PCF8574_TogglePin(pin)</code></td><td>สลับสถานะ pin</td><td><code>PCF8574_TogglePin(0)</code></td></tr>
-        <tr><td><code>PCF8574_IntActive()</code></td><td>เช็ค flag interrupt</td><td><code>if(PCF8574_IntActive()){...}</code></td></tr>
-    </table>
+<section><h2>📋 API Reference</h2>
+<table>
+    <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+    <tr><td><code>PCF8574_Init(&pcf, addr)</code></td><td>เริ่มต้น IO expander</td><td><code>PCF8574_Init(&pcf, 0x20)</code></td></tr>
+    <tr><td><code>PCF8574_WritePort(&pcf, value)</code></td><td>เขียน output 8-bit</td><td><code>PCF8574_WritePort(&pcf, 0x55)</code></td></tr>
+    <tr><td><code>PCF8574_ReadPort(&pcf)</code></td><td>อ่าน input 8-bit</td><td><code>uint8_t v = PCF8574_ReadPort(&pcf)</code></td></tr>
+    <tr><td><code>PCF8574_WritePin(&pcf, pin, val)</code></td><td>ตั้ง output 1 pin</td><td><code>PCF8574_WritePin(&pcf, 3, 1)</code></td></tr>
+    <tr><td><code>PCF8574_ReadPin(&pcf, pin)</code></td><td>อ่าน input 1 pin</td><td><code>if(PCF8574_ReadPin(&pcf, 2) == 0)</code></td></tr>
+    <tr><td><code>PCF8574_TogglePin(&pcf, pin)</code></td><td>สลับสถานะ pin</td><td><code>PCF8574_TogglePin(&pcf, 0)</code></td></tr>
+</table>
 </section>
 
-<section>
-    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
-    <table>
-        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
-        <tr><td>อ่าน input ได้ 0 ตลอด</td><td>ลืมเขียน 1 ก่อนอ่าน (ตั้งเป็น input)</td><td>ต้องเขียน 1 ที่ pin ที่ต้องการอ่านก่อน → <code>PCF8574_WritePin(2, 1)</code></td></tr>
-        <tr><td>LED ติดแต่หรี่มาก</td><td>Quasi-bidir HIGH = ~100µA เท่านั้น</td><td>ต่อ LED แบบ active-LOW (MCU→LOW=ON), หรือเพิ่ม external pull-up</td></tr>
-        <tr><td>INT ไม่เคย active</td><td>Input pin ไม่ได้ถูกดึงเป็น LOW/HIGH ชัดเจน</td><td>ต้องมี external pull-up 10kΩ, หรือใช้ <code>PCF8574_Init()</code> ตั้ง pull-up ภายใน</td></tr>
-        <tr><td>PCF8574 vs PCF8574A สับสน</td><td>Address ต่างกัน: PCF8574=0x20-0x27, PCF8574A=0x38-0x3F</td><td>เช็คเบอร์ชิป — ใช้ I2C scanner ถ้าไม่แน่ใจ</td></tr>
-        <tr><td>I2C address ไม่เจอ</td><td>A0-A2 ต่อผิด หรือใช้ address ผิด</td><td>A0-A2 ต่อ GND = 0x20, ต่อ VCC = 0x27 — เช็คการต่อ</td></tr>
-    </table>
+<section><h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+<table>
+    <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+    <tr><td>อ่าน input ได้ 0 ตลอด</td><td>ลืมเขียน 1 ก่อนอ่าน</td><td>ต้องเขียน 1 ที่ pin ที่ต้องการอ่านก่อน</td></tr>
+    <tr><td>LED ติดแต่หรี่มาก</td><td>Quasi-bidir HIGH = ~100µA เท่านั้น</td><td>ต่อ LED แบบ active-LOW</td></tr>
+</table>
 </section>
 
-<section>
-    <h2>🛠️ สร้าง Product: 8-Channel Relay Board + 4 Button Input</h2>
-    <p>PCF8574 ขยาย GPIO — P0-P3=output (relay), P4-P7=input (buttons) — interrupt-driven</p>
-    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+<section><h2>🛠️ สร้าง Product: 8-Channel Relay Board + 4 Button Input</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "PCF8574.h"
 
@@ -173,55 +134,37 @@ int main(void)
 {
     SystemCoreClockUpdate();
     I2C_Init(I2C1, I2C_SPEED_STANDARD);
-    PCF8574_Init(I2C1, 0x20);
+
+    PCF8574_Instance pcf;
+    PCF8574_Init(&pcf, 0x20);
     USART_Init(USART1, BAUD_115200);
 
-    // P0-P3: output (relay), P4-P7: input (buttons)
-    PCF8574_Write(0xF0);  // 0b11110000
+    PCF8574_WritePort(&pcf, 0xF0);  // P0-P3: output, P4-P7: input
+    pinMode(PC3, PIN_MODE_INPUT_PULLUP);
 
-    pinMode(PC3, PIN_MODE_INPUT_PULLUP);  // INT pin
-
-    uint8_t relay_state = 0x00;  // all relays OFF
-    PCF8574_Write(0xF0 | relay_state);
+    uint8_t relay_state = 0x00;
 
     while(1)
     {
-        if(!digitalRead(PC3)) {  // INT active
-            uint8_t pins = PCF8574_Read();
+        if(!digitalRead(PC3)) {
+            uint8_t pins = PCF8574_ReadPort(&pcf);
 
-            // Button P4 → toggle relay P0
-            if(!(pins & 0x10)) {  // P4=LOW (button pressed)
-                relay_state ^= 0x01;
-                USART_Println("Toggle Relay 0");
-            }
-            if(!(pins & 0x20)) {  // P5
-                relay_state ^= 0x02;
-                USART_Println("Toggle Relay 1");
-            }
-            if(!(pins & 0x40)) {  // P6
-                relay_state ^= 0x04;
-                USART_Println("Toggle Relay 2");
-            }
-            if(!(pins & 0x80)) {  // P7
-                relay_state = 0x00;  // ALL OFF
-                USART_Println("All Relays OFF");
-            }
+            if(!(pins & 0x10)) { relay_state ^= 0x01; }  // P4 → toggle P0
+            if(!(pins & 0x20)) { relay_state ^= 0x02; }  // P5 → toggle P1
+            if(!(pins & 0x80)) { relay_state = 0x00; }   // P7 → all OFF
 
-            // Update outputs
-            PCF8574_Write(0xF0 | relay_state);
+            PCF8574_WritePort(&pcf, 0xF0 | relay_state);
         }
         Delay_Ms(10);
     }
 }</code></pre>
 </section>
 
-<section>
-    <h2>✏️ ลองทำดู</h2>
-    <ol>
-        <li>ต่อ PCF8574 2 ตัวบนบัส I2C เดียวกัน — address 0x20 และ 0x21 — รวม 16 GPIO → ควบคุม LED matrix 4x4</li>
-        <li>ทำ keypad 4x4 — ใช้ PCF8574 1 ตัว (P0-P3=row outputs, P4-P7=col inputs) — สแกน matrix</li>
-        <li>ทำ interrupt-driven encoder — ต่อ rotary encoder กับ PCF8574 P0,P1 → INT แจ้งเมื่อหมุน</li>
-    </ol>
+<section><h2>✏️ ลองทำดู</h2>
+<ol>
+    <li>ต่อ PCF8574 2 ตัวบนบัส I2C เดียวกัน — address 0x20 และ 0x21 — รวม 16 GPIO</li>
+    <li>ทำ keypad 4x4 — ใช้ PCF8574 1 ตัว (P0-P3=row, P4-P7=col)</li>
+</ol>
 </section>
 
 <nav class="bottom-nav">

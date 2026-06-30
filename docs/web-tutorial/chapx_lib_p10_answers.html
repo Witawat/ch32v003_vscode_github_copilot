@@ -23,13 +23,15 @@ const uint8_t big_digit[10][16] = {
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    P10_Init(1, 1);
+    P10_Instance inst;
+    P10_Config cfg;
+    P10_Init(&inst, &cfg);
 
     uint8_t count = 0;
     while(1) {
-        P10_Clear();
+        P10_Clear(&inst);
         for(uint8_t y = 0; y < 16; y++) {
-            P10_SetRow(y, big_digit[count % 10][y] << 0 |
+            P10_SetRow(&inst, y, big_digit[count % 10][y] << 0 |
                           big_digit[count / 10][y] << 8);
         }
         count++;
@@ -79,12 +81,14 @@ void render_text(const char *text) {
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    P10_Init(2, 1);  // 32 columns
+    P10_Instance inst;
+    P10_Config cfg;
+    P10_Init(&inst, &cfg);  // 32 columns
     render_text("HELLO");
 
     int16_t offset = 0;
     while(1) {
-        P10_Clear();
+        P10_Clear(&inst);
         for(uint8_t row = 0; row < 16; row++) {
             uint32_t row_data = 0;
             for(uint8_t col = 0; col < 32; col++) {
@@ -98,7 +102,7 @@ int main(void) {
                     }
                 }
             }
-            P10_SetRowLong(row, row_data);
+            P10_SetRowLong(&inst, row, row_data);
         }
         offset++;
         if(offset >= msg_pixels) offset = -32;
@@ -145,23 +149,25 @@ void draw_digit(uint8_t digit, uint8_t x) {
         if(pattern & 0x10 && row >= 8) bits |= 0x02;
         // segment d (bottom)
         if(pattern & 0x08 && row == 15) bits |= 0x7E;
-        P10_SetCol(x, row, bits);
+        P10_SetCol(&inst, x, row, bits);
     }
 }
 
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    P10_Init(4, 1);
+    P10_Instance inst;
+    P10_Config cfg;
+    P10_Init(&inst, &cfg);
     Timer1_Init(TIM1_UP_COUNT, 47999, 999);  // ~1Hz
 
     while(1) {
-        P10_Clear();
+        P10_Clear(&inst);
         draw_digit(hours / 10, 0);
         draw_digit(hours % 10, 8);
         if(blink_colon) {
-            for(uint8_t r = 4; r <= 5; r++)  P10_SetPixel(16, r, 1);
-            for(uint8_t r = 10; r <= 11; r++) P10_SetPixel(16, r, 1);
+            for(uint8_t r = 4; r <= 5; r++)  P10_SetPixel(&inst, 16, r, 1);
+            for(uint8_t r = 10; r <= 11; r++) P10_SetPixel(&inst, 16, r, 1);
         }
         draw_digit(minutes / 10, 18);
         draw_digit(minutes % 10, 26);

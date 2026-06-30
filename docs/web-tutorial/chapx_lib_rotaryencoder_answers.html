@@ -16,9 +16,9 @@
 volatile int16_t volume = 50;      // 0–100%
 volatile bool muted = false;
 int16_t saved_vol = 50;
+RotaryEncoder enc;
+int32_t last_pos = 0;
 
-void enc_cw_cb(void)  { if(volume < 100) volume++; }
-void enc_ccw_cb(void) { if(volume > 0)   volume--; }
 void enc_sw_cb(void) {
     if(muted) { muted = false; volume = saved_vol; }
     else      { muted = true;  saved_vol = volume; volume = 0; }
@@ -29,17 +29,22 @@ int main(void) {
     Timer_Init();
     USART_Init(115200);
 
-    Rotary_Init(ENC_CLK, ENC_DT, ENC_SW);
-    RotaryEncoder_AttachCW(enc_cw_cb);
-    RotaryEncoder_AttachCCW(enc_ccw_cb);
-    RotaryEncoder_AttachSW(enc_sw_cb);
+    Rotary_Init(&enc, PC0, PC1, PC2);
+    Rotary_SetCallback(&enc, ROTARY_EVENT_SW, enc_sw_cb);
 
     PWM_SimpleInit(SPK_PIN, PWM_CH, 1000, 0);
     Timer_t update_tmr;
     Start_Timer(&update_tmr, 100, 1);
 
     while(1) {
-        RotaryEncoder_Process();
+        int32_t pos = Rotary_GetPosition(&enc);
+        if(pos != last_pos) {
+            int8_t diff = (int8_t)(pos - last_pos);
+            volume += diff;
+            if(volume < 0) volume = 0;
+            if(volume > 100) volume = 100;
+            last_pos = pos;
+        }
 
         if(Is_Timer_Expired(&update_tmr)) {
             uint16_t duty = (uint16_t)((uint32_t)volume * 1000 / 100);
@@ -63,22 +68,26 @@ const char *menu[] = {"LED ON", "LED OFF", "BLINK 1Hz", "BLINK 5Hz", "EXIT"};
 #define MENU_COUNT 5
 volatile int8_t idx = 0;
 volatile bool selected = false;
+RotaryEncoder enc;
+int32_t last_pos2 = 0;
 
-void enc_cw_cb(void)  { idx = (idx + 1) % MENU_COUNT; }
-void enc_ccw_cb(void) { idx = (idx - 1 + MENU_COUNT) % MENU_COUNT; }
-void enc_sw_cb(void)  { selected = true; }
+void enc_sw_cb2(void) { selected = true; }
 
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    OLED_Init();
-    Rotary_Init(ENC_CLK, ENC_DT, ENC_SW);
-    RotaryEncoder_AttachCW(enc_cw_cb);
-    RotaryEncoder_AttachCCW(enc_ccw_cb);
-    RotaryEncoder_AttachSW(enc_sw_cb);
+    OLED_Handle oled;
+    OLED_Init(&oled, OLED_128x64, 0x3C);
+    Rotary_Init(&enc, PC0, PC1, PC2);
+    Rotary_SetCallback(&enc, ROTARY_EVENT_SW, enc_sw_cb2);
 
     while(1) {
-        RotaryEncoder_Process();
+        int32_t pos = Rotary_GetPosition(&enc);
+        if(pos != last_pos2) {
+            idx = (idx + (int8_t)(pos - last_pos2)) % MENU_COUNT;
+            if(idx < 0) idx += MENU_COUNT;
+            last_pos2 = pos;
+        }
 
         OLED_Clear();
         OLED_SetFont(FONT_8X16);
@@ -88,14 +97,14 @@ int main(void) {
             if(i == idx) { OLED_Print(">"); OLED_Print(menu[i]); }
             else          OLED_Printf(" %s", menu[i]);
         }
-        OLED_Display();
+        OLED_Update(&oled);
 
         if(selected) {
             selected = false;
             OLED_Clear();
             OLED_SetCursor(0, 0); OLED_Print("Selected:");
             OLED_SetCursor(0, 1); OLED_Print(menu[idx]);
-            OLED_Display();
+            OLED_Update(&oled);
             Delay_Ms(1500);
         }
 
@@ -114,6 +123,7 @@ int main(void) {
 volatile int32_t value = 0;
 uint32_t last_tick = 0;
 int8_t   tick_count = 0;
+RotaryEncoder enc;
 
 void enc_tick_cb(int8_t dir) {
     uint32_t now = Timer_GetMs();
@@ -140,15 +150,13 @@ int main(void) {
     Timer_Init();
     USART_Init(115200);
 
-    Rotary_Init(ENC_CLK, ENC_DT, 0xFF);  // ไม่มีปุ่มกด
-    RotaryEncoder_AttachTick(enc_tick_cb);
+    Rotary_Init(&enc, PC0, PC1, 0xFF);  // ไม่มีปุ่มกด
+    Rotary_SetCallback(&enc, ROTARY_EVENT_TICK, enc_tick_cb);
 
     Timer_t print_tmr;
     Start_Timer(&print_tmr, 200, 1);
 
     while(1) {
-        RotaryEncoder_Process();
-
         if(Is_Timer_Expired(&print_tmr)) {
             USART_Printf("Value: %ld  (speed: %dms)\n", value,
                          tick_count ? (int)(Timer_GetMs() - last_tick) : 0);

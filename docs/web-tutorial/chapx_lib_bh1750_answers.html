@@ -5,11 +5,12 @@
 #define FLASH_SAVE_ADDR  0x08003C00
 
 float last_lux = 0;
+BH1750_Instance bh;
 
 void bh1750_logger(void) {
-    if(!BH1750_IsReady()) return;
+    if(!BH1750_IsReady(&bh)) return;
 
-    float lux = BH1750_ReadLux();
+    float lux = BH1750_ReadLux(&bh);
     if(lux < 0) {
         USART_Println("BH1750 read error");
         return;
@@ -37,14 +38,15 @@ void bh1750_logger(void) {
 #define LUX_BRIGHT    500
 
 void bh1750_night_light(void) {
-    BH1750_Init(BH1750_ADDR_LOW, BH1750_CONT_HIRES);
+    BH1750_Instance bh;
+    BH1750_Init(&bh, 0x23);
     PWM_SimpleInit(LED_PIN, PWM_CHANNEL, 1000, 0);
 
     while(1) {
         Delay_Ms(150);
-        if(!BH1750_IsReady()) continue;
+        if(!BH1750_IsReady(&bh)) continue;
 
-        float lux = BH1750_ReadLux();
+        float lux = BH1750_ReadLux(&bh);
         if(lux < 0) continue;
 
         uint16_t duty;
@@ -63,7 +65,9 @@ void bh1750_night_light(void) {
 </code></pre><div class="approach"><strong>🧠 แนวคิด:</strong> map เชิงเส้นแบบผกผัน — มืด LED สว่าง, สว่าง LED ดับ — ใช้ <code>PWM_SimpleInit</code> ตั้งความถี่ 1kHz แล้ว <code>PWM_SetDuty</code> อัปเดต duty cycle ตามค่า lux — clamp duty 0–1000 ป้องกัน overflow</div></div>
 <div class="answer"><h2>ข้อ 3: OLED Lux Display — แสดงค่า lux บน OLED</h2><pre><code class="language-c">void bh1750_oled_display(void) {
     OLED_Init(I2C_PINS_DEFAULT);
-    BH1750_Init(BH1750_ADDR_LOW, BH1750_CONT_HIRES);
+
+    BH1750_Instance bh;
+    BH1750_Init(&bh, 0x23);
 
     OLED_Clear();
     OLED_SetCursor(0, 0);
@@ -71,9 +75,9 @@ void bh1750_night_light(void) {
 
     while(1) {
         Delay_Ms(200);
-        if(!BH1750_IsReady()) continue;
+        if(!BH1750_IsReady(&bh)) continue;
 
-        float lux = BH1750_ReadLux();
+        float lux = BH1750_ReadLux(&bh);
         if(lux < 0) continue;
 
         OLED_SetCursor(0, 1);

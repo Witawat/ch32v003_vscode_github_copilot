@@ -43,7 +43,7 @@ void ir_replay_slot(uint8_t slot) {
 }
 
 void ir_learner_main(void) {
-    IR_Init(IR_PINS_DEFAULT);
+    IR_ReceiverInit(PC0);
 
     while(1) {
         if(GPIO_ReadBit(PD2) == 0) {  // ปุ่ม Learn
@@ -59,8 +59,8 @@ void ir_learner_main(void) {
         }
 
         // Normal decode mode
-        if(IR_Available()) {
-            uint32_t code = IR_Read();
+        if(IR_Process()) {
+            uint32_t code = IR_GetCode();
             USART_Print("IR NEC: 0x");
             USART_PrintHex(code);
             USART_Println("");
@@ -124,7 +124,7 @@ void ir_universal_send(void) {
 }
 
 void ir_cycle_devices(void) {
-    IR_Init(IR_PINS_DEFAULT);
+    IR_ReceiverInit(PC0);
 
     while(1) {
         if(GPIO_ReadBit(PD2) == 0) {  // ปุ่มเปลี่ยนอุปกรณ์
@@ -161,13 +161,13 @@ volatile uint32_t ir_last_time = 0;
 volatile uint8_t  ir_held = 0;
 
 void ir_repeat_handler(void) {
-    IR_Init(IR_PINS_DEFAULT);
+    IR_ReceiverInit(PC0);
 
     while(1) {
-        if(!IR_Available()) { Delay_Ms(10); continue; }
+        if(!IR_Process()) { Delay_Ms(10); continue; }
 
         uint32_t now = Timer_GetMs();
-        uint32_t code = IR_Read();
+        uint32_t code = IR_GetCode();
 
         // NEC repeat code = 0xFFFFFFFF
         if(code == 0xFFFFFFFF && ir_last_code != 0) {

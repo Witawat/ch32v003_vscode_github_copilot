@@ -7,6 +7,10 @@
 #include "LCDMenu.h"
 #include "I2C_LCD.h"
 
+LCD1602_Handle lcd;
+Button_Instance btn_up, btn_down, btn_enter, btn_back;
+LCDMenu_Handle menu;
+
 char ssid[33] = "MyWiFi_2.4G";
 uint8_t cursor_pos = 0;
 
@@ -34,12 +38,12 @@ int main(void) {
     I2C_LCD_Init(0x27, 16, 2);
     I2C_LCD_Backlight(1);
 
-    LCDMenu_Init();
-    LCDMenu_AddItem("WiFi SSID", LCDMENU_EDIT, ssid_edit_up,
+    LCDMenu_Init(&menu, &lcd, &btn_up, &btn_down, &btn_enter, &btn_back);
+    LCDMenu_AddItem(&menu, "WiFi SSID", LCDMENU_EDIT, ssid_edit_up,
                     ssid_edit_down, ssid_edit_right, ssid_edit_left);
 
     while(1) {
-        LCDMenu_Process();
+        LCDMenu_Process(&menu);
 
         I2C_LCD_SetCursor(0, 0); I2C_LCD_Print("SSID:");
         I2C_LCD_SetCursor(0, 1); I2C_LCD_Print(ssid + max(0, cursor_pos - 15));
@@ -55,6 +59,10 @@ int main(void) {
 #include "SimpleHAL.h"
 #include "LCDMenu.h"
 #include "I2C_LCD.h"
+
+LCD1602_Handle lcd;
+Button_Instance btn_up, btn_down, btn_enter, btn_back;
+LCDMenu_Handle menu;
 
 float setpoint = 40.0f;
 float step = 0.5f;
@@ -72,14 +80,14 @@ int main(void) {
     I2C_LCD_Init(0x27, 16, 2);
     I2C_LCD_Backlight(1);
 
-    LCDMenu_Init();
-    LCDMenu_AddItem("Setpoint", LCDMENU_ADJUST,
+    LCDMenu_Init(&menu, &lcd, &btn_up, &btn_down, &btn_enter, &btn_back);
+    LCDMenu_AddItem(&menu, "Setpoint", LCDMENU_ADJUST,
                     setpoint_inc, setpoint_dec,
                     setpoint_fast_inc, setpoint_fast_dec);
 
     char buf[17];
     while(1) {
-        LCDMenu_Process();
+        LCDMenu_Process(&menu);
 
         I2C_LCD_SetCursor(0, 0); I2C_LCD_Print("TARGET TEMP");
         I2C_LCD_SetCursor(3, 1);
@@ -97,6 +105,10 @@ int main(void) {
 #include "I2C_LCD.h"
 #include "AT24Cxx.h"
 
+LCD1602_Handle lcd;
+Button_Instance btn_up, btn_down, btn_enter, btn_back;
+LCDMenu_Handle menu;
+AT24Cxx_Instance eeprom;
 #define EEPROM_ADDR  0x00
 
 typedef struct {
@@ -113,11 +125,11 @@ void toggle_backlight(void) { cfg.backlight = !cfg.backlight; }
 void toggle_buzzer(void)   { cfg.buzzer    = !cfg.buzzer; }
 
 void save_config(void) {
-    AT24Cxx_Write(EEPROM_ADDR, (uint8_t*)&cfg, sizeof(Config_t));
+    AT24Cxx_Write(&eeprom, EEPROM_ADDR, (uint8_t*)&cfg, sizeof(Config_t));
 }
 
 void load_config(void) {
-    AT24Cxx_Read(EEPROM_ADDR, (uint8_t*)&cfg, sizeof(Config_t));
+    AT24Cxx_Read(&eeprom, EEPROM_ADDR, (uint8_t*)&cfg, sizeof(Config_t));
     // ตรวจสอบ magic number / CRC
     if(cfg.setpoint < 0 || cfg.setpoint > 100) {
         memset(&cfg, 0, sizeof(Config_t));
@@ -130,19 +142,19 @@ int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
     I2C_LCD_Init(0x27, 16, 2);
-    AT24Cxx_Init();
+    AT24Cxx_Init(&eeprom, AT24C32, 0x50);
     load_config();
 
-    LCDMenu_Init();
-    LCDMenu_AddItem("Power",     LCDMENU_TOGGLE, toggle_power,     NULL, NULL, NULL);
-    LCDMenu_AddItem("Backlight", LCDMENU_TOGGLE, toggle_backlight, NULL, NULL, NULL);
-    LCDMenu_AddItem("Buzzer",    LCDMENU_TOGGLE, toggle_buzzer,    NULL, NULL, NULL);
+    LCDMenu_Init(&menu, &lcd, &btn_up, &btn_down, &btn_enter, &btn_back);
+    LCDMenu_AddItem(&menu, "Power",     LCDMENU_TOGGLE, toggle_power,     NULL, NULL, NULL);
+    LCDMenu_AddItem(&menu, "Backlight", LCDMENU_TOGGLE, toggle_backlight, NULL, NULL, NULL);
+    LCDMenu_AddItem(&menu, "Buzzer",    LCDMENU_TOGGLE, toggle_buzzer,    NULL, NULL, NULL);
 
     I2C_LCD_Print("Config Loaded");
     Delay_Ms(1000);
 
     while(1) {
-        LCDMenu_Process();
+        LCDMenu_Process(&menu);
 
         static Config_t last_cfg;
         if(memcmp(&cfg, &last_cfg, sizeof(Config_t)) != 0) {

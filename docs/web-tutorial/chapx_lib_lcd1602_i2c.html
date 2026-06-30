@@ -17,9 +17,9 @@
     <h2>🧭 แผนภาพการทำงาน</h2>
     <pre class="mermaid">
 flowchart TD
-    A["LCD_Init(0x27)"] --> B["LCD_Clear()"]
-    B --> C["LCD_SetCursor(row, col)"]
-    C --> D["LCD_Print(str)"]
+    A["LCD_Init(&amp;lcd, 0x27, LCD_16x2)"] --> B["LCD_Clear(&amp;lcd)"]
+    B --> C["LCD_SetCursor(&amp;lcd, row, col)"]
+    C --> D["LCD_Print(&amp;lcd, str)"]
     D --> E["loop: อ่าน sensor → Print → Delay"]
     E --> C
     </pre>
@@ -44,8 +44,8 @@ flowchart TD
     <h2>📚 หลักการทำงาน</h2>
     <p><strong>Hitachi HD44780 Controller:</strong> เป็นจอตัวอักษร 16 คอลัมน์ × 2 แถว — ภายในใช้ controller HD44780 ที่มี RAM สำหรับตัวอักษร (DDRAM) 80 ตำแหน่ง และ CGRAM สำหรับตัวอักษรที่กำหนดเอง 8 ตัว (5×8 pixel ต่อตัว)</p>
     <p><strong>PCF8574 I2C Backpack:</strong> แปลงสัญญาณ I2C 2 เส้น → parallel 8-bit สำหรับ HD44780 — ทำให้ใช้สายแค่ 4 เส้น (VCC, GND, SDA, SCL) แทน 8-16 เส้น — address 0x27 (A0-A2 = GND) หรือ 0x3F</p>
-    <p><strong>Custom Characters:</strong> CGRAM รองรับตัวอักษรกำหนดเอง 8 ตัว — แต่ละตัวใช้ 8 ไบต์ (5-bit ต่อแถว × 8 แถว) — ใช้ LCD_CreateChar() กำหนดรูปแบบ — แล้ว WriteChar() แสดง</p>
-    <p><strong>Backlight Control:</strong> PCF8574 ขา P3 ควบคุม backlight — LCD1602_I2C_Backlight(on/off) เปิดปิดไฟหลังจอ — ประหยัดไฟเมื่อไม่ต้องแสดงผล</p>
+    <p><strong>LCD1602_Handle:</strong> ใช้ struct instance — <code>LCD_Init(&amp;lcd, 0x27, LCD_16x2)</code> — ทุกฟังก์ชันใช้ prefix <code>LCD_</code> — รับ <code>&amp;lcd</code> เป็นพารามิเตอร์แรก</p>
+    <p><strong>Backlight Control:</strong> <code>LCD_Backlight(&amp;lcd, 1)</code> เปิด, <code>LCD_Backlight(&amp;lcd, 0)</code> ปิด — ควบคุมไฟหลังจอผ่าน PCF8574 ขา P3</p>
 </section>
 <section>
     <h2>💻 เขียน Code ทีละขั้น</h2>
@@ -54,60 +54,50 @@ flowchart TD
 #include "SimpleHAL.h"
 #include "lcd1602_i2c.h"
 
+LCD1602_Handle lcd;
+
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
     I2C_SimpleInit(I2C_SPEED_100K, I2C_PINS_DEFAULT);
 
-    LCD_Init(0x27);
-    LCD_Clear();
-    LCD1602_I2C_Backlight(1);</code></pre>
-    <p class="explain">🔍 เริ่มต้นด้วย I2C 100kHz (LCD รองรับสูงสุด 100kHz) — Init(0x27) ระบุ address ของ backpack — Clear() ล้างหน้าจอและตั้ง cursor ไปที่ (0,0)</p></div>
-    <div class="step"><h3>ขั้นที่ 2: พิมพ์ข้อความ + Custom Char</h3>
-    <pre><code class="language-c">    // Custom character: heart
-    uint8_t heart[8] = {0x00,0x0A,0x1F,0x1F,0x0E,0x04,0x00,0x00};
-    LCD_CreateChar(0, heart);
+    LCD_Init(&amp;lcd, 0x27, LCD_16x2);
+    LCD_Clear(&amp;lcd);
+    LCD_Backlight(&amp;lcd, 1);</code></pre>
+    <p class="explain">🔍 <code>LCD_Init(&amp;lcd, addr, type)</code> — addr=0x27, type=LCD_16x2 (หรือ LCD_20x4) — <code>LCD_Clear()</code> ล้างหน้าจอ — <code>LCD_Backlight(&amp;lcd, 1)</code> เปิดไฟหลังจอ</p></div>
+    <div class="step"><h3>ขั้นที่ 2: พิมพ์ข้อความ</h3>
+    <pre><code class="language-c">    LCD_SetCursor(&amp;lcd, 0, 0);
+    LCD_Print(&amp;lcd, "Hello CH32V003!");
 
-    LCD_SetCursor(0, 0);
-    LCD_Print("Hello");
-    LCD1602_I2C_WriteChar(0);  // heart symbol
-
-    LCD_SetCursor(1, 0);
-    LCD_Print(&quot;Temp: &quot;);
-    LCD_Print(25);
-    LCD_Print(&quot;C&quot;);</code></pre>
-    <p class="explain">🔍 CreateChar(slot, pattern) — เก็บใน CGRAM slot 0-7 — WriteChar(slot) แสดง custom char — SetCursor(row, col) กำหนดตำแหน่ง — PrintNum() แสดงตัวเลข</p></div>
+    LCD_SetCursor(&amp;lcd, 1, 0);
+    LCD_Print(&amp;lcd, "I2C LCD 16x2");</code></pre>
+    <p class="explain">🔍 <code>LCD_SetCursor(&amp;lcd, row, col)</code> — row 0-1, col 0-15 (สำหรับ 16×2) — <code>LCD_Print(&amp;lcd, str)</code> พิมพ์ข้อความ — ทุกฟังก์ชันใช้ prefix <code>LCD_</code> ไม่ใช่ <code>LCD1602_I2C_</code></p></div>
     <div class="step"><h3>ขั้นที่ 3: Loop แสดงค่า Sensor</h3>
-    <pre><code class="language-c">    uint32_t temp = 0;
+    <pre><code class="language-c">    char buf[16];
+    uint32_t temp = 0;
 
     while(1) {
-        temp = ADC_Read(ADC_CH0);  // อ่าน sensor
-        temp = (temp * 3300 / 4096) / 10;  // แปลงเป็น °C (สมมติ LM35)
+        temp = ADC_Read(ADC_CH0);
+        temp = (temp * 3300 / 4096) / 10;  // LM35 → °C
 
-        LCD_SetCursor(1, 6);
-        LCD_Print(temp);
-        LCD_Print(&quot;C   &quot;);
+        LCD_SetCursor(&amp;lcd, 1, 6);
+        SimpleHAL_Sprintf(buf, "%d C  ", temp);
+        LCD_Print(&amp;lcd, buf);
 
         Delay_Ms(1000);
     }
 }</code></pre>
-    <p class="explain">🔍 ไม่ต้อง Clear() ก็ได้ — แค่เขียนทับที่เดิม — ต่อท้ายด้วยช่องว่างเพื่อลบตัวเลขเก่า — หน่วง 1 วิ ก่อนอัปเดตใหม่</p></div>
+    <p class="explain">🔍 ไม่ต้อง Clear() ก็ได้ — แค่เขียนทับที่เดิม — ต่อท้ายด้วยช่องว่างเพื่อลบตัวเลขเก่า — ใช้ sprintf สร้างข้อความพร้อมตัวเลข — หน่วง 1 วิ ก่อนอัปเดตใหม่</p></div>
 </section>
 <section>
     <h2>📋 API Reference</h2>
     <table>
         <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
-        <tr><td><code>LCD_Init(addr)</code></td><td>เริ่มต้น LCD ที่ address</td><td><code>LCD_Init(0x27)</code></td></tr>
-        <tr><td><code>LCD_SetCursor(r, c)</code></td><td>ตั้ง cursor แถว r, คอลัมน์ c</td><td><code>LCD_SetCursor(0, 0)</code></td></tr>
-        <tr><td><code>LCD_Print(str)</code></td><td>พิมพ์ข้อความ</td><td><code>LCD_Print("Hello")</code></td></tr>
-        <tr><td><code>LCD_Print(n)</code></td><td>พิมพ์ตัวเลขจำนวนเต็ม</td><td><code>LCD_Print(123)</code></td></tr>
-        <tr><td><code>LCD_Print(f, dec)</code></td><td>พิมพ์ทศนิยม</td><td><code>LCD_Print(3.14, 2)</code></td></tr>
-        <tr><td><code>LCD_Clear()</code></td><td>ล้างหน้าจอ + cursor กลับ (0,0)</td><td><code>LCD_Clear()</code></td></tr>
-        <tr><td><code>LCD_CreateChar(slot, pat)</code></td><td>สร้าง custom char ใน CGRAM</td><td><code>LCD_CreateChar(0, pattern)</code></td></tr>
-        <tr><td><code>LCD1602_I2C_WriteChar(slot)</code></td><td>แสดง custom char จาก slot</td><td><code>LCD1602_I2C_WriteChar(0)</code></td></tr>
-        <tr><td><code>LCD1602_I2C_Backlight(on)</code></td><td>เปิด/ปิด backlight (1/0)</td><td><code>LCD1602_I2C_Backlight(1)</code></td></tr>
-        <tr><td><code>LCD1602_I2C_ScrollLeft()</code></td><td>เลื่อนข้อความซ้าย 1 ตำแหน่ง</td><td><code>LCD1602_I2C_ScrollLeft()</code></td></tr>
-        <tr><td><code>LCD1602_I2C_ScrollRight()</code></td><td>เลื่อนข้อความขวา 1 ตำแหน่ง</td><td><code>LCD1602_I2C_ScrollRight()</code></td></tr>
+        <tr><td><code>LCD_Init(&amp;lcd, addr, type)</code></td><td>เริ่มต้น LCD — type: LCD_16x2, LCD_20x4</td><td><code>LCD_Init(&amp;lcd, 0x27, LCD_16x2)</code></td></tr>
+        <tr><td><code>LCD_SetCursor(&amp;lcd, r, c)</code></td><td>ตั้ง cursor แถว r, คอลัมน์ c</td><td><code>LCD_SetCursor(&amp;lcd, 0, 0)</code></td></tr>
+        <tr><td><code>LCD_Print(&amp;lcd, str)</code></td><td>พิมพ์ข้อความ</td><td><code>LCD_Print(&amp;lcd, "Hello")</code></td></tr>
+        <tr><td><code>LCD_Clear(&amp;lcd)</code></td><td>ล้างหน้าจอ + cursor กลับ (0,0)</td><td><code>LCD_Clear(&amp;lcd)</code></td></tr>
+        <tr><td><code>LCD_Backlight(&amp;lcd, on)</code></td><td>เปิด/ปิด backlight (1=on, 0=off)</td><td><code>LCD_Backlight(&amp;lcd, 1)</code></td></tr>
     </table>
 </section>
 <section>
@@ -117,46 +107,53 @@ int main(void) {
         <tr><td>จอดำหมด ไม่มีไฟ backlight</td><td>Jumper backlight หลุด หรือไม่ได้ต่อ 5V</td><td>ตรวจสอบ jumper บน backpack — ต้องมี 5V จ่ายให้ LED backlight</td></tr>
         <tr><td>ตัวหนังสือประหลาด / สี่เหลี่ยมดำ</td><td>Contrast ไม่เหมาะสม — V0 potentiometer</td><td>หมุน potentiometer สีน้ำเงินบน backpack จนเห็นตัวอักษรชัด</td></tr>
         <tr><td>I2C ไม่ตอบ — จอดำ+backlight ติด</td><td>ใช้ address ผิด (0x27 vs 0x3F)</td><td>ใช้ <code>I2C_Scan()</code> หา address — ลองทั้ง 0x27 และ 0x3F</td></tr>
-        <tr><td>แสดงผลแค่ 8 ตัวอักษรต่อแถว</td><td>ไม่ได้ init เป็น 16×2 mode — stuck ใน 8×2</td><td>LCD_Init() ต้องตั้งค่าเป็น 2-line mode — ตรวจสอบว่าเรียก Init ก่อนใช้งาน</td></tr>
+        <tr><td>แสดงผลแค่ 8 ตัวอักษรต่อแถว</td><td>ไม่ได้ init เป็น 16×2 mode</td><td><code>LCD_Init(&amp;lcd, 0x27, LCD_16x2)</code> ต้องระบุ LCD_16x2</td></tr>
         <tr><td>ตัวอักษรกระพริบหรือหาย</td><td>สาย I2C ยาวเกินหรือ pull-up อ่อน</td><td>เพิ่ม pull-up 4.7kΩ ที่ SDA/SCL หรือลดความเร็ว I2C</td></tr>
     </table>
 </section>
 <section>
     <h2>🛠️ สร้าง Product: เครื่องวัดอุณหภูมิ LCD</h2>
-    <p>DHT11 อ่านอุณหภูมิ+ความชื้น แสดงผลบน LCD1602 I2C — ใช้ Non-Blocking Timer อัปเดตทุก 2 วินาที</p>
+    <p>DHT22 อ่านอุณหภูมิ+ความชื้น แสดงผลบน LCD1602 I2C — ใช้ Non-Blocking Timer อัปเดตทุก 2 วินาที</p>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "lcd1602_i2c.h"
+#include "DHT.h"
+
+LCD1602_Handle lcd;
+DHT_Instance dht;
 
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
     I2C_SimpleInit(I2C_SPEED_100K, I2C_PINS_DEFAULT);
 
-    LCD_Init(0x27);
-    LCD_Clear();
-    LCD1602_I2C_Backlight(1);
+    LCD_Init(&amp;lcd, 0x27, LCD_16x2);
+    LCD_Clear(&amp;lcd);
+    LCD_Backlight(&amp;lcd, 1);
 
-    DHT11_Init(PC3);
-    DHT11_Data_t dht;
+    DHT_Init(&amp;dht, PC4, DHT_TYPE_DHT22);
+    Delay_Ms(2000);
+
     Timer_t tmr;
-    Start_Timer(&tmr, 2000, 1);
+    Start_Timer(&amp;tmr, 2000, 1);
+    char buf[16];
 
     while(1) {
-        if(Is_Timer_Expired(&tmr)) {
-            if(DHT11_Read(&dht) == DHT11_OK) {
-                LCD_SetCursor(0, 0);
-                LCD_Print("Temp: ");
-                LCD_Print(dht.temp);
-                LCD_Print("C  ");
+        if(Is_Timer_Expired(&amp;tmr)) {
+            if(DHT_Read(&amp;dht) == DHT_OK) {
+                float t = DHT_GetTemperature(&amp;dht);
+                float h = DHT_GetHumidity(&amp;dht);
 
-                LCD_SetCursor(1, 0);
-                LCD_Print("Hum : ");
-                LCD_Print(dht.hum);
-                LCD_Print("%  ");
+                SimpleHAL_Sprintf(buf, "Temp: %.1f C", t);
+                LCD_SetCursor(&amp;lcd, 0, 0);
+                LCD_Print(&amp;lcd, buf);
+
+                SimpleHAL_Sprintf(buf, "Hum : %.1f %%", h);
+                LCD_SetCursor(&amp;lcd, 1, 0);
+                LCD_Print(&amp;lcd, buf);
             } else {
-                LCD_SetCursor(0, 0);
-                LCD_Print("Sensor Error!  ");
+                LCD_SetCursor(&amp;lcd, 0, 0);
+                LCD_Print(&amp;lcd, "Sensor Error!   ");
             }
         }
     }
@@ -165,9 +162,9 @@ int main(void) {
 <section>
     <h2>✏️ ลองทำดู</h2>
     <ol>
-        <li>ทำ Scrolling Text — ข้อความยาวกว่า 16 ตัวอักษรเลื่อนซ้ายอัตโนมัติ — ใช้ <code>ScrollLeft()</code> ทุก 500ms</li>
-        <li>สร้าง Custom Characters ตัวเลข 0-9 แบบดิจิทัล 8 ตัว — ใช้ CGRAM ทั้ง 8 slots</li>
-        <li>ทำปุ่ม Toggle สลับภาษาไทย/อังกฤษ — ใช้ custom char แสดงภาษาไทย 2-3 ตัว (ใช้หลาย char ต่อกัน)</li>
+        <li>ทำ Scrolling Text — ข้อความยาวกว่า 16 ตัวอักษรเลื่อนซ้ายอัตโนมัติ — ใช้การเลื่อน cursor ทุก 500ms</li>
+        <li>สร้าง Custom Characters ตัวเลข 0-9 แบบดิจิทัล — ใช้ CGRAM ถ้ามีใน library</li>
+        <li>ทำปุ่ม Toggle สลับภาษาไทย/อังกฤษ — ใช้ custom char แสดงภาษาไทย 2-3 ตัว</li>
     </ol>
 </section>
 <nav class="bottom-nav">

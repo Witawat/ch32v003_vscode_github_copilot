@@ -4,7 +4,8 @@
 
 <div class="answer">
 <h2>ข้อ 1: Position Logger — บันทึกตำแหน่งลง Flash ทุก N เมตร</h2>
-<pre><code class="language-c">#define FLASH_LOG_START  0x08004000
+<pre><code class="language-c">GPS_Instance gps;
+#define FLASH_LOG_START  0x08004000
 #define FLASH_LOG_END    0x08008000
 #define LOG_DIST_M       10.0f   // บันทึกทุก 10m
 
@@ -17,13 +18,13 @@ volatile uint32_t log_addr = FLASH_LOG_START;
 float last_lat, last_lon;
 
 void gps_position_logger(void) {
-    GPS_Init(BAUD_9600, USART_PINS_DEFAULT);
+    GPS_Init(&gps, BAUD_9600, USART_PINS_DEFAULT);
 
     while(1) {
-        if(!GPS_IsUpdated()) { Delay_Ms(100); continue; }
+        if(!GPS_Update(&gps)) { Delay_Ms(100); continue; }
 
-        float lat = GPS_GetLat();
-        float lon = GPS_GetLon();
+        float lat = GPS_GetLatitude(&gps);
+        float lon = GPS_GetLongitude(&gps);
 
         if(lat == 0 && lon == 0) continue;  // ยังไม่มี fix
 
@@ -70,11 +71,12 @@ void gps_position_logger(void) {
 
 <div class="answer">
 <h2>ข้อ 2: Speed Alert — เตือนเมื่อความเร็วเกินกำหนด</h2>
-<pre><code class="language-c">#define SPEED_LIMIT_KPH  80.0f
+<pre><code class="language-c">GPS_Instance gps;
+#define SPEED_LIMIT_KPH  80.0f
 #define ALERT_BUZZER_PIN PC0
 
 void gps_speed_alert(void) {
-    GPS_Init(BAUD_9600, USART_PINS_DEFAULT);
+    GPS_Init(&gps, BAUD_9600, USART_PINS_DEFAULT);
     GPIO_SimpleInit(ALERT_BUZZER_PIN, GPIO_OUT_PP);
     PWM_SimpleInit(ALERT_BUZZER_PIN, 1, 2000, 0);
 
@@ -82,10 +84,10 @@ void gps_speed_alert(void) {
     uint8_t over_limit = 0;
 
     while(1) {
-        if(!GPS_IsUpdated()) { Delay_Ms(200); continue; }
+        if(!GPS_Update(&gps)) { Delay_Ms(200); continue; }
 
-        speed_kph = GPS_GetSpeedKph();
-        uint8_t sats = GPS_GetSatellites();
+        speed_kph = GPS_GetSpeedKph(&gps);
+        uint8_t sats = GPS_GetSatellites(&gps);
 
         USART_Print("Speed: ");
         USART_PrintFloat(speed_kph, 1);
@@ -125,26 +127,27 @@ void gps_speed_alert(void) {
 
 <div class="answer">
 <h2>ข้อ 3: Time Sync — ตั้งเวลา DS3231 จาก GPS</h2>
-<pre><code class="language-c">void gps_sync_ds3231(void) {
-    GPS_Init(BAUD_9600, USART_PINS_DEFAULT);
-    DS3231_Init(I2C_PINS_DEFAULT);
+<pre><code class="language-c">GPS_Instance gps;
+DS3231_Instance rtc;
+void gps_sync_ds3231(void) {
+    GPS_Init(&gps, BAUD_9600, USART_PINS_DEFAULT);
+    DS3231_Init(&rtc);
 
     uint8_t synced = 0;
 
     while(1) {
-        if(!GPS_IsUpdated()) { Delay_Ms(200); continue; }
+        if(!GPS_Update(&gps)) { Delay_Ms(200); continue; }
 
-        if(GPS_GetFix() && !synced) {
+        if(GPS_GetFix(&gps) && !synced) {
             // อ่านวันเวลาจาก GPS
             uint16_t y; uint8_t m, d, h, min, s;
-            GPS_GetDateTime(&y, &m, &d, &h, &min, &s);
+            GPS_GetDateTime(&gps, &y, &m, &d, &h, &min, &s);
 
             // GPS ให้เวลา UTC ต้องปรับ timezone (+7 สำหรับไทย)
             h += 7;
             if(h >= 24) { h -= 24; d += 1; }
 
-            DS3231_SetTime(h, min, s);
-            DS3231_SetDate(y, m, d);
+            DS3231_SetDateTime(&rtc, y, m, d, h, min, s);
 
             USART_Print("GPS→DS3231: ");
             USART_PrintNum(y);
@@ -167,7 +170,7 @@ void gps_speed_alert(void) {
         static uint32_t last = 0;
         if(Timer_GetMs() - last > 5000) {
             uint8_t hh, mm, ss;
-            DS3231_GetTime(&hh, &mm, &ss);
+            DS3231_GetDateTime(&rtc, NULL, NULL, NULL, &hh, &mm, &ss);
             USART_Print("DS3231: ");
             USART_PrintNum(hh); USART_Print(":");
             USART_PrintNum(mm); USART_Print(":");

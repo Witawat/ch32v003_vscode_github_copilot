@@ -18,13 +18,14 @@
     <h2>🧭 แผนภาพการทำงาน</h2>
     <pre class="mermaid">
 flowchart TD
-    A["RCWL0516_Init(pin)"] --> B["ส่งคลื่น 3.18GHz Doppler"]
-    B --> C["วัตถุเคลื่อนที่?"]
-    C -->|"Yes"| D["Frequency Shift → OUT HIGH"]
-    C -->|"No"| E["OUT LOW"]
-    D --> F["Alarm / Light / Log"]
-    F --> E
-    E --> B
+    A["RCWL0516_Init(&r, pin)"] --> B["RCWL0516_SetCallbacks(&r, on_motion, on_no_motion)"]
+    B --> C["RCWL0516_Update(&r) in loop"]
+    C --> D["วัตถุเคลื่อนที่?"]
+    D -->|"Yes"| E["on_motion callback"]
+    D -->|"No"| F["on_no_motion callback"]
+    E --> G["Alarm / Light / Log"]
+    F --> G
+    G --> C
     </pre>
 </section>
 
@@ -64,15 +65,20 @@ flowchart TD
 <section>
     <h2>💻 เขียน Code ทีละขั้น</h2>
 
-    <div class="step"><h3>ขั้นที่ 1: Init + Setup</h3>
+    <div class="step"><h3>ขั้นที่ 1: Init + Set Callbacks</h3>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "RCWL0516.h"
 
+RCWL0516_Instance r;
 volatile uint8_t radarFlag = 0;
 
-void onRadarTrigger(void) {
+void on_motion(void) {
     radarFlag = 1;
+}
+
+void on_no_motion(void) {
+    radarFlag = 0;
 }
 
 int main(void) {
@@ -82,32 +88,32 @@ int main(void) {
 
     pinMode(PC1, PIN_MODE_OUTPUT);  // Buzzer/LED
 
-    // RCWL-0516: pin=PC0, interrupt mode
-    RCWL0516_Init(PC0, RCWL0516_MODE_INTERRUPT, onRadarTrigger);
+    // RCWL-0516: instance-based init
+    RCWL0516_Init(&r, PC0);
+    RCWL0516_SetCallbacks(&r, on_motion, on_no_motion);
     USART_Println("RCWL-0516 Ready");</code></pre>
-    <p class="explain">🔍 <code>RCWL0516_Init(pin, mode, callback)</code> — API คล้าย PIR เพราะทำงานเหมือนกัน (active HIGH เมื่อตรวจจับ) — Interrupt mode ดีเพราะ OUT pulse อาจสั้น (~2-3ms)</p></div>
+    <p class="explain">🔍 <code>RCWL0516_Init(&r, pin)</code> เริ่มต้นแบบ instance — <code>RCWL0516_SetCallbacks(&r, on_motion, on_no_motion)</code> ตั้ง 2 callback: เมื่อตรวจจับ และเมื่อไม่ตรวจจับ — OUT pin อาจ pulse สั้น (~2-3ms)</p></div>
 
-    <div class="step"><h3>ขั้นที่ 2: อ่าน/เขียนค่า</h3>
-    <pre><code class="language-c">    // Interrupt-based
-    if(radarFlag) {
-        radarFlag = 0;
-        USART_Print("Motion @ ");
-        USART_PrintInt(Get_CurrentMs());
-        USART_Println(" ms");
-        digitalWrite(PC1, HIGH);  // Alert
+    <div class="step"><h3>ขั้นที่ 2: Update + ตรวจจับ</h3>
+    <pre><code class="language-c">    while(1) {
+        RCWL0516_Update(&r);
+
+        if(radarFlag) {
+            USART_Print("Motion @ ");
+            USART_PrintInt(Get_CurrentMs());
+            USART_Println(" ms");
+            digitalWrite(PC1, HIGH);  // Alert
+        }
+
+        // เช็ค motion โดยตรง
+        if(RCWL0516_IsMotionDetected(&r)) {
+            // มีวัตถุเคลื่อนที่
+        }
+
+        Delay_Ms(50);
     }
-
-    // หรือใช้ Polling
-    if(RCWL0516_IsMotion()) {
-        USART_Println("Motion! (polling)");
-    }
-
-    // ตรวจนับความถี่การเคลื่อนไหว
-    uint16_t motionCount = RCWL0516_GetMotionCount();
-    USART_Print("Motion count: ");
-    USART_PrintInt(motionCount);
-    USART_Println("");</code></pre>
-    <p class="explain">🔍 <code>RCWL0516_IsMotion()</code> — อ่าน pin OUT โดยตรง — <code>RCWL0516_GetMotionCount()</code> นับจำนวนครั้งที่ trigger ตั้งแต่เริ่ม — OUT pin จะค้าง HIGH ~2-3ms ต่อการตรวจจับหนึ่งครั้ง</p></div>
+}</code></pre>
+    <p class="explain">🔍 <code>RCWL0516_Update(&r)</code> ต้องเรียกใน loop — <code>RCWL0516_IsMotionDetected(&r)</code> เช็คสถานะโดยตรง — callbacks on_motion/on_no_motion ถูกเรียกตามสถานะ</p></div>
 
     <div class="step"><h3>ขั้นที่ 3: Loop + แสดงผล</h3>
     <pre><code class="language-c">    Timer_t tmr_debounce;
@@ -115,6 +121,8 @@ int main(void) {
     uint16_t totalTriggers = 0;
 
     while(1) {
+        RCWL0516_Update(&r);
+
         if(radarFlag) {
             radarFlag = 0;
 
@@ -146,12 +154,10 @@ int main(void) {
     <h2>📋 API Reference</h2>
     <table>
         <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
-        <tr><td><code>RCWL0516_Init(pin, mode, cb)</code></td><td>เริ่มต้นเซนเซอร์</td><td><code>RCWL0516_Init(PC0, RCWL0516_MODE_INTERRUPT, cb)</code></td></tr>
-        <tr><td><code>RCWL0516_IsMotion()</code></td><td>เช็ค motion (polling)</td><td><code>if(RCWL0516_IsMotion()) { ... }</code></td></tr>
-        <tr><td><code>RCWL0516_GetMotionCount()</code></td><td>จำนวนครั้งที่ trigger</td><td><code>uint16_t c = RCWL0516_GetMotionCount()</code></td></tr>
-        <tr><td><code>RCWL0516_ResetCount()</code></td><td>รีเซ็ตตัวนับ</td><td><code>RCWL0516_ResetCount()</code></td></tr>
-        <tr><td><code>RCWL0516_SetDebounce(ms)</code></td><td>ตั้งเวลา debounce</td><td><code>RCWL0516_SetDebounce(500)</code></td></tr>
-        <tr><td><code>RCWL0516_Enable()</code></td><td>เปิด sensor/interrupt</td><td><code>RCWL0516_Enable()</code></td></tr>
+        <tr><td><code>RCWL0516_Init(&r, pin)</code></td><td>เริ่มต้นเซนเซอร์แบบ instance</td><td><code>RCWL0516_Init(&r, PC0)</code></td></tr>
+        <tr><td><code>RCWL0516_SetCallbacks(&r, cb1, cb2)</code></td><td>ตั้ง callback motion/no-motion</td><td><code>RCWL0516_SetCallbacks(&r, on_motion, on_no_motion)</code></td></tr>
+        <tr><td><code>RCWL0516_Update(&r)</code></td><td>อัปเดต — เรียกใน loop</td><td><code>RCWL0516_Update(&r)</code></td></tr>
+        <tr><td><code>RCWL0516_IsMotionDetected(&r)</code></td><td>เช็คว่ามี motion หรือไม่</td><td><code>if(RCWL0516_IsMotionDetected(&r))</code></td></tr>
     </table>
 </section>
 
@@ -175,8 +181,10 @@ int main(void) {
 #include "RCWL0516.h"
 #include "oled_i2c.h"
 
+RCWL0516_Instance r;
 volatile uint8_t radarFlag = 0;
-void onRadarTrigger(void) { radarFlag = 1; }
+void on_motion(void) { radarFlag = 1; }
+void on_no_motion(void) { radarFlag = 0; }
 
 int main(void)
 {
@@ -188,7 +196,8 @@ int main(void)
     OLED_Init(&oled, OLED_128x64, 0x3C);
 
     pinMode(PC1, PIN_MODE_OUTPUT);  // Buzzer
-    RCWL0516_Init(PC0, RCWL0516_MODE_INTERRUPT, onRadarTrigger);
+    RCWL0516_Init(&r, PC0);
+    RCWL0516_SetCallbacks(&r, on_motion, on_no_motion);
 
     uint16_t count = 0;
     uint32_t lastTrigger = 0;
@@ -203,6 +212,8 @@ int main(void)
 
     while(1)
     {
+        RCWL0516_Update(&r);
+
         if(radarFlag) {
             radarFlag = 0;
 

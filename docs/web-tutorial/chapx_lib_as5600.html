@@ -18,11 +18,10 @@
     <h2>🧭 แผนภาพการทำงาน</h2>
     <pre class="mermaid">
 flowchart TD
-    A["AS5600_Init(addr)"] --> B["AS5600_ReadAngle()"]
-    B --> C["Raw 0-4095 (12-bit)"]
-    C --> D["Degrees = raw × 360 / 4096"]
-    D --> E["Display / Motor Control"]
-    E --> B
+    A["AS5600_Init(&enc)"] --> B["AS5600_ReadAngleDegrees(&enc)"]
+    B --> C["0.0 – 360.0°"]
+    C --> D["Display / Motor Control"]
+    D --> B
     </pre>
 </section>
 
@@ -48,13 +47,12 @@ flowchart TD
 
 <section>
     <h2>📚 หลักการทำงาน</h2>
-    <p><strong>AS5600</strong> ใช้ Hall sensor array ตรวจจับสนามแม่เหล็กจากแม่เหล็กที่หมุนอยู่เหนือชิป — ให้ค่ามุม 12-bit (0–4095 steps) — ไม่มี contact → ไม่สึกหรอ → อายุการใช้งานยาวนานกว่า potentiometer หลายเท่า</p>
+    <p><strong>AS5600</strong> ใช้ Hall sensor array ตรวจจับสนามแม่เหล็กจากแม่เหล็กที่หมุนอยู่เหนือชิป — ให้ค่ามุม 12-bit (0–4095 steps) — ไม่มี contact → ไม่สึกหรอ</p>
     <p><strong>ข้อควรรู้:</strong></p>
     <ul>
-        <li><strong>Magnet:</strong> ต้องเป็น diametric magnet (ขั้ว N-S แบ่งครึ่ง) ทรงกระบอก ∅6 มม. — ถ้าใช้แม่เหล็ก axial (ขั้วที่หน้า) จะวัดไม่ได้!</li>
+        <li><strong>Magnet:</strong> ต้องเป็น diametric magnet (ขั้ว N-S แบ่งครึ่ง) ทรงกระบอก ∅6 มม.</li>
         <li><strong>ระยะห่าง:</strong> 0.5–2.0 มม. จากผิว AS5600 — ใกล้เกิน = saturation, ไกลเกิน = weak field</li>
-        <li><strong>Output:</strong> 12-bit angle (0–4095) + analog/PWM output (optional)</li>
-        <li><strong>Zero programming:</strong> สามารถตั้งตำแหน่ง 0° ได้ผ่าน I2C หรือใช้โปรแกรม zero (ดึงขา PGO HIGH)</li>
+        <li><strong>Output:</strong> 12-bit angle (0–4095)</li>
     </ul>
 </section>
 
@@ -66,79 +64,51 @@ flowchart TD
 #include "SimpleHAL.h"
 #include "AS5600.h"
 
+AS5600_Instance enc;
+
 int main(void) {
     SystemCoreClockUpdate();
-    USART_Init(USART1, BAUD_115200);
-    I2C_Init(I2C1, I2C_SPEED_STANDARD);
+    USART_Init(115200);
 
-    AS5600_Init(0x36);  // default I2C address
+    AS5600_Init(&enc);  // default address 0x36
 
-    // เช็คว่ามีแม่เหล็กหรือไม่
-    if(AS5600_IsMagnetDetected()) {
-        USART_Println("Magnet: OK");
-    } else {
-        USART_Println("Magnet: NOT FOUND!");
-    }</code></pre>
-    <p class="explain">🔍 <code>AS5600_Init(addr)</code> — default address 0x36 — <code>AS5600_IsMagnetDetected()</code> เช็คสถานะบิต MD (Magnet Detected) — ถ้า FALSE: แม่เหล็กอ่อนไป, ไกลเกิน, หรือใช้แม่เหล็กผิดชนิด</p></div>
+    USART_Println("AS5600 Ready!");</code></pre>
+    <p class="explain">🔍 <code>AS5600_Init(&enc)</code> — ใช้ address default 0x36 — library จัดการ I2C ให้</p></div>
 
-    <div class="step"><h3>ขั้นที่ 2: อ่าน/เขียนค่า</h3>
-    <pre><code class="language-c">    uint16_t raw = AS5600_ReadRawAngle();
-    float deg = AS5600_ReadAngle();       // 0.0 – 360.0°
-    float rad = AS5600_ReadAngleRad();    // 0.0 – 2π
+    <div class="step"><h3>ขั้นที่ 2: อ่านมุม</h3>
+    <pre><code class="language-c">    float deg = AS5600_ReadAngleDegrees(&enc);  // 0.0 – 360.0°
 
-    USART_Print("Raw: "); USART_PrintInt(raw);
-    USART_Print(" | Angle: "); USART_PrintFloat(deg, 1);
-    USART_Print("° | RPM: ");
-
-    // คำนวณ RPM (ต้องเก็บเวลา)
-    float rpm = AS5600_GetRPM();  // ต้องเรียก ReadAngle ต่อเนื่อง
-    USART_PrintFloat(rpm, 0);
-    USART_Println("");</code></pre>
-    <p class="explain">🔍 <code>AS5600_ReadRawAngle()</code> — 0–4095 (12-bit) — <code>AS5600_ReadAngle()</code> แปลงเป็น 0–360° — <code>AS5600_GetRPM()</code> คำนวณรอบต่อนาทีจากประวัติการอ่าน</p></div>
+    USART_Print("Angle: ");
+    USART_PrintFloat(deg, 1);
+    USART_Println("°");</code></pre>
+    <p class="explain">🔍 <code>AS5600_ReadAngleDegrees(&enc)</code> — คืนค่ามุม 0.0–360.0° โดยตรง</p></div>
 
     <div class="step"><h3>ขั้นที่ 3: Loop + แสดงผล</h3>
     <pre><code class="language-c">    OLED_Handle oled;
     OLED_Init(&oled, OLED_128x64, 0x3C);
 
     while(1) {
-        float angle = AS5600_ReadAngle();
-        uint16_t raw = AS5600_ReadRawAngle();
+        float angle = AS5600_ReadAngleDegrees(&enc);
 
         OLED_Clear(&oled);
         OLED_SetCursor(&oled, 0, 0);
         OLED_PrintFloat(&oled, "Angle:", angle, 1);
         OLED_Print(&oled, " deg");
 
-        // Draw angle bar (0-127 px = 0-360°)
-        int barW = (int)(raw * 127 / 4096);
-        OLED_DrawRect(&oled, 0, 24, barW, 10, 1);
-
-        // Draw a simple dial indicator
-        int cx = 64, cy = 48, r = 12;
-        float radVal = angle * M_PI / 180.0f;
-        int tx = cx + (int)(r * sin(radVal));
-        int ty = cy - (int)(r * cos(radVal));
-        OLED_DrawCircle(&oled, cx, cy, r, 0);  // circle outline
-        OLED_DrawLine(&oled, cx, cy, tx, ty);   // needle
-
         OLED_Update(&oled);
         Delay_Ms(50);
     }
 }</code></pre>
-    <p class="explain">🔍 อ่านมุมทุก 50ms (20Hz) — แสดงทั้งตัวเลขและกราฟิกเข็ม — <code>OLED_DrawLine</code> วาดเข็มจากมุมที่อ่านได้ — ใช้ raw angle สำหรับ bar graph 12-bit → แม่นถึง 0.088°</p></div>
+    <p class="explain">🔍 อ่านมุมทุก 50ms (20Hz) — แสดงตัวเลขบน OLED — ใช้ instance-based API</p></div>
 </section>
 
 <section>
     <h2>📋 API Reference</h2>
     <table>
         <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
-        <tr><td><code>AS5600_Init(addr)</code></td><td>เริ่มต้น AS5600</td><td><code>AS5600_Init(0x36)</code></td></tr>
-        <tr><td><code>AS5600_ReadAngle()</code></td><td>อ่านมุม (°) (0.0–360.0)</td><td><code>float a = AS5600_ReadAngle()</code></td></tr>
-        <tr><td><code>AS5600_ReadRawAngle()</code></td><td>อ่าน raw 12-bit (0–4095)</td><td><code>uint16_t r = AS5600_ReadRawAngle()</code></td></tr>
-        <tr><td><code>AS5600_ReadAngleRad()</code></td><td>อ่านมุม (rad) (0.0–2π)</td><td><code>float r = AS5600_ReadAngleRad()</code></td></tr>
-        <tr><td><code>AS5600_IsMagnetDetected()</code></td><td>เช็คแม่เหล็ก</td><td><code>if(AS5600_IsMagnetDetected())</code></td></tr>
-        <tr><td><code>AS5600_GetRPM()</code></td><td>คำนวณ RPM</td><td><code>float rpm = AS5600_GetRPM()</code></td></tr>
-        <tr><td><code>AS5600_SetZero(angle)</code></td><td>ตั้งมุมเริ่มต้น 0°</td><td><code>AS5600_SetZero(currentAngle)</code></td></tr>
+        <tr><td><code>AS5600_Init(&enc)</code></td><td>เริ่มต้น AS5600</td><td><code>AS5600_Init(&enc)</code></td></tr>
+        <tr><td><code>AS5600_ReadAngleDegrees(&enc)</code></td><td>อ่านมุม (°) (0.0–360.0)</td><td><code>float a = AS5600_ReadAngleDegrees(&enc)</code></td></tr>
+        <tr><td><code>AS5600_ReadRawAngle(&enc)</code></td><td>อ่าน raw 12-bit (0–4095)</td><td><code>uint16_t r = AS5600_ReadRawAngle(&enc)</code></td></tr>
     </table>
 </section>
 
@@ -147,10 +117,9 @@ int main(void) {
     <table>
         <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
         <tr><td>Magnet Not Detected</td><td>แม่เหล็กผิดชนิด (ใช้ axial แทน diametric)</td><td>ใช้ diametric magnet ∅6mm, วางห่าง 0.5-2mm</td></tr>
-        <tr><td>มุมค้างหรืออ่านได้ 0 ตลอด</td><td>แม่เหล็กห่างเกินไปหรือ field อ่อน</td><td>ขยับแม่เหล็กเข้าใกล้ชิป (<2mm), เช็ค <code>IsMagnetDetected()</code></td></tr>
+        <tr><td>มุมค้างหรืออ่านได้ 0 ตลอด</td><td>แม่เหล็กห่างเกินไปหรือ field อ่อน</td><td>ขยับแม่เหล็กเข้าใกล้ชิป (<2mm)</td></tr>
         <tr><td>มุมไม่ linear (กระโดด)</td><td>แม่เหล็กไม่ตรงศูนย์กลาง</td><td>จัดให้แม่เหล็กอยู่ตรงกลางชิป หมุนแกนให้ตั้งฉาก</td></tr>
         <tr><td>ค่าเกิน 360° กลับไป 0 เร็ว</td><td>Overflow 12-bit (4095 → 0)</td><td>ใช้ฟังก์ชันตรวจจับ wrap-around ใน soft ก่อนคำนวณ RPM</td></tr>
-        <tr><td>RPM แกว่งหรือผิด</td><td>อ่าน angle ถี่ไม่พอ / ไม่สม่ำเสมอ</td><td>ใช้ Timer interrupt อ่าน angle ที่ความถี่คงที่ (100Hz+)</td></tr>
     </table>
 </section>
 
@@ -165,32 +134,27 @@ int main(void) {
 int main(void)
 {
     SystemCoreClockUpdate();
-    I2C_Init(I2C1, I2C_SPEED_STANDARD);
-    USART_Init(USART1, BAUD_115200);
+    USART_Init(115200);
+
+    AS5600_Instance enc;
+    AS5600_Init(&enc);
 
     OLED_Handle oled;
     OLED_Init(&oled, OLED_128x64, 0x3C);
 
-    AS5600_Init(0x36);
-
-    float prevAngle = AS5600_ReadAngle();
+    float prevAngle = AS5600_ReadAngleDegrees(&enc);
     int32_t totalDegrees = 0;
-    float rpm = 0;
-
-    uint32_t lastTime = Get_CurrentMs();
 
     while(1)
     {
-        float angle = AS5600_ReadAngle();
+        float angle = AS5600_ReadAngleDegrees(&enc);
 
-        // Detect wrap-around and count turns
         float diff = angle - prevAngle;
-        if(diff > 180) diff -= 360;       // wraparound 0→360
-        else if(diff < -180) diff += 360; // wraparound 360→0
+        if(diff > 180) diff -= 360;
+        else if(diff < -180) diff += 360;
 
         totalDegrees += (int32_t)diff;
         int turns = totalDegrees / 360;
-
         prevAngle = angle;
 
         OLED_Clear(&oled);
@@ -211,9 +175,9 @@ int main(void)
 <section>
     <h2>✏️ ลองทำดู</h2>
     <ol>
-        <li>ทำ RPM meter — ใช้ Timer interrupt อ่าน angle ที่ 100Hz → คำนวณ RPM แสดงบน OLED</li>
-        <li>ทำ servo position feedback — ติด AS5600 ที่แกน servo → อ่านตำแหน่งจริง → PID แก้ให้ตรงกับ setpoint</li>
-        <li>ทำ magnetic rotary switch — แบ่ง 360° เป็น 8 โซน (45° ต่อโซน) → เลือกโหมดโดยหมุนแม่เหล็ก</li>
+        <li>ทำ RPM meter — ใช้ Timer interrupt อ่าน angle ที่ 100Hz → คำนวณ RPM</li>
+        <li>ทำ servo position feedback — ติด AS5600 ที่แกน servo → PID แก้ตำแหน่ง</li>
+        <li>ทำ magnetic rotary switch — แบ่ง 360° เป็น 8 โซน → เลือกโหมดโดยหมุนแม่เหล็ก</li>
     </ol>
 </section>
 

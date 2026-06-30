@@ -20,18 +20,16 @@
     <h2>🧭 แผนภาพการทำงาน</h2>
     <pre class="mermaid">
 flowchart TD
-    A["TMC2209_UART_Init(addr)"] --> B["TMC_WriteRegister(reg, val)"]
-    B --> C["Set GCONF: enable StealthChop"]
-    C --> D["Set IHOLD_IRUN: current"]
-    D --> E{"Mode?"}
-    E -->|"StealthChop"| F["เงียบ — ดีสำหรับพิมพ์ 3D"]
-    E -->|"SpreadCycle"| G["แรงบิดสูง — สำหรับ CNC"]
-    F --> H["STEP/DIR pulses — silent movement"]
-    G --> H
-    H --> I{"StallGuard Value < Threshold?"}
-    I -->|"Yes"| J["Motor Stall Detected!"]
-    I -->|"No"| K["Continue normal operation"]
-    J --> L["Sensorless Homing / Stop"]
+    A["TMC220x_Init(&drv, model, en, dir, step, stepsPerRev)"] --> B["TMC220x_SetSpeed(&drv, rpm)"]
+    B --> C{Mode?}
+    C -->|"StealthChop"| D["เงียบ — ดีสำหรับพิมพ์ 3D"]
+    C -->|"SpreadCycle"| E["แรงบิดสูง — สำหรับ CNC"]
+    D --> F["TMC220x_Move — silent movement"]
+    E --> F
+    F --> G{"StallGuard Value < Threshold?"}
+    G -->|"Yes"| H["Motor Stall Detected!"]
+    G -->|"No"| I["Continue normal operation"]
+    H --> J["Sensorless Homing / Stop"]
     </pre>
 </section>
 
@@ -70,101 +68,67 @@ flowchart TD
 <section>
     <h2>💻 เขียน Code ทีละขั้น</h2>
 
-    <div class="step"><h3>ขั้นที่ 1: Init UART + Write Register</h3>
+    <div class="step"><h3>ขั้นที่ 1: สร้าง Instance + Init</h3>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "TMC220x.h"
 
-#define TMC_ADDR 0x00
-#define REG_GCONF 0x00
-#define REG_IHOLD_IRUN 0x10
-#define REG_SGTHRS 0x40
-#define REG_SG_RESULT 0x41
+TMC220x_Instance drv;
 
-void tmc_write(uint8_t reg, uint32_t val) {
-    uint8_t buf[8];
-    buf[0] = 0x05;  // Sync byte
-    buf[1] = TMC_ADDR;
-    buf[2] = reg | 0x80;  // Write flag
-    buf[3] = (val >> 24) & 0xFF;
-    buf[4] = (val >> 16) & 0xFF;
-    buf[5] = (val >> 8) & 0xFF;
-    buf[6] = val & 0xFF;
-    uint8_t crc = 0;
-    for(int i=0;i<7;i++) crc ^= buf[i];
-    buf[7] = crc;
-    for(int i=0;i<8;i++) USART1_Write(buf[i]);
-}</code></pre>
-    <p class="explain">🔍 1-Wire UART datagram: sync(0x05) + addr + reg(write bit) + 4-byte value + CRC — ส่งผ่าน USART1 Tx — CRC ใช้ XOR (simplified) — baud rate ต้องตั้งเป็น 115200</p></div>
-
-    <div class="step"><h3>ขั้นที่ 2: Configure StealthChop + Current</h3>
-    <pre><code class="language-c">int main(void) {
+int main(void) {
     SystemCoreClockUpdate();
-    USART1_Init(115200);
-    // TX pin = PD5 — 1-Wire with resistor network
-    pinMode(PC0, PIN_MODE_OUTPUT);  // STEP
-    pinMode(PC1, PIN_MODE_OUTPUT);  // DIR
-    pinMode(PC2, PIN_MODE_OUTPUT);  // EN
-    digitalWrite(PC2, LOW);         // Enable
 
-    // StealthChop: GCONF pwm_autoscale + en_spreadcycle=0
-    tmc_write(REG_GCONF, 0x00000004);  // en_pwm_mode=1 (StealthChop)
+    // Init: model=TMC2209, EN=PC2, DIR=PC1, STEP=PC0, 200 steps/rev
+    TMC220x_Init(&drv, TMC220x_MODEL_2209, PC2, PC1, PC0, 200);
+    USART_Println("TMC220x Ready!");</code></pre>
+    <p class="explain">🔍 <code>TMC220x_Init(&drv, model, en, dir, step, stepsPerRev)</code> — รองรับ TMC2208 และ TMC2209 — EN=PC2 (LOW=on), DIR=PC1, STEP=PC0 — 200 steps/rev สำหรับ NEMA17 ทั่วไป — ไลบรารีจัดการ 1-Wire UART ให้อัตโนมัติ</p></div>
 
-    // Set current: IHOLD=10/31, IRUN=20/31, IHOLDDELAY=3
-    tmc_write(REG_IHOLD_IRUN, 0x00031F0A);  // 0.5A hold, 1.0A run
+    <div class="step"><h3>ขั้นที่ 2: ตั้งความเร็ว + Enable</h3>
+    <pre><code class="language-c">    // ตั้งความเร็ว และเปิด driver
+    TMC220x_SetSpeed(&drv, 120);   // 120 RPM
+    TMC220x_Enable(&drv);
 
     // StallGuard threshold (TMC2209 only)
-    tmc_write(REG_SGTHRS, 100);  // 0-255, lower = more sensitive</code></pre>
-    <p class="explain">🔍 GCONF bit 2 = StealthChop — IHOLD=hold current (10/31), IRUN=run current (20/31) — SGTHRS = stallGuard threshold — ค่าต้อง tune ตามมอเตอร์ (เริ่มที่ 50-100)</p></div>
+    TMC220x_SetStallThreshold(&drv, 100);  // 0-255, lower = more sensitive</code></pre>
+    <p class="explain">🔍 <code>TMC220x_SetSpeed(&drv, rpm)</code> ตั้งความเร็วรอบ — <code>TMC220x_Enable(&drv)</code> เปิด driver และ StealthChop — <code>TMC220x_SetStallThreshold</code> ตั้งค่า stall detection — ค่าต้อง tune ตามมอเตอร์ (เริ่มที่ 50-100)</p></div>
 
-    <div class="step"><h3>ขั้นที่ 3: Sensorless Homing + Movement</h3>
-    <pre><code class="language-c">    // Sensorless Homing
-    digitalWrite(DIR, 0);  // Move towards home
-    while(1) {
-        digitalWrite(STEP, HIGH); Delay_Us(5);
-        digitalWrite(STEP, LOW);  Delay_Us(500);
-        // Read stallGuard result (simplified)
-        tmc_write(REG_SG_RESULT, 0);  // trigger read
-        // In real code, read UART response
-        // uint16_t sg = tmc_read(REG_SG_RESULT);
-        // if(sg < 50) break;  // Stall detected = home
-    }
-    // Home found — back off 100 steps
-    digitalWrite(DIR, 1);
-    for(int i=0;i<100;i++) {
-        digitalWrite(STEP, HIGH); Delay_Us(5);
-        digitalWrite(STEP, LOW);  Delay_Us(500);
+    <div class="step"><h3>ขั้นที่ 3: เคลื่อนที่ + Sensorless Homing</h3>
+    <pre><code class="language-c">    // เคลื่อนที่ 1000 steps (5 รอบ สำหรับ 200 steps/rev)
+    TMC220x_Move(&drv, 1000);
+    // ไลบรารีใช้ blocking move — ฟังก์ชัน return เมื่อเคลื่อนที่เสร็จ
+
+    Delay_Ms(500);
+
+    // เคลื่อนที่กลับทิศทาง — ใช้ค่าติดลบ
+    TMC220x_Move(&drv, -1000);
+
+    // Sensorless Homing
+    if(TMC220x_IsStalled(&drv)) {
+        USART_Println("Stall detected! At home position.");
+        TMC220x_Stop(&drv);
     }
 
     while(1) {
-        // Normal movement loop
-        digitalWrite(DIR, 1);
-        for(uint32_t i=0;i<6400;i++) {
-            digitalWrite(STEP, HIGH); Delay_Us(5);
-            digitalWrite(STEP, LOW);  Delay_Us(300);
-        }
-        Delay_Ms(1000);
-        digitalWrite(DIR, 0);
-        for(uint32_t i=0;i<6400;i++) {
-            digitalWrite(STEP, HIGH); Delay_Us(5);
-            digitalWrite(STEP, LOW);  Delay_Us(300);
-        }
-        Delay_Ms(1000);
+        // วนไปกลับ
+        TMC220x_Move(&drv, 2000);
+        Delay_Ms(500);
+        TMC220x_Move(&drv, -2000);
+        Delay_Ms(500);
     }
 }</code></pre>
-    <p class="explain">🔍 Sensorless homing: เคลื่อนที่ช้า ๆ จน stall — SG_RESULT < threshold = ชน — ถอยกลับ 100 steps เป็น home offset — การอ่าน SG_RESULT ต้องเปลี่ยน USART เป็น half-duplex read (นอกเหนือ scope นี้)</p></div>
+    <p class="explain">🔍 <code>TMC220x_Move(&drv, steps)</code> — steps > 0 หมุนตามเข็ม, steps < 0 หมุนทวนเข็ม — ใช้ blocking move — <code>TMC220x_IsStalled(&drv)</code> ตรวจสอบ stallGuard — sensorless homing ทำโดยเคลื่อนที่จน stall แล้วหยุด</p></div>
 </section>
 
 <section>
     <h2>📋 API Reference</h2>
     <table>
         <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
-        <tr><td><code>TMC2209_Init(addr)</code></td><td>เริ่ม UART + ตั้งค่า default registers</td><td><code>TMC2209_Init(0)</code></td></tr>
-        <tr><td><code>TMC_WriteReg(reg, val)</code></td><td>เขียน 32-bit ลง register</td><td><code>TMC_WriteReg(0x10, 0x31F0A)</code></td></tr>
-        <tr><td><code>TMC_ReadReg(reg)</code></td><td>อ่าน 32-bit จาก register</td><td><code>uint32_t sg = TMC_ReadReg(0x41)</code></td></tr>
-        <tr><td><code>TMC_EnableStealthChop()</code></td><td>เปิดโหมดเงียบ</td><td><code>TMC_EnableStealthChop()</code></td></tr>
-        <tr><td><code>TMC_SetCurrent(run, hold)</code></td><td>ตั้งกระแส run และ hold (0-31)</td><td><code>TMC_SetCurrent(20, 10)</code></td></tr>
-        <tr><td><code>TMC_ReadStallGuard()</code></td><td>อ่านค่า stallGuard (0-1023)</td><td><code>if(TMC_ReadStallGuard() < 50)</code></td></tr>
+        <tr><td><code>TMC220x_Init(&drv, model, en, dir, step, spr)</code></td><td>เริ่ม UART + ตั้งค่า default registers</td><td><code>TMC220x_Init(&drv, TMC220x_MODEL_2209, PC2, PC1, PC0, 200)</code></td></tr>
+        <tr><td><code>TMC220x_SetSpeed(&drv, rpm)</code></td><td>ตั้งความเร็วรอบ (RPM)</td><td><code>TMC220x_SetSpeed(&drv, 120)</code></td></tr>
+        <tr><td><code>TMC220x_Enable(&drv)</code></td><td>เปิด StealthChop + driver</td><td><code>TMC220x_Enable(&drv)</code></td></tr>
+        <tr><td><code>TMC220x_Move(&drv, steps)</code></td><td>เคลื่อนที่ n steps (blocking)</td><td><code>TMC220x_Move(&drv, 1000)</code></td></tr>
+        <tr><td><code>TMC220x_IsStalled(&drv)</code></td><td>ตรวจสอบว่ามอเตอร์ stall หรือไม่</td><td><code>if(TMC220x_IsStalled(&drv))</code></td></tr>
+        <tr><td><code>TMC220x_SetStallThreshold(&drv, thr)</code></td><td>ตั้งค่า stallGuard threshold</td><td><code>TMC220x_SetStallThreshold(&drv, 100)</code></td></tr>
     </table>
 </section>
 
@@ -187,43 +151,34 @@ void tmc_write(uint8_t reg, uint32_t val) {
 #include "SimpleHAL.h"
 #include "TMC220x.h"
 
+TMC220x_Instance drv;
 int32_t z_pos = 0;
 #define STEPS_PER_MM 3200  // 1/16 * 200 steps/rev / 1.25mm pitch
 
-void z_home() {
-    uint8_t stall = 0;
-    while(!stall) {
-        digitalWrite(PC0, HIGH); Delay_Us(5);
-        digitalWrite(PC0, LOW);  Delay_Us(800);
-        // stall = (TMC_ReadStallGuard() < 30);
+void z_home(void) {
+    // เคลื่อนที่ช้า ๆ จน stall
+    TMC220x_SetStallThreshold(&drv, 30);
+    TMC220x_Move(&drv, -50000);  // เคลื่อนที่เข้าหา home
+    if(TMC220x_IsStalled(&drv)) {
+        z_pos = 0;
+        USART_Println("Homed!");
     }
-    // Back off 2mm
-    for(int i=0;i<STEPS_PER_MM*2;i++) {
-        digitalWrite(PC0, HIGH); Delay_Us(5);
-        digitalWrite(PC0, LOW);  Delay_Us(300);
-    }
-    z_pos = 0;
 }
 
 void z_move_to(int32_t target_mm) {
-    int32_t delta = target_mm - z_pos;
-    int32_t pulses = (delta > 0) ? delta * STEPS_PER_MM : -delta * STEPS_PER_MM;
-    digitalWrite(PC1, (delta > 0) ? 1 : 0);
-    for(int32_t i=0;i<pulses;i++) {
-        digitalWrite(PC0, HIGH); Delay_Us(5);
-        digitalWrite(PC0, LOW);  Delay_Us(200);
-    }
-    z_pos = target_mm;
+    int32_t delta = (target_mm * STEPS_PER_MM) - z_pos;
+    TMC220x_Move(&drv, delta);
+    z_pos = target_mm * STEPS_PER_MM;
 }
 
 int main(void) {
     SystemCoreClockUpdate();
-    USART1_Init(115200); USART2_Init(115200);
-    pinMode(PC0, PIN_MODE_OUTPUT); pinMode(PC1, PIN_MODE_OUTPUT);
-    pinMode(PC2, PIN_MODE_OUTPUT); digitalWrite(PC2, LOW);
-    TMC2209_Init(0);
-    TMC_EnableStealthChop();
-    TMC_SetCurrent(20, 10);
+    USART1_Init(115200);
+    USART2_Init(115200);
+
+    TMC220x_Init(&drv, TMC220x_MODEL_2209, PC2, PC1, PC0, 200);
+    TMC220x_SetSpeed(&drv, 120);
+    TMC220x_Enable(&drv);
     z_home();
 
     while(1) {
@@ -244,7 +199,7 @@ int main(void) {
 <section>
     <h2>✏️ ลองทำดู</h2>
     <ol>
-        <li>ทำ Auto-Tune StallGuard — โปรแกรมให้มอเตอร์เดินจน stall แล้วอ่าน SG_RESULT — เก็บค่า threshold ที่เหมาะสมลง EEPROM</li>
+        <li>ทำ Auto-Tune StallGuard — โปรแกรมให้มอเตอร์เดินจน stall แล้วอ่านค่า stall — เก็บค่า threshold ที่เหมาะสมลง EEPROM</li>
         <li>ควบคุม TMC2209 หลายตัวบน UART bus เดียว (address 0-3) — ทำ 4-axis (X,Y,Z,E) ด้วย CH32V003 ตัวเดียว</li>
         <li>ใช้ SpreadCycle สำหรับ Z-hop — switch โหมดระหว่าง StealthChop (เคลื่อนที่ปกติ) กับ SpreadCycle (ตอน Z-hop ที่ต้องการแรงบิดสูง)</li>
     </ol>

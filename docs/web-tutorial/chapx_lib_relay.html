@@ -64,27 +64,27 @@ flowchart TD
 <section>
     <h2>💻 เขียน Code ทีละขั้น</h2>
 
-    <div class="step"><h3>ขั้นที่ 1: Init GPIO + ตรวจสอบ Logic</h3>
+    <div class="step"><h3>ขั้นที่ 1: สร้าง Instance + Init</h3>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "Relay.h"
 
-#define RELAY1 PC0  // Relay 1
-#define RELAY2 PC1  // Relay 2 (2-channel module)
+Relay_Instance relay1;
+Relay_Instance relay2;
 
 int main(void) {
     SystemCoreClockUpdate();
-    pinMode(RELAY1, PIN_MODE_OUTPUT);
-    pinMode(RELAY2, PIN_MODE_OUTPUT);
 
-    // ตรวจสอบว่า module เป็น Active LOW หรือ HIGH
-    // Active LOW: LOW=ON, HIGH=OFF (ส่วนใหญ่)
-    // Active HIGH: HIGH=ON, LOW=OFF
-    digitalWrite(RELAY1, HIGH);  // เริ่มต้น OFF
-    digitalWrite(RELAY2, HIGH);</code></pre>
-    <p class="explain">🔍 เริ่มต้นด้วย HIGH เพื่อให้ relay OFF (สำหรับ Active LOW module) — ฟังเสียง "click" เพื่อยืนยัน — relay ที่ ON จะมีเสียง click และไฟ LED ติด</p></div>
+    // Active LOW: LOW=ON, HIGH=OFF
+    Relay_Init(&relay1, PC0, RELAY_ACTIVE_LOW);
+    Relay_Init(&relay2, PC1, RELAY_ACTIVE_LOW);
 
-    <div class="step"><h3>ขั้นที่ 2: ON/OFF + Delay Control</h3>
+    // เริ่มต้นปิดทุก relay
+    Relay_Off(&relay1);
+    Relay_Off(&relay2);</code></pre>
+    <p class="explain">🔍 <code>Relay_Init(&relay, pin, activeLevel)</code> ใช้ instance-based — RELAY_ACTIVE_LOW หรือ RELAY_ACTIVE_HIGH — เริ่มต้นด้วย Off() เพื่อให้ relay OFF — ฟังเสียง "click" เพื่อยืนยัน</p></div>
+
+    <div class="step"><h3>ขั้นที่ 2: ON/OFF + Toggle</h3>
     <pre><code class="language-c">    // ทดสอบเปิด-ปิด relay ด้วย Non-Blocking Timer
     Timer_t tmr_relay;
     Start_Timer(&tmr_relay, 2000, 1);  // toggle ทุก 2 วิ
@@ -94,32 +94,32 @@ int main(void) {
         if(Is_Timer_Expired(&tmr_relay)) {
             relay_state = !relay_state;
             if(relay_state) {
-                digitalWrite(RELAY1, LOW);   // ON (Active LOW)
-                digitalWrite(RELAY2, LOW);
+                Relay_On(&relay1);
+                Relay_On(&relay2);
             } else {
-                digitalWrite(RELAY1, HIGH);  // OFF
-                digitalWrite(RELAY2, HIGH);
+                Relay_Off(&relay1);
+                Relay_Off(&relay2);
             }
         }
         // main loop ทำงานอื่นได้อิสระ
     }
 }</code></pre>
-    <p class="explain">🔍 ใช้ Non-Blocking Timer สลับ relay ทุก 2 วิ — LOW=ON สำหรับ Active LOW — ได้ยินเสียง click ทุกครั้งที่เปลี่ยนสถานะ — relay เป็น mechanical device อายุใช้งาน ~100,000 ครั้ง</p></div>
+    <p class="explain">🔍 <code>Relay_On(&relay)</code> / <code>Relay_Off(&relay)</code> ใช้เปิดปิด — <code>Relay_Toggle(&relay)</code> สลับสถานะ — <code>Relay_IsOn(&relay)</code> อ่านสถานะ — relay เป็น mechanical device อายุใช้งาน ~100,000 ครั้ง</p></div>
 
     <div class="step"><h3>ขั้นที่ 3: Multi-Relay + Button + Safety</h3>
     <pre><code class="language-c">// 2-channel relay + 2 buttons (toggle)
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    pinMode(RELAY1, PIN_MODE_OUTPUT);
-    pinMode(RELAY2, PIN_MODE_OUTPUT);
+    Relay_Init(&relay1, PC0, RELAY_ACTIVE_LOW);
+    Relay_Init(&relay2, PC1, RELAY_ACTIVE_LOW);
+    Relay_Off(&relay1);
+    Relay_Off(&relay2);
+
     pinMode(PC3, PIN_MODE_INPUT_PULLUP);  // BTN1
     pinMode(PC4, PIN_MODE_INPUT_PULLUP);  // BTN2
-    digitalWrite(RELAY1, HIGH);
-    digitalWrite(RELAY2, HIGH);
 
     uint8_t btn1_prev = 1, btn2_prev = 1;
-    uint8_t r1 = 0, r2 = 0;  // relay states
 
     while(1) {
         uint8_t b1 = digitalRead(PC3);
@@ -127,13 +127,11 @@ int main(void) {
 
         // กดปุ่ม toggle relay (falling edge)
         if(!b1 && btn1_prev) {
-            r1 = !r1;
-            digitalWrite(RELAY1, r1 ? LOW : HIGH);
+            Relay_Toggle(&relay1);
             Delay_Ms(50); // debounce
         }
         if(!b2 && btn2_prev) {
-            r2 = !r2;
-            digitalWrite(RELAY2, r2 ? LOW : HIGH);
+            Relay_Toggle(&relay2);
             Delay_Ms(50);
         }
         btn1_prev = b1; btn2_prev = b2;
@@ -141,32 +139,30 @@ int main(void) {
         // Safety: auto-off after 30 seconds if both on
         static Timer_t tmr_safety;
         static uint8_t safety_started = 0;
-        if(r1 && r2 && !safety_started) {
+        if(Relay_IsOn(&relay1) && Relay_IsOn(&relay2) && !safety_started) {
             Start_Timer(&tmr_safety, 30000, 0);
             safety_started = 1;
         }
         if(safety_started && Is_Timer_Expired(&tmr_safety)) {
-            r1 = r2 = 0;
-            digitalWrite(RELAY1, HIGH);
-            digitalWrite(RELAY2, HIGH);
+            Relay_Off(&relay1);
+            Relay_Off(&relay2);
             safety_started = 0;
         }
-        if(!r1 && !r2) safety_started = 0;
+        if(!Relay_IsOn(&relay1) && !Relay_IsOn(&relay2)) safety_started = 0;
     }
 }</code></pre>
-    <p class="explain">🔍 Toggle relay ด้วยปุ่ม — debounce 50ms — Safety timer: ถ้า relay ทั้งสอง ON พร้อมกันเกิน 30 วิ ให้ปิดอัตโนมัติ — ป้องกันอุปกรณ์เสียหายหรือไฟไหม้</p></div>
+    <p class="explain">🔍 Toggle relay ด้วยปุ่ม — debounce 50ms — <code>Relay_IsOn(&relay)</code> อ่านสถานะ — Safety timer: ถ้า relay ทั้งสอง ON พร้อมกันเกิน 30 วิ ให้ปิดอัตโนมัติ — ป้องกันอุปกรณ์เสียหายหรือไฟไหม้</p></div>
 </section>
 
 <section>
     <h2>📋 API Reference</h2>
     <table>
         <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
-        <tr><td><code>Relay_Init(pin, active)</code></td><td>เริ่ม relay — ระบุ active LOW/HIGH</td><td><code>Relay_Init(PC0, ACTIVE_LOW)</code></td></tr>
-        <tr><td><code>Relay_On(pin)</code></td><td>เปิด relay</td><td><code>Relay_On(PC0)</code></td></tr>
-        <tr><td><code>Relay_Off(pin)</code></td><td>ปิด relay</td><td><code>Relay_Off(PC0)</code></td></tr>
-        <tr><td><code>Relay_Toggle(pin)</code></td><td>กลับสถานะ relay</td><td><code>Relay_Toggle(PC0)</code></td></tr>
-        <tr><td><code>Relay_Read(pin)</code></td><td>อ่านสถานะ (ON=1, OFF=0)</td><td><code>if(Relay_Read(PC0)){...}</code></td></tr>
-        <tr><td><code>Relay_Pulse(pin, ms)</code></td><td>เปิด relay เป็นเวลา ms</td><td><code>Relay_Pulse(PC0, 500)</code></td></tr>
+        <tr><td><code>Relay_Init(&relay, pin, active)</code></td><td>เริ่ม relay — ระบุ active LOW/HIGH</td><td><code>Relay_Init(&relay, PC0, RELAY_ACTIVE_HIGH)</code></td></tr>
+        <tr><td><code>Relay_On(&relay)</code></td><td>เปิด relay</td><td><code>Relay_On(&relay)</code></td></tr>
+        <tr><td><code>Relay_Off(&relay)</code></td><td>ปิด relay</td><td><code>Relay_Off(&relay)</code></td></tr>
+        <tr><td><code>Relay_Toggle(&relay)</code></td><td>กลับสถานะ relay</td><td><code>Relay_Toggle(&relay)</code></td></tr>
+        <tr><td><code>Relay_IsOn(&relay)</code></td><td>อ่านสถานะ (ON=true, OFF=false)</td><td><code>if(Relay_IsOn(&relay)){...}</code></td></tr>
     </table>
 </section>
 
@@ -174,7 +170,7 @@ int main(void) {
     <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
     <table>
         <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
-        <tr><td>Relay ไม่ ON — ไม่มีเสียง click</td><td>GPIO logic กลับด้าน — module เป็น Active HIGH</td><td>ลองกลับ logic: LOW->HIGH, HIGH->LOW — หรือใช้ jumper บนบอร์ดเลือกโหมด</td></tr>
+        <tr><td>Relay ไม่ ON — ไม่มีเสียง click</td><td>GPIO logic กลับด้าน — module เป็น Active HIGH</td><td>ลองเปลี่ยน RELAY_ACTIVE_LOW เป็น RELAY_ACTIVE_HIGH — หรือใช้ jumper บนบอร์ดเลือกโหมด</td></tr>
         <tr><td>Relay ON ค้าง ปิดไม่ได้</td><td>MCU GPIO ไม่พอจ่ายกระแส — transistor ไม่ fully off</td><td>ตรวจสอบ GPIO output voltage — ใช้ pull-down resistor 10kΩ ที่ IN pin</td></tr>
         <tr><td>MCU รีเซ็ตเองเวลา relay เปลี่ยนสถานะ</td><td>Flyback spike จาก relay coil รบกวนไฟ MCU</td><td>ใช้ capacitor 100μF + 100nF ขนาน VCC-GND ใกล้ MCU — แยก supply relay กับ MCU</td></tr>
         <tr><td>Relay ติด ๆ ดับ ๆ (chattering)</td><td>GPIO noise — สัญญาณรบกวนจาก AC line</td><td>ใช้ shielded cable — ต่อ snubber circuit (100Ω + 100nF series) ขนาน contact — แยกสายไฟ AC ห่างจาก MCU</td></tr>
@@ -189,7 +185,7 @@ int main(void) {
 #include "SimpleHAL.h"
 #include "Relay.h"
 
-#define RELAY PC0
+Relay_Instance relay;
 uint8_t schedule_h = 18, schedule_m = 30; // เปิด 18:30
 uint8_t duration_min = 120;  // ปิดหลัง 120 นาที
 uint8_t relay_on = 0;
@@ -198,9 +194,10 @@ uint32_t auto_off_time = 0;
 int main(void) {
     SystemCoreClockUpdate(); Timer_Init();
     OLED_Init_I2C(0x3C, PC2, PC1);
-    pinMode(RELAY, PIN_MODE_OUTPUT);
+    Relay_Init(&relay, PC0, RELAY_ACTIVE_LOW);
+    Relay_Off(&relay);
+
     pinMode(PC3, PIN_MODE_INPUT_PULLUP); // BTN: manual toggle
-    digitalWrite(RELAY, HIGH); // Off
 
     uint8_t btn_prev = 1;
     uint8_t hour = 12, min = 0;  // simulated time (use RTC in real)
@@ -215,22 +212,22 @@ int main(void) {
 
         // Auto ON at schedule time
         if(hour == schedule_h && min == schedule_m && !relay_on) {
-            digitalWrite(RELAY, LOW);  // ON
+            Relay_On(&relay);
             relay_on = 1;
             auto_off_time = Get_CurrentMs() + (uint32_t)duration_min * 60000;
         }
 
         // Auto OFF after duration
         if(relay_on && Get_CurrentMs() >= auto_off_time) {
-            digitalWrite(RELAY, HIGH);
+            Relay_Off(&relay);
             relay_on = 0;
         }
 
         // Manual toggle button
         uint8_t btn = digitalRead(PC3);
         if(!btn && btn_prev) {
-            relay_on = !relay_on;
-            digitalWrite(RELAY, relay_on ? LOW : HIGH);
+            Relay_Toggle(&relay);
+            relay_on = Relay_IsOn(&relay);
             Delay_Ms(50);
         }
         btn_prev = btn;

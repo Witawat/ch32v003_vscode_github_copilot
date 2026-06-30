@@ -7,6 +7,7 @@
 #include "KeyMatrix.h"
 #include "I2C_LCD.h"
 
+KeyMatrix_Instance kp;
 #define KEYMAP "123+456-789*C0=/"  // 4×4 matrix
 
 int32_t num1 = 0, num2 = 0;
@@ -35,12 +36,14 @@ void calc_process(char key) {
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    KeyMatrix_Init(PA0, PA1, PA2, PA3, PA4, PA5, PA6, PA7, KEYMAP);
+    GPIO_Pin rows[] = {PA0, PA1, PA2, PA3};
+    GPIO_Pin cols[] = {PA4, PA5, PA6, PA7};
+    KeyMatrix_Init(&kp, rows, 4, cols, 4, KEYMAP);
     I2C_LCD_Init(0x27, 16, 2);
     I2C_LCD_Backlight(1);
 
     while(1) {
-        char key = KeyMatrix_GetKey();
+        char key = KeyMatrix_GetKey(&kp);
         if(key != 0) {
             calc_process(key);
             I2C_LCD_Clear();
@@ -51,7 +54,7 @@ int main(void) {
                 snprintf(display, 17, "%ld", num1);
                 I2C_LCD_SetCursor(0, 1); I2C_LCD_Print(display);
             }
-            while(KeyMatrix_GetKey() != 0);  // debounce wait
+            while(KeyMatrix_GetKey(&kp) != 0);  // debounce wait
         }
     }
 }</code></pre>
@@ -63,6 +66,7 @@ int main(void) {
 #include "I2C_LCD.h"
 #include "AT24Cxx.h"
 
+KeyMatrix_Instance kp;
 #define KEYMAP  "123A456B789C*0#D"
 #define PASSWD  "2847"
 #define MAXLEN  4
@@ -73,13 +77,15 @@ uint8_t pos = 0;
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    KeyMatrix_Init(PA0, PA1, PA2, PA3, PA4, PA5, PA6, PA7, KEYMAP);
+    GPIO_Pin rows[] = {PA0, PA1, PA2, PA3};
+    GPIO_Pin cols[] = {PA4, PA5, PA6, PA7};
+    KeyMatrix_Init(&kp, rows, 4, cols, 4, KEYMAP);
     I2C_LCD_Init(0x27, 16, 2);
     I2C_LCD_Backlight(1);
     I2C_LCD_SetCursor(0, 0); I2C_LCD_Print("Enter Password:");
 
     while(1) {
-        char key = KeyMatrix_GetKey();
+        char key = KeyMatrix_GetKey(&kp);
         if(key == 0) continue;
 
         if(key >= '0' && key <= '9' && pos < MAXLEN) {
@@ -97,7 +103,7 @@ int main(void) {
         if(key == '#' && pos == MAXLEN) {
             if(strcmp(input, PASSWD) == 0) {
                 I2C_LCD_Clear(); I2C_LCD_Print("ACCESS GRANTED");
-                digitalWrite(PC0, HIGH); Delay_Ms(2000); digitalWrite(PC0, LOW);
+                GPIO_WriteBit(PC0, 1); Delay_Ms(2000); GPIO_WriteBit(PC0, 0);
             } else {
                 I2C_LCD_Clear(); I2C_LCD_Print("ACCESS DENIED");
                 Delay_Ms(1500);
@@ -115,6 +121,7 @@ int main(void) {
 #include "SimpleHAL.h"
 #include "KeyMatrix.h"
 
+KeyMatrix_Instance kp;
 #define ROWS 4
 #define COLS 4
 #define KEYMAP "123A456B789C*0#D"
@@ -146,8 +153,7 @@ int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
     USART_Init(115200);
-    KeyMatrix_Init(row_pins[0], row_pins[1], row_pins[2], row_pins[3],
-                   col_pins[0], col_pins[1], col_pins[2], col_pins[3], KEYMAP);
+    KeyMatrix_Init(&kp, row_pins, 4, col_pins, 4, KEYMAP);
 
     uint8_t pressed[16], pcount = 0;
     Timer_t scan_tmr;
@@ -155,7 +161,7 @@ int main(void) {
 
     while(1) {
         if(Is_Timer_Expired(&scan_tmr)) {
-            pcount = KeyMatrix_GetAllPressed(pressed, 16);
+            pcount = KeyMatrix_GetAllPressed(&kp, pressed, 16);
 
             if(ghost_detect(pressed, pcount)) {
                 USART_Println("⚠ GHOST KEY DETECTED — data unreliable!");

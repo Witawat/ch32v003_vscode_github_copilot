@@ -12,8 +12,11 @@ int main(void) {
     Timer_Init();
     USART_Init(115200);
 
-    AHT10_Init(0x38);
-    DHT_Init(PC0, DHT22);
+    AHT10_Instance sensor;
+    AHT10_Init(&sensor);
+
+    DHT_Instance dht;
+    DHT_Init(&dht, PC0, DHT_TYPE_DHT22);
 
     USART_Println("AHT_T,AHT_H,DHT_T,DHT_H,dT,dH");
 
@@ -22,14 +25,12 @@ int main(void) {
 
     while(1) {
         if(Is_Timer_Expired(&tmr)) {
-            AHT10_TriggerMeasurement();
-            Delay_Ms(80);
+            float at, ah;
+            AHT10_Read(&sensor, &at, &ah);
 
-            float at = AHT10_ReadTemperature();
-            float ah = AHT10_ReadHumidity();
-
-            float dt, dh;
-            uint8_t ok = DHT_Read(&dt, &dh);
+            uint8_t ok = DHT_Read(&dht);
+            float dt = DHT_GetTemperature(&dht);
+            float dh = DHT_GetHumidity(&dht);
 
             USART_PrintFloat(at, 1); USART_Print(",");
             USART_PrintFloat(ah, 1); USART_Print(",");
@@ -62,7 +63,10 @@ int main(void) {
     Timer_Init();
 
     pinMode(LED_RED, PIN_MODE_OUTPUT);
-    AHT10_Init(0x38);
+
+    AHT10_Instance sensor;
+    AHT10_Init(&sensor);
+
     Buzzer_Init(BUZZER_PIN, BUZZER_ACTIVE);
 
     Timer_t tmr;
@@ -70,11 +74,8 @@ int main(void) {
 
     while(1) {
         if(Is_Timer_Expired(&tmr)) {
-            AHT10_TriggerMeasurement();
-            Delay_Ms(80);
-
-            float t = AHT10_ReadTemperature();
-            float h = AHT10_ReadHumidity();
+            float t, h;
+            AHT10_Read(&sensor, &t, &h);
 
             USART_Print("T:"); USART_PrintFloat(t, 1);
             USART_Print("C H:"); USART_PrintFloat(h, 1);
@@ -82,7 +83,7 @@ int main(void) {
 
             if(h > HUM_THRESHOLD) {
                 digitalWrite(LED_RED, HIGH);
-                Buzzer_Beep(BUZZER_PIN, 300);
+                Buzzer_Beep(300);
                 Delay_Ms(200);
                 digitalWrite(LED_RED, LOW);
             } else {
@@ -105,17 +106,16 @@ int main(void) {
     USART_Init(115200);
 
     pinMode(BTN_RESET, PIN_MODE_INPUT_PULLUP);
-    AHT10_Init(0x38);
+
+    AHT10_Instance sensor;
+    AHT10_Init(&sensor);
 
     USART_Println("Press button to SoftReset AHT10");
 
     while(1) {
-        AHT10_TriggerMeasurement();
-        Delay_Ms(80);
-
-        float t = AHT10_ReadTemperature();
-        float h = AHT10_ReadHumidity();
-        uint8_t stat = AHT10_ReadStatus();
+        float t, h;
+        AHT10_Read(&sensor, &t, &h);
+        uint8_t stat = AHT10_ReadStatus(&sensor);
 
         USART_Print("T:"); USART_PrintFloat(t, 1);
         USART_Print(" H:"); USART_PrintFloat(h, 1);
@@ -124,9 +124,9 @@ int main(void) {
 
         if(digitalRead(BTN_RESET) == LOW) {
             USART_Println("→ SoftReset...");
-            AHT10_SoftReset();
+            AHT10_SoftReset(&sensor);
             Delay_Ms(20);
-            AHT10_Init(0x38);     // re-init หลัง reset
+            AHT10_Init(&sensor);     // re-init หลัง reset
             USART_Println("→ Re-initialized!");
 
             Delay_Ms(300);  // debounce

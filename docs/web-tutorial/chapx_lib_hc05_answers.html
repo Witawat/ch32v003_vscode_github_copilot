@@ -4,7 +4,8 @@
 
 <div class="answer">
 <h2>ข้อ 1: เปลี่ยนชื่อ Bluetooth + ตั้ง PIN ใหม่</h2>
-<pre><code class="language-c">#define BT_NEW_NAME  "CH32V003_BT"
+<pre><code class="language-c">HC05_Instance bt;
+#define BT_NEW_NAME  "CH32V003_BT"
 #define BT_NEW_PIN   "2580"
 
 void hc05_configure(void) {
@@ -13,42 +14,39 @@ void hc05_configure(void) {
     GPIO_WriteBit(PC4, 1);  // ENTER AT MODE
     Delay_Ms(500);
 
-    USART_SimpleInit(BAUD_38400, USART_PINS_DEFAULT);  // HC05 AT: 38400
+    HC05_Init(&bt, BAUD_38400);  // HC05 AT: 38400
 
     // เปลี่ยนชื่อ
-    USART_Print("AT+NAME=");
-    USART_Println(BT_NEW_NAME);
+    HC05_SendString(&bt, "AT+NAME=");
+    HC05_SendString(&bt, BT_NEW_NAME);
+    HC05_SendString(&bt, "\r\n");
     Delay_Ms(200);
     if(USART_FindStr("OK", 1000) >= 0)
         USART_Println("[BT] Name changed OK");
 
     // เปลี่ยน PIN
-    USART_Print("AT+PSWD=");
-    USART_Println(BT_NEW_PIN);
+    HC05_SendString(&bt, "AT+PSWD=");
+    HC05_SendString(&bt, BT_NEW_PIN);
+    HC05_SendString(&bt, "\r\n");
     Delay_Ms(200);
     if(USART_FindStr("OK", 1000) >= 0)
         USART_Println("[BT] PIN changed OK");
 
     // เช็คการตั้งค่าปัจจุบัน
-    USART_Println("AT+VERSION?");
-    USART_Println("AT+NAME?");
-    USART_Println("AT+PSWD?");
+    HC05_SendString(&bt, "AT+VERSION?\r\n");
+    HC05_SendString(&bt, "AT+NAME?\r\n");
+    HC05_SendString(&bt, "AT+PSWD?\r\n");
 
     GPIO_WriteBit(PC4, 0);  // EXIT AT MODE
     USART_Println("[BT] Configuration done. Restart module.");
-}
-
-// AT command จำเป็นต้องส่ง CR+LF (\r\n)
-void USART_Println(const char *s) {
-    USART_Print(s);
-    USART_Print("\r\n");
 }</code></pre>
 <div class="approach"><strong>🧠 แนวคิด:</strong> HC05 เข้า AT mode โดยดึงขา KEY/EN HIGH แล้วเปิดไฟ — AT mode ใช้ baudrate 38400 (ค่า default) — คำสั่งเปลี่ยนชื่อ: AT+NAME=xxx, เปลี่ยนรหัส: AT+PSWD=xxx — ใช้ USART_FindStr หา "OK" แทนการเช็คทีละบรรทัด — รีบูตโมดูลหลังแก้ไขค่าเพื่อให้生效</div>
 </div>
 
 <div class="answer">
 <h2>ข้อ 2: Data Bridge — ส่งข้อมูลระหว่างมือถือกับ MCU</h2>
-<pre><code class="language-c">volatile char bt_rx_buf[64];
+<pre><code class="language-c">HC05_Instance bt;
+volatile char bt_rx_buf[64];
 volatile uint8_t bt_rx_idx = 0;
 volatile uint8_t bt_new_cmd = 0;
 
@@ -70,7 +68,7 @@ void hc05_bridge(void) {
             else if(strcmp((char *)bt_rx_buf, "LED1_OFF") == 0)
                 GPIO_WriteBit(PC0, 0);
             else if(strcmp((char *)bt_rx_buf, "STATUS") == 0) {
-                USART_Print("TEMP:25.5 HUM:60\r\n");
+                HC05_SendString(&bt, "TEMP:25.5 HUM:60\r\n");
             }
         }
 
@@ -102,38 +100,41 @@ void hc05_rx_poll(void) {
 
 <div class="answer">
 <h2>ข้อ 3: Master-Slave auto-connect + pairing</h2>
-<pre><code class="language-c">#define SLAVE_MAC  "98D3,31,F539AB"  // MAC ของอุปกรณ์ที่จะเชื่อม
+<pre><code class="language-c">HC05_Instance bt;
+#define SLAVE_MAC  "98D3,31,F539AB"  // MAC ของอุปกรณ์ที่จะเชื่อม
 
 void hc05_master_connect(void) {
     GPIO_SimpleInit(PC4, GPIO_OUT_PP);
     GPIO_WriteBit(PC4, 1);  // AT MODE
     Delay_Ms(300);
 
-    USART_SimpleInit(BAUD_38400, USART_PINS_DEFAULT);
+    HC05_Init(&bt, BAUD_38400);
 
     // ตั้งเป็น Master
-    USART_Println("AT+ROLE=1");  // 0=Slave, 1=Master, 2=Loopback
+    HC05_SendString(&bt, "AT+ROLE=1\r\n");  // 0=Slave, 1=Master, 2=Loopback
     Delay_Ms(100);
 
     // ลบ pairing เก่า
-    USART_Println("AT+RMAAD");
+    HC05_SendString(&bt, "AT+RMAAD\r\n");
     Delay_Ms(100);
 
     // จับคู่กับ Slave MAC
-    USART_Print("AT+PAIR=");
-    USART_Println(SLAVE_MAC);
+    HC05_SendString(&bt, "AT+PAIR=");
+    HC05_SendString(&bt, SLAVE_MAC);
+    HC05_SendString(&bt, "\r\n");
     Delay_Ms(100);
 
     // ผูกกับอุปกรณ์นี้เท่านั้น
-    USART_Print("AT+BIND=");
-    USART_Println(SLAVE_MAC);
+    HC05_SendString(&bt, "AT+BIND=");
+    HC05_SendString(&bt, SLAVE_MAC);
+    HC05_SendString(&bt, "\r\n");
     Delay_Ms(100);
 
     // Auto-connect ทันทีเมื่อเปิด
-    USART_Println("AT+CMODE=0");  // connect to paired device only
+    HC05_SendString(&bt, "AT+CMODE=0\r\n");  // connect to paired device only
     Delay_Ms(100);
 
-    USART_Println("AT+INIT");  // เริ่ม SPP profile
+    HC05_SendString(&bt, "AT+INIT\r\n");  // เริ่ม SPP profile
 
     USART_Println("[BT] Master config done");
     GPIO_WriteBit(PC4, 0);
@@ -146,11 +147,11 @@ void hc05_master_connect(void) {
 // Slave side — minimal setup
 void hc05_slave_setup(void) {
     GPIO_WriteBit(PC4, 1); Delay_Ms(300);
-    USART_SimpleInit(BAUD_38400, USART_PINS_DEFAULT);
+    HC05_Init(&bt, BAUD_38400);
 
-    USART_Println("AT+ROLE=0");    // Slave mode
-    USART_Println("AT+CMODE=0");   // connect to any device
-    USART_Println("AT+NAME=SLAVE_CH32");
+    HC05_SendString(&bt, "AT+ROLE=0\r\n");    // Slave mode
+    HC05_SendString(&bt, "AT+CMODE=0\r\n");   // connect to any device
+    HC05_SendString(&bt, "AT+NAME=SLAVE_CH32\r\n");
 
     GPIO_WriteBit(PC4, 0);
     USART_SimpleInit(BAUD_9600, USART_PINS_DEFAULT);

@@ -22,8 +22,9 @@ int main(void) {
     I2C_Init(PC1, PC2, I2C_SPEED_STANDARD);
     USART_Init(115200);
 
-    HX711_t scale;
-    HX711_Init(&scale, DT_PIN, SCK_PIN, HX711_GAIN_128);
+    HX711_Instance hx;
+    HX711_Init(&hx, DT_PIN, SCK_PIN);
+    HX711_SetGain(&hx, HX711_GAIN_128);
 
     OLED_Handle oled;
     OLED_Init(&oled, OLED_128x64, 0x3C);
@@ -35,18 +36,18 @@ int main(void) {
     Unit_t unit = UNIT_GRAM;
 
     USART_Print("Calibrating... place known weight\r\n");
-    HX711_Tare(&scale, 15);
+    HX711_Tare(&hx, 15);
     USART_Print("Tare done. Place 100g calibration weight.\r\n");
     Delay_Ms(3000);
-    HX711_Calibrate(&scale, 100.0f, 10);
+    HX711_Calibrate(&hx, 100.0f, 10);
     USART_Print("Calibration done!\r\n");
 
     while(1) {
-        float weight_g = HX711_ReadWeight(&scale, 8);
+        float weight_g = HX711_GetWeight(&hx, 8);
 
         if(GPIO_Read(TARE_BTN) == 0) {
             Delay_Ms(100);
-            HX711_Tare(&scale, 15);
+            HX711_Tare(&hx, 15);
             USART_Print("TARE!\r\n");
             while(GPIO_Read(TARE_BTN) == 0);
         }
@@ -116,9 +117,10 @@ int main(void) {
     SPI_Init(PC4, PC5, PC6, SPI_MODE0);
     USART_Init(115200);
 
-    HX711_t scale;
-    HX711_Init(&scale, DT_PIN, SCK_PIN, HX711_GAIN_128);
-    HX711_SetScale(&scale, 420.5f);
+    HX711_Instance hx;
+    HX711_Init(&hx, DT_PIN, SCK_PIN);
+    HX711_SetGain(&hx, HX711_GAIN_128);
+    HX711_SetScale(&hx, 420.5f);
 
     W25Qxx_Init();
     W25Qxx_EraseSector(0);
@@ -127,7 +129,7 @@ int main(void) {
 
     USART_Print("Auto-Tare...\r\n");
     Delay_Ms(2000);
-    HX711_Tare(&scale, 15);
+    HX711_Tare(&hx, 15);
     USART_Print("Weight Logger Ready\r\n");
 
     uint16_t log_count = 0;
@@ -138,7 +140,7 @@ int main(void) {
     uint8_t logging = 0;
 
     while(1) {
-        float weight = HX711_ReadWeight(&scale, 8);
+        float weight = HX711_GetWeight(&hx, 8);
 
         if(GPIO_Read(LOG_BTN) == 0) {
             Delay_Ms(100);
@@ -213,10 +215,11 @@ int main(void) {
     I2C_Init(PC1, PC2, I2C_SPEED_STANDARD);
     USART_Init(115200);
 
-    HX711_t scale;
-    HX711_Init(&scale, DT_PIN, SCK_PIN, HX711_GAIN_128);
-    HX711_SetScale(&scale, 415.0f);
-    HX711_Tare(&scale, 15);
+    HX711_Instance hx;
+    HX711_Init(&hx, DT_PIN, SCK_PIN);
+    HX711_SetGain(&hx, HX711_GAIN_128);
+    HX711_SetScale(&hx, 415.0f);
+    HX711_Tare(&hx, 15);
 
     OLED_Handle oled;
     OLED_Init(&oled, OLED_128x64, 0x3C);
@@ -231,13 +234,13 @@ int main(void) {
     USART_Print("Auto-Zero Scale Ready\r\n");
 
     while(1) {
-        float weight = HX711_ReadWeight(&scale, 10);
+        float weight = HX711_GetWeight(&hx, 10);
         float diff = fabs(weight - stable_weight);
 
         if(diff < 0.5f && fabs(weight) < 2.0f && !auto_zero_done) {
             stable_count++;
             if(stable_count >= 20) {
-                HX711_Tare(&scale, 15);
+                HX711_Tare(&hx, 15);
                 USART_Print("AUTO-ZERO! Weight was: ");
                 USART_PrintFloat(weight, 1);
                 USART_Print("g\r\n");
@@ -257,7 +260,7 @@ int main(void) {
 
         if(GPIO_Read(MAN_TARE) == 0) {
             Delay_Ms(80);
-            HX711_Tare(&scale, 15);
+            HX711_Tare(&hx, 15);
             USART_Print("MANUAL TARE\r\n");
             auto_zero_done = 1;
             while(GPIO_Read(MAN_TARE) == 0);

@@ -6,7 +6,7 @@
 <h2>ข้อ 1: Timer Switch — เปิด 5 นาที / ปิด 5 นาที</h2>
 <pre><code class="language-c">#include "simple_relay.h"
 
-Relay_t relay;
+Relay_Instance relay;
 
 #define ON_TIME_MS   300000   // 5 นาที
 #define OFF_TIME_MS  300000
@@ -16,7 +16,7 @@ typedef enum { STATE_ON, STATE_OFF } TimerState_t;
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    Relay_Init(&relay, GPIOA, GPIO_Pin_0);
+    Relay_Init(&relay, PC0, RELAY_ACTIVE_HIGH);
 
     TimerState_t state = STATE_ON;
     uint32_t     last_toggle = 0;
@@ -49,27 +49,30 @@ int main(void) {
 <pre><code class="language-c">#include "simple_relay.h"
 #include "simple_button.h"
 
-Relay_t  relay;
-Button_t btn;
+Relay_Instance relay;
+Button_Instance btn;
+volatile bool btn_pressed = false;
+
+void on_btn_press(void) { btn_pressed = true; }
 
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    Relay_Init(&relay, GPIOA, GPIO_Pin_0);
-    Button_Init(&btn, GPIOA, GPIO_Pin_1);
+    Relay_Init(&relay, PC0, RELAY_ACTIVE_HIGH);
+    Button_Init(&btn, PC1, BUTTON_ACTIVE_LOW);
+    Button_SetCallback(&btn, BUTTON_EVENT_PRESS, on_btn_press);
 
     uint8_t relay_state = 0;  // 0=OFF, 1=ON
 
     while (1) {
-        Button_Update(&btn);
-
-        if (Button_WasPressed(&btn)) {
+        if (btn_pressed) {
+            btn_pressed = false;
             relay_state ^= 1;   // toggle
             if (relay_state) Relay_On(&relay);
             else             Relay_Off(&relay);
         }
 
-        Delay_Ms(10);  // debounce processing
+        Delay_Ms(10);
     }
 }</code></pre>
 <div class="approach"><strong>🧠 แนวคิด:</strong> ใช้ XOR toggle (<code>^= 1</code>) สลับสถานะทุกครั้งที่กดปุ่ม — <code>Button_WasPressed</code> ตรวจจับขอบขาขึ้นเพียงครั้งเดียว (ไม่ใช่การกดค้าง) — <code>Button_Update</code> ต้องเรียกใน loop หลักเพื่อทำ debounce — ถ้าใช้ปุ่มแบบ toggle switch (กดติด-ปล่อยดับ) ให้ใช้ <code>Button_IsDown</code> แทน — ควรเพิ่ม capacitor 0.1µF ที่ขา button เพื่อ hardware debounce ลด noise — ในตู้คอนโทรล: ต่อ LED แสดงสถานะ relay เพื่อให้ผู้ใช้เห็นว่าเปิดหรือปิด — ถ้า relay หลายตัวใช้หลายปุ่ม: เพิ่ม array of Button_t และ loop ตรวจสอบ</div>
@@ -80,15 +83,16 @@ int main(void) {
 <pre><code class="language-c">#include "simple_relay.h"
 #include "simple_oled.h"
 
-Relay_t relay;
+Relay_Instance relay;
 
 #define COUNTDOWN_SEC  30
 
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    Relay_Init(&relay, GPIOA, GPIO_Pin_0);
-    OLED_Init();
+    Relay_Init(&relay, PC0, RELAY_ACTIVE_HIGH);
+    OLED_Handle oled;
+    OLED_Init(&oled, OLED_128x64, 0x3C);
 
     uint16_t remaining = COUNTDOWN_SEC;
     uint32_t last_tick = 0;
@@ -96,7 +100,7 @@ int main(void) {
 
     OLED_SetFont(FONT_8X16);
     OLED_Print(0, 0, "Countdown:");
-    OLED_Display();
+    OLED_Update(&oled);
 
     while (1) {
         uint32_t now = Timer_GetMs();
@@ -129,7 +133,7 @@ int main(void) {
         OLED_SetFont(FONT_8X16);
         if (!running &amp;&amp; remaining == 0)
             OLED_Print(10, 50, "DONE!");
-        OLED_Display();
+        OLED_Update(&oled);
 
         Delay_Ms(50);
     }

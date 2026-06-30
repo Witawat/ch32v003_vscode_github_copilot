@@ -6,15 +6,15 @@
 <h2>ข้อ 1: Robot Arm 3-DOF Pick &amp; Place</h2>
 <pre><code class="language-c">#include "simple_servocluster.h"
 
-ServoCluster_t arm;
+ServoCluster_Instance arm;
 
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    ServoCluster_Init(&arm, 3);
-    ServoCluster_Attach(&arm, 0, GPIOA, GPIO_Pin_0);  // base
-    ServoCluster_Attach(&arm, 1, GPIOA, GPIO_Pin_1);  // shoulder
-    ServoCluster_Attach(&arm, 2, GPIOA, GPIO_Pin_2);  // gripper
+    ServoCluster_Init(&arm, SERVOCLUSTER_PCA9685, 3);
+    ServoCluster_AddServo(&arm, 0);  // base
+    ServoCluster_AddServo(&arm, 1);  // shoulder
+    ServoCluster_AddServo(&arm, 2);  // gripper
 
     while (1) {
         // Home position
@@ -60,14 +60,14 @@ int main(void) {
 <h2>ข้อ 2: Synchronized Movement — หลาย Servo ขยับพร้อมกัน</h2>
 <pre><code class="language-c">#include "simple_servocluster.h"
 
-ServoCluster_t cluster;
+ServoCluster_Instance cluster;
 
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    ServoCluster_Init(&cluster, 4);
+    ServoCluster_Init(&cluster, SERVOCLUSTER_PCA9685, 4);
     for (uint8_t i = 0; i &lt; 4; i++)
-        ServoCluster_Attach(&cluster, i, GPIOA, GPIO_Pin_0 + i);
+        ServoCluster_AddServo(&cluster, i);
 
     uint8_t wave[4] = {0, 45, 90, 135};
     int8_t  dir[4]  = {1, 1, 1, 1};
@@ -90,14 +90,14 @@ int main(void) {
 <h2>ข้อ 3: Easing Comparison — LINEAR vs EASE_IN_OUT_CUBIC</h2>
 <pre><code class="language-c">#include "simple_servocluster.h"
 
-ServoCluster_t cluster;
+ServoCluster_Instance cluster;
 
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    ServoCluster_Init(&cluster, 2);
-    ServoCluster_Attach(&cluster, 0, GPIOA, GPIO_Pin_0);
-    ServoCluster_Attach(&cluster, 1, GPIOA, GPIO_Pin_1);
+    ServoCluster_Init(&cluster, SERVOCLUSTER_PCA9685, 2);
+    ServoCluster_AddServo(&cluster, 0);
+    ServoCluster_AddServo(&cluster, 1);
 
     const uint8_t targets[] = {0, 180};
     uint8_t idx = 0;

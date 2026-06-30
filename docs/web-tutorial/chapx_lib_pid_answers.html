@@ -11,7 +11,7 @@
 #define NTC_PIN    PA0
 #define SETPOINT   40.0f
 
-PID_t pid;
+PID_Controller pid;
 float input, output;
 
 int main(void) {
@@ -19,26 +19,22 @@ int main(void) {
     Timer_Init();
     USART_Init(115200);
     ADC_SimpleInit(NTC_PIN);
-    pinMode(RELAY_PIN, PIN_MODE_OUTPUT);
-    digitalWrite(RELAY_PIN, LOW);
+    GPIO_SimpleInit(RELAY_PIN, GPIO_OUT_PP);
+    GPIO_WriteBit(RELAY_PIN, 0);
 
-    PID_Init(&pid, PID_DIRECT);
-    PID_SetTunings(&pid, 30.0f, 1.5f, 0.2f);    // Kp=30, Ki=1.5, Kd=0.2
-    PID_SetLimits(&pid, 0, 1000);
-    PID_SetSampleTime(&pid, 250);                 // คำนวณทุก 250ms
-    PID_SetMode(&pid, PID_AUTOMATIC);
+    PID_Init(&pid, 30.0f, 1.5f, 0.2f, 250.0f); // Kp=30, Ki=1.5, Kd=0.2, sample=250ms
 
     while(1) {
         input = NTC_ReadTemp_C(NTC_PIN);
-        PID_Compute(&pid, input, SETPOINT, &output);
+        output = PID_Compute(&pid, input, SETPOINT);
 
         // Relay hysteresis ลดการกระพือ
         static bool relay_state = false;
         if(output > 500 && !relay_state) {        // >50% → เปิด heater
-            digitalWrite(RELAY_PIN, HIGH);
+            GPIO_WriteBit(RELAY_PIN, 1);
             relay_state = true;
         } else if(output < 200 && relay_state) {  // <20% → ปิด heater
-            digitalWrite(RELAY_PIN, LOW);
+            GPIO_WriteBit(RELAY_PIN, 0);
             relay_state = false;
         }
 
@@ -58,7 +54,7 @@ int main(void) {
 #include "SimpleHAL.h"
 #include "PID.h"
 
-PID_t pid;
+PID_Controller pid;
 float Ku = 0, Tu = 0;
 
 float test_setpoint = 40.0f;
@@ -67,9 +63,7 @@ void tune_ziegler_nichols(void) {
     USART_Println("=== Ziegler-Nichols Tuning ===");
 
     // Step 1: ตั้ง Ki=0, Kd=0, เพิ่ม Kp จน oscillation คงที่
-    PID_Init(&pid, PID_DIRECT);
-    PID_SetTunings(&pid, 0, 0, 0);
-    PID_SetMode(&pid, PID_AUTOMATIC);
+    PID_Init(&pid, 0, 0, 0, 100.0f);
 
     float Kp = 1.0f;
     uint32_t last_cross = 0, period_sum = 0;
@@ -77,8 +71,7 @@ void tune_ziegler_nichols(void) {
 
     while(cross_count < 6) {
         float input = NTC_ReadTemp_C(PA0);
-        float output;
-        PID_Compute(&pid, input, test_setpoint, &output);
+        float output = PID_Compute(&pid, input, test_setpoint);
 
         // เช็ค oscillation: ค่าข้าม setpoint
         static float prev_input = 0;
@@ -93,7 +86,7 @@ void tune_ziegler_nichols(void) {
         }
         prev_input = input;
 
-        if(cross_count < 3) { Kp += 0.5f; PID_SetTunings(&pid, Kp, 0, 0); }
+        if(cross_count < 3) { Kp += 0.5f; PID_Init(&pid, Kp, 0, 0, 100.0f); }
         Delay_Ms(50);
     }
 
@@ -105,8 +98,7 @@ void tune_ziegler_nichols(void) {
     float final_Ki = final_Kp / (Tu * 0.5f);
     float final_Kd = final_Kp * Tu * 0.125f;
 
-    PID_SetTunings(&pid, final_Kp, final_Ki, final_Kd);
-    PID_SetSampleTime(&pid, (uint32_t)(Tu * 1000 / 10));
+    PID_Init(&pid, final_Kp, final_Ki, final_Kd, Tu * 1000 / 10);
 
     USART_Printf("Ku=%.2f Tu=%.2fs\n", Ku, Tu);
     USART_Printf("Kp=%.2f Ki=%.3f Kd=%.3f\n", final_Kp, final_Ki, final_Kd);
@@ -133,20 +125,16 @@ int main(void) {
 typedef enum { MODE_HEAT, MODE_COOL } Mode_t;
 Mode_t mode = MODE_HEAT;
 
-PID_t pid;
+PID_Controller pid;
 
 void set_mode(Mode_t m) {
     mode = m;
-    PID_SetMode(&pid, PID_MANUAL);
+    PID_Init(&pid, 25.0f, 2.0f, 0.3f, 200.0f);
     if(m == MODE_HEAT) {
-        PID_SetDirection(&pid, PID_DIRECT);   // output↑เมื่อ temp↓
-        digitalWrite(RELAY_COOL, LOW);
+        GPIO_WriteBit(RELAY_COOL, 0);
     } else {
-        PID_SetDirection(&pid, PID_REVERSE);  // output↑เมื่อ temp↑
-        digitalWrite(RELAY_HEAT, LOW);
+        GPIO_WriteBit(RELAY_HEAT, 0);
     }
-    PID_Reset(&pid);  // ล้าง integral term
-    PID_SetMode(&pid, PID_AUTOMATIC);
 }
 
 int main(void) {
@@ -154,16 +142,12 @@ int main(void) {
     Timer_Init();
     USART_Init(115200);
     ADC_SimpleInit(NTC_PIN);
-    pinMode(RELAY_HEAT, PIN_MODE_OUTPUT);
-    pinMode(RELAY_COOL, PIN_MODE_OUTPUT);
-    digitalWrite(RELAY_HEAT, LOW);
-    digitalWrite(RELAY_COOL, LOW);
+    GPIO_SimpleInit(RELAY_HEAT, GPIO_OUT_PP);
+    GPIO_SimpleInit(RELAY_COOL, GPIO_OUT_PP);
+    GPIO_WriteBit(RELAY_HEAT, 0);
+    GPIO_WriteBit(RELAY_COOL, 0);
 
-    PID_Init(&pid, PID_DIRECT);
-    PID_SetTunings(&pid, 25.0f, 2.0f, 0.3f);
-    PID_SetLimits(&pid, 0, 1000);
-    PID_SetSampleTime(&pid, 200);
-    PID_SetMode(&pid, PID_AUTOMATIC);
+    PID_Init(&pid, 25.0f, 2.0f, 0.3f, 200.0f);
 
     while(1) {
         float temp = NTC_ReadTemp_C(NTC_PIN);
@@ -174,15 +158,15 @@ int main(void) {
         if(temp > setpoint + 2.0f) set_mode(MODE_COOL);
         if(temp < setpoint - 1.0f) set_mode(MODE_HEAT);
 
-        PID_Compute(&pid, temp, setpoint, &output);
+        output = PID_Compute(&pid, temp, setpoint);
 
         if(mode == MODE_HEAT && output > 500)
-            digitalWrite(RELAY_HEAT, HIGH);
-        else digitalWrite(RELAY_HEAT, LOW);
+            GPIO_WriteBit(RELAY_HEAT, 1);
+        else GPIO_WriteBit(RELAY_HEAT, 0);
 
         if(mode == MODE_COOL && output > 500)
-            digitalWrite(RELAY_COOL, HIGH);
-        else digitalWrite(RELAY_COOL, LOW);
+            GPIO_WriteBit(RELAY_COOL, 1);
+        else GPIO_WriteBit(RELAY_COOL, 0);
 
         Delay_Ms(30);
     }

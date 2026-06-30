@@ -20,13 +20,15 @@
     <h2>🧭 แผนภาพการทำงาน</h2>
     <pre class="mermaid">
 flowchart TD
-    A["PWM_SimpleInit(1, PD2, 50)"] --> B["PWM_Start(1)"]
-    B --> C["PWM_SetDuty(1, duty)"]
-    C --> D["คำนวณ duty จากมุม: 2.5 + angle × 10 / 180"]
-    D --> E["Servo หมุนไปตำแหน่งที่ต้องการ"]
-    E --> F{"ต้องการย้ายตำแหน่ง?"}
-    F -->|"ใช่"| C
-    F -->|"ไม่"| G["Servo คงตำแหน่ง"]
+    A["Servo_Init(&amp;servo, PWM1_CH4)"] --> B["Servo_Attach(&amp;servo)"]
+    B --> C["Servo_Write(&amp;servo, 90)"]
+    C --> D["Servo หมุนไปตำแหน่งที่ต้องการ"]
+    D --> E{"ต้องการย้ายตำแหน่ง?"}
+    E -->|"ใช่"| C
+    E -->|"ไม่"| F["Servo คงตำแหน่ง"]
+    F --> G{"ปลด servo?"}
+    G -->|"ใช่"| H["Servo_Detach(&amp;servo)"]
+    G -->|"ไม่"| E
     </pre>
 </section>
 
@@ -54,66 +56,73 @@ flowchart TD
     <h2>📚 หลักการทำงาน</h2>
     <p><strong>PWM 50Hz</strong> คือความถี่มาตรฐานของ RC Servo — 20ms ต่อ 1 คาบ (1/50 = 0.02s) ภายใน 1 คาบ จะมี <strong>pulse</strong> ความกว้าง 0.5ms–2.5ms คุมมุม 0°–180° โดย <strong>center = 1.5ms = 90°</strong></p>
     <p><strong>SG90 Specifications:</strong> แรงดัน 4.8V, แรงบิด 1.2 kg·cm, ความเร็ว 0.12s/60°, มุมทำงาน 0–180°, น้ำหนัก 9g, ขนาด 23×12×29mm</p>
-    <p><strong>การคำนวณ Duty Cycle:</strong> ที่ 50Hz (20ms) → duty = 0.5ms/20ms × 100 = 2.5% (0°) ถึง 2.5ms/20ms × 100 = 12.5% (180°) → สูตร: <code>duty = 2.5 + (angle × 10.0 / 180.0)</code></p>
-    <p><strong>ข้อควรระวัง:</strong> Servo สั่งงานด้วย pulse width — ไม่ใช่ duty cycle ของ PWM ทั่วไป ถ้าเปลี่ยนความถี่ PWM ต้องคำนวณ duty ใหม่</p>
+    <p><strong>Servo_Init + Attach/Detach:</strong> Servo_Init() กำหนด PWM channel — ต้องเรียก Servo_Attach() ก่อนใช้งานจึงจะมีสัญญาณ — Servo_Detach() หยุดสร้างสัญญาณ (ประหยัดไฟ, กัน servo ร้อน)</p>
+    <p><strong>Servo_Write / Servo_WriteMicroseconds:</strong> Servo_Write() รับมุม 0-180° — Servo_WriteMicroseconds() รับค่า pulse โดยตรงหน่วย μs (500-2500) — Servo_SetPulseRange() ปรับ range ได้ ใช้กับ servo ที่ pulse ต่างจากมาตรฐาน</p>
+    <p><strong>ข้อควรระวัง:</strong> Servo ต้อง Attach ก่อน — ถ้าไม่ได้ Attach Servo_Write จะไม่ทำงาน — หลังจบการใช้งานควร Detach เพื่อไม่ให้ servo สั่นค้างตำแหน่ง</p>
 </section>
 
 <section>
     <h2>💻 เขียน Code ทีละขั้น</h2>
 
-    <div class="step"><h3>ขั้นที่ 1: Init PWM + Setup</h3>
+    <div class="step"><h3>ขั้นที่ 1: Init + Attach</h3>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "Servo.h"
 
+Servo_Instance servo;
+
 int main(void) {
     SystemCoreClockUpdate();
-    // เริ่ม PWM1 ที่ PD2, ความถี่ 50Hz
-    PWM_SimpleInit(1, PD2, 50);
-    PWM_Start(1);</code></pre>
-    <p class="explain">🔍 <code>PWM_SimpleInit(ch, pin, freq_hz)</code> ตั้งค่า PWM channel 1 บน PD2 ที่ 50Hz (มาตรฐาน servo) — <code>PWM_Start()</code> เริ่มสร้างสัญญาณ</p></div>
+
+    Servo_Init(&amp;servo, PWM1_CH4);
+    Servo_Attach(&amp;servo);</code></pre>
+    <p class="explain">🔍 <code>Servo_Init(&amp;servo, channel)</code> กำหนด PWM channel (PWM1_CH4 ตรงกับขา PD2) — <code>Servo_Attach()</code> เริ่มสร้างสัญญาณ — ต้องเรียก Attach ก่อนจึงจะควบคุม servo ได้</p></div>
 
     <div class="step"><h3>ขั้นที่ 2: ควบคุมตำแหน่ง Servo</h3>
-    <pre><code class="language-c">    // หมุนไป 0° (duty ~2.5%)
-    PWM_SetDuty(1, 2.5f);
+    <pre><code class="language-c">    // หมุนไป 0°
+    Servo_Write(&amp;servo, 0);
     Delay_Ms(1000);
-    // หมุนไป 90° (duty ~7.5%)
-    PWM_SetDuty(1, 7.5f);
+    // หมุนไป 90° (กึ่งกลาง)
+    Servo_Write(&amp;servo, 90);
     Delay_Ms(1000);
-    // หมุนไป 180° (duty ~12.5%)
-    PWM_SetDuty(1, 12.5f);
+    // หมุนไป 180°
+    Servo_Write(&amp;servo, 180);
+    Delay_Ms(1000);
+    // ใช้ pulse โดยตรง (1500μs = 90°)
+    Servo_WriteMicroseconds(&amp;servo, 1500);
     Delay_Ms(1000);</code></pre>
-    <p class="explain">🔍 <code>PWM_SetDuty(ch, percent)</code> รับค่า % — 2.5% = 0°, 7.5% = 90°, 12.5% = 180° ที่ 50Hz — หน่วง 1 วิให้ servo มีเวลาหมุนถึงตำแหน่ง</p></div>
+    <p class="explain">🔍 <code>Servo_Write(&amp;servo, angle)</code> — รับมุม 0-180° — <code>Servo_WriteMicroseconds()</code> รับค่า μs โดยตรง — หน่วง 1 วิให้ servo มีเวลาหมุนถึงตำแหน่ง</p></div>
 
-    <div class="step"><h3>ขั้นที่ 3: Sweep Loop + แปลงมุม</h3>
+    <div class="step"><h3>ขั้นที่ 3: Sweep Loop</h3>
     <pre><code class="language-c">    while(1) {
         // Sweep 0° → 180°
         for(uint8_t a = 0; a <= 180; a++) {
-            float duty = 2.5f + (a * 10.0f / 180.0f);
-            PWM_SetDuty(1, duty);
+            Servo_Write(&amp;servo, a);
             Delay_Ms(15);
         }
         // Sweep 180° → 0°
         for(uint8_t a = 180; a > 0; a--) {
-            float duty = 2.5f + (a * 10.0f / 180.0f);
-            PWM_SetDuty(1, duty);
+            Servo_Write(&amp;servo, a);
             Delay_Ms(15);
         }
     }
+
+    // เมื่อเลิกใช้:
+    Servo_Detach(&amp;servo);
 }</code></pre>
-    <p class="explain">🔍 Sweep ไป-กลับ 0–180° — <code>Delay_Ms(15)</code> ให้ servo มีเวลาขยับทีละองศา (0.12s/60° ≈ 2ms/°) — ใช้ float เพื่อความแม่นยำของ duty</p></div>
+    <p class="explain">🔍 Sweep ไป-กลับ 0–180° — <code>Delay_Ms(15)</code> ให้ servo มีเวลาขยับทีละองศา — หลังใช้งานควรเรียก <code>Servo_Detach()</code> หยุดสัญญาณ</p></div>
 </section>
 
 <section>
     <h2>📋 API Reference</h2>
     <table>
         <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
-        <tr><td><code>PWM_SimpleInit(ch, pin, freq)</code></td><td>เริ่ม PWM ที่ pin, ความถี่ Hz</td><td><code>PWM_SimpleInit(1, PD2, 50)</code></td></tr>
-        <tr><td><code>PWM_Start(ch)</code></td><td>เริ่มสร้างสัญญาณ PWM</td><td><code>PWM_Start(1)</code></td></tr>
-        <tr><td><code>PWM_Stop(ch)</code></td><td>หยุดสัญญาณ PWM</td><td><code>PWM_Stop(1)</code></td></tr>
-        <tr><td><code>PWM_SetDuty(ch, percent)</code></td><td>ตั้ง duty cycle เป็น % (float)</td><td><code>PWM_SetDuty(1, 7.5f)</code></td></tr>
-        <tr><td><code>Servo_Write(angle)</code></td><td>สั่ง servo ไปมุมที่ต้องการ</td><td><code>Servo_Write(90)</code></td></tr>
-        <tr><td><code>Servo_WriteUs(us)</code></td><td>สั่ง servo ด้วย pulse width μs</td><td><code>Servo_WriteUs(1500)</code></td></tr>
+        <tr><td><code>Servo_Init(&amp;sv, channel)</code></td><td>เริ่มต้น servo ที่ PWM channel</td><td><code>Servo_Init(&amp;servo, PWM1_CH4)</code></td></tr>
+        <tr><td><code>Servo_Attach(&amp;sv)</code></td><td>เริ่มสร้างสัญญาณ PWM</td><td><code>Servo_Attach(&amp;servo)</code></td></tr>
+        <tr><td><code>Servo_Write(&amp;sv, angle)</code></td><td>สั่ง servo ไปมุม 0-180°</td><td><code>Servo_Write(&amp;servo, 90)</code></td></tr>
+        <tr><td><code>Servo_WriteMicroseconds(&amp;sv, us)</code></td><td>สั่ง servo ด้วย pulse width μs</td><td><code>Servo_WriteMicroseconds(&amp;servo, 1500)</code></td></tr>
+        <tr><td><code>Servo_Detach(&amp;sv)</code></td><td>หยุดสัญญาณ PWM</td><td><code>Servo_Detach(&amp;servo)</code></td></tr>
+        <tr><td><code>Servo_SetPulseRange(&amp;sv, min, max)</code></td><td>ตั้งช่วง pulse μs (ค่าเริ่มต้น 1000-2000)</td><td><code>Servo_SetPulseRange(&amp;servo, 1000, 2000)</code></td></tr>
     </table>
 </section>
 
@@ -122,30 +131,31 @@ int main(void) {
     <table>
         <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
         <tr><td>Servo กระตุก/ไม่หมุน</td><td>ไฟ 5V จ่ายกระแสไม่พอ (servo กิน 500mA+)</td><td>ใช้ External 5V supply แยก — ห้ามใช้ 3.3V จาก MCU</td></tr>
-        <tr><td>Servo หมุนเกิน 180°</td><td>pulse width เกิน 0.5–2.5ms</td><td>จำกัด duty ระหว่าง 2.5%–12.5% ที่ 50Hz</td></tr>
-        <tr><td>Servo ไม่ตอบสนอง</td><td>GND ไม่ร่วมกันระหว่าง MCU กับ servo</td><td>ต่อ GND ของ MCU, External 5V, และ servo เข้าด้วยกัน</td></tr>
+        <tr><td>Servo ไม่ตอบสนอง</td><td>ลืมเรียก <code>Servo_Attach()</code> หลัง Init</td><td>ต้องเรียก Attach() ก่อนจึงจะมีสัญญาณ PWM ออก</td></tr>
+        <tr><td>Servo สั่นค้างตำแหน่ง</td><td>ไม่มี load หรือ PWM timing ผิด</td><td>เรียก <code>Servo_Detach()</code> เมื่อไม่ใช้งาน — หรือเช็ค channel init</td></tr>
+        <tr><td>Servo หมุนเกิน 180°</td><td>pulse width เกิน 0.5–2.5ms</td><td>ใช้ <code>Servo_SetPulseRange()</code> จำกัดช่วง pulse ให้เหมาะสม</td></tr>
+        <tr><td>GND ไม่ร่วมกัน</td><td>ลืมต่อ GND MCU กับ External 5V</td><td>ต่อ GND ของ MCU, External 5V, และ servo เข้าด้วยกัน</td></tr>
         <tr><td>หลายตัวควบคุมไม่แม่น</td><td>CH32V003 มี PWM channels จำกัด</td><td>ใช้ PCA9685 I²C Servo Driver สำหรับ ≥4 ตัว</td></tr>
-        <tr><td>Servo สั่นค้างตำแหน่ง</td><td>PWM ความถี่ไม่ใช่ 50Hz</td><td>ตรวจสอบว่า freq=50 — ถ้าใช้ 1kHz pulse จะแคบเกินไป</td></tr>
     </table>
 </section>
 
 <section>
     <h2>🛠️ สร้าง Product: Pan-Tilt 2-Axis Camera Mount</h2>
-    <p>ใช้ Servo 2 ตัว + Joystick (2 Potentiometer ADC) ควบคุมกล้อง — แกน X (Pan) PD2, แกน Y (Tilt) PD3</p>
+    <p>ใช้ Servo 2 ตัว + Joystick (2 Potentiometer ADC) ควบคุมกล้อง — แกน X (Pan) PWM1_CH4, แกน Y (Tilt) PWM1_CH3</p>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "Servo.h"
 
-float angle_to_duty(uint8_t angle) {
-    if(angle > 180) angle = 180;
-    return 2.5f + (angle * 10.0f / 180.0f);
-}
+Servo_Instance pan_servo, tilt_servo;
 
 int main(void) {
     SystemCoreClockUpdate();
     ADC_Init_Single(PA1); ADC_Init_Single(PA2);
-    PWM_SimpleInit(1, PD2, 50); PWM_Start(1);
-    PWM_SimpleInit(2, PD3, 50); PWM_Start(2);
+
+    Servo_Init(&amp;pan_servo, PWM1_CH4);
+    Servo_Attach(&amp;pan_servo);
+    Servo_Init(&amp;tilt_servo, PWM1_CH3);
+    Servo_Attach(&amp;tilt_servo);
 
     uint8_t pan = 90, tilt = 90;
     while(1) {
@@ -153,8 +163,8 @@ int main(void) {
         uint16_t adc_y = ADC_Read(PA2);
         pan = (uint8_t)(adc_x * 180 / 4095);
         tilt = (uint8_t)(adc_y * 180 / 4095);
-        PWM_SetDuty(1, angle_to_duty(pan));
-        PWM_SetDuty(2, angle_to_duty(tilt));
+        Servo_Write(&amp;pan_servo, pan);
+        Servo_Write(&amp;tilt_servo, tilt);
         Delay_Ms(20);
     }
 }</code></pre>

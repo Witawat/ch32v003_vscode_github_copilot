@@ -24,7 +24,7 @@ void i2c_register_device(uint8_t addr, const char *name) {
 }
 
 void i2c_scan_bus(void) {
-    I2C_SimpleInit(I2C_PINS_DEFAULT);
+    I2C_SimpleInit(I2C_100KHZ, I2C_PINS_DEFAULT);
 
     USART_Println("=== I2C Bus Scan ===");
     uint8_t found = 0;
@@ -96,7 +96,7 @@ void i2c_scan_demo(void) {
 i2c_conflict_t conflicts[127];
 
 void i2c_conflict_scan(void) {
-    I2C_SimpleInit(I2C_PINS_DEFAULT);
+    I2C_SimpleInit(I2C_100KHZ, I2C_PINS_DEFAULT);
     memset(conflicts, 0, sizeof(conflicts));
 
     USART_Println("=== Address Conflict Check ===");

@@ -4,14 +4,15 @@
 
 <div class="answer">
 <h2>ข้อ 1: รีโมตควบคุม — กดปุ่มฝั่ง TX → LED ติดที่ฝั่ง RX</h2>
-<pre><code class="language-c">// ========== ฝั่ง Transmitter (รีโมต) ==========
+<pre><code class="language-c">nRF24_Instance radio;
+// ========== ฝั่ง Transmitter (รีโมต) ==========
 #define BTN1 PD2
 #define BTN2 PD3
 #define BTN3 PD4
 #define BTN4 PD5
 
 void rf_tx_remote(void) {
-    NRF24_Init(NRF24_TX);
+    nRF24_Init(&radio, PC4, PC3);
     GPIO_SimpleInit(BTN1, GPIO_IN_PU);
     GPIO_SimpleInit(BTN2, GPIO_IN_PU);
     GPIO_SimpleInit(BTN3, GPIO_IN_PU);
@@ -28,7 +29,7 @@ void rf_tx_remote(void) {
 
         // ส่งเมื่อ state เปลี่ยนเท่านั้น ลด RF traffic
         if(memcmp(payload, last, 4) != 0) {
-            nRF24_Transmit(payload, 4);
+            nRF24_Transmit(&radio, payload, 4);
             memcpy(last, payload, 4);
             USART_Print("Sent: ");
             for(int i=0; i<4; i++) USART_Print(payload[i]?'1':'0');
@@ -45,7 +46,8 @@ void rf_tx_remote(void) {
 #define LED4_PIN PC3
 
 void rf_rx_led_control(void) {
-    NRF24_Init(NRF24_RX);
+    nRF24_Init(&radio, PC4, PC3);
+    nRF24_StartListening(&radio);
     GPIO_SimpleInit(LED1_PIN, GPIO_OUT_PP);
     GPIO_SimpleInit(LED2_PIN, GPIO_OUT_PP);
     GPIO_SimpleInit(LED3_PIN, GPIO_OUT_PP);
@@ -54,8 +56,8 @@ void rf_rx_led_control(void) {
     uint8_t buf[32];
 
     while(1) {
-        if(nRF24_StartListening)) {
-            uint8_t len = nRF24_StartListeningbuf, sizeof(buf));
+        if(nRF24_Available(&radio)) {
+            uint8_t len = nRF24_Read(&radio, buf, sizeof(buf));
             if(len >= 4) {
                 GPIO_WriteBit(LED1_PIN, buf[0]);
                 GPIO_WriteBit(LED2_PIN, buf[1]);
@@ -71,7 +73,8 @@ void rf_rx_led_control(void) {
 
 <div class="answer">
 <h2>ข้อ 2: Multi-node ID system — ส่งระบุ node เป้าหมาย</h2>
-<pre><code class="language-c">#define MY_NODE_ID    0x01   // ID ของบอร์ดนี้
+<pre><code class="language-c">nRF24_Instance radio;
+#define MY_NODE_ID    0x01   // ID ของบอร์ดนี้
 #define MAX_NODES     5
 
 typedef struct {
@@ -90,16 +93,17 @@ void rf_send_to(uint8_t target, uint8_t cmd, uint8_t val) {
     pkt.value = val;
     pkt.crc = target ^ MY_NODE_ID ^ cmd ^ val;
 
-    nRF24_Transmit((uint8_t *)&pkt, sizeof(pkt));
+    nRF24_Transmit(&radio, (uint8_t *)&pkt, sizeof(pkt));
 }
 
 void rf_multi_node_rx(void) {
-    NRF24_Init(NRF24_RX);
+    nRF24_Init(&radio, PC4, PC3);
+    nRF24_StartListening(&radio);
     uint8_t buf[32];
 
     while(1) {
-        if(nRF24_StartListening)) {
-            uint8_t n = nRF24_StartListeningbuf, sizeof(buf));
+        if(nRF24_Available(&radio)) {
+            uint8_t n = nRF24_Read(&radio, buf, sizeof(buf));
             if(n < sizeof(rf_packet_t)) continue;
 
             rf_packet_t *pkt = (rf_packet_t *)buf;
@@ -135,7 +139,8 @@ void rf_multi_node_rx(void) {
 
 <div class="answer">
 <h2>ข้อ 3: วัดระยะด้วย RSSI + แสดงสัญญาณ</h2>
-<pre><code class="language-c">#define RSSI_THRESH_GOOD   -60
+<pre><code class="language-c">nRF24_Instance radio;
+#define RSSI_THRESH_GOOD   -60
 #define RSSI_THRESH_FAIR   -75
 #define RSSI_THRESH_POOR   -90
 
@@ -150,7 +155,8 @@ typedef struct {
 rf_rssi_stats_t rssi_stats;
 
 void rf_rssi_monitor(void) {
-    NRF24_Init(NRF24_RX);
+    nRF24_Init(&radio, PC4, PC3);
+    nRF24_StartListening(&radio);
     rssi_stats.rssi_min = 0;
     rssi_stats.rssi_max = -127;
     int32_t rssi_sum = 0;
@@ -159,9 +165,9 @@ void rf_rssi_monitor(void) {
     uint8_t buf[32];
 
     while(1) {
-        if(nRF24_StartListening)) {
-            uint8_t n = nRF24_StartListeningbuf, sizeof(buf));
-            int8_t rssi = NRF24_GetRSSI();
+        if(nRF24_Available(&radio)) {
+            uint8_t n = nRF24_Read(&radio, buf, sizeof(buf));
+            int8_t rssi = nRF24_GetRSSI(&radio);
 
             if(rssi > rssi_stats.rssi_max)
                 rssi_stats.rssi_max = rssi;

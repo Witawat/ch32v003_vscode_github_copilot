@@ -14,15 +14,17 @@ int main(void) {
     Timer_Init();
     pinMode(LED_GREEN, PIN_MODE_OUTPUT);
     pinMode(LED_RED, PIN_MODE_OUTPUT);
-    DHT_Init(PC0, DHT11);
+
+    DHT_Instance dht;
+    DHT_Init(&dht, PC0, DHT_TYPE_DHT11);
 
     Timer_t tmr;
     Start_Timer(&tmr, 2000, 1);
 
     while(1) {
         if(Is_Timer_Expired(&tmr)) {
-            float t, h;
-            if(DHT_Read(&t, &h) == DHT_OK) {
+            if(DHT_Read(&dht) == DHT_OK) {
+                float t = DHT_GetTemperature(&dht);
                 if(t > 35.0f) {
                     digitalWrite(LED_RED, HIGH);
                     digitalWrite(LED_GREEN, LOW);
@@ -54,7 +56,9 @@ int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
     USART_Init(115200);
-    DHT_Init(PC0, DHT11);
+
+    DHT_Instance dht;
+    DHT_Init(&dht, PC0, DHT_TYPE_DHT11);
 
     Timer_t tmr;
     Start_Timer(&tmr, 300000, 1);   // 5 min = 300,000 ms
@@ -62,8 +66,9 @@ int main(void) {
     uint8_t idx = 0;
     while(1) {
         if(Is_Timer_Expired(&tmr)) {
-            float t, h;
-            if(DHT_Read(&t, &h) == DHT_OK) {
+            if(DHT_Read(&dht) == DHT_OK) {
+                float t = DHT_GetTemperature(&dht);
+                float h = DHT_GetHumidity(&dht);
                 LogEntry_t entry;
                 entry.timestamp = Timer_GetMs();
                 entry.temp = t;
@@ -90,34 +95,34 @@ int main(void) {
     Timer_Init();
     USART_Init(115200);
 
-    DHT_Init(PC0, DHT11);
-    DHT_Init(PC1, DHT22);
+    DHT_Instance dht11, dht22;
+    DHT_Init(&dht11, PC0, DHT_TYPE_DHT11);
+    DHT_Init(&dht22, PC1, DHT_TYPE_DHT22);
 
     Timer_t tmr;
     Start_Timer(&tmr, 2500, 1);  // DHT22 ต้อง >= 2000ms
 
     while(1) {
         if(Is_Timer_Expired(&tmr)) {
-            float t11, h11, t22, h22;
-            uint8_t r11 = DHT_Read(PC0, &t11, &h11);
-            uint8_t r22 = DHT_Read(PC1, &t22, &h22);
+            uint8_t r11 = DHT_Read(&dht11);
+            uint8_t r22 = DHT_Read(&dht22);
 
             USART_Println("---------");
             if(r11 == DHT_OK) {
-                USART_Print("DHT11 → T:"); USART_PrintFloat(t11, 1);
-                USART_Print(" H:"); USART_PrintFloat(h11, 1);
+                USART_Print("DHT11 → T:"); USART_PrintFloat(DHT_GetTemperature(&dht11), 1);
+                USART_Print(" H:"); USART_PrintFloat(DHT_GetHumidity(&dht11), 1);
                 USART_Println("%");
             } else USART_Println("DHT11 FAIL");
 
             if(r22 == DHT_OK) {
-                USART_Print("DHT22 → T:"); USART_PrintFloat(t22, 1);
-                USART_Print(" H:"); USART_PrintFloat(h22, 1);
+                USART_Print("DHT22 → T:"); USART_PrintFloat(DHT_GetTemperature(&dht22), 1);
+                USART_Print(" H:"); USART_PrintFloat(DHT_GetHumidity(&dht22), 1);
                 USART_Println("%");
             } else USART_Println("DHT22 FAIL");
 
             if(r11 == DHT_OK && r22 == DHT_OK) {
-                USART_Print("ΔT:"); USART_PrintFloat(t22 - t11, 2);
-                USART_Print(" ΔH:"); USART_PrintFloat(h22 - h11, 2);
+                USART_Print("ΔT:"); USART_PrintFloat(DHT_GetTemperature(&dht22) - DHT_GetTemperature(&dht11), 2);
+                USART_Print(" ΔH:"); USART_PrintFloat(DHT_GetHumidity(&dht22) - DHT_GetHumidity(&dht11), 2);
                 USART_Println("");
             }
         }

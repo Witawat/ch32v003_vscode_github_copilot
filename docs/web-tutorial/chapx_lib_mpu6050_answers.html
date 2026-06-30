@@ -5,12 +5,13 @@
 #define BUZZER_PIN      PC3
 
 void mpu6050_tilt_alarm(void) {
-    MPU6050_Init(I2C_PINS_DEFAULT, MPU6050_ACCEL_2G, MPU6050_GYRO_250DPS);
+    MPU6050_Instance imu;
+    MPU6050_Init(&imu, 0x68);
     pinMode(BUZZER_PIN, PIN_MODE_OUTPUT);
 
     while(1) {
         MPU6050_Data_t data;
-        if(!MPU6050_GetAll(&data)) {
+        if(!MPU6050_GetAll(&imu, &data)) {
             Delay_Ms(10);
             continue;
         }
@@ -41,12 +42,13 @@ void mpu6050_tilt_alarm(void) {
 uint32_t last_filter_time = 0;
 
 void mpu6050_complementary_filter(void) {
-    MPU6050_Init(I2C_PINS_DEFAULT, MPU6050_ACCEL_2G, MPU6050_GYRO_250DPS);
+    MPU6050_Instance imu;
+    MPU6050_Init(&imu, 0x68);
     last_filter_time = millis();
 
     while(1) {
         MPU6050_Data_t data;
-        if(!MPU6050_GetAll(&data)) { Delay_Ms(5); continue; }
+        if(!MPU6050_GetAll(&imu, &data)) { Delay_Ms(5); continue; }
 
         uint32_t now = millis();
         float dt = (now - last_filter_time) / 1000.0f;
@@ -76,7 +78,7 @@ void mpu6050_complementary_filter(void) {
 </code></pre><div class="approach"><strong>🧠 แนวคิด:</strong> Gyro: ตอบสนองเร็ว, drift สะสม — Accel: ไม่ drift, แต่มี noise ตอนเคลื่อนที่ — Complementary filter: α=0.98 เชื่อ gyro 98% ตอบสนองดี + accel 2% แก้ drift — ต้อง convert gyro raw → °/s ก่อน integrate — dt สำคัญมากต้องวัดจาก millis() จริง</div></div>
 <div class="answer"><h2>ข้อ 3: Calibrate Gyro Drift</h2><pre><code class="language-c">float gyro_bias_x = 0, gyro_bias_y = 0, gyro_bias_z = 0;
 
-void mpu6050_calibrate_gyro(void) {
+void mpu6050_calibrate_gyro(MPU6050_Instance *imu) {
     const int samples = 200;
     float sum_x = 0, sum_y = 0, sum_z = 0;
 
@@ -85,7 +87,7 @@ void mpu6050_calibrate_gyro(void) {
 
     for(int i = 0; i < samples; i++) {
         int16_t gx, gy, gz;
-        MPU6050_ReadGyro(&gx, &gy, &gz);
+        MPU6050_ReadGyro(imu, &gx, &gy, &gz);
         sum_x += gx;
         sum_y += gy;
         sum_z += gz;
@@ -102,9 +104,9 @@ void mpu6050_calibrate_gyro(void) {
     USART_Println("");
 }
 
-float mpu6050_read_gyro_x_cal(void) {
+float mpu6050_read_gyro_x_cal(MPU6050_Instance *imu) {
     int16_t raw;
-    MPU6050_ReadGyro(&raw, NULL, NULL);
+    MPU6050_ReadGyro(imu, &raw, NULL, NULL);
     return (raw - gyro_bias_x) * 250.0f / 32768.0f;  // °/s
 }
 </code></pre><div class="approach"><strong>🧠 แนวคิด:</strong> ตอนเซนเซอร์อยู่นิ่ง gyro ควรอ่าน 0 — แต่ในความเป็นจริงมี offset — เก็บ 200 ตัวอย่างตอนนิ่ง → หาค่าเฉลี่ยเป็น bias — ลบ bias ทุกครั้งที่อ่านก่อน integrate — ลด drift จาก 0.5°/s เหลือ <0.01°/s — ควร calibrate ทุกครั้งที่เปิดเครื่องเพราะ bias เปลี่ยนตามอุณหภูมิ</div></div>

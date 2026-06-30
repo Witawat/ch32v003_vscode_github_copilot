@@ -8,17 +8,17 @@
 #include "SimpleHAL.h"
 #include "OH49E.h"
 
-#define HALL_PIN PD2
-#define HALL_CH  ADC_CH0
 #define SENSITIVITY 1.4f
 
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    ADC_Init(HALL_PIN, HALL_CH);
     USART_Init(115200);
 
-    float zero_v = HALL_Calibrate(HALL_PIN, 100);
+    OH49E_Instance hall;
+    OH49E_Init(&hall, ADC_CH_PC4, 3.3f, 3.3f);
+
+    float zero_v = OH49E_ReadVoltage(&hall);
     pinMode(PC0, PIN_MODE_OUTPUT);
     pinMode(PC1, PIN_MODE_OUTPUT);
     pinMode(PC2, PIN_MODE_OUTPUT);
@@ -27,16 +27,14 @@ int main(void) {
     USART_Print("Zero: "); USART_PrintFloat(zero_v, 3); USART_Print("V\r\n");
 
     while(1) {
-        uint16_t adc = ADC_Read(HALL_PIN);
-        float voltage = adc * (3.3f / 1024.0f);
+        float voltage = OH49E_ReadVoltage(&hall);
         float gauss = ((voltage - zero_v) * 1000.0f) / SENSITIVITY;
 
         digitalWrite(PC0, LOW);
         digitalWrite(PC1, LOW);
         digitalWrite(PC2, LOW);
 
-        USART_Print("ADC:"); USART_PrintDec(adc);
-        USART_Print(" V:"); USART_PrintFloat(voltage, 3);
+        USART_Print("V:"); USART_PrintFloat(voltage, 3);
         USART_Print(" G:"); USART_PrintFloat(gauss, 1);
 
         if(gauss > 30) {
@@ -69,18 +67,18 @@ int main(void) {
 #include "SimpleHAL.h"
 #include "OH49E.h"
 
-#define HALL_PIN PD2
-#define HALL_CH  ADC_CH0
 #define SENSITIVITY 1.4f
 
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    ADC_Init(HALL_PIN, HALL_CH);
     USART_Init(115200);
 
+    OH49E_Instance hall;
+    OH49E_Init(&hall, ADC_CH_PC4, 3.3f, 3.3f);
+
     USART_Print("Calibrating...\r\n");
-    float zero_v = HALL_Calibrate(HALL_PIN, 100);
+    float zero_v = OH49E_ReadVoltage(&hall);
     USART_Print("Zero: "); USART_PrintFloat(zero_v, 3); USART_Print("V\r\n");
 
     USART_Print("Place magnet at 5mm distance...\r\n");
@@ -90,8 +88,7 @@ int main(void) {
 
     float sum = 0;
     for(int i = 0; i < 50; i++) {
-        uint16_t adc = ADC_Read(HALL_PIN);
-        float v = adc * (3.3f / 1024.0f);
+        float v = OH49E_ReadVoltage(&hall);
         sum += ((v - zero_v) * 1000.0f) / SENSITIVITY;
         Delay_Ms(10);
     }
@@ -105,8 +102,7 @@ int main(void) {
     USART_Print("\r\nReady\r\n");
 
     while(1) {
-        uint16_t adc = ADC_Read(HALL_PIN);
-        float voltage = adc * (3.3f / 1024.0f);
+        float voltage = OH49E_ReadVoltage(&hall);
         float gauss = ((voltage - zero_v) * 1000.0f) / SENSITIVITY;
         float distance_mm = gauss * scale;
 
@@ -133,33 +129,32 @@ int main(void) {
 #include "OH49E.h"
 #include "oled_i2c.h"
 
-#define HALL_PIN PD2
-#define HALL_CH  ADC_CH0
 #define SENSITIVITY 1.4f
 
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
     I2C_Init(PC1, PC2, I2C_SPEED_STANDARD);
-    ADC_Init(HALL_PIN, HALL_CH);
     USART_Init(115200);
 
     OLED_Handle oled;
     OLED_Init(&oled, OLED_128x64, 0x3C);
     OLED_SetFont(&oled, FONT_8x16);
 
-    float zero_v = HALL_Calibrate(HALL_PIN, 100);
+    OH49E_Instance hall;
+    OH49E_Init(&hall, ADC_CH_PC4, 3.3f, 3.3f);
+
+    float zero_v = OH49E_ReadVoltage(&hall);
 
     float peak_north = 0, peak_south = 0;
 
     while(1) {
-        uint32_t adc_sum = 0;
+        float sum_v = 0;
         for(int i = 0; i < 8; i++) {
-            adc_sum += ADC_Read(HALL_PIN);
+            sum_v += OH49E_ReadVoltage(&hall);
             Delay_Ms(5);
         }
-        uint16_t adc = adc_sum / 8;
-        float voltage = adc * (3.3f / 1024.0f);
+        float voltage = sum_v / 8.0f;
         float gauss = ((voltage - zero_v) * 1000.0f) / SENSITIVITY;
 
         if(gauss > peak_south) peak_south = gauss;
@@ -197,8 +192,7 @@ int main(void) {
 
         OLED_SetCursor(&oled, 0, 7);
         OLED_PrintFloat(&oled, "V:", voltage, 3);
-        OLED_Print(&oled, " ADC:");
-        OLED_PrintDec(&oled, adc);
+        OLED_Print(&oled, " ");
 
         OLED_Update(&oled);
         Delay_Ms(50);

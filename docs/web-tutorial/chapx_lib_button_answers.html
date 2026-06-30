@@ -11,6 +11,7 @@ typedef enum { MENU_MAIN, MENU_LED, MENU_SENSOR, MENU_COUNT } Menu_t;
 const char *items[] = {"1. LED Control", "2. Read Sensor", "3. Settings"};
 uint8_t cur = 0;
 Menu_t submenu = MENU_MAIN;
+Button_Instance btn;
 
 void btn_short_cb(void) { cur = (cur + 1) % MENU_COUNT; }
 void btn_long_cb(void)  { submenu = cur; }
@@ -20,11 +21,11 @@ int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
     USART_Init(115200);
-    Button_Init(PC0, BTN_PULLUP);
+    Button_Init(&btn, PC0, BUTTON_ACTIVE_LOW);
 
-    Button_AttachEvent(PC0, BTN_EVENT_SHORT,  btn_short_cb);
-    Button_AttachEvent(PC0, BTN_EVENT_LONG,   btn_long_cb);
-    Button_AttachEvent(PC0, BTN_EVENT_DOUBLE, btn_double_cb);
+    Button_SetCallback(&btn, BUTTON_EVENT_PRESS,        btn_short_cb);
+    Button_SetCallback(&btn, BUTTON_EVENT_LONG_PRESS,   btn_long_cb);
+    Button_SetCallback(&btn, BUTTON_EVENT_DOUBLE_CLICK, btn_double_cb);
 
     USART_Println("Menu: short=next, long=select, double=back");
 
@@ -48,6 +49,7 @@ int main(void) {
 #include "Button.h"
 
 volatile uint16_t dbl_cnt = 0;
+Button_Instance btn;
 
 void on_double(void) { dbl_cnt++; }
 
@@ -56,8 +58,8 @@ int main(void) {
     Timer_Init();
     USART_Init(115200);
 
-    Button_Init(PC0, BTN_PULLUP);
-    Button_AttachEvent(PC0, BTN_EVENT_DOUBLE, on_double);
+    Button_Init(&btn, PC0, BUTTON_ACTIVE_LOW);
+    Button_SetCallback(&btn, BUTTON_EVENT_DOUBLE_CLICK, on_double);
 
     Timer_t tmr;
     Start_Timer(&tmr, 1000, 1);
@@ -65,8 +67,6 @@ int main(void) {
     USART_Println("Double-click to count. Press DEL to reset.");
 
     while(1) {
-        Button_Process();
-
         if(Is_Timer_Expired(&tmr)) {
             USART_Printf("Double-clicks: %d\n", dbl_cnt);
         }
@@ -90,6 +90,7 @@ int main(void) {
 
 volatile uint16_t duty = 1000;
 volatile bool holding = false;
+Button_Instance btn;
 
 void btn_down(void)  { holding = true; }
 void btn_up(void)    { holding = false; }
@@ -97,10 +98,10 @@ void btn_up(void)    { holding = false; }
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    Button_Init(BTN_PIN, BTN_PULLUP);
+    Button_Init(&btn, BTN_PIN, BUTTON_ACTIVE_LOW);
 
-    Button_AttachEvent(BTN_PIN, BTN_EVENT_DOWN, btn_down);
-    Button_AttachEvent(BTN_PIN, BTN_EVENT_UP,   btn_up);
+    Button_SetCallback(&btn, BUTTON_EVENT_DOWN, btn_down);
+    Button_SetCallback(&btn, BUTTON_EVENT_UP,   btn_up);
 
     PWM_SimpleInit(LED_PIN, PWM_CH, 1000, 1000);  // เริ่มสว่างสุด
     pinMode(PA0, PIN_MODE_OUTPUT);
@@ -110,8 +111,6 @@ int main(void) {
     Start_Timer(&dim_tmr, 50, 1);
 
     while(1) {
-        Button_Process();
-
         if(holding && Is_Timer_Expired(&dim_tmr)) {
             if(duty > 0) duty -= 10;           // ลด duty ทีละ 1% ทุก 50ms
             PWM_SetDuty(LED_PIN, PWM_CH, duty);
@@ -132,10 +131,11 @@ int main(void) {
 #define LOCK_PIN  PC2
 #define BTN_PIN   PC0
 
-const uint8_t combo[] = {BTN_EVENT_SHORT, BTN_EVENT_LONG, BTN_EVENT_SHORT};
+const uint8_t combo[] = {BUTTON_EVENT_PRESS, BUTTON_EVENT_LONG_PRESS, BUTTON_EVENT_PRESS};
 #define COMBO_LEN 3
 uint8_t input_buf[COMBO_LEN];
 uint8_t idx = 0;
+Button_Instance btn;
 
 void btn_event_cb(uint8_t event) {
     input_buf[idx++] = event;
@@ -152,10 +152,10 @@ int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
     USART_Init(115200);
-    Button_Init(BTN_PIN, BTN_PULLUP);
+    Button_Init(&btn, BTN_PIN, BUTTON_ACTIVE_LOW);
 
-    Button_AttachEvent(BTN_PIN, BTN_EVENT_SHORT, btn_event_cb);
-    Button_AttachEvent(BTN_PIN, BTN_EVENT_LONG,  btn_event_cb);
+    Button_SetCallback(&btn, BUTTON_EVENT_PRESS,      btn_event_cb);
+    Button_SetCallback(&btn, BUTTON_EVENT_LONG_PRESS, btn_event_cb);
 
     pinMode(LOCK_PIN, PIN_MODE_OUTPUT);
     digitalWrite(LOCK_PIN, LOW);
@@ -166,8 +166,6 @@ int main(void) {
     Start_Timer(&tmr, 5000, 1);   // auto-reset ทุก 5 วิ
 
     while(1) {
-        Button_Process();
-
         if(Is_Timer_Expired(&tmr)) {
             idx = 0;                              // หมดเวลา → รีเซ็ต input
             USART_Println("Timeout! Try again.");

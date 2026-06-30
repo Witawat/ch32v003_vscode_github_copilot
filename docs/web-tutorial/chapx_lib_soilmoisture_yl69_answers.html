@@ -9,6 +9,7 @@
 #include "SoilMoisture.h"
 #include "oled_i2c.h"
 
+SoilMoisture_Instance s;
 #define SOIL_VCC PC0
 #define SOIL_ADC PD2
 #define SOIL_CH  ADC_CH0
@@ -21,19 +22,18 @@ int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
     I2C_Init(PC1, PC2, I2C_SPEED_STANDARD);
-    ADC_Init(SOIL_ADC, SOIL_CH);
     USART_Init(115200);
 
-    pinMode(SOIL_VCC, PIN_MODE_OUTPUT);
-    pinMode(PUMP_PIN, PIN_MODE_OUTPUT);
-    digitalWrite(SOIL_VCC, LOW);
-    digitalWrite(PUMP_PIN, LOW);
+    SoilMoisture_Init(&s, SOIL_CH);
+    GPIO_SimpleInit(SOIL_VCC, GPIO_OUT_PP);
+    GPIO_SimpleInit(PUMP_PIN, GPIO_OUT_PP);
+    GPIO_WriteBit(SOIL_VCC, 0);
+    GPIO_WriteBit(PUMP_PIN, 0);
 
     OLED_Handle oled;
     OLED_Init(&oled, OLED_128x64, 0x3C);
     OLED_SetFont(&oled, FONT_8x16);
 
-    uint16_t adc_dry = 200, adc_wet = 950;
     uint32_t pump_run_count = 0;
     Timer_t tmr;
     Start_Timer(&tmr, CHECK_INTERVAL_MS, 1);
@@ -42,15 +42,10 @@ int main(void) {
 
     while(1) {
         if(Is_Timer_Expired(&tmr)) {
-            digitalWrite(SOIL_VCC, HIGH);
+            GPIO_WriteBit(SOIL_VCC, 1);
             Delay_Ms(80);
-            uint16_t adc = ADC_Read(SOIL_ADC);
-            digitalWrite(SOIL_VCC, LOW);
-
-            if(adc < adc_dry) adc = adc_dry;
-            if(adc > adc_wet) adc = adc_wet;
-            float moisture = 100.0f - ((float)(adc - adc_dry) /
-                             (float)(adc_wet - adc_dry)) * 100.0f;
+            float moisture = SoilMoisture_Read(&s);
+            GPIO_WriteBit(SOIL_VCC, 0);
 
             OLED_Clear(&oled);
             OLED_SetCursor(&oled, 0, 0);
@@ -69,12 +64,12 @@ int main(void) {
                 OLED_Print(&oled, "WATERING...");
                 OLED_Update(&oled);
 
-                digitalWrite(PUMP_PIN, HIGH);
+                GPIO_WriteBit(PUMP_PIN, 1);
                 USART_Print("WATERING! ");
                 USART_PrintFloat(moisture, 1);
                 USART_Print("%\r\n");
                 Delay_Ms(WATER_DURATION_MS);
-                digitalWrite(PUMP_PIN, LOW);
+                GPIO_WriteBit(PUMP_PIN, 0);
                 pump_run_count++;
             } else {
                 OLED_SetCursor(&oled, 0, 6);
@@ -84,8 +79,7 @@ int main(void) {
             OLED_Update(&oled);
 
             USART_Print("Moisture:"); USART_PrintFloat(moisture, 1);
-            USART_Print("% ADC:"); USART_PrintDec(adc);
-            USART_Print("\r\n");
+            USART_Print("%\r\n");
         }
     }
 }</code></pre>
@@ -99,6 +93,8 @@ int main(void) {
 #include "SoilMoisture.h"
 #include "AT24Cxx.h"
 
+SoilMoisture_Instance s;
+AT24Cxx_Instance eeprom;
 #define SOIL_VCC PC0
 #define SOIL_ADC PD2
 #define SOIL_CH  ADC_CH0
@@ -113,12 +109,12 @@ typedef struct {
 CalData_t cal;
 
 void save_calibration(void) {
-    AT24Cxx_WritePage(0, (uint8_t*)&cal, sizeof(CalData_t));
+    AT24Cxx_Write(&eeprom, 0, (uint8_t*)&cal, sizeof(CalData_t));
     USART_Print("Calibration saved to EEPROM\r\n");
 }
 
 void load_calibration(void) {
-    AT24Cxx_Read(0, (uint8_t*)&cal, sizeof(CalData_t));
+    AT24Cxx_Read(&eeprom, 0, (uint8_t*)&cal, sizeof(CalData_t));
     if(cal.magic != CAL_MAGIC) {
         cal.magic = CAL_MAGIC;
         cal.adc_dry = 200;
@@ -127,11 +123,11 @@ void load_calibration(void) {
     }
 }
 
-uint16_t read_soil(void) {
-    digitalWrite(SOIL_VCC, HIGH);
+uint16_t read_soil_raw(void) {
+    GPIO_WriteBit(SOIL_VCC, 1);
     Delay_Ms(50);
     uint16_t adc = ADC_Read(SOIL_ADC);
-    digitalWrite(SOIL_VCC, LOW);
+    GPIO_WriteBit(SOIL_VCC, 0);
     return adc;
 }
 
@@ -142,12 +138,13 @@ int main(void) {
     ADC_Init(SOIL_ADC, SOIL_CH);
     USART_Init(115200);
 
-    pinMode(SOIL_VCC, PIN_MODE_OUTPUT);
-    digitalWrite(SOIL_VCC, LOW);
-    pinMode(PC3, PIN_MODE_INPUT_PULLUP);
-    pinMode(PC4, PIN_MODE_INPUT_PULLUP);
+    SoilMoisture_Init(&s, SOIL_CH);
+    GPIO_SimpleInit(SOIL_VCC, GPIO_OUT_PP);
+    GPIO_WriteBit(SOIL_VCC, 0);
+    GPIO_SimpleInit(PC3, GPIO_IN_PU);
+    GPIO_SimpleInit(PC4, GPIO_IN_PU);
 
-    AT24Cxx_Init(0x50, 256);
+    AT24Cxx_Init(&eeprom, AT24C32, 0x50);
     load_calibration();
 
     USART_Print("Soil Calibration Menu\r\n");
@@ -158,45 +155,39 @@ int main(void) {
     USART_Print("\r\n");
 
     while(1) {
-        if(GPIO_Read(PC3) == 0) {
+        if(GPIO_ReadBit(PC3) == 0) {
             Delay_Ms(100);
             USART_Print("Calibrating DRY...\r\n");
             uint32_t sum = 0;
             for(int i = 0; i < 30; i++) {
-                sum += read_soil();
+                sum += read_soil_raw();
                 Delay_Ms(50);
             }
             cal.adc_dry = sum / 30;
             save_calibration();
             USART_Print("Dry ADC: "); USART_PrintDec(cal.adc_dry);
             USART_Print("\r\n");
-            while(GPIO_Read(PC3) == 0);
+            while(GPIO_ReadBit(PC3) == 0);
         }
 
-        if(GPIO_Read(PC4) == 0) {
+        if(GPIO_ReadBit(PC4) == 0) {
             Delay_Ms(100);
             USART_Print("Calibrating WET...\r\n");
             uint32_t sum = 0;
             for(int i = 0; i < 30; i++) {
-                sum += read_soil();
+                sum += read_soil_raw();
                 Delay_Ms(50);
             }
             cal.adc_wet = sum / 30;
             save_calibration();
             USART_Print("Wet ADC: "); USART_PrintDec(cal.adc_wet);
             USART_Print("\r\n");
-            while(GPIO_Read(PC4) == 0);
+            while(GPIO_ReadBit(PC4) == 0);
         }
 
-        uint16_t adc = read_soil();
-        if(adc < cal.adc_dry) adc = cal.adc_dry;
-        if(adc > cal.adc_wet) adc = cal.adc_wet;
+        float moisture = SoilMoisture_Read(&s);
 
-        float moisture = 100.0f - ((float)(adc - cal.adc_dry) /
-                         (float)(cal.adc_wet - cal.adc_dry)) * 100.0f;
-
-        USART_Print("ADC:"); USART_PrintDec(adc);
-        USART_Print(" Moisture:"); USART_PrintFloat(moisture, 1);
+        USART_Print("Moisture:"); USART_PrintFloat(moisture, 1);
         USART_Print("%\r\n");
         Delay_Ms(2000);
     }
@@ -210,6 +201,7 @@ int main(void) {
 #include "SimpleHAL.h"
 #include "SoilMoisture.h"
 
+SoilMoisture_Instance s;
 #define SOIL_VCC_EN PC0
 #define SOIL_ADC    PD2
 #define SOIL_CH     ADC_CH0
@@ -231,13 +223,12 @@ int main(void) {
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    ADC_Init(SOIL_ADC, SOIL_CH);
     USART_Init(115200);
 
-    pinMode(SOIL_VCC_EN, PIN_MODE_OUTPUT);
-    digitalWrite(SOIL_VCC_EN, LOW);
+    SoilMoisture_Init(&s, SOIL_CH);
+    GPIO_SimpleInit(SOIL_VCC_EN, GPIO_OUT_PP);
+    GPIO_WriteBit(SOIL_VCC_EN, 0);
 
-    uint16_t adc_dry = 200, adc_wet = 950;
     Timer_t tmr;
     Start_Timer(&tmr, 10000, 1);
 
@@ -246,24 +237,17 @@ int main(void) {
 
     while(1) {
         if(Is_Timer_Expired(&tmr)) {
-            digitalWrite(SOIL_VCC_EN, HIGH);
+            GPIO_WriteBit(SOIL_VCC_EN, 1);
             Delay_Ms(50);
 
-            uint16_t adc = ADC_Read(SOIL_ADC);
+            float moisture = SoilMoisture_Read(&s);
 
-            digitalWrite(SOIL_VCC_EN, LOW);
+            GPIO_WriteBit(SOIL_VCC_EN, 0);
 
-            if(adc < adc_dry) adc = adc_dry;
-            if(adc > adc_wet) adc = adc_wet;
-
-            float moisture = 100.0f - ((float)(adc - adc_dry) /
-                             (float)(adc_wet - adc_dry)) * 100.0f;
-
-            USART_Print("ADC:"); USART_PrintDec(adc);
             USART_Print(" → "); USART_PrintFloat(moisture, 1);
             USART_Print("%");
 
-            if(adc > 0) {
+            if(moisture > 0) {
                 USART_Print(" OK\r\n");
             } else {
                 USART_Print(" (check transistor wiring)\r\n");

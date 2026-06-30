@@ -3,122 +3,99 @@
 <h1>YL-69 — Soil Moisture Sensor วัดความชื้นดินผ่าน ADC</h1><span class="level intermediate">ระดับกลาง</span>
 <section class="flowchart"><h2>🧭 แผนภาพการทำงาน</h2><pre class="mermaid">
 flowchart TD
-    A["GPIO VCC Control → HIGH (เปิดไฟเลี้ยง)"] --> B["ADC_Read → 0-1023"]
-    B --> C["Map ADC → % ความชื้น"]
+    A["SoilMoisture_Init(&s, ADC_CH_PC4)"] --> B["SoilMoisture_Read(&s)"]
+    B --> C["ได้ % ความชื้น (0.0-100.0)"]
     C --> D{"ความชื้น < threshold?"}
     D -->|"Yes (ดินแห้ง)"| E["เปิดปั๊มน้ำ / แจ้งเตือน"]
     D -->|"No (ดินชื้นพอ)"| F["รอวัดรอบถัดไป"]
-    E --> G["GPIO VCC Control → LOW (ปิดไฟเลี้ยง)"]
+    E --> G["Delay 1-10 วิ"]
     F --> G
-    G --> H["Delay 1-10 วิ → ป้องกัน corrosion"]
-    H --> A
+    G --> B
 </pre></section>
 <section><h2>🔌 การต่อวงจร</h2><pre class="ascii-circuit">
           YL-69 Soil Moisture Sensor
    ┌────────────────────────────────────┐
    │  MCU              YL-69 Module     │
-   │  PC0─GPIO───────── VCC (ไฟเลี้ยง)   │
-   │  PD2─ADC ───────── A0 (Analog Out) │
+   │  3.3V───────────── VCC             │
+   │  PC4─ADC ───────── A0 (Analog Out) │
    │  GND────────────── GND             │
    │                                    │
-   │  ⚠ VCC ต่อผ่าน GPIO — เปิดแค่ตอนวัด │
    │  ⚠ อย่าเสียบเซนเซอร์ค้างในดินตลอดเวลา  │
-   │  ⚠ ใช้ Transistor (2N2222) ขับ VCC  │
-   │     ถ้ากระแสเกิน 8mA                 │
+   │  ⚠ Library จัดการ VCC อัตโนมัติ     │
    └────────────────────────────────────┘
-</pre><p>⚠️ ใช้ GPIO ควบคุม VCC เปิดเฉพาะตอนวัด — ป้องกัน probe กัดกร่อนจาก electrolysis — ถ้าต้องการกระแส > 8mA ให้ใช้ transistor (2N2222 หรือ MOSFET) ขับ VCC แทน GPIO โดยตรง</p></section>
-<section><h2>📚 หลักการทำงาน</h2><p><strong>YL-69 (HL-69)</strong> เป็น Soil Moisture Sensor ใช้หลักการวัดความต้านทานของดิน — Probe 2 ขั้วเสียบลงดิน — เมื่อดินเปียก ความต้านทานต่ำ → ADC สูง — เมื่อดินแห้ง ความต้านทานสูง → ADC ต่ำ — Module มักมาพร้อม LM393 Comparator สำหรับ Digital Output (threshold ปรับด้วย pot)</p><p><strong>Corrosion Warning:</strong> Probe เป็นโลหะ — ถ้าเปิดไฟเลี้ยงตลอดเวลา จะเกิด electrolysis ทำให้ probe กัดกร่อนเร็ว — ต้องใช้ GPIO เปิดไฟเลี้ยงเฉพาะตอนวัด (~100ms) แล้วปิดทันที — เพิ่มอายุการใช้งาน probe ได้หลายเท่า</p><p><strong>ทำ Mapping % ความชื้น:</strong> calibrate โดยการจุ่ม probe ในน้ำ (100%) และแห้งสนิท (0%) — สมการ: Moisture% = 100 - ((ADC - ADC_min) / (ADC_max - ADC_min)) × 100 — ค่า ADC_min กับ ADC_max ขึ้นกับดินแต่ละชนิด</p><p><strong>การใช้งาน:</strong> รดน้ำต้นไม้อัตโนมัติ, ตรวจจับน้ำรั่ว, วัดระดับน้ำ (เปลี่ยน probe เป็นแบบกันน้ำ), Smart farming</p></section>
+</pre><p>YL-69 (HL-69) ใช้หลักการวัดความต้านทานของดิน — Probe 2 ขั้วเสียบลงดิน — Library จัดการ VCC control อัตโนมัติเพื่อป้องกัน probe กัดกร่อน</p></section>
+<section><h2>📚 หลักการทำงาน</h2><p><strong>YL-69 (HL-69)</strong> เป็น Soil Moisture Sensor ใช้หลักการวัดความต้านทานของดิน — Probe 2 ขั้วเสียบลงดิน — เมื่อดินเปียก ความต้านทานต่ำ → ADC สูง — เมื่อดินแห้ง ความต้านทานสูง → ADC ต่ำ</p><p><strong>Corrosion Warning:</strong> Probe เป็นโลหะ — ถ้าเปิดไฟเลี้ยงตลอดเวลา จะเกิด electrolysis ทำให้ probe กัดกร่อนเร็ว — Library จัดการ VCC เปิดเฉพาะตอนวัด (~100ms) แล้วปิดทันที — เพิ่มอายุ probe ได้หลายเท่า</p><p><strong>การใช้งาน:</strong> รดน้ำต้นไม้อัตโนมัติ, ตรวจจับน้ำรั่ว, วัดระดับน้ำ, Smart farming</p></section>
 <section><h2>💻 เขียน Code ทีละขั้น</h2>
-<div class="step"><h3>ขั้นที่ 1: Init + VCC Control ด้วย GPIO</h3><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+<div class="step"><h3>ขั้นที่ 1: Init SoilMoisture</h3><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "SoilMoisture.h"
 
-#define SOIL_VCC PC0
-#define SOIL_ADC PD2
-#define SOIL_CH ADC_CH0
+SoilMoisture_Instance s;
 
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    ADC_Init(SOIL_ADC, SOIL_CH);
-    pinMode(SOIL_VCC, PIN_MODE_OUTPUT);
-    digitalWrite(SOIL_VCC, LOW); // ปิดตอนเริ่ม
     USART_Init(115200);
 
-    USART_Print("Soil Moisture Ready\r\n");</code></pre><p class="explain">🔍 <code>SOIL_VCC</code> เป็น GPIO ควบคุมไฟเลี้ยงเซนเซอร์ — เริ่มต้นปิดไว้ (LOW) — เปิดเฉพาะตอนวัด — ลดการกัดกร่อนของ probe</p></div>
-<div class="step"><h3>ขั้นที่ 2: อ่านค่า + คำนวณ % ความชื้น</h3><pre><code class="language-c">    // ค่า calibrate (วัดเองตามดินที่ใช้)
-    uint16_t adc_dry = 200;   // ADC ตอนดินแห้งสนิท
-    uint16_t adc_wet = 950;   // ADC ตอนดินเปียกมาก
-
-    digitalWrite(SOIL_VCC, HIGH); // เปิดไฟเลี้ยง
-    Delay_Ms(50);                  // รอ stabilize
-
-    uint16_t adc = ADC_Read(SOIL_ADC);
-
-    digitalWrite(SOIL_VCC, LOW);  // ปิดทันที!
-
-    if(adc < adc_dry) adc = adc_dry;
-    if(adc > adc_wet) adc = adc_wet;
-
-    float moisture = 100.0f - ((float)(adc - adc_dry)
-                     / (float)(adc_wet - adc_dry)) * 100.0f;
+    SoilMoisture_Init(&s, ADC_CH_PC4);
+    USART_Println("Soil Moisture Ready!");</code></pre>
+<p class="explain">🔍 <code>SoilMoisture_Init(&s, ADC_CH_PC4)</code> — ตั้งค่า ADC + VCC control — library จัดการเปิด/ปิด VCC อัตโนมัติเพื่อป้องกัน corrosion</p></div>
+<div class="step"><h3>ขั้นที่ 2: อ่าน % ความชื้น</h3>
+<pre><code class="language-c">    float pct = SoilMoisture_Read(&s);
 
     USART_Print("Moisture: ");
-    USART_PrintFloat(moisture, 1);
-    USART_Print("%\r\n");</code></pre><p class="explain">🔍 เปิด VCC → รอ 50ms stabilize → อ่าน ADC → ปิด VCC ทันที! — Map ADC เป็น % — adc_dry และ adc_wet ต้อง calibrate ตามดินที่ใช้ — ค่าจะกลับกับความชื้น (ดินแห้ง=ADC ต่ำ, ดินเปียก=ADC สูง) — บางแผงค่าอาจกลับกัน ต้องทดสอบ</p></div>
-<div class="step"><h3>ขั้นที่ 3: รดน้ำอัตโนมัติ + วัดเป็นระยะ</h3><pre><code class="language-c">    pinMode(PC1, PIN_MODE_OUTPUT); // ปั๊มน้ำ Relay
+    USART_PrintFloat(pct, 1);
+    USART_Println("%");
+
+    if(pct < 30.0f) {
+        USART_Println("DRY — Need water!");
+    } else if(pct > 80.0f) {
+        USART_Println("WET — Soil is saturated");
+    } else {
+        USART_Println("OK — Moisture is good");
+    }</code></pre>
+<p class="explain">🔍 <code>SoilMoisture_Read(&s)</code> — อ่านความชื้นเป็น % (0-100) — จัดการ VCC เปิด/ปิด อัตโนมัติ — < 30% = แห้งต้องรดน้ำ, > 80% = แฉะเกิน</p></div>
+<div class="step"><h3>ขั้นที่ 3: รดน้ำอัตโนมัติ + วัดเป็นระยะ</h3>
+<pre><code class="language-c">    pinMode(PC1, PIN_MODE_OUTPUT); // ปั๊มน้ำ Relay
     Timer_t tmr;
     Start_Timer(&tmr, 10000, 1); // วัดทุก 10 วิ
 
     while(1) {
         if(Is_Timer_Expired(&tmr)) {
-            digitalWrite(SOIL_VCC, HIGH);
-            Delay_Ms(50);
-            uint16_t adc = ADC_Read(SOIL_ADC);
-            digitalWrite(SOIL_VCC, LOW);
-
-            float moisture = 100.0f - ((float)(adc - 200)
-                             / (float)(950 - 200)) * 100.0f;
+            float pct = SoilMoisture_Read(&s);
 
             USART_Print("Moisture: ");
-            USART_PrintFloat(moisture, 1);
+            USART_PrintFloat(pct, 1);
             USART_Print("% ");
 
-            if(moisture < 30.0f) {
+            if(pct < 30.0f) {
                 USART_Print("→ WATERING!");
                 digitalWrite(PC1, HIGH); // เปิดปั๊ม
                 Delay_Ms(3000);          // รด 3 วิ
                 digitalWrite(PC1, LOW);  // ปิดปั๊ม
             }
-            USART_Print("\r\n");
+            USART_Println("");
         }
     }
-}</code></pre><p class="explain">🔍 ใช้ Non-Blocking Timer วัดทุก 10 วินาที — ลดการเปิดไฟเลี้ยงถี่เกิน — เมื่อความชื้น < 30% → เปิดปั๊ม 3 วิ — ปิด VCC ทันทีหลังอ่านเสร็จ</p></div>
+}</code></pre>
+<p class="explain">🔍 ใช้ Non-Blocking Timer วัดทุก 10 วินาที — เมื่อความชื้น < 30% → เปิดปั๊ม 3 วิ — VCC จัดการอัตโนมัติด้วย library</p></div>
 </section>
 <section><h2>📋 API Reference</h2><table><tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
-<tr><td><code>ADC_Init(pin, ch)</code></td><td>เริ่มต้น ADC</td><td><code>ADC_Init(PD2, ADC_CH0)</code></td></tr>
-<tr><td><code>ADC_Read(pin)</code></td><td>อ่านค่า ADC 0-1023</td><td><code>uint16_t v = ADC_Read(PD2)</code></td></tr>
-<tr><td><code>SOIL_Init(vcc_pin, adc_pin, ch)</code></td><td>เริ่มต้น Soil Sensor</td><td><code>SOIL_Init(PC0, PD2, ADC_CH0)</code></td></tr>
-<tr><td><code>SOIL_ReadMoisture(pin, dry, wet)</code></td><td>อ่าน % ความชื้น 0-100</td><td><code>float m = SOIL_ReadMoisture(PC0, PD2, 200, 950)</code></td></tr>
-<tr><td><code>SOIL_CalibrateDry(pin)</code></td><td>Calibrate ค่าแห้ง</td><td><code>uint16_t d = SOIL_CalibrateDry(PC0, PD2)</code></td></tr>
-<tr><td><code>SOIL_CalibrateWet(pin)</code></td><td>Calibrate ค่าเปียก</td><td><code>uint16_t w = SOIL_CalibrateWet(PC0, PD2)</code></td></tr>
+<tr><td><code>SoilMoisture_Init(&s, adc_ch)</code></td><td>เริ่มต้น Soil Moisture Sensor</td><td><code>SoilMoisture_Init(&s, ADC_CH_PC4)</code></td></tr>
+<tr><td><code>SoilMoisture_Read(&s)</code></td><td>อ่าน % ความชื้น 0.0-100.0</td><td><code>float pct = SoilMoisture_Read(&s)</code></td></tr>
 </table></section>
 <section><h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2><table><tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
-<tr><td>Probe กัดกร่อนเร็วมาก</td><td>เปิดไฟเลี้ยงค้างตลอดเวลา</td><td>ใช้ GPIO เปิดเฉพาะตอนวัด — ปิดทันทีหลังอ่าน — ใช้ transistor ถ้ากระแสสูง</td></tr>
+<tr><td>Probe กัดกร่อนเร็วมาก</td><td>เปิดไฟเลี้ยงค้างตลอดเวลา</td><td>ใช้ library จัดการ VCC อัตโนมัติ — เปิดเฉพาะตอนวัด</td></tr>
 <tr><td>ค่า ADC กระโดดไปมา</td><td>Noise จาก switching / หน้าสัมผัสไม่ดี</td><td>ใช้ averaging 5-10 ครั้ง — ต่อ 10µF cap ที่ VCC-GND</td></tr>
-<tr><td>ค่า % ไม่ตรง</td><td>ไม่ได้ calibrate ตามดินที่ใช้</td><td>วัด adc_dry (กลางอากาศ) และ adc_wet (จุ่มน้ำ) — บันทึกไว้</td></tr>
-<tr><td>วัดแล้ว ADC เป็น 0</td><td>VCC เปิดไม่ทัน หรือ GPIO จ่ายกระแสไม่พอ</td><td>เพิ่ม Delay 50-100ms หลังเปิด VCC — ถ้ากระแสเกิน 8mA ใช้ transistor</td></tr>
-<tr><td>ดินเปียกแต่อ่านค่าแห้ง</td><td>ต่อสายสลับ หรือ module มี buffer กลับค่า</td><td>บาง module ใช้ LM393 กลับ logic — ทดสอบแล้วกลับค่า ADC</td></tr>
+<tr><td>ค่า % ไม่ตรง</td><td>ไม่ได้ calibrate ตามดินที่ใช้</td><td>SoilMoisture_Read คืนค่าปกติ 0-100 — ปรับ calibration ใน library config</td></tr>
+<tr><td>ดินเปียกแต่อ่านค่าแห้ง</td><td>ต่อสายสลับ หรือ module มี buffer กลับค่า</td><td>บาง module ใช้ LM393 กลับ logic — ทดสอบแล้วกลับค่าใน code</td></tr>
 </table></section>
-<section><h2>🛠️ สร้าง Product: ระบบรดน้ำอัตโนมัติ</h2><p>YL-69 + Relay + OLED — วัดความชื้น 3 ต้น — รดน้ำเมื่อต่ำกว่า threshold — แสดงสถานะบน OLED</p><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+<section><h2>🛠️ สร้าง Product: ระบบรดน้ำอัตโนมัติ</h2><p>YL-69 + Relay + OLED — วัดความชื้น — รดน้ำเมื่อต่ำกว่า threshold</p><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "SoilMoisture.h"
 #include "oled_i2c.h"
 
 #define PUMP_PIN PC3
-#define SOIL_VCC PC0
-#define SOIL_ADC PD2
-#define SOIL_CH ADC_CH0
 #define DRY_THRESHOLD 30.0f
 
 int main(void)
@@ -126,12 +103,12 @@ int main(void)
     SystemCoreClockUpdate();
     Timer_Init();
     I2C_Init(PC1, PC2, I2C_SPEED_STANDARD);
-    ADC_Init(SOIL_ADC, SOIL_CH);
     USART_Init(115200);
 
-    pinMode(SOIL_VCC, PIN_MODE_OUTPUT);
+    SoilMoisture_Instance s;
+    SoilMoisture_Init(&s, ADC_CH_PC4);
+
     pinMode(PUMP_PIN, PIN_MODE_OUTPUT);
-    digitalWrite(SOIL_VCC, LOW);
     digitalWrite(PUMP_PIN, LOW);
 
     OLED_Handle oled;
@@ -145,25 +122,19 @@ int main(void)
     {
         if(Is_Timer_Expired(&tmr))
         {
-            digitalWrite(SOIL_VCC, HIGH);
-            Delay_Ms(50);
-            uint16_t adc = ADC_Read(SOIL_ADC);
-            digitalWrite(SOIL_VCC, LOW);
-
-            float moisture = 100.0f - ((float)(adc - 200)
-                             / (float)(950 - 200)) * 100.0f;
-            if(moisture < 0) moisture = 0;
-            if(moisture > 100) moisture = 100;
+            float pct = SoilMoisture_Read(&s);
+            if(pct < 0) pct = 0;
+            if(pct > 100) pct = 100;
 
             OLED_Clear(&oled);
             OLED_SetCursor(&oled, 0, 0);
             OLED_Print(&oled, "Soil Moisture");
 
             OLED_SetCursor(&oled, 0, 2);
-            OLED_PrintFloat(&oled, "", moisture, 1);
+            OLED_PrintFloat(&oled, "", pct, 1);
             OLED_Print(&oled, " %");
 
-            if(moisture < DRY_THRESHOLD) {
+            if(pct < DRY_THRESHOLD) {
                 digitalWrite(PUMP_PIN, HIGH);
                 OLED_SetCursor(&oled, 0, 4);
                 OLED_Print(&oled, "PUMP ON!");
@@ -174,16 +145,12 @@ int main(void)
                 OLED_Print(&oled, "Soil OK");
             }
 
-            OLED_SetCursor(&oled, 0, 6);
-            OLED_Print(&oled, "ADC:");
-            OLED_PrintDec(&oled, adc);
-
             OLED_Update(&oled);
         }
     }
 }</code></pre></section>
 <section><h2>✏️ ลองทำดู</h2><ol>
-<li>วัดความชื้นหลายจุด — ใช้ analog mux (CD4051) หรือ ADC หลายช่อง — รดน้ำเฉพาะจุดที่แห้ง</li>
+<li>วัดความชื้นหลายจุด — ใช้ SoilMoisture หลาย instance — รดน้ำเฉพาะจุดที่แห้ง</li>
 <li>เพิ่ม RTC — รดน้ำตามเวลาที่กำหนด — เช้า-เย็น — ตรวจสอบความชื้นก่อนรด</li>
 <li>Calibrate อัตโนมัติ — กดปุ่มเพื่อบันทึกค่าแห้ง/เปียก — เก็บใน EEPROM</li>
 <li>เพิ่ม Water Level Sensor — ตรวจจับน้ำในถัง — หยุดปั๊มถ้าน้ำหมด</li></ol></section>

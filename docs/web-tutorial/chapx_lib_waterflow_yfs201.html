@@ -3,11 +3,11 @@
 <h1>YF-S201 — Water Flow Sensor นับพัลส์วัดอัตราการไหล</h1><span class="level intermediate">ระดับกลาง</span>
 <section class="flowchart"><h2>🧭 แผนภาพการทำงาน</h2><pre class="mermaid">
 flowchart TD
-    A["Init GPIO + Interrupt (PC3)"] --> B["น้ำไหล → Hall Sensor → พัลส์"]
-    B --> C["ISR: pulse_count++"]
-    C --> D["Timer 1 วิ: คำนวณ flow rate"]
+    A["WaterFlow_Init(&w, PC0, 450.0f)"] --> B["น้ำไหล → Hall Sensor → พัลส์"]
+    B --> C["ISR: pulse_count++ (auto)"]
+    C --> D["WaterFlow_GetFlowRate(&w)"]
     D --> E["Flow(L/min) = pulses / K-factor"]
-    E --> F["Total Volume += Flow × Δt"]
+    E --> F["WaterFlow_GetTotalVolume(&w)"]
     F --> G["แสดง Flow Rate + Total"]
     G --> D
 </pre></section>
@@ -17,128 +17,88 @@ flowchart TD
    │  MCU              YF-S201          │
    │  3.3V───────────── VCC (Red)       │
    │  GND────────────── GND (Black)     │
-   │  PC3─GPIO ──────── Signal (Yellow) │
+   │  PC0─GPIO ──────── Signal (Yellow) │
    │                                    │
    │  ⚠ K-factor = 450 pulse/Liter      │
    │  ⚠ Flow range: 1-30 L/min          │
    │  ⚠ ทิศทางน้ำ: ลูกศรบนตัว sensor     │
-   │  ⚠ Pull-up 10kΩ อาจมีในตัว          │
    └────────────────────────────────────┘
 </pre><p>YF-S201 ใช้ Hall Effect Sensor + Magnet ในกังหัน — เมื่อน้ำไหล กังหันหมุน → Hall Sensor สร้างพัลส์ — K-factor = 450 pulse/Liter — ต่อตรง GPIO ใช้ Interrupt นับ</p></section>
-<section><h2>📚 หลักการทำงาน</h2><p><strong>YF-S201 Water Flow Sensor</strong> ใช้กังหันที่มีแม่เหล็กติดอยู่ — เมื่อน้ำไหลผ่าน กังหันหมุน — Hall Effect Sensor ตรวจจับแม่เหล็ก → สร้างพัลส์สัญญาณ (LOW-HIGH-LOW) — ความถี่ของพัลส์แปรผันตามอัตราการไหล</p><p><strong>K-Factor (Pulses/Liter):</strong> แต่ละรุ่นมีค่า K-factor ต่างกัน — YF-S201 = 450 pulse/L, YF-S401 = 5880 pulse/L — Flow Rate (L/min) = (pulse_count / K_factor) × 60 — หรือใช้ library ที่คำนวณให้</p><p><strong>Interrupt-Based Counting:</strong> ใช้ EXTI Interrupt ที่ขา GPIO — ทุกครั้งที่มี pulse (falling edge) → ISR เพิ่มตัวนับ — Timer อ่านค่าตัวนับทุก 1 วินาที → คำนวณ flow rate + total volume — แม่นยำกว่า polling มาก</p><p><strong>การคำนวณปริมาตรรวม:</strong> Total Volume (L) = Total Pulses / K-factor — หรือสะสมจาก flow rate ทุกวินาที: Volume += (Flow_L_min / 60) × 1sec</p></section>
+<section><h2>📚 หลักการทำงาน</h2><p><strong>YF-S201 Water Flow Sensor</strong> ใช้กังหันที่มีแม่เหล็กติดอยู่ — เมื่อน้ำไหลผ่าน กังหันหมุน — Hall Effect Sensor ตรวจจับแม่เหล็ก → สร้างพัลส์สัญญาณ — ความถี่ของพัลส์แปรผันตามอัตราการไหล</p><p><strong>K-Factor (Pulses/Liter):</strong> แต่ละรุ่นมีค่า K-factor ต่างกัน — YF-S201 = 450 pulse/L, YF-S401 = 5880 pulse/L — Flow Rate (L/min) = (pulse_count / K_factor) × 60</p><p><strong>Interrupt-Based Counting:</strong> Library จัดการ EXTI Interrupt ให้อัตโนมัติ — ไม่ต้องเขียน ISR เอง — <code>WaterFlow_GetFlowRate()</code> และ <code>WaterFlow_GetTotalVolume()</code> อ่านค่าได้ทันที</p></section>
 <section><h2>💻 เขียน Code ทีละขั้น</h2>
-<div class="step"><h3>ขั้นที่ 1: Init GPIO + Interrupt</h3><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+<div class="step"><h3>ขั้นที่ 1: Init WaterFlow</h3><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "WaterFlow.h"
 
-#define FLOW_PIN PC3
-volatile uint32_t pulse_count = 0;
-
-void EXTI_IRQ(void) {
-    if(EXTI_GetITStatus(EXTI_Line3)) {
-        pulse_count++;
-        EXTI_ClearITPendingBit(EXTI_Line3);
-    }
-}
+WaterFlow_Instance w;
 
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
     USART_Init(115200);
 
-    pinMode(FLOW_PIN, PIN_MODE_INPUT_PULLUP);
-    EXTI_Init(FLOW_PIN, EXTI_Trigger_Falling);
-    NVIC_EnableIRQ(EXTI7_0_IRQn);
+    WaterFlow_Init(&w, PC0, 450.0f); // pin, K-factor
+    USART_Println("Water Flow Sensor Ready!");</code></pre>
+<p class="explain">🔍 <code>WaterFlow_Init(&w, pin, kfactor)</code> — ตั้งค่า GPIO + EXTI Interrupt อัตโนมัติ — K-factor 450 สำหรับ YF-S201 — library จัดการ ISR ภายใน</p></div>
+<div class="step"><h3>ขั้นที่ 2: อ่าน Flow Rate + Total Volume</h3>
+<pre><code class="language-c">    float lpm = WaterFlow_GetFlowRate(&w);   // L/min
+    float total = WaterFlow_GetTotalVolume(&w); // L
 
-    USART_Print("Flow Sensor Ready\r\n");</code></pre><p class="explain">🔍 ใช้ EXTI Interrupt แบบ Falling Edge — ทุกพัลส์จาก flow sensor → ISR เพิ่ม pulse_count — ใช้ Internal Pull-Up — volatile เพราะแก้ใน ISR — K-factor 450 pulse/L</p></div>
-<div class="step"><h3>ขั้นที่ 2: คำนวณ Flow Rate + Total Volume</h3><pre><code class="language-c">    float K_FACTOR = 450.0f; // YF-S201
-    float total_liters = 0;
-    uint32_t last_pulse = 0;
+    USART_Print("Flow: ");
+    USART_PrintFloat(lpm, 1);
+    USART_Print(" L/min  |  Total: ");
+    USART_PrintFloat(total, 1);
+    USART_Println(" L");</code></pre>
+<p class="explain">🔍 <code>WaterFlow_GetFlowRate(&w)</code> — อัตราการไหล L/min — <code>WaterFlow_GetTotalVolume(&w)</code> — ปริมาตรรวม L — library คำนวณให้อัตโนมัติ</p></div>
+<div class="step"><h3>ขั้นที่ 3: วาล์วควบคุม + แจ้งเตือน overflow</h3>
+<pre><code class="language-c">    pinMode(PC1, PIN_MODE_OUTPUT); // Solenoid Valve
+    digitalWrite(PC1, LOW);
+
+    float flow_limit = 10.0f; // L/min max
+    float daily_limit = 100.0f; // L/day max
     Timer_t tmr;
     Start_Timer(&tmr, 1000, 1);
 
     while(1) {
         if(Is_Timer_Expired(&tmr)) {
-            uint32_t pulses_this_sec;
-            NVIC_DisableIRQ(EXTI7_0_IRQn);
-            pulses_this_sec = pulse_count - last_pulse;
-            last_pulse = pulse_count;
-            NVIC_EnableIRQ(EXTI7_0_IRQn);
+            float lpm = WaterFlow_GetFlowRate(&w);
+            float total = WaterFlow_GetTotalVolume(&w);
 
-            float flow_l_min = (pulses_this_sec / K_FACTOR) * 60.0f;
-            total_liters += (float)pulses_this_sec / K_FACTOR;
+            USART_Print("Flow:"); USART_PrintFloat(lpm, 1);
+            USART_Print(" Total:"); USART_PrintFloat(total, 1);
 
-            USART_Print("Flow: "); USART_PrintFloat(flow_l_min, 1);
-            USART_Print(" L/min Total: ");
-            USART_PrintFloat(total_liters, 1);
-            USART_Print(" L\r\n");
-        }
-    }
-}</code></pre><p class="explain">🔍 ปิด interrupt ชั่วคราวเพื่ออ่านค่า atomic — คำนวณ flow rate จาก pulses ใน 1 วิ — Flow(L/min) = (pulses/K_factor) × 60 — Total = pulses สะสม / K_factor</p></div>
-<div class="step"><h3>ขั้นที่ 3: วาล์วควบคุม + แจ้งเตือน overflow</h3><pre><code class="language-c">    pinMode(PC0, PIN_MODE_OUTPUT); // Solenoid Valve
-    digitalWrite(PC0, LOW);
-
-    float flow_limit = 10.0f; // L/min max
-    float daily_limit = 100.0f; // L/day max
-
-    while(1) {
-        if(Is_Timer_Expired(&tmr)) {
-            NVIC_DisableIRQ(EXTI7_0_IRQn);
-            uint32_t pps = pulse_count - last_pulse;
-            last_pulse = pulse_count;
-            NVIC_EnableIRQ(EXTI7_0_IRQn);
-
-            float flow = (pps / K_FACTOR) * 60.0f;
-            total_liters += pps / K_FACTOR;
-
-            USART_Print("Flow:"); USART_PrintFloat(flow, 1);
-            USART_Print(" Total:"); USART_PrintFloat(total_liters, 1);
-
-            if(flow > flow_limit) {
+            if(lpm > flow_limit) {
                 USART_Print(" OVERFLOW!");
-                digitalWrite(PC0, HIGH); // ปิดวาล์ว
+                digitalWrite(PC1, HIGH); // ปิดวาล์ว
             }
-            if(total_liters > daily_limit) {
+            if(total > daily_limit) {
                 USART_Print(" DAILY LIMIT!");
-                digitalWrite(PC0, HIGH);
+                digitalWrite(PC1, HIGH);
             }
-            USART_Print("\r\n");
+            USART_Println("");
         }
     }
-}</code></pre><p class="explain">🔍 ตรวจจับ overflow เมื่อ flow rate เกิน 10 L/min — ปิด Solenoid Valve ทันที — จำกัดปริมาณน้ำต่อวัน 100 L — ป้องกันน้ำรั่ว/ท่อแตก</p></div>
+}</code></pre>
+<p class="explain">🔍 ตรวจจับ overflow เมื่อ flow rate เกิน 10 L/min — ปิด Solenoid Valve ทันที — จำกัดปริมาณน้ำต่อวัน 100 L — ป้องกันน้ำรั่ว/ท่อแตก</p></div>
 </section>
 <section><h2>📋 API Reference</h2><table><tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
-<tr><td><code>FLOW_Init(pin)</code></td><td>เริ่มต้น Flow Sensor + EXTI</td><td><code>FLOW_Init(PC3)</code></td></tr>
-<tr><td><code>FLOW_GetPulses()</code></td><td>อ่านจำนวนพัลส์สะสม</td><td><code>uint32_t n = FLOW_GetPulses()</code></td></tr>
-<tr><td><code>FLOW_GetRate(pin, kfactor)</code></td><td>อ่าน Flow Rate (L/min)</td><td><code>float r = FLOW_GetRate(PC3, 450.0f)</code></td></tr>
-<tr><td><code>FLOW_GetVolume(pin, kfactor)</code></td><td>อ่านปริมาตรสะสม (L)</td><td><code>float v = FLOW_GetVolume(PC3, 450.0f)</code></td></tr>
-<tr><td><code>FLOW_Reset(pin)</code></td><td>รีเซ็ตตัวนับ</td><td><code>FLOW_Reset(PC3)</code></td></tr>
-<tr><td><code>FLOW_Calibrate(pin, known_vol)</code></td><td>Calibrate หา K-factor จริง</td><td><code>float k = FLOW_Calibrate(PC3, 1.0f)</code></td></tr>
+<tr><td><code>WaterFlow_Init(&w, pin, kfactor)</code></td><td>เริ่มต้น Flow Sensor + EXTI</td><td><code>WaterFlow_Init(&w, PC0, 450.0f)</code></td></tr>
+<tr><td><code>WaterFlow_GetFlowRate(&w)</code></td><td>อ่าน Flow Rate (L/min)</td><td><code>float lpm = WaterFlow_GetFlowRate(&w)</code></td></tr>
+<tr><td><code>WaterFlow_GetTotalVolume(&w)</code></td><td>อ่านปริมาตรสะสม (L)</td><td><code>float total = WaterFlow_GetTotalVolume(&w)</code></td></tr>
+<tr><td><code>WaterFlow_Reset(&w)</code></td><td>รีเซ็ตตัวนับ</td><td><code>WaterFlow_Reset(&w)</code></td></tr>
 </table></section>
 <section><h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2><table><tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
-<tr><td>นับพัลส์ไม่ได้เลย</td><td>ไม่ใช้ Interrupt / Pull-up หาย</td><td>ใช้ EXTI Falling Edge — ต่อ Pull-up 10kΩ ถ้าไม่มีในตัว — ใช้ Oscilloscope ดูสัญญาณ</td></tr>
-<tr><td>Flow Rate อ่านผิด</td><td>K-factor ไม่ตรงรุ่นเซนเซอร์</td><td>YF-S201=450, YF-S401=5880, YF-B1=396 — เช็ค sticker — calibrate เอง</td></tr>
-<tr><td>ค่ากระโดดไปมา</td><td>น้ำไหลไม่สม่ำเสมอ / ฟองอากาศ</td><td>ใช้ averaging 5 วินาที — ติดตั้งแนวนอน — ไล่ฟองอากาศในท่อ</td></tr>
-<tr><td>Interrupt รบกวน USART</td><td>ISR ใช้เวลานาน / priority conflict</td><td>ISR ให้เร็วที่สุด — แค่ pulse_count++ — งานหนักทำใน main loop</td></tr>
-<tr><td>น้ำไหลแต่พัลส์น้อยกว่าที่ควร</td><td>Flow rate ต่ำกว่า minimum (1 L/min)</td><td>YF-S201 วัดต่ำสุด ~1 L/min — ใช้ YF-S401 สำหรับ flow ต่ำ (0.3 L/min)</td></tr>
+<tr><td>นับพัลส์ไม่ได้เลย</td><td>สายสัญญาณหลุด / Pull-up หาย</td><td>ใช้ Pull-up 10kΩ ถ้าไม่มีในตัว — ใช้ Oscilloscope ดูสัญญาณ</td></tr>
+<tr><td>Flow Rate อ่านผิด</td><td>K-factor ไม่ตรงรุ่นเซนเซอร์</td><td>YF-S201=450, YF-S401=5880, YF-B1=396 — เช็ค sticker</td></tr>
+<tr><td>ค่ากระโดดไปมา</td><td>น้ำไหลไม่สม่ำเสมอ / ฟองอากาศ</td><td>ใช้ averaging — ติดตั้งแนวนอน — ไล่ฟองอากาศในท่อ</td></tr>
+<tr><td>น้ำไหลแต่พัลส์น้อยกว่าที่ควร</td><td>Flow rate ต่ำกว่า minimum (1 L/min)</td><td>YF-S201 วัดต่ำสุด ~1 L/min — ใช้ YF-S401 สำหรับ flow ต่ำ</td></tr>
 </table></section>
-<section><h2>🛠️ สร้าง Product: Smart Water Meter</h2><p>YF-S201 + OLED + Solenoid Valve — วัดปริมาณน้ำ ควบคุมวาล์ว — แสดง Flow Rate + Total</p><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+<section><h2>🛠️ สร้าง Product: Smart Water Meter</h2><p>YF-S201 + OLED + Solenoid Valve — วัดปริมาณน้ำ ควบคุมวาล์ว</p><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "WaterFlow.h"
 #include "oled_i2c.h"
 
-#define FLOW_PIN PC3
-#define VALVE_PIN PC0
-#define K_FACTOR 450.0f
-
-volatile uint32_t pulse_cnt = 0;
-
-void EXTI_IRQ(void) {
-    if(EXTI_GetITStatus(EXTI_Line3)) {
-        pulse_cnt++;
-        EXTI_ClearITPendingBit(EXTI_Line3);
-    }
-}
+#define VALVE_PIN PC1
 
 int main(void)
 {
@@ -147,18 +107,16 @@ int main(void)
     I2C_Init(PC1, PC2, I2C_SPEED_STANDARD);
     USART_Init(115200);
 
-    pinMode(FLOW_PIN, PIN_MODE_INPUT_PULLUP);
+    WaterFlow_Instance w;
+    WaterFlow_Init(&w, PC0, 450.0f);
+
     pinMode(VALVE_PIN, PIN_MODE_OUTPUT);
-    EXTI_Init(FLOW_PIN, EXTI_Trigger_Falling);
-    NVIC_EnableIRQ(EXTI7_0_IRQn);
     digitalWrite(VALVE_PIN, LOW);
 
     OLED_Handle oled;
     OLED_Init(&oled, OLED_128x64, 0x3C);
     OLED_SetFont(&oled, FONT_8x16);
 
-    float total_L = 0;
-    uint32_t last = 0;
     Timer_t tmr;
     Start_Timer(&tmr, 1000, 1);
 
@@ -166,28 +124,23 @@ int main(void)
     {
         if(Is_Timer_Expired(&tmr))
         {
-            NVIC_DisableIRQ(EXTI7_0_IRQn);
-            uint32_t pps = pulse_cnt - last;
-            last = pulse_cnt;
-            NVIC_EnableIRQ(EXTI7_0_IRQn);
-
-            float flow_lpm = (pps / K_FACTOR) * 60.0f;
-            total_L += pps / K_FACTOR;
+            float lpm = WaterFlow_GetFlowRate(&w);
+            float total = WaterFlow_GetTotalVolume(&w);
 
             OLED_Clear(&oled);
             OLED_SetCursor(&oled, 0, 0);
             OLED_Print(&oled, "Flow Rate:");
             OLED_SetCursor(&oled, 0, 2);
-            OLED_PrintFloat(&oled, "", flow_lpm, 1);
+            OLED_PrintFloat(&oled, "", lpm, 1);
             OLED_Print(&oled, " L/min");
 
             OLED_SetCursor(&oled, 0, 4);
             OLED_Print(&oled, "Total:");
             OLED_SetCursor(&oled, 0, 6);
-            OLED_PrintFloat(&oled, "", total_L, 1);
+            OLED_PrintFloat(&oled, "", total, 1);
             OLED_Print(&oled, " L");
 
-            if(flow_lpm > 15.0f) {
+            if(lpm > 15.0f) {
                 digitalWrite(VALVE_PIN, HIGH);
                 OLED_SetCursor(&oled, 80, 0);
                 OLED_Print(&oled, "MAX!");
@@ -198,9 +151,9 @@ int main(void)
     }
 }</code></pre></section>
 <section><h2>✏️ ลองทำดู</h2><ol>
-<li>Calibrate K-factor — ปล่อยน้ำ 1 ลิตร — นับพัลส์ — ใช้ค่านั้นแทน 450 เพื่อความแม่นยำ</li>
-<li>เพิ่ม Water Temperature Sensor — วัดอุณหภูมิน้ำ — ปิดวาล์วถ้าร้อนเกิน 60°C</li>
 <li>ทำ Water Dispenser — กดปุ่ม → เปิดวาล์วจนครบปริมาณที่ตั้ง (เช่น 250ml) → ปิดอัตโนมัติ</li>
-<li>บันทึกการใช้น้ำรายวันลง EEPROM — คำนวณค่าใช้จ่าย — สร้างกราฟการใช้น้ำ</li></ol></section>
+<li>เพิ่ม Water Temperature Sensor — วัดอุณหภูมิน้ำ — ปิดวาล์วถ้าร้อนเกิน 60°C</li>
+<li>บันทึกการใช้น้ำรายวันลง EEPROM — คำนวณค่าใช้จ่าย</li>
+</ol></section>
 <nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_rainsensor_yl83.html">บทก่อน</a><a href="chapx_lib_hx711.html">บทถัดไป →</a></nav>
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script><script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script><script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

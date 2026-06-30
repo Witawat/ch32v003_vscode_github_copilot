@@ -17,14 +17,12 @@
     <h2>🧭 แผนภาพการทำงาน</h2>
     <pre class="mermaid">
 flowchart TD
-    A["WS2815Matrix_Init(PC0, W, H)"] --> B["WS2815Matrix_Clear()"]
+    A["Matrix_Init(GPIOC, GPIO_Pin_0, W, H, WIRING_ZIGZAG)"] --> B["Matrix_Clear()"]
     B --> C{"Display Mode"}
-    C -->|"Text"| D["WS2815Matrix_Print + Show"]
-    C -->|"Bitmap"| E["WS2815Matrix_DrawBitmap + Show"]
-    C -->|"Effect"| F["ScrollText / Rainbow / Sparkle"]
-    D --> G["while(1) loop"]
-    E --> G
-    F --> G
+    C -->|"Pixel"| D["Matrix_SetPixel + Matrix_Show"]
+    C -->|"Effect"| E["Rainbow / Sparkle"]
+    D --> F["while(1) loop"]
+    E --> F
     H["Break-Point Continue: LED เสีย→ตัวอื่นยังทำงาน"]
     </pre>
 </section>
@@ -52,7 +50,7 @@ flowchart TD
     <p><strong>WS2815 vs WS2812B:</strong> WS2815 เป็นรุ่น 12V ของ WS2812B — แรงดันสูงกว่าทำให้ voltage drop ตามสายน้อยลง — เหมาะกับ strip ยาวหรืองาน outdoor — protocol เหมือน WS2812B (800kHz NRZ, GRB)</p>
     <p><strong>Break-Point Continue (BPC):</strong> WS2815 มี 2 data input (DIN + BI) — ถ้า LED ดวงใดเสียหาย (open circuit) — สัญญาณจะถูกส่งต่อไป LED ถัดไปผ่านขา BI — LED ดวงอื่นยังทำงานได้ตามปกติ — ข้อดีสำหรับงานติดตั้งถาวร</p>
     <p><strong>12V Advantage:</strong> แรงดันสูง = กระแสต่ำ = voltage drop น้อย — ไฟ 12V 2A จ่าย LED ได้ 200+ ดวง — ไม่ต้องต่อไฟเสริมบ่อยเหมือน WS2812B — ใช้กับ PSU 12V ทั่วไป</p>
-    <p><strong>API Compatible:</strong> WS2815Matrix มี API เหมือน WS2812Matrix — Init, Clear, SetPixel, Print, ScrollText, Rainbow — เปลี่ยนจาก WS2812B เป็น WS2815 แค่เปลี่ยนชื่อฟังก์ชัน</p>
+    <p><strong>API:</strong> ใช้ฟังก์ชัน Matrix_* — Matrix_Init, Matrix_SetPixel, Matrix_Show, Matrix_Clear — ทำงานกับ GPIO port/pin โดยตรง</p>
 </section>
 <section>
     <h2>💻 เขียน Code ทีละขั้น</h2>
@@ -65,22 +63,25 @@ int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
 
-    WS2815Matrix_Init(PC0, 8, 8);
-    WS2815Matrix_SetBrightness(128);
-    WS2815Matrix_Clear();
-    WS2815Matrix_Show();</code></pre>
-    <p class="explain">🔍 ใช้ API เดียวกับ WS2812Matrix — Init(pin, w, h) — SetBrightness 0-255 — Clear+Show pattern มาตรฐาน</p></div>
+    Matrix_Init(GPIOC, GPIO_Pin_0, 8, 8, WIRING_ZIGZAG);
+    Matrix_Clear();
+    Matrix_Show();</code></pre>
+    <p class="explain">🔍 <code>Matrix_Init(port, pin, w, h, wiring)</code> — ใช้ GPIOC + GPIO_Pin_0 — WIRING_ZIGZAG สำหรับ serpentine layout — ใช้กับ WS2815 matrix 12V</p></div>
     <div class="step"><h3>ขั้นที่ 2: แสดงผล</h3>
-    <pre><code class="language-c">    WS2815Matrix_SetCursor(0, 0);
-    WS2815Matrix_SetTextColor(RGB(255, 165, 0)); // Orange
-    WS2815Matrix_Print("12V");
-    WS2815Matrix_Show();
+    <pre><code class="language-c">    // ตั้ง pixel ทีละดวง
+    Matrix_SetPixel(0, 0, COLOR_RED);
+    Matrix_SetPixel(3, 3, COLOR_GREEN);
+    Matrix_SetPixel(7, 7, COLOR_BLUE);
+    Matrix_Show();
+    Delay_Ms(1000);
 
-    // Scroll text
-    WS2815Matrix_ScrollText("WS2815", 150, RGB(0, 255, 255));
-    // Rainbow
-    WS2815Matrix_Rainbow(40);</code></pre>
-    <p class="explain">🔍 ฟังก์ชันเหมือน WS2812Matrix — SetCursor + Print + Show — ScrollText เลื่อนข้อความ — Rainbow effect — ไม่ต้องเปลี่ยน logic</p></div>
+    // ล้าง
+    Matrix_Clear();
+    Matrix_Show();
+
+    // Rainbow effect
+    Matrix_Rainbow(40);</code></pre>
+    <p class="explain">🔍 <code>Matrix_SetPixel(x, y, color)</code> ตั้งค่าสี — <code>COLOR_RED</code>, <code>COLOR_GREEN</code>, <code>COLOR_BLUE</code> เป็นค่าคงที่ — <code>Matrix_Show()</code> ส่ง buffer — API เรียบง่าย ไม่ต้องใช้ instance</p></div>
     <div class="step"><h3>ขั้นที่ 3: Loop แสดงโหมด</h3>
     <pre><code class="language-c">    uint8_t mode = 0;
     Timer_t tmr;
@@ -88,34 +89,29 @@ int main(void) {
 
     while(1) {
         if(Is_Timer_Expired(&tmr)) {
-            WS2815Matrix_Clear();
+            Matrix_Clear();
             if(mode == 0) {
-                WS2815Matrix_SetCursor(0, 1);
-                WS2815Matrix_Print("12V");
-                WS2815Matrix_Show();
+                for(uint8_t x=0; x<8; x++)
+                    Matrix_SetPixel(x, 1, COLOR_ORANGE);
+                Matrix_Show();
             } else {
-                WS2815Matrix_Rainbow(30);
+                Matrix_Rainbow(30);
             }
             mode = !mode;
         }
     }
 }</code></pre>
-    <p class="explain">🔍 สลับโหมดทุก 5 วิ — แสดง "12V" กับ Rainbow — Non-Blocking Timer — WS2815 ทนทานกว่า WS2812B เพราะ break-point continue</p></div>
+    <p class="explain">🔍 สลับโหมดทุก 5 วิ — Matrix_Rainbow effect — Non-Blocking Timer — WS2815 ทนทานกว่า WS2812B เพราะ break-point continue</p></div>
 </section>
 <section>
     <h2>📋 API Reference</h2>
     <table>
         <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
-        <tr><td><code>WS2815Matrix_Init(pin, w, h)</code></td><td>เริ่มต้น matrix จอง buffer</td><td><code>WS2815Matrix_Init(PC0, 8, 8)</code></td></tr>
-        <tr><td><code>WS2815Matrix_SetBrightness(v)</code></td><td>ความสว่าง 0-255</td><td><code>WS2815Matrix_SetBrightness(128)</code></td></tr>
-        <tr><td><code>WS2815Matrix_Clear()</code></td><td>ล้างทุก LED</td><td><code>WS2815Matrix_Clear()</code></td></tr>
-        <tr><td><code>WS2815Matrix_Show()</code></td><td>ส่ง buffer ไป matrix</td><td><code>WS2815Matrix_Show()</code></td></tr>
-        <tr><td><code>WS2815Matrix_SetPixel(x, y, c)</code></td><td>ตั้งสี 1 pixel</td><td><code>WS2815Matrix_SetPixel(3,3,RGB(255,0,0))</code></td></tr>
-        <tr><td><code>WS2815Matrix_SetCursor(r, c)</code></td><td>ตั้ง cursor ข้อความ</td><td><code>WS2815Matrix_SetCursor(0, 0)</code></td></tr>
-        <tr><td><code>WS2815Matrix_Print(str)</code></td><td>พิมพ์ข้อความ</td><td><code>WS2815Matrix_Print("HI")</code></td></tr>
-        <tr><td><code>WS2815Matrix_ScrollText(s, ms, c)</code></td><td>เลื่อนข้อความ</td><td><code>WS2815Matrix_ScrollText("HI",100,RGB(0,255,0))</code></td></tr>
-        <tr><td><code>WS2815Matrix_Rainbow(ms)</code></td><td>Effect รุ้งวน</td><td><code>WS2815Matrix_Rainbow(50)</code></td></tr>
-        <tr><td><code>WS2815Matrix_DrawBitmap(bmp, w, h, c)</code></td><td>วาด bitmap ตามสี</td><td><code>WS2815Matrix_DrawBitmap(bmp,8,8,RGB(255,0,255))</code></td></tr>
+        <tr><td><code>Matrix_Init(port, pin, w, h, wiring)</code></td><td>เริ่มต้น matrix + จอง buffer</td><td><code>Matrix_Init(GPIOC, GPIO_Pin_0, 8, 8, WIRING_ZIGZAG)</code></td></tr>
+        <tr><td><code>Matrix_SetPixel(x, y, color)</code></td><td>ตั้งสี 1 pixel</td><td><code>Matrix_SetPixel(3, 3, COLOR_RED)</code></td></tr>
+        <tr><td><code>Matrix_Show()</code></td><td>ส่ง buffer ไป matrix</td><td><code>Matrix_Show()</code></td></tr>
+        <tr><td><code>Matrix_Clear()</code></td><td>ล้างทุก LED</td><td><code>Matrix_Clear()</code></td></tr>
+        <tr><td><code>Matrix_Rainbow(delay)</code></td><td>Effect รุ้งวน</td><td><code>Matrix_Rainbow(50)</code></td></tr>
     </table>
 </section>
 <section>
@@ -131,7 +127,7 @@ int main(void) {
 </section>
 <section>
     <h2>🛠️ สร้าง Product: ป้ายไฟ Outdoor 12V</h2>
-    <p>WS2815 8×8 แสดงข้อความเลื่อน — เหมาะกับงาน outdoor เพราะ 12V + BPC — ใช้ PSU 12V ทนแดดทนฝน</p>
+    <p>WS2815 8×8 แสดง Pixel Art — เหมาะกับงาน outdoor เพราะ 12V + BPC — ใช้ PSU 12V ทนแดดทนฝน</p>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "WS2815Matrix.h"
@@ -139,16 +135,25 @@ int main(void) {
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    WS2815Matrix_Init(PC0, 8, 8);
-    WS2815Matrix_SetBrightness(200);
+    Matrix_Init(GPIOC, GPIO_Pin_0, 8, 8, WIRING_ZIGZAG);
 
     while(1) {
-        WS2815Matrix_ScrollText("OPEN", 150, RGB(0, 255, 0));
-        Delay_Ms(500);
-        WS2815Matrix_Rainbow(40);
-        Delay_Ms(500);
-        WS2815Matrix_ScrollText("12V!", 150, RGB(255, 165, 0));
-        Delay_Ms(500);
+        // แสดงกรอบสีเขียว
+        Matrix_Clear();
+        for(uint8_t x=0; x<8; x++) {
+            Matrix_SetPixel(x, 0, COLOR_GREEN);
+            Matrix_SetPixel(x, 7, COLOR_GREEN);
+        }
+        for(uint8_t y=0; y<8; y++) {
+            Matrix_SetPixel(0, y, COLOR_GREEN);
+            Matrix_SetPixel(7, y, COLOR_GREEN);
+        }
+        Matrix_Show();
+        Delay_Ms(2000);
+
+        // Rainbow
+        Matrix_Rainbow(40);
+        Delay_Ms(2000);
     }
 }</code></pre>
 </section>
@@ -157,7 +162,7 @@ int main(void) {
     <ol>
         <li>ทดสอบ Break-Point Continue — ถอด LED 1 ดวงออก ดูว่าดวงอื่นยังทำงาน</li>
         <li>ทำ Thermometer แสดงอุณหภูมิด้วยสี — ใช้ DHT11 — น้ำเงิน=เย็น, เขียว=ปกติ, แดง=ร้อน</li>
-        <li>ทำไฟวิ่ง 2 แถว — ใช้ 8×16 Matrix (2 แผงต่อกัน) — ใช้ WS2815Matrix_Init(PC0, 8, 16)</li>
+        <li>ทำไฟวิ่ง 2 แถว — ใช้ Matrix_Init(GPIOC, GPIO_Pin_0, 8, 16) สำหรับ 2 แผงต่อกัน</li>
     </ol>
 </section>
 <nav class="bottom-nav">

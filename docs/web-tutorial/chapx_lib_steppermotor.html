@@ -20,16 +20,14 @@
     <h2>🧭 แผนภาพการทำงาน</h2>
     <pre class="mermaid">
 flowchart TD
-    A["StepperMotor_InitULN2003(IN1,IN2,IN3,IN4)"] --> B{"Mode"}
-    B -->|"Full-Step"| C["4 steps/cycle → 2048 steps/rev"]
-    B -->|"Half-Step"| D["8 steps/cycle → 4096 steps/rev"]
-    C --> E["Stepper_Step(N, speed, dir)"]
-    D --> E
-    E --> F["Step sequence with DelayUs(speed)"]
-    F --> G["Accel: speed ramps up/down"]
-    G --> H{"Steps remaining?"}
-    H -->|"Yes"| F
-    H -->|"No"| I["Motor holds position"]
+    A["StepperMotor_InitULN2003(&st, IN1,IN2,IN3,IN4, 2048)"] --> B["StepperMotor_SetSpeed(&st, rpm)"]
+    B --> C{"Mode"}
+    C -->|"Full-Step"| D["StepperMotor_Move(&st, 2048)"]
+    C -->|"Degrees"| E["StepperMotor_MoveDegrees(&st, 90)"]
+    D --> F["Step sequence with internal timer"]
+    E --> F
+    F --> G["while(1) loop"]
+    G --> B
     </pre>
 </section>
 
@@ -59,92 +57,67 @@ flowchart TD
     <h2>📚 หลักการทำงาน</h2>
     <p><strong>28BYJ-48</strong> เป็น unipolar stepper motor ราคาถูก — ใช้ไฟ 5V, กินกระแส ~240mA ต่อเฟส, gearbox 1:64 — ในโหมด <strong>Full-Step</strong> (4 steps/cycle) หมุน 1 รอบ = 2048 steps, <strong>Half-Step</strong> (8 steps/cycle) = 4096 steps/rev — ความละเอียดสูงกว่า 2 เท่าแต่แรงบิดลด</p>
     <p><strong>Step Sequence:</strong> Full-step ใช้ coil activation pattern 4 state: A→AB→B→BC→C→CD→D→DA — สลับขั้ว coil เพื่อดึง rotor หมุนทีละ step — Half-Step เพิ่ม state กลางอีก 4 state รวมเป็น 8</p>
-    <p><strong>Speed Control:</strong> <code>Delay_Us(speed)</code> ระหว่างแต่ละ step — speed ยิ่งน้อย ยิ่งหมุนเร็ว — ความเร็วสูงสุด ~10 RPM (ประมาณ speed=800μs) ที่ 5V — เกินกว่านี้มอเตอร์จะ missed step</p>
-    <p><strong>Acceleration:</strong> เริ่มจาก speed สูง (หมุนช้า) แล้วค่อยลดลง — ป้องกัน missed step และมอเตอร์กระตุก — ใช้ ramp-up/down profile</p>
+    <p><strong>Speed Control:</strong> <code>StepperMotor_SetSpeed(&st, rpm)</code> ตั้งความเร็วรอบ — ไลบรารีจัดการ delay ระหว่างขั้นตอนอัตโนมัติ — ความเร็วสูงสุด ~10 RPM ที่ 5V — เกินกว่านี้มอเตอร์จะ missed step</p>
+    <p><strong>Acceleration:</strong> เริ่มจาก speed ต่ำ (หมุนช้า) แล้วค่อยเพิ่ม — ป้องกัน missed step และมอเตอร์กระตุก</p>
 </section>
 
 <section>
     <h2>💻 เขียน Code ทีละขั้น</h2>
 
-    <div class="step"><h3>ขั้นที่ 1: Init Stepper Pins</h3>
+    <div class="step"><h3>ขั้นที่ 1: สร้าง Instance + Init</h3>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "StepperMotor.h"
 
-#define IN1 PC0
-#define IN2 PC1
-#define IN3 PC2
-#define IN4 PC3
-
-// Full-Step Sequence (4 states)
-const uint8_t full_step[4] = {
-    0b0001,  // IN1
-    0b0010,  // IN2
-    0b0100,  // IN3
-    0b1000   // IN4
-};
-
-void stepper_write(uint8_t step) {
-    digitalWrite(IN1, step & 0x01);
-    digitalWrite(IN2, step & 0x02);
-    digitalWrite(IN3, step & 0x04);
-    digitalWrite(IN4, step & 0x08);
-}</code></pre>
-    <p class="explain">🔍 ใช้ bitmask 4-bit ควบคุม 4 pins — full_step array เก็บ sequence — <code>stepper_write()</code> แยกบิตเขียน GPIO ทีละ pin</p></div>
-
-    <div class="step"><h3>ขั้นที่ 2: Step Function + Direction</h3>
-    <pre><code class="language-c">void stepper_step(uint16_t steps, uint16_t speed_us, int8_t dir) {
-    int8_t idx = 0;
-    for(uint16_t i = 0; i < steps; i++) {
-        stepper_write(full_step[idx]);
-        idx += dir;
-        if(idx >= 4) idx = 0;
-        if(idx < 0) idx = 3;
-        Delay_Us(speed_us);  // speed_us = 800-5000μs
-    }
-}</code></pre>
-    <p class="explain">🔍 <code>stepper_step(n, speed, dir)</code> — dir=+1 หมุนตามเข็ม, dir=-1 ทวนเข็ม — speed_us ควบคุมความเร็ว (ยิ่งน้อยยิ่งเร็ว) — 2048 steps = 1 รอบในโหมด full-step</p></div>
-
-    <div class="step"><h3>ขั้นที่ 3: Acceleration + Main Loop</h3>
-    <pre><code class="language-c">void stepper_accel(uint16_t steps, uint16_t start_speed, uint16_t end_speed) {
-    int32_t speed = start_speed;
-    int32_t step_inc = ((int32_t)end_speed - start_speed) / steps;
-    for(uint16_t i = 0; i < steps; i++) {
-        stepper_step(1, (uint16_t)speed, 1);
-        speed += step_inc;
-        if(speed < end_speed) speed = end_speed;
-    }
-}
+StepperMotor_Instance st;
 
 int main(void) {
     SystemCoreClockUpdate();
-    pinMode(IN1, PIN_MODE_OUTPUT);
-    pinMode(IN2, PIN_MODE_OUTPUT);
-    pinMode(IN3, PIN_MODE_OUTPUT);
-    pinMode(IN4, PIN_MODE_OUTPUT);
 
-    while(1) {
-        // หมุน 1 รอบ (2048 steps) ด้วย acceleration
-        stepper_accel(2048, 2000, 900);  // start slow → speed up
+    // Init ULN2003: IN1=PC0, IN2=PC1, IN3=PC2, IN4=PC3, 2048 steps/rev
+    StepperMotor_InitULN2003(&st, PC0, PC1, PC2, PC3, 2048);</code></pre>
+    <p class="explain">🔍 <code>StepperMotor_InitULN2003(&st, in1, in2, in3, in4, stepsPerRev)</code> — ใช้ instance-based — 2048 steps/rev สำหรับ 28BYJ-48 full-step — ไลบรารีจัดการ GPIO sequence อัตโนมัติ</p></div>
+
+    <div class="step"><h3>ขั้นที่ 2: ตั้งความเร็ว + เคลื่อนที่</h3>
+    <pre><code class="language-c">    // ตั้งความเร็ว
+    StepperMotor_SetSpeed(&st, 5);  // 5 RPM
+
+    // เคลื่อนที่ 2048 steps (1 รอบ full-step)
+    StepperMotor_Move(&st, 2048);
+    Delay_Ms(1000);
+
+    // หมุนกลับ
+    StepperMotor_Move(&st, -2048);
+
+    // เคลื่อนที่เป็นองศา
+    StepperMotor_MoveDegrees(&st, 90);   // หมุน 90 องศา
+    Delay_Ms(500);
+    StepperMotor_MoveDegrees(&st, -90);  // หมุนกลับ</code></pre>
+    <p class="explain">🔍 <code>StepperMotor_SetSpeed(&st, rpm)</code> ตั้งความเร็ว — <code>StepperMotor_Move(&st, steps)</code> เคลื่อนที่ n steps (blocking) — <code>StepperMotor_MoveDegrees(&st, deg)</code> เคลื่อนที่เป็นองศา — ค่าติดลบ = กลับทิศ</p></div>
+
+    <div class="step"><h3>ขั้นที่ 3: Loop วนไปกลับ</h3>
+    <pre><code class="language-c">    while(1) {
+        // หมุน 1 รอบ
+        StepperMotor_Move(&st, 2048);
         Delay_Ms(1000);
+
         // หมุนกลับ 1 รอบ
-        stepper_step(2048, 1200, -1);
+        StepperMotor_Move(&st, -2048);
         Delay_Ms(1000);
     }
 }</code></pre>
-    <p class="explain">🔍 <code>stepper_accel()</code> เปลี่ยนความเร็วจาก start_speed→end_speed แบบ linear — ป้องกัน motor stall — 1 รอบ = 2048 steps (full-step), ~4096 steps (half-step)</p></div>
+    <p class="explain">🔍 วนไปกลับ 1 รอบ — Delay_Ms ระหว่างรอบเพื่อให้ motor หยุด — StepperMotor_Move เป็น blocking — 1 รอบ = 2048 steps (full-step), ~4096 steps (half-step)</p></div>
 </section>
 
 <section>
     <h2>📋 API Reference</h2>
     <table>
         <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
-        <tr><td><code>StepperMotor_InitULN2003(a,b,c,d)</code></td><td>ตั้งค่า 4 GPIO pins</td><td><code>StepperMotor_InitULN2003(PC0,PC1,PC2,PC3)</code></td></tr>
-        <tr><td><code>Stepper_SetMode(mode)</code></td><td>เลือก FULL_STEP หรือ HALF_STEP</td><td><code>Stepper_SetMode(HALF_STEP)</code></td></tr>
-        <tr><td><code>Stepper_Step(n, speed, dir)</code></td><td>หมุน n steps, speed μs, dir ±1</td><td><code>Stepper_Step(2048, 1200, 1)</code></td></tr>
-        <tr><td><code>StepperMotor_Move(deg, speed)</code></td><td>หมุนเป็นองศา (full-step)</td><td><code>StepperMotor_Move(360, 1000)</code></td></tr>
-        <tr><td><code>Stepper_Stop()</code></td><td>หยุด — ปล่อย coil (no hold)</td><td><code>Stepper_Stop()</code></td></tr>
-        <tr><td><code>Stepper_Hold()</code></td><td>หยุดแต่จ่ายไฟ coil — hold torque</td><td><code>Stepper_Hold()</code></td></tr>
+        <tr><td><code>StepperMotor_InitULN2003(&st, a,b,c,d, spr)</code></td><td>ตั้งค่า 4 GPIO pins + steps/rev</td><td><code>StepperMotor_InitULN2003(&st, PC0,PC1,PC2,PC3, 2048)</code></td></tr>
+        <tr><td><code>StepperMotor_SetSpeed(&st, rpm)</code></td><td>ตั้งความเร็วรอบ (RPM)</td><td><code>StepperMotor_SetSpeed(&st, 5)</code></td></tr>
+        <tr><td><code>StepperMotor_Move(&st, steps)</code></td><td>เคลื่อนที่ n steps (blocking)</td><td><code>StepperMotor_Move(&st, 2048)</code></td></tr>
+        <tr><td><code>StepperMotor_MoveDegrees(&st, deg)</code></td><td>หมุนเป็นองศา</td><td><code>StepperMotor_MoveDegrees(&st, 90)</code></td></tr>
+        <tr><td><code>StepperMotor_Stop(&st)</code></td><td>หยุด — ปล่อย coil (no hold)</td><td><code>StepperMotor_Stop(&st)</code></td></tr>
     </table>
 </section>
 
@@ -152,62 +125,40 @@ int main(void) {
     <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
     <table>
         <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
-        <tr><td>มอเตอร์สั่นแต่ไม่หมุน</td><td>ลำดับ step sequence ผิด</td><td>ตรวจสอบลำดับ coil: A→B→C→D หรือ A→AB→B→BC... ห้ามสลับ</td></tr>
-        <tr><td>มอเตอร์หมุนช้ามาก</td><td>ลืม half-step หรือ speed สูงเกิน 5000μs</td><td>ใช้ half-step = 4096 steps/rev — ลด speed ลง 800-1200μs เพื่อ speed up</td></tr>
-        <tr><td>Missed steps — เสียงดังติ๊ก</td><td>speed ต่ำเกินไป (เร็วไป) หรือไม่มี acceleration</td><td>เพิ่ม ramp-up acceleration — เริ่มจาก speed 2000μs ค่อยลดลง</td></tr>
+        <tr><td>มอเตอร์สั่นแต่ไม่หมุน</td><td>ลำดับ pin ผิด</td><td>ตรวจสอบลำดับ pin: IN1,IN2,IN3,IN4 — ต้องตรงกับ ULN2003</td></tr>
+        <tr><td>มอเตอร์หมุนช้ามาก</td><td>ตั้ง speed ต่ำเกิน</td><td>ใช้ SetSpeed 5-10 RPM — 28BYJ-48 max ~10 RPM ที่ 5V</td></tr>
+        <tr><td>Missed steps — เสียงดังติ๊ก</td><td>Speed สูงเกินไป (เร็วไป)</td><td>ลด speed ลง — เริ่มที่ 5 RPM — เพิ่มทีละ 1</td></tr>
         <tr><td>แรงบิดไม่พอ — ไม่สามารถหมุนโหลด</td><td>ใช้ 3.3V เลี้ยงมอเตอร์</td><td>28BYJ-48 ต้องใช้ 5V — ตรวจสอบ ULN2003 VCC ต่อเข้ากับ 5V</td></tr>
-        <tr><td>ร้อนมากเมื่อหยุดนิ่ง</td><td>Stepper_Hold() จ่ายไฟ coil ตลอดเวลา</td><td>ใช้ Stepper_Stop() เพื่อปล่อย coil — หรือลด duty cycle ใน hold mode</td></tr>
+        <tr><td>ร้อนมากเมื่อหยุดนิ่ง</td><td>Stop() ปล่อย coil — แต่ถ้าต้องการ hold torque</td><td>ใช้ Stop() เพื่อปล่อย coil — หรือใช้ฟังก์ชัน hold ในไลบรารี</td></tr>
     </table>
 </section>
 
 <section>
     <h2>🛠️ สร้าง Product: Programmable Stepper Positioner</h2>
-    <p>หมุน stepper ไปตำแหน่งองศาที่ต้องการด้วย acceleration — ใช้ Potentiometer ตั้งองศา + ปุ่มกด start</p>
+    <p>หมุน stepper ไปตำแหน่งองศาที่ต้องการ — ใช้ Potentiometer ตั้งองศา + ปุ่มกด start</p>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "StepperMotor.h"
 
-#define IN1 PC0
-#define IN2 PC1
-#define IN3 PC2
-#define IN4 PC3
-
-const uint8_t half_step[8] = {
-    0b0001,0b0011,0b0010,0b0110,0b0100,0b1100,0b1000,0b1001
-};
+StepperMotor_Instance st;
 int32_t current_pos = 0;  // in steps
-
-void stepper_goto(int32_t target, uint16_t speed) {
-    int32_t delta = target - current_pos;
-    int8_t dir = (delta > 0) ? 1 : -1;
-    uint32_t steps = (delta > 0) ? delta : -delta;
-    static uint8_t idx = 0;
-    for(uint32_t i = 0; i < steps; i++) {
-        digitalWrite(IN1, half_step[idx] & 0x01);
-        digitalWrite(IN2, half_step[idx] & 0x02);
-        digitalWrite(IN3, half_step[idx] & 0x04);
-        digitalWrite(IN4, half_step[idx] & 0x08);
-        idx += dir; if(idx >= 8) idx = 0; if(idx < 0) idx = 7;
-        current_pos += dir;
-        Delay_Us(speed);
-    }
-}
 
 int main(void) {
     SystemCoreClockUpdate();
     ADC_Init_Single(PA1);
-    pinMode(PC4, PIN_MODE_INPUT_PULLUP);
-    pinMode(IN1, PIN_MODE_OUTPUT);
-    pinMode(IN2, PIN_MODE_OUTPUT);
-    pinMode(IN3, PIN_MODE_OUTPUT);
-    pinMode(IN4, PIN_MODE_OUTPUT);
+    pinMode(PC4, PIN_MODE_INPUT_PULLUP);  // Start button
+
+    StepperMotor_InitULN2003(&st, PC0, PC1, PC2, PC3, 2048);
+    StepperMotor_SetSpeed(&st, 5);
 
     while(1) {
         if(!digitalRead(PC4)) {  // กดปุ่ม
             uint16_t adc = ADC_Read(PA1);
             int32_t target_deg = (int32_t)(adc * 360 / 4095);
-            int32_t target_steps = (int32_t)(target_deg * 4096 / 360);
-            stepper_goto(target_steps, 1000);
+            int32_t target_steps = (int32_t)(target_deg * 2048 / 360);
+            int32_t delta = target_steps - current_pos;
+            StepperMotor_Move(&st, delta);
+            current_pos = target_steps;
             Delay_Ms(200); // debounce
         }
     }

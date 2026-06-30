@@ -3,12 +3,12 @@
 <h1>OH49E — Hall Effect Sensor แบบ Ratiometric ผ่าน ADC</h1><span class="level intermediate">ระดับกลาง</span>
 <section class="flowchart"><h2>🧭 แผนภาพการทำงาน</h2><pre class="mermaid">
 flowchart TD
-    A["ADC_Init(PD2, ADC_CH0)"] --> B["อ่าน ADC → 0-1023"]
-    B --> C["Zero = ~511 (2.5V @ 5V)"]
-    C --> D{"ค่ามากกว่า Zero?"}
-    D -->|"สูงกว่า"| E["สนามแม่เหล็กขั้ว South"]
-    D -->|"ต่ำกว่า"| F["สนามแม่เหล็กขั้ว North"]
-    E --> G["คำนวณ Gauss: (ADC - Zero) × Scale"]
+    A["OH49E_Init(&hall, ADC_CH_PC4, 3.3f, 3.3f)"] --> B["OH49E_ReadVoltage(&hall)"]
+    B --> C["Voltage → Gauss"]
+    C --> D{"Field > 0?"}
+    D -->|"บวก"| E["สนามแม่เหล็กขั้ว South"]
+    D -->|"ลบ"| F["สนามแม่เหล็กขั้ว North"]
+    E --> G["OH49E_GetFieldStrength(&hall)"]
     F --> G
     G --> H["แสดงผล / ตรวจจับแม่เหล็ก"]
 </pre></section>
@@ -16,77 +16,62 @@ flowchart TD
           OH49E Hall Effect Sensor
    ┌────────────────────────────────────┐
    │  MCU              OH49E            │
-   │  PD2─ADC ───────── Out             │
+   │  PC4─ADC ───────── Out             │
    │  3.3V───────────── VCC             │
    │  GND────────────── GND             │
    │                                    │
    │  แม่เหล็ก → ← OH49E               │
-   │  (South pole = Vout > 2.5V)        │
-   │  (North pole = Vout < 2.5V)        │
-   │  (No field = Vout ≈ 2.5V)          │
+   │  (South pole = Vout > VCC/2)       │
+   │  (North pole = Vout < VCC/2)       │
+   │  (No field = Vout ≈ VCC/2)        │
    └────────────────────────────────────┘
-</pre><p>OH49E เป็น Linear Hall Sensor แบบ Ratiometric — Output เป็น analog voltage แปรผันตามสนามแม่เหล็ก — ที่ 0 Gauss output ≈ ½VCC (2.5V@5V หรือ 1.65V@3.3V)</p></section>
-<section><h2>📚 หลักการทำงาน</h2><p><strong>OH49E</strong> เป็น Linear Hall Effect Sensor — ตรวจจับสนามแม่เหล็กและคืนค่าแรงดัน analog แบบ Ratiometric (แปรผันตาม VCC) — Sensitivity ประมาณ 1.4mV/Gauss — วัดได้ทั้งขั้ว North และ South — Output อยู่ระหว่าง 0V ถึง VCC</p><p><strong>Ratiometric Output</strong> หมายความว่าแรงดัน output เป็นสัดส่วนกับ VCC — ที่ 0 Gauss output = VCC/2 — ถ้า VCC=3.3V → zero=1.65V — ถ้า VCC=5V → zero=2.5V — การใช้ ADC ต้อง calibrate zero ทุกครั้งที่เปลี่ยน VCC</p><p><strong>การคำนวณ Gauss:</strong> อ่าน ADC → แปลงเป็นแรงดัน → ลบด้วย zero voltage → หารด้วย sensitivity — Gauss = (Vout - Vzero) / Sensitivity — ค่าบวก = South, ค่าลบ = North</p><p><strong>การใช้งาน:</strong> วัดความแรงสนามแม่เหล็ก, ตรวจจับตำแหน่งแม่เหล็ก, Current Sensor (วัดสนามแม่เหล็กรอบสายไฟ), ตรวจจับการเปิด-ปิด (Proximity Switch)</p></section>
+</pre><p>OH49E เป็น Linear Hall Sensor แบบ Ratiometric — Output เป็น analog voltage แปรผันตามสนามแม่เหล็ก — Sensitivity ประมาณ 1.4mV/Gauss</p></section>
+<section><h2>📚 หลักการทำงาน</h2><p><strong>OH49E</strong> เป็น Linear Hall Effect Sensor — ตรวจจับสนามแม่เหล็กและคืนค่าแรงดัน analog แบบ Ratiometric (แปรผันตาม VCC) — Sensitivity ประมาณ 1.4mV/Gauss — วัดได้ทั้งขั้ว North และ South</p><p><strong>Ratiometric Output</strong> หมายความว่าแรงดัน output เป็นสัดส่วนกับ VCC — ที่ 0 Gauss output = VCC/2 — ถ้า VCC=3.3V → zero=1.65V</p><p><strong>การใช้งาน:</strong> วัดความแรงสนามแม่เหล็ก, ตรวจจับตำแหน่งแม่เหล็ก, Current Sensor, ตรวจจับการเปิด-ปิด (Proximity Switch)</p></section>
 <section><h2>💻 เขียน Code ทีละขั้น</h2>
-<div class="step"><h3>ขั้นที่ 1: Init ADC + Calibrate Zero</h3><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+<div class="step"><h3>ขั้นที่ 1: Init OH49E</h3><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "OH49E.h"
 
-#define HALL_PIN PD2
-#define HALL_CH ADC_CH0
-#define SENSITIVITY 1.4f // mV/Gauss
-
-float zero_voltage;
+OH49E_Instance hall;
 
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    ADC_Init(HALL_PIN, HALL_CH);
     USART_Init(115200);
 
-    // Calibrate zero — อ่าน 100 ครั้งเฉลี่ยตอนไม่มีแม่เหล็ก
-    uint32_t sum = 0;
-    for(int i = 0; i < 100; i++) {
-        sum += ADC_Read(HALL_PIN);
-        Delay_Ms(10);
-    }
-    zero_voltage = (sum / 100.0f) * (3.3f / 1024.0f);
-    USART_Print("Zero: ");
-    USART_PrintFloat(zero_voltage, 3);
-    USART_Print("V\r\n");</code></pre><p class="explain">🔍 Calibrate ด้วยการหาค่าเฉลี่ยตอนไม่มีแม่เหล็ก — ใช้ 100 samples — zero voltage = ค่ากลางที่ใช้เป็น reference — ต้อง calibrate ใหม่ถ้าเปลี่ยน VCC</p></div>
-<div class="step"><h3>ขั้นที่ 2: อ่านค่า ADC + คำนวณ Gauss</h3><pre><code class="language-c">    while(1) {
-        uint16_t adc = ADC_Read(HALL_PIN);
-        float voltage = adc * (3.3f / 1024.0f);
-        float diff = voltage - zero_voltage;
-        float gauss = (diff * 1000.0f) / SENSITIVITY; // mV → Gauss
+    OH49E_Init(&hall, ADC_CH_PC4, 3.3f, 3.3f);
+    // adc_ch, vcc, vref
+    USART_Println("OH49E Hall Sensor Ready!");</code></pre>
+<p class="explain">🔍 <code>OH49E_Init(&hall, ADC_CH_PC4, vcc, vref)</code> — ตั้งค่า ADC + VCC reference — VCC และ Vref มักเท่ากับ 3.3V สำหรับ CH32V003</p></div>
+<div class="step"><h3>ขั้นที่ 2: อ่าน Voltage + Field Strength</h3>
+<pre><code class="language-c">    float v = OH49E_ReadVoltage(&hall);
+    int str = OH49E_GetFieldStrength(&hall);
 
-        USART_Print("ADC:"); USART_PrintDec(adc);
-        USART_Print(" V:"); USART_PrintFloat(voltage, 3);
-        USART_Print(" Gauss:"); USART_PrintFloat(gauss, 1);
+    USART_Print("Voltage: ");
+    USART_PrintFloat(v, 3);
+    USART_Print(" V  |  Field: ");
+    USART_PrintDec(str);
+    USART_Print(" Gauss");
 
-        if(gauss > 10) {
-            USART_Print(" SOUTH+");
-        } else if(gauss < -10) {
-            USART_Print(" NORTH-");
-        } else {
-            USART_Print(" ~ZERO");
-        }
-        USART_Print("\r\n");
-        Delay_Ms(200);
-    }
-}</code></pre><p class="explain">🔍 แปลง ADC → Voltage → Gauss — diff เป็น Volt, คูณ 1000 เป็น mV ก่อนหาร sensitivity — threshold ±10 Gauss กัน noise — South pole = +Gauss, North pole = -Gauss</p></div>
-<div class="step"><h3>ขั้นที่ 3: ตรวจจับแม่เหล็ก + LED แสดงขั้ว</h3><pre><code class="language-c">    pinMode(PC0, PIN_MODE_OUTPUT); // LED South
+    if(str > 10) {
+        USART_Println(" SOUTH+");
+    } else if(str < -10) {
+        USART_Println(" NORTH-");
+    } else {
+        USART_Println(" ~ZERO");
+    }</code></pre>
+<p class="explain">🔍 <code>OH49E_ReadVoltage(&hall)</code> — อ่านแรงดัน output (V) — <code>OH49E_GetFieldStrength(&hall)</code> — อ่านค่า Gauss (ค่าบวก=South, ค่าลบ=North) — threshold ±10 Gauss กัน noise</p></div>
+<div class="step"><h3>ขั้นที่ 3: ตรวจจับแม่เหล็ก + LED แสดงขั้ว</h3>
+<pre><code class="language-c">    pinMode(PC0, PIN_MODE_OUTPUT); // LED South
     pinMode(PC1, PIN_MODE_OUTPUT); // LED North
 
     while(1) {
-        uint16_t adc = ADC_Read(HALL_PIN);
-        float voltage = adc * (3.3f / 1024.0f);
-        float gauss = ((voltage - zero_voltage) * 1000.0f) / SENSITIVITY;
+        int str = OH49E_GetFieldStrength(&hall);
 
-        if(gauss > 15) {
+        if(str > 15) {
             digitalWrite(PC0, HIGH); // South detected
             digitalWrite(PC1, LOW);
-        } else if(gauss < -15) {
+        } else if(str < -15) {
             digitalWrite(PC0, LOW);
             digitalWrite(PC1, HIGH); // North detected
         } else {
@@ -95,74 +80,56 @@ int main(void) {
         }
         Delay_Ms(50);
     }
-}</code></pre><p class="explain">🔍 ใช้ hysteresis ±15 Gauss — LED 2 ดวงแสดงขั้วแม่เหล็ก — South = PC0 ติด, North = PC1 ติด, ไม่มีแม่เหล็ก = ดับทั้งคู่</p></div>
+}</code></pre>
+<p class="explain">🔍 ใช้ hysteresis ±15 Gauss — LED 2 ดวงแสดงขั้วแม่เหล็ก — South = PC0, North = PC1</p></div>
 </section>
 <section><h2>📋 API Reference</h2><table><tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
-<tr><td><code>ADC_Init(pin, ch)</code></td><td>เริ่มต้น ADC</td><td><code>ADC_Init(PD2, ADC_CH0)</code></td></tr>
-<tr><td><code>ADC_Read(pin)</code></td><td>อ่านค่า ADC 0-1023</td><td><code>uint16_t v = ADC_Read(PD2)</code></td></tr>
-<tr><td><code>HALL_Init(pin, ch)</code></td><td>เริ่มต้น Hall Sensor</td><td><code>HALL_Init(PD2, ADC_CH0)</code></td></tr>
-<tr><td><code>HALL_ReadGauss(pin, zero_v)</code></td><td>อ่านค่าเป็น Gauss</td><td><code>float g = HALL_ReadGauss(PD2, 1.65f)</code></td></tr>
-<tr><td><code>HALL_Calibrate(pin, samples)</code></td><td>Calibrate หาค่า zero</td><td><code>float z = HALL_Calibrate(PD2, 100)</code></td></tr>
-<tr><td><code>HALL_IsMagnetDetected(pin, zero, thresh)</code></td><td>ตรวจพบแม่เหล็กหรือไม่</td><td><code>if(HALL_IsMagnetDetected(PD2, 1.65f, 20))</code></td></tr>
+<tr><td><code>OH49E_Init(&hall, adc_ch, vcc, vref)</code></td><td>เริ่มต้น Hall Sensor</td><td><code>OH49E_Init(&hall, ADC_CH_PC4, 3.3f, 3.3f)</code></td></tr>
+<tr><td><code>OH49E_ReadVoltage(&hall)</code></td><td>อ่านแรงดัน output (V)</td><td><code>float v = OH49E_ReadVoltage(&hall)</code></td></tr>
+<tr><td><code>OH49E_GetFieldStrength(&hall)</code></td><td>อ่าน Gauss (int)</td><td><code>int str = OH49E_GetFieldStrength(&hall)</code></td></tr>
 </table></section>
 <section><h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2><table><tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
-<tr><td>ค่า ADC ไม่เปลี่ยนเมื่อเอาแม่เหล็กเข้าใกล้</td><td>แม่เหล็กอ่อนเกิน/อยู่ไกลเกิน</td><td>ใช้แม่เหล็ก Neodymium — ให้ใกล้ผิวเซนเซอร์ที่สุด — sensitivity ~1.4mV/G</td></tr>
-<tr><td>ค่า Gauss เพี้ยนหลังจากเปลี่ยน VCC</td><td>Ratiometric — zero shift ตาม VCC</td><td>Calibrate ใหม่ทุกครั้งที่เปลี่ยน VCC — หรือใช้แรงดันอ้างอิงคงที่</td></tr>
-<tr><td>ค่ากระพือแม้ไม่มีแม่เหล็ก</td><td>Noise จาก ADC + switching power supply</td><td>ใช้ averaging 10-20 samples — ต่อ 0.1µF cap ที่ output</td></tr>
-<tr><td>Output ติดอยู่ที่ 0V หรือ VCC</td><td>แม่เหล็กแรงมากจนเซนเซอร์อิ่มตัว</td><td>OH49E มี linear range ±1000G — ถ้าเกินจะ clip — ถอยแม่เหล็กออก</td></tr>
-<tr><td>ทิศทางขั้วกลับกัน</td><td>ติดตั้งเซนเซอร์กลับด้าน</td><td>OH49E ด้านที่มีตัวอักษรหันเข้าแม่เหล็ก South → output สูงขึ้น</td></tr>
+<tr><td>ค่าไม่เปลี่ยนเมื่อเอาแม่เหล็กเข้าใกล้</td><td>แม่เหล็กอ่อนเกิน/อยู่ไกลเกิน</td><td>ใช้แม่เหล็ก Neodymium — ให้ใกล้ผิวเซนเซอร์ที่สุด</td></tr>
+<tr><td>ค่า Gauss เพี้ยนหลังจากเปลี่ยน VCC</td><td>Ratiometric — zero shift ตาม VCC</td><td>ระบุ VCC จริงตอน Init — library calibrate ให้</td></tr>
+<tr><td>ค่ากระพือแม้ไม่มีแม่เหล็ก</td><td>Noise จาก ADC + switching power supply</td><td>ใช้ averaging — ต่อ 0.1µF cap ที่ output</td></tr>
+<tr><td>Output ติดอยู่ที่ 0V หรือ VCC</td><td>แม่เหล็กแรงมากจนเซนเซอร์อิ่มตัว</td><td>OH49E มี linear range ±1000G — ถอยแม่เหล็กออก</td></tr>
 </table></section>
-<section><h2>🛠️ สร้าง Product: Magnetic Field Strength Meter</h2><p>OH49E + OLED — แสดงค่า Gauss แบบ Real-Time + กราฟแท่ง — Calibrate อัตโนมัติตอนเริ่ม</p><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+<section><h2>🛠️ สร้าง Product: Magnetic Field Strength Meter</h2><p>OH49E + OLED — แสดงค่า Gauss แบบ Real-Time + กราฟแท่ง</p><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "OH49E.h"
 #include "oled_i2c.h"
-
-#define HALL_PIN PD2
-#define HALL_CH ADC_CH0
-#define SENSITIVITY 1.4f
 
 int main(void)
 {
     SystemCoreClockUpdate();
     Timer_Init();
     I2C_Init(PC1, PC2, I2C_SPEED_STANDARD);
-    ADC_Init(HALL_PIN, HALL_CH);
     USART_Init(115200);
+
+    OH49E_Instance hall;
+    OH49E_Init(&hall, ADC_CH_PC4, 3.3f, 3.3f);
 
     OLED_Handle oled;
     OLED_Init(&oled, OLED_128x64, 0x3C);
     OLED_SetFont(&oled, FONT_8x16);
 
-    float zero_v = HALL_Calibrate(HALL_PIN, 100);
-
     while(1)
     {
-        uint16_t adc = ADC_Read(HALL_PIN);
-        float voltage = adc * (3.3f / 1024.0f);
-        float gauss = ((voltage - zero_v) * 1000.0f) / SENSITIVITY;
+        float v = OH49E_ReadVoltage(&hall);
+        int str = OH49E_GetFieldStrength(&hall);
 
         OLED_Clear(&oled);
         OLED_SetCursor(&oled, 0, 0);
-        OLED_PrintFloat(&oled, "Field:", gauss, 1);
+        OLED_PrintFloat(&oled, "Field:", (float)str, 1);
         OLED_Print(&oled, " G");
 
-        const char* pole = (gauss > 5) ? " SOUTH" :
-                           (gauss < -5) ? " NORTH" : " --";
+        const char* pole = (str > 5) ? " SOUTH" :
+                           (str < -5) ? " NORTH" : " --";
         OLED_SetCursor(&oled, 80, 0);
         OLED_Print(&oled, pole);
 
-        // Bar graph
-        int bar_w = (int)(fabs(gauss) * 0.3f);
-        if(bar_w > 100) bar_w = 100;
-        OLED_SetCursor(&oled, 0, 3);
-        for(int i = 0; i < bar_w; i++) {
-            OLED_Print(&oled, "|");
-        }
-
-        OLED_SetCursor(&oled, 0, 5);
-        OLED_PrintFloat(&oled, "ADC:", (float)adc, 0);
-        OLED_Print(&oled, " ");
-        OLED_PrintFloat(&oled, "V:", voltage, 2);
+        OLED_SetCursor(&oled, 0, 4);
+        OLED_PrintFloat(&oled, "V:", v, 2);
 
         OLED_Update(&oled);
         Delay_Ms(100);
@@ -170,8 +137,7 @@ int main(void)
 }</code></pre></section>
 <section><h2>✏️ ลองทำดู</h2><ol>
 <li>ทำ Current Sensor แบบไม่สัมผัส — พันสายไฟรอบ Toroid Core แล้ววาง OH49E ใน gap — calibrate เทียบกับ DMM</li>
-<li>ทำ RPM Sensor — ติดแม่เหล็กบนมอเตอร์ — นับจำนวนครั้งที่สนามแม่เหล็กเปลี่ยน — คำนวณ RPM</li>
-<li>ทำ Linear Position Sensor — ติดแม่เหล็กกับ slider — วัดระยะทางจากค่า Gauss ในแนว linear</li>
-<li>ทำ Magnetic Door Sensor — ตรวจจับการเปิด-ปิดประตูด้วยแม่เหล็ก — ส่งสถานะผ่าน USART</li></ol></section>
+<li>ทำ RPM Sensor — ติดแม่เหล็กบนมอเตอร์ — นับจำนวนครั้งที่สนามแม่เหล็กเปลี่ยน</li>
+<li>ทำ Magnetic Door Sensor — ตรวจจับการเปิด-ปิดประตูด้วยแม่เหล็ก</li></ol></section>
 <nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_pzem004tv3.html">บทก่อน</a><a href="chapx_lib_soilmoisture_yl69.html">บทถัดไป →</a></nav>
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script><script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script><script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

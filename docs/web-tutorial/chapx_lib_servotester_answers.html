@@ -6,12 +6,12 @@
 <h2>ข้อ 1: Calibrate เซอร์โวที่ไม่รู้จัก — หา min/max pulse</h2>
 <pre><code class="language-c">#include "simple_servotester.h"
 
-ServoTester_t tester;
+ServoTester_Instance tester;
 
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    ServoTester_Init(&tester, GPIOA, GPIO_Pin_0);
+    ServoTester_Init(&tester, PWM1_CH4);
 
     // กวาด pulse ตั้งแต่ 500us ถึง 2500us ทีละ 10us
     for (uint16_t pulse = 500; pulse &lt;= 2500; pulse += 10) {
@@ -34,7 +34,7 @@ int main(void) {
 <h2>ข้อ 2: ทดสอบ Center Accuracy — วนกลับจุดกึ่งกลางซ้ำ ๆ</h2>
 <pre><code class="language-c">#include "simple_servotester.h"
 
-ServoTester_t tester;
+ServoTester_Instance tester;
 
 #define CENTER_PULSE  1500
 #define LEFT_PULSE    1000
@@ -43,7 +43,7 @@ ServoTester_t tester;
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    ServoTester_Init(&tester, GPIOA, GPIO_Pin_0);
+    ServoTester_Init(&tester, PWM1_CH4);
 
     uint16_t positions[] = {LEFT_PULSE, CENTER_PULSE, RIGHT_PULSE, CENTER_PULSE};
     uint8_t  idx = 0;
@@ -67,12 +67,12 @@ int main(void) {
 <h2>ข้อ 3: วัด Deadband ของเซอร์โว — หา pulse ขั้นต่ำที่ทำให้ขยับ</h2>
 <pre><code class="language-c">#include "simple_servotester.h"
 
-ServoTester_t tester;
+ServoTester_Instance tester;
 
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    ServoTester_Init(&tester, GPIOA, GPIO_Pin_0);
+    ServoTester_Init(&tester, PWM1_CH4);
 
     uint16_t base_pulse = 1500;
 

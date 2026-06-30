@@ -12,14 +12,15 @@
 #define ZONE_STOP   20.0f
 
 void hcsr04_parking_sensor(void) {
-    HCSR04_Init(TRIG_PIN, ECHO_PIN);
+    HCSR04_Instance s;
+    HCSR04_Init(&s, TRIG_PIN, ECHO_PIN);
     pinMode(LED_GREEN, PIN_MODE_OUTPUT);
     pinMode(LED_YELLOW, PIN_MODE_OUTPUT);
     pinMode(LED_RED, PIN_MODE_OUTPUT);
     pinMode(BUZZER, PIN_MODE_OUTPUT);
 
     while(1) {
-        float dist = HCSR04_ReadDistance();
+        float dist = HCSR04_MeasureCm(&s);
 
         if(dist < 0 || dist > 400) {
             // No valid reading
@@ -49,13 +50,13 @@ void hcsr04_parking_sensor(void) {
 </code></pre><div class="approach"><strong>🧠 แนวคิด:</strong> 3 โซน: SAFE (>100cm เขียว) / WARN (50–100cm เหลือง) / STOP (<50cm แดง) — Buzzer กระพริบถี่ขึ้นเมื่อใกล้ — ใช้ค่า dist map เป็น delay: dist×5 ms — กรอง invalid reading (dist < 0 หรือ > 4m) — <code>HCSR04_ReadDistance</code> คืน cm โดยตรง</div></div>
 <div class="answer"><h2>ข้อ 2: Average Multiple Readings Filter</h2><pre><code class="language-c">#define FILTER_SAMPLES 8
 
-float hcsr04_read_filtered(void) {
+float hcsr04_read_filtered(HCSR04_Instance *s) {
     float readings[FILTER_SAMPLES];
     int count = 0;
 
     // เก็บตัวอย่าง
     for(int i = 0; i < FILTER_SAMPLES; i++) {
-        float d = HCSR04_ReadDistance();
+        float d = HCSR04_MeasureCm(s);
         if(d > 0 && d <= 400) {
             readings[count++] = d;
         }
@@ -89,13 +90,17 @@ float hcsr04_read_filtered(void) {
 }
 </code></pre><div class="approach"><strong>🧠 แนวคิด:</strong> เก็บ 8 ตัวอย่าง — median filter: sort แล้วตัดหัว-ท้าย 25% (กรอง outlier) — เฉลี่ยค่าที่เหลือ — ดีกว่า simple average เพราะ spike จาก echo ข้างเคียงจะถูกตัดทิ้ง — เพิ่ม 30ms ระหว่างอ่านให้คลื่นจางก่อนยิงใหม่</div></div>
 <div class="answer"><h2>ข้อ 3: เปรียบเทียบ HC-SR04 vs VL53L0X</h2><pre><code class="language-c">void ultrasonic_vs_laser(void) {
-    HCSR04_Init(PC0, PC1);
-    VL53L0X_Init(VL53L0X_ADDR_DEFAULT, I2C_PINS_DEFAULT);
+    HCSR04_Instance us;
+    HCSR04_Init(&us, PC0, PC1);
+
+    VL53L0X_Instance tof;
+    VL53L0X_Init(&tof, 0x29);
+
     OLED_Init(I2C_PINS_DEFAULT);
 
     while(1) {
-        float dist_us = HCSR04_ReadDistance();
-        uint16_t dist_lx = VL53L0X_ReadDistance();
+        float dist_us = HCSR04_MeasureCm(&us);
+        uint16_t dist_lx = VL53L0X_ReadRangeMM(&tof);
 
         OLED_SetCursor(0, 0);
         OLED_Print("US: "); OLED_PrintFloat(dist_us, 1); OLED_Print(" cm  ");

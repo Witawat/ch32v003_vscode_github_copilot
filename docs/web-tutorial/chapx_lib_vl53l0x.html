@@ -18,8 +18,8 @@
     <h2>🧭 แผนภาพการทำงาน</h2>
     <pre class="mermaid">
 flowchart TD
-    A["VL53L0X_Init(addr)"] --> B["VL53L0X_SetMode(CONTINUOUS)"]
-    B --> C["VL53L0X_ReadRangeMM()"]
+    A["VL53L0X_Init(&tof, addr)"] --> B["เริ่มวัดอัตโนมัติ"]
+    B --> C["VL53L0X_ReadRangeMM(&tof)"]
     C --> D["Range (mm) = Time_of_Flight"]
     D --> E["Status OK?"]
     E -->|"Yes"| F["Display / Use"]
@@ -42,22 +42,14 @@ flowchart TD
     │                                    │
     │ addr=0x29 (default, 1 device)      │
     │ Range: 30mm – 2000mm              │
-    │ Resolution: 1mm                   │
     └────────────────────────────────────┘
     </pre>
-    <p>PC1─SDA, PC2─SCL — I2C address 0x29 (default, เปลี่ยนได้เมื่อมีหลายตัวผ่าน XSHUT), XSHUT ใช้สลับ address ตอน init</p>
+    <p>PC1─SDA, PC2─SCL — I2C address 0x29 (default), XSHUT ใช้สลับ address ตอน init สำหรับ multi-sensor</p>
 </section>
 
 <section>
     <h2>📚 หลักการทำงาน</h2>
     <p><strong>VL53L0X</strong> ใช้หลักการ <strong>Time-of-Flight (ToF)</strong> — ยิงเลเซอร์ VCSEL 940nm → วัดเวลาเดินทางไป-กลับของโฟตอน → คำนวณระยะทางด้วยความเร็วแสง — แม่นยำกว่า ultrasonic เพราะไม่ขึ้นกับวัสดุเป้าหมาย</p>
-    <p><strong>Continuous vs Single Mode:</strong></p>
-    <ul>
-        <li><strong>Continuous:</strong> วัดต่อเนื่องอัตโนมัติ ~30ms/ครั้ง — เหมาะกับงาน real-time</li>
-        <li><strong>Single:</strong> วัดทีละครั้ง → เรียก <code>VL53L0X_StartSingle()</code> แล้วรอ — ประหยัดไฟกว่า</li>
-    </ul>
-    <p><strong>Range Status:</strong> ค่า range มาพร้อม status code — 0=OK, 1=early, 2=sigma fail, 4=signal fail, 7=wrap — ใช้กรองค่าที่ผิดพลาดออก</p>
-    <p><strong>ข้อจำกัดแสงแดด:</strong> แสงแดดจ้ามี IR จำนวนมาก → รบกวน VCSEL 940nm → ระยะลดลง หรือวัดไม่ได้เลย — แก้โดยใช้ cover ปิดกันแสง หรือใช้ VL53L1X (IR filter ดีกว่า)</p>
 </section>
 
 <section>
@@ -68,58 +60,51 @@ flowchart TD
 #include "SimpleHAL.h"
 #include "VL53L0X.h"
 
+VL53L0X_Instance tof;
+
 int main(void) {
     SystemCoreClockUpdate();
     USART_Init(USART1, BAUD_115200);
-    I2C_Init(I2C1, I2C_SPEED_FAST);  // 400kHz recommended
+    I2C_Init(I2C1, I2C_SPEED_FAST);
 
-    VL53L0X_Data_t range;
-    if(!VL53L0X_Init(0x29)) {  // default address
+    if(!VL53L0X_Init(&tof, 0x29)) {
         USART_Println("VL53L0X init failed!");
         while(1);
     }
-    VL53L0X_SetMode(VL53L0X_MODE_CONTINUOUS);</code></pre>
-    <p class="explain">🔍 <code>VL53L0X_Init(addr)</code> — คืน FALSE ถ้าไม่พบเซนเซอร์ (เช็ค I2C), addr 0x29 คือ default — XSHUT ใช้สำหรับ multi-sensor: ปิดทุกตัว → เปิดทีละตัว → เปลี่ยน addr</p></div>
+    USART_Println("VL53L0X Ready!");</code></pre>
+    <p class="explain">🔍 <code>VL53L0X_Init(&tof, addr)</code> — คืน FALSE ถ้าไม่พบเซนเซอร์, addr 0x29 คือ default</p></div>
 
-    <div class="step"><h3>ขั้นที่ 2: อ่าน/เขียนค่า</h3>
-    <pre><code class="language-c">    // Continuous mode: อ่านได้เลย
-    VL53L0X_ReadRangeMM(&range);
+    <div class="step"><h3>ขั้นที่ 2: อ่านค่า</h3>
+    <pre><code class="language-c">    uint16_t mm = VL53L0X_ReadRangeMM(&tof);
 
-    USART_Print("Range: ");
-    USART_PrintInt(range.range_mm);
-    USART_Print(" mm | Status: ");
-    USART_PrintInt(range.status);
-    USART_Println("");
-
-    if(range.status == 0) {
-        USART_Println("✓ Valid measurement");
+    if(mm > 0 && mm < 2000) {
+        USART_Print("Range: ");
+        USART_PrintInt(mm);
+        USART_Println(" mm");
     } else {
-        USART_Print("⚠️ Error code: ");
-        USART_PrintInt(range.status);
-        USART_Println("");
+        USART_Println("Out of range / error");
     }</code></pre>
-    <p class="explain">🔍 <code>VL53L0X_ReadRangeMM()</code> — คืน <code>range.range_mm</code> (30–2000) และ <code>range.status</code> — status 0 = OK, 4 = weak signal, 7 = wrap-around — ใช้ status กรองค่าที่ผิดพลาด</p></div>
+    <p class="explain">🔍 <code>VL53L0X_ReadRangeMM(&tof)</code> — คืนค่าระยะในหน่วย mm (30–2000) — คืน 0 เมื่อวัดไม่ได้</p></div>
 
     <div class="step"><h3>ขั้นที่ 3: Loop + แสดงผล</h3>
     <pre><code class="language-c">    OLED_Handle oled;
     OLED_Init(&oled, OLED_128x64, 0x3C);
 
     while(1) {
-        VL53L0X_ReadRangeMM(&range);
+        uint16_t mm = VL53L0X_ReadRangeMM(&tof);
 
         OLED_Clear(&oled);
         OLED_SetCursor(&oled, 0, 0);
 
-        if(range.status == 0) {
-            OLED_PrintFloat(&oled, "Dist:", (float)range.range_mm / 10.0f, 1);
+        if(mm > 0) {
+            OLED_PrintFloat(&oled, "Dist:", mm / 10.0f, 1);
             OLED_Print(&oled, " cm");
 
-            // ระยะใกล้สุด/ไกลสุดที่วัดได้
             OLED_SetCursor(&oled, 0, 2);
-            if(range.range_mm < 100)        OLED_Print(&oled, "Very Close");
-            else if(range.range_mm < 500)   OLED_Print(&oled, "Close");
-            else if(range.range_mm < 1500)   OLED_Print(&oled, "Medium");
-            else                            OLED_Print(&oled, "Far");
+            if(mm < 100)       OLED_Print(&oled, "Very Close");
+            else if(mm < 500)  OLED_Print(&oled, "Close");
+            else if(mm < 1500) OLED_Print(&oled, "Medium");
+            else               OLED_Print(&oled, "Far");
         } else {
             OLED_Print(&oled, "Signal Error");
             OLED_SetCursor(&oled, 0, 2);
@@ -130,19 +115,17 @@ int main(void) {
         Delay_Ms(50);
     }
 }</code></pre>
-    <p class="explain">🔍 Continuous mode อัพเดท ~33Hz — หน่วง 50ms (~20Hz) — กรอง status 0 ก่อนใช้ — ถ้าสถานะไม่ใช่ 0 แสดง error — อาจเกิดจากแสงแดด, ระยะเกิน, หรือวัตถุดำเกินไป</p></div>
+    <p class="explain">🔍 Continuous mode อัพเดท ~33Hz — หน่วง 50ms (~20Hz) — กรองค่า mm > 0 ก่อนใช้</p></div>
 </section>
 
 <section>
     <h2>📋 API Reference</h2>
     <table>
         <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
-        <tr><td><code>VL53L0X_Init(addr)</code></td><td>เริ่มต้นเซนเซอร์</td><td><code>VL53L0X_Init(0x29)</code></td></tr>
-        <tr><td><code>VL53L0X_SetMode(mode)</code></td><td>CONTINUOUS หรือ SINGLE</td><td><code>VL53L0X_SetMode(VL53L0X_MODE_CONTINUOUS)</code></td></tr>
-        <tr><td><code>VL53L0X_ReadRangeMM(&data)</code></td><td>อ่านระยะ + status</td><td><code>VL53L0X_ReadRangeMM(&range)</code></td></tr>
-        <tr><td><code>VL53L0X_StartSingle()</code></td><td>เริ่มวัดครั้งเดียว (single mode)</td><td><code>VL53L0X_StartSingle()</code></td></tr>
-        <tr><td><code>VL53L0X_IsDataReady()</code></td><td>เช็คว่า data พร้อมหรือยัง</td><td><code>if(VL53L0X_IsDataReady())</code></td></tr>
-        <tr><td><code>VL53L0X_SetAddress(addr)</code></td><td>เปลี่ยน I2C address</td><td><code>VL53L0X_SetAddress(0x30)</code></td></tr>
+        <tr><td><code>VL53L0X_Init(&tof, addr)</code></td><td>เริ่มต้นเซนเซอร์</td><td><code>VL53L0X_Init(&tof, 0x29)</code></td></tr>
+        <tr><td><code>VL53L0X_ReadRangeMM(&tof)</code></td><td>อ่านระยะ (mm)</td><td><code>uint16_t mm = VL53L0X_ReadRangeMM(&tof)</code></td></tr>
+        <tr><td><code>VL53L0X_IsReady(&tof)</code></td><td>เช็คว่า data พร้อมหรือยัง</td><td><code>if(VL53L0X_IsReady(&tof))</code></td></tr>
+        <tr><td><code>VL53L0X_SetAddress(&tof, addr)</code></td><td>เปลี่ยน I2C address</td><td><code>VL53L0X_SetAddress(&tof, 0x30)</code></td></tr>
     </table>
 </section>
 
@@ -150,21 +133,17 @@ int main(void) {
     <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
     <table>
         <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
-        <tr><td>Init ล้มเหลว (ไม่เจอ device)</td><td>สาย SDA/SCL ผิด หรือ XSHUT ไม่ได้ต่อ HIGH</td><td>เช็ค I2C scan, ต่อ XSHUT เข้า VCC (3.3V) ถ้าไม่ใช้ multi-sensor</td></tr>
-        <tr><td>Status=4 (signal fail) บ่อย</td><td>วัตถุมืดเกินไป (ดำ) หรืออยู่กลางแดด</td><td>ใช้วัตถุสีอ่อน, หลีกเลี่ยงแสงแดดตรง, เพิ่ม integration time</td></tr>
-        <tr><td>Status=7 (wrap-around)</td><td>วัตถุอยู่นอกระยะ 30-2000mm</td><td>ตรวจสอบวัตถุอยู่ในระยะ, ใช้ ultrasonic เสริมระยะไกล</td></tr>
-        <tr><td>วัดได้ 0mm ทั้งที่อยู่ในระยะ</td><td>Cover glass สกปรกหรือมีรอย</td><td>ทำความสะอาด cover glass, ห้ามใช้ cover ที่ไม่ใช่ IR-pass</td></tr>
-        <tr><td>ค่าแกว่ง ±5mm ตลอด</td><td>Multi-path reflection (วัตถุมีหลายผิว)</td><td>เปลี่ยนมุมเซนเซอร์, ใช้ single mode เฉลี่ยหลายค่า</td></tr>
+        <tr><td>Init ล้มเหลว (ไม่เจอ device)</td><td>สาย SDA/SCL ผิด หรือ XSHUT ไม่ได้ต่อ HIGH</td><td>เช็ค I2C scan, ต่อ XSHUT เข้า VCC (3.3V)</td></tr>
+        <tr><td>อ่านได้ 0 ตลอด</td><td>วัตถุมืดเกินไป (ดำ) หรืออยู่กลางแดด</td><td>ใช้วัตถุสีอ่อน, หลีกเลี่ยงแสงแดดตรง</td></tr>
     </table>
 </section>
 
 <section>
-    <h2>🛠️ สร้าง Product: ประตูอัตโนมัติ — เปิดเมื่อมีคนเข้าใกล้</h2>
+    <h2>🛠️ สร้าง Product: ประตูอัตโนมัติ</h2>
     <p>VL53L0X วัดระยะ — เมื่อระยะ < 50cm → Servo เปิดประตู</p>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "VL53L0X.h"
-#include "Servo.h"
 
 int main(void)
 {
@@ -172,28 +151,27 @@ int main(void)
     USART_Init(USART1, BAUD_115200);
     I2C_Init(I2C1, I2C_SPEED_FAST);
 
-    VL53L0X_Data_t range;
-    VL53L0X_Init(0x29);
-    VL53L0X_SetMode(VL53L0X_MODE_CONTINUOUS);
+    VL53L0X_Instance tof;
+    VL53L0X_Init(&tof, 0x29);
 
-    Servo_Init(PC0);  // Servo for door
-    Servo_SetAngle(0);  // door closed
+    Servo_Init(PC0);
+    Servo_SetAngle(0);
 
     Timer_t tmr_close;
     uint8_t doorOpen = 0;
 
     while(1)
     {
-        VL53L0X_ReadRangeMM(&range);
+        uint16_t mm = VL53L0X_ReadRangeMM(&tof);
 
-        if(range.status == 0 && range.range_mm < 500 && !doorOpen) {
-            Servo_SetAngle(90);   // เปิดประตู
+        if(mm > 0 && mm < 500 && !doorOpen) {
+            Servo_SetAngle(90);
             doorOpen = 1;
-            Start_Timer(&tmr_close, 3000, 0);  // เปิดค้าง 3 วิ
+            Start_Timer(&tmr_close, 3000, 0);
         }
 
         if(doorOpen && Is_Timer_Expired(&tmr_close)) {
-            Servo_SetAngle(0);    // ปิดประตู
+            Servo_SetAngle(0);
             doorOpen = 0;
         }
 
@@ -205,9 +183,9 @@ int main(void)
 <section>
     <h2>✏️ ลองทำดู</h2>
     <ol>
-        <li>ใช้ VL53L0X 2 ตัว (multi-sensor) — ใช้ XSHUT เปลี่ยน addr เป็น 0x30, 0x31 — วัดระยะ 2 จุดพร้อมกัน</li>
+        <li>ใช้ VL53L0X 2 ตัว — ใช้ XSHUT เปลี่ยน addr เป็น 0x30, 0x31 — วัดระยะ 2 จุดพร้อมกัน</li>
         <li>ทำ liquid level sensor — ติด VL53L0X เหนือผิวของเหลว วัดระดับความสูงของเหลว</li>
-        <li>ทำ gesture sensor — วัดการเปลี่ยนแปลงระยะเร็วๆ ตรวจจับ swipe left/right/up/down</li>
+        <li>ทำ gesture sensor — วัดการเปลี่ยนแปลงระยะเร็วๆ ตรวจจับ swipe</li>
     </ol>
 </section>
 

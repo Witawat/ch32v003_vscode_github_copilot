@@ -4,7 +4,8 @@
 
 <div class="answer">
 <h2>ข้อ 1: Keypad 4x4 ผ่าน I2C</h2>
-<pre><code class="language-c">#define PCF_ADDR  0x20
+<pre><code class="language-c">PCF8574_Instance pcf;
+#define PCF_ADDR  0x20
 
 const char keymap[4][4] = {
     {'1','2','3','A'},
@@ -16,15 +17,15 @@ const char keymap[4][4] = {
 char pcf_keypad_read(void) {
     for(uint8_t row=0; row<4; row++) {
         uint8_t row_mask = ~(1 << (row + 4)) & 0xF0;
-        I2C_WriteByte(PCF_ADDR, row_mask | 0x0F);
+        PCF8574_WritePort(&pcf, row_mask | 0x0F);
         Delay_Ms(1);
 
-        uint8_t val = I2C_ReadByte(PCF_ADDR) & 0x0F;
+        uint8_t val = PCF8574_ReadPort(&pcf) & 0x0F;
         if(val != 0x0F) {
             for(uint8_t col=0; col<4; col++) {
                 if(!(val & (1 << col))) {
                     Delay_Ms(10);
-                    uint8_t v2 = I2C_ReadByte(PCF_ADDR) & 0x0F;
+                    uint8_t v2 = PCF8574_ReadPort(&pcf) & 0x0F;
                     if(!(v2 & (1 << col)))
                         return keymap[row][col];
                 }
@@ -35,7 +36,7 @@ char pcf_keypad_read(void) {
 }
 
 void pcf8574_keypad(void) {
-    I2C_SimpleInit(I2C_PINS_DEFAULT);
+    PCF8574_Init(&pcf, PCF_ADDR);
     char last = 0;
 
     while(1) {
@@ -55,7 +56,8 @@ void pcf8574_keypad(void) {
 
 <div class="answer">
 <h2>ข้อ 2: Interrupt-on-Change — ตรวจจับปุ่มกดโดยไม่ต้อง polling</h2>
-<pre><code class="language-c">#define PCF_ADDR    0x20
+<pre><code class="language-c">PCF8574_Instance pcf;
+#define PCF_ADDR    0x20
 #define PCF_INT_PIN PD2
 
 volatile uint8_t pcf_int_flag = 0;
@@ -68,8 +70,8 @@ void EXTI2_IRQHandler(void) {
 }
 
 void pcf8574_int_setup(void) {
-    I2C_SimpleInit(I2C_PINS_DEFAULT);
-    I2C_WriteByte(PCF_ADDR, 0xFF);
+    PCF8574_Init(&pcf, PCF_ADDR);
+    PCF8574_WritePort(&pcf, 0xFF);
 
     GPIO_SimpleInit(PCF_INT_PIN, GPIO_IN_PU);
     AFIO_EXTIConfig(GPIO_PortD, GPIO_PinSource2);
@@ -90,7 +92,7 @@ void pcf8574_int_loop(void) {
     while(1) {
         if(pcf_int_flag) {
             pcf_int_flag = 0;
-            uint8_t inputs = I2C_ReadByte(PCF_ADDR);
+            uint8_t inputs = PCF8574_ReadPort(&pcf);
 
             uint8_t changed = last_inputs ^ inputs;
             last_inputs = inputs;
@@ -112,7 +114,8 @@ void pcf8574_int_loop(void) {
 
 <div class="answer">
 <h2>ข้อ 3: Output Expansion — ต่อ LED 8 ดวง + Relay ผ่าน I2C</h2>
-<pre><code class="language-c">#define PCF1_ADDR  0x20
+<pre><code class="language-c">PCF8574_Instance pcf1, pcf2;
+#define PCF1_ADDR  0x20
 #define PCF2_ADDR  0x21
 
 typedef struct {
@@ -123,8 +126,8 @@ typedef struct {
 pcf_outputs_t pcf_out;
 
 void pcf8574_output_write(void) {
-    I2C_WriteByte(PCF1_ADDR, ~pcf_out.leds);
-    I2C_WriteByte(PCF2_ADDR, ~pcf_out.relay);
+    PCF8574_WritePort(&pcf1, ~pcf_out.leds);
+    PCF8574_WritePort(&pcf2, ~pcf_out.relay);
 }
 
 void pcf8574_relay_control(uint8_t ch, uint8_t on) {
@@ -135,7 +138,8 @@ void pcf8574_relay_control(uint8_t ch, uint8_t on) {
 }
 
 void pcf8574_expander_demo(void) {
-    I2C_SimpleInit(I2C_PINS_DEFAULT);
+    PCF8574_Init(&pcf1, PCF1_ADDR);
+    PCF8574_Init(&pcf2, PCF2_ADDR);
     pcf_out.leds = 0;
     pcf_out.relay = 0;
     pcf8574_output_write();

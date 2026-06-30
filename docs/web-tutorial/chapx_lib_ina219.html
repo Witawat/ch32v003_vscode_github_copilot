@@ -3,7 +3,7 @@
 <h1>INA219 — วัดแรงดัน/กระแส/กำลังไฟฟ้า ผ่าน I2C</h1><span class="level advanced">ระดับสูง</span>
 <section class="flowchart"><h2>🧭 แผนภาพการทำงาน</h2><pre class="mermaid">
 flowchart TD
-    A["INA219_Init(addr, range)"] --> B["ตั้งค่า Calibration Register"]
+    A["INA219_Init(&ina, addr, shunt, max_amps)"] --> B["ตั้งค่า Calibration Register"]
     B --> C["เริ่มวัดอัตโนมัติ (Continuous Mode)"]
     C --> D["อ่าน Bus Voltage (Shunt+Bus)"]
     D --> E["อ่าน Shunt Voltage (mV)"]
@@ -25,14 +25,13 @@ flowchart TD
    │                  A1─GND              │
    └──────────────────────────────────────┘
 </pre><p>ต่อ Shunt Resistor 0.1Ω ระหว่าง Load(+) กับ VCC — วัด High-Side (ด้านบวกของโหลด) รองรับแรงดัน 0-32V, กระแสสูงสุด ±3.2A (ที่ shunt 0.1Ω)</p></section>
-<section><h2>📚 หลักการทำงาน</h2><p><strong>INA219</strong> เป็น Bi-directional Current/Power Monitor แบบ I2C วัดแรงดันตกคร่อม Shunt Resistor แล้วคำนวณกระแสด้วยกฎของโอห์ม <code>I = Vshunt / Rshunt</code> — มี ADC 12-bit ภายใน วัดได้ทั้ง Bus Voltage (0-32V) และ Shunt Voltage (±320mV full-scale)</p><p><strong>Calibration Register</strong> ต้องตั้งค่าให้ถูกต้องตาม Rshunt และ Current Range ที่ใช้ — Lib จะคำนวณ calibration value ให้อัตโนมัติจาก config ที่กำหนด (เช่น <code>INA219_32V_2A</code>) ค่า Current LSB จะถูกคำนวณจาก max current / 2^15</p><p><strong>4 Addresses</strong> เลือกผ่านขา A0/A1 — ต่อ GND หรือ VCC ได้ 4 ค่า: 0x40, 0x41, 0x44, 0x45 — ต่อหลายตัวบน I2C bus เดียวกันได้</p><p><strong>การวัดกำลัง</strong> ใช้ Bus Voltage × Current — INA219 คำนวณ power register ให้ในตัว แต่ Lib อ่าน Bus Voltage จริง (ไม่รวม shunt drop) แล้วคูณกระแสให้ถูกต้อง</p></section>
+<section><h2>📚 หลักการทำงาน</h2><p><strong>INA219</strong> เป็น Bi-directional Current/Power Monitor แบบ I2C วัดแรงดันตกคร่อม Shunt Resistor แล้วคำนวณกระแสด้วยกฎของโอห์ม <code>I = Vshunt / Rshunt</code> — มี ADC 12-bit ภายใน วัดได้ทั้ง Bus Voltage (0-32V) และ Shunt Voltage (±320mV full-scale)</p><p><strong>Calibration Register</strong> ต้องตั้งค่าให้ถูกต้องตาม Rshunt และ Max Current ที่ใช้ — Lib จะคำนวณ calibration value ให้อัตโนมัติจากค่าที่กำหนด (shunt Ω และ max_amps)</p><p><strong>4 Addresses</strong> เลือกผ่านขา A0/A1 — ต่อ GND หรือ VCC ได้ 4 ค่า: 0x40, 0x41, 0x44, 0x45 — ต่อหลายตัวบน I2C bus เดียวกันได้</p><p><strong>การวัดกำลัง</strong> ใช้ Bus Voltage × Current — INA219 คำนวณ power register ให้ในตัว แต่ Lib อ่าน Bus Voltage จริง (ไม่รวม shunt drop) แล้วคูณกระแสให้ถูกต้อง</p></section>
 <section><h2>💻 เขียน Code ทีละขั้น</h2>
-<div class="step"><h3>ขั้นที่ 1: Init INA219 + ตั้งค่า Range</h3><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+<div class="step"><h3>ขั้นที่ 1: Init INA219 + ตั้งค่า</h3><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "INA219.h"
 
-#define SHUNT_OHM 0.1f
-INA219_t ina;
+INA219_Instance ina;
 
 int main(void) {
     SystemCoreClockUpdate();
@@ -40,10 +39,11 @@ int main(void) {
     I2C_Init(PC1, PC2, I2C_SPEED_STANDARD);
     USART_Init(115200);
 
-    INA219_Init(&ina, 0x40, SHUNT_OHM, INA219_32V_2A);
-    USART_Print("INA219 Ready\r\n");</code></pre><p class="explain">🔍 <code>INA219_Init(dev, addr, rshunt, range)</code> — addr 0x40 (A0=GND,A1=GND), shunt 0.1Ω, range 32V/2A — Lib คำนวณ Calibration ให้โดยอัตโนมัติ</p></div>
+    INA219_Init(&ina, 0x40, 0.1f, 3.2f);
+    //              inst addr shunt max_amps
+    USART_Print("INA219 Ready\r\n");</code></pre><p class="explain">🔍 <code>INA219_Init(&ina, addr, shunt, max_amps)</code> — addr 0x40 (A0=GND,A1=GND), shunt 0.1Ω, max_amps 3.2A — Lib คำนวณ Calibration ให้โดยอัตโนมัติ</p></div>
 <div class="step"><h3>ขั้นที่ 2: อ่านค่าแรงดัน กระแส กำลัง</h3><pre><code class="language-c">    float busV = INA219_GetBusVoltage(&ina);
-    float shuntV = INA219_ReadShuntVoltage(&ina);
+    float shuntV = INA219_GetShuntVoltage(&ina);
     float current = INA219_GetCurrent(&ina);
     float power = INA219_GetPower(&ina);
 
@@ -51,7 +51,7 @@ int main(void) {
     USART_Print("V Shunt:"); USART_PrintFloat(shuntV*1000, 2);
     USART_Print("mV I:"); USART_PrintFloat(current, 3);
     USART_Print("A P:"); USART_PrintFloat(power, 3);
-    USART_Print("W\r\n");</code></pre><p class="explain">🔍 <code>ReadBusVoltage()</code> คืนค่าแรงดันที่ขั้วโหลด (3.3V) — <code>ReadShuntVoltage()</code> คืนค่าแรงดันตกคร่อม shunt (mV) — <code>ReadCurrent()</code> คืนค่ากระแสที่คำนวณจาก Vshunt/Rshunt — <code>ReadPower()</code> คำนวณจาก BusV × Current</p></div>
+    USART_Print("W\r\n");</code></pre><p class="explain">🔍 <code>GetBusVoltage()</code> คืนค่าแรงดันที่ขั้วโหลด — <code>GetShuntVoltage()</code> คืนค่าแรงดันตกคร่อม shunt (V) — <code>GetCurrent()</code> คืนค่ากระแสที่คำนวณจาก Vshunt/Rshunt — <code>GetPower()</code> คำนวณจาก BusV × Current</p></div>
 <div class="step"><h3>ขั้นที่ 3: Loop วัดแบตเตอรี่ + คำนวณ mAh</h3><pre><code class="language-c">    float mah_used = 0;
     Timer_t tmr_sample;
     Start_Timer(&tmr_sample, 1000, 1); // sample ทุก 1 วิ
@@ -72,28 +72,25 @@ int main(void) {
 }</code></pre><p class="explain">🔍 สุ่มตัวอย่างทุก 1 วินาที — สะสม mAh จากกระแส × เวลา — mAh = (I(A) × 1000) / 3600 ต่อวินาที — ตรวจจับแบตเตอรี่ต่ำเมื่อแรงดันต่ำกว่า 2.8V</p></div>
 </section>
 <section><h2>📋 API Reference</h2><table><tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
-<tr><td><code>INA219_Init(dev, addr, rshunt, range)</code></td><td>เริ่มต้น INA219 ตั้งค่า addr/shunt/range</td><td><code>INA219_Init(&ina, 0x40, 0.1f, INA219_32V_2A)</code></td></tr>
-<tr><td><code>INA219_GetBusVoltage(dev)</code></td><td>อ่านแรงดันที่ขั้วโหลด (V)</td><td><code>float v = INA219_GetBusVoltage(&ina)</code></td></tr>
-<tr><td><code>INA219_ReadShuntVoltage(dev)</code></td><td>อ่านแรงดันตกคร่อม shunt (V)</td><td><code>float sv = INA219_ReadShuntVoltage(&ina)</code></td></tr>
-<tr><td><code>INA219_GetCurrent(dev)</code></td><td>อ่านกระแสที่คำนวณ (A)</td><td><code>float a = INA219_GetCurrent(&ina)</code></td></tr>
-<tr><td><code>INA219_GetPower(dev)</code></td><td>อ่านกำลังไฟฟ้า (W)</td><td><code>float w = INA219_GetPower(&ina)</code></td></tr>
-<tr><td><code>INA219_SetCalibration(dev, cal)</code></td><td>ตั้งค่า Calibration Register เอง</td><td><code>INA219_SetCalibration(&ina, 4096)</code></td></tr>
-<tr><td><code>INA219_Reset(dev)</code></td><td>Reset INA219 ทั้งหมด</td><td><code>INA219_Reset(&ina)</code></td></tr>
+<tr><td><code>INA219_Init(&ina, addr, shunt, max_amps)</code></td><td>เริ่มต้น INA219 ตั้งค่า addr/shunt/max current</td><td><code>INA219_Init(&ina, 0x40, 0.1f, 3.2f)</code></td></tr>
+<tr><td><code>INA219_GetBusVoltage(&ina)</code></td><td>อ่านแรงดันที่ขั้วโหลด (V)</td><td><code>float v = INA219_GetBusVoltage(&ina)</code></td></tr>
+<tr><td><code>INA219_GetShuntVoltage(&ina)</code></td><td>อ่านแรงดันตกคร่อม shunt (V)</td><td><code>float sv = INA219_GetShuntVoltage(&ina)</code></td></tr>
+<tr><td><code>INA219_GetCurrent(&ina)</code></td><td>อ่านกระแสที่คำนวณ (A)</td><td><code>float a = INA219_GetCurrent(&ina)</code></td></tr>
+<tr><td><code>INA219_GetPower(&ina)</code></td><td>อ่านกำลังไฟฟ้า (W)</td><td><code>float w = INA219_GetPower(&ina)</code></td></tr>
+<tr><td><code>INA219_SetCalibration(&ina, cal)</code></td><td>ตั้งค่า Calibration Register เอง</td><td><code>INA219_SetCalibration(&ina, 4096)</code></td></tr>
+<tr><td><code>INA219_Reset(&ina)</code></td><td>Reset INA219 ทั้งหมด</td><td><code>INA219_Reset(&ina)</code></td></tr>
 </table></section>
 <section><h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2><table><tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
 <tr><td>อ่านค่าได้ 0 ตลอด</td><td>Shunt ต่อผิดขั้ว หรือ Vin+ Vin- สลับ</td><td>ตรวจสอบ Vin+ ต่อด้าน VCC, Vin- ต่อด้าน Load</td></tr>
-<tr><td>ค่ากระแสผิดเพี้ยน</td><td>Rshunt ไม่ตรงกับค่าที่กำหนดใน Init</td><td>วัดค่า shunt จริงด้วยมิเตอร์ — ป้อนค่าที่ถูกต้องใน Init</td></tr>
+<tr><td>ค่ากระแสผิดเพี้ยน</td><td>Rshunt ไม่ตรงกับค่าที่กำหนดใน Init</td><td>วัดค่า shunt จริงด้วยมัลติมิเตอร์ — ป้อนค่าที่ถูกต้องใน Init</td></tr>
 <tr><td>Bus Voltage อ่านได้ 0</td><td>ใช้ High-Side แต่ต่อผิดด้าน GND</td><td>High-Side ต้องต่อ shunt ด้านบวก ไม่ใช่ด้าน GND</td></tr>
 <tr><td>I2C ไม่ตอบสนอง</td><td>Address ผิด (A0/A1 ต่อผิด)</td><td>ตรวจสอบ A0/A1 — 0x40(A0=GND,A1=GND), 0x41(VCC,GND), 0x44(GND,VCC), 0x45(VCC,VCC)</td></tr>
 <tr><td>กระแสอ่านได้ติดลบ</td><td>โหลดต่อกลับขั้ว หรือ current direction</td><td>กลับขั้ว Vin+ Vin- หรือใช้ abs() กับค่ากระแส</td></tr>
-<tr><td>ค่าเกิน max range</td><td>ตั้ง range ต่ำเกินไปสำหรับโหลด</td><td>ใช้ <code>INA219_32V_2A</code> สำหรับ 32V/2A, หรือ <code>INA219_32V_1A</code> / <code>INA219_16V_400mA</code></td></tr>
 </table></section>
-<section><h2>🛠️ สร้าง Product: Battery Fuel Gauge</h2><p>INA219 + OLED แสดงแรงดัน กระแส mAh ที่ใช้ — หน้าจอ实时อัพเดททุก 1 วิ</p><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+<section><h2>🛠️ สร้าง Product: Battery Fuel Gauge</h2><p>INA219 + OLED แสดงแรงดัน กระแส mAh ที่ใช้ — หน้าจออัพเดททุก 1 วิ</p><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "INA219.h"
 #include "oled_i2c.h"
-
-#define SHUNT_OHM 0.1f
 
 int main(void)
 {
@@ -102,8 +99,8 @@ int main(void)
     I2C_Init(PC1, PC2, I2C_SPEED_STANDARD);
     USART_Init(115200);
 
-    INA219_t ina;
-    INA219_Init(&ina, 0x40, SHUNT_OHM, INA219_32V_2A);
+    INA219_Instance ina;
+    INA219_Init(&ina, 0x40, 0.1f, 3.2f);
 
     OLED_Handle oled;
     OLED_Init(&oled, OLED_128x64, 0x3C);

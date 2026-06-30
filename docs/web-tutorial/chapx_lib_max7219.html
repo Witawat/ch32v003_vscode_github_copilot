@@ -17,16 +17,18 @@
     <h2>🧭 แผนภาพการทำงาน</h2>
     <pre class="mermaid">
 flowchart TD
-    A["SPI_Init()"] --> B["MAX7219_Init(n_modules, CS_pin)"]
-    B --> C["MAX7219_SetIntensity(5)"]
-    C --> D["MAX7219_Clear()"]
+    A["SPI_Init()"] --> B["MAX7219_Handle* = MAX7219_Init(CLK, MOSI, CS, count)"]
+    B --> C["MAX7219_SetIntensity(display, 5)"]
+    C --> D["MAX7219_Clear(display)"]
     D --> E{"Display Mode"}
-    E -->|"Scroll"| F["MAX7219_StartScrollText(str, speed)"]
-    E -->|"Char"| G["MAX7219_DrawBitmap(c)"]
-    E -->|"Bitmap"| H["MAX7219_DrawBitmap(arr)"]
-    F --> I["while(1) loop"]
+    E -->|"Scroll"| F["MAX7219_StartScrollText(display, str, speed, SCROLL_LEFT)"]
+    E -->|"Pixel"| G["MAX7219_SetPixel(display, x, y, 1)"]
+    E -->|"Bitmap"| H["วาดเองทีละ pixel ใน loop"]
+    F --> I["MAX7219_Update(display)"]
     G --> I
     H --> I
+    I --> J["while(1) loop"]
+    J --> E
     </pre>
 </section>
 <section>
@@ -38,19 +40,20 @@ flowchart TD
     │ 5V  ─────────────── VCC        │
     │ GND ─────────────── GND        │
     │ PC4 ─────────────── CS         │
-    │ PC5 ─────────────── SCK        │
+    │ PC5 ─────────────── SCK (CLK)  │
     │ PC6 ─────────────── DIN (MOSI) │
     │ ต่อหลาย module: DOUT→DIN ต่อไป │
     └────────────────────────────────┘
     </pre>
-    <p>MAX7219 สื่อสารผ่าน SPI — ใช้ 5V จ่ายไฟมอดูลละ ~330mA (8×8 LEDs on) — CS, SCK, DIN 3 ขา — ต่อพ่วงหลายโมดูลได้โดย DOUT → DIN</p>
+    <p>MAX7219 สื่อสารผ่าน SPI — ใช้ 5V จ่ายไฟมอดูลละ ~330mA (8×8 LEDs on) — ต่อพ่วงหลายโมดูลได้โดย DOUT → DIN</p>
 </section>
 <section>
     <h2>📚 หลักการทำงาน</h2>
-    <p><strong>SPI Chainable:</strong> MAX7219 แต่ละตัวมี shift register ภายใน 16-bit — ส่งข้อมูลผ่าน SPI (CS, SCK, DIN) — ข้อมูลเลื่อนจาก DIN → DOUT ไปตัวถัดไป — CS pulse เพื่อ latch ข้อมูลทั้งหมด</p>
-    <p><strong>8×8 Per Module:</strong> แต่ละโมดูลมี LED 8×8 = 64 ดวง — MAX7219 ควบคุม 8 แถว × 8 คอลัมน์ ด้วยการ scan multiplex (ทีละแถว) — ใช้ BCD decode mode สำหรับตัวเลข หรือ no-decode สำหรับ bitmap</p>
-    <p><strong>Intensity Control:</strong> 16 ระดับความสว่าง (0-15) — ควบคุมด้วย PWM ภายใน — SetIntensity() ปรับความสว่าง — ค่า 0=มืดสุด, 15=สว่างสุด (ค่าแนะนำ 5-8)</p>
-    <p><strong>Scroll Text Engine:</strong> MAX7219_StartScrollText() ใช้ state machine ภายใน — เลื่อนข้อความทีละคอลัมน์ — รองรับภาษาไทยผ่านฟอนต์ bitmap — speed parameter ควบคุมความเร็ว (ค่า ms ต่อเฟรม)</p>
+    <p><strong>SPI Chainable:</strong> MAX7219 แต่ละตัวมี shift register ภายใน 16-bit — ส่งข้อมูลผ่าน SPI (CS, SCK, DIN) — ข้อมูลเลื่อนจาก DIN → DOUT ไปตัวถัดไป</p>
+    <p><strong>8×8 Per Module:</strong> แต่ละโมดูลมี LED 8×8 = 64 ดวง — MAX7219 ควบคุม 8 แถว × 8 คอลัมน์ ด้วยการ scan multiplex</p>
+    <p><strong>MAX7219_Handle Pointer:</strong> <code>MAX7219_Init()</code> คืน Handle pointer — ทุกฟังก์ชันรับ handle เป็นพารามิเตอร์ตัวแรก — <code>MAX7219_Update()</code> ส่งข้อมูลทั้งหมดขึ้นจอ</p>
+    <p><strong>Intensity Control:</strong> 16 ระดับความสว่าง (0-15) — ควบคุมด้วย PWM ภายใน — <code>MAX7219_SetIntensity(display, 5)</code></p>
+    <p><strong>Scroll Text Engine:</strong> <code>MAX7219_StartScrollText(display, str, speed_ms, direction)</code> เลื่อนข้อความอัตโนมัติ — direction: SCROLL_LEFT/SCROLL_RIGHT</p>
 </section>
 <section>
     <h2>💻 เขียน Code ทีละขั้น</h2>
@@ -64,79 +67,72 @@ int main(void) {
     Timer_Init();
     SPI_Init(SPI_MODE0, SPI_SPEED_8M);
 
-    MAX7219_Init(PC5, PC6, PC4, 1);      // 1 module, CS=PC4
-    MAX7219_SetIntensity(5);   // brightness 5/15
-    MAX7219_Clear();</code></pre>
-    <p class="explain">🔍 SPI Mode 0 — MAX7219_Init(n, cs_pin) ระบุจำนวนโมดูลและขา CS — SetIntensity 0-15 — Clear() ล้างหน้าจอทุกโมดูล</p></div>
-    <div class="step"><h3>ขั้นที่ 2: Scroll Text + Custom Bitmap</h3>
-    <pre><code class="language-c">    // เลื่อนข้อความ
-    MAX7219_StartScrollText("HELLO CH32V003", 100);
+    MAX7219_Handle* display = MAX7219_Init(PC5, PC6, PC4, 1);
+    MAX7219_SetIntensity(display, 5);
+    MAX7219_Clear(display);</code></pre>
+    <p class="explain">🔍 <code>MAX7219_Init(CLK, MOSI, CS, count)</code> — PC5=CLK, PC6=MOSI, PC4=CS, 1 module — คืน Handle pointer — <code>MAX7219_SetIntensity()</code> 0-15 — <code>MAX7219_Clear()</code> ล้างทุกโมดูล</p></div>
+    <div class="step"><h3>ขั้นที่ 2: Scroll Text + SetPixel</h3>
+    <pre><code class="language-c">    // เลื่อนข้อความ (speed 100ms ต่อเฟรม, SCROLL_LEFT)
+    MAX7219_StartScrollText(display, "HELLO CH32V003", 100, SCROLL_LEFT);
 
-    // หรือแสดงทีละตัวอักษร
-    MAX7219_DrawBitmap('A');
+    // หรือเปิด pixel ทีละจุด
+    MAX7219_SetPixel(display, 3, 3, 1);
+    MAX7219_SetPixel(display, 4, 3, 1);
+    MAX7219_SetPixel(display, 3, 4, 1);
+    MAX7219_SetPixel(display, 4, 4, 1);
 
-    // หรือ custom bitmap 8x8
-    uint8_t heart[8] = {
-        0b00111100,
-        0b01111110,
-        0b11111111,
-        0b11111111,
-        0b01111110,
-        0b00111100,
-        0b00011000,
-        0b00000000
-    };
-    MAX7219_DrawBitmap(heart);</code></pre>
-    <p class="explain">🔍 ScrollText(str, speed_ms) เลื่อนข้อความอัตโนมัติ — PrintChar(c) แสดง 1 ตัวอักษร — DrawBitmap(arr[8]) แสดง bitmap 8×8 แบบกำหนดเอง</p></div>
-    <div class="step"><h3>ขั้นที่ 3: Loop สลับข้อความ</h3>
+    MAX7219_Update(display);</code></pre>
+    <p class="explain">🔍 ScrollText(handle, str, speed, direction) เลื่อนข้อความ — SetPixel(handle, x, y, on/off) เปิด/ปิด 1 pixel — <code>MAX7219_Update()</code> ส่งข้อมูลขึ้นจอ</p></div>
+    <div class="step"><h3>ขั้นที่ 3: Loop + Heart Animation</h3>
     <pre><code class="language-c">    Timer_t tmr;
-    Start_Timer(&tmr, 3000, 1);
-    uint8_t page = 0;
+    Start_Timer(&amp;tmr, 500, 1);
+    uint8_t frame = 0;
 
     while(1) {
-        if(Is_Timer_Expired(&tmr)) {
-            MAX7219_Clear();
-            if(page == 0) {
-                MAX7219_DrawBitmap('1');
-            } else if(page == 1) {
-                MAX7219_DrawBitmap('2');
+        if(Is_Timer_Expired(&amp;tmr)) {
+            MAX7219_Clear(display);
+            if(frame == 0) {
+                // Heart frame 1
+                MAX7219_SetPixel(display, 3, 1, 1);
+                MAX7219_SetPixel(display, 4, 1, 1);
             } else {
-                MAX7219_DrawBitmap('3');
+                // Heart frame 2
+                MAX7219_SetPixel(display, 1, 2, 1);
+                MAX7219_SetPixel(display, 6, 2, 1);
             }
-            page = (page + 1) % 3;
+            MAX7219_Update(display);
+            frame = !frame;
         }
     }
 }</code></pre>
-    <p class="explain">🔍 ใช้ Non-Blocking Timer เปลี่ยนข้อความทุก 3 วิ — Clear() ก่อนเปลี่ยน — สลับระหว่าง 3 หน้าจอ — loop ไม่เคยบล็อก</p></div>
+    <p class="explain">🔍 ใช้ Non-Blocking Timer เปลี่ยน frame ทุก 500ms — Clear() + SetPixel() + Update() pattern — อนิเมชันหัวใจ 2 เฟรม</p></div>
 </section>
 <section>
     <h2>📋 API Reference</h2>
     <table>
         <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
-        <tr><td><code>MAX7219_Init(n, cs)</code></td><td>เริ่มต้น n โมดูล, CS pin</td><td><code>MAX7219_Init(PC5, PC6, PC4, 1)</code></td></tr>
-        <tr><td><code>MAX7219_SetIntensity(v)</code></td><td>ความสว่าง 0-15</td><td><code>MAX7219_SetIntensity(5)</code></td></tr>
-        <tr><td><code>MAX7219_Clear()</code></td><td>ล้างทุกโมดูล</td><td><code>MAX7219_Clear()</code></td></tr>
-        <tr><td><code>MAX7219_StartScrollText(s, ms)</code></td><td>เลื่อนข้อความ</td><td><code>MAX7219_StartScrollText("HELLO", 100)</code></td></tr>
-        <tr><td><code>MAX7219_DrawBitmap(c)</code></td><td>แสดง 1 ตัวอักษร</td><td><code>MAX7219_DrawBitmap('A')</code></td></tr>
-        <tr><td><code>MAX7219_DrawBitmap(bmp)</code></td><td>แสดง bitmap 8x8</td><td><code>MAX7219_DrawBitmap(heart)</code></td></tr>
-        <tr><td><code>MAX7219_SetPixel(x, y, v)</code></td><td>เปิด/ปิด 1 pixel</td><td><code>MAX7219_SetPixel(3, 3, 1)</code></td></tr>
-        <tr><td><code>MAX7219_Shutdown(on)</code></td><td>Shutdown mode (1=off)</td><td><code>MAX7219_Shutdown(0)</code></td></tr>
+        <tr><td><code>MAX7219_Init(CLK, MOSI, CS, count)</code></td><td>เริ่มต้น n โมดูล — คืน Handle*</td><td><code>MAX7219_Handle* d = MAX7219_Init(PC5, PC6, PC4, 1)</code></td></tr>
+        <tr><td><code>MAX7219_SetIntensity(h, v)</code></td><td>ความสว่าง 0-15</td><td><code>MAX7219_SetIntensity(display, 5)</code></td></tr>
+        <tr><td><code>MAX7219_Clear(h)</code></td><td>ล้างทุกโมดูล</td><td><code>MAX7219_Clear(display)</code></td></tr>
+        <tr><td><code>MAX7219_StartScrollText(h, str, ms, dir)</code></td><td>เลื่อนข้อความ — dir: SCROLL_LEFT/SCROLL_RIGHT</td><td><code>MAX7219_StartScrollText(display, "HELLO", 100, SCROLL_LEFT)</code></td></tr>
+        <tr><td><code>MAX7219_SetPixel(h, x, y, v)</code></td><td>เปิด/ปิด 1 pixel (v=0/1)</td><td><code>MAX7219_SetPixel(display, 3, 3, 1)</code></td></tr>
+        <tr><td><code>MAX7219_Update(h)</code></td><td>ส่งข้อมูลขึ้นจอทั้งหมด</td><td><code>MAX7219_Update(display)</code></td></tr>
     </table>
 </section>
 <section>
     <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
     <table>
         <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
-        <tr><td>LED ไม่ติดเลย</td><td>SPI pin ผิด — ต้อง PC5=SCK, PC6=DIN (MOSI)</td><td>ตรวจสอบ pin mapping — CH32V003 SPI1 ใช้ PC5/PC6</td></tr>
-        <tr><td>LEDs dim / สว่างไม่พอ</td><td>Intensity ต่ำกว่า 3 หรือไฟเลี้ยงไม่พอ (5V)</td><td>SetIntensity(≥5) — ใช้ external 5V จ่ายไฟโดยตรง อย่าพึ่ง MCU</td></tr>
+        <tr><td>LED ไม่ติดเลย</td><td>SPI pin ผิด — ต้อง PC5=CLK, PC6=MOSI</td><td>ตรวจสอบ pin mapping — CH32V003 SPI1 ใช้ PC5/PC6</td></tr>
+        <tr><td>LEDs dim / สว่างไม่พอ</td><td>Intensity ต่ำกว่า 3 หรือไฟเลี้ยงไม่พอ (5V)</td><td>SetIntensity(≥5) — ใช้ external 5V จ่ายไฟโดยตรง</td></tr>
         <tr><td>Scroll กระตุก / ไม่ smooth</td><td>Delay น้อยเกินจน MAX7219 ตามไม่ทัน</td><td>speed parameter ≥ 50ms ต่อเฟรม — ลอง 100ms</td></tr>
-        <tr><td>ต่อ 2 โมดูลแล้วไม่ทำงานที่ 2</td><td>Init ระบุแค่ 1 โมดูล</td><td>ใช้ <code>MAX7219_Init(2, PC4)</code> — จำนวนโมดูลต้องตรงกับที่ต่อ</td></tr>
+        <tr><td>ต่อ 2 โมดูลแล้วไม่ทำงานที่ 2</td><td>Init ระบุแค่ 1 โมดูล</td><td>ใช้ <code>MAX7219_Init(PC5, PC6, PC4, 2)</code></td></tr>
         <tr><td>LED บางดวงติดค้าง</td><td>SPI noise หรือ CS toggle ผิดจังหวะ</td><td>ต่อ pull-up 10k ที่ CS — ลด SPI speed เหลือ 1MHz</td></tr>
     </table>
 </section>
 <section>
     <h2>🛠️ สร้าง Product: ป้ายไฟวิ่งภาษาไทย 4 โมดูล</h2>
-    <p>MAX7219 4 โมดูลต่อพ่วง — แสดงข้อความเลื่อนภาษาไทย — ใช้ Non-Blocking Timer เพื่อให้โปรแกรมทำงานอื่นต่อได้</p>
+    <p>MAX7219 4 โมดูลต่อพ่วง — แสดงข้อความเลื่อนภาษาไทย</p>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "MAX7219.h"
@@ -146,22 +142,22 @@ int main(void) {
     Timer_Init();
     SPI_Init(SPI_MODE0, SPI_SPEED_8M);
 
-    MAX7219_Init(4, PC4);
-    MAX7219_SetIntensity(5);
-    MAX7219_Clear();
+    MAX7219_Handle* display = MAX7219_Init(PC5, PC6, PC4, 4);
+    MAX7219_SetIntensity(display, 5);
+    MAX7219_Clear(display);
 
     while(1) {
-        MAX7219_StartScrollText("สวัสดี CH32V003 ", 80);
-        Delay_Ms(1000);
-        MAX7219_StartScrollText("MAX7219 4 Module ", 80);
-        Delay_Ms(1000);
+        MAX7219_StartScrollText(display, "สวัสดี CH32V003 ", 80, SCROLL_LEFT);
+        Delay_Ms(2000);
+        MAX7219_StartScrollText(display, "MAX7219 4 Module ", 80, SCROLL_LEFT);
+        Delay_Ms(2000);
     }
 }</code></pre>
 </section>
 <section>
     <h2>✏️ ลองทำดู</h2>
     <ol>
-        <li>สร้าง Thai Font 8×8 แบบกำหนดเองสำหรับตัวอักษรไทย 10 ตัว — ใช้ DrawBitmap ทีละตัว</li>
+        <li>สร้าง bitmap 8×8 แบบกำหนดเอง — ไล่ SetPixel ทุกจุดในลูป</li>
         <li>ต่อ 2 โมดูล — ทำ Scrolling 2 บรรทัด (ใช้ 2 โมดูลต่อพ่วงในแนวนอน)</li>
         <li>ทำเกม Snake — ใช้ SetPixel() แสดงหัวงู — ใช้ปุ่ม 4 ทิศ — อัปเดต 4fps ด้วย Non-Blocking Timer</li>
     </ol>

@@ -10,8 +10,9 @@ int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
     USART_Init(115200);
-    BMP280_Init(0x76);
-    BMP280_SetMode(BMP280_NORMAL);
+
+    BMP280_Instance bmp;
+    BMP280_Init(&bmp, BMP280_ADDR_LOW);
     USART_Println("T(C),P(hPa),Alt(m)");  // header สำหรับ plot
 
     Timer_t tmr;
@@ -19,9 +20,9 @@ int main(void) {
 
     while(1) {
         if(Is_Timer_Expired(&tmr)) {
-            float t = BMP280_ReadTemperature();
-            float p = BMP280_ReadPressure() / 100.0f;
-            float alt = BMP280_CalcAltitude(1013.25f);
+            float t, p;
+            BMP280_Read(&bmp, &t, &p);
+            float alt = BMP280_GetAltitude(&bmp, 1013.25f);
 
             USART_PrintFloat(t, 1);
             USART_Print(",");
@@ -56,8 +57,9 @@ int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
     USART_Init(115200);
-    BMP280_Init(0x76);
-    BMP280_SetMode(BMP280_NORMAL);
+
+    BMP280_Instance bmp;
+    BMP280_Init(&bmp, BMP280_ADDR_LOW);
 
     float sea_level_hPa = 1013.25f;  // ตั้งค่าได้จากสภาพอากาศวันนั้น
 
@@ -69,9 +71,11 @@ int main(void) {
         if(Is_Timer_Expired(&tmr)) {
             AltLog_t log;
             log.timestamp = Timer_GetMs();
-            log.temperature = BMP280_ReadTemperature();
-            log.pressure = BMP280_ReadPressure() / 100.0f;
-            log.altitude = BMP280_CalcAltitude(sea_level_hPa);
+            float t, p;
+            BMP280_Read(&bmp, &t, &p);
+            log.temperature = t;
+            log.pressure = p;
+            log.altitude = BMP280_GetAltitude(&bmp, sea_level_hPa);
 
             USART_Print("Alt:"); USART_PrintFloat(log.altitude, 1);
             USART_Print("m P:"); USART_PrintFloat(log.pressure, 1);
@@ -94,11 +98,9 @@ int main(void) {
     Timer_Init();
     USART_Init(115200);
 
-    BMP280_Init(0x76);  // SDO → GND
-    BMP280_SetMode(0x76, BMP280_NORMAL);
-
-    BMP280_Init(0x77);  // SDO → VCC (คนละ address)
-    BMP280_SetMode(0x77, BMP280_NORMAL);
+    BMP280_Instance bmp1, bmp2;
+    BMP280_Init(&bmp1, BMP280_ADDR_LOW);   // SDO → GND = 0x76
+    BMP280_Init(&bmp2, BMP280_ADDR_HIGH);  // SDO → VCC = 0x77
 
     USART_Println("Comparing BMP280 #1 (0x76) vs #2 (0x77)");
     USART_Println("T1,P1,A1,T2,P2,A2,dT,dP");
@@ -108,13 +110,11 @@ int main(void) {
 
     while(1) {
         if(Is_Timer_Expired(&tmr)) {
-            float t1 = BMP280_ReadTemperature_Addr(0x76);
-            float p1 = BMP280_ReadPressure_Addr(0x76) / 100.0f;
-            float a1 = BMP280_CalcAltitude_Addr(1013.25f, 0x76);
-
-            float t2 = BMP280_ReadTemperature_Addr(0x77);
-            float p2 = BMP280_ReadPressure_Addr(0x77) / 100.0f;
-            float a2 = BMP280_CalcAltitude_Addr(1013.25f, 0x77);
+            float t1, p1, t2, p2;
+            BMP280_Read(&bmp1, &t1, &p1);
+            BMP280_Read(&bmp2, &t2, &p2);
+            float a1 = BMP280_GetAltitude(&bmp1, 1013.25f);
+            float a2 = BMP280_GetAltitude(&bmp2, 1013.25f);
 
             USART_PrintFloat(t1, 1); USART_Print(",");
             USART_PrintFloat(p1, 1); USART_Print(",");

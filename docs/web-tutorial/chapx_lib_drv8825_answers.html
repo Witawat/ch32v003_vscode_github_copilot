@@ -6,7 +6,7 @@
 <h2>ข้อ 1: เปรียบเทียบ Microstepping — Full vs Half vs 1/4 vs 1/8</h2>
 <pre><code class="language-c">#include "simple_drv8825.h"
 
-DRV8825_t motor;
+DRV8825_Instance motor;
 
 typedef struct {
     const char *name;
@@ -24,16 +24,14 @@ const MicrostepConfig_t modes[] = {
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    DRV8825_Init(&motor, GPIOA, GPIO_Pin_0,
-                 GPIOA, GPIO_Pin_1, GPIOA, GPIO_Pin_2,
-                 GPIOA, GPIO_Pin_3);
+    DRV8825_Init(&motor, PC1, PC0, PC2, 200);
 
     for (uint8_t m = 0; m &lt; 4; m++) {
-        DRV8825_SetMicrostep(&motor, modes[m].ms_pins);
+        DRV8825_SetSpeed(&motor, modes[m].ms_pins);
         Delay_Ms(100);
         // หมุน 1 รอบในแต่ละโหมด
         for (uint32_t i = 0; i &lt; modes[m].steps_per_rev; i++) {
-            DRV8825_Step(&motor, 1);
+            DRV8825_Move(&motor, 1);
             Delay_Us(2000);
         }
         Delay_Ms(1500);  // พักระหว่างโหมด สังเกตความต่าง
@@ -48,7 +46,7 @@ int main(void) {
 <pre><code class="language-c">#include "simple_drv8825.h"
 #include "simple_adc.h"
 
-DRV8825_t motor;
+DRV8825_Instance motor;
 
 /* ตั้งกระแสผ่าน Vref pin โดยใช้ PWM เป็น DAC */
 void set_motor_current(uint16_t current_ma) {
@@ -67,9 +65,7 @@ int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
     ADC_SimpleInit(ADC_CH0);
-    DRV8825_Init(&motor, GPIOA, GPIO_Pin_0,
-                 GPIOA, GPIO_Pin_1, GPIOA, GPIO_Pin_2,
-                 GPIOA, GPIO_Pin_3);
+    DRV8825_Init(&motor, PC1, PC0, PC2, 200);
 
     uint16_t currents[] = {250, 500, 750, 1000, 1500};  // mA
 
@@ -77,7 +73,7 @@ int main(void) {
         set_motor_current(currents[i]);
 
         for (uint16_t step = 0; step &lt; 800; step++) {
-            DRV8825_Step(&motor, 1);
+            DRV8825_Move(&motor, 1);
             Delay_Us(1500);
         }
 
@@ -97,7 +93,7 @@ int main(void) {
 <h2>ข้อ 3: CNC Linear Slide — ควบคุมแกนเดียวด้วย Limit Switch สองข้าง</h2>
 <pre><code class="language-c">#include "simple_drv8825.h"
 
-DRV8825_t axis;
+DRV8825_Instance axis;
 
 #define LIMIT_MIN  GPIO_Pin_4
 #define LIMIT_MAX  GPIO_Pin_5
@@ -113,7 +109,7 @@ void move_to(int32_t target) {
         if (dir == 1 &amp;&amp; !GPIO_ReadInputDataBit(LIMIT_PORT, LIMIT_MAX)) break;
         if (dir == -1 &amp;&amp; !GPIO_ReadInputDataBit(LIMIT_PORT, LIMIT_MIN)) break;
 
-        DRV8825_Step(&axis, dir);
+        DRV8825_Move(&axis, dir);
         pos += dir;
         Delay_Us(1200);
     }
@@ -122,10 +118,8 @@ void move_to(int32_t target) {
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    DRV8825_Init(&axis, GPIOA, GPIO_Pin_0,
-                 GPIOA, GPIO_Pin_1, GPIOA, GPIO_Pin_2,
-                 GPIOA, GPIO_Pin_3);
-    DRV8825_SetMicrostep(&axis, 0b011);  // 1/8 step
+    DRV8825_Init(&axis, PC1, PC0, PC2, 200);
+    DRV8825_SetSpeed(&axis, 0b011);  // 1/8 step
 
     GPIO_InitTypeDef g = {0};
     g.GPIO_Pin  = LIMIT_MIN | LIMIT_MAX;

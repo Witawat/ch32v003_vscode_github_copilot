@@ -1,24 +1,23 @@
 <!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย MQ Gas — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
 <nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_mqgas.html">กลับบท</a><a href="chapx_lib_pms5003_answers.html">เฉลยถัดไป →</a></nav>
 <h1>📝 เฉลย — MQ Gas เซนเซอร์แก๊ส</h1>
-<div class="answer"><h2>ข้อ 1: MQ-2 Smoke Alarm — LED+Buzzer เตือนควัน</h2><pre><code class="language-c">#define MQ2_PIN       PA1
+<div class="answer"><h2>ข้อ 1: MQ-2 Smoke Alarm — LED+Buzzer เตือนควัน</h2><pre><code class="language-c">#define MQ2_ADC_CH   ADC_CH_PC4
 #define LED_RED       PC0
 #define BUZZER_PIN    PC3
 #define SMOKE_THRESH  400
 
 void mq2_smoke_alarm(void) {
-    pinMode(MQ2_PIN, PIN_MODE_INPUT);
     pinMode(LED_RED, PIN_MODE_OUTPUT);
     pinMode(BUZZER_PIN, PIN_MODE_OUTPUT);
 
-    while(1) {
-        uint16_t adc = analogRead(MQ2_PIN);
-        float voltage = adc * 3.3f / 1023.0f;
-        float rs = (5.0f - voltage) / voltage * 10000.0f;  // RL=10k
-        float ppm = MQGAS_CalcPPM(MQGAS_MQ2, rs);
+    MQGas_Instance mq;
+    MQGas_Init(&mq, MQ2_ADC_CH, MQ2, 5.0f, 3.3f);
+    MQGas_Calibrate(&mq);
 
-        USART_Print("ADC:"); USART_PrintNum(adc);
-        USART_Print(" PPM:"); USART_PrintFloat(ppm, 1);
+    while(1) {
+        float ppm = MQGas_GetPPM(&mq);
+
+        USART_Print("PPM:"); USART_PrintFloat(ppm, 1);
         USART_Println("");
 
         if(ppm > SMOKE_THRESH) {
@@ -36,11 +35,11 @@ void mq2_smoke_alarm(void) {
 }
 </code></pre><div class="approach"><strong>🧠 แนวคิด:</strong> อ่าน ADC → คำนวณ Rs (ความต้านทานเซนเซอร์) ผ่าน voltage divider RL=10k — <code>MQGAS_CalcPPM</code> แปลง Rs→PPM — Buzzer+LED เตือนแบบกระพริบเมื่อเกิน threshold — ค่า PPM สูง = ควันมาก = อันตราย</div></div>
 <div class="answer"><h2>ข้อ 2: Calibrate Ro ในอากาศสะอาด</h2><pre><code class="language-c">float mq2_calibrate_ro(void) {
-    const int samples = 50;
-    float rs_sum = 0;
-
     USART_Println("Calibrating Ro in clean air...");
     USART_Println("Wait 60s for sensor warm-up");
+
+    MQGas_Instance mq;
+    MQGas_Init(&mq, ADC_CH_PC4, MQ2, 5.0f, 3.3f);
 
     // รอเซนเซอร์อุ่น 1 นาที
     for(int i = 0; i < 60; i++) {
@@ -49,18 +48,10 @@ void mq2_smoke_alarm(void) {
         digitalToggle(PC5);  // heartbeat LED
     }
 
-    // เก็บตัวอย่าง 50 ครั้ง
-    for(int i = 0; i < samples; i++) {
-        uint16_t adc = analogRead(MQ2_PIN);
-        float voltage = adc * 3.3f / 1023.0f;
-        float rs = (5.0f - voltage) / voltage * 10000.0f;
-        rs_sum += rs;
-        Delay_Ms(100);
-    }
+    // Calibrate โดยใช้ฟังก์ชันของไลบรารี
+    MQGas_Calibrate(&mq);
 
-    float rs_avg = rs_sum / samples;
-    float ro = rs_avg / 9.8f;  // MQ-2: Rs/Ro ≈ 9.8 ในอากาศสะอาด
-
+    float ro = MQGas_GetRo(&mq);
     USART_Print("Ro = ");
     USART_PrintFloat(ro, 1);
     USART_Println(" Ohm — saved");

@@ -15,8 +15,8 @@ int main(void) {
     I2C_Init(PC1, PC2, I2C_SPEED_STANDARD);
     USART_Init(115200);
 
-    PZEM004Tv3_t pzem;
-    PZEM004Tv3_Init(&pzem, PD6, PD5, 0x01);
+    PZEM004Tv3 pzem;
+    PZEM004Tv3_Init(&pzem, 1, USART_PINS_DEFAULT);
 
     OLED_Handle oled;
     OLED_Init(&oled, OLED_128x64, 0x3C);
@@ -111,8 +111,8 @@ int main(void) {
     Timer_Init();
     USART_Init(115200);
 
-    PZEM004Tv3_t pzem;
-    PZEM004Tv3_Init(&pzem, PD6, PD5, 0x01);
+    PZEM004Tv3 pzem;
+    PZEM004Tv3_Init(&pzem, 1, USART_PINS_DEFAULT);
 
     PZEM004Tv3_SetAlarmThreshold(&pzem, 2500, 10000, 20000);
 
@@ -174,10 +174,10 @@ int main(void) {
     Timer_Init();
     USART_Init(115200);
 
-    PZEM004Tv3_t pzem1, pzem2;
+    PZEM004Tv3 pzem1, pzem2;
 
-    PZEM004Tv3_Init(&pzem1, PD6, PD5, 0x01);
-    PZEM004Tv3_Init(&pzem2, PD6, PD5, 0x02);
+    PZEM004Tv3_Init(&pzem1, 1, USART_PINS_DEFAULT);
+    PZEM004Tv3_Init(&pzem2, 2, USART_PINS_DEFAULT);
 
     USART_Print("Dual PZEM v3 via RS485\r\n");
     USART_Print("Addr 0x01 = Main, 0x02 = Sub\r\n");

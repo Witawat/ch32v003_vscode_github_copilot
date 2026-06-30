@@ -20,18 +20,18 @@
     <h2>🧭 แผนภาพการทำงาน</h2>
     <pre class="mermaid">
 flowchart TD
-    A["Power ON"] --> B["ESC_Init(PD2)"]
+    A["Power ON"] --> B["ESC_Init(&esc, PWM1_CH1, 1000, 2000)"]
     B --> C{"Calibrate?"}
-    C -->|"Yes"| D["Send Max Throttle (100%)"]
+    C -->|"Yes"| D["ESC_SetThrottle(&esc, 100%)"]
     D --> E["Wait for ESC beep"]
-    E --> F["Send Min Throttle (0%)"]
+    E --> F["ESC_SetThrottle(&esc, 0%)"]
     F --> G["Wait for confirmation beep"]
     G --> H["ESC Calibrated"]
     C -->|"No"| H
-    H --> I["ESC_Arm() → 0% Throttle 3s"]
-    I --> J["ESC_SetThrottle(0-100%)"]
+    H --> I["ESC_Arm(&esc)"]
+    I --> J["ESC_SetThrottle(&esc, 0-100%)"]
     J --> K{"Throttle = 0?"}
-    K -->|"Yes"| L["ESC_Disarm()"]
+    K -->|"Yes"| L["ESC_Disarm(&esc)"]
     K -->|"No"| J
     </pre>
 </section>
@@ -75,69 +75,59 @@ flowchart TD
 
 int main(void) {
     SystemCoreClockUpdate();
-    Timer_Init();
-    // PWM 50Hz บน PD2 สำหรับ ESC
-    PWM_SimpleInit(1, PD2, 50);
-    PWM_Start(1);
+    ESC_Instance esc;
+    ESC_Init(&esc, PWM1_CH1, 1000, 2000);  // channel, min 1000µs, max 2000µs
 
-    // ส่ง throttle 0% (1000μs = 5% duty at 50Hz)
-    PWM_SetDuty(1, 5.0f);
-    Delay_Ms(3000);  // รอ ESC arm 3 วินาที</code></pre>
-    <p class="explain">🔍 ESC ใช้ PWM 50Hz เหมือน servo แต่ range 1ms–2ms (5%–10% duty) — ต้องรอ 3 วิหลังจ่ายไฟก่อน ESC จะ arm — ระหว่างนี้ห้ามส่งสัญญาณผิด</p></div>
+    ESC_Arm(&esc);  // รอ arm 3 วินาที</code></pre>
+    <p class="explain">🔍 <code>ESC_Init(&esc, PWM1_CH1, 1000, 2000)</code> — ตั้งช่อง PWM, min pulse 1000µs, max pulse 2000µs — <code>ESC_Arm(&esc)</code> รอ 3 วิ</p></div>
 
     <div class="step"><h3>ขั้นที่ 2: Throttle Control + Safety</h3>
     <pre><code class="language-c">    // ไล่ throttle จาก 0% → 50% → 0%
     for(uint8_t t = 0; t <= 50; t += 5) {
-        float duty = 5.0f + (t * 5.0f / 100.0f);  // 5% + throttle%
-        PWM_SetDuty(1, duty);
+        ESC_SetThrottle(&esc, t);
         Delay_Ms(1000);
     }
-    // ลด throttle กลับ
     for(uint8_t t = 50; t > 0; t -= 5) {
-        PWM_SetDuty(1, 5.0f + (t * 5.0f / 100.0f));
+        ESC_SetThrottle(&esc, t);
         Delay_Ms(500);
     }</code></pre>
-    <p class="explain">🔍 <code>duty = 5.0 + (throttle × 5.0 / 100.0)</code> — แปลง throttle % เป็น duty cycle — เปลี่ยน throttle ช้า ๆ ป้องกัน ESC ตัดการทำงาน — ขณะทดสอบให้ใช้ low throttle ก่อน</p></div>
+    <p class="explain">🔍 <code>ESC_SetThrottle(&esc, t)</code> — เปลี่ยน throttle โดยตรงเป็น % — ramp ช้า ๆ ป้องกัน ESC ตัดการทำงาน</p></div>
 
     <div class="step"><h3>ขั้นที่ 3: Calibration + Safe Loop</h3>
     <pre><code class="language-c">    // ===== ESC Calibration (ทำครั้งเดียว) =====
-    PWM_SetDuty(1, 10.0f);  // Max throttle (2000μs)
-    Delay_Ms(3000);          // รอ ESC beep (1-2 ครั้ง)
-    PWM_SetDuty(1, 5.0f);   // Min throttle (1000μs)
-    Delay_Ms(2000);          // รอ ESC confirmation beep
+    ESC_SetThrottle(&esc, 100);  // Max throttle
+    Delay_Ms(3000);              // รอ ESC beep
+    ESC_SetThrottle(&esc, 0);    // Min throttle
+    Delay_Ms(2000);              // รอ ESC confirmation beep
     // ===== Calibration Complete =====
 
     while(1) {
-        // Ramp up slowly
         for(uint8_t t = 0; t <= 80; t++) {
-            PWM_SetDuty(1, 5.0f + (t * 5.0f / 100.0f));
+            ESC_SetThrottle(&esc, t);
             Delay_Ms(50);
         }
-        // Hold 3s
         Delay_Ms(3000);
-        // Ramp down
         for(uint8_t t = 80; t > 0; t--) {
-            PWM_SetDuty(1, 5.0f + (t * 5.0f / 100.0f));
+            ESC_SetThrottle(&esc, t);
             Delay_Ms(50);
         }
-        // Disarm pause
-        PWM_SetDuty(1, 5.0f);
+        ESC_SetThrottle(&esc, 0);
+        ESC_Disarm(&esc);
         Delay_Ms(5000);
+        ESC_Arm(&esc);
     }
 }</code></pre>
-    <p class="explain">🔍 Calibration sequence ต้องทำก่อนใช้งานจริง — Max→Min→Done — ถ้าเสียบแบตแล้ว ESC beep ถี่ ๆ แสดงว่ายังไม่ calibrate — Safety: ramp up/down ช้า ๆ และหยุดพักระหว่างรอบ</p></div>
+    <p class="explain">🔍 Calibration sequence ต้องทำก่อนใช้งานจริง — Max→Min→Done — ถ้าเสียบแบตแล้ว ESC beep ถี่ ๆ แสดงว่ายังไม่ calibrate — ใช้ <code>ESC_Disarm(&esc)</code> + <code>ESC_Arm(&esc)</code> รีเซ็ตรอบ</p></div>
 </section>
 
 <section>
     <h2>📋 API Reference</h2>
     <table>
         <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
-        <tr><td><code>ESC_Init(pin)</code></td><td>เริ่ม PWM 50Hz สำหรับ ESC</td><td><code>ESC_Init(PD2)</code></td></tr>
-        <tr><td><code>ESC_Calibrate()</code></td><td>ทำ calibration sequence อัตโนมัติ</td><td><code>ESC_Calibrate()</code></td></tr>
-        <tr><td><code>ESC_Arm()</code></td><td>Arm ESC — ส่ง 0% throttle 3 วิ</td><td><code>ESC_Arm()</code></td></tr>
-        <tr><td><code>ESC_SetThrottle(pct)</code></td><td>ตั้ง throttle 0–100%</td><td><code>ESC_SetThrottle(60)</code></td></tr>
-        <tr><td><code>ESC_Disarm()</code></td><td>Disarm — throttle 0%</td><td><code>ESC_Disarm()</code></td></tr>
-        <tr><td><code>ESC_Stop()</code></td><td>หยุด PWM — motor หยุดทันที</td><td><code>ESC_Stop()</code></td></tr>
+        <tr><td><code>ESC_Init(&esc, ch, min, max)</code></td><td>เริ่ม PWM 50Hz สำหรับ ESC</td><td><code>ESC_Init(&esc, PWM1_CH1, 1000, 2000)</code></td></tr>
+        <tr><td><code>ESC_Arm(&esc)</code></td><td>Arm ESC — ส่ง 0% throttle 3 วิ</td><td><code>ESC_Arm(&esc)</code></td></tr>
+        <tr><td><code>ESC_SetThrottle(&esc, pct)</code></td><td>ตั้ง throttle 0–100%</td><td><code>ESC_SetThrottle(&esc, 50)</code></td></tr>
+        <tr><td><code>ESC_Disarm(&esc)</code></td><td>Disarm — throttle 0%</td><td><code>ESC_Disarm(&esc)</code></td></tr>
     </table>
 </section>
 
@@ -163,27 +153,25 @@ int main(void) {
 int main(void) {
     SystemCoreClockUpdate(); Timer_Init();
     OLED_Init_I2C(0x3C, PC2, PC1);
-    HX711_Init(PD3, PD4);  // DT, SCK
-    HX711_Tare(10);
+    HX711_Init(PD3, PD4);
 
-    PWM_SimpleInit(1, PD2, 50); PWM_Start(1);
-    PWM_SetDuty(1, 5.0f);  // 0% throttle
-    Delay_Ms(3000);         // Arm wait
+    ESC_Instance esc;
+    ESC_Init(&esc, PWM1_CH1, 1000, 2000);
+    ESC_Arm(&esc);
 
     uint8_t throttle = 0;
     while(1) {
         throttle += 10; if(throttle > 100) throttle = 0;
-        PWM_SetDuty(1, 5.0f + (throttle * 5.0f / 100.0f));
-        Delay_Ms(2000); // รอแรงขับ stabilize
+        ESC_SetThrottle(&esc, throttle);
+        Delay_Ms(2000);
 
         float grams = HX711_ReadGrams();
         OLED_Clear();
         OLED_Printf(0,0,"Throttle: %d%%", throttle);
         OLED_Printf(0,2,"Thrust: %.1fg", grams);
-        OLED_Printf(0,4,"PWM: %.1f%%", 5.0+throttle*5.0/100.0);
         OLED_Update();
 
-        if(throttle == 0) Delay_Ms(3000); // cool down
+        if(throttle == 0) { ESC_Disarm(&esc); Delay_Ms(3000); ESC_Arm(&esc); }
     }
 }</code></pre>
 </section>

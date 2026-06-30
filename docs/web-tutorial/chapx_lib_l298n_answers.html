@@ -6,46 +6,38 @@
 <h2>ข้อ 1: Differential Drive — 2-Wheel Robot เลี้ยวซ้าย-ขวา</h2>
 <pre><code class="language-c">#include "simple_l298n.h"
 
-L298N_t motor_left, motor_right;
+L298N_Instance motor_left, motor_right;
 
 void forward(uint8_t speed) {
-    L298N_SetSpeed(&motor_left,  speed);
-    L298N_SetSpeed(&motor_right, speed);
-    L298N_Forward(&motor_left);
-    L298N_Forward(&motor_right);
+    L298N_Run(&motor_left,  L298N_FORWARD, speed);
+    L298N_Run(&motor_right, L298N_FORWARD, speed);
 }
 
 void backward(uint8_t speed) {
-    L298N_SetSpeed(&motor_left,  speed);
-    L298N_SetSpeed(&motor_right, speed);
-    L298N_Backward(&motor_left);
-    L298N_Backward(&motor_right);
+    L298N_Run(&motor_left,  L298N_BACKWARD, speed);
+    L298N_Run(&motor_right, L298N_BACKWARD, speed);
 }
 
 void turn_left(uint8_t speed) {
-    L298N_SetSpeed(&motor_left,  speed);
-    L298N_SetSpeed(&motor_right, speed);
-    L298N_Backward(&motor_left);
-    L298N_Forward(&motor_right);
+    L298N_Run(&motor_left,  L298N_BACKWARD, speed);
+    L298N_Run(&motor_right, L298N_FORWARD, speed);
 }
 
 void turn_right(uint8_t speed) {
-    L298N_SetSpeed(&motor_left,  speed);
-    L298N_SetSpeed(&motor_right, speed);
-    L298N_Forward(&motor_left);
-    L298N_Backward(&motor_right);
+    L298N_Run(&motor_left,  L298N_FORWARD, speed);
+    L298N_Run(&motor_right, L298N_BACKWARD, speed);
 }
 
 void stop(void) {
-    L298N_Brake(&motor_left);
-    L298N_Brake(&motor_right);
+    L298N_Run(&motor_left,  L298N_STOP, 0);
+    L298N_Run(&motor_right, L298N_STOP, 0);
 }
 
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    L298N_Init(&motor_left,  GPIOA, GPIO_Pin_0, GPIOA, GPIO_Pin_1, GPIOA, GPIO_Pin_2);
-    L298N_Init(&motor_right, GPIOA, GPIO_Pin_3, GPIOA, GPIO_Pin_4, GPIOA, GPIO_Pin_5);
+    L298N_Init(&motor_left,  PC0, PC1, PWM1_CH1);
+    L298N_Init(&motor_right, PC2, PC3, PWM1_CH2);
 
     while (1) {
         forward(80);     Delay_Ms(2000);
@@ -63,14 +55,14 @@ int main(void) {
 <h2>ข้อ 2: Speed Control ด้วย PWM แบบ Smooth Ramp</h2>
 <pre><code class="language-c">#include "simple_l298n.h"
 
-L298N_t motor;
+L298N_Instance motor;
 
-void smooth_ramp(L298N_t *m, uint8_t from, uint8_t to) {
+void smooth_ramp(L298N_Instance *m, uint8_t from, uint8_t to) {
     int16_t step = (from &lt; to) ? 1 : -1;
     int16_t val = from;
     while (val != to) {
         val += step;
-        L298N_SetSpeed(m, (uint8_t)val);
+        L298N_Run(m, L298N_FORWARD, (uint8_t)val);
         Delay_Ms(10);
     }
 }
@@ -78,9 +70,7 @@ void smooth_ramp(L298N_t *m, uint8_t from, uint8_t to) {
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    L298N_Init(&motor, GPIOA, GPIO_Pin_0, GPIOA, GPIO_Pin_1, GPIOA, GPIO_Pin_2);
-
-    L298N_Forward(&motor);
+    L298N_Init(&motor, PC0, PC1, PWM1_CH1);
 
     while (1) {
         smooth_ramp(&motor, 0, 100);   Delay_Ms(500);
@@ -97,36 +87,34 @@ int main(void) {
 <pre><code class="language-c">#include "simple_l298n.h"
 #include "simple_hcsr04.h"
 
-L298N_t left, right;
+L298N_Instance left, right;
 
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    L298N_Init(&left,  GPIOA, GPIO_Pin_0, GPIOA, GPIO_Pin_1, GPIOA, GPIO_Pin_2);
-    L298N_Init(&right, GPIOA, GPIO_Pin_3, GPIOA, GPIO_Pin_4, GPIOA, GPIO_Pin_5);
+    L298N_Init(&left,  PC0, PC1, PWM1_CH1);
+    L298N_Init(&right, PC2, PC3, PWM1_CH2);
     HCSR04_Init(GPIOA, GPIO_Pin_6, GPIOA, GPIO_Pin_7);
 
     while (1) {
-        L298N_SetSpeed(&left,  70);
-        L298N_SetSpeed(&right, 70);
-        L298N_Forward(&left);
-        L298N_Forward(&right);
+        L298N_Run(&left,  L298N_FORWARD, 70);
+        L298N_Run(&right, L298N_FORWARD, 70);
 
         uint32_t dist_mm = HCSR04_Read();
         if (dist_mm &lt; 200) {   // ตรวจพบสิ่งกีดขวาง &lt; 20cm
             // ถอยหลัง
-            L298N_Backward(&left);
-            L298N_Backward(&right);
+            L298N_Run(&left,  L298N_BACKWARD, 70);
+            L298N_Run(&right, L298N_BACKWARD, 70);
             Delay_Ms(600);
 
             // เลี้ยวหลบ
-            L298N_Forward(&left);
-            L298N_Backward(&right);
+            L298N_Run(&left,  L298N_FORWARD, 70);
+            L298N_Run(&right, L298N_BACKWARD, 70);
             Delay_Ms(400);
 
             // หยุดเช็คอีกครั้ง
-            L298N_Brake(&left);
-            L298N_Brake(&right);
+            L298N_Run(&left,  L298N_STOP, 0);
+            L298N_Run(&right, L298N_STOP, 0);
             Delay_Ms(100);
         }
         Delay_Ms(50);

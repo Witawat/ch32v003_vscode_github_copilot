@@ -23,10 +23,10 @@ int main(void) {
     SPI_Init(PC4, PC5, PC6, SPI_MODE0);
     USART_Init(115200);
 
-    ADS1115_t adc;
-    ADS1115_Init(&adc, 0x48);
-    ADS1115_SetGain(&adc, ADS1115_PGA_4096);
-    ADS1115_SetDataRate(&adc, ADS1115_DR_128);
+    ADS1115_Instance ads;
+    ADS1115_Init(&ads, 0x48);
+    ADS1115_SetGain(&ads, ADS1115_PGA_4096);
+    ADS1115_SetDataRate(&ads, ADS1115_DR_128);
 
     W25Qxx_Init();
     W25Qxx_EraseSector(0);
@@ -43,10 +43,10 @@ int main(void) {
         if(Is_Timer_Expired(&tmr_log) && count < MAX_LOGS) {
             LogEntry_t log;
             log.timestamp = Get_CurrentMs();
-            log.ch0 = ADS1115_Read(&adc, 0);
-            log.ch1 = ADS1115_Read(&adc, 1);
-            log.ch2 = ADS1115_Read(&adc, 2);
-            log.ch3 = ADS1115_Read(&adc, 3);
+            log.ch0 = ADS1115_Read(&ads, 0);
+            log.ch1 = ADS1115_Read(&ads, 1);
+            log.ch2 = ADS1115_Read(&ads, 2);
+            log.ch3 = ADS1115_Read(&ads, 3);
 
             W25Qxx_WritePage(addr, (uint8_t*)&log, sizeof(LogEntry_t));
             addr += sizeof(LogEntry_t);
@@ -95,16 +95,16 @@ int main(void) {
     I2C_Init(PC1, PC2, I2C_SPEED_STANDARD);
     USART_Init(115200);
 
-    ADS1115_t adc;
-    ADS1115_Init(&adc, 0x48);
-    ADS1115_SetGain(&adc, ADS1115_PGA_0512);
-    ADS1115_SetDataRate(&adc, ADS1115_DR_128);
-    ADS1115_SetChannel(&adc, ADS1115_CH_DIFF_0_1);
+    ADS1115_Instance ads;
+    ADS1115_Init(&ads, 0x48);
+    ADS1115_SetGain(&ads, ADS1115_PGA_0512);
+    ADS1115_SetDataRate(&ads, ADS1115_DR_128);
+    ADS1115_SetChannel(&ads, ADS1115_CH_DIFF_0_1);
 
     USART_Print("Calibrating zero...\r\n");
     int32_t sum = 0;
     for(int i = 0; i < 100; i++) {
-        sum += ADS1115_ReadDiff(&adc);
+        sum += ADS1115_ReadDiff(&ads);
         Delay_Ms(10);
     }
     int32_t zero_offset = sum / 100;
@@ -116,7 +116,7 @@ int main(void) {
     Delay_Ms(5000);
     sum = 0;
     for(int i = 0; i < 100; i++) {
-        sum += ADS1115_ReadDiff(&adc);
+        sum += ADS1115_ReadDiff(&ads);
         Delay_Ms(10);
     }
     int32_t cal_raw = sum / 100;
@@ -126,7 +126,7 @@ int main(void) {
     USART_Print("\r\n");
 
     while(1) {
-        int32_t diff = ADS1115_ReadDiff(&adc);
+        int32_t diff = ADS1115_ReadDiff(&ads);
         float weight_g = (float)(diff - zero_offset) / cal_factor;
 
         USART_Print("Raw:"); USART_PrintDec(diff);
@@ -163,15 +163,15 @@ int main(void) {
     I2C_Init(PC1, PC2, I2C_SPEED_STANDARD);
     USART_Init(115200);
 
-    ADS1115_t adc;
-    ADS1115_Init(&adc, 0x48);
-    ADS1115_SetGain(&adc, ADS1115_PGA_4096);
-    ADS1115_SetDataRate(&adc, ADS1115_DR_250);
-    ADS1115_SetChannel(&adc, 0);
+    ADS1115_Instance ads;
+    ADS1115_Init(&ads, 0x48);
+    ADS1115_SetGain(&ads, ADS1115_PGA_4096);
+    ADS1115_SetDataRate(&ads, ADS1115_DR_250);
+    ADS1115_SetChannel(&ads, 0);
 
     int16_t lo_thresh = (int16_t)(2.5f / 4.096f * 32767.0f);
     int16_t hi_thresh = (int16_t)(3.1f / 4.096f * 32767.0f);
-    ADS1115_SetComparator(&adc, lo_thresh, hi_thresh, ADS1115_COMP_TRAD);
+    ADS1115_SetComparator(&ads, lo_thresh, hi_thresh, ADS1115_COMP_TRAD);
 
     pinMode(ALERT_PIN, PIN_MODE_INPUT_PULLUP);
     EXTI_Init(ALERT_PIN, EXTI_Trigger_Falling);
@@ -184,8 +184,8 @@ int main(void) {
     USART_Print("Threshold: 2.5V ~ 3.1V\r\n");
 
     while(1) {
-        int16_t raw = ADS1115_Read(&adc, 0);
-        float voltage = ADS1115_ReadVoltage(&adc, 0);
+        int16_t raw = ADS1115_Read(&ads, 0);
+        float voltage = ADS1115_ReadVoltage(&ads, 0);
 
         if(alert_flag) {
             alert_flag = 0;

@@ -6,13 +6,13 @@
 
 <section class="flowchart"><h2>🧭 แผนภาพการทำงาน</h2><pre class="mermaid">
 flowchart TD
-    A["KeyMatrix_Init(rows,cols,map)"] --> B["KeyMatrix_Update(&amp;kp)"]
+    A["KeyMatrix_Init(&kp, rows, nR, cols, nC, map)"] --> B["KeyMatrix_Update(&kp)"]
     B --> C["Row Scan: activate row=LOW"]
     C --> D["Read all columns"]
     D --> E{"HasColumnLOW?"}
     E -->|"Yes"| F["Debounce 20ms"]
     F --> G["Match key map[row][col]"]
-    G --> H["KeyMatrix_GetKey(&amp;kp)"]
+    G --> H["KeyMatrix_GetKey(&kp)"]
     E -->|"No"| I["Next row"]
     I --> C
     H --> B
@@ -63,10 +63,10 @@ flowchart TD
 #include "SimpleHAL.h"
 #include "KeyMatrix.h"
 
-KeyMatrix_Handle keypad;
-uint8_t rows[] = {PC0, PC1, PC2, PC3};
-uint8_t cols[] = {PC4, PC5, PC6, PC7};
-char keys[4][4] = {
+KeyMatrix_Instance kp;
+GPIO_Pin rows[] = {PC0, PC1, PC2, PC3};
+GPIO_Pin cols[] = {PC4, PC5, PC6, PC7};
+char map[4][KEYMATRIX_MAX_COLS] = {
     {'1','2','3','A'},
     {'4','5','6','B'},
     {'7','8','9','C'},
@@ -78,16 +78,16 @@ int main(void) {
     Timer_Init();
     USART_Init(115200);
 
-    KeyMatrix_Init(&keypad, rows, cols, 4, 4, keys);
+    KeyMatrix_Init(&kp, rows, 4, cols, 4, map);
     USART_Println("Keypad 4x4 Ready!");</code></pre>
-<p class="explain">🔍 <code>KeyMatrix_Init(&handle, rows, cols, numRows, numCols, keyMap)</code> — ต้องกำหนด pin array และ key map ให้ตรงกัน — rows/cols ละ 4 pin รองรับสูงสุด 8×8 — ใช้ internal pull-up อัตโนมัติ</p></div>
+<p class="explain">🔍 <code>KeyMatrix_Init(&kp, rows, numRows, cols, numCols, keyMap)</code> — ใช้ GPIO_Pin array — rows/cols ละ 4 pin รองรับสูงสุด 8×8 — ใช้ internal pull-up อัตโนมัติ</p></div>
 
 <div class="step"><h3>ขั้นที่ 2: Update + GetKey ใน Loop</h3>
 <pre><code class="language-c">    char last_key = 0;
 
     while(1) {
-        KeyMatrix_Update(&keypad);
-        char key = KeyMatrix_GetKey(&keypad);
+        KeyMatrix_Update(&kp);
+        char key = KeyMatrix_GetKey(&kp);
         if(key && key != last_key) {
             USART_WriteByte(key);
             USART_Println("");
@@ -97,14 +97,14 @@ int main(void) {
         Delay_Ms(20);  // scan rate ~50Hz
     }
 }</code></pre>
-<p class="explain">🔍 <code>KeyMatrix_GetKey()</code> คืนอักขระที่กดล่าสุด หรือ 0 ถ้าไม่มี — ใช้ <code>last_key</code> ป้องกันการส่งซ้ำ — scan rate 20ms (~50Hz) เร็วพอสำหรับการพิมพ์ปกติ</p></div>
+<p class="explain">🔍 <code>KeyMatrix_GetKey(&kp)</code> คืนอักขระที่กดล่าสุด หรือ 0 ถ้าไม่มี — ใช้ <code>last_key</code> ป้องกันการส่งซ้ำ — scan rate 20ms (~50Hz) เร็วพอสำหรับการพิมพ์ปกติ</p></div>
 
 <div class="step"><h3>ขั้นที่ 3: Multi-Key + State Machine</h3>
 <pre><code class="language-c">    char buf[16]; uint8_t idx = 0;
 
     while(1) {
-        KeyMatrix_Update(&keypad);
-        char key = KeyMatrix_GetKey(&keypad);
+        KeyMatrix_Update(&kp);
+        char key = KeyMatrix_GetKey(&kp);
         if(key) {
             if(key == '#') {  // Enter
                 buf[idx] = '\0';
@@ -126,7 +126,7 @@ int main(void) {
 </section>
 
 <section><h2>📋 API Reference</h2><table><tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
-<tr><td><code>KeyMatrix_Init(&kp, rows, cols, nR, nC, map)</code></td><td>เริ่มต้น keypad — กำหนด pin และ key map</td><td><code>KeyMatrix_Init(&kp, r, c, 4, 4, keys)</code></td></tr>
+<tr><td><code>KeyMatrix_Init(&kp, rows, nR, cols, nC, map)</code></td><td>เริ่มต้น keypad — กำหนด pin และ key map</td><td><code>KeyMatrix_Init(&kp, rows, 4, cols, 4, map)</code></td></tr>
 <tr><td><code>KeyMatrix_Update(&kp)</code></td><td>Scan matrix + debounce — เรียกใน loop</td><td><code>while(1){KeyMatrix_Update(&kp);}</code></td></tr>
 <tr><td><code>KeyMatrix_GetKey(&kp)</code></td><td>คืนอักขระที่กดล่าสุด หรือ 0 ถ้าไม่มี</td><td><code>char c = KeyMatrix_GetKey(&kp)</code></td></tr>
 <tr><td><code>KeyMatrix_GetRawKey(&kp)</code></td><td>คืน raw index (0-15) แทนอักขระ</td><td><code>uint8_t idx = KeyMatrix_GetRawKey(&kp)</code></td></tr>
@@ -149,9 +149,10 @@ int main(void) {
 #include "KeyMatrix.h"
 #include "lcd1602_i2c.h"
 
-KeyMatrix_Handle kp;
-uint8_t rows[] = {PC0,PC1,PC2,PC3}, cols[] = {PC4,PC5,PC6,PC7};
-char keys[4][4] = {{'1','2','3','+'},{'4','5','6','-'},{'7','8','9','*'},{'C','0','=','/'}};
+KeyMatrix_Instance kp;
+GPIO_Pin rows[] = {PC0,PC1,PC2,PC3};
+GPIO_Pin cols[] = {PC4,PC5,PC6,PC7};
+char map[4][KEYMATRIX_MAX_COLS] = {{'1','2','3','+'},{'4','5','6','-'},{'7','8','9','*'},{'C','0','=','/'}};
 int32_t a=0, b=0, result=0; char op=0, disp[17]; uint8_t state=0;
 
 int main(void) {
@@ -159,7 +160,7 @@ int main(void) {
     Timer_Init();
     USART_Init(115200);
     LCD_Init(0x27);
-    KeyMatrix_Init(&kp, rows, cols, 4, 4, keys);
+    KeyMatrix_Init(&kp, rows, 4, cols, 4, map);
     LCD_SetCursor(0,0); LCD_Print("Calc Ready!");
     while(1) {
         KeyMatrix_Update(&kp);

@@ -14,23 +14,23 @@ const uint8_t thai_font[3][8] = {
 };
 
 void draw_char(uint8_t c, uint8_t col) {
-    MAX7219_SetColumn(col, thai_font[c][0]);
-    MAX7219_SetColumn(col+1, thai_font[c][1]);
-    MAX7219_SetColumn(col+2, thai_font[c][2]);
-    MAX7219_SetColumn(col+3, thai_font[c][3]);
-    MAX7219_SetColumn(col+4, thai_font[c][4]);
-    MAX7219_SetColumn(col+5, thai_font[c][5]);
-    MAX7219_SetColumn(col+6, thai_font[c][6]);
-    MAX7219_SetColumn(col+7, thai_font[c][7]);
+    MAX7219_SetColumn(mx, col, thai_font[c][0]);
+    MAX7219_SetColumn(mx, col+1, thai_font[c][1]);
+    MAX7219_SetColumn(mx, col+2, thai_font[c][2]);
+    MAX7219_SetColumn(mx, col+3, thai_font[c][3]);
+    MAX7219_SetColumn(mx, col+4, thai_font[c][4]);
+    MAX7219_SetColumn(mx, col+5, thai_font[c][5]);
+    MAX7219_SetColumn(mx, col+6, thai_font[c][6]);
+    MAX7219_SetColumn(mx, col+7, thai_font[c][7]);
 }
 
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    MAX7219_Init(1);
+    MAX7219_Handle* mx = MAX7219_Init(PC5, PC6, PC4, 1);
 
     while(1) {
-        MAX7219_Clear();
+        MAX7219_Clear(mx);
         draw_char(0, 0);  // ก
         Delay_Ms(1000);
         draw_char(1, 0);  // ข
@@ -56,11 +56,11 @@ const uint8_t msg_len = 18;  // 3 chars × 6 cols
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    MAX7219_Init(2);  // 2 modules chained
+    MAX7219_Handle* mx = MAX7219_Init(PC5, PC6, PC4, 2);  // 2 modules chained
 
     int16_t offset = 0;
     while(1) {
-        MAX7219_Clear();
+        MAX7219_Clear(mx);
         for(uint8_t x = 0; x < 16; x++) {
             int16_t src = (int16_t)x + offset;
             uint8_t data = 0;
@@ -74,7 +74,7 @@ int main(void) {
                     }
                 }
             }
-            MAX7219_SetColumn(x, data);
+            MAX7219_SetColumn(mx, x, data);
         }
         offset++;
         if(offset >= msg_len) offset = 0;
@@ -101,16 +101,16 @@ void spawn_food(void) {
 
 void draw_all(void) {
     MAX7219_Clear();
-    MAX7219_SetPixel(food_x, food_y, 1);
+    MAX7219_SetPixel(mx, food_x, food_y, 1);
     for(uint8_t i = 0; i < snake_len; i++) {
-        MAX7219_SetPixel(snake_x[i], snake_y[i], 1);
+        MAX7219_SetPixel(mx, snake_x[i], snake_y[i], 1);
     }
 }
 
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    MAX7219_Init(1);
+    MAX7219_Handle* mx = MAX7219_Init(PC5, PC6, PC4, 1);
 
     snake_x[0]=4; snake_y[0]=4;
     snake_x[1]=3; snake_y[1]=4;

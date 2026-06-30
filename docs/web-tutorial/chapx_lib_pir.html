@@ -18,16 +18,15 @@
     <h2>🧭 แผนภาพการทำงาน</h2>
     <pre class="mermaid">
 flowchart TD
-    A["PIR_Init(pin, mode)"] --> B{"Mode?"}
-    B -->|"Polling"| C["digitalRead(PIR_PIN)"]
-    B -->|"Interrupt"| D["EXTI callback → onMotion()"]
-    C --> E{"HIGH?"}
-    D --> F["Motion Detected!"]
-    E -->|"Yes"| F
-    E -->|"No"| C
+    A["PIR_Init(pin)"] --> B["PIR_SetCallback(cb)"]
+    B --> C["PIR_SetDebounce(lockout_ms, duration_ms)"]
+    C --> D["PIR_Update() in loop"]
+    D --> E{"Motion?"}
+    E -->|"Yes"| F["Callback → set flag"]
+    E -->|"No"| D
     F --> G["Light ON / Alarm / Send"]
-    G --> H["Delay (Time delay pot)"]
-    H --> C
+    G --> H["PIR_GetMotionDuration()"]
+    H --> D
     </pre>
 </section>
 
@@ -60,13 +59,13 @@ flowchart TD
         <li><strong>Repeatable (L):</strong> ทุกการเคลื่อนไหว → reset delay timer → output ค้าง HIGH ถ้ายังมีคนเคลื่อนที่</li>
         <li><strong>Non-Repeatable (H):</strong> Trigger ครั้งเดียว → รอ delay → LOW → รอถึงจะ trigger ใหม่</li>
     </ul>
-    <p><strong>Interrupt vs Polling:</strong> Polling ง่ายแต่อาจพลาด trigger สั้นๆ — Interrupt-based จับทุก edge แม่นกว่าแต่ต้องจัดการ debounce</p>
+    <p><strong>Interrupt vs Polling:</strong> PIR_SetCallback ใช้ interrupt จับทุก edge แม่นกว่า — PIR_SetDebounce ตั้ง lockout กัน trigger ซ้ำ — PIR_Update() ต้องเรียกใน loop</p>
 </section>
 
 <section>
     <h2>💻 เขียน Code ทีละขั้น</h2>
 
-    <div class="step"><h3>ขั้นที่ 1: Init + Setup</h3>
+    <div class="step"><h3>ขั้นที่ 1: Init + Setup Callback</h3>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "PIR.h"
@@ -74,7 +73,7 @@ flowchart TD
 volatile uint8_t motionFlag = 0;
 
 // Interrupt callback
-void onMotion(void) {
+void my_callback(void) {
     motionFlag = 1;
 }
 
@@ -85,34 +84,45 @@ int main(void) {
 
     pinMode(PC1, PIN_MODE_OUTPUT);  // LED indicator
 
-    // PIR: pin=PC0, interrupt mode, callback=onMotion
-    PIR_Init(PC0, PIR_MODE_INTERRUPT, onMotion);
+    // PIR: pin=PC0, callback=my_callback
+    PIR_Init(PC0);
+    PIR_SetCallback(my_callback);
+    PIR_SetDebounce(100, 5000);  // 100ms lockout, 5000ms duration
     USART_Println("PIR Ready...");</code></pre>
-    <p class="explain">🔍 <code>PIR_Init(pin, mode, callback)</code> — PIR_MODE_INTERRUPT: ให้ interrupt จัดการ, PIR_MODE_POLLING: programmer เช็คเอง — callback ถูกเรียกใน ISR → ควรสั้นที่สุด</p></div>
+    <p class="explain">🔍 <code>PIR_Init(pin)</code> เริ่มขา PIN — <code>PIR_SetCallback(cb)</code> ตั้งฟังก์ชันที่จะเรียกเมื่อตรวจจับ motion — <code>PIR_SetDebounce(lockout, duration)</code> ตั้งเวลากันซ้ำ (100ms) และ duration ค้าง (5000ms)</p></div>
 
-    <div class="step"><h3>ขั้นที่ 2: อ่าน/เขียนค่า</h3>
-    <pre><code class="language-c">    // Polling mode
-    #if 0
-    if(PIR_IsMotion()) {
-        USART_Println("Motion detected! (polling)");
+    <div class="step"><h3>ขั้นที่ 2: Update + อ่านค่า</h3>
+    <pre><code class="language-c">    // PIR_Update() ต้องเรียกใน loop เพื่อตรวจสอบ state
+    while(1) {
+        PIR_Update();
+
+        if(motionFlag) {
+            motionFlag = 0;
+            USART_Println("Motion detected!");
+
+            // อ่านระยะเวลาที่ motion ค้างอยู่
+            uint32_t dur = PIR_GetMotionDuration();
+            USART_Print("Duration: ");
+            USART_PrintInt(dur);
+            USART_Println(" ms");
+
+            digitalWrite(PC1, HIGH);  // LED ON
+        } else {
+            digitalWrite(PC1, LOW);   // LED OFF
+        }
+
+        Delay_Ms(100);  // check every 100ms
     }
-    #endif
-
-    // Interrupt mode — check flag
-    if(motionFlag) {
-        motionFlag = 0;
-        USART_Println("Motion detected! (interrupt)");
-        digitalWrite(PC1, HIGH);  // LED ON
-    } else {
-        digitalWrite(PC1, LOW);   // LED OFF
-    }</code></pre>
-    <p class="explain">🔍 <code>PIR_IsMotion()</code> — อ่าน pin โดยตรง (polling) — Interrupt mode ใช้ flag ใน main loop — ตั้งใจว่า PIR จะค้าง HIGH ตาม delay pot (ถ้ามีคนอยู่)</p></div>
+}</code></pre>
+    <p class="explain">🔍 <code>PIR_Update()</code> ต้องเรียกใน loop — ตรวจสอบ state และเรียก callback — <code>PIR_GetMotionDuration()</code> อ่านเวลาที่ motion ค้าง — callback ถูกเรียกใน main loop ผ่าน Update()</p></div>
 
     <div class="step"><h3>ขั้นที่ 3: Loop + แสดงผล</h3>
     <pre><code class="language-c">    uint32_t lastMotion = 0;
     uint16_t motionCount = 0;
 
     while(1) {
+        PIR_Update();
+
         if(motionFlag) {
             motionFlag = 0;
             motionCount++;
@@ -130,22 +140,21 @@ int main(void) {
             digitalWrite(PC1, LOW);
         }
 
-        Delay_Ms(100);  // check every 100ms
+        Delay_Ms(100);
     }
 }</code></pre>
-    <p class="explain">🔍 ใช้ interrupt flag + main loop pattern — motionFlag ถูก set ใน ISR, clear ใน main loop — LED ติด 5 วิหลัง motion ล่าสุด — นับจำนวนครั้งที่ตรวจจับได้ — ปรับ delay pot ที่ PIR เพิ่มความ long-hold</p></div>
+    <p class="explain">🔍 ใช้ callback flag + main loop pattern — motionFlag ถูก set ใน callback, clear ใน main loop — LED ติด 5 วิหลัง motion ล่าสุด — นับจำนวนครั้งที่ตรวจจับได้ — ปรับ delay pot ที่ PIR เพิ่มความ long-hold</p></div>
 </section>
 
 <section>
     <h2>📋 API Reference</h2>
     <table>
         <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
-        <tr><td><code>PIR_Init(pin, mode, callback)</code></td><td>เริ่มต้น PIR sensor</td><td><code>PIR_Init(PC0, PIR_MODE_INTERRUPT, onMotion)</code></td></tr>
-        <tr><td><code>PIR_IsMotion()</code></td><td>เช็ค motion (polling)</td><td><code>if(PIR_IsMotion()) { ... }</code></td></tr>
-        <tr><td><code>PIR_GetState()</code></td><td>อ่านสถานะ pin ดิบ</td><td><code>uint8_t s = PIR_GetState()</code></td></tr>
-        <tr><td><code>PIR_SetMode(mode)</code></td><td>เปลี่ยน POLLING/INTERRUPT</td><td><code>PIR_SetMode(PIR_MODE_POLLING)</code></td></tr>
-        <tr><td><code>PIR_Enable()</code></td><td>เปิด interrupt</td><td><code>PIR_Enable()</code></td></tr>
-        <tr><td><code>PIR_Disable()</code></td><td>ปิด interrupt (ประหยัดไฟ)</td><td><code>PIR_Disable()</code></td></tr>
+        <tr><td><code>PIR_Init(pin)</code></td><td>เริ่มต้น PIR sensor</td><td><code>PIR_Init(PC0)</code></td></tr>
+        <tr><td><code>PIR_SetCallback(cb)</code></td><td>ตั้ง callback เมื่อตรวจจับ motion</td><td><code>PIR_SetCallback(my_callback)</code></td></tr>
+        <tr><td><code>PIR_SetDebounce(lockout_ms, dur_ms)</code></td><td>ตั้ง lockout และ duration</td><td><code>PIR_SetDebounce(100, 5000)</code></td></tr>
+        <tr><td><code>PIR_Update()</code></td><td>อัปเดต state — เรียกใน loop</td><td><code>PIR_Update()</code></td></tr>
+        <tr><td><code>PIR_GetMotionDuration()</code></td><td>ระยะเวลา motion (ms)</td><td><code>uint32_t dur = PIR_GetMotionDuration()</code></td></tr>
     </table>
 </section>
 
@@ -155,7 +164,7 @@ int main(void) {
         <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
         <tr><td>Trigger ตลอดเวลา (false trigger)</td><td>Sensitivity pot สูงเกิน, แหล่งความร้อนใกล้เคียง</td><td>ลด sensitivity, หัน PIR ออกจากหน้าต่าง/แอร์/ฮีตเตอร์</td></tr>
         <tr><td>ไม่ trigger แม้มีคนเดินผ่าน</td><td>Sensitivity pot ต่ำเกิน, lens สกปรก</td><td>เพิ่ม sensitivity, ทำความสะอาด Fresnel lens</td></tr>
-        <tr><td>Interrupt ทำงานครั้งเดียวแล้วหยุด</td><td>ไม่ได้ clear interrupt flag ใน ISR</td><td>อ่าน EXTI status register → clear Pending bit</td></tr>
+        <tr><td>Callback ไม่ถูกเรียก</td><td>ลืมเรียก PIR_Update() ใน loop</td><td>ต้องเรียก PIR_Update() ทุกรอบ loop — ไลบรารีใช้ polling ภายใน</td></tr>
         <tr><td>Output ค้าง HIGH ไม่ยอมกลับ LOW</td><td>Delay pot ตั้งนานเกิน (300s)</td><td>ลด delay time, หรือใช้ Repeatable mode (L) แทน H</td></tr>
         <tr><td>PIR ใช้ไม่ได้กับสัตว์ขนาดเล็ก</td><td>สัตว์เล็ก → IR เปลี่ยนแปลงน้อย → ไม่ถึง threshold</td><td>ใช้ PIR ความไวสูง หรือใช้ microwave sensor (RCWL-0516)</td></tr>
     </table>
@@ -169,7 +178,7 @@ int main(void) {
 #include "PIR.h"
 
 volatile uint8_t motionFlag = 0;
-void onMotion(void) { motionFlag = 1; }
+void my_callback(void) { motionFlag = 1; }
 
 int main(void)
 {
@@ -177,13 +186,17 @@ int main(void)
     Timer_Init();
 
     pinMode(PC1, PIN_MODE_OUTPUT);  // Relay (ไฟ)
-    PIR_Init(PC0, PIR_MODE_INTERRUPT, onMotion);
+    PIR_Init(PC0);
+    PIR_SetCallback(my_callback);
+    PIR_SetDebounce(100, 5000);
 
     Timer_t tmr_off;
     uint8_t lightOn = 0;
 
     while(1)
     {
+        PIR_Update();
+
         if(motionFlag) {
             motionFlag = 0;
 

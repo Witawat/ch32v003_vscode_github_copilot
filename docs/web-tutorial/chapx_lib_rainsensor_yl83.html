@@ -3,75 +3,51 @@
 <h1>YL-83 — Rain Sensor ตรวจจับน้ำฝน ADC + GPIO</h1><span class="level intermediate">ระดับกลาง</span>
 <section class="flowchart"><h2>🧭 แผนภาพการทำงาน</h2><pre class="mermaid">
 flowchart TD
-    A["Init ADC + GPIO"] --> B["เปิด VCC ผ่าน GPIO"]
-    B --> C["Delay 50ms stabilize"]
-    C --> D["อ่าน Analog (PD2)"]
-    D --> E["อ่าน Digital (PC3)"]
-    E --> F{"Digital == HIGH?"}
-    F -->|"Yes"| G["ฝนตกหนัก! แจ้งเตือน"]
-    F -->|"No"| H["คำนวณระดับฝนจาก ADC"]
-    H --> I{"ADC < threshold?"}
-    I -->|"ใช่ (ฝนตก)"| G
-    I -->|"ไม่ (แห้ง)"| J["ปกติ"]
-    G --> K["ปิด VCC — ลด corrosion"]
-    J --> K
-    K --> L["Delay 1-5 วิ → วัดรอบถัดไป"]
-    L --> B
+    A["RainSensor_Init(&r, ADC_CH_PC4)"] --> B["RainSensor_IsRaining(&r)"]
+    B --> C{"IsRaining?"}
+    C -->|"Yes"| D["ฝนตก! แจ้งเตือน"]
+    C -->|"No"| E["แห้ง — ปกติ"]
+    D --> F["Delay 1-5 วิ → วัดรอบถัดไป"]
+    E --> F
+    F --> B
 </pre></section>
 <section><h2>🔌 การต่อวงจร</h2><pre class="ascii-circuit">
           YL-83 Rain Sensor (Raindrop Module)
    ┌────────────────────────────────────┐
    │  MCU              YL-83            │
-   │  PC0─GPIO───────── VCC (ไฟเลี้ยง)   │
-   │  PD2─ADC ───────── A0 (Analog Out) │
-   │  PC3─GPIO ──────── D0 (Digital Out)│
+   │  3.3V───────────── VCC             │
+   │  PC4─ADC ───────── A0 (Analog Out) │
+   │  PC1─GPIO ──────── D0 (Digital Out)│
    │  GND────────────── GND             │
    │                                    │
-   │  ⚠ VCC เปิดเฉพาะตอนวัด — ป้องกัน corrosion
-   │  ⚠ แผ่นเซนเซอร์ให้เอียง 15° — น้ำขัง
+   │  ⚠ แผ่นเซนเซอร์ให้เอียง 15° — ป้องกันน้ำขัง
    └────────────────────────────────────┘
-</pre><p>YL-83 ใช้แผ่น PCB แบบ interleaved traces — เมื่อมีหยดน้ำตกลงบนแผ่น → ความต้านทานลดลง → ADC สูงขึ้น — มี LM393 Comparator สำหรับ Digital Output — Pot ปรับ threshold</p></section>
-<section><h2>📚 หลักการทำงาน</h2><p><strong>YL-83 Rain Sensor</strong> วัดความชื้นบนแผ่นเซนเซอร์ — แผ่นเป็นลายทองแดงสลับฟันปลา — เมื่อน้ำเชื่อมรอยต่อ ความต้านทานลด → ADC สูง — แห้ง = ความต้านทานสูง → ADC ต่ำ</p><p><strong>2 Outputs:</strong> Analog (A0) — วัดปริมาณน้ำที่ตก (0=แห้ง, 1023=น้ำท่วม) — Digital (D0) — LM393 comparator — HIGH เมื่อน้ำเกิน threshold — ใช้ขัดจังหวะ MCU ได้</p><p><strong>Corrosion Warning:</strong> แผ่นเซนเซอร์เป็นทองแดง — ถ้าเปิดไฟเลี้ยงตลอดเวลา จะเกิด electrolysis กัดกร่อนเร็ว — ใช้ GPIO ควบคุม VCC เปิดเฉพาะตอนวัด (~100ms) — ปิดทันทีเมื่อวัดเสร็จ</p><p><strong>การติดตั้ง:</strong> วางแผ่นราบ แต่เอียงเล็กน้อย (~15°) ให้น้ำไหลออก ไม่ขัง — หลีกเลี่ยงแดดจัดเพราะทำให้แห้งเร็ว — ใช้วัดปริมาณน้ำฝนแบบ analog ไม่ใช่แค่ on/off</p></section>
+</pre><p>YL-83 ใช้แผ่น PCB แบบ interleaved traces — เมื่อมีหยดน้ำตกลงบนแผ่น → ความต้านทานลดลง → ADC สูงขึ้น — มี LM393 Comparator สำหรับ Digital Output</p></section>
+<section><h2>📚 หลักการทำงาน</h2><p><strong>YL-83 Rain Sensor</strong> วัดความชื้นบนแผ่นเซนเซอร์ — แผ่นเป็นลายทองแดงสลับฟันปลา — เมื่อน้ำเชื่อมรอยต่อ ความต้านทานลด → ADC สูง — แห้ง = ความต้านทานสูง → ADC ต่ำ</p><p><strong>Corrosion Warning:</strong> แผ่นเซนเซอร์เป็นทองแดง — ถ้าเปิดไฟเลี้ยงตลอดเวลา จะเกิด electrolysis กัดกร่อนเร็ว — ตัว library จัดการ VCC control ให้อัตโนมัติ (เปิดเฉพาะตอนวัด)</p><p><strong>การติดตั้ง:</strong> วางแผ่นราบ แต่เอียงเล็กน้อย (~15°) ให้น้ำไหลออก ไม่ขัง — หลีกเลี่ยงแดดจัดเพราะทำให้แห้งเร็ว</p></section>
 <section><h2>💻 เขียน Code ทีละขั้น</h2>
-<div class="step"><h3>ขั้นที่ 1: Init + VCC Control</h3><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+<div class="step"><h3>ขั้นที่ 1: Init RainSensor</h3><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "RainSensor.h"
 
-#define RAIN_VCC PC0
-#define RAIN_ADC PD2
-#define RAIN_DIG PC3
+RainSensor_Instance r;
 
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    ADC_Init(RAIN_ADC, ADC_CH0);
-    pinMode(RAIN_VCC, PIN_MODE_OUTPUT);
-    pinMode(RAIN_DIG, PIN_MODE_INPUT);
-    digitalWrite(RAIN_VCC, LOW);
     USART_Init(115200);
 
-    USART_Print("Rain Sensor Ready\r\n");</code></pre><p class="explain">🔍 VCC ควบคุมด้วย GPIO — เปิดเฉพาะตอนวัด — ป้องกันแผ่นเซนเซอร์กัดกร่อน — Digital อ่านสถานะเปียก/แห้ง</p></div>
-<div class="step"><h3>ขั้นที่ 2: อ่านค่า + แปลผลระดับฝน</h3><pre><code class="language-c">    digitalWrite(RAIN_VCC, HIGH);
-    Delay_Ms(50);
-
-    uint16_t adc = ADC_Read(RAIN_ADC);
-    uint8_t dig = GPIO_Read(RAIN_DIG);
-
-    digitalWrite(RAIN_VCC, LOW); // ปิดทันที!
-
-    USART_Print("Rain ADC:"); USART_PrintDec(adc);
-
-    if(dig) {
-        USART_Print(" HEAVY RAIN!");
-    } else if(adc > 700) {
-        USART_Print(" Moderate rain");
-    } else if(adc > 400) {
-        USART_Print(" Light rain / Drizzle");
+    RainSensor_Init(&r, ADC_CH_PC4);
+    USART_Println("Rain Sensor Ready!");</code></pre>
+<p class="explain">🔍 <code>RainSensor_Init(&r, ADC_CH_PC4)</code> — ตั้งค่า ADC + GPIO — library จัดการ VCC control ให้อัตโนมัติเพื่อป้องกัน corrosion</p></div>
+<div class="step"><h3>ขั้นที่ 2: ตรวจสอบฝนตก</h3>
+<pre><code class="language-c">    if(RainSensor_IsRaining(&r)) {
+        USART_Println("RAINING!");
     } else {
-        USART_Print(" Dry");
-    }
-    USART_Print("\r\n");</code></pre><p class="explain">🔍 เปิด VCC → รอ 50ms → อ่าน ADC + Digital → ปิด VCC ทันที — แบ่งระดับ: >700=ฝนปานกลาง, >400=ฝนเบา, <400=แห้ง — Digital=ฝนหนัก (น้ำท่วมแผ่น)</p></div>
-<div class="step"><h3>ขั้นที่ 3: ระบบแจ้งเตือนฝนตก + กันขโมย</h3><pre><code class="language-c">    pinMode(PC1, PIN_MODE_OUTPUT); // Buzzer
+        USART_Println("Dry");
+    }</code></pre>
+<p class="explain">🔍 <code>RainSensor_IsRaining(&r)</code> — ตรวจสอบทั้ง Analog + Digital — คืน true เมื่อตรวจพบน้ำฝน — จัดการ VCC เปิด/ปิด อัตโนมัติ</p></div>
+<div class="step"><h3>ขั้นที่ 3: ระบบแจ้งเตือนฝนตก + Debounce</h3>
+<pre><code class="language-c">    pinMode(PC1, PIN_MODE_OUTPUT); // Buzzer
     pinMode(PC2, PIN_MODE_OUTPUT); // Servo ปิดหลังคา
     Timer_t tmr;
     Start_Timer(&tmr, 5000, 1);
@@ -80,20 +56,14 @@ int main(void) {
 
     while(1) {
         if(Is_Timer_Expired(&tmr)) {
-            digitalWrite(RAIN_VCC, HIGH);
-            Delay_Ms(50);
-            uint16_t adc = ADC_Read(RAIN_ADC);
-            uint8_t dig = GPIO_Read(RAIN_DIG);
-            digitalWrite(RAIN_VCC, LOW);
-
-            if(dig && adc > 800) {
+            if(RainSensor_IsRaining(&r)) {
                 rain_streak++;
                 if(rain_streak >= 3) {
-                    USART_Print("RAIN CONFIRMED!\r\n");
+                    USART_Println("RAIN CONFIRMED!");
                     digitalWrite(PC1, HIGH); // Buzzer
                     digitalWrite(PC2, HIGH); // ปิดหลังคา
                 }
-            } else if(adc < 300) {
+            } else {
                 if(rain_streak > 0) rain_streak--;
                 if(rain_streak == 0) {
                     digitalWrite(PC1, LOW);
@@ -101,36 +71,27 @@ int main(void) {
                 }
             }
 
-            USART_Print("ADC:"); USART_PrintDec(adc);
-            USART_Print(" S:"); USART_PrintDec(rain_streak);
-            USART_Print("\r\n");
+            USART_Print("Streak: "); USART_PrintDec(rain_streak);
+            USART_Println("");
         }
     }
-}</code></pre><p class="explain">🔍 ใช้ Debounce 3 ครั้ง (15 วิ) ยืนยันฝนตก — ป้องกัน false alarm จากละออง — เมื่อยืนยัน → Buzzer + Servo ปิดหลังคา — เมื่อแห้ง → กลับสู่ปกติ</p></div>
+}</code></pre>
+<p class="explain">🔍 ใช้ Debounce 3 ครั้ง (15 วิ) ยืนยันฝนตก — ป้องกัน false alarm จากละออง — เมื่อยืนยัน → Buzzer + Servo ปิดหลังคา</p></div>
 </section>
 <section><h2>📋 API Reference</h2><table><tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
-<tr><td><code>ADC_Init(pin, ch)</code></td><td>เริ่มต้น ADC</td><td><code>ADC_Init(PD2, ADC_CH0)</code></td></tr>
-<tr><td><code>ADC_Read(pin)</code></td><td>อ่านค่า ADC 0-1023</td><td><code>uint16_t v = ADC_Read(PD2)</code></td></tr>
-<tr><td><code>RAIN_Init(vcc_pin, adc_pin, dig_pin)</code></td><td>เริ่มต้น Rain Sensor</td><td><code>RAIN_Init(PC0, PD2, PC3)</code></td></tr>
-<tr><td><code>RAIN_ReadLevel(pin, vcc)</code></td><td>อ่านระดับน้ำฝน (0-1023)</td><td><code>uint16_t lv = RAIN_ReadLevel(PD2, PC0)</code></td></tr>
-<tr><td><code>RAIN_IsRaining(pin, vcc, thresh)</code></td><td>ตรวจสอบว่าฝนตกหรือไม่</td><td><code>if(RAIN_IsRaining(PD2, PC0, 500))</code></td></tr>
-<tr><td><code>RAIN_ReadDigital(pin)</code></td><td>อ่าน Digital threshold</td><td><code>uint8_t d = RAIN_ReadDigital(PC3)</code></td></tr>
+<tr><td><code>RainSensor_Init(&r, adc_ch)</code></td><td>เริ่มต้น Rain Sensor</td><td><code>RainSensor_Init(&r, ADC_CH_PC4)</code></td></tr>
+<tr><td><code>RainSensor_IsRaining(&r)</code></td><td>ตรวจสอบว่าฝนตกหรือไม่</td><td><code>if(RainSensor_IsRaining(&r)){}</code></td></tr>
 </table></section>
 <section><h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2><table><tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
-<tr><td>แผ่นเซนเซอร์เป็นสนิมเขียว</td><td>เปิดไฟเลี้ยงค้าง — electrolysis กัดทองแดง</td><td>ใช้ GPIO เปิดเฉพาะตอนวัด — ปิดทันทีหลังอ่าน — เคลือบแผ่นด้วย conformal coating</td></tr>
+<tr><td>แผ่นเซนเซอร์เป็นสนิมเขียว</td><td>เปิดไฟเลี้ยงค้าง — electrolysis กัดทองแดง</td><td>ใช้ library จัดการ VCC อัตโนมัติ — เปิดเฉพาะตอนวัด</td></tr>
 <tr><td>ตรวจจับฝนทั้งที่ไม่มีฝน</td><td>น้ำค้าง / ความชื้นสูง / ฝุ่นบนแผ่น</td><td>ใช้ debounce — threshold สูงพอ — ทำความสะอาดแผ่นสม่ำเสมอ</td></tr>
-<tr><td>Digital ไม่เคย HIGH</td><td>Pot ตั้ง threshold สูงเกิน</td><td>หมุน Pot — ใช้หยดน้ำทดสอบ — ดู LED บนโมดูล</td></tr>
 <tr><td>น้ำขังบนแผ่น</td><td>วางแผ่นราบเกินไป</td><td>เอียงแผ่น ~15° — ให้น้ำไหลทิ้ง — เจาะรูระบายน้ำ</td></tr>
-<tr><td>ADC อ่านค่าแปลก</td><td>แผ่น corrode จนลายทองแดงขาด</td><td>ตรวจสอบลายทองแดง — เปลี่ยนแผ่นใหม่ — ใช้แผ่นเคลือบทอง</td></tr>
 </table></section>
-<section><h2>🛠️ สร้าง Product: ระบบกันฝนอัตโนมัติ</h2><p>YL-83 + Servo + Buzzer — ตรวจจับฝน → ปิดหลังคา/หน้าต่าง — เมื่อแห้ง → เปิดกลับ</p><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+<section><h2>🛠️ สร้าง Product: ระบบกันฝนอัตโนมัติ</h2><p>YL-83 + Servo + Buzzer — ตรวจจับฝน → ปิดหลังคา/หน้าต่าง</p><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "RainSensor.h"
 #include "Servo.h"
 
-#define RAIN_VCC PC0
-#define RAIN_ADC PD2
-#define RAIN_DIG PC3
 #define SERVO_PIN PC4
 #define BUZZER PC1
 
@@ -138,14 +99,14 @@ int main(void)
 {
     SystemCoreClockUpdate();
     Timer_Init();
-    ADC_Init(RAIN_ADC, ADC_CH0);
-    pinMode(RAIN_VCC, PIN_MODE_OUTPUT);
-    pinMode(RAIN_DIG, PIN_MODE_INPUT);
-    pinMode(BUZZER, PIN_MODE_OUTPUT);
-    Servo_Init(SERVO_PIN);
     USART_Init(115200);
 
-    digitalWrite(RAIN_VCC, LOW);
+    RainSensor_Instance r;
+    RainSensor_Init(&r, ADC_CH_PC4);
+
+    pinMode(BUZZER, PIN_MODE_OUTPUT);
+    Servo_Init(SERVO_PIN);
+
     digitalWrite(BUZZER, LOW);
     Servo_SetAngle(SERVO_PIN, 0); // เปิด
 
@@ -158,40 +119,30 @@ int main(void)
     {
         if(Is_Timer_Expired(&tmr))
         {
-            digitalWrite(RAIN_VCC, HIGH);
-            Delay_Ms(50);
-            uint16_t adc = ADC_Read(RAIN_ADC);
-            uint8_t dig = GPIO_Read(RAIN_DIG);
-            digitalWrite(RAIN_VCC, LOW);
-
-            if(dig && adc > 700) {
+            if(RainSensor_IsRaining(&r)) {
                 rain_confirmed++;
                 if(rain_confirmed >= 3 && roof_open) {
-                    USART_Print("RAIN! Closing roof\r\n");
+                    USART_Println("RAIN! Closing roof");
                     digitalWrite(BUZZER, HIGH);
                     Servo_SetAngle(SERVO_PIN, 90); // ปิดหลังคา
                     roof_open = 0;
                 }
-            } else if(adc < 300) {
+            } else {
                 if(rain_confirmed > 0) rain_confirmed--;
                 if(rain_confirmed == 0 && !roof_open) {
-                    USART_Print("Dry. Opening roof\r\n");
+                    USART_Println("Dry. Opening roof");
                     digitalWrite(BUZZER, LOW);
                     Servo_SetAngle(SERVO_PIN, 0); // เปิด
                     roof_open = 1;
                 }
             }
-
-            USART_Print("ADC:"); USART_PrintDec(adc);
-            USART_Print(" Roof:"); USART_Print(roof_open ? "OPEN" : "CLOSED");
-            USART_Print("\r\n");
         }
     }
 }</code></pre></section>
 <section><h2>✏️ ลองทำดู</h2><ol>
-<li>วัดปริมาณน้ำฝนสะสม — ใช้อัตราการเปลี่ยนแปลง ADC เทียบเวลา — แสดงเป็น mm/hour</li>
+<li>วัดปริมาณน้ำฝนสะสม — อ่าน analog level สะสมเทียบเวลา — แสดงเป็น mm/hour</li>
 <li>เพิ่ม Wind Speed Sensor — เมื่อลมแรง + ฝนตก → ปิดหลังคาเร็วกว่าปกติ</li>
 <li>บันทึกข้อมูลฝนตกรายวันลง W25Qxx — วิเคราะห์ pattern ของฝนแต่ละเดือน</li>
-<li>ทำ Wireless Rain Alarm — ส่งสถานะฝนผ่าน NRF24L01 ไปยังเครื่องรับในบ้าน</li></ol></section>
+</ol></section>
 <nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_soundsensor_ky038.html">บทก่อน</a><a href="chapx_lib_waterflow_yfs201.html">บทถัดไป →</a></nav>
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script><script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script><script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

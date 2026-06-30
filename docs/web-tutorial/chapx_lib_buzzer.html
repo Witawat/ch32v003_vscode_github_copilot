@@ -96,8 +96,8 @@ int main(void) {
     Delay_Ms(200);
 
     // หยุดเสียง
-    Buzzer_Stop(PC4);</code></pre>
-    <p class="explain">🔍 <code>Buzzer_Beep(pin, ms)</code> ใช้กับ Active — ดังตามเวลาที่กำหนดแล้วเงียบเอง, <code>Buzzer_Tone(pin, freq, ms)</code> ใช้กับ Passive — เลือกความถี่ได้ (Hz), <code>Buzzer_Stop(pin)</code> หยุดเสียงทันที</p></div>
+    Buzzer_NoTone(PC4);</code></pre>
+    <p class="explain">🔍 <code>Buzzer_Beep(pin, ms)</code> ใช้กับ Active — ดังตามเวลาที่กำหนดแล้วเงียบเอง, <code>Buzzer_Tone(pin, freq, ms)</code> ใช้กับ Passive — เลือกความถี่ได้ (Hz), <code>Buzzer_NoTone(pin)</code> หยุดเสียงทันที</p></div>
 
     <div class="step"><h3>ขั้นที่ 3: Melody + Non-Blocking Loop</h3>
     <pre><code class="language-c">    // Melody — เล่น C Major Scale (C4-C5)
@@ -126,7 +126,7 @@ int main(void) {
         <tr><td><code>Buzzer_Init(pin, type)</code></td><td>Init buzzer — type: ACTIVE/PASSIVE</td><td><code>Buzzer_Init(PC0, BUZZER_ACTIVE)</code></td></tr>
         <tr><td><code>Buzzer_Beep(pin, ms)</code></td><td>Active: ดังตามเวลา (ms) แล้วเงียบ</td><td><code>Buzzer_Beep(PC0, 200)</code></td></tr>
         <tr><td><code>Buzzer_Tone(pin, freq, ms)</code></td><td>Passive: เล่นความถี่ (Hz) ตามเวลา</td><td><code>Buzzer_Tone(PC4, 1000, 500)</code></td></tr>
-        <tr><td><code>Buzzer_Stop(pin)</code></td><td>หยุดเสียงทันที</td><td><code>Buzzer_Stop(PC4)</code></td></tr>
+        <tr><td><code>Buzzer_NoTone(pin)</code></td><td>หยุดเสียงทันที</td><td><code>Buzzer_NoTone(PC4)</code></td></tr>
         <tr><td><code>Buzzer_Melody(pin, notes, dur, len)</code></td><td>เล่นทำนองจากอาเรย์โน้ต</td><td><code>Buzzer_Melody(PC4, n, d, 8)</code></td></tr>
         <tr><td><code>Buzzer_SetVolume(level)</code></td><td>ปรับ volume (PWM duty 0-255)</td><td><code>Buzzer_SetVolume(128)</code></td></tr>
     </table>

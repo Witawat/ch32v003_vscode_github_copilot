@@ -18,8 +18,8 @@ int main(void) {
     I2C_Init(PC1, PC2, I2C_SPEED_STANDARD);
     USART_Init(115200);
 
-    INA219_t ina;
-    INA219_Init(&ina, 0x40, SHUNT_OHM, INA219_32V_2A);
+    INA219_Instance ina;
+    INA219_Init(&ina, 0x40, SHUNT_OHM, 3.2f);
 
     OLED_Handle oled;
     OLED_Init(&oled, OLED_128x64, 0x3C);
@@ -34,7 +34,7 @@ int main(void) {
         if(Is_Timer_Expired(&tmr)) {
             float v = INA219_GetBusVoltage(&ina);
             float a = INA219_GetCurrent(&ina);
-            float w = INA219_GetPower(&ina);
+            float w = v * a;
             mah_used += (a * 1000.0f) / 3600.0f;
 
             float mah_remain = mah_capacity - mah_used;
@@ -89,8 +89,8 @@ int main(void) {
     I2C_Init(PC1, PC2, I2C_SPEED_STANDARD);
     USART_Init(115200);
 
-    INA219_t ina;
-    INA219_Init(&ina, 0x40, SHUNT_NOMINAL, INA219_32V_2A);
+    INA219_Instance ina;
+    INA219_Init(&ina, 0x40, SHUNT_NOMINAL, 3.2f);
 
     USART_Print("Shunt Calibration\r\n");
     USART_Print("Connect known load (e.g. 500mA)\r\n");
@@ -118,7 +118,7 @@ int main(void) {
     USART_PrintFloat(actual_shunt, 4);
     USART_Print(" Ohm\r\n");
 
-    INA219_Init(&ina, 0x40, actual_shunt, INA219_32V_2A);
+    INA219_Init(&ina, 0x40, actual_shunt, 3.2f);
     USART_Print("Re-initialized with calibrated shunt\r\n");
 
     while(1) {
@@ -150,8 +150,8 @@ int main(void) {
     I2C_Init(PC1, PC2, I2C_SPEED_STANDARD);
     USART_Init(115200);
 
-    INA219_t ina;
-    INA219_Init(&ina, 0x40, SHUNT_OHM, INA219_32V_2A);
+    INA219_Instance ina;
+    INA219_Init(&ina, 0x40, SHUNT_OHM, 3.2f);
 
     OLED_Handle oled;
     OLED_Init(&oled, OLED_128x64, 0x3C);
@@ -168,7 +168,7 @@ int main(void) {
         if(Is_Timer_Expired(&tmr)) {
             float v = INA219_GetBusVoltage(&ina);
             float a = INA219_GetCurrent(&ina);
-            float w = INA219_GetPower(&ina);
+            float w = v * a;
             energy_wh += (w / 3600.0f);
 
             OLED_Clear(&oled);

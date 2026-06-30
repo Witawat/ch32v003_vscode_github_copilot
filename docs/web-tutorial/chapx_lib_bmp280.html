@@ -20,11 +20,10 @@
     <h2>🧭 แผนภาพการทำงาน</h2>
     <pre class="mermaid">
 flowchart TD
-    A["BMP280_Init(addr)"] --> B["SetMode(NORMAL)"]
-    B --> C["ReadTemperature+ReadPressure"]
-    C --> D["Calc Altitude"]
-    D --> E["Display/Delay"]
-    E --> C
+    A["BMP280_Init(&amp;bmp, BMP280_ADDR_LOW)"] --> B["BMP280_Read(&amp;bmp, &amp;temp, &amp;press)"]
+    B --> C["BMP280_GetAltitude(&amp;bmp, press, 1013.25f)"]
+    C --> D["Display/Delay"]
+    D --> B
     </pre>
 </section>
 
@@ -43,19 +42,17 @@ flowchart TD
 │ (ต่อ 2 ตัวบน I2C เดียวได้)          │
 └────────────────────────────────────┘
     </pre>
-    <p>SDO pin เลือก I2C address — ต่อ GND = 0x76, ต่อ VCC = 0x77 ทำให้ต่อ BMP280 ได้ 2 ตัวบนบัสเดียวกัน</p>
+    <p>SDO pin เลือก I2C address — ต่อ GND = 0x76 (BMP280_ADDR_LOW), ต่อ VCC = 0x77 (BMP280_ADDR_HIGH) — ต่อ BMP280 ได้ 2 ตัวบนบัสเดียวกัน</p>
 </section>
 
 <section>
     <h2>📚 หลักการทำงาน</h2>
-    <p><strong>I2C Interface</strong>: แอดเดรส 0x76 หรือ 0x77 — เลือกด้วยขา SDO</p>
-    <p><strong>Compensation Formula</strong>: BMP280 เก็บ calibration data ใน internal registers — Library จะอ่านและใช้คำนวณอัตโนมัติ</p>
+    <p><strong>I2C Interface</strong>: แอดเดรส 0x76 (BMP280_ADDR_LOW) หรือ 0x77 (BMP280_ADDR_HIGH) — เลือกด้วยขา SDO</p>
+    <p><strong>Compensation Formula</strong>: BMP280 เก็บ calibration data ใน internal registers — BMP280_Init() จะอ่านและใช้คำนวณอัตโนมัติ</p>
     <p><strong>ความกดอากาศ</strong>: 300-1100 hPa — ใช้คำนวณความสูงจากระดับน้ำทะเลได้</p>
     <p><strong>อุณหภูมิ</strong>: -40°C ถึง +85°C — ใช้สำหรับ compensation ความกดอากาศ และใช้อ่านอุณหภูมิทั่วไปได้</p>
-    <p><strong>Altitude</strong>: คำนวณจาก sea-level pressure — ค่าเริ่มต้น 1013.25 hPa (ความกดอากาศเฉลี่ยที่ระดับน้ำทะเล)</p>
-    <p><strong>Modes</strong>: SLEEP (พัก), FORCED (วัด 1 ครั้งแล้วพัก — ประหยัดไฟ), NORMAL (วัดต่อเนื่องอัตโนมัติ)</p>
-    <p><strong>Oversampling</strong>: Temperature x1-x16, Pressure x1-x16 — ค่าสูง = แม่นยำขึ้นแต่ใช้เวลานานขึ้น + กินไฟมากขึ้น</p>
-    <p><strong>IIR Filter</strong>: กัน noise — off/2/4/8/16 — ใช้กับ NORMAL mode</p>
+    <p><strong>Altitude</strong>: คำนวณจาก sea-level pressure — <code>BMP280_GetAltitude(&amp;bmp, press, 1013.25f)</code> — ค่าเริ่มต้น 1013.25 hPa (ความกดอากาศเฉลี่ยที่ระดับน้ำทะเล)</p>
+    <p><strong>BMP280_Read():</strong> อ่านทั้งอุณหภูมิและความกดอากาศในครั้งเดียว — ไม่มีฟังก์ชันแยก BMP280_ReadTemperature / BMP280_ReadPressure — ค่าความกดเป็น Pa ต้องหาร 100 เป็น hPa</p>
 </section>
 
 <section>
@@ -66,59 +63,56 @@ flowchart TD
 #include "SimpleHAL.h"
 #include "BMP280.h"
 
+BMP280_Instance bmp;
+
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
     I2C_SimpleInit(I2C_SPEED_100K, I2C_PINS_DEFAULT);
 
-    BMP280_Init(0x76);                  // SDO=GND → 0x76
-    BMP280_SetMode(BMP280_MODE_NORMAL); // วัดต่อเนื่อง
-    Delay_Ms(100);                      // รอ measurement แรก
+    BMP280_Init(&amp;bmp, BMP280_ADDR_LOW);  // 0x76
     USART_Println("BMP280 Ready!");</code></pre>
-    <p class="explain">🔍 <code>BMP280_Init(addr)</code> โหลด calibration data โดยอัตโนมัติ, <code>SetMode(NORMAL)</code> เริ่มวัดต่อเนื่อง — ต้องรอ 100ms ให้ measurement แรกเสร็จ</p></div>
+    <p class="explain">🔍 <code>BMP280_Init(&amp;bmp, addr)</code> — ใช้ BMP280_ADDR_LOW (0x76) หรือ BMP280_ADDR_HIGH (0x77) — โหลด calibration data โดยอัตโนมัติ</p></div>
 
     <div class="step"><h3>ขั้นที่ 2: อ่านอุณหภูมิ + ความกดอากาศ + ความสูง</h3>
-    <pre><code class="language-c">    float t = BMP280_ReadTemperature();          // °C
-    float p = BMP280_ReadPressure() / 100.0f;     // Pa → hPa
-    float alt = BMP280_ReadAltitude(1013.25f);    // เทียบ sea-level
+    <pre><code class="language-c">    float temp, press;
+    BMP280_Read(&amp;bmp, &amp;temp, &amp;press);     // อ่านทั้ง temp และ press ในครั้งเดียว
+    float press_hPa = press / 100.0f;        // Pa → hPa
+    float alt = BMP280_GetAltitude(&amp;bmp, press, 1013.25f);
 
-    USART_Print("T: "); USART_PrintFloat(t, 1);
-    USART_Print("C  P: "); USART_PrintFloat(p, 1);
+    USART_Print("T: "); USART_PrintFloat(temp, 1);
+    USART_Print("C  P: "); USART_PrintFloat(press_hPa, 1);
     USART_Print("hPa  Alt: "); USART_PrintFloat(alt, 1);
     USART_Println("m");</code></pre>
-    <p class="explain">🔍 <code>ReadPressure()</code> คืนค่าเป็น Pascal (Pa) — หาร 100 ได้ hPa, <code>ReadAltitude(seaLevel_hPa)</code> คำนวณความสูงจากระดับน้ำทะเล — เปลี่ยน seaLevel ได้ตามสภาพอากาศจริง</p></div>
+    <p class="explain">🔍 <code>BMP280_Read(&amp;bmp, &amp;temp, &amp;press)</code> อ่านทั้งสองค่าในฟังก์ชันเดียว — press เป็น Pa หาร 100 ได้ hPa — <code>BMP280_GetAltitude()</code> รับค่า press และ sea-level pressure</p></div>
 
     <div class="step"><h3>ขั้นที่ 3: Loop + USART Print</h3>
     <pre><code class="language-c">    Timer_t tmr;
-    Start_Timer(&tmr, 1000, 1);
+    Start_Timer(&amp;tmr, 1000, 1);
 
     while(1) {
-        if(Is_Timer_Expired(&tmr)) {
-            float t = BMP280_ReadTemperature();
-            float p = BMP280_ReadPressure() / 100.0f;
-            float alt = BMP280_ReadAltitude(1013.25f);
-            USART_Print("T:"); USART_PrintFloat(t, 1);
-            USART_Print(" P:"); USART_PrintFloat(p, 1);
+        if(Is_Timer_Expired(&amp;tmr)) {
+            float temp, press;
+            BMP280_Read(&amp;bmp, &amp;temp, &amp;press);
+            float alt = BMP280_GetAltitude(&amp;bmp, press, 1013.25f);
+            USART_Print("T:"); USART_PrintFloat(temp, 1);
+            USART_Print(" P:"); USART_PrintFloat(press/100.0f, 1);
             USART_Print(" Alt:"); USART_PrintFloat(alt, 1);
             USART_Println("m");
         }
         IWDG_Feed();
     }
 }</code></pre>
-    <p class="explain">🔍 ใช้ <code>Timer_t</code> อ่านทุก 1 วิ — NORMAL mode วัดต่อเนื่องให้ค่าล่าสุดตลอด, <code>IWDG_Feed()</code> เลี้ยง watchdog</p></div>
+    <p class="explain">🔍 ใช้ <code>Timer_t</code> อ่านทุก 1 วิ — BMP280_Read() ให้ทั้ง temp และ press ในครั้งเดียว — <code>IWDG_Feed()</code> เลี้ยง watchdog</p></div>
 </section>
 
 <section>
     <h2>📋 API Reference</h2>
     <table>
         <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
-        <tr><td><code>BMP280_Init(addr)</code></td><td>Init + load calibration data</td><td><code>BMP280_Init(0x76)</code></td></tr>
-        <tr><td><code>BMP280_SetMode(mode)</code></td><td>ตั้งโหมด: SLEEP/FORCED/NORMAL</td><td><code>BMP280_SetMode(BMP280_MODE_NORMAL)</code></td></tr>
-        <tr><td><code>BMP280_ReadTemperature()</code></td><td>อ่านอุณหภูมิ (°C)</td><td><code>float t = BMP280_ReadTemperature()</code></td></tr>
-        <tr><td><code>BMP280_ReadPressure()</code></td><td>อ่านความกดอากาศ (Pa)</td><td><code>float p = BMP280_ReadPressure()</code></td></tr>
-        <tr><td><code>BMP280_ReadAltitude(sea_hPa)</code></td><td>คำนวณความสูงจากระดับน้ำทะเล (m)</td><td><code>float a = BMP280_ReadAltitude(1013.25f)</code></td></tr>
-        <tr><td><code>BMP280_SetOversampling(t, p)</code></td><td>ตั้ง oversampling temp และ pressure</td><td><code>BMP280_SetOversampling(2, 4)</code></td></tr>
-        <tr><td><code>BMP280_SetFilter(coeff)</code></td><td>ตั้ง IIR filter (off/2/4/8/16)</td><td><code>BMP280_SetFilter(4)</code></td></tr>
+        <tr><td><code>BMP280_Init(&amp;bmp, addr)</code></td><td>Init + load calibration data</td><td><code>BMP280_Init(&amp;bmp, BMP280_ADDR_LOW)</code></td></tr>
+        <tr><td><code>BMP280_Read(&amp;bmp, &amp;t, &amp;p)</code></td><td>อ่านอุณหภูมิ (°C) และความกด (Pa) ในครั้งเดียว</td><td><code>BMP280_Read(&amp;bmp, &amp;temp, &amp;press)</code></td></tr>
+        <tr><td><code>BMP280_GetAltitude(&amp;bmp, p, sea)</code></td><td>คำนวณความสูง (m) จากความกดและ sea-level</td><td><code>float a = BMP280_GetAltitude(&amp;bmp, press, 1013.25f)</code></td></tr>
     </table>
 </section>
 
@@ -126,11 +120,10 @@ int main(void) {
     <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
     <table>
         <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
-        <tr><td>อ่านค่าคืน 0 ตลอด</td><td>I2C address ผิด — ใช้คนละ address กับที่ต่อ SDO</td><td>เช็คขา SDO — GND = 0x76, VCC = 0x77 — หรือใช้ I2C Scan หา address</td></tr>
-        <tr><td>ค่าความสูงแปลก — ขึ้นๆ ลงๆ เป็นร้อยเมตร</td><td>sea-level pressure ไม่ถูกต้อง — ใช้ค่า default 1013.25 hPa แต่ของจริงแตกต่างตามสภาพอากาศ</td><td>หาค่า sea-level pressure จริงจากเว็บพยากรณ์อากาศในพื้นที่ — ปรับ argument ใน <code>ReadAltitude()</code></td></tr>
+        <tr><td>อ่านค่าคืน 0 ตลอด</td><td>I2C address ผิด — ใช้คนละ address กับที่ต่อ SDO</td><td>เช็คขา SDO — GND = BMP280_ADDR_LOW (0x76), VCC = BMP280_ADDR_HIGH (0x77)</td></tr>
+        <tr><td>ค่าความสูงแปลก — ขึ้นๆ ลงๆ เป็นร้อยเมตร</td><td>sea-level pressure ไม่ถูกต้อง — ใช้ค่า default 1013.25 hPa แต่ของจริงแตกต่างตามสภาพอากาศ</td><td>หาค่า sea-level pressure จริงจากเว็บพยากรณ์อากาศในพื้นที่ — ปรับ argument ใน <code>BMP280_GetAltitude()</code></td></tr>
         <tr><td>I2C bus hang — อ่านไม่ขึ้นอีกเลย</td><td>I2C bus lockup — noise รบกวนระหว่างสื่อสาร</td><td>ทำ I2C bus reset: ส่ง 9 clock pulses บน SCL, แล้ว Re-Init I2C</td></tr>
-        <tr><td>NORMAL mode กินไฟตลอดเวลา (~1.1mA)</td><td>NORMAL mode วัดต่อเนื่อง — เหมาะกับ mains-powered</td><td>ใช้ FORCED mode: <code>SetMode(FORCED)</code> → รอ → อ่าน → chip sleep อัตโนมัติ (~0.1μA)</td></tr>
-        <tr><td>อุณหภูมิอ่านได้สูงกว่าความเป็นจริง ~2°C</td><td>Self-heating จากวงจรบนบอร์ด — BMP280 อยู่ใกล้ regulator</td><td>แยก BMP280 ให้ห่างจาก heat source บน PCB, ใช้ FORCED mode ลด duty cycle</td></tr>
+        <tr><td>อุณหภูมิอ่านได้สูงกว่าความเป็นจริง ~2°C</td><td>Self-heating จากวงจรบนบอร์ด — BMP280 อยู่ใกล้ regulator</td><td>แยก BMP280 ให้ห่างจาก heat source บน PCB</td></tr>
     </table>
 </section>
 
@@ -141,36 +134,40 @@ int main(void) {
 #include "SimpleHAL.h"
 #include "BMP280.h"
 #include "oled_i2c.h"
+#include "oled_graphics.h"
+#include "oled_fonts.h"
+
+BMP280_Instance bmp;
+OLED_Handle oled;
 
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
     I2C_SimpleInit(I2C_SPEED_100K, I2C_PINS_DEFAULT);
 
-    BMP280_Init(0x76);
-    BMP280_SetMode(BMP280_MODE_NORMAL);
-    Delay_Ms(100);
+    BMP280_Init(&amp;bmp, BMP280_ADDR_LOW);
 
-    OLED_Handle oled;
-    OLED_Init(&oled, OLED_128x64, 0x3C);
-    OLED_SetFont(&oled, FONT_8x16);
+    OLED_Init(&amp;oled, OLED_128x64, 0x3C);
+    OLED_SetFont(&amp;oled, FONT_8x16);
 
     Timer_t tmr;
-    Start_Timer(&tmr, 500, 1);
+    Start_Timer(&amp;tmr, 500, 1);
+    char buf[32];
 
     while(1) {
-        if(Is_Timer_Expired(&tmr)) {
-            float t = BMP280_ReadTemperature();
-            float p = BMP280_ReadPressure() / 100.0f;
-            float alt = BMP280_ReadAltitude(1013.25f);
-            OLED_Clear(&oled);
-            OLED_SetCursor(&oled, 0, 0);
-            OLED_PrintFloat(&oled, "T:", t, 1); OLED_Print(&oled, " C");
-            OLED_SetCursor(&oled, 0, 2);
-            OLED_PrintFloat(&oled, "P:", p, 1); OLED_Print(&oled, " hPa");
-            OLED_SetCursor(&oled, 0, 4);
-            OLED_PrintFloat(&oled, "Alt:", alt, 1); OLED_Print(&oled, " m");
-            OLED_Update(&oled);
+        if(Is_Timer_Expired(&amp;tmr)) {
+            float temp, press;
+            BMP280_Read(&amp;bmp, &amp;temp, &amp;press);
+            float alt = BMP280_GetAltitude(&amp;bmp, press, 1013.25f);
+
+            OLED_Clear(&amp;oled);
+            SimpleHAL_Sprintf(buf, "T: %.1f C", temp);
+            OLED_DrawStringAlign(&amp;oled, 0, 0, buf, ALIGN_LEFT);
+            SimpleHAL_Sprintf(buf, "P: %.1f hPa", press/100.0f);
+            OLED_DrawStringAlign(&amp;oled, 20, 0, buf, ALIGN_LEFT);
+            SimpleHAL_Sprintf(buf, "Alt: %.1f m", alt);
+            OLED_DrawStringAlign(&amp;oled, 40, 0, buf, ALIGN_LEFT);
+            OLED_Update(&amp;oled);
         }
         IWDG_Feed();
     }
@@ -180,9 +177,9 @@ int main(void) {
 <section>
     <h2>✏️ ลองทำดู</h2>
     <ol>
-        <li>Weather Station — ส่งค่า temp+pressure+altitude ผ่าน USART ทุก 1 วิ เปิด Serial Plotter ใน Arduino IDE ดูกราฟ</li>
+        <li>Weather Station — ส่งค่า temp+pressure+altitude ผ่าน USART ทุก 1 วิ เปิด Serial Plotter ดูกราฟ</li>
         <li>Altitude Logger — บันทึกความสูงทุก 10 วิ ลง Flash — แล้วเดินขึ้นตึก 5 ชั้น ดูข้อมูลย้อนหลัง</li>
-        <li>ต่อ BMP280 2 ตัวบน I2C เดียว (0x76 + 0x77) — เทียบค่าความกดอากาศจาก 2 จุดในห้องเดียวกัน</li>
+        <li>ต่อ BMP280 2 ตัวบน I2C เดียว (BMP280_ADDR_LOW + BMP280_ADDR_HIGH) — เทียบค่าความกดอากาศจาก 2 จุด</li>
     </ol>
 </section>
 

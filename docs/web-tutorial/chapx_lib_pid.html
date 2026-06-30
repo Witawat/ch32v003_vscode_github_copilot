@@ -6,15 +6,13 @@
 
 <section class="flowchart"><h2>🧭 แผนภาพการทำงาน</h2><pre class="mermaid">
 flowchart TD
-    A["PID_Init(&amp;pid, DIRECT)"] --> B["PID_SetTunings(Kp, Ki, Kd)"]
-    B --> C["PID_SetSetpoint(target)"]
-    C --> D["PID_SetOutputLimits(min,max)"]
-    D --> E["Loop: read sensor → input"]
-    E --> F["PID_Compute(&amp;pid, input)"]
-    F --> G{"Output = P+I+D"}
-    G --> H["Apply output to actuator"]
-    H --> I["Wait sample time"]
-    I --> E
+    A["PID_Init(&amp;pid, Kp, Ki, Kd, dt)"] --> B["PID_SetSetpoint(target)"]
+    B --> C["Loop: read sensor → input"]
+    C --> D["output = PID_Compute(&amp;pid, input)"]
+    D --> E{"Output = P+I+D"}
+    E --> F["Apply output to actuator"]
+    F --> G["Wait sample time"]
+    G --> C
 </pre></section>
 
 <section><h2>🔌 การต่อวงจร</h2><pre class="ascii-circuit">
@@ -40,30 +38,27 @@ flowchart TD
 <p><strong>Kp (Proportional)</strong>: ตอบสนองตาม error ปัจจุบัน — ยิ่ง Kp สูง ยิ่งตอบสนองเร็ว — แต่มากเกินจะเกิด oscillation (แกว่ง) — <code>P = Kp × error</code></p>
 <p><strong>Ki (Integral)</strong>: สะสม error ในอดีต — กำจัด steady-state error (offset) — <code>I += Ki × error × dt</code> — มากเกินจะเกิด overshoot</p>
 <p><strong>Kd (Derivative)</strong>: ทำนาย error ในอนาคตจากอัตราการเปลี่ยนแปลง — ลด overshoot — <code>D = Kd × d(error)/dt</code> — ไวต่อ noise มาก</p>
-<p><strong>DIRECT vs REVERSE</strong>: DIRECT = ถ้า input < setpoint → เพิ่ม output (เช่น heater) — REVERSE = ถ้า input < setpoint → ลด output (เช่น cooler)</p>
-<p><strong>Anti-Windup</strong>: เมื่อ output ถูก clamp ด้วยขีดจำกัด (min/max) — integral term จะหยุดสะสมป้องกัน "windup" ที่ทำให้ระบบตอบสนองช้าเมื่อกลับมาใน range</p>
-<p><strong>Sample Time</strong>: ต้องเรียก <code>PID_Compute()</code> ในช่วงเวลาที่สม่ำเสมอ — default 1000ms — ใช้ Timer_t หรือ SysTick จับเวลา</p>
+<p><strong>dt (Sample Time)</strong>: ระบุเป็นวินาทีตอน Init — ต้องเรียก <code>PID_Compute()</code> ในช่วงเวลาที่สม่ำเสมอ — default 1.0 วินาที — ใช้ Timer_t จับเวลา</p>
+<p><strong>Anti-Windup</strong>: เมื่อ output ถูก clamp ด้วยขีดจำกัด — integral term จะหยุดสะสมป้องกัน "windup" ที่ทำให้ระบบตอบสนองช้าเมื่อกลับมาใน range</p>
 </section>
 
 <section><h2>💻 เขียน Code ทีละขั้น</h2>
 
-<div class="step"><h3>ขั้นที่ 1: Init + ตั้งค่า Kp/Ki/Kd + Limits</h3>
+<div class="step"><h3>ขั้นที่ 1: Init + ตั้งค่า Kp/Ki/Kd/dt + Setpoint</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "PID.h"
 
-PID_Handle pid;
+PID_Controller pid;
 
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
     USART_Init(115200);
 
-    PID_Init(&pid, PID_DIRECT);  // Heater: input↓→output↑
-    PID_SetTunings(&pid, 2.0f, 5.0f, 1.0f);  // Kp, Ki, Kd
-    PID_SetLimits(&pid, 0, 100);  // 0-100% duty
+    PID_Init(&pid, 2.0f, 5.0f, 1.0f, 1.0f);  // Kp, Ki, Kd, dt(s)
     PID_SetSetpoint(&pid, 40.0f);  // Target 40°C</code></pre>
-<p class="explain">🔍 <code>PID_Init(&pid, direction)</code> — <code>PID_DIRECT</code> สำหรับ heater (เพิ่ม output เมื่อต่ำกว่า setpoint) — <code>PID_REVERSE</code> สำหรับ cooler — Ki หน่วยเป็นนาที (integral time) — <code>SetOutputLimits</code> clamp output ให้อยู่ใน range ที่ actuator รับได้</p></div>
+<p class="explain">🔍 <code>PID_Init(&pid, Kp, Ki, Kd, dt)</code> — ตั้งค่า gain และ sample time ในขั้นตอนเดียว — dt=1.0f หมายถึง sample ทุก 1 วิ — <code>PID_SetSetpoint()</code> ตั้งค่าเป้าหมาย</p></div>
 
 <div class="step"><h3>ขั้นที่ 2: อ่าน Sensor + Compute + Apply Output</h3>
 <pre><code class="language-c">    pinMode(PC1, PIN_MODE_OUTPUT);  // Heater relay
@@ -85,7 +80,7 @@ int main(void) {
         IWDG_Feed();
     }
 }</code></pre>
-<p class="explain">🔍 <code>PID_Compute(&pid, input)</code> — รับค่าปัจจุบันจากเซนเซอร์ คืนค่า output ที่ปรับแล้ว — ต้องเรียกใน sample time ที่สม่ำเสมอ — ถ้า sample time ไม่คงที่ PID จะคำนวณผิดพลาด</p></div>
+<p class="explain">🔍 <code>PID_Compute(&pid, input)</code> — รับค่าปัจจุบันจากเซนเซอร์ คืนค่า output ที่ปรับแล้ว — ต้องเรียกใน sample time ที่สม่ำเสมอตามค่า dt ที่ตั้งไว้ — ถ้า sample time ไม่คงที่ PID จะคำนวณผิดพลาด</p></div>
 
 <div class="step"><h3>ขั้นที่ 3: Auto-Tune + Ziegler-Nichols</h3>
 <pre><code class="language-c">    // Ziegler-Nichols Tuning Method:
@@ -94,30 +89,26 @@ int main(void) {
     // 3. วัดคาบการแกว่ง → Tu (วินาที)
     // 4. คำนวณ:
     //    Kp = 0.6 × Ku
-    //    Ki = 2 × Kp / Tu   (นาที)
+    //    Ki = 2 × Kp / Tu
     //    Kd = Kp × Tu / 8
 
-    PID_SetTunings(&pid, 0.6f*Ku, 2.0f*0.6f*Ku/Tu, 0.6f*Ku*Tu/8.0f);
-    PID_SetSampleTime(&pid, Tu/10);  // 10 samples per cycle</code></pre>
-<p class="explain">🔍 Ziegler-Nichols เป็นวิธี manual tune ที่ใช้กันแพร่หลาย — หา Ku (ultimate gain) และ Tu (oscillation period) โดยทดลอง — แล้วคำนวณ Kp, Ki, Kd จากสูตร — เหมาะสำหรับระบบที่ยอมให้ oscillate ได้ชั่วคราว</p></div>
+    float Ku = 4.0f, Tu = 10.0f;
+    PID_Init(&pid, 0.6f*Ku, 2.0f*0.6f*Ku/Tu, 0.6f*Ku*Tu/8.0f, Tu/10.0f);</code></pre>
+<p class="explain">🔍 Ziegler-Nichols เป็นวิธี manual tune ที่ใช้กันแพร่หลาย — หา Ku (ultimate gain) และ Tu (oscillation period) โดยทดลอง — แล้วคำนวณ Kp, Ki, Kd จากสูตร — เรียก PID_Init ใหม่ด้วยค่าที่คำนวณได้</p></div>
 </section>
 
 <section><h2>📋 API Reference</h2><table><tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
-<tr><td><code>PID_Init(&pid, direction)</code></td><td>เริ่มต้น PID — DIRECT/REVERSE</td><td><code>PID_Init(&pid, PID_DIRECT)</code></td></tr>
-<tr><td><code>PID_SetTunings(&pid, Kp, Ki, Kd)</code></td><td>ตั้งค่า gain — Ki ในหน่วยนาที</td><td><code>PID_SetTunings(&pid, 2.0, 5.0, 1.0)</code></td></tr>
+<tr><td><code>PID_Init(&pid, Kp, Ki, Kd, dt)</code></td><td>เริ่มต้น PID พร้อมตั้ง gain + dt</td><td><code>PID_Init(&pid, 2.0f, 3.0f, 0.5f, 1.0f)</code></td></tr>
 <tr><td><code>PID_SetSetpoint(&pid, sp)</code></td><td>ตั้งค่าเป้าหมาย (target)</td><td><code>PID_SetSetpoint(&pid, 40.0f)</code></td></tr>
-<tr><td><code>PID_SetLimits(&pid, min, max)</code></td><td>จำกัด output range — กัน actuator เสียหาย</td><td><code>PID_SetLimits(&pid, 0, 100)</code></td></tr>
 <tr><td><code>PID_Compute(&pid, input)</code></td><td>คำนวณ output จาก input ปัจจุบัน</td><td><code>float out = PID_Compute(&pid, temp)</code></td></tr>
-<tr><td><code>PID_SetSampleTime(&pid, ms)</code></td><td>ตั้ง sample time (default 1000ms)</td><td><code>PID_SetSampleTime(&pid, 250)</code></td></tr>
 <tr><td><code>PID_Reset(&pid)</code></td><td>รีเซ็ต integral + derivative สะสม</td><td><code>PID_Reset(&pid)</code></td></tr>
 </table></section>
 
 <section><h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2><table><tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
 <tr><td>อุณหภูมิแกว่ง (oscillate) ไม่หยุด</td><td>Kp สูงเกิน — proportional term overreact</td><td>ลด Kp ลง 50% — หรือเพิ่ม Kd เพื่อ dampen การแกว่ง</td></tr>
-<tr><td>อุณหภูมิไม่ถึง setpoint (offset)</td><td>Ki ต่ำเกิน — integral ไม่พอชดเชย steady-state error</td><td>เพิ่ม Ki ทีละ 0.1 — หรือลด integral time (เพิ่ม Ki)</td></tr>
-<tr><td>Overshoot มาก — พุ่งเกินแล้วค่อยกลับ</td><td>Ki สูงเกิน — integral windup สะสมเกิน</td><td>ตั้ง output limits ให้แคบลง — หรือเปิด anti-windup (default on)</td></tr>
+<tr><td>อุณหภูมิไม่ถึง setpoint (offset)</td><td>Ki ต่ำเกิน — integral ไม่พอชดเชย steady-state error</td><td>เพิ่ม Ki ทีละ 0.1</td></tr>
+<tr><td>Overshoot มาก — พุ่งเกินแล้วค่อยกลับ</td><td>Ki สูงเกิน — integral windup สะสมเกิน</td><td>ลด Ki ลง — ใช้ dt ที่ถี่ขึ้น</td></tr>
 <tr><td>PID Compute คืนค่าเท่าเดิมทุกครั้ง</td><td>Sample time ไม่คงที่ — หรือไม่ได้ call Compute</td><td>ใช้ Timer_t จับ sample time ให้เป๊ะ — อย่าใช้ Delay_Ms ใน loop</td></tr>
-<tr><td>ทิศทางสลับ — Heater ติดตอนร้อน</td><td>ใช้ PID_REVERSE แทน PID_DIRECT</td><td>เช็ค: heater=DIRECT (input↓→output↑), cooler=REVERSE (input↓→output↓)</td></tr>
 <tr><td>Noise ทำให้ derivative พุ่ง</td><td>เซนเซอร์มี noise — Kd ขยาย noise</td><td>กรอง input ด้วย moving average 3-5 ตัวอย่าง — หรือลด Kd ลง</td></tr>
 </table></section>
 
@@ -128,7 +119,7 @@ int main(void) {
 #include "DS18B20.h"
 #include "oled_i2c.h"
 
-PID_Handle pid;
+PID_Controller pid;
 DS18B20_Handle sensor;
 OLED_Handle oled;
 Timer_t tmr_sample, tmr_display;
@@ -139,9 +130,7 @@ int main(void) {
     USART_Init(115200);
 
     DS18B20_SearchDevices(&sensor, PC0, DS18B20_RES_12BIT);
-    PID_Init(&pid, PID_DIRECT);
-    PID_SetTunings(&pid, 2.0f, 5.0f, 1.0f);
-    PID_SetLimits(&pid, 0, 100);
+    PID_Init(&pid, 2.0f, 5.0f, 1.0f, 1.0f);
     PID_SetSetpoint(&pid, 40.0f);
     pinMode(PC1, PIN_MODE_OUTPUT);  // Heater relay
 

@@ -10,7 +10,9 @@ int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
     USART_Init(115200);
-    MAX31855_Init(PC4);
+
+    MAX31855_Instance therm;
+    MAX31855_Init(&therm, PC4);
 
     USART_Println("T_TC(C),T_CJ(C)");  // header for Serial Plotter
 
@@ -19,8 +21,8 @@ int main(void) {
 
     while(1) {
         if(Is_Timer_Expired(&tmr)) {
-            float tc = MAX31855_ReadCelsius();
-            float cj = MAX31855_ReadInternal();
+            float tc = MAX31855_ReadTemp(&therm);
+            float cj = MAX31855_ReadInternalTemp(&therm);
 
             USART_Print("T:");
             USART_PrintFloat(tc, 1);
@@ -59,16 +61,18 @@ int main(void) {
     USART_Init(115200);
 
     pinMode(LED_RED, PIN_MODE_OUTPUT);
-    MAX31855_Init(PC4);
+
+    MAX31855_Instance therm;
+    MAX31855_Init(&therm, PC4);
 
     Timer_t tmr;
     Start_Timer(&tmr, 1000, 1);
 
     while(1) {
         if(Is_Timer_Expired(&tmr)) {
-            uint8_t fault = MAX31855_ReadFault();
-            float tc = MAX31855_ReadCelsius();  // อ่านก่อนเช็ค fault
-            float cj = MAX31855_ReadInternal();
+            uint8_t fault = MAX31855_ReadFault(&therm);
+            float tc = MAX31855_ReadTemp(&therm);
+            float cj = MAX31855_ReadInternalTemp(&therm);
 
             if(fault != 0) {
                 digitalWrite(LED_RED, HIGH);
@@ -98,7 +102,8 @@ int main(void) {
     Timer_Init();
     USART_Init(115200);
 
-    MAX31855_Init(PC4);   // CS1 = PC4
+    MAX31855_Instance therm;
+    MAX31855_Init(&therm, PC4);   // CS1 = PC4
     MAX6675_Init(PC3);    // CS2 = PC3 (คนละ CS, SPI bus เดียวกัน: SCK=PC5, MISO=PC7)
 
     USART_Println("31855_TC,31855_CJ,31855_F,6675_TC,dT");
@@ -108,9 +113,9 @@ int main(void) {
 
     while(1) {
         if(Is_Timer_Expired(&tmr)) {
-            float tc31855 = MAX31855_ReadCelsius();
-            float cj31855 = MAX31855_ReadInternal();
-            uint8_t f31855 = MAX31855_ReadFault();
+            float tc31855 = MAX31855_ReadTemp(&therm);
+            float cj31855 = MAX31855_ReadInternalTemp(&therm);
+            uint8_t f31855 = MAX31855_ReadFault(&therm);
 
             float tc6675 = MAX6675_ReadCelsius();
 

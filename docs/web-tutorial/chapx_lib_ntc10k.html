@@ -18,8 +18,8 @@
     <h2>🧭 แผนภาพการทำงาน</h2>
     <pre class="mermaid">
 flowchart TD
-    A["ADC_Init() + NTC_Init()"] --> B["NTC_ReadTemp()"]
-    B --> C["Steinhart-Hart Equation"]
+    A["NTC_Init(ADC_CH_PC4)"] --> B["NTC_ReadTemperature()"]
+    B --> C["Steinhart-Hart / Beta Equation"]
     C --> D["Temperature (°C)"]
     D --> E["Display / Control"]
     E --> B
@@ -35,7 +35,7 @@ flowchart TD
     │              │                     │
     │           R_fixed=10kΩ             │
     │              │                     │
-    │    PA1───────┤─ NTC (10kΩ @25°C)   │
+    │    PC4───────┤─ NTC (10kΩ @25°C)   │
     │              │                     │
     │              GND                   │
     │                                    │
@@ -43,22 +43,17 @@ flowchart TD
     │ R_fixed = 10k (เท่ากับ NTC@25°C)    │
     └────────────────────────────────────┘
     </pre>
-    <p>PA1─ADC — วงจรแบ่งแรงดัน: R_fixed 10kΩ + NTC 10kΩ — NTC ลดความต้านทานเมื่อร้อนขึ้น → Vout ลดลง</p>
+    <p>PC4─ADC — วงจรแบ่งแรงดัน: R_fixed 10kΩ + NTC 10kΩ — NTC ลดความต้านทานเมื่อร้อนขึ้น → Vout ลดลง</p>
 </section>
 
 <section>
     <h2>📚 หลักการทำงาน</h2>
-    <p><strong>NTC (Negative Temperature Coefficient) Thermistor</strong> — ตัวต้านทานที่ค่าความต้านทานลดลงเมื่ออุณหภูมิสูงขึ้น — ใช้สมการ <strong>Steinhart-Hart</strong> แปลงค่าความต้านทานเป็นอุณหภูมิ</p>
-    <p><strong>สมการ Steinhart-Hart:</strong></p>
-    <pre>1/T = A + B×ln(R) + C×(ln(R))³
-
-T = อุณหภูมิ (Kelvin), R = ความต้านทาน NTC (Ω)
-A, B, C = ค่าสัมประสิทธิ์เฉพาะตัว (จาก datasheet)</pre>
+    <p><strong>NTC (Negative Temperature Coefficient) Thermistor</strong> — ตัวต้านทานที่ค่าความต้านทานลดลงเมื่ออุณหภูมิสูงขึ้น — ใช้สมการ <strong>Beta Equation</strong> แปลงค่าความต้านทานเป็นอุณหภูมิ</p>
     <p><strong>Beta Equation (แบบง่าย):</strong></p>
     <pre>1/T = 1/T₀ + (1/B) × ln(R/R₀)
 
 T₀ = 298.15K (25°C), R₀ = 10000Ω, B = 3950 (NTC 10k)</pre>
-    <p><strong>Self-Heating:</strong> กระแสไหลผ่าน NTC ทำให้ตัวมันร้อนเอง → อุณหภูมิที่วัดได้สูงกว่าจริง — ใช้ R_fixed ค่าสูงเพื่อลดกระแส — แก้โดยอ่าน ADC แล้วปิดไฟ divider (ใช้ GPIO จ่ายไฟแทน VCC ต่อตรง)</p>
+    <p><strong>Simple API:</strong> NTC10K ใช้ API แบบง่าย — ไม่ต้องสร้าง instance — <code>NTC_Init()</code> เรียกครั้งเดียวแล้วใช้ <code>NTC_ReadTemperature()</code> ได้เลย</p>
 </section>
 
 <section>
@@ -69,48 +64,33 @@ T₀ = 298.15K (25°C), R₀ = 10000Ω, B = 3950 (NTC 10k)</pre>
 #include "SimpleHAL.h"
 #include "NTC10K.h"
 
-// NTC 10kΩ, B=3950, R_fixed=10kΩ, VCC=3.3V, ADC=12-bit
-#define NTC_SERIES_R    10000.0f  // R_fixed 10k
-#define NTC_REF_R       10000.0f  // NTC @ 25°C
-#define NTC_BETA        3950.0f   // B-constant
-
 int main(void) {
     SystemCoreClockUpdate();
-    USART_Init(USART1, BAUD_115200);
-    ADC_Init(ADC1);
+    USART_Init(115200);
 
-    NTC_Init(PA1, NTC_SERIES_R, NTC_REF_R, NTC_BETA);</code></pre>
-    <p class="explain">🔍 <code>NTC_Init(pin, seriesR, refR, beta)</code> — seriesR ต้องเท่ากับ R_fixed ในวงจร, refR คือค่าที่ 25°C (ปกติ 10k), beta ได้จาก datasheet</p></div>
+    NTC_Init(ADC_CH_PC4);  // PC4 = ADC input</code></pre>
+    <p class="explain">🔍 <code>NTC_Init(ADC_CH_PC4)</code> — API แบบง่าย ไม่ต้องใช้ instance — ADC channel ที่ต่อ NTC — ใช้ค่า default: R_fixed=10k, R_ref=10k, B=3950</p></div>
 
-    <div class="step"><h3>ขั้นที่ 2: อ่าน/เขียนค่า</h3>
-    <pre><code class="language-c">    float tempC = NTC_ReadTemp(NTC_UNIT_CELSIUS);
-    float tempF = NTC_ReadTemp(NTC_UNIT_FAHRENHEIT);
-    float tempK = NTC_ReadTemp(NTC_UNIT_KELVIN);
+    <div class="step"><h3>ขั้นที่ 2: อ่านอุณหภูมิ</h3>
+    <pre><code class="language-c">    float t = NTC_ReadTemperature();
 
     USART_Print("Temp: ");
-    USART_PrintFloat(tempC, 1);
-    USART_Println(" °C");
-
-    // อ่านค่าดิบ (resistance)
-    float resistance = NTC_GetResistance();
-    USART_Print("NTC: ");
-    USART_PrintFloat(resistance, 1);
-    USART_Println(" Ω");</code></pre>
-    <p class="explain">🔍 <code>NTC_ReadTemp()</code> คืนค่าอุณหภูมิในหน่วยที่เลือก — ใช้ Steinhart-Hart หรือ Beta equation ขึ้นอยู่กับการ config — ความแม่น ±0.5°C ในช่วง 0–70°C</p></div>
+    USART_PrintFloat(t, 1);
+    USART_Println(" °C");</code></pre>
+    <p class="explain">🔍 <code>NTC_ReadTemperature()</code> — คืนค่าอุณหภูมิ °C — ใช้ Beta equation — ความแม่น ±0.5°C ในช่วง 0–70°C</p></div>
 
     <div class="step"><h3>ขั้นที่ 3: Loop + แสดงผล</h3>
     <pre><code class="language-c">    OLED_Handle oled;
     OLED_Init(&oled, OLED_128x64, 0x3C);
 
     while(1) {
-        float temp = NTC_ReadTemp(NTC_UNIT_CELSIUS);
+        float temp = NTC_ReadTemperature();
 
         OLED_Clear(&oled);
         OLED_SetCursor(&oled, 0, 0);
         OLED_PrintFloat(&oled, "Temp:", temp, 1);
         OLED_Print(&oled, " C");
 
-        // แสดงสถานะ
         OLED_SetCursor(&oled, 0, 2);
         if(temp < 0)           OLED_Print(&oled, "COLD!");
         else if(temp < 20)     OLED_Print(&oled, "Cool");
@@ -122,18 +102,15 @@ int main(void) {
         Delay_Ms(500);
     }
 }</code></pre>
-    <p class="explain">🔍 NTC 10k B=3950 — ช่วงวัด -55 ถึง 125°C — แต่ช่วงที่แม่นยำที่สุดคือ 0–70°C — แสดงผลบน OLED พร้อมแถบสถานะ</p></div>
+    <p class="explain">🔍 NTC 10k B=3950 — ช่วงวัด -55 ถึง 125°C — ช่วงที่แม่นยำที่สุดคือ 0–70°C — แสดงผลบน OLED พร้อมแถบสถานะ</p></div>
 </section>
 
 <section>
     <h2>📋 API Reference</h2>
     <table>
         <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
-        <tr><td><code>NTC_Init(pin, seriesR, refR, beta)</code></td><td>เริ่มต้น NTC</td><td><code>NTC_Init(PA1, 10000, 10000, 3950)</code></td></tr>
-        <tr><td><code>NTC_ReadTemp(unit)</code></td><td>อ่านอุณหภูมิ</td><td><code>float t = NTC_ReadTemp(NTC_UNIT_CELSIUS)</code></td></tr>
-        <tr><td><code>NTC_GetResistance()</code></td><td>อ่านความต้านทาน (Ω)</td><td><code>float r = NTC_GetResistance()</code></td></tr>
-        <tr><td><code>NTC_SetBeta(beta)</code></td><td>ตั้งค่า Beta ใหม่</td><td><code>NTC_SetBeta(4100)</code></td></tr>
-        <tr><td><code>NTC_ReadRaw()</code></td><td>อ่าน ADC raw (0–4095)</td><td><code>uint16_t raw = NTC_ReadRaw()</code></td></tr>
+        <tr><td><code>NTC_Init(adc_ch)</code></td><td>เริ่มต้น NTC</td><td><code>NTC_Init(ADC_CH_PC4)</code></td></tr>
+        <tr><td><code>NTC_ReadTemperature()</code></td><td>อ่านอุณหภูมิ (°C)</td><td><code>float t = NTC_ReadTemperature()</code></td></tr>
     </table>
 </section>
 
@@ -144,7 +121,6 @@ int main(void) {
         <tr><td>อุณหภูมิสูงกว่าจริง 2-3°C</td><td>Self-heating จากกระแสใน divider</td><td>ใช้ R_fixed ใหญ่ขึ้น (47k-100k), หรือปิด divider หลังอ่าน</td></tr>
         <tr><td>อุณหภูมิแกว่งตลอด</td><td>ADC noise — ไม่มี capacitor</td><td>ต่อ 100nF capacitor ขนาน NTC, เก็บค่าเฉลี่ย 8-16 samples</td></tr>
         <tr><td>อุณหภูมิผิดมาก (>10°C)</td><td>R_fixed ไม่ตรงกับที่ config</td><td>วัด R_fixed ด้วยมัลติมิเตอร์, ใช้ค่าจริงแทนค่าที่ระบุ</td></tr>
-        <tr><td>อ่านค่า resistance ได้ 0 Ω</td><td>NTC ลัดวงจร หรือสายขาด</td><td>เช็คการต่อสาย, วัด Vout ที่ divider — ควรอยู่ระหว่าง 0.3V–2.7V</td></tr>
         <tr><td>Beta ผิดค่า → อุณหภูมิเพี้ยน</td><td>Beta ไม่ตรง specs ของ NTC ที่ใช้</td><td>เช็ค datasheet, NTC 10k ทั่วไปใช้ B=3950 หรือ B=3435</td></tr>
     </table>
 </section>
@@ -160,30 +136,24 @@ int main(void) {
 int main(void)
 {
     SystemCoreClockUpdate();
-    USART_Init(USART1, BAUD_115200);
-    I2C_Init(I2C1, I2C_SPEED_STANDARD);
-    ADC_Init(ADC1);
+    USART_Init(115200);
+    I2C_Init(PC1, PC2, I2C_SPEED_STANDARD);
 
     OLED_Handle oled;
     OLED_Init(&oled, OLED_128x64, 0x3C);
 
     pinMode(PC0, PIN_MODE_OUTPUT);  // Buzzer
-    NTC_Init(PA1, 10000, 10000, 3950);
+    NTC_Init(ADC_CH_PC4);
 
     while(1)
     {
-        float temp = NTC_ReadTemp(NTC_UNIT_CELSIUS);
+        float temp = NTC_ReadTemperature();
 
         OLED_Clear(&oled);
         OLED_SetCursor(&oled, 0, 0);
         OLED_PrintFloat(&oled, "Temperature", temp, 1);
         OLED_Print(&oled, " C");
 
-        OLED_SetCursor(&oled, 0, 2);
-        OLED_PrintFloat(&oled, "NTC:", NTC_GetResistance(), 0);
-        OLED_Print(&oled, " ohm");
-
-        // Alert
         if(temp > 50.0f || temp < -10.0f) {
             OLED_SetCursor(&oled, 0, 4);
             OLED_Print(&oled, "ALERT!");
@@ -203,7 +173,7 @@ int main(void)
     <ol>
         <li>เทียบ NTC กับ DS18B20 — วัดอุณหภูมิจุดเดียวกัน บันทึกค่า 2 เซนเซอร์ ดูความต่าง</li>
         <li>ทำ PID temperature controller — NTC feedback + MOSFET heater — รักษาอุณหภูมิให้คงที่ ±0.5°C</li>
-        <li>ทดลอง self-heating — ใช้ R_fixed 1k vs 10k vs 100k วัดอุณหภูมิในห้องเดียวกัน เปรียบเทียบ</li>
+        <li>ทดลอง self-heating — ใช้ R_fixed 1k vs 10k vs 100k วัดอุณหภูมิในห้องเดียวกัน</li>
     </ol>
 </section>
 

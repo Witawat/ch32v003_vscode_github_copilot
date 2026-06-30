@@ -7,27 +7,30 @@
 uint32_t motion_count = 0;
 uint32_t last_motion_time = 0;
 
+void on_motion(void) {
+    uint32_t now = millis();
+    if(now - last_motion_time > DEBOUNCE_MS) {
+        motion_count++;
+        last_motion_time = now;
+
+        USART_Print("Motion #");
+        USART_PrintNum(motion_count);
+        USART_Print(" at ");
+        USART_PrintNum(now / 1000);
+        USART_Println("s");
+    }
+}
+
 void pir_motion_counter(void) {
-    pinMode(PIR_PIN, PIN_MODE_INPUT);
+    PIR_Init(PIR_PIN);
+    PIR_SetCallback(on_motion);
 
     while(1) {
-        uint32_t now = millis();
-
-        if(digitalRead(PIR_PIN) == HIGH) {
-            if(now - last_motion_time > DEBOUNCE_MS) {
-                motion_count++;
-                last_motion_time = now;
-
-                USART_Print("Motion #");
-                USART_PrintNum(motion_count);
-                USART_Print(" at ");
-                USART_PrintNum(now / 1000);
-                USART_Println("s");
-            }
-        }
+        PIR_Update();
 
         // แสดง counter ทุก 5 วิ
         static uint32_t last_report = 0;
+        uint32_t now = millis();
         if(now - last_report >= 5000) {
             USART_Print("Total: ");
             USART_PrintNum(motion_count);
@@ -45,21 +48,24 @@ void pir_motion_counter(void) {
 
 uint32_t light_off_at = 0;
 
+void on_motion_light(void) {
+    uint32_t now = millis();
+    light_off_at = now + LIGHT_ON_S * 1000;
+    digitalWrite(RELAY_PIN, HIGH);
+    digitalWrite(PC1, HIGH);
+    USART_Println("Motion! Light ON, timer reset");
+}
+
 void pir_sleep_wake_light(void) {
-    pinMode(PIR_PIN, PIN_MODE_INPUT);
+    PIR_Init(PIR_PIN);
+    PIR_SetCallback(on_motion_light);
     pinMode(RELAY_PIN, PIN_MODE_OUTPUT);
     pinMode(PC1, PIN_MODE_OUTPUT);  // status LED
 
     while(1) {
+        PIR_Update();
+
         uint32_t now = millis();
-
-        if(digitalRead(PIR_PIN) == HIGH) {
-            light_off_at = now + LIGHT_ON_S * 1000;
-            digitalWrite(RELAY_PIN, HIGH);
-            digitalWrite(PC1, HIGH);
-            USART_Println("Motion! Light ON, timer reset");
-        }
-
         if(light_off_at > 0 && now >= light_off_at) {
             digitalWrite(RELAY_PIN, LOW);
             digitalWrite(PC1, LOW);
@@ -77,34 +83,40 @@ void pir_sleep_wake_light(void) {
 }
 </code></pre><div class="approach"><strong>🧠 แนวคิด:</strong> PIR HIGH → ต่ออายุ timer 30 วิ — ทุกครั้งที่ตรวจจับใหม่ timer ถูกรีเซ็ต — เมื่อหมดเวลา → ปิดไฟ — ตอน idle ตรวจช้าลง (500ms) ประหยัดพลังงาน — ตอน active ตรวจเร็ว (50ms) ตอบสนองไว — Retriggerable timer pattern ใช้กับไฟทางเดิน/ห้องน้ำอัตโนมัติ</div></div>
 <div class="answer"><h2>ข้อ 3: PIR vs RCWL-0516 Comparison</h2><pre><code class="language-c">void pir_vs_rcwl(void) {
-    pinMode(PC0, PIN_MODE_INPUT);  // PIR
-    pinMode(PC1, PIN_MODE_INPUT);  // RCWL-0516
+    RCWL0516_Instance r;
+    RCWL0516_Init(&r, PC1);
 
     uint32_t pir_count = 0, rcwl_count = 0, both_count = 0;
     uint32_t start = millis();
+    uint8_t last_pir = 0, last_rcwl = 0;
+    uint8_t pir_state = 0, rcwl_state = 0;
+
+    PIR_Init(PC0);
+
+    void on_pir(void) { if(!pir_state) { pir_count++; pir_state = 1; } }
+    void on_pir_clear(void) { pir_state = 0; }
+    PIR_SetCallback(on_pir);
 
     USART_Println("PIR vs RCWL — 60 second test");
     USART_Println("Sec, PIR, RCWL, Both");
 
     while(millis() - start < 60000) {
-        uint8_t pir  = digitalRead(PC0);
-        uint8_t rcwl = digitalRead(PC1);
+        PIR_Update();
+        RCWL0516_Update(&r);
 
-        static uint8_t last_pir = 0, last_rcwl = 0;
+        uint8_t rcwl_now = RCWL0516_IsTriggered(&r);
 
-        if(pir && !last_pir)  pir_count++;
-        if(rcwl && !last_rcwl) rcwl_count++;
-        if(pir && rcwl)  both_count++;
+        if(rcwl_now && !last_rcwl) rcwl_count++;
+        last_rcwl = rcwl_now;
 
-        last_pir = pir;
-        last_rcwl = rcwl;
+        if(pir_state && rcwl_now) both_count++;
 
         static uint32_t last_log = 0;
         if(millis() - last_log >= 1000) {
             USART_PrintNum((millis() - start) / 1000);
-            USART_Print(", "); USART_PrintNum(pir);
-            USART_Print(", "); USART_PrintNum(rcwl);
-            USART_Print(", "); USART_PrintNum(pir && rcwl);
+            USART_Print(", "); USART_PrintNum(pir_state);
+            USART_Print(", "); USART_PrintNum(rcwl_now);
+            USART_Print(", "); USART_PrintNum(pir_state && rcwl_now);
             USART_Println("");
             last_log = millis();
         }

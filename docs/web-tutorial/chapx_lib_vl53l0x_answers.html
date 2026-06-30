@@ -6,15 +6,16 @@
 #define DIST_FAR     1200
 
 void vl53l0x_continuous_alert(void) {
-    VL53L0X_Init(VL53L0X_ADDR_DEFAULT, I2C_PINS_DEFAULT);
-    VL53L0X_StartContinuous();
+    VL53L0X_Instance tof;
+    VL53L0X_Init(&tof, 0x29);
+    VL53L0X_StartContinuous(&tof);
 
     pinMode(PC4, PIN_MODE_OUTPUT);
     pinMode(PC5, PIN_MODE_OUTPUT);
     pinMode(PC3, PIN_MODE_OUTPUT);
 
     while(1) {
-        uint16_t dist = VL53L0X_ReadContinuous();
+        uint16_t dist = VL53L0X_ReadRangeMM(&tof);
 
         if(dist > DIST_FAR || dist == 0) {
             USART_Println("Out of range");
@@ -41,12 +42,13 @@ void vl53l0x_continuous_alert(void) {
 uint8_t alarm_active = 0;
 
 void vl53l0x_threshold_hysteresis(void) {
-    VL53L0X_Init(VL53L0X_ADDR_DEFAULT, I2C_PINS_DEFAULT);
-    VL53L0X_StartContinuous();
+    VL53L0X_Instance tof;
+    VL53L0X_Init(&tof, 0x29);
+    VL53L0X_StartContinuous(&tof);
     pinMode(PC0, PIN_MODE_OUTPUT);  // alarm relay/LED
 
     while(1) {
-        uint16_t dist = VL53L0X_ReadContinuous();
+        uint16_t dist = VL53L0X_ReadRangeMM(&tof);
         if(dist == 0) { Delay_Ms(30); continue; }
 
         if(!alarm_active && dist < ALARM_THRESHOLD - HYSTERESIS) {
@@ -66,8 +68,9 @@ void vl53l0x_threshold_hysteresis(void) {
 }
 </code></pre><div class="approach"><strong>🧠 แนวคิด:</strong> Hysteresis ป้องกัน alarm เปิด-ปิดกระพริบที่ค่า threshold — ON ที่ 280mm แต่ OFF ที่ 320mm สร้าง deadband 40mm — ใช้ state variable <code>alarm_active</code> แทนการเช็คค่าเดียว — รูปแบบนี้ใช้ได้กับเซนเซอร์ทุกชนิดที่มี noise ใกล้ threshold</div></div>
 <div class="answer"><h2>ข้อ 3: Indoor vs Outdoor Accuracy</h2><pre><code class="language-c">void vl53l0x_accuracy_test(void) {
-    VL53L0X_Init(VL53L0X_ADDR_DEFAULT, I2C_PINS_DEFAULT);
-    VL53L0X_StartContinuous();
+    VL53L0X_Instance tof;
+    VL53L0X_Init(&tof, 0x29);
+    VL53L0X_StartContinuous(&tof);
 
     USART_Println("Place at known distances: 100, 200, 500, 1000 mm");
     USART_Println("Test in indoor & outdoor condition");
@@ -81,7 +84,7 @@ void vl53l0x_threshold_hysteresis(void) {
         USART_Println(" mm — then press Enter");
         while(USART_Available() == 0) {
             // แสดงค่าปัจจุบันรอผู้ใช้กด
-            uint16_t d = VL53L0X_ReadContinuous();
+            uint16_t d = VL53L0X_ReadRangeMM(&tof);
             USART_PrintNum(d); USART_Print(" mm\r");
             Delay_Ms(100);
         }
@@ -90,7 +93,7 @@ void vl53l0x_threshold_hysteresis(void) {
         // เก็บ 20 samples
         float sum = 0; int valid = 0;
         for(int i = 0; i < 20; i++) {
-            uint16_t d = VL53L0X_ReadContinuous();
+            uint16_t d = VL53L0X_ReadRangeMM(&tof);
             if(d > 0) { sum += d; valid++; }
             Delay_Ms(30);
         }

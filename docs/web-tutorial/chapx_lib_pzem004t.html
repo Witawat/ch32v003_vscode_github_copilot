@@ -3,10 +3,10 @@
 <h1>PZEM-004T — วัดไฟ AC ผ่าน Modbus-RTU</h1><span class="level advanced">ระดับสูง</span>
 <section class="flowchart"><h2>🧭 แผนภาพการทำงาน</h2><pre class="mermaid">
 flowchart TD
-    A["PZEM_Init(USART, addr)"] --> B["ส่ง Modbus Request"]
+    A["PZEM004T_Init(&pzem, USART_PINS_DEFAULT)"] --> B["ส่ง Modbus Request"]
     B --> C["รอ Response 7-13 bytes"]
     C --> D{"CRC16 OK?"}
-    D -->|"Yes"| E["Parse Registers"]
+    D -->|"Yes"| E["PZEM004T_ReadAll(&pzem)"]
     D -->|"No"| F["Timeout / Retry"]
     E --> G["V, A, W, Wh, Hz, PF"]
     F --> B
@@ -14,96 +14,72 @@ flowchart TD
     H --> B
 </pre></section>
 <section><h2>🔌 การต่อวงจร</h2><pre class="ascii-circuit">
-   ⚡ WARNING: 220VAC! อันตรายถึงชีวิต! ต่อไฟเมื่อแน่ใจว่าถูกต้องเท่านั้น
-   ┌────────────────────────────────────────────┐
-   │  MCU              PZEM-004T                │
-   │  PD5─TX ────────── RX   VCC──5V            │
-   │  PD6─RX ────────── TX   GND──GND           │
-   │  5V─────────────── 5V                      │
-   │                                            │
-   │  CT Clamp ──────── CT ──|Load|── L(220V)   │
-   │  L ──────────────────────|Load|── N         │
-   │  (สาย L ผ่าน CT — ทิศทางมีผล)               │
-   └────────────────────────────────────────────┘
-</pre><p>⚠️ <strong>220VAC อันตรายถึงชีวิต!</strong> ต้องต่อวงจรเมื่อไม่ได้เสียบไฟเท่านั้น — CT Clamp ต้องหนีบสาย Line (L) เส้นเดียว ห้ามหนีบทั้ง L+N — ใช้隔离电源หรือหม้อแปลงในการทดสอบ</p></section>
-<section><h2>📚 หลักการทำงาน</h2><p><strong>PZEM-004T</strong> เป็น AC Energy Meter สื่อสารผ่าน USART ด้วยโปรโตคอล Modbus-RTU — วัดแรงดัน (80-260V AC), กระแส (0-100A ผ่าน CT clamp), กำลังไฟฟ้า (0-23kW), พลังงาน (0-9999kWh), ความถี่ (45-65Hz), และ Power Factor (0-1)</p><p><strong>Modbus-RTU</strong> ใช้การสื่อสารแบบ Master-Slave — CH32V003 เป็น Master ส่งคำสั่งอ่าน Register ไปที่ PZEM (Slave address 0x01 default) — แต่ละ register มี 2 bytes (16-bit) — ข้อมูลทุกตัวมี CRC16 checksum เพื่อตรวจสอบความถูกต้อง</p><p><strong>CT Clamp 100A</strong> วัดกระแสแบบ Non-Contact — ต้องหนีบสาย Line (L) เส้นเดียว — ถ้าหนีบทั้ง L+N กระแสจะ cancel กัน อ่านได้ 0 — ทิศทางการหนีบมีผลต่อ sign ของ Power Factor</p><p><strong>Register Map:</strong> 0x0000=Voltage(x0.1V), 0x0001=Current(x0.01A high), 0x0002=Current(x0.001A low), 0x0003=Power(x0.1W high), 0x0004=Power low, 0x0005=Energy(x1Wh high), 0x0006=Energy low, 0x0007=Frequency(x0.1Hz), 0x0008=Power Factor(x0.01), 0x0009=Alarm</p></section>
+   ⚡ WARNING: 220VAC! อันตรายถึงชีวิต!
+    ┌────────────────────────────────────────────┐
+    │  MCU              PZEM-004T                │
+    │  PD5─TX ────────── RX   VCC──5V            │
+    │  PD6─RX ────────── TX   GND──GND           │
+    │  CT Clamp ──────── CT ──|Load|── L(220V)   │
+    └────────────────────────────────────────────┘
+</pre></section>
+<section><h2>📚 หลักการทำงาน</h2><p><strong>PZEM-004T</strong> เป็น AC Energy Meter สื่อสารผ่าน USART ด้วย Modbus-RTU — PZEM004T_ReadAll() อ่านทุกค่าพร้อมกันในครั้งเดียว</p></section>
 <section><h2>💻 เขียน Code ทีละขั้น</h2>
 <div class="step"><h3>ขั้นที่ 1: Init PZEM + USART</h3><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "PZEM004T.h"
 
-PZEM004T_t pzem;
+PZEM004T pzem;
 
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
     USART_Init(115200); // debug
 
-    // PZEM ใช้ USART2 (PD5=TX, PD6=RX) 9600 8N1
-    PZEM004T_Init(&pzem, PD6, PD5, 0x01); // RX, TX, slave addr=1
-    USART_Print("PZEM-004T Ready\r\n");</code></pre><p class="explain">🔍 <code>PZEM004T_Init(dev, rx_pin, tx_pin, addr)</code> — ตั้งค่า USART 9600 baud 8N1 — slave address default=0x01 — RX/TX ต่อกับ PD6/PD5 (USART2)</p></div>
-<div class="step"><h3>ขั้นที่ 2: อ่านค่าทีละตัว</h3><pre><code class="language-c">    float voltage = PZEM004T_ReadVoltage(&pzem);
-    float current = PZEM004T_ReadCurrent(&pzem);
-    float power = PZEM004T_ReadPower(&pzem);
-    float energy = PZEM004T_ReadEnergy(&pzem);
-    float freq = PZEM004T_ReadFrequency(&pzem);
-    float pf = PZEM004T_ReadPowerFactor(&pzem);
-
-    USART_Print("V:"); USART_PrintFloat(voltage, 1);
-    USART_Print(" I:"); USART_PrintFloat(current, 2);
-    USART_Print("A P:"); USART_PrintFloat(power, 1);
-    USART_Print("W\r\n");
-    USART_Print("E:"); USART_PrintFloat(energy, 1);
-    USART_Print("kWh Hz:"); USART_PrintFloat(freq, 1);
-    USART_Print(" PF:"); USART_PrintFloat(pf, 2);
-    USART_Print("\r\n");</code></pre><p class="explain">🔍 ฟังก์ชันอ่านแยกแต่ละ register — แต่ละครั้งส่ง Modbus request + รอ response — ใช้เวลา ~50-100ms ต่อค่า — ถ้า timeout (1000ms) จะคืนค่า NAN</p></div>
-<div class="step"><h3>ขั้นที่ 3: Loop อ่าน + ตรวจจับ Alarm</h3><pre><code class="language-c">    Timer_t tmr;
-    Start_Timer(&tmr, 2000, 1); // อ่านทุก 2 วิ
+    PZEM004T_Init(&pzem, USART_PINS_DEFAULT);
+    USART_Print("PZEM-004T Ready\r\n");</code></pre>
+<p class="explain">🔍 <code>PZEM004T_Init(&pzem, pins)</code> — instance-based, ใช้ USART_PINS_DEFAULT — baud 9600 auto</p></div>
+<div class="step"><h3>ขั้นที่ 2: อ่านค่าทั้งหมดในครั้งเดียว</h3>
+<pre><code class="language-c">    if(PZEM004T_ReadAll(&pzem)) {
+        USART_Print("V:"); USART_PrintFloat(pzem.voltage, 1);
+        USART_Print(" I:"); USART_PrintFloat(pzem.current, 2);
+        USART_Print("A P:"); USART_PrintFloat(pzem.power, 1);
+        USART_Print("W\r\n");
+        USART_Print("E:"); USART_PrintFloat(pzem.energy, 1);
+        USART_Print("kWh Hz:"); USART_PrintFloat(pzem.freq, 1);
+        USART_Print(" PF:"); USART_PrintFloat(pzem.pf, 2);
+        USART_Print("\r\n");
+    }</code></pre>
+<p class="explain">🔍 <code>PZEM004T_ReadAll(&pzem)</code> — อ่านทุก register ในครั้งเดียว — ข้อมูลเก็บใน fields: voltage, current, power, energy, freq, pf</p></div>
+<div class="step"><h3>ขั้นที่ 3: Loop อ่าน</h3><pre><code class="language-c">    Timer_t tmr;
+    Start_Timer(&tmr, 2000, 1);
 
     while(1) {
         if(Is_Timer_Expired(&tmr)) {
-            float v = PZEM004T_ReadVoltage(&pzem);
-            float a = PZEM004T_ReadCurrent(&pzem);
-            float w = PZEM004T_ReadPower(&pzem);
-            uint16_t alarm = PZEM004T_ReadAlarm(&pzem);
-
-            if(v != v) { // NaN check
+            if(PZEM004T_ReadAll(&pzem)) {
+                USART_Print("V:"); USART_PrintFloat(pzem.voltage, 1);
+                USART_Print(" A:"); USART_PrintFloat(pzem.current, 2);
+                USART_Print(" W:"); USART_PrintFloat(pzem.power, 1);
+                USART_Print("\r\n");
+            } else {
                 USART_Print("PZEM Timeout!\r\n");
-                continue;
             }
-
-            USART_Print("V:"); USART_PrintFloat(v, 1);
-            USART_Print(" A:"); USART_PrintFloat(a, 2);
-            USART_Print(" W:"); USART_PrintFloat(w, 1);
-
-            if(alarm & 0x0001) USART_Print(" OVER_V!");
-            if(alarm & 0x0002) USART_Print(" OVER_A!");
-            if(alarm & 0x0004) USART_Print(" OVER_P!");
-            USART_Print("\r\n");
         }
     }
-}</code></pre><p class="explain">🔍 ตรวจสอบ NaN ก่อนใช้ค่า — alarm register แจ้ง over-voltage (bit0), over-current (bit1), over-power (bit2) — ไม่ควรอ่านถี่เกิน 200ms เพราะ PZEM มีเวลาตอบสนอง ~200ms</p></div>
+}</code></pre>
+<p class="explain">🔍 อ่านทุก 2 วิ — ReadAll คืน TRUE ถ้า CRC OK — timeout จะคืน FALSE</p></div>
 </section>
 <section><h2>📋 API Reference</h2><table><tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
-<tr><td><code>PZEM004T_Init(dev, rx, tx, addr)</code></td><td>เริ่มต้น PZEM ด้วย USART pins</td><td><code>PZEM004T_Init(&pzem, PD6, PD5, 0x01)</code></td></tr>
-<tr><td><code>PZEM004T_ReadVoltage(dev)</code></td><td>อ่านแรงดัน AC (V)</td><td><code>float v = PZEM004T_ReadVoltage(&pzem)</code></td></tr>
-<tr><td><code>PZEM004T_ReadCurrent(dev)</code></td><td>อ่านกระแส (A)</td><td><code>float a = PZEM004T_ReadCurrent(&pzem)</code></td></tr>
-<tr><td><code>PZEM004T_ReadPower(dev)</code></td><td>อ่านกำลังไฟฟ้า (W)</td><td><code>float w = PZEM004T_ReadPower(&pzem)</code></td></tr>
-<tr><td><code>PZEM004T_ReadEnergy(dev)</code></td><td>อ่านพลังงานสะสม (kWh)</td><td><code>float e = PZEM004T_ReadEnergy(&pzem)</code></td></tr>
-<tr><td><code>PZEM004T_ReadFrequency(dev)</code></td><td>อ่านความถี่ (Hz)</td><td><code>float hz = PZEM004T_ReadFrequency(&pzem)</code></td></tr>
-<tr><td><code>PZEM004T_ReadPowerFactor(dev)</code></td><td>อ่าน Power Factor</td><td><code>float pf = PZEM004T_ReadPowerFactor(&pzem)</code></td></tr>
-<tr><td><code>PZEM004T_ReadAlarm(dev)</code></td><td>อ่านสถานะ Alarm</td><td><code>uint16_t al = PZEM004T_ReadAlarm(&pzem)</code></td></tr>
-<tr><td><code>PZEM004T_SetAlarm(dev, alarm)</code></td><td>ตั้งค่า Alarm threshold</td><td><code>PZEM004T_SetAlarm(&pzem, 0x0001)</code></td></tr>
+<tr><td><code>PZEM004T_Init(&pzem, pins)</code></td><td>เริ่มต้น PZEM</td><td><code>PZEM004T_Init(&pzem, USART_PINS_DEFAULT)</code></td></tr>
+<tr><td><code>PZEM004T_ReadAll(&pzem)</code></td><td>อ่านทุกค่าในครั้งเดียว</td><td><code>if(PZEM004T_ReadAll(&pzem))</code></td></tr>
+<tr><td><code>PZEM004T_ReadVoltage(&pzem)</code></td><td>อ่านแรงดัน AC (V) แยก</td><td><code>float v = PZEM004T_ReadVoltage(&pzem)</code></td></tr>
+<tr><td><code>PZEM004T_ReadCurrent(&pzem)</code></td><td>อ่านกระแส (A) แยก</td><td><code>float a = PZEM004T_ReadCurrent(&pzem)</code></td></tr>
+<tr><td><code>PZEM004T_ReadPower(&pzem)</code></td><td>อ่านกำลังไฟฟ้า (W) แยก</td><td><code>float w = PZEM004T_ReadPower(&pzem)</code></td></tr>
 </table></section>
 <section><h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2><table><tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
-<tr><td>อ่านค่าได้ 0 ทุกตัว</td><td>CT Clamp หนีบผิด / ไม่มีโหลด</td><td>CT ต้องหนีบสาย L เส้นเดียว — ต้องมีโหลดต่ออยู่</td></tr>
-<tr><td>ค่ากระแสติดลบ</td><td>CT Clamp หนีบกลับทิศ</td><td>กลับด้าน CT Clamp — ลูกศรบน CT ชี้ไปทางโหลด</td></tr>
-<tr><td>Timeout ตลอดเวลา</td><td>USART baud ไม่ตรง / สาย RX/TX สลับ</td><td>ต้อง 9600 8N1 — RX→TX, TX→RX — ตรวจสอบด้วย Oscilloscope</td></tr>
-<tr><td>แรงดันอ่านได้แต่กระแสเป็น 0</td><td>ไม่ได้ต่อโหลด หรือ CT ไม่ได้เสียบ</td><td>ตรวจสอบ CT เสียบแน่น — ต่อโหลดอย่างน้อย 50W</td></tr>
-<tr><td>ค่าพลังงานไม่เพิ่ม</td><td>กระแสต่ำเกิน minimum detection</td><td>PZEM วัดกระแสขั้นต่ำ ~0.01A — ใช้โหลดที่กินกระแสมากขึ้น</td></tr>
-<tr><td>MCU รีเซ็ตตอนต่อ 220V</td><td>Noise จาก AC เข้า MCU</td><td>ใช้隔离电源 — แยก GND ระหว่าง MCU กับ PZEM — ต่อ Optocoupler ที่ USART</td></tr>
+<tr><td>อ่านค่าได้ 0 ทุกตัว</td><td>CT Clamp หนีบผิด / ไม่มีโหลด</td><td>CT ต้องหนีบสาย L เส้นเดียว</td></tr>
+<tr><td>Timeout ตลอดเวลา</td><td>USART baud ไม่ตรง</td><td>ต้อง 9600 8N1 — RX→TX, TX→RX</td></tr>
 </table></section>
-<section><h2>🛠️ สร้าง Product: เครื่องวัดไฟบ้าน + บันทึก kWh</h2><p>PZEM-004T + OLED แสดงค่าทางไฟฟ้า — บันทึก kWh สะสมลง EEPROM ทุก 1 นาที</p><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+<section><h2>🛠️ สร้าง Product: เครื่องวัดไฟบ้าน</h2><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "PZEM004T.h"
 #include "oled_i2c.h"
@@ -115,12 +91,11 @@ int main(void)
     I2C_Init(PC1, PC2, I2C_SPEED_STANDARD);
     USART_Init(115200);
 
-    PZEM004T_t pzem;
-    PZEM004T_Init(&pzem, PD6, PD5, 0x01);
+    PZEM004T pzem;
+    PZEM004T_Init(&pzem, USART_PINS_DEFAULT);
 
     OLED_Handle oled;
     OLED_Init(&oled, OLED_128x64, 0x3C);
-    OLED_SetFont(&oled, FONT_8x16);
 
     Timer_t tmr;
     Start_Timer(&tmr, 2000, 1);
@@ -129,47 +104,35 @@ int main(void)
     {
         if(Is_Timer_Expired(&tmr))
         {
-            float v = PZEM004T_ReadVoltage(&pzem);
-            float a = PZEM004T_ReadCurrent(&pzem);
-            float w = PZEM004T_ReadPower(&pzem);
-            float e = PZEM004T_ReadEnergy(&pzem);
-            float pf = PZEM004T_ReadPowerFactor(&pzem);
-            float hz = PZEM004T_ReadFrequency(&pzem);
-
-            if(v != v) continue; // timeout skip
-
-            OLED_Clear(&oled);
-            OLED_SetCursor(&oled, 0, 0);
-            OLED_PrintFloat(&oled, "", v, 1);
-            OLED_Print(&oled, "V ");
-
-            OLED_SetCursor(&oled, 60, 0);
-            OLED_PrintFloat(&oled, "", a, 2);
-            OLED_Print(&oled, "A");
-
-            OLED_SetCursor(&oled, 0, 2);
-            OLED_PrintFloat(&oled, "", w, 1);
-            OLED_Print(&oled, "W ");
-
-            OLED_SetCursor(&oled, 60, 2);
-            OLED_PrintFloat(&oled, "PF:", pf, 2);
-
-            OLED_SetCursor(&oled, 0, 4);
-            OLED_PrintFloat(&oled, "", hz, 1);
-            OLED_Print(&oled, "Hz ");
-
-            OLED_SetCursor(&oled, 0, 6);
-            OLED_PrintFloat(&oled, "", e, 1);
-            OLED_Print(&oled, "kWh");
-
-            OLED_Update(&oled);
+            if(PZEM004T_ReadAll(&pzem))
+            {
+                OLED_Clear(&oled);
+                OLED_SetCursor(&oled, 0, 0);
+                OLED_PrintFloat(&oled, "", pzem.voltage, 1);
+                OLED_Print(&oled, "V ");
+                OLED_SetCursor(&oled, 60, 0);
+                OLED_PrintFloat(&oled, "", pzem.current, 2);
+                OLED_Print(&oled, "A");
+                OLED_SetCursor(&oled, 0, 2);
+                OLED_PrintFloat(&oled, "", pzem.power, 1);
+                OLED_Print(&oled, "W ");
+                OLED_SetCursor(&oled, 60, 2);
+                OLED_PrintFloat(&oled, "PF:", pzem.pf, 2);
+                OLED_SetCursor(&oled, 0, 4);
+                OLED_PrintFloat(&oled, "", pzem.freq, 1);
+                OLED_Print(&oled, "Hz ");
+                OLED_SetCursor(&oled, 0, 6);
+                OLED_PrintFloat(&oled, "", pzem.energy, 1);
+                OLED_Print(&oled, "kWh");
+                OLED_Update(&oled);
+            }
         }
     }
 }</code></pre></section>
 <section><h2>✏️ ลองทำดู</h2><ol>
-<li>เพิ่ม Relay ตัดโหลดเมื่อ over-current — ใช้ alarm register ตรวจจับแล้วสั่งตัดผ่าน GPIO</li>
-<li>บันทึกค่า kWh ลง EEPROM ทุก 5 นาที — ป้องกันข้อมูลหายเมื่อไฟดับ — อ่านกลับมาใช้เป็น baseline</li>
-<li>คำนวณค่าไฟ — ตั้งอัตราค่าไฟต่อหน่วย (บาท/kWh) — แสดงค่าใช้จ่ายสะสมบน OLED</li>
-<li>ส่งข้อมูลผ่าน UART ไป ESP8266 — ทำ Dashboard แสดงผลบน WiFi แบบ real-time</li></ol></section>
+<li>เพิ่ม Relay ตัดโหลดเมื่อ over-current</li>
+<li>บันทึกค่า kWh ลง EEPROM ทุก 5 นาที</li>
+<li>คำนวณค่าไฟ — ตั้งอัตราค่าไฟต่อหน่วย (บาท/kWh)</li>
+</ol></section>
 <nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_mcp4725.html">บทก่อน</a><a href="chapx_lib_pzem004tv3.html">บทถัดไป →</a></nav>
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script><script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script><script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

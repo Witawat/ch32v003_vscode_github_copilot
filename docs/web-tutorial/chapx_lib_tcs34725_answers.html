@@ -2,12 +2,13 @@
 <nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_tcs34725.html">กลับบท</a><a href="chapx_lib_mqgas_answers.html">เฉลยถัดไป →</a></nav>
 <h1>📝 เฉลย — TCS34725 เซนเซอร์สี RGB</h1>
 <div class="answer"><h2>ข้อ 1: Color Detection — ตรวจจับสีวัตถุ</h2><pre><code class="language-c">void tcs34725_color_detect(void) {
-    TCS34725_Init(TCS34725_INTEGRATION_154MS, TCS34725_GAIN_1X);
+    TCS34725_Instance s;
+    TCS34725_Init(&s, TCS34725_GAIN_1X, TCS34725_INTEG_24MS);
 
     while(1) {
         Delay_Ms(200);
         uint16_t r, g, b, c;
-        if(!TCS34725_ReadRGBC(&r, &g, &b, &c)) continue;
+        if(!TCS34725_ReadRGBC(&s, &r, &g, &b, &c)) continue;
 
         // normalize ให้รวมกันเป็น 100%
         float sum = r + g + b;
@@ -29,9 +30,9 @@
 </code></pre><div class="approach"><strong>🧠 แนวคิด:</strong> normalize RGB เป็นเปอร์เซ็นต์เพื่อขจัดผลกระทบจากความเข้มแสง — ใช้ threshold ตรวจจับสีหลัก — สีเหลือง = R+G สูง B ต่ำ — clear channel <code>c</code> ใช้วัดความสว่างรวมเพื่อกรอง dark noise</div></div>
 <div class="answer"><h2>ข้อ 2: M&M Sorter — แยกสีลูกอม</h2><pre><code class="language-c">typedef enum { M_RED, M_GREEN, M_BLUE, M_YELLOW, M_BROWN, M_UNKNOWN } mm_color_t;
 
-mm_color_t tcs34725_sort_mm(void) {
+mm_color_t tcs34725_sort_mm(TCS34725_Instance *s) {
     uint16_t r, g, b, c;
-    if(!TCS34725_ReadRGBC(&r, &g, &b, &c)) return M_UNKNOWN;
+    if(!TCS34725_ReadRGBC(s, &r, &g, &b, &c)) return M_UNKNOWN;
     if(c < 50) return M_UNKNOWN;  // มืดเกินไป
 
     float sum = r + g + b;
@@ -61,12 +62,14 @@ mm_color_t tcs34725_sort_mm(void) {
 
 void tcs34725_oled_rgb(void) {
     OLED_Init(I2C_PINS_DEFAULT);
-    TCS34725_Init(TCS34725_INTEGRATION_154MS, TCS34725_GAIN_1X);
+
+    TCS34725_Instance s;
+    TCS34725_Init(&s, TCS34725_GAIN_1X, TCS34725_INTEG_24MS);
 
     while(1) {
         Delay_Ms(200);
         uint16_t r, g, b, c;
-        if(!TCS34725_ReadRGBC(&r, &g, &b, &c)) continue;
+        if(!TCS34725_ReadRGBC(&s, &r, &g, &b, &c)) continue;
 
         OLED_SetCursor(0, 0);
         OLED_Print("R:"); OLED_PrintNum(r); OLED_Print(" ");

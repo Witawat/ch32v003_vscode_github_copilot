@@ -27,7 +27,7 @@ int main(void) {
     ADC_Init(PD2, ADC_CH0);
     USART_Init(115200);
 
-    MCP4725_t dac;
+    MCP4725_Instance dac;
     MCP4725_Init(&dac, 0x60);
 
     pinMode(PC0, PIN_MODE_INPUT_PULLUP);
@@ -53,7 +53,7 @@ int main(void) {
             case 3: val = (idx < 64) ? 4095 : 0; break;
         }
 
-        MCP4725_FastWrite(&dac, val);
+        MCP4725_SetVoltage(&dac, val);
         idx = (idx + 1) % 128;
         Delay_Us(delay_us);
     }
@@ -73,7 +73,7 @@ int main(void) {
     I2C_Init(PC1, PC2, I2C_SPEED_FAST);
     USART_Init(115200);
 
-    MCP4725_t dac;
+    MCP4725_Instance dac;
     MCP4725_Init(&dac, 0x60);
 
     uint16_t saved = MCP4725_ReadEEPROM(&dac);
@@ -82,10 +82,10 @@ int main(void) {
     USART_Print("\r\n");
 
     if(saved > 0 && saved <= 4095) {
-        MCP4725_FastWrite(&dac, saved);
+        MCP4725_SetVoltage(&dac, saved);
         USART_Print("Restored setpoint from EEPROM\r\n");
     } else {
-        MCP4725_FastWrite(&dac, 2048);
+        MCP4725_SetVoltage(&dac, 2048);
         USART_Print("No valid EEPROM value, default: 2048\r\n");
     }
 
@@ -104,7 +104,7 @@ int main(void) {
         if(GPIO_Read(PC0) == 0) {
             Delay_Ms(100);
             if(setpoint < 4095) setpoint += 40;
-            MCP4725_FastWrite(&dac, setpoint);
+            MCP4725_SetVoltage(&dac, setpoint);
             float v = setpoint * (3.3f / 4096.0f);
             USART_Print("UP → "); USART_PrintDec(setpoint);
             USART_Print(" ("); USART_PrintFloat(v, 3);
@@ -115,7 +115,7 @@ int main(void) {
         if(GPIO_Read(PC1) == 0) {
             Delay_Ms(100);
             if(setpoint >= 40) setpoint -= 40;
-            MCP4725_FastWrite(&dac, setpoint);
+            MCP4725_SetVoltage(&dac, setpoint);
             float v = setpoint * (3.3f / 4096.0f);
             USART_Print("DOWN → "); USART_PrintDec(setpoint);
             USART_Print(" ("); USART_PrintFloat(v, 3);
@@ -156,7 +156,7 @@ int main(void) {
     I2C_Init(PC1, PC2, I2C_SPEED_FAST);
     USART_Init(115200);
 
-    MCP4725_t dac;
+    MCP4725_Instance dac;
     MCP4725_Init(&dac, 0x60);
 
     pinMode(PC0, PIN_MODE_INPUT_PULLUP);
@@ -180,7 +180,7 @@ int main(void) {
             while(GPIO_Read(PC0) == 0);
         }
 
-        MCP4725_FastWrite(&dac, (uint16_t)value);
+        MCP4725_SetVoltage(&dac, (uint16_t)value);
 
         switch(mode) {
             case RAMP_UP:

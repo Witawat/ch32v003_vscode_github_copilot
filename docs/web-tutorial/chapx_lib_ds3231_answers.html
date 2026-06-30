@@ -4,7 +4,8 @@
 
 <div class="answer">
 <h2>ข้อ 1: นาฬิกาปลุก + Snooze 5 นาที</h2>
-<pre><code class="language-c">#define ALARM_HOUR      7
+<pre><code class="language-c">DS3231_Instance rtc;
+#define ALARM_HOUR      7
 #define ALARM_MIN       0
 #define SNOOZE_MINUTES  5
 #define BUZZER_PIN      PC0
@@ -13,13 +14,13 @@ volatile uint8_t alarm_active = 0;
 uint8_t alarm_h = ALARM_HOUR, alarm_m = ALARM_MIN;
 
 void ds3231_alarm_init(void) {
-    DS3231_Init(I2C_PINS_DEFAULT);
+    DS3231_Init(&rtc);
     GPIO_SimpleInit(BUZZER_PIN, GPIO_OUT_PP);
     PWM_SimpleInit(BUZZER_PIN, 1, 2000, 0);
 
     // ตั้ง Alarm1: เมื่อชั่วโมง+นาทีตรง
-    DS3231_ClearAlarm(1);
-    DS3231_SetAlarm1(alarm_h, alarm_m, 0,
+    DS3231_ClearAlarm(&rtc, 1);
+    DS3231_SetAlarm1(&rtc, alarm_h, alarm_m, 0,
                      DS3231_ALARM1_MATCH_HOUR_MIN);
 
     USART_Print("Alarm set: ");
@@ -31,13 +32,13 @@ void ds3231_snooze(void) {
     if(!alarm_active) return;
 
     // SNOOZE: เลื่อน alarm ไปอีก 5 นาที
-    DS3231_GetTime(&alarm_h, &alarm_m, NULL);
+    DS3231_GetDateTime(&rtc, NULL, NULL, NULL, &alarm_h, &alarm_m, NULL);
 
     alarm_m += SNOOZE_MINUTES;
     if(alarm_m >= 60) { alarm_m -= 60; alarm_h++; }
     if(alarm_h >= 24) alarm_h = 0;
 
-    DS3231_SetAlarm1(alarm_h, alarm_m, 0,
+    DS3231_SetAlarm1(&rtc, alarm_h, alarm_m, 0,
                      DS3231_ALARM1_MATCH_HOUR_MIN);
 
     // ปิด buzzer
@@ -54,7 +55,7 @@ void ds3231_alarm_loop(void) {
 
     while(1) {
         // เช็ค alarm flag
-        if(DS3231_IsAlarm1()) {
+        if(DS3231_IsAlarm1(&rtc)) {
             alarm_active = 1;
             PWM_SetDuty(BUZZER_PIN, 1, 1000);
             USART_Println("⏰ ALARM!");
@@ -67,14 +68,14 @@ void ds3231_alarm_loop(void) {
                 }
                 Delay_Ms(50);
             }
-            DS3231_ClearAlarm(1);
+            DS3231_ClearAlarm(&rtc, 1);
         }
 
         // แสดงเวลาปัจจุบัน
         static uint32_t last = 0;
         if(Timer_GetMs() - last > 1000) {
             uint8_t h, m, s;
-            DS3231_GetTime(&h, &m, &s);
+            DS3231_GetDateTime(&rtc, NULL, NULL, NULL, &h, &m, &s);
             USART_PrintNum(h);   USART_Print(":");
             USART_PrintNum(m/10); USART_PrintNum(m%10);
             USART_Print(":");
@@ -90,15 +91,16 @@ void ds3231_alarm_loop(void) {
 
 <div class="answer">
 <h2>ข้อ 2: Temperature-Compensated Accuracy — ปรับเทียบความถี่</h2>
-<pre><code class="language-c">// DS3231 มี temperature-compensated crystal (TCXO) ในตัว
+<pre><code class="language-c">DS3231_Instance rtc;
+// DS3231 มี temperature-compensated crystal (TCXO) ในตัว
 // ความแม่นยำ ±2ppm (≈1 นาที/ปี) โดยไม่ต้องปรับเทียบเอง
 // แต่เราสามารถอ่านอุณหภูมิและคำนวณ drift ได้
 
 void ds3231_temp_compensate(void) {
-    DS3231_Init(I2C_PINS_DEFAULT);
+    DS3231_Init(&rtc);
 
     // อ่านอุณหภูมิ DS3231
-    float temp = DS3231_GetTemperature();
+    float temp = DS3231_GetTemperature(&rtc);
 
     USART_Print("DS3231 Temp: ");
     USART_PrintFloat(temp, 2);
@@ -106,7 +108,7 @@ void ds3231_temp_compensate(void) {
 
     // DS3231 มี aging offset register (0x10)
     // ค่าแก้ความถี่คริสตัลที่เสื่อมตามอายุ
-    int8_t aging = DS3231_ReadReg(0x10);
+    int8_t aging = DS3231_ReadReg(&rtc, 0x10);
     USART_Print("Aging offset: ");
     USART_PrintNum(aging);
     USART_Println(" (0.1ppm steps)");
@@ -132,14 +134,14 @@ void ds3231_temp_compensate(void) {
 
 // วิธีเชิงปฏิบัติ: sync กับ GPS/NTP แล้วปรับ aging register
 void ds3231_calibrate_from_gps(void) {
-    uint32_t rtc_start = DS3231_GetUnix();
+    uint32_t rtc_start = DS3231_GetUnix(&rtc);
     // ... รอ GPS fix แล้วคำนวณ offset ...
     uint32_t gps_unix = 0;  // from GPS
     int32_t diff = (int32_t)(gps_unix - rtc_start);
 
     // 1 ppm = 0.0864 sec/day, aging offset = 0.1 ppm/step
     int8_t aging = (int8_t)(diff * 10 / 864);  // rough
-    DS3231_WriteReg(0x10, aging);
+    DS3231_WriteReg(&rtc, 0x10, aging);
 
     USART_Print("Calibrated aging: ");
     USART_PrintNum(aging);
@@ -150,7 +152,8 @@ void ds3231_calibrate_from_gps(void) {
 
 <div class="answer">
 <h2>ข้อ 3: SQW 1Hz output — ใช้ RTC pulse ขับ LED กระพริบแบบประหยัดพลังงาน</h2>
-<pre><code class="language-c">#define SQW_PIN  PD2  // ขา GPIO อ่าน SQW
+<pre><code class="language-c">DS3231_Instance rtc;
+#define SQW_PIN  PD2  // ขา GPIO อ่าน SQW
 
 volatile uint32_t rtc_ticks = 0;
 
@@ -163,10 +166,10 @@ void EXTI2_IRQHandler(void) {
 }
 
 void ds3231_sqw_init(void) {
-    DS3231_Init(I2C_PINS_DEFAULT);
+    DS3231_Init(&rtc);
 
     // ตั้ง SQW output = 1Hz
-    DS3231_WriteReg(0x0E, 0x00);  // 1Hz square wave, INT disabled
+    DS3231_WriteReg(&rtc, 0x0E, 0x00);  // 1Hz square wave, INT disabled
 
     // ตั้ง EXTI ขา PD2 รับ rising edge
     GPIO_SimpleInit(SQW_PIN, GPIO_IN_PU);
@@ -204,7 +207,7 @@ void ds3231_ultra_low_power_clock(void) {
             // อ่านเวลาจาก DS3231 ทุก 60 วิ
             if(rtc_ticks % 60 == 0) {
                 uint8_t h, m, s;
-                DS3231_GetTime(&h, &m, &s);
+                DS3231_GetDateTime(&rtc, NULL, NULL, NULL, &h, &m, &s);
                 USART_PrintNum(h);  USART_Print(":");
                 USART_PrintNum(m/10); USART_PrintNum(m%10);
                 USART_Print(":");

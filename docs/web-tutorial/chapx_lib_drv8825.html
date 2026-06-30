@@ -20,22 +20,14 @@
     <h2>🧭 แผนภาพการทำงาน</h2>
     <pre class="mermaid">
 flowchart TD
-    A["DRV8825_Init(STEP,DIR,EN)"] --> B["Set Microstepping M0-M2"]
-    B --> C{"Microstep Mode"}
-    C -->|"Full"| D["1/1 — 200 steps/rev"]
-    C -->|"Half"| E["1/2 — 400"]
-    C -->|"1/4"| F["1/4 — 800"]
-    C -->|"1/8"| G["1/8 — 1600"]
-    C -->|"1/16"| H["1/16 — 3200"]
-    C -->|"1/32"| I["1/32 — 6400"]
-    D --> J["Set Current Limit via Pot"]
-    E --> J
-    F --> J
-    G --> J
-    H --> J
-    I --> J
-    J --> K["Pulse STEP pin at desired speed"]
-    K --> L["Motor rotates smoothly"]
+    A["DRV8825_Init(&drv, STEP, DIR, EN, 200)"] --> B["DRV8825_SetSpeed(&drv, 60)"]
+    B --> C["DRV8825_Enable(&drv)"]
+    C --> D{"Command"}
+    D -->|"Move steps"| E["DRV8825_Move(&drv, 400)"]
+    D -->|"Move degrees"| F["DRV8825_MoveDegrees(&drv, 90)"]
+    E --> G["Motor rotates"]
+    F --> G
+    G --> D
     </pre>
 </section>
 
@@ -77,83 +69,48 @@ flowchart TD
 <section>
     <h2>💻 เขียน Code ทีละขั้น</h2>
 
-    <div class="step"><h3>ขั้นที่ 1: Init GPIO + Microstepping Pins</h3>
+    <div class="step"><h3>ขั้นที่ 1: Init + Setup</h3>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "DRV8825.h"
 
-#define STEP PC0
-#define DIR  PC1
-#define EN   PC2
-#define M0   PC3
-#define M1   PC4
-#define M2   PC5
-
-typedef enum {FULL=0, HALF=1, QUARTER=2, EIGHTH=3, SIXTEENTH=4, THIRTYSEC=5} Microstep_t;
-
-void drv8825_set_microstep(Microstep_t ms) {
-    digitalWrite(M0, ms & 0x01);
-    digitalWrite(M1, (ms >> 1) & 0x01);
-    digitalWrite(M2, (ms >> 2) & 0x01);
-}</code></pre>
-    <p class="explain">🔍 M0-M2 ใช้ 3-bit binary เลือก microstep mode — เขียน GPIO ตามตาราง datasheet — LOW=LOW=LOW → Full-Step, HIGH=HIGH=HIGH → 1/32</p></div>
-
-    <div class="step"><h3>ขั้นที่ 2: Pulse Generation + Speed</h3>
-    <pre><code class="language-c">void drv8825_step(uint32_t pulses, uint16_t delay_us, uint8_t dir) {
-    digitalWrite(DIR, dir);  // 1=CW, 0=CCW
-    for(uint32_t i = 0; i < pulses; i++) {
-        digitalWrite(STEP, HIGH);
-        Delay_Us(2);       // DRV8825 ต้องการ pulse > 1.9μs
-        digitalWrite(STEP, LOW);
-        Delay_Us(delay_us);  // ความเร็ว = delay ระหว่าง pulses
-    }
-}
-
 int main(void) {
     SystemCoreClockUpdate();
-    pinMode(STEP, PIN_MODE_OUTPUT);
-    pinMode(DIR, PIN_MODE_OUTPUT);
-    pinMode(EN, PIN_MODE_OUTPUT);
-    pinMode(M0, PIN_MODE_OUTPUT);
-    pinMode(M1, PIN_MODE_OUTPUT);
-    pinMode(M2, PIN_MODE_OUTPUT);
+    DRV8825_Instance drv;
+    DRV8825_Init(&drv, PC1, PC0, PC2, 200);  // STEP=PC1, DIR=PC0, EN=PC2, 200 steps/rev
+    DRV8825_Enable(&drv);
+    DRV8825_SetSpeed(&drv, 60);  // 60 RPM</code></pre>
+    <p class="explain">🔍 <code>DRV8825_Init(&drv, STEP, DIR, EN, steps_per_rev)</code> — ตั้งค่า GPIO อัตโนมัติ — <code>DRV8825_Enable(&drv)</code> เปิด driver — <code>DRV8825_SetSpeed(&drv, rpm)</code> ตั้งความเร็ว</p></div>
 
-    digitalWrite(EN, LOW);    // Enable driver
-    drv8825_set_microstep(SIXTEENTH);  // 1/16 = 3200 pulses/rev</code></pre>
-    <p class="explain">🔍 Pulse ต้องกว้าง ≥1.9μs — EN=LOW เพื่อเปิด — 1/16 microstepping ให้ความละเอียด 3200 pulses/รอบ — delay_us ยิ่งน้อยยิ่งเร็ว (100μs = ~187 RPM)</p></div>
-
-    <div class="step"><h3>ขั้นที่ 3: Acceleration Profile + Loop</h3>
+    <div class="step"><h3>ขั้นที่ 2: Move Steps + Degrees</h3>
     <pre><code class="language-c">    while(1) {
-        // หมุน 10 รอบที่ 1/16 = 32000 pulses
-        // Ramp up from 500μs to 100μs
-        for(uint32_t i = 0; i < 32000; i++) {
-            uint16_t spd;
-            if(i < 5000) spd = 500 - (i * 400 / 5000);       // ramp up
-            else if(i > 27000) spd = 100 + ((i-27000) * 400 / 5000); // ramp down
-            else spd = 100;  // constant speed
-
-            digitalWrite(STEP, HIGH); Delay_Us(2);
-            digitalWrite(STEP, LOW);  Delay_Us(spd);
-        }
+        // หมุน 400 steps ที่ 60 RPM
+        DRV8825_Move(&drv, 400);
         Delay_Ms(1000);
 
-        // เปลี่ยนทิศทาง
-        digitalWrite(DIR, !digitalRead(DIR)); // toggle
+        // หมุน 90 องศา
+        DRV8825_MoveDegrees(&drv, 90);
+        Delay_Ms(1000);
+
+        // เปลี่ยนความเร็ว
+        DRV8825_SetSpeed(&drv, 120);  // 120 RPM
+        DRV8825_Move(&drv, 800);
+        Delay_Ms(1000);
+        DRV8825_SetSpeed(&drv, 60);
     }
 }</code></pre>
-    <p class="explain">🔍 Acceleration แบบ linear ramp — 3 ช่วง: เร่ง 5k pulses, คงที่ 22k pulses, ผ่อน 5k pulses — ป้องกัน motor stall ที่รอบสูง — 1/16 microstepping = 3200 pulses/rev → 32000 = 10 รอบ</p></div>
+    <p class="explain">🔍 <code>DRV8825_Move(&drv, steps)</code> — หมุนตามจำนวน steps, <code>DRV8825_MoveDegrees(&drv, deg)</code> — หมุนตามองศา, <code>DRV8825_SetSpeed(&drv, rpm)</code> เปลี่ยนความเร็วได้ทุกเมื่อ</p></div>
 </section>
 
 <section>
     <h2>📋 API Reference</h2>
     <table>
         <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
-        <tr><td><code>DRV8825_Init(step,dir,en)</code></td><td>เริ่ม driver GPIO</td><td><code>DRV8825_Init(PC0, PC1, PC2)</code></td></tr>
-        <tr><td><code>DRV8825_SetMicrostep(ms)</code></td><td>ตั้ง microstep 1/1 ถึง 1/32</td><td><code>DRV8825_SetMicrostep(MS_1_16)</code></td></tr>
-        <tr><td><code>DRV8825_Step(n, speed, dir)</code></td><td>หมุน n microsteps</td><td><code>DRV8825_Step(3200, 200, CW)</code></td></tr>
-        <tr><td><code>DRV8825_Move(mm, speed)</code></td><td>เคลื่อนที่เป็น mm (ต้องตั้ง steps/mm)</td><td><code>DRV8825_Move(50, 500)</code></td></tr>
-        <tr><td><code>DRV8825_Enable()</code></td><td>เปิด driver (EN=LOW)</td><td><code>DRV8825_Enable()</code></td></tr>
-        <tr><td><code>DRV8825_Disable()</code></td><td>ปิด driver — ปล่อยมอเตอร์</td><td><code>DRV8825_Disable()</code></td></tr>
+        <tr><td><code>DRV8825_Init(&drv, step, dir, en, rev)</code></td><td>เริ่ม driver พร้อม steps/rev</td><td><code>DRV8825_Init(&drv, PC1, PC0, PC2, 200)</code></td></tr>
+        <tr><td><code>DRV8825_Enable(&drv)</code></td><td>เปิด driver (EN=LOW)</td><td><code>DRV8825_Enable(&drv)</code></td></tr>
+        <tr><td><code>DRV8825_SetSpeed(&drv, rpm)</code></td><td>ตั้งความเร็ว RPM</td><td><code>DRV8825_SetSpeed(&drv, 60)</code></td></tr>
+        <tr><td><code>DRV8825_Move(&drv, steps)</code></td><td>หมุนตามจำนวน steps</td><td><code>DRV8825_Move(&drv, 400)</code></td></tr>
+        <tr><td><code>DRV8825_MoveDegrees(&drv, deg)</code></td><td>หมุนตามองศา</td><td><code>DRV8825_MoveDegrees(&drv, 90)</code></td></tr>
     </table>
 </section>
 
@@ -164,7 +121,7 @@ int main(void) {
         <tr><td>Motor ไม่หมุน — DRV8825 ร้อนจัด</td><td>ต่อ VMOT กลับขั้ว หรือ Current Limit สูงเกิน</td><td>ตรวจสอบขั้ว VMOT — ปรับ pot ทวนเข็มเพื่อลด Vref — วัด Vref ≤ 1V</td></tr>
         <tr><td>Motor สั่นแต่ไม่หมุน</td><td>pulse frequency สูงเกิน หรือ microstep mode ไม่ตรง</td><td>เริ่มจากความเร็วต่ำ (delay 1000μs) — ตรวจสอบ M0-M2 logic กับตาราง datasheet</td></tr>
         <tr><td>Motor skip steps ที่ความเร็วสูง</td><td>ไม่มี acceleration — หรือ current limit ต่ำไป</td><td>ใช้ ramp-up profile — เพิ่ม Vref (ระวังความร้อน) — ลด microstep level</td></tr>
-        <tr><td>STEP pin ไม่สร้าง pulse</td><td>ลืมตั้ง pinMode เป็น OUTPUT</td><td>ตรวจสอบ <code>pinMode(STEP, PIN_MODE_OUTPUT)</code> — ใช้ oscilloscope วัด</td></tr>
+        <tr><td>STEP pin ไม่สร้าง pulse</td><td>ลืมเรียก DRV8825_Enable หรือ Init ไม่ถูกต้อง</td><td>ตรวจสอบ <code>DRV8825_Init(&drv, PC1, PC0, PC2, 200)</code> — ใช้ oscilloscope วัด</td></tr>
         <tr><td>นับรอบผิด — จำนวน pulses ไม่ตรง</td><td>ลืมเปลี่ยน steps/rev ตาม microstep mode</td><td>Full=200, 1/16=3200, 1/32=6400 — คำนวณสูตร: <code>200 × microstep_level</code></td></tr>
     </table>
 </section>
@@ -176,47 +133,33 @@ int main(void) {
 #include "SimpleHAL.h"
 #include "DRV8825.h"
 
-#define STEP PC0
-#define DIR  PC1
-#define EN   PC2
-#define M0   PC3
-#define M1   PC4
-#define M2   PC5
 #define LIMIT PC6  // Endstop (NC, LOW=triggered)
 
-#define STEPS_PER_MM 25600  // 1/32 * 200 steps * (1rev/2.5mm) * 32
+DRV8825_Instance drv;
 int32_t position_mm = 0;
 
 void move_to_mm(int32_t target_mm) {
     int32_t delta = target_mm - position_mm;
-    uint8_t dir = (delta > 0) ? 1 : 0;
-    uint32_t pulses = (delta > 0) ? delta * STEPS_PER_MM : -delta * STEPS_PER_MM;
-    digitalWrite(DIR, dir);
-    for(uint32_t i = 0; i < pulses; i++) {
-        if(!digitalRead(LIMIT) && dir == 0) break; // Limit switch stop
-        digitalWrite(STEP, HIGH); Delay_Us(2);
-        digitalWrite(STEP, LOW);  Delay_Us(300);
+    uint32_t steps = (delta > 0) ? delta * 200 : (-delta) * 200;  // 200 steps/mm
+    if(delta != 0) {
+        DRV8825_Move(&drv, steps);
     }
     position_mm = target_mm;
 }
 
 void home_sequence() {
-    digitalWrite(DIR, 0);  // Move towards limit
-    while(digitalRead(LIMIT)) {  // Until triggered
-        digitalWrite(STEP, HIGH); Delay_Us(2);
-        digitalWrite(STEP, LOW);  Delay_Us(500);
+    while(digitalRead(LIMIT)) {
+        DRV8825_Move(&drv, 1);  // move 1 step toward limit
     }
-    position_mm = 0;  // Home = 0mm
+    position_mm = 0;
 }
 
 int main(void) {
     SystemCoreClockUpdate();
-    pinMode(STEP, PIN_MODE_OUTPUT); pinMode(DIR, PIN_MODE_OUTPUT);
-    pinMode(EN, PIN_MODE_OUTPUT);
-    pinMode(M0,PIN_MODE_OUTPUT); pinMode(M1,PIN_MODE_OUTPUT); pinMode(M2,PIN_MODE_OUTPUT);
     pinMode(LIMIT, PIN_MODE_INPUT_PULLUP);
-    digitalWrite(EN, LOW);
-    digitalWrite(M0,HIGH); digitalWrite(M1,HIGH); digitalWrite(M2,HIGH); // 1/32
+    DRV8825_Init(&drv, PC1, PC0, PC2, 200);
+    DRV8825_Enable(&drv);
+    DRV8825_SetSpeed(&drv, 60);
 
     home_sequence();
     while(1) {

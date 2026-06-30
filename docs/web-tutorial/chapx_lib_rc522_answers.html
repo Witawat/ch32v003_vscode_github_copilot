@@ -4,7 +4,8 @@
 
 <div class="answer">
 <h2>ข้อ 1: Door Lock — ตรวจ UID whitelist เปิดประตู</h2>
-<pre><code class="language-c">#define MAX_CARDS   10
+<pre><code class="language-c">RC522_Instance rfid;
+#define MAX_CARDS   10
 #define RELAY_PIN   PC0
 #define BUZZER_PIN  PC1
 
@@ -18,7 +19,7 @@ uint8_t whitelist_len[MAX_CARDS] = {4, 4};  // UID length
 uint8_t whitelist_count = 2;
 
 void rc522_door_lock(void) {
-    RC522_Init();
+    RC522_Init(&rfid, PC4, PC3);
     GPIO_SimpleInit(RELAY_PIN, GPIO_OUT_PP);
     GPIO_SimpleInit(BUZZER_PIN, GPIO_OUT_PP);
     GPIO_WriteBit(RELAY_PIN, 0);  // ล็อกเริ่มต้น
@@ -26,13 +27,13 @@ void rc522_door_lock(void) {
     USART_Println("[DOOR] Waiting for card...");
 
     while(1) {
-        if(!RC522_IsCardPresent()) {
+        if(!RC522_IsCardPresent(&rfid)) {
             Delay_Ms(200);
             continue;
         }
 
         uint8_t uid[10];
-        uint8_t uid_len = RC522_ReadUID(uid);
+        uint8_t uid_len = RC522_ReadUID(&rfid, uid);
 
         if(uid_len == 0) { Delay_Ms(200); continue; }
 
@@ -74,7 +75,7 @@ void rc522_door_lock(void) {
             Delay_Ms(1000);  // หน่วงกัน brute force
         }
 
-        RC522_Halt();
+        RC522_Halt(&rfid);
         Delay_Ms(500);
     }
 }</code></pre>
@@ -83,7 +84,8 @@ void rc522_door_lock(void) {
 
 <div class="answer">
 <h2>ข้อ 2: เขียนข้อมูลลงการ์ด Mifare Classic</h2>
-<pre><code class="language-c">#define MFRC_SECTOR    1     // sector ที่จะเขียน
+<pre><code class="language-c">RC522_Instance rfid;
+#define MFRC_SECTOR    1     // sector ที่จะเขียน
 #define MFRC_BLOCK     (MFRC_SECTOR * 4)  // block แรกของ sector
 #define MFRC_DEFAULT_KEY  {0xFF,0xFF,0xFF,0xFF,0xFF,0xFF}
 
@@ -97,27 +99,27 @@ typedef struct {
 } card_data_t;
 
 void rc522_write_card_data(void) {
-    RC522_Init();
+    RC522_Init(&rfid, PC4, PC3);
 
     USART_Println("[RC522] Place card to write...");
 
     while(1) {
-        if(!RC522_IsCardPresent()) {
+        if(!RC522_IsCardPresent(&rfid)) {
             Delay_Ms(200);
             continue;
         }
 
         uint8_t uid[10];
-        uint8_t uid_len = RC522_ReadUID(uid);
+        uint8_t uid_len = RC522_ReadUID(&rfid, uid);
         if(uid_len == 0) { Delay_Ms(200); continue; }
 
         USART_Println("Card detected. Writing...");
 
         // Authenticate sector ด้วย Key A
-        if(!RC522_Auth(MFRC_PICC_AUTHENT1A, MFRC_BLOCK,
+        if(!RC522_Auth(&rfid, MFRC_PICC_AUTHENT1A, MFRC_BLOCK,
                        key_a, uid)) {
             USART_Println("Auth FAIL");
-            RC522_Halt();
+            RC522_Halt(&rfid);
             Delay_Ms(500);
             continue;
         }
@@ -131,13 +133,13 @@ void rc522_write_card_data(void) {
                                             sizeof(data)-1);
 
         // เขียน block (16 bytes)
-        RC522_WriteBlock(MFRC_BLOCK, (uint8_t *)&data);
+        RC522_WriteBlock(&rfid, MFRC_BLOCK, (uint8_t *)&data);
 
         USART_Println("Write OK");
 
         // Verify: อ่านกลับ
         uint8_t verify[16];
-        RC522_ReadBlock(MFRC_BLOCK, verify);
+        RC522_ReadBlock(&rfid, MFRC_BLOCK, verify);
         USART_Print("Verify: ");
         for(uint8_t i=0; i<16; i++) {
             USART_PrintHexByte(verify[i]);
@@ -145,7 +147,7 @@ void rc522_write_card_data(void) {
         }
         USART_Println("");
 
-        RC522_Halt();
+        RC522_Halt(&rfid);
         Delay_Ms(1000);
     }
 }
@@ -160,19 +162,20 @@ uint8_t rc522_calc_checksum(uint8_t *d, uint8_t len) {
 
 <div class="answer">
 <h2>ข้อ 3: Sector Key Management — เปลี่ยนคีย์ A/B</h2>
-<pre><code class="language-c">uint8_t new_key_a[6] = {0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5};
+<pre><code class="language-c">RC522_Instance rfid;
+uint8_t new_key_a[6] = {0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5};
 uint8_t new_key_b[6] = {0xB0, 0xB1, 0xB2, 0xB3, 0xB4, 0xB5};
 
 void rc522_change_keys(void) {
-    RC522_Init();
+    RC522_Init(&rfid, PC4, PC3);
 
     USART_Println("[KEY] Place card to change keys...");
 
     while(1) {
-        if(!RC522_IsCardPresent()) { Delay_Ms(200); continue; }
+        if(!RC522_IsCardPresent(&rfid)) { Delay_Ms(200); continue; }
 
         uint8_t uid[10];
-        uint8_t uid_len = RC522_ReadUID(uid);
+        uint8_t uid_len = RC522_ReadUID(&rfid, uid);
         if(uid_len == 0) continue;
 
         uint8_t sector = 1;
@@ -180,10 +183,10 @@ void rc522_change_keys(void) {
 
         // 1. Auth ด้วย key เดิม (default: FFFFFF)
         uint8_t default_key[6] = MFRC_DEFAULT_KEY;
-        if(!RC522_Auth(MFRC_PICC_AUTHENT1A, trailer,
+        if(!RC522_Auth(&rfid, MFRC_PICC_AUTHENT1A, trailer,
                        default_key, uid)) {
             USART_Println("Auth FAIL — wrong old key?");
-            RC522_Halt(); Delay_Ms(500); continue;
+            RC522_Halt(&rfid); Delay_Ms(500); continue;
         }
 
         // 2. สร้าง sector trailer ใหม่
@@ -194,23 +197,23 @@ void rc522_change_keys(void) {
         memcpy(new_trailer + 10, new_key_b, 6);      // Key B
 
         // 3. เขียน trailer ใหม่
-        RC522_WriteBlock(trailer, new_trailer);
+        RC522_WriteBlock(&rfid, trailer, new_trailer);
 
         USART_Println("[KEY] Sector 1 keys changed!");
 
         // 4. Verify ด้วย key ใหม่
-        if(RC522_Auth(MFRC_PICC_AUTHENT1A, trailer,
+        if(RC522_Auth(&rfid, MFRC_PICC_AUTHENT1A, trailer,
                       new_key_a, uid)) {
             USART_Println("✓ New Key A verified OK");
         }
-        if(RC522_Auth(MFRC_PICC_AUTHENT1B, trailer,
+        if(RC522_Auth(&rfid, MFRC_PICC_AUTHENT1B, trailer,
                       new_key_b, uid)) {
             USART_Println("✓ New Key B verified OK");
         }
 
         // แสดง access bits
         uint8_t tr[16];
-        RC522_ReadBlock(trailer, tr);
+        RC522_ReadBlock(&rfid, trailer, tr);
         USART_Print("New trailer: ");
         for(uint8_t i=0; i<16; i++) {
             USART_PrintHexByte(tr[i]);
@@ -218,7 +221,7 @@ void rc522_change_keys(void) {
         }
         USART_Println("");
 
-        RC522_Halt();
+        RC522_Halt(&rfid);
         break;
     }
 }

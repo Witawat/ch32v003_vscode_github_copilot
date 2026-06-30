@@ -18,15 +18,14 @@
     <h2>🧭 แผนภาพการทำงาน</h2>
     <pre class="mermaid">
 flowchart TD
-    A["BH1750_Init(addr, mode)"] --> B["BH1750_ReadLux()"]
+    A["BH1750_Init(&bh, addr)"] --> B["BH1750_ReadLux(&bh)"]
     B --> C["Display / ใช้งานค่า lux"]
     C --> B
     </pre>
 </section>
 
-<section>
-    <h2>🔌 การต่อวงจร</h2>
-    <pre class="ascii-circuit">
+<section><h2>🔌 การต่อวงจร</h2>
+<pre class="ascii-circuit">
             BH1750 — เซนเซอร์วัดแสง I2C
     ┌────────────────────────────────────┐
     │ MCU                         BH1750 │
@@ -37,93 +36,74 @@ flowchart TD
     │                                    │
     │ ADDR=LOW → 0x23  ADDR=HIGH → 0x5C │
     └────────────────────────────────────┘
-    </pre>
-    <p>PC1─SDA, PC2─SCL (ขา I2C ของ CH32V003), ADDR ต่อ GND = address 0x23</p>
-</section>
+</pre></section>
 
-<section>
-    <h2>📚 หลักการทำงาน</h2>
-    <p><strong>BH1750</strong> เป็นเซนเซอร์วัดความสว่างแบบ I2C ambient light sensor ย่านวัด 1–65535 lux — การตอบสนองสเปกตรัมใกล้เคียงกับตามนุษย์มาก (human eye spectral response) จึงวัดแสงที่ตามองเห็นได้แม่น ไม่ต้อง calibrate เอง</p>
-    <p><strong>โหมดการวัด:</strong></p>
-    <ul>
-        <li><code>BH1750_CONT_HIRES</code> — Continuous High Resolution (1 lux/step), วัดต่อเนื่อง ~120ms ต่อครั้ง</li>
-        <li><code>BH1750_CONT_HIRES2</code> — Continuous High Resolution Mode 2 (0.5 lux/step), ละเอียดกว่าแต่ช้ากว่า ~120ms</li>
-        <li><code>BH1750_ONCE_HIRES</code> — Single measurement แล้วเข้า power-down อัตโนมัติ</li>
-    </ul>
-    <p><strong>I2C Address:</strong> ADDR pin → LOW = <code>0x23</code>, HIGH = <code>0x5C</code> — เลือกได้ 2 address → ใช้ BH1750 พร้อมกัน 2 ตัวบนบัสเดียวได้</p>
-</section>
+<section><h2>📚 หลักการทำงาน</h2>
+<p><strong>BH1750</strong> เป็นเซนเซอร์วัดความสว่างแบบ I2C ambient light sensor ย่านวัด 1–65535 lux — การตอบสนองสเปกตรัมใกล้เคียงกับตามนุษย์</p></section>
 
-<section>
-    <h2>💻 เขียน Code ทีละขั้น</h2>
+<section><h2>💻 เขียน Code ทีละขั้น</h2>
 
-    <div class="step"><h3>ขั้นที่ 1: Init + Setup</h3>
-    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+<div class="step"><h3>ขั้นที่ 1: Init + Setup</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "BH1750.h"
+
+BH1750_Instance bh;
 
 int main(void) {
     SystemCoreClockUpdate();
     USART_Init(USART1, BAUD_115200);
-    I2C_Init(I2C1, I2C_SPEED_STANDARD);  // 100kHz
-    BH1750_Init(0x23, BH1750_CONT_HIRES); // addr=0x23, continuous mode</code></pre>
-    <p class="explain">🔍 <code>BH1750_Init(addr, mode)</code> — กำหนด address (0x23 หรือ 0x5C) และโหมดการวัด แนะนำ CONT_HIRES สำหรับงานส่วนใหญ่</p></div>
+    I2C_Init(I2C1, I2C_SPEED_STANDARD);
 
-    <div class="step"><h3>ขั้นที่ 2: อ่าน/เขียนค่า</h3>
-    <pre><code class="language-c">    uint16_t lux = BH1750_ReadLux();     // อ่านค่า lux (uint16)
-    if(lux == 0xFFFF) {                  // error check
+    BH1750_Init(&bh, 0x23);  // addr=0x23 (ADDR=GND)
+    USART_Println("BH1750 Ready!");</code></pre>
+<p class="explain">🔍 <code>BH1750_Init(&bh, addr)</code> — instance-based, address 0x23 หรือ 0x5C</p></div>
+
+<div class="step"><h3>ขั้นที่ 2: อ่านค่า lux</h3>
+<pre><code class="language-c">    uint16_t lux = BH1750_ReadLux(&bh);
+    if(lux == 0xFFFF) {
         USART_Println("Sensor error!");
-        Delay_Ms(500);
     } else {
         USART_Print("Light: ");
         USART_PrintInt(lux);
         USART_Println(" lux");
     }</code></pre>
-    <p class="explain">🔍 <code>BH1750_ReadLux()</code> คืนค่า 1–65535 lux — ถ้าได้ <code>0xFFFF</code> แปลว่า I2C error (สายหลุด/address ผิด) เช็ค <code>0</code> lux อาจเกิดจากอยู่ใน single mode แล้วไม่ได้เริ่มวัดใหม่</p></div>
+<p class="explain">🔍 <code>BH1750_ReadLux(&bh)</code> — คืนค่า 1–65535 lux — 0xFFFF = I2C error</p></div>
 
-    <div class="step"><h3>ขั้นที่ 3: Loop + แสดงผล</h3>
-    <pre><code class="language-c">    while(1) {
-        uint16_t lux = BH1750_ReadLux();
+<div class="step"><h3>ขั้นที่ 3: Loop — ไฟอัตโนมัติ</h3>
+<pre><code class="language-c">    while(1) {
+        uint16_t lux = BH1750_ReadLux(&bh);
         if(lux != 0xFFFF) {
-            // ปรับ LED brightness อัตโนมัติตามแสง
             uint8_t duty = (uint8_t)((uint32_t)lux * 255 / 1000);
             if(duty > 255) duty = 255;
-            PWM_SetDuty(TIM2_CH1, duty);  // สว่างในที่มืด หรี่ในที่สว่าง
+            PWM_SetDuty(TIM2_CH1, duty);
         }
-        Delay_Ms(200);  // ~5 readings/sec
+        Delay_Ms(200);
     }
 }</code></pre>
-    <p class="explain">🔍 ใช้ <code>map(lux, 0, 1000, 0, 255)</code> แบบ manual — <code>lux * 255 / 1000</code> — ปรับความสว่าง LED ผกผันกับแสงแวดล้อม: มืด→LED สว่าง, สว่าง→LED หรี่</p></div>
+<p class="explain">🔍 ใช้ lux ปรับ LED brightness อัตโนมัติ — มืด→LED สว่าง, สว่าง→LED หรี่</p></div>
 </section>
 
-<section>
-    <h2>📋 API Reference</h2>
-    <table>
-        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
-        <tr><td><code>BH1750_Init(addr, mode)</code></td><td>เริ่มต้นเซนเซอร์, ตั้งโหมด</td><td><code>BH1750_Init(0x23, BH1750_CONT_HIRES)</code></td></tr>
-        <tr><td><code>BH1750_ReadLux()</code></td><td>อ่านค่า lux ปัจจุบัน</td><td><code>uint16_t lux = BH1750_ReadLux()</code></td></tr>
-        <tr><td><code>BH1750_SetMode(mode)</code></td><td>เปลี่ยนโหมดระหว่างรัน</td><td><code>BH1750_SetMode(BH1750_CONT_HIRES2)</code></td></tr>
-        <tr><td><code>BH1750_PowerDown()</code></td><td>เข้า sleep โหมดประหยัดไฟ</td><td><code>BH1750_PowerDown()</code></td></tr>
-        <tr><td><code>BH1750_PowerOn()</code></td><td>ปลุกจาก sleep</td><td><code>BH1750_PowerOn()</code></td></tr>
-        <tr><td><code>BH1750_Reset()</code></td><td>รีเซ็ต register</td><td><code>BH1750_Reset()</code></td></tr>
-    </table>
+<section><h2>📋 API Reference</h2>
+<table>
+    <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+    <tr><td><code>BH1750_Init(&bh, addr)</code></td><td>เริ่มต้นเซนเซอร์</td><td><code>BH1750_Init(&bh, 0x23)</code></td></tr>
+    <tr><td><code>BH1750_ReadLux(&bh)</code></td><td>อ่านค่า lux</td><td><code>uint16_t lux = BH1750_ReadLux(&bh)</code></td></tr>
+    <tr><td><code>BH1750_PowerDown(&bh)</code></td><td>เข้า sleep โหมด</td><td><code>BH1750_PowerDown(&bh)</code></td></tr>
+    <tr><td><code>BH1750_PowerOn(&bh)</code></td><td>ปลุกจาก sleep</td><td><code>BH1750_PowerOn(&bh)</code></td></tr>
+</table>
 </section>
 
-<section>
-    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
-    <table>
-        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
-        <tr><td>อ่านได้ 0 lux ตลอด</td><td>Address ผิด (0x23 vs 0x5C)</td><td>เช็ค ADDR pin — ต่อ GND ได้ 0x23, ต่อ VCC ได้ 0x5C</td></tr>
-        <tr><td>ค่าไม่เปลี่ยน (ค้าง)</td><td>ยังอยู่ใน single mode</td><td>ใช้ <code>BH1750_CONT_HIRES</code> แทน <code>BH1750_ONCE_HIRES</code></td></tr>
-        <tr><td>ค่า overflow (65535)</td><td>แสงแดดจัด >65535 lux</td><td>เพิ่มตัวกรองแสง (ND filter) หรือเปลี่ยนโหมด low-gain</td></tr>
-        <tr><td>อ่านค่าได้แต่เพี้ยน</td><td>MTreg ไม่ได้ตั้ง หรือ I2C noise</td><td>ใช้ <code>BH1750_SetMTreg(69)</code> ค่า default, เพิ่ม pull-up 4.7kΩ</td></tr>
-        <tr><td>I2C scan ไม่เจอ device</td><td>สาย SDA/SCL สลับ หรือลืม VCC</td><td>เช็คการต่อสาย, วัดไฟ 3.3V ที่ sensor, ลอง <code>I2C_Scan()</code></td></tr>
-    </table>
+<section><h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+<table>
+    <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+    <tr><td>อ่านได้ 0 lux ตลอด</td><td>Address ผิด (0x23 vs 0x5C)</td><td>เช็ค ADDR pin — ต่อ GND ได้ 0x23</td></tr>
+    <tr><td>ค่า overflow (65535)</td><td>แสงแดดจัด >65535 lux</td><td>เพิ่มตัวกรองแสง (ND filter)</td></tr>
+</table>
 </section>
 
-<section>
-    <h2>🛠️ สร้าง Product: ไฟอัตโนมัติ</h2>
-    <p>BH1750 วัดแสง + LED PWM — เมื่อมืด LED สว่างอัตโนมัติ, เมื่อสว่าง LED หรี่ลง</p>
-    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+<section><h2>🛠️ สร้าง Product: ไฟอัตโนมัติ</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "BH1750.h"
 
@@ -132,38 +112,35 @@ int main(void)
     SystemCoreClockUpdate();
     USART_Init(USART1, BAUD_115200);
     I2C_Init(I2C1, I2C_SPEED_STANDARD);
-    PWM_Init(TIM2, TIM2_CH1, PC4, 1000);  // PWM 1kHz ที่ PC4
+    PWM_Init(TIM2, TIM2_CH1, PC4, 1000);
 
-    BH1750_Init(0x23, BH1750_CONT_HIRES);
-    USART_Println("Auto Light System Ready");
+    BH1750_Instance bh;
+    BH1750_Init(&bh, 0x23);
 
     while(1)
     {
-        uint16_t lux = BH1750_ReadLux();
-        if(lux == 0xFFFF) { USART_Println("Err"); Delay_Ms(1000); continue; }
+        uint16_t lux = BH1750_ReadLux(&bh);
+        if(lux == 0xFFFF) { Delay_Ms(1000); continue; }
 
         uint8_t duty;
-        if(lux <= 50)      duty = 255;      // มืดมาก → LED 100%
-        else if(lux < 500) duty = (uint8_t)((500 - lux) * 255 / 450);  // fade
-        else               duty = 0;        // สว่าง → LED off
+        if(lux <= 50)      duty = 255;
+        else if(lux < 500) duty = (uint8_t)((500 - lux) * 255 / 450);
+        else               duty = 0;
 
         PWM_SetDuty(TIM2_CH1, duty);
 
         USART_Print("Lux: "); USART_PrintInt(lux);
         USART_Print(" | PWM: "); USART_PrintInt(duty); USART_Println("");
-
         Delay_Ms(200);
     }
 }</code></pre>
 </section>
 
-<section>
-    <h2>✏️ ลองทำดู</h2>
-    <ol>
-        <li>ทำ lux logger — บันทึกค่า lux ทุก 1 วินาที ผ่าน USART ดูกราฟแสงใน 24 ชม.</li>
-        <li>ทำไฟกลางคืนอัตโนมัติ — lux < 30 → LED ติด, lux > 50 → LED ดับ (เพิ่ม hysteresis)</li>
-        <li>ต่อ OLED แสดงค่า lux + กราฟแท่ง — ใช้ <code>OLED_PrintFloat(&oled, "Lux:", lux, 0)</code></li>
-    </ol>
+<section><h2>✏️ ลองทำดู</h2>
+<ol>
+    <li>ทำ lux logger — บันทึกค่า lux ทุก 1 วิ ผ่าน USART</li>
+    <li>ทำไฟกลางคืนอัตโนมัติ — lux < 30 → LED ติด, lux > 50 → LED ดับ</li>
+</ol>
 </section>
 
 <nav class="bottom-nav">

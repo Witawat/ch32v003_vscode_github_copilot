@@ -18,12 +18,12 @@
     <h2>🧭 แผนภาพการทำงาน</h2>
     <pre class="mermaid">
 flowchart TD
-    A["RC522_Init(spi,cs,rst)"] --> B["RC522_SelfTest()"]
+    A["RC522_Init(&rfid, CS, RST)"] --> B["RC522_SelfTest()"]
     B --> C{"Pass?"}
-    C -->|"Yes"| D["RC522_IsCardPresentPICC_REQIDL)"]
+    C -->|"Yes"| D["RC522_IsCardPresent(&rfid)"]
     C -->|"No"| E["Check wiring"]
     D --> F{"Card Present?"}
-    F -->|"Yes"| G["RC522_ReadUID(uid)"]
+    F -->|"Yes"| G["RC522_ReadUID(&rfid, uid)"]
     F -->|"No"| D
     G --> H["RC522_SelectTag(uid)"]
     H --> I["RC522_Auth(KEY_A, block, key)"]
@@ -78,10 +78,12 @@ flowchart TD
 #include "SimpleHAL.h"
 #include "RC522.h"
 
+RC522_Instance rfid;
+
 int main(void) {
     SystemCoreClockUpdate();
     SPI_Init(SPI1, SPI_BAUD_4MHZ, SPI_MODE0);
-    RC522_Init(SPI1, PC3, PC4);  // CS=PC3, RST=PC4
+    RC522_Init(&rfid, PC4, PC3);  // CS=PC4, RST=PC3
     USART_Init(USART1, BAUD_115200);
 
     if(RC522_SelfTest()) {
@@ -90,31 +92,27 @@ int main(void) {
         USART_Println("RC522 SelfTest FAILED!");
         while(1);
     }</code></pre>
-    <p class="explain">🔍 <code>RC522_Init(SPI, CS, RST)</code> — ตั้งค่า SPI + control pins, <code>RC522_SelfTest()</code> — ทำ self-test ภายใน RC522 ตรวจสอบ SPI communication และ register response</p></div>
+    <p class="explain">🔍 <code>RC522_Init(&rfid, CS, RST)</code> — CS=PC4, RST=PC3, <code>RC522_SelfTest()</code> — ทำ self-test ภายใน RC522 ตรวจสอบ SPI communication และ register response</p></div>
 
     <div class="step"><h3>ขั้นที่ 2: ตรวจจับบัตร + อ่าน UID</h3>
-    <pre><code class="language-c">    uint8_t uid[7], uid_len;
+    <pre><code class="language-c">    uint8_t uid[10];
     while(1) {
-        // Step 1: Request — มีบัตรไหม?
-        if(RC522_IsCardPresentPICC_REQIDL, &uid_len) == MI_OK) {
+        if(RC522_IsCardPresent(&rfid)) {
             USART_Println("Card detected!");
+            RC522_ReadUID(&rfid, uid);
 
-            // Step 2: Anticollision — อ่าน UID
-            if(RC522_ReadUID(uid, &uid_len) == MI_OK) {
-                USART_Print("UID: ");
-                for(uint8_t i=0; i<uid_len; i++) {
-                    USART_PrintHex(uid[i]); USART_Print(" ");
-                }
-                USART_Println("");
-
-                // Step 3: Select Tag
-                RC522_SelectTag(uid, uid_len);
+            USART_Print("UID: ");
+            for(uint8_t i=0; i<4; i++) {
+                USART_PrintHex(uid[i]); USART_Print(" ");
             }
+            USART_Println("");
+
+            RC522_SelectTag(uid, 4);
         }
         Delay_Ms(200);
     }
 }</code></pre>
-    <p class="explain">🔍 <code>PICC_REQIDL</code> — request บัตรที่ยังไม่ได้เข้า sleep (idle state), <code>RC522_ReadUID(uid, &len)</code> — อ่าน UID, ความยาว 4 byte (single size) หรือ 7 byte (double size)</p></div>
+    <p class="explain">🔍 <code>RC522_IsCardPresent(&rfid)</code> — ตรวจจับบัตร, <code>RC522_ReadUID(&rfid, uid)</code> — อ่าน UID 4-7 byte</p></div>
 
     <div class="step"><h3>ขั้นที่ 3: Authenticate + Read/Write Block</h3>
     <pre><code class="language-c">    // Default Key A for MIFARE Classic (new cards)
@@ -141,19 +139,19 @@ int main(void) {
             USART_Println("Write OK!");
         }
 
-        RC522_Halt();  // put card to sleep
+        RC522_Halt(&rfid);  // put card to sleep
     }</code></pre>
-    <p class="explain">🔍 <code>RC522_Auth(mode, block, key, uid)</code> — authenticate ด้วย Key A หรือ B ก่อนเขียน/อ่าน, <code>RC522_Read(block, buf, &len)</code> — อ่าน 16 bytes, <code>RC522_Write(block, data)</code> — เขียน 16 bytes</p></div>
+    <p class="explain">🔍 <code>RC522_Auth(mode, block, key, uid)</code> — authenticate ด้วย Key A หรือ B ก่อนเขียน/อ่าน, <code>RC522_Read(block, buf, &len)</code> — อ่าน 16 bytes, <code>RC522_Write(block, data)</code> — เขียน 16 bytes, <code>RC522_Halt(&rfid)</code> — สั่งการ์ด sleep</p></div>
 </section>
 
 <section>
     <h2>📋 API Reference</h2>
     <table>
         <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
-        <tr><td><code>RC522_Init(spi, cs, rst)</code></td><td>เริ่มต้น RC522</td><td><code>RC522_Init(SPI1, PC3, PC4)</code></td></tr>
+        <tr><td><code>RC522_Init(&rfid, cs, rst)</code></td><td>เริ่มต้น RC522</td><td><code>RC522_Init(&rfid, PC4, PC3)</code></td></tr>
         <tr><td><code>RC522_SelfTest()</code></td><td>ทดสอบ SPI + RC522</td><td><code>if(RC522_SelfTest()){...}</code></td></tr>
-        <tr><td><code>RC522_IsCardPresentmode, &len)</code></td><td>ตรวจจับการ์ด</td><td><code>RC522_IsCardPresentPICC_REQIDL, &len)</code></td></tr>
-        <tr><td><code>RC522_ReadUID(uid, &len)</code></td><td>อ่าน UID การ์ด</td><td><code>RC522_ReadUID(uid, &uid_len)</code></td></tr>
+        <tr><td><code>RC522_IsCardPresent(&rfid)</code></td><td>ตรวจจับการ์ด</td><td><code>if(RC522_IsCardPresent(&rfid)){...}</code></td></tr>
+        <tr><td><code>RC522_ReadUID(&rfid, uid)</code></td><td>อ่าน UID การ์ด</td><td><code>RC522_ReadUID(&rfid, uid)</code></td></tr>
         <tr><td><code>RC522_SelectTag(uid, len)</code></td><td>เลือกการ์ด</td><td><code>RC522_SelectTag(uid, 4)</code></td></tr>
         <tr><td><code>RC522_Auth(mode,blk,key,uid)</code></td><td>ยืนยันตัวตนด้วย key</td><td><code>RC522_Auth(AUTH1A, 4, key, uid)</code></td></tr>
         <tr><td><code>RC522_Read(block, buf, &len)</code></td><td>อ่าน block 16B</td><td><code>RC522_Read(4, buf, &size)</code></td></tr>
@@ -190,27 +188,25 @@ int main(void)
 {
     SystemCoreClockUpdate();
     SPI_Init(SPI1, SPI_BAUD_4MHZ, SPI_MODE0);
-    RC522_Init(SPI1, PC3, PC4);
+    RC522_Instance rfid;
+    RC522_Init(&rfid, PC4, PC3);
     USART_Init(USART1, BAUD_115200);
     pinMode(PC0, PIN_MODE_OUTPUT);  // lock solenoid
 
     if(!RC522_SelfTest()) { USART_Println("RC522 FAIL"); while(1); }
 
-    uint8_t uid[7], uid_len;
-    uint8_t default_key[6] = {0xFF,0xFF,0xFF,0xFF,0xFF,0xFF};
-
+    uint8_t uid[10];
     while(1)
     {
-        if(RC522_IsCardPresentPICC_REQIDL, &uid_len) != MI_OK) {
+        if(!RC522_IsCardPresent(&rfid)) {
             Delay_Ms(100); continue;
         }
-        if(RC522_ReadUID(uid, &uid_len) != MI_OK) continue;
-        RC522_SelectTag(uid, uid_len);
+        RC522_ReadUID(&rfid, uid);
+        RC522_SelectTag(uid, 4);
 
         USART_Print("UID: ");
-        for(int i=0;i<uid_len;i++){ USART_PrintHex(uid[i]); }
+        for(int i=0;i<4;i++){ USART_PrintHex(uid[i]); }
 
-        // Check whitelist
         uint8_t access = 0;
         for(int i=0;i<2;i++) {
             if(memcmp(uid, whitelist[i], 4) == 0) {
@@ -219,12 +215,12 @@ int main(void)
         }
         if(access) {
             USART_Println(" => ACCESS GRANTED");
-            digitalWrite(PC0, HIGH); Delay_Ms(3000);  // unlock 3s
+            digitalWrite(PC0, HIGH); Delay_Ms(3000);
             digitalWrite(PC0, LOW);
         } else {
             USART_Println(" => ACCESS DENIED");
         }
-        RC522_Halt();
+        RC522_Halt(&rfid);
         Delay_Ms(500);
     }
 }</code></pre>
