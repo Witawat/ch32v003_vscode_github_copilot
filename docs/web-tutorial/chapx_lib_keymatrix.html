@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>KeyMatrix — แป้นพิมพ์ 4×4 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head><body>
+﻿<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>KeyMatrix — แป้นพิมพ์ 4×4 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head><body>
 
 <nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_button.html">บทก่อน</a><a href="chapx_lib_rotaryencoder.html">บทถัดไป →</a></nav>
 
@@ -147,7 +147,7 @@ int main(void) {
 <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "KeyMatrix.h"
-#include "LCD1602_I2C.h"
+#include "lcd1602_i2c.h"
 
 KeyMatrix_Handle kp;
 uint8_t rows[] = {PC0,PC1,PC2,PC3}, cols[] = {PC4,PC5,PC6,PC7};
@@ -158,9 +158,9 @@ int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
     USART_Init(115200);
-    LCD1602_I2C_Init(0x27);
+    LCD_Init(0x27);
     KeyMatrix_Init(&kp, rows, cols, 4, 4, keys);
-    LCD1602_I2C_SetCursor(0,0); LCD1602_I2C_Print("Calc Ready!");
+    LCD_SetCursor(0,0); LCD_Print("Calc Ready!");
     while(1) {
         KeyMatrix_Update(&kp);
         char key = KeyMatrix_GetKey(&kp);
@@ -175,7 +175,7 @@ int main(void) {
                 a=result; b=0; op=0; state=0;
             } else { op=key; state=1; }
             sprintf(disp,"%ld %c %ld=%ld",a,op?op:' ',b,result);
-            LCD1602_I2C_SetCursor(0,0); LCD1602_I2C_Print(disp);
+            LCD_SetCursor(0,0); LCD_Print(disp);
             Delay_Ms(250);
         }
         IWDG_Feed();

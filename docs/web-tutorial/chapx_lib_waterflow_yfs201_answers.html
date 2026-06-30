@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย YF-S201 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+﻿<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย YF-S201 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
 <nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_waterflow_yfs201.html">กลับบท</a><a href="chapx_lib_hx711_answers.html">เฉลยถัดไป →</a></nav>
 <h1>📝 เฉลย — YF-S201 Water Flow</h1>
 
@@ -6,7 +6,8 @@
 <h2>ข้อ 1: Water Meter with Totalizer — สะสมปริมาตรน้ำ</h2>
 <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
-#include "OLED.h"
+#include "WaterFlow.h"
+#include "oled_i2c.h"
 
 #define FLOW_PIN  PC3
 #define K_FACTOR  450.0f
@@ -30,8 +31,8 @@ int main(void) {
     EXTI_Init(FLOW_PIN, EXTI_Trigger_Falling);
     NVIC_EnableIRQ(EXTI7_0_IRQn);
 
-    OLED_t oled;
-    OLED_Init(&oled, 0x3C, OLED_128x64);
+    OLED_Handle oled;
+    OLED_Init(&oled, OLED_128x64, 0x3C);
     OLED_SetFont(&oled, FONT_8x16);
 
     float total_liters = 0;
@@ -78,7 +79,7 @@ int main(void) {
             OLED_PrintDec(&oled, pulse_count);
             OLED_Print(&oled, "p");
 
-            OLED_Display(&oled);
+            OLED_Update(&oled);
 
             USART_Print("Flow:"); USART_PrintFloat(flow_lpm, 1);
             USART_Print("L/m Total:"); USART_PrintFloat(total_m3, 2);
@@ -95,7 +96,8 @@ int main(void) {
 <h2>ข้อ 2: Flow Rate Display — OLED แบบ Real-Time</h2>
 <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
-#include "OLED.h"
+#include "WaterFlow.h"
+#include "oled_i2c.h"
 
 #define FLOW_PIN   PC3
 #define K_FACTOR   450.0f
@@ -122,8 +124,8 @@ int main(void) {
     NVIC_EnableIRQ(EXTI7_0_IRQn);
     digitalWrite(VALVE_PIN, LOW);
 
-    OLED_t oled;
-    OLED_Init(&oled, 0x3C, OLED_128x64);
+    OLED_Handle oled;
+    OLED_Init(&oled, OLED_128x64, 0x3C);
     OLED_SetFont(&oled, FONT_8x16);
 
     uint32_t last_pulses = 0;
@@ -181,7 +183,7 @@ int main(void) {
             OLED_SetCursor(&oled, 0, 6);
             OLED_Print(&oled, status);
 
-            OLED_Display(&oled);
+            OLED_Update(&oled);
         }
     }
 }</code></pre>
@@ -192,6 +194,7 @@ int main(void) {
 <h2>ข้อ 3: Daily Usage Log — บันทึกการใช้น้ำรายวันลง Flash</h2>
 <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
+#include "WaterFlow.h"
 #include "W25Qxx.h"
 
 #define FLOW_PIN    PC3

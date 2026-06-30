@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>INA219 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head><body>
+﻿<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>INA219 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head><body>
 <nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_rcwl0516.html">บทก่อน</a><a href="chapx_lib_ads1115.html">บทถัดไป →</a></nav>
 <h1>INA219 — วัดแรงดัน/กระแส/กำลังไฟฟ้า ผ่าน I2C</h1><span class="level advanced">ระดับสูง</span>
 <section class="flowchart"><h2>🧭 แผนภาพการทำงาน</h2><pre class="mermaid">
@@ -42,10 +42,10 @@ int main(void) {
 
     INA219_Init(&ina, 0x40, SHUNT_OHM, INA219_32V_2A);
     USART_Print("INA219 Ready\r\n");</code></pre><p class="explain">🔍 <code>INA219_Init(dev, addr, rshunt, range)</code> — addr 0x40 (A0=GND,A1=GND), shunt 0.1Ω, range 32V/2A — Lib คำนวณ Calibration ให้โดยอัตโนมัติ</p></div>
-<div class="step"><h3>ขั้นที่ 2: อ่านค่าแรงดัน กระแส กำลัง</h3><pre><code class="language-c">    float busV = INA219_ReadBusVoltage(&ina);
+<div class="step"><h3>ขั้นที่ 2: อ่านค่าแรงดัน กระแส กำลัง</h3><pre><code class="language-c">    float busV = INA219_GetBusVoltage(&ina);
     float shuntV = INA219_ReadShuntVoltage(&ina);
-    float current = INA219_ReadCurrent(&ina);
-    float power = INA219_ReadPower(&ina);
+    float current = INA219_GetCurrent(&ina);
+    float power = INA219_GetPower(&ina);
 
     USART_Print("Bus:");  USART_PrintFloat(busV, 3);
     USART_Print("V Shunt:"); USART_PrintFloat(shuntV*1000, 2);
@@ -58,8 +58,8 @@ int main(void) {
 
     while(1) {
         if(Is_Timer_Expired(&tmr_sample)) {
-            float v = INA219_ReadBusVoltage(&ina);
-            float a = INA219_ReadCurrent(&ina);
+            float v = INA219_GetBusVoltage(&ina);
+            float a = INA219_GetCurrent(&ina);
             mah_used += (a * 1000.0f) / 3600.0f; // mAh
 
             USART_Print("V:"); USART_PrintFloat(v, 3);
@@ -73,10 +73,10 @@ int main(void) {
 </section>
 <section><h2>📋 API Reference</h2><table><tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
 <tr><td><code>INA219_Init(dev, addr, rshunt, range)</code></td><td>เริ่มต้น INA219 ตั้งค่า addr/shunt/range</td><td><code>INA219_Init(&ina, 0x40, 0.1f, INA219_32V_2A)</code></td></tr>
-<tr><td><code>INA219_ReadBusVoltage(dev)</code></td><td>อ่านแรงดันที่ขั้วโหลด (V)</td><td><code>float v = INA219_ReadBusVoltage(&ina)</code></td></tr>
+<tr><td><code>INA219_GetBusVoltage(dev)</code></td><td>อ่านแรงดันที่ขั้วโหลด (V)</td><td><code>float v = INA219_GetBusVoltage(&ina)</code></td></tr>
 <tr><td><code>INA219_ReadShuntVoltage(dev)</code></td><td>อ่านแรงดันตกคร่อม shunt (V)</td><td><code>float sv = INA219_ReadShuntVoltage(&ina)</code></td></tr>
-<tr><td><code>INA219_ReadCurrent(dev)</code></td><td>อ่านกระแสที่คำนวณ (A)</td><td><code>float a = INA219_ReadCurrent(&ina)</code></td></tr>
-<tr><td><code>INA219_ReadPower(dev)</code></td><td>อ่านกำลังไฟฟ้า (W)</td><td><code>float w = INA219_ReadPower(&ina)</code></td></tr>
+<tr><td><code>INA219_GetCurrent(dev)</code></td><td>อ่านกระแสที่คำนวณ (A)</td><td><code>float a = INA219_GetCurrent(&ina)</code></td></tr>
+<tr><td><code>INA219_GetPower(dev)</code></td><td>อ่านกำลังไฟฟ้า (W)</td><td><code>float w = INA219_GetPower(&ina)</code></td></tr>
 <tr><td><code>INA219_SetCalibration(dev, cal)</code></td><td>ตั้งค่า Calibration Register เอง</td><td><code>INA219_SetCalibration(&ina, 4096)</code></td></tr>
 <tr><td><code>INA219_Reset(dev)</code></td><td>Reset INA219 ทั้งหมด</td><td><code>INA219_Reset(&ina)</code></td></tr>
 </table></section>
@@ -91,7 +91,7 @@ int main(void) {
 <section><h2>🛠️ สร้าง Product: Battery Fuel Gauge</h2><p>INA219 + OLED แสดงแรงดัน กระแส mAh ที่ใช้ — หน้าจอ实时อัพเดททุก 1 วิ</p><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "INA219.h"
-#include "OLED.h"
+#include "oled_i2c.h"
 
 #define SHUNT_OHM 0.1f
 
@@ -105,8 +105,8 @@ int main(void)
     INA219_t ina;
     INA219_Init(&ina, 0x40, SHUNT_OHM, INA219_32V_2A);
 
-    OLED_t oled;
-    OLED_Init(&oled, 0x3C, OLED_128x64);
+    OLED_Handle oled;
+    OLED_Init(&oled, OLED_128x64, 0x3C);
     OLED_SetFont(&oled, FONT_8x16);
 
     float mah_used = 0;
@@ -115,9 +115,9 @@ int main(void)
 
     while(1) {
         if(Is_Timer_Expired(&tmr)) {
-            float v = INA219_ReadBusVoltage(&ina);
-            float a = INA219_ReadCurrent(&ina);
-            float w = INA219_ReadPower(&ina);
+            float v = INA219_GetBusVoltage(&ina);
+            float a = INA219_GetCurrent(&ina);
+            float w = INA219_GetPower(&ina);
             mah_used += (a * 1000.0f) / 3600.0f;
 
             OLED_Clear(&oled);
@@ -142,7 +142,7 @@ int main(void)
                 OLED_Print(&oled, "LOW!");
             }
 
-            OLED_Display(&oled);
+            OLED_Update(&oled);
         }
     }
 }</code></pre></section>

@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="th">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -92,8 +92,8 @@ PC4─SDA(CS)  PC5─SCK  PC6─MOSI  PC7─MISO  PC3─RST  3.3V─VCC  GND─G
 <pre><code class="language-c">#include "RC522.h"
 RC522_Init(PC4, PC3); // CS, RST
 uint8_t uid[10], uid_len;
-if(RC522_Request(PICC_REQIDL) == MI_OK) {
-    if(RC522_AntiColl(uid, &uid_len) == MI_OK) {
+if(RC522_IsCardPresentPICC_REQIDL) == MI_OK) {
+    if(RC522_ReadUID(uid, &uid_len) == MI_OK) {
         USART_Print("Card UID: ");
         for(uint8_t i=0; i<uid_len; i++) { USART_PrintHex(uid[i], 2); }
         USART_Println("");
@@ -107,8 +107,8 @@ RC522_Halt();</code></pre>
 
 <h3>API หลัก</h3>
 <table>
-<tr><td><code>RC522_Init(cs, rst)</code></td><td>Init SPI + self-test</td><td><code>RC522_Request(mode)</code></td><td>ตรวจหาบัตร</td></tr>
-<tr><td><code>RC522_AntiColl(uid, &len)</code></td><td>อ่าน UID (anti-collision)</td><td><code>RC522_SelectTag(uid)</code></td><td>เลือกบัตร</td></tr>
+<tr><td><code>RC522_Init(cs, rst)</code></td><td>Init SPI + self-test</td><td><code>RC522_IsCardPresentmode)</code></td><td>ตรวจหาบัตร</td></tr>
+<tr><td><code>RC522_ReadUID(uid, &len)</code></td><td>อ่าน UID (anti-collision)</td><td><code>RC522_SelectTag(uid)</code></td><td>เลือกบัตร</td></tr>
 <tr><td><code>RC522_Auth(mode, blk, key, uid)</code></td><td>Authenticate sector</td><td><code>RC522_Read(blk, buf)</code></td><td>อ่าน 16B block</td></tr>
 <tr><td><code>RC522_Write(blk, data)</code></td><td>เขียน 16B block</td><td><code>RC522_Halt()</code></td><td>หยุดการสื่อสาร</td></tr>
 </table>

@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>YL-69 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head><body>
+﻿<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>YL-69 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head><body>
 <nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_oh49e.html">บทก่อน</a><a href="chapx_lib_flamesensor_ky026.html">บทถัดไป →</a></nav>
 <h1>YL-69 — Soil Moisture Sensor วัดความชื้นดินผ่าน ADC</h1><span class="level intermediate">ระดับกลาง</span>
 <section class="flowchart"><h2>🧭 แผนภาพการทำงาน</h2><pre class="mermaid">
@@ -31,6 +31,7 @@ flowchart TD
 <section><h2>💻 เขียน Code ทีละขั้น</h2>
 <div class="step"><h3>ขั้นที่ 1: Init + VCC Control ด้วย GPIO</h3><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
+#include "SoilMoisture.h"
 
 #define SOIL_VCC PC0
 #define SOIL_ADC PD2
@@ -111,7 +112,8 @@ int main(void) {
 </table></section>
 <section><h2>🛠️ สร้าง Product: ระบบรดน้ำอัตโนมัติ</h2><p>YL-69 + Relay + OLED — วัดความชื้น 3 ต้น — รดน้ำเมื่อต่ำกว่า threshold — แสดงสถานะบน OLED</p><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
-#include "OLED.h"
+#include "SoilMoisture.h"
+#include "oled_i2c.h"
 
 #define PUMP_PIN PC3
 #define SOIL_VCC PC0
@@ -132,8 +134,8 @@ int main(void)
     digitalWrite(SOIL_VCC, LOW);
     digitalWrite(PUMP_PIN, LOW);
 
-    OLED_t oled;
-    OLED_Init(&oled, 0x3C, OLED_128x64);
+    OLED_Handle oled;
+    OLED_Init(&oled, OLED_128x64, 0x3C);
     OLED_SetFont(&oled, FONT_8x16);
 
     Timer_t tmr;
@@ -176,7 +178,7 @@ int main(void)
             OLED_Print(&oled, "ADC:");
             OLED_PrintDec(&oled, adc);
 
-            OLED_Display(&oled);
+            OLED_Update(&oled);
         }
     }
 }</code></pre></section>

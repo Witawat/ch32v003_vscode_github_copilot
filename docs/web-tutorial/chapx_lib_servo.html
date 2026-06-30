@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="th">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -64,6 +64,7 @@ flowchart TD
     <div class="step"><h3>ขั้นที่ 1: Init PWM + Setup</h3>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
+#include "Servo.h"
 
 int main(void) {
     SystemCoreClockUpdate();
@@ -133,6 +134,7 @@ int main(void) {
     <p>ใช้ Servo 2 ตัว + Joystick (2 Potentiometer ADC) ควบคุมกล้อง — แกน X (Pan) PD2, แกน Y (Tilt) PD3</p>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
+#include "Servo.h"
 
 float angle_to_duty(uint8_t angle) {
     if(angle > 180) angle = 180;

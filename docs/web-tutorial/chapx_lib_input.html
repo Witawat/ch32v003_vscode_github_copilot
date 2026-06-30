@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="th">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -27,8 +27,8 @@ void on_press(void)    { USART_Println("Pressed"); }
 void on_long(void)     { USART_Println("Long press 1s"); }
 void on_double(void)   { USART_Println("Double click"); }
 
-Button_OnPress(&btn, on_press);
-Button_OnLongPress(&btn, on_long, 1000);
+Button_SetCallback(&btn, on_press);
+Button_SetAdvancedCallback(&btn, on_long, 1000);
 Button_OnDoubleClick(&btn, on_double, 400);
 
 while(1) { Button_Update(&btn); IWDG_Feed(); }</code></pre>
@@ -61,12 +61,12 @@ int32_t pos = 0;
 void on_rotate(int8_t dir) { pos += dir; USART_PrintNum(pos); USART_Println(""); }
 void on_button(void)       { pos = 0; USART_Println("Zero"); }
 
-RotaryEncoder_Init(PC0, PC1, PC2);
-RotaryEncoder_OnRotate(on_rotate);
-RotaryEncoder_OnButton(on_button);
+Rotary_Init(PC0, PC1, PC2);
+Rotary_SetCallback(on_rotate);
+Rotary_SetCallback(on_button);
 // OR interrupt: RotaryEncoder_InitInt(PC0, PC1, PC2); // no polling
 
-while(1) { RotaryEncoder_Update(); IWDG_Feed(); }</code></pre>
+while(1) { Rotary_Update(); IWDG_Feed(); }</code></pre>
 <p class="explain">⚠️ quadrature encoding, CLK lead=±, 20 steps/rev common, interrupt mode saves CPU, acceleration: if speed > threshold → multiply step</p>
 
 <h2>PID — Control Algorithm</h2>
@@ -74,7 +74,7 @@ while(1) { RotaryEncoder_Update(); IWDG_Feed(); }</code></pre>
 PID_Handle pid;
 PID_Init(&pid, PID_DIRECT); // heater
 PID_SetTunings(&pid, 2.0f, 3.0f, 0.5f); // Kp, Ki, Kd
-PID_SetOutputLimits(&pid, 0, 100);
+PID_SetLimits(&pid, 0, 100);
 PID_SetSetpoint(&pid, 25.0f);
 
 while(1) {
@@ -91,7 +91,7 @@ LCD1602 I2C: PC1─SDA, PC2─SCL
 Buttons: PC3─UP, PC4─DOWN, PC5─ENTER, PC6─BACK (pull-up)
 </pre>
 <pre><code class="language-c">#include "LCDMenu.h"
-#include "LCD1602_I2C.h"
+#include "lcd1602_i2c.h"
 LCDMenu_Handle menu;
 
 void on_temp(void) { USART_Println("Temp menu"); }
@@ -99,7 +99,7 @@ void on_fan_toggle(LCDMenu_Handle *m, uint8_t val) {
     USART_Print(val ? "Fan ON\r\n" : "Fan OFF\r\n");
 }
 
-LCD1602_I2C_Init(0x27);
+LCD_Init(0x27);
 LCDMenu_Init(&menu, 0x27, 16, 2);
 LCDMenu_AddItem(&menu, "Temperature",   LCDMENU_SUBMENU, NULL);
 LCDMenu_AddItem(&menu, "  Set Max",     LCDMENU_EDIT,    on_temp);
@@ -124,13 +124,13 @@ CircularBuffer_Init(&cb, buf, BUF_SIZE);
 void USART1_IRQHandler(void) {
     if(USART_GetFlagStatus(USART1, USART_FLAG_RXNE)) {
         char c = USART_ReceiveData(USART1);
-        CircularBuffer_Write(&cb, c); // safe (no ISR conflicts)
+        CircularBuffer_Push(&cb, c); // safe (no ISR conflicts)
     }
 }
 // Main: read
 while(1) {
     while(CircularBuffer_Available(&cb)) {
-        char c = CircularBuffer_Read(&cb);
+        char c = CircularBuffer_Pop(&cb);
         process_char(c);
     }
     IWDG_Feed();

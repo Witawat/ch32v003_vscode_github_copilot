@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย MPU6050 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+﻿<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย MPU6050 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
 <nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_mpu6050.html">กลับบท</a><a href="chapx_lib_as5600_answers.html">เฉลยถัดไป →</a></nav>
 <h1>📝 เฉลย — MPU6050 Accelerometer + Gyroscope</h1>
 <div class="answer"><h2>ข้อ 1: Tilt Alarm >30° พร้อม Buzzer</h2><pre><code class="language-c">#define TILT_THRESHOLD  30.0f
@@ -10,7 +10,7 @@ void mpu6050_tilt_alarm(void) {
 
     while(1) {
         MPU6050_Data_t data;
-        if(!MPU6050_ReadAll(&data)) {
+        if(!MPU6050_GetAll(&data)) {
             Delay_Ms(10);
             continue;
         }
@@ -46,7 +46,7 @@ void mpu6050_complementary_filter(void) {
 
     while(1) {
         MPU6050_Data_t data;
-        if(!MPU6050_ReadAll(&data)) { Delay_Ms(5); continue; }
+        if(!MPU6050_GetAll(&data)) { Delay_Ms(5); continue; }
 
         uint32_t now = millis();
         float dt = (now - last_filter_time) / 1000.0f;

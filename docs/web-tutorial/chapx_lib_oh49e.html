@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>OH49E — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head><body>
+﻿<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>OH49E — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head><body>
 <nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_pzem004tv3.html">บทก่อน</a><a href="chapx_lib_soilmoisture_yl69.html">บทถัดไป →</a></nav>
 <h1>OH49E — Hall Effect Sensor แบบ Ratiometric ผ่าน ADC</h1><span class="level intermediate">ระดับกลาง</span>
 <section class="flowchart"><h2>🧭 แผนภาพการทำงาน</h2><pre class="mermaid">
@@ -30,6 +30,7 @@ flowchart TD
 <section><h2>💻 เขียน Code ทีละขั้น</h2>
 <div class="step"><h3>ขั้นที่ 1: Init ADC + Calibrate Zero</h3><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
+#include "OH49E.h"
 
 #define HALL_PIN PD2
 #define HALL_CH ADC_CH0
@@ -113,7 +114,8 @@ int main(void) {
 </table></section>
 <section><h2>🛠️ สร้าง Product: Magnetic Field Strength Meter</h2><p>OH49E + OLED — แสดงค่า Gauss แบบ Real-Time + กราฟแท่ง — Calibrate อัตโนมัติตอนเริ่ม</p><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
-#include "OLED.h"
+#include "OH49E.h"
+#include "oled_i2c.h"
 
 #define HALL_PIN PD2
 #define HALL_CH ADC_CH0
@@ -127,8 +129,8 @@ int main(void)
     ADC_Init(HALL_PIN, HALL_CH);
     USART_Init(115200);
 
-    OLED_t oled;
-    OLED_Init(&oled, 0x3C, OLED_128x64);
+    OLED_Handle oled;
+    OLED_Init(&oled, OLED_128x64, 0x3C);
     OLED_SetFont(&oled, FONT_8x16);
 
     float zero_v = HALL_Calibrate(HALL_PIN, 100);
@@ -162,7 +164,7 @@ int main(void)
         OLED_Print(&oled, " ");
         OLED_PrintFloat(&oled, "V:", voltage, 2);
 
-        OLED_Display(&oled);
+        OLED_Update(&oled);
         Delay_Ms(100);
     }
 }</code></pre></section>

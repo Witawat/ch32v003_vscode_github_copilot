@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย PZEM-004T v3 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+﻿<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย PZEM-004T v3 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
 <nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_pzem004tv3.html">กลับบท</a><a href="chapx_lib_oh49e_answers.html">เฉลยถัดไป →</a></nav>
 <h1>📝 เฉลย — PZEM-004T v3</h1>
 
@@ -7,7 +7,7 @@
 <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "PZEM004Tv3.h"
-#include "OLED.h"
+#include "oled_i2c.h"
 
 int main(void) {
     SystemCoreClockUpdate();
@@ -18,8 +18,8 @@ int main(void) {
     PZEM004Tv3_t pzem;
     PZEM004Tv3_Init(&pzem, PD6, PD5, 0x01);
 
-    OLED_t oled;
-    OLED_Init(&oled, 0x3C, OLED_128x64);
+    OLED_Handle oled;
+    OLED_Init(&oled, OLED_128x64, 0x3C);
     OLED_SetFont(&oled, FONT_8x16);
 
     Timer_t tmr;
@@ -62,7 +62,7 @@ int main(void) {
                 OLED_Print(&oled, "/");
                 OLED_PrintDec(&oled, fail_count);
 
-                OLED_Display(&oled);
+                OLED_Update(&oled);
 
                 USART_Print("OK "); USART_PrintDec(elapsed);
                 USART_Print("ms V:"); USART_PrintFloat(d.voltage, 1);

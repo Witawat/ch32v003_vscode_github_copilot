@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="th">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -66,6 +66,7 @@ flowchart TD
     <div class="step"><h3>ขั้นที่ 1: Init อุปกรณ์ทั้งหมด</h3>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
+#include "ServoTester.h"
 typedef enum {SWEEP, CENTER, MANUAL, STEP} Mode_t;
 Mode_t mode = SWEEP;
 uint8_t angle = 90;
@@ -158,6 +159,7 @@ int main(void) {
     <p>เครื่องมือทดสอบ servo แบบพกพา — 4 โหมดครบ + OLED แสดงผล + เก็บค่า min/max angle + ทดสอบ deadband</p>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
+#include "ServoTester.h"
 
 typedef enum {SWEEP=0, CENTER, MANUAL, STEP, SPEED_TEST} Mode_t;
 Mode_t mode = SWEEP;

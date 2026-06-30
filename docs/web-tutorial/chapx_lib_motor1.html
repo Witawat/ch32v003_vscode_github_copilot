@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="th">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -78,40 +78,40 @@ PC0─IN1(blue)  PC1─IN2(pink)  PC2─IN3(yellow)  PC3─IN4(orange)  5V exter
 
 28BYJ-48 specs: 5V, 0.3 kg·cm torque, 1:64 gear ratio, 5-wire unipolar</pre>
 <pre><code class="language-c">#include "StepperMotor.h"
-Stepper_Init(PC0, PC1, PC2, PC3);
-Stepper_SetSpeed(5);              // 5 RPM
+StepperMotor_InitULN2003(PC0, PC1, PC2, PC3);
+StepperMotor_SetSpeed(5);              // 5 RPM
 Stepper_SetMode(STEPPER_FULL_STEP);
 
 // Full-step: 2048 steps = 1 revolution
-Stepper_Rotate(2048);             // หมุน 1 รอบ
-Stepper_RotateDegrees(90);       // หมุน 90°
+StepperMotor_Move(2048);             // หมุน 1 รอบ
+StepperMotor_MoveDegrees(90);       // หมุน 90°
 
 // Half-step: 4096 steps = 1 revolution (นุ่มนวลกว่า)
 Stepper_SetMode(STEPPER_HALF_STEP);
-Stepper_SetSpeed(3);              // ลด speed เพราะ step เพิ่ม 2 เท่า
-Stepper_Rotate(4096);             // หมุน 1 รอบ (half-step)
+StepperMotor_SetSpeed(3);              // ลด speed เพราะ step เพิ่ม 2 เท่า
+StepperMotor_Move(4096);             // หมุน 1 รอบ (half-step)
 
 // Direction control:
 Stepper_SetDirection(STEPPER_CW);     // clockwise
-Stepper_Rotate(1024);                 // หมุนครึ่งรอบ
+StepperMotor_Move(1024);                 // หมุนครึ่งรอบ
 Stepper_SetDirection(STEPPER_CCW);    // counter-clockwise
-Stepper_Rotate(1024);                 // หมุนกลับครึ่งรอบ
+StepperMotor_Move(1024);                 // หมุนกลับครึ่งรอบ
 
 // Pattern: conveyor belt forward → pause → backward
 while(1) {
     Stepper_SetDirection(STEPPER_CW);
-    Stepper_Rotate(8192);  // 4 รอบ (ระยะทาง conveyor)
+    StepperMotor_Move(8192);  // 4 รอบ (ระยะทาง conveyor)
     Delay_Ms(2000);        // หยุด 2s
     Stepper_SetDirection(STEPPER_CCW);
-    Stepper_Rotate(8192);  // กลับ
+    StepperMotor_Move(8192);  // กลับ
     Delay_Ms(2000);
 }</code></pre>
 <p class="explain">⚠️ 28BYJ-48 = 2048 steps/rev (full-step), 4096 steps/rev (half-step) — gear ratio 1:64, torque ~0.3 kg·cm (เบามาก), ULN2003 รับ 5V logic (CH32V003 3.3V → marginal แต่ใช้งานได้ — ULN2003 threshold ~2.5V), <strong>ควรทำ acceleration (ramp speed)</strong>: ค่อยๆ เพิ่มความเร็วตอน start และลดความเร็วตอน stop → ป้องกัน step loss, Full-step vs Half-step: half-step torque ลดลง ~30% แต่หมุนนุ่มนวลกว่าและเพิ่ม resolution 2 เท่า, การคำนวณระยะทาง: 1 รอบ = 2048 steps → ถ้ารู้ระยะทางต่อรอบ (เช่น lead screw pitch) → ขั้นต่อ mm = 2048 / pitch_mm, 28BYJ-48 กินไฟ ~200mA ตอน full load → ใช้ external 5V 1A</p>
 
 <h3>API หลัก</h3>
 <table>
-<tr><td><code>Stepper_Init(in1..in4)</code></td><td>Init 4 GPIO pins</td><td><code>Stepper_SetSpeed(rpm)</code></td><td>ตั้งความเร็ว RPM</td></tr>
-<tr><td><code>Stepper_Rotate(steps)</code></td><td>หมุน N ขั้น (blocking)</td><td><code>Stepper_RotateDegrees(deg)</code></td><td>หมุน N องศา</td></tr>
+<tr><td><code>StepperMotor_InitULN2003(in1..in4)</code></td><td>Init 4 GPIO pins</td><td><code>StepperMotor_SetSpeed(rpm)</code></td><td>ตั้งความเร็ว RPM</td></tr>
+<tr><td><code>StepperMotor_Move(steps)</code></td><td>หมุน N ขั้น (blocking)</td><td><code>StepperMotor_MoveDegrees(deg)</code></td><td>หมุน N องศา</td></tr>
 <tr><td><code>Stepper_SetMode(mode)</code></td><td>FULL_STEP/HALF_STEP</td><td><code>Stepper_SetDirection(dir)</code></td><td>CW/CCW</td></tr>
 <tr><td><code>Stepper_Stop()</code></td><td>หยุดมอเตอร์</td><td><code>Stepper_Release()</code></td><td>ปลด coil ทั้งหมด (free spin)</td></tr>
 </table>

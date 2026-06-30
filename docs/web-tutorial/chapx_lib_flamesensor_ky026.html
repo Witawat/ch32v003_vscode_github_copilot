@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>KY-026 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head><body>
+﻿<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>KY-026 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head><body>
 <nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_soilmoisture_yl69.html">บทก่อน</a><a href="chapx_lib_soundsensor_ky038.html">บทถัดไป →</a></nav>
 <h1>KY-026 — Flame Sensor ตรวจจับเปลวไฟ IR + Digital</h1><span class="level intermediate">ระดับกลาง</span>
 <section class="flowchart"><h2>🧭 แผนภาพการทำงาน</h2><pre class="mermaid">
@@ -33,6 +33,7 @@ flowchart TD
 <section><h2>💻 เขียน Code ทีละขั้น</h2>
 <div class="step"><h3>ขั้นที่ 1: Init ADC + GPIO สำหรับ Digital</h3><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
+#include "FlameSensor.h"
 
 #define FLAME_ADC PD2
 #define FLAME_DIG PC3
@@ -111,6 +112,7 @@ int main(void) {
 </table></section>
 <section><h2>🛠️ สร้าง Product: Fire Alarm System</h2><p>KY-026 + Buzzer + Relay — ตรวจจับไฟ 3 จุด — แจ้งเตือน 2 ระดับ (Warning / Fire) — ตัดแก๊สอัตโนมัติ</p><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
+#include "FlameSensor.h"
 
 #define FLAME_A PD2
 #define FLAME_D PC3

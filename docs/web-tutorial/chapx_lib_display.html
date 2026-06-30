@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="th">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -20,31 +20,31 @@
 <pre class="ascii-circuit">
 3.3V─VCC  GND─GND  PC1─SDA  PC2─SCL   (I2C addr=0x3C)
 </pre>
-<pre><code class="language-c">#include "OLED.h"
-OLED_t oled;
-OLED_Init(&oled, 0x3C, OLED_128x64);
+<pre><code class="language-c">#include "oled_i2c.h"
+OLED_Handle oled;
+OLED_Init(&oled, OLED_128x64, 0x3C);
 OLED_Clear(&oled);
 OLED_SetCursor(&oled, 0, 0); OLED_Print(&oled, "สวัสดี CH32V003!");
 OLED_SetCursor(&oled, 0, 2); OLED_PrintFloat(&oled, "Temp:", 25.5f, 1);
 OLED_DrawRect(&oled, 100, 0, 127, 63, 1);
-OLED_Display(&oled);  // ★ ต้องเรียก — push buffer ลงจอ</code></pre>
+OLED_Update(&oled);  // ★ ต้องเรียก — push buffer ลงจอ</code></pre>
 <p class="explain">⚠️ 3 ขนาด (128x64/128x32/64x48) → เลือกตอน Init, buffer ~1KB ใน RAM, I2C addr 0x3C(0x78<<1) หรือ 0x3D, Font 6x8/8x16 สลับด้วย OLED_SetFont(&oled, FONT_8x16)</p></div>
 
 <h3>API หลัก</h3>
 <table>
 <tr><td><code>OLED_Init(o, addr, size)</code></td><td>Init + clear</td><td><code>OLED_SetCursor(o, x, y)</code></td><td>ตำแหน่ง text</td></tr>
 <tr><td><code>OLED_Print(o, str)</code></td><td>พิมพ์ข้อความ</td><td><code>OLED_PrintFloat(o, prefix, val, decimals)</code></td><td>เลขทศนิยม</td></tr>
-<tr><td><code>OLED_DrawPixel(o, x, y)</code></td><td>จุด</td><td><code>OLED_DrawLine(o, x1,y1,x2,y2)</code></td><td>เส้น</td></tr>
+<tr><td><code>OLED_SetPixel(o, x, y)</code></td><td>จุด</td><td><code>OLED_DrawLine(o, x1,y1,x2,y2)</code></td><td>เส้น</td></tr>
 <tr><td><code>OLED_DrawRect(o, x,y,w,h, fill)</code></td><td>สี่เหลี่ยม</td><td><code>OLED_DrawCircle(o, cx,cy,r, fill)</code></td><td>วงกลม</td></tr>
 <tr><td><code>OLED_Display(o)</code></td><td>Push buffer → จอ</td><td><code>OLED_Clear(o)</code></td><td>ล้าง buffer</td></tr>
 </table>
 
 <h2>LCD1602 I2C — จอตัวอักษร 16x2</h2>
-<pre><code class="language-c">#include "LCD1602_I2C.h"
-LCD1602_I2C_Init(0x27);  // หรือ 0x3F
-LCD1602_I2C_SetCursor(0, 0); LCD1602_I2C_Print("Hello World!");
-LCD1602_I2C_SetCursor(1, 0); LCD1602_I2C_Print("Line 2");
-// Custom char: LCD1602_I2C_CreateChar(0, custom_pattern); LCD1602_I2C_WriteChar(0);</code></pre>
+<pre><code class="language-c">#include "lcd1602_i2c.h"
+LCD_Init(0x27);  // หรือ 0x3F
+LCD_SetCursor(0, 0); LCD_Print("Hello World!");
+LCD_SetCursor(1, 0); LCD_Print("Line 2");
+// Custom char: LCD_CreateChar(0, custom_pattern); LCD1602_I2C_WriteChar(0);</code></pre>
 <p class="explain">⚠️ 2 address หลัก: 0x27 vs 0x3F — ใช้ I2CScan ตรวจสอบ, backlight เปิด/ปิดด้วย jumper หรือคำสั่ง</p>
 
 <h2>MAX7219 — LED Matrix 8x8 (SPI)</h2>
@@ -52,11 +52,11 @@ LCD1602_I2C_SetCursor(1, 0); LCD1602_I2C_Print("Line 2");
 PC4─CS  PC5─SCK  PC6─DIN  5V─VCC  GND─GND  (chain ได้หลาย module)
 </pre>
 <pre><code class="language-c">#include "MAX7219.h"
-MAX7219_Init(1, PC4);       // 1 module, CS=PC4
+MAX7219_Init(PC5, PC6, PC4, 1);       // 1 module, CS=PC4
 MAX7219_SetIntensity(5);    // 0-15
 MAX7219_Clear();
-MAX7219_ScrollText("สวัสดี", 100);  // 100ms/frame
-// Static char: MAX7219_PrintChar('A');
+MAX7219_StartScrollText("สวัสดี", 100);  // 100ms/frame
+// Static char: MAX7219_DrawBitmap('A');
 // Custom bitmap: MAX7219_DrawBitmap(custom_8x8);</code></pre>
 <p class="explain">⚠️ SPI pins ต้องเป็น PC5(SCK) PC6(MOSI) — CS เลือก pin ไหนก็ได้, ต่อหลาย module → MAX7219_Init(N, CS), ใช้ไฟ 5V ได้</p>
 
@@ -83,9 +83,9 @@ PC0─DATA  5V─VCC  GND─GND  (ห้าม 3.3V! WS2812B ต้อง 5V log
 </pre>
 <pre><code class="language-c">#include "NeoPixel.h"
 #define LED_COUNT 8
-NeoPixel_Init(PC0, LED_COUNT);
-NeoPixel_SetPixel(0, 255, 0, 0);    // LED 0 = Red
-NeoPixel_SetPixel(1, 0, 255, 0);    // LED 1 = Green
+NeoPixel_Init(GPIOC, GPIO_Pin_0, LED_COUNT);
+NeoPixel_SetPixelColor(0, 255, 0, 0);    // LED 0 = Red
+NeoPixel_SetPixelColor(1, 0, 255, 0);    // LED 1 = Green
 NeoPixel_SetAll(0, 0, 255);         // All Blue
 NeoPixel_Show();                     // Push to strip
 // Rainbow: for(i=0;i<LED_COUNT;i++) { NeoPixel_SetHSV(i, i*360/LED_COUNT, 255, 255); }</code></pre>

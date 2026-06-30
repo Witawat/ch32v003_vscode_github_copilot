@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย INA219 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+﻿<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย INA219 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
 <nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_ina219.html">กลับบท</a><a href="chapx_lib_ads1115_answers.html">เฉลยถัดไป →</a></nav>
 <h1>📝 เฉลย — INA219</h1>
 
@@ -7,7 +7,7 @@
 <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "INA219.h"
-#include "OLED.h"
+#include "oled_i2c.h"
 
 #define SHUNT_OHM 0.1f
 #define BATTERY_CAPACITY_MAH 2000.0f
@@ -21,8 +21,8 @@ int main(void) {
     INA219_t ina;
     INA219_Init(&ina, 0x40, SHUNT_OHM, INA219_32V_2A);
 
-    OLED_t oled;
-    OLED_Init(&oled, 0x3C, OLED_128x64);
+    OLED_Handle oled;
+    OLED_Init(&oled, OLED_128x64, 0x3C);
     OLED_SetFont(&oled, FONT_8x16);
 
     float mah_used = 0;
@@ -32,9 +32,9 @@ int main(void) {
 
     while(1) {
         if(Is_Timer_Expired(&tmr)) {
-            float v = INA219_ReadBusVoltage(&ina);
-            float a = INA219_ReadCurrent(&ina);
-            float w = INA219_ReadPower(&ina);
+            float v = INA219_GetBusVoltage(&ina);
+            float a = INA219_GetCurrent(&ina);
+            float w = INA219_GetPower(&ina);
             mah_used += (a * 1000.0f) / 3600.0f;
 
             float mah_remain = mah_capacity - mah_used;
@@ -67,7 +67,7 @@ int main(void) {
                 OLED_Print(&oled, "LOW!");
             }
 
-            OLED_Display(&oled);
+            OLED_Update(&oled);
         }
     }
 }</code></pre>
@@ -101,7 +101,7 @@ int main(void) {
 
     float sum_current = 0;
     for(int i = 0; i < 50; i++) {
-        sum_current += INA219_ReadCurrent(&ina);
+        sum_current += INA219_GetCurrent(&ina);
         Delay_Ms(20);
     }
     float avg_current_a = sum_current / 50.0f;
@@ -122,8 +122,8 @@ int main(void) {
     USART_Print("Re-initialized with calibrated shunt\r\n");
 
     while(1) {
-        float v = INA219_ReadBusVoltage(&ina);
-        float a = INA219_ReadCurrent(&ina);
+        float v = INA219_GetBusVoltage(&ina);
+        float a = INA219_GetCurrent(&ina);
         USART_Print("V:"); USART_PrintFloat(v, 3);
         USART_Print(" I:"); USART_PrintFloat(a * 1000, 1);
         USART_Print("mA\r\n");
@@ -138,7 +138,7 @@ int main(void) {
 <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "INA219.h"
-#include "OLED.h"
+#include "oled_i2c.h"
 
 #define SHUNT_OHM 0.1f
 #define OVERCURRENT_A 1.5f
@@ -153,8 +153,8 @@ int main(void) {
     INA219_t ina;
     INA219_Init(&ina, 0x40, SHUNT_OHM, INA219_32V_2A);
 
-    OLED_t oled;
-    OLED_Init(&oled, 0x3C, OLED_128x64);
+    OLED_Handle oled;
+    OLED_Init(&oled, OLED_128x64, 0x3C);
     OLED_SetFont(&oled, FONT_8x16);
 
     pinMode(PC0, PIN_MODE_OUTPUT);
@@ -166,9 +166,9 @@ int main(void) {
 
     while(1) {
         if(Is_Timer_Expired(&tmr)) {
-            float v = INA219_ReadBusVoltage(&ina);
-            float a = INA219_ReadCurrent(&ina);
-            float w = INA219_ReadPower(&ina);
+            float v = INA219_GetBusVoltage(&ina);
+            float a = INA219_GetCurrent(&ina);
+            float w = INA219_GetPower(&ina);
             energy_wh += (w / 3600.0f);
 
             OLED_Clear(&oled);
@@ -207,7 +207,7 @@ int main(void) {
                 OLED_Print(&oled, "Status: NORMAL  ");
             }
 
-            OLED_Display(&oled);
+            OLED_Update(&oled);
         }
     }
 }</code></pre>

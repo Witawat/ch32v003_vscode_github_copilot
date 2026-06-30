@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>HX711 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head><body>
+﻿<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>HX711 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head><body>
 <nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_waterflow_yfs201.html">บทก่อน</a><a href="chapx_lib_servo.html">บทถัดไป →</a></nav>
 <h1>HX711 — Load Cell ADC 24-Bit สำหรับเครื่องชั่งน้ำหนัก</h1><span class="level advanced">ระดับสูง</span>
 <section class="flowchart"><h2>🧭 แผนภาพการทำงาน</h2><pre class="mermaid">
@@ -110,7 +110,7 @@ int main(void) {
 <section><h2>🛠️ สร้าง Product: Digital Kitchen Scale</h2><p>HX711 + Load Cell 5kg + OLED + ปุ่ม Tare — แสดงน้ำหนัก g/kg — Auto Tare ตอนเปิด</p><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "HX711.h"
-#include "OLED.h"
+#include "oled_i2c.h"
 
 #define DT_PIN PC2
 #define SCK_PIN PC3
@@ -128,8 +128,8 @@ int main(void)
     HX711_Init(&scale, DT_PIN, SCK_PIN, HX711_GAIN_128);
     HX711_SetScale(&scale, CAL_FACTOR);
 
-    OLED_t oled;
-    OLED_Init(&oled, 0x3C, OLED_128x64);
+    OLED_Handle oled;
+    OLED_Init(&oled, OLED_128x64, 0x3C);
     OLED_SetFont(&oled, FONT_8x16);
 
     pinMode(TARE_BTN, PIN_MODE_INPUT_PULLUP);
@@ -166,12 +166,12 @@ int main(void)
             HX711_Tare(&scale, 15);
             OLED_SetCursor(&oled, 0, 6);
             OLED_Print(&oled, "TARED!      ");
-            OLED_Display(&oled);
+            OLED_Update(&oled);
             Delay_Ms(500);
             while(GPIO_Read(TARE_BTN) == 0);
         }
 
-        OLED_Display(&oled);
+        OLED_Update(&oled);
         Delay_Ms(200);
     }
 }</code></pre></section>

@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="th">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -50,14 +50,14 @@ CH32V003 TSSOP-20
 #include "SimpleHAL.h"
 #include "BMP280.h"
 #include "DS18B20.h"
-#include "OLED.h"
+#include "oled_i2c.h"
 #include "Relay.h"
 #include "RotaryEncoder.h"
 #include "PID.h"
 #include "SimpleScheduler.h"
 #include "Buzzer.h"
 
-OLED_t oled;
+OLED_Handle oled;
 PID_Handle pid;
 float setpoint = 25.0f, current_temp = 0, pid_output = 0;
 uint8_t heater_on = 0, alarm_active = 0;
@@ -103,7 +103,7 @@ void task_update_display(void) {
     OLED_PrintFloat(&oled, "", (float)(Get_CurrentMs()/1000), 0);
     OLED_Print(&oled, "s");
 
-    OLED_Display(&oled);
+    OLED_Update(&oled);
 }
 
 // ---- Rotary Encoder Callbacks ----
@@ -134,13 +134,13 @@ int main(void) {
     // Init sensors
     BMP280_Init(0x76);
     BMP280_SetMode(BMP280_MODE_NORMAL);
-    DS18B20_Init();
+    DS18B20_SearchDevices();
 
     // Init display
-    OLED_Init(&oled, 0x3C, OLED_128x64);
+    OLED_Init(&oled, OLED_128x64, 0x3C);
     OLED_Clear(&oled); OLED_SetCursor(&oled, 0, 2);
     OLED_Print(&oled, "Temp Controller"); OLED_SetCursor(&oled, 0, 4);
-    OLED_Print(&oled, "Booting..."); OLED_Display(&oled);
+    OLED_Print(&oled, "Booting..."); OLED_Update(&oled);
     Delay_Ms(2000);
 
     // Init actuators
@@ -150,26 +150,26 @@ int main(void) {
     // Init PID
     PID_Init(&pid, PID_DIRECT);
     PID_SetTunings(&pid, 2.0f, 3.0f, 0.5f);
-    PID_SetOutputLimits(&pid, 0, 100);
+    PID_SetLimits(&pid, 0, 100);
     PID_SetSetpoint(&pid, setpoint);
 
     // Init input
-    RotaryEncoder_Init(PC3, PC4, PC6);
-    RotaryEncoder_OnRotate(on_rotate);
-    RotaryEncoder_OnButton(on_button);
+    Rotary_Init(PC3, PC4, PC6);
+    Rotary_SetCallback(on_rotate);
+    Rotary_SetCallback(on_button);
 
     // Init scheduler
-    SimpleScheduler_Init();
-    SimpleScheduler_AddTask(task_read_sensors,  2000); // 2s
-    SimpleScheduler_AddTask(task_pid_control,   1000); // 1s
-    SimpleScheduler_AddTask(task_update_display, 500); // 0.5s
+    Scheduler_Init();
+    Scheduler_AddTask(task_read_sensors,  2000); // 2s
+    Scheduler_AddTask(task_pid_control,   1000); // 1s
+    Scheduler_AddTask(task_update_display, 500); // 0.5s
 
     Buzzer_Beep(PA1, 100); // startup beep
     USART_Println("=== Temp Controller Ready ===");
 
     while(1) {
-        RotaryEncoder_Update();  // fast poll for responsiveness
-        SimpleScheduler_Run();   // run timed tasks
+        Rotary_Update();  // fast poll for responsiveness
+        Scheduler_Run();   // run timed tasks
         yield();                 // feed IWDG
 
         // Optional: sleep when idle

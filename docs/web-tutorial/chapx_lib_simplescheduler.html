@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>SimpleScheduler — มัลติทาสก์แบบ Cooperative — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head><body>
+﻿<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>SimpleScheduler — มัลติทาสก์แบบ Cooperative — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head><body>
 
 <nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_circularbuffer.html">บทก่อน</a><a href="chapx_lib_dht.html">บทถัดไป →</a></nav>
 
@@ -115,9 +115,9 @@ void task_button(void) {
 #include "SimpleHAL.h"
 #include "SimpleScheduler.h"
 #include "DHT.h"
-#include "OLED.h"
+#include "oled_i2c.h"
 
-OLED_t oled;
+OLED_Handle oled;
 float temp = 0, hum = 0;
 uint8_t btn_state = 0;
 
@@ -128,7 +128,7 @@ void task_display(void) {
     OLED_Clear(&oled);
     OLED_SetCursor(&oled,0,0); OLED_PrintFloat(&oled,"T:",temp,1);
     OLED_SetCursor(&oled,0,1); OLED_PrintFloat(&oled,"H:",hum,1);
-    OLED_Display(&oled);
+    OLED_Update(&oled);
     digitalToggle(PC3);  // Heartbeat
 }
 void task_button(void) {
@@ -146,7 +146,7 @@ int main(void) {
     DHT_Init(PC0, DHT11);
     pinMode(PC1, PIN_MODE_INPUT_PULLUP);
     pinMode(PC3, PIN_MODE_OUTPUT);
-    OLED_Init(&oled, 0x3C, OLED_128x64);
+    OLED_Init(&oled, OLED_128x64, 0x3C);
     OLED_SetFont(&oled, FONT_8x16);
 
     Scheduler_Init();

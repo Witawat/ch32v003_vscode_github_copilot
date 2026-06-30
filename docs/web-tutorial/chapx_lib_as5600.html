@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="th">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -97,8 +97,8 @@ int main(void) {
     <p class="explain">🔍 <code>AS5600_ReadRawAngle()</code> — 0–4095 (12-bit) — <code>AS5600_ReadAngle()</code> แปลงเป็น 0–360° — <code>AS5600_GetRPM()</code> คำนวณรอบต่อนาทีจากประวัติการอ่าน</p></div>
 
     <div class="step"><h3>ขั้นที่ 3: Loop + แสดงผล</h3>
-    <pre><code class="language-c">    OLED_t oled;
-    OLED_Init(&oled, 0x3C, OLED_128x64);
+    <pre><code class="language-c">    OLED_Handle oled;
+    OLED_Init(&oled, OLED_128x64, 0x3C);
 
     while(1) {
         float angle = AS5600_ReadAngle();
@@ -121,7 +121,7 @@ int main(void) {
         OLED_DrawCircle(&oled, cx, cy, r, 0);  // circle outline
         OLED_DrawLine(&oled, cx, cy, tx, ty);   // needle
 
-        OLED_Display(&oled);
+        OLED_Update(&oled);
         Delay_Ms(50);
     }
 }</code></pre>
@@ -160,7 +160,7 @@ int main(void) {
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "AS5600.h"
-#include "OLED.h"
+#include "oled_i2c.h"
 
 int main(void)
 {
@@ -168,8 +168,8 @@ int main(void)
     I2C_Init(I2C1, I2C_SPEED_STANDARD);
     USART_Init(USART1, BAUD_115200);
 
-    OLED_t oled;
-    OLED_Init(&oled, 0x3C, OLED_128x64);
+    OLED_Handle oled;
+    OLED_Init(&oled, OLED_128x64, 0x3C);
 
     AS5600_Init(0x36);
 
@@ -202,7 +202,7 @@ int main(void)
         OLED_Print(&oled, "Turns: ");
         OLED_PrintInt(&oled, turns);
 
-        OLED_Display(&oled);
+        OLED_Update(&oled);
         Delay_Ms(10);
     }
 }</code></pre>

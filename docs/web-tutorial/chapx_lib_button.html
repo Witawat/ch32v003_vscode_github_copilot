@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Button — ปุ่มกด Debounce — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head><body>
+﻿<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Button — ปุ่มกด Debounce — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head><body>
 
 <nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_i2cscan.html">บทก่อน</a><a href="chapx_lib_keymatrix.html">บทถัดไป →</a></nav>
 
@@ -54,8 +54,8 @@ int main(void) {
     USART_Init(115200);
 
     Button_Init(&btn, PC1, BUTTON_ACTIVE_LOW, 50);
-    Button_OnPress(&btn, on_press);
-    Button_OnLongPress(&btn, on_long, 1000);
+    Button_SetCallback(&btn, on_press);
+    Button_SetAdvancedCallback(&btn, on_long, 1000);
     Button_OnDoubleClick(&btn, on_double, 400);
     USART_Println("Button Ready!");</code></pre>
 <p class="explain">🔍 <code>Button_Init(&btn, pin, mode, debounce_ms)</code> — mode เป็น <code>BUTTON_ACTIVE_LOW</code> (ปุ่มต่อ GND) หรือ <code>BUTTON_ACTIVE_HIGH</code> (ปุ่มต่อ VCC) debounce 50ms คือค่ามาตรฐานที่ใช้ได้กับปุ่มทั่วไป</p></div>
@@ -83,8 +83,8 @@ void on_double(void) {
 
 <section><h2>📋 API Reference</h2><table><tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
 <tr><td><code>Button_Init(&btn, pin, mode, ms)</code></td><td>เริ่มต้นปุ่ม — mode=ACTIVE_LOW/ACTIVE_HIGH, debounce=20-100ms</td><td><code>Button_Init(&btn, PC1, BUTTON_ACTIVE_LOW, 50)</code></td></tr>
-<tr><td><code>Button_OnPress(&btn, cb)</code></td><td>ตั้ง callback เมื่อกดสั้น (ปล่อยภายใน threshold)</td><td><code>Button_OnPress(&btn, on_press)</code></td></tr>
-<tr><td><code>Button_OnLongPress(&btn, cb, ms)</code></td><td>ตั้ง callback เมื่อกดค้างเกิน ms (default 1000)</td><td><code>Button_OnLongPress(&btn, on_long, 1000)</code></td></tr>
+<tr><td><code>Button_SetCallback(&btn, cb)</code></td><td>ตั้ง callback เมื่อกดสั้น (ปล่อยภายใน threshold)</td><td><code>Button_SetCallback(&btn, on_press)</code></td></tr>
+<tr><td><code>Button_SetAdvancedCallback(&btn, cb, ms)</code></td><td>ตั้ง callback เมื่อกดค้างเกิน ms (default 1000)</td><td><code>Button_SetAdvancedCallback(&btn, on_long, 1000)</code></td></tr>
 <tr><td><code>Button_OnDoubleClick(&btn, cb, ms)</code></td><td>ตั้ง callback เมื่อดับเบิลคลิกภายใน window ms</td><td><code>Button_OnDoubleClick(&btn, on_double, 400)</code></td></tr>
 <tr><td><code>Button_Update(&btn)</code></td><td>อัปเดต state machine — ต้องเรียกใน loop</td><td><code>while(1){Button_Update(&btn);}</code></td></tr>
 <tr><td><code>Button_IsPressed(&btn)</code></td><td>เช็คสถานะปัจจุบัน — true=กดอยู่</td><td><code>if(Button_IsPressed(&btn)){...}</code></td></tr>
@@ -93,7 +93,7 @@ void on_double(void) {
 
 <section><h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2><table><tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
 <tr><td>กด 1 ครั้ง แต่ callback ทำงาน 2-3 รอบ</td><td>Debounce น้อยเกินไป (เช่น 10ms)</td><td>เพิ่ม debounce เป็น 50-80ms — ปุ่มโลหะอาจต้อง 80ms</td></tr>
-<tr><td>Long Press ไม่เคยถูกเรียก</td><td>ลืมตั้ง <code>Button_OnLongPress()</code> หรือ threshold สั้นไป</td><td>เพิ่ม <code>Button_OnLongPress(&btn, cb, 1000)</code> และเช็คค่า threshold ≥ 500ms</td></tr>
+<tr><td>Long Press ไม่เคยถูกเรียก</td><td>ลืมตั้ง <code>Button_OnLongPress()</code> หรือ threshold สั้นไป</td><td>เพิ่ม <code>Button_SetAdvancedCallback(&btn, cb, 1000)</code> และเช็คค่า threshold ≥ 500ms</td></tr>
 <tr><td>Callback ไม่ทำงานเลย</td><td>ลืม <code>Button_Update(&btn)</code> ใน while(1)</td><td>เพิ่มใน main loop ทุกรอบ — state machine ต้องถูกเรียกจึงจะทำงาน</td></tr>
 <tr><td>Active High/Low กลับด้าน</td><td>ตั้ง mode ไม่ตรงกับวงจร — ACTIVE_LOW แต่ต่อปุ่มเข้า VCC</td><td>เช็ควงจร: ACTIVE_LOW → ปุ่มต่อ GND, ACTIVE_HIGH → ปุ่มต่อ VCC</td></tr>
 <tr><td>Double Click ไม่ติด</td><td>Window แคบเกิน หรือกดไม่ทัน</td><td>เพิ่ม window เป็น 400-600ms — double click ต้องกด 2 ครั้งเร็ว</td></tr>
@@ -129,8 +129,8 @@ int main(void) {
     Timer_Init();
     USART_Init(115200);
     Button_Init(&btn, PC1, BUTTON_ACTIVE_LOW, 50);
-    Button_OnPress(&btn, on_press);
-    Button_OnLongPress(&btn, on_long, 1000);
+    Button_SetCallback(&btn, on_press);
+    Button_SetAdvancedCallback(&btn, on_long, 1000);
     Button_OnDoubleClick(&btn, on_double, 400);
     USART_Println("=== Single-Button Menu ===");
     USART_Println(menu[0]);

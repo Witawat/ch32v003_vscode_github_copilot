@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="th">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -155,7 +155,7 @@ int main(void) {
 #include "SimpleHAL.h"
 #include "SHT3x.h"
 #include "BMP280.h"
-#include "OLED.h"
+#include "oled_i2c.h"
 
 int main(void) {
     SystemCoreClockUpdate();
@@ -168,8 +168,8 @@ int main(void) {
     BMP280_SetMode(BMP280_MODE_NORMAL);
     Delay_Ms(100);
 
-    OLED_t oled;
-    OLED_Init(&oled, 0x3C, OLED_128x64);
+    OLED_Handle oled;
+    OLED_Init(&oled, OLED_128x64, 0x3C);
     OLED_SetFont(&oled, FONT_8x16);
 
     Timer_t tmr;
@@ -189,7 +189,7 @@ int main(void) {
             OLED_PrintFloat(&oled, "H:", sh, 1); OLED_Print(&oled, "%");
             OLED_SetCursor(&oled, 0, 2);
             OLED_PrintFloat(&oled, "P:", bp, 1); OLED_Print(&oled, "hPa");
-            OLED_Display(&oled);
+            OLED_Update(&oled);
         }
         IWDG_Feed();
     }

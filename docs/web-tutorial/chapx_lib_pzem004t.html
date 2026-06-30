@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>PZEM-004T — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head><body>
+﻿<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>PZEM-004T — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head><body>
 <nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_mcp4725.html">บทก่อน</a><a href="chapx_lib_pzem004tv3.html">บทถัดไป →</a></nav>
 <h1>PZEM-004T — วัดไฟ AC ผ่าน Modbus-RTU</h1><span class="level advanced">ระดับสูง</span>
 <section class="flowchart"><h2>🧭 แผนภาพการทำงาน</h2><pre class="mermaid">
@@ -106,7 +106,7 @@ int main(void) {
 <section><h2>🛠️ สร้าง Product: เครื่องวัดไฟบ้าน + บันทึก kWh</h2><p>PZEM-004T + OLED แสดงค่าทางไฟฟ้า — บันทึก kWh สะสมลง EEPROM ทุก 1 นาที</p><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "PZEM004T.h"
-#include "OLED.h"
+#include "oled_i2c.h"
 
 int main(void)
 {
@@ -118,8 +118,8 @@ int main(void)
     PZEM004T_t pzem;
     PZEM004T_Init(&pzem, PD6, PD5, 0x01);
 
-    OLED_t oled;
-    OLED_Init(&oled, 0x3C, OLED_128x64);
+    OLED_Handle oled;
+    OLED_Init(&oled, OLED_128x64, 0x3C);
     OLED_SetFont(&oled, FONT_8x16);
 
     Timer_t tmr;
@@ -162,7 +162,7 @@ int main(void)
             OLED_PrintFloat(&oled, "", e, 1);
             OLED_Print(&oled, "kWh");
 
-            OLED_Display(&oled);
+            OLED_Update(&oled);
         }
     }
 }</code></pre></section>

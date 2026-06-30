@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="th">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -76,6 +76,7 @@ flowchart TD
     <div class="step"><h3>ขั้นที่ 1: Init Motor Channels + PWM</h3>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
+#include "L298N.h"
 
 #define IN1 PC0
 #define IN2 PC1
@@ -183,6 +184,7 @@ int main(void) {
     <p>มอเตอร์ 2 ตัว L298N + Bluetooth Control — Forward/Reverse/Left/Right ด้วย PWM speed แยกซ้าย-ขวา</p>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
+#include "L298N.h"
 
 void motor_left(int16_t speed) {  // -100..0..+100
     if(speed > 0) { digitalWrite(PC0,HIGH); digitalWrite(PC1,LOW); PWM_SetDuty(1,speed); }

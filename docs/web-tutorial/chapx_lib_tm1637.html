@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="th">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -53,6 +53,7 @@ flowchart TD
     <div class="step"><h3>ขั้นที่ 1: Init + Setup</h3>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
+#include "TM1637.h"
 
 int main(void) {
     SystemCoreClockUpdate();
@@ -126,6 +127,7 @@ int main(void) {
     <p>TM1637 + Rotary Encoder — หมุนตั้งนาที, กดเริ่มนับถอยหลัง — ใช้ Non-Blocking Timer สำหรับ countdown</p>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
+#include "TM1637.h"
 
 int main(void) {
     SystemCoreClockUpdate();

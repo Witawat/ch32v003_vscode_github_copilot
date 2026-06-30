@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="th">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -71,6 +71,7 @@ flowchart TD
     <div class="step"><h3>ขั้นที่ 1: Init PWM + ESC Setup</h3>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
+#include "ESC.h"
 
 int main(void) {
     SystemCoreClockUpdate();
@@ -157,6 +158,7 @@ int main(void) {
     <p>ใช้ Load Cell (HX711) + ESC วัดแรงขับของมอเตอร์ที่ throttle ต่าง ๆ — แสดงผลผ่าน OLED</p>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
+#include "ESC.h"
 
 int main(void) {
     SystemCoreClockUpdate(); Timer_Init();

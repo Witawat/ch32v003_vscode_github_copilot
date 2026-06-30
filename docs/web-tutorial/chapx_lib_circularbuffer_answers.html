@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย CIRCULAR BUFFER — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+﻿<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย CIRCULAR BUFFER — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
 <nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_circularbuffer.html">กลับบท</a><a href="chapx_lib_simplescheduler_answers.html">เฉลยถัดไป →</a></nav>
 <h1>📝 เฉลย — Circular Buffer</h1>
 <div class="answer"><h2>ข้อ 1: USART RX Buffer — ISR เขียน, main loop อ่าน</h2>
@@ -14,7 +14,7 @@ void USART1_IRQHandler(void) __attribute__((interrupt("WCH-Interrupt-fast")));
 void USART1_IRQHandler(void) {
     if(USART_GetITStatus(USART1, USART_IT_RXNE)) {
         uint8_t byte = USART_ReceiveData(USART1);
-        CircularBuffer_Write(&rx_buf, byte);   // ISR-safe write
+        CircularBuffer_Push(&rx_buf, byte);   // ISR-safe write
     }
 }
 
@@ -34,7 +34,7 @@ int main(void) {
         // อ่านทั้งก้อนเมื่อมีข้อมูล ≥ 1 byte
         while(CircularBuffer_Available(&rx_buf) > 0) {
             uint8_t b;
-            CircularBuffer_Read(&rx_buf, &b);
+            CircularBuffer_Pop(&rx_buf, &b);
             USART_SendData(USART1, b);         // echo back
             while(!USART_GetFlagStatus(USART1, USART_FLAG_TC));
         }
@@ -75,7 +75,7 @@ void process_line(const char *line) {
 void USART1_IRQHandler(void) __attribute__((interrupt("WCH-Interrupt-fast")));
 void USART1_IRQHandler(void) {
     if(USART_GetITStatus(USART1, USART_IT_RXNE)) {
-        CircularBuffer_Write(&cmd_buf, USART_ReceiveData(USART1));
+        CircularBuffer_Push(&cmd_buf, USART_ReceiveData(USART1));
     }
 }
 
@@ -95,7 +95,7 @@ int main(void) {
     while(1) {
         while(CircularBuffer_Available(&cmd_buf)) {
             uint8_t b;
-            CircularBuffer_Read(&cmd_buf, &b);
+            CircularBuffer_Pop(&cmd_buf, &b);
 
             if(b == '\n' || b == '\r') {
                 if(li > 0) { line[li] = '\0'; process_line(line); li = 0; }
@@ -124,7 +124,7 @@ void USART1_IRQHandler(void) __attribute__((interrupt("WCH-Interrupt-fast")));
 void USART1_IRQHandler(void) {
     if(USART_GetITStatus(USART1, USART_IT_RXNE)) {
         uint8_t b = USART_ReceiveData(USART1);
-        if(!CircularBuffer_Write(&rx, b)) {
+        if(!CircularBuffer_Push(&rx, b)) {
             overflow_cnt++;              // นับครั้งที่ buffer เต็ม
             dropped_bytes++;             // นับ byte ที่หายไป
         }
@@ -133,7 +133,7 @@ void USART1_IRQHandler(void) {
 
 void flush_buffer(void) {
     uint8_t dummy;
-    while(CircularBuffer_Available(&rx)) CircularBuffer_Read(&rx, &dummy);
+    while(CircularBuffer_Available(&rx)) CircularBuffer_Pop(&rx, &dummy);
 }
 
 int main(void) {
@@ -166,7 +166,7 @@ int main(void) {
         // ประมวลผลเฉพาะเมื่อ buffer ไม่เกิน 50%
         if(avail <= BUF_SIZE / 2) {
             uint8_t b;
-            while(CircularBuffer_Read(&rx, &b)) {
+            while(CircularBuffer_Pop(&rx, &b)) {
                 USART_SendData(USART1, b);
                 while(!USART_GetFlagStatus(USART1, USART_FLAG_TC));
             }

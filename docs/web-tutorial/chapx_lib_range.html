@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="th">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -22,14 +22,14 @@ PC0─TRIG  PC1─ECHO  5V─VCC  GND─GND
 ⚠️ ECHO 5V → voltage divider 2.2kΩ+3.3kΩ ลดเหลือ ~3.3V</pre>
 <pre><code class="language-c">#include "HCSR04.h"
 HCSR04_Init(PC0, PC1);
-float dist = HCSR04_ReadCm();
+float dist = HCSR04_MeasureCm();
 if(dist > 0) { USART_PrintFloat(dist, 1); USART_Println(" cm"); }
 // Average: float avg = HCSR04_ReadAvgCm(5); // 5 samples</code></pre>
 <p class="explain">⚠️ Range 2-400cm, angle ~15°, ECHO 5V → ต้องใช้ voltage divider (2.2kΩ+3.3kΩ), pulseIn timeout 30ms, ห้ามวัดถี่กว่า 60ms (รอ echo decay), sound speed varies with temp → 0.6% error per 1°C, ถ้าคืน 0 = object อยู่นอกระยะ / timeout</p>
 
 <h3>API หลัก</h3>
 <table>
-<tr><td><code>HCSR04_Init(trig, echo)</code></td><td>ตั้ง pin TRIG + ECHO</td><td><code>HCSR04_ReadCm()</code></td><td>อ่านระยะ cm</td></tr>
+<tr><td><code>HCSR04_Init(trig, echo)</code></td><td>ตั้ง pin TRIG + ECHO</td><td><code>HCSR04_MeasureCm()</code></td><td>อ่านระยะ cm</td></tr>
 <tr><td><code>HCSR04_ReadAvgCm(n)</code></td><td>เฉลี่ย n samples</td><td><code>HCSR04_ReadInch()</code></td><td>อ่านระยะนิ้ว</td></tr>
 </table>
 
@@ -39,13 +39,13 @@ PC1─SDA  PC2─SCL  3.3V─VCC  GND─GND  XSHUT─3.3V (หรือ GPIO ส
 </pre>
 <pre><code class="language-c">#include "VL53L0X.h"
 VL53L0X_Init(0x29); // I2C addr (เปลี่ยน XSHUT สำหรับ multiple)
-uint16_t mm = VL53L0X_ReadRange();
+uint16_t mm = VL53L0X_ReadRangeMM();
 // Continuous mode: VL53L0X_StartContinuous(); VL53L0X_ReadRangeContinuous();</code></pre>
 <p class="explain">⚠️ Range 3-200cm (indoor, dark surface), accuracy ±3%, แสงแดดจัดอ่านไม่ได้ — ใช้ในที่ร่ม/ในห้อง, I2C addr 0x29 (single), multi-sensor: toggle XSHUT → assign address ใหม่ทีละตัว, เร็วกว่า+แม่นกว่าอัลตราโซนิคสำหรับระยะ <2m, range mode: default/long/high speed เลือกได้</p>
 
 <h3>API หลัก</h3>
 <table>
-<tr><td><code>VL53L0X_Init(addr)</code></td><td>Init + calibration</td><td><code>VL53L0X_ReadRange()</code></td><td>Single-shot (mm)</td></tr>
+<tr><td><code>VL53L0X_Init(addr)</code></td><td>Init + calibration</td><td><code>VL53L0X_ReadRangeMM()</code></td><td>Single-shot (mm)</td></tr>
 <tr><td><code>VL53L0X_StartContinuous()</code></td><td>เริ่ม continuous</td><td><code>VL53L0X_ReadRangeContinuous()</code></td><td>อ่านต่อเนื่อง</td></tr>
 <tr><td><code>VL53L0X_SetRangeMode(mode)</code></td><td>Default/Long/HighSpeed</td><td><code>VL53L0X_SetTimeout(ms)</code></td><td>Timeout</td></tr>
 </table>
@@ -57,7 +57,7 @@ PC1─SDA  PC2─SCL  3.3V─VCC  GND─GND  AD0─GND (=0x68, หรือ VCC 
 <pre><code class="language-c">#include "MPU6050.h"
 MPU6050_Data_t data;
 MPU6050_Init(0x68);
-MPU6050_ReadAll(&data);
+MPU6050_GetAll(&data);
 // Accel (raw → g): float ax = data.ax / 16384.0f;
 // Gyro (raw → °/s): float gx = data.gx / 131.0f;
 // Complementary filter:
@@ -66,7 +66,7 @@ float angle = 0.98f * (angle + gx*dt) + 0.02f * (atan2(ay, az)*57.3f);</code></p
 
 <h3>API หลัก</h3>
 <table>
-<tr><td><code>MPU6050_Init(addr)</code></td><td>Init + wake up</td><td><code>MPU6050_ReadAll(&data)</code></td><td>อ่าน accel+gyro+temp</td></tr>
+<tr><td><code>MPU6050_Init(addr)</code></td><td>Init + wake up</td><td><code>MPU6050_GetAll(&data)</code></td><td>อ่าน accel+gyro+temp</td></tr>
 <tr><td><code>MPU6050_ReadAccel(&data)</code></td><td>อ่านเฉพาะ accel</td><td><code>MPU6050_ReadGyro(&data)</code></td><td>อ่านเฉพาะ gyro</td></tr>
 <tr><td><code>MPU6050_Calibrate(n)</code></td><td>หัก bias จาก n samples</td><td><code>MPU6050_SetRange(acc, gyr)</code></td><td>ตั้ง range</td></tr>
 </table>

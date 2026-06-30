@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>PID — ระบบควบคุมอัตโนมัติ — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head><body>
+﻿<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>PID — ระบบควบคุมอัตโนมัติ — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head><body>
 
 <nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_rotaryencoder.html">บทก่อน</a><a href="chapx_lib_lcdmenu.html">บทถัดไป →</a></nav>
 
@@ -61,7 +61,7 @@ int main(void) {
 
     PID_Init(&pid, PID_DIRECT);  // Heater: input↓→output↑
     PID_SetTunings(&pid, 2.0f, 5.0f, 1.0f);  // Kp, Ki, Kd
-    PID_SetOutputLimits(&pid, 0, 100);  // 0-100% duty
+    PID_SetLimits(&pid, 0, 100);  // 0-100% duty
     PID_SetSetpoint(&pid, 40.0f);  // Target 40°C</code></pre>
 <p class="explain">🔍 <code>PID_Init(&pid, direction)</code> — <code>PID_DIRECT</code> สำหรับ heater (เพิ่ม output เมื่อต่ำกว่า setpoint) — <code>PID_REVERSE</code> สำหรับ cooler — Ki หน่วยเป็นนาที (integral time) — <code>SetOutputLimits</code> clamp output ให้อยู่ใน range ที่ actuator รับได้</p></div>
 
@@ -106,7 +106,7 @@ int main(void) {
 <tr><td><code>PID_Init(&pid, direction)</code></td><td>เริ่มต้น PID — DIRECT/REVERSE</td><td><code>PID_Init(&pid, PID_DIRECT)</code></td></tr>
 <tr><td><code>PID_SetTunings(&pid, Kp, Ki, Kd)</code></td><td>ตั้งค่า gain — Ki ในหน่วยนาที</td><td><code>PID_SetTunings(&pid, 2.0, 5.0, 1.0)</code></td></tr>
 <tr><td><code>PID_SetSetpoint(&pid, sp)</code></td><td>ตั้งค่าเป้าหมาย (target)</td><td><code>PID_SetSetpoint(&pid, 40.0f)</code></td></tr>
-<tr><td><code>PID_SetOutputLimits(&pid, min, max)</code></td><td>จำกัด output range — กัน actuator เสียหาย</td><td><code>PID_SetOutputLimits(&pid, 0, 100)</code></td></tr>
+<tr><td><code>PID_SetLimits(&pid, min, max)</code></td><td>จำกัด output range — กัน actuator เสียหาย</td><td><code>PID_SetLimits(&pid, 0, 100)</code></td></tr>
 <tr><td><code>PID_Compute(&pid, input)</code></td><td>คำนวณ output จาก input ปัจจุบัน</td><td><code>float out = PID_Compute(&pid, temp)</code></td></tr>
 <tr><td><code>PID_SetSampleTime(&pid, ms)</code></td><td>ตั้ง sample time (default 1000ms)</td><td><code>PID_SetSampleTime(&pid, 250)</code></td></tr>
 <tr><td><code>PID_Reset(&pid)</code></td><td>รีเซ็ต integral + derivative สะสม</td><td><code>PID_Reset(&pid)</code></td></tr>
@@ -126,11 +126,11 @@ int main(void) {
 #include "SimpleHAL.h"
 #include "PID.h"
 #include "DS18B20.h"
-#include "OLED.h"
+#include "oled_i2c.h"
 
 PID_Handle pid;
 DS18B20_Handle sensor;
-OLED_t oled;
+OLED_Handle oled;
 Timer_t tmr_sample, tmr_display;
 
 int main(void) {
@@ -138,14 +138,14 @@ int main(void) {
     Timer_Init();
     USART_Init(115200);
 
-    DS18B20_Init(&sensor, PC0, DS18B20_RES_12BIT);
+    DS18B20_SearchDevices(&sensor, PC0, DS18B20_RES_12BIT);
     PID_Init(&pid, PID_DIRECT);
     PID_SetTunings(&pid, 2.0f, 5.0f, 1.0f);
-    PID_SetOutputLimits(&pid, 0, 100);
+    PID_SetLimits(&pid, 0, 100);
     PID_SetSetpoint(&pid, 40.0f);
     pinMode(PC1, PIN_MODE_OUTPUT);  // Heater relay
 
-    OLED_Init(&oled, 0x3C, OLED_128x64);
+    OLED_Init(&oled, OLED_128x64, 0x3C);
     OLED_SetFont(&oled, FONT_8x16);
     Start_Timer(&tmr_sample, 1000, 1);
     Start_Timer(&tmr_display, 500, 1);
@@ -164,7 +164,7 @@ int main(void) {
             OLED_SetCursor(&oled,0,0); OLED_PrintFloat(&oled,"T:",temp,1);
             OLED_SetCursor(&oled,0,2); OLED_PrintFloat(&oled,"P:",out,1);
             OLED_SetCursor(&oled,0,4); OLED_Print(&oled,relay?"HEAT":" IDLE");
-            OLED_Display(&oled);
+            OLED_Update(&oled);
         }
         IWDG_Feed();
     }

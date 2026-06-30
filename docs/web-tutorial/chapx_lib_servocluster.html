@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="th">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -74,6 +74,7 @@ flowchart TD
     <div class="step"><h3>ขั้นที่ 1: Init PCA9685 + เพิ่ม Servo</h3>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
+#include "ServoCluster.h"
 
 ServoCluster_t cluster;
 
@@ -151,6 +152,7 @@ void on_servo0_done(void) {
     <p>แขนกล 3 แกน — Base (CH0), Shoulder (CH1), Elbow (CH2) + Gripper (CH3) — ทำ Pick and Place sequence อัตโนมัติ</p>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
+#include "ServoCluster.h"
 
 ServoCluster_t arm;
 uint8_t step = 0;

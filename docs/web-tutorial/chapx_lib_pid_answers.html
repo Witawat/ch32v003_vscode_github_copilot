@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย PID — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+﻿<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย PID — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
 <nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_pid.html">กลับบท</a><a href="chapx_lib_lcdmenu_answers.html">เฉลยถัดไป →</a></nav>
 <h1>📝 เฉลย — PID Controller</h1>
 <div class="answer"><h2>ข้อ 1: Temperature Controller — รักษา 40°C ±0.5 ด้วย Relay</h2>
@@ -24,7 +24,7 @@ int main(void) {
 
     PID_Init(&pid, PID_DIRECT);
     PID_SetTunings(&pid, 30.0f, 1.5f, 0.2f);    // Kp=30, Ki=1.5, Kd=0.2
-    PID_SetOutputLimits(&pid, 0, 1000);
+    PID_SetLimits(&pid, 0, 1000);
     PID_SetSampleTime(&pid, 250);                 // คำนวณทุก 250ms
     PID_SetMode(&pid, PID_AUTOMATIC);
 
@@ -161,7 +161,7 @@ int main(void) {
 
     PID_Init(&pid, PID_DIRECT);
     PID_SetTunings(&pid, 25.0f, 2.0f, 0.3f);
-    PID_SetOutputLimits(&pid, 0, 1000);
+    PID_SetLimits(&pid, 0, 1000);
     PID_SetSampleTime(&pid, 200);
     PID_SetMode(&pid, PID_AUTOMATIC);
 

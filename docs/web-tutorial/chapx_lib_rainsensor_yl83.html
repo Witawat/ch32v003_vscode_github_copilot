@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>YL-83 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head><body>
+﻿<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>YL-83 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head><body>
 <nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_soundsensor_ky038.html">บทก่อน</a><a href="chapx_lib_waterflow_yfs201.html">บทถัดไป →</a></nav>
 <h1>YL-83 — Rain Sensor ตรวจจับน้ำฝน ADC + GPIO</h1><span class="level intermediate">ระดับกลาง</span>
 <section class="flowchart"><h2>🧭 แผนภาพการทำงาน</h2><pre class="mermaid">
@@ -35,6 +35,7 @@ flowchart TD
 <section><h2>💻 เขียน Code ทีละขั้น</h2>
 <div class="step"><h3>ขั้นที่ 1: Init + VCC Control</h3><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
+#include "RainSensor.h"
 
 #define RAIN_VCC PC0
 #define RAIN_ADC PD2
@@ -124,6 +125,7 @@ int main(void) {
 </table></section>
 <section><h2>🛠️ สร้าง Product: ระบบกันฝนอัตโนมัติ</h2><p>YL-83 + Servo + Buzzer — ตรวจจับฝน → ปิดหลังคา/หน้าต่าง — เมื่อแห้ง → เปิดกลับ</p><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
+#include "RainSensor.h"
 #include "Servo.h"
 
 #define RAIN_VCC PC0

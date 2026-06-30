@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="th">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -71,11 +71,11 @@ int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
     OneWire_Init(PC0);         // ตั้งขา DQ
-    DS18B20_Init();            // ค้นหาทุกตัวบนบัส
+    DS18B20_SearchDevices();            // ค้นหาทุกตัวบนบัส
     uint8_t count = DS18B20_GetDeviceCount();
     USART_Print("Found: "); USART_PrintNum(count);
     USART_Println(" devices");</code></pre>
-    <p class="explain">🔍 <code>OneWire_Init(PC0)</code> กำหนดขา DQ, <code>DS18B20_Init()</code> จะ auto-scan ค้นหาทุกตัวที่ต่ออยู่บนบัส — <code>DS18B20_GetDeviceCount()</code> บอกจำนวนที่เจอ</p></div>
+    <p class="explain">🔍 <code>OneWire_Init(PC0)</code> กำหนดขา DQ, <code>DS18B20_SearchDevices()</code> จะ auto-scan ค้นหาทุกตัวที่ต่ออยู่บนบัส — <code>DS18B20_GetDeviceCount()</code> บอกจำนวนที่เจอ</p></div>
 
     <div class="step"><h3>ขั้นที่ 2: สั่งวัด + รอ + อ่านผล</h3>
     <pre><code class="language-c">    DS18B20_RequestTemperatures();   // สั่ง convert ทั้งหมด
@@ -115,7 +115,7 @@ int main(void) {
     <table>
         <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
         <tr><td><code>OneWire_Init(pin)</code></td><td>เริ่มต้นบัส 1-Wire ที่ขาที่กำหนด</td><td><code>OneWire_Init(PC0)</code></td></tr>
-        <tr><td><code>DS18B20_Init()</code></td><td>ค้นหา DS18B20 ทั้งหมดบนบัส</td><td><code>DS18B20_Init()</code></td></tr>
+        <tr><td><code>DS18B20_SearchDevices()</code></td><td>ค้นหา DS18B20 ทั้งหมดบนบัส</td><td><code>DS18B20_SearchDevices()</code></td></tr>
         <tr><td><code>DS18B20_RequestTemperatures()</code></td><td>สั่งให้ทุกตัวเริ่มวัดอุณหภูมิ</td><td><code>DS18B20_RequestTemperatures()</code></td></tr>
         <tr><td><code>DS18B20_GetTempCByIndex(i)</code></td><td>อ่านอุณหภูมิตัวที่ i (°C)</td><td><code>float t = DS18B20_GetTempCByIndex(0)</code></td></tr>
         <tr><td><code>DS18B20_GetTempC(&rom)</code></td><td>อ่านอุณหภูมิตาม ROM ID</td><td><code>DS18B20_GetTempC(&rom)</code></td></tr>
@@ -133,7 +133,7 @@ int main(void) {
         <tr><td>อ่านได้ 85°C ตลอด</td><td>ยังไม่ได้เรียก <code>RequestTemperatures()</code> หรือรอไม่ครบ 750ms</td><td>ต้องเรียก <code>RequestTemperatures()</code> ก่อน — แล้ว <code>Delay_Ms(750)</code> ก่อนอ่าน</td></tr>
         <tr><td><code>GetDeviceCount()</code> คืน 0</td><td>ไม่มี pull-up resistor หรือสายหลวม</td><td>ต่อ R 4.7kΩ ระหว่าง DQ ↔ 3.3V, เช็คสายทุกเส้น</td></tr>
         <tr><td>Parasite mode ไม่อ่านค่า</td><td>ขาด strong pull-up ระหว่าง conversion</td><td>ใช้ MOSFET/transistor strong pull-up ช่วงรอ 750ms หรือใช้โหมด 3-wire (VCC จริง)</td></tr>
-        <tr><td>ต่อหลายตัวแต่ ROM ซ้ำ / หายบางตัว</td><td>Power-on ใหม่โดยไม่ Init ซ้ำ</td><td>เรียก <code>DS18B20_Init()</code> ใหม่ทุกครั้งหลังเปิดไฟ — รายการ ROM อาจเปลี่ยน</td></tr>
+        <tr><td>ต่อหลายตัวแต่ ROM ซ้ำ / หายบางตัว</td><td>Power-on ใหม่โดยไม่ Init ซ้ำ</td><td>เรียก <code>DS18B20_SearchDevices()</code> ใหม่ทุกครั้งหลังเปิดไฟ — รายการ ROM อาจเปลี่ยน</td></tr>
         <tr><td>อ่านค่าเพี้ยน ±1-2°C</td><td>สายยาวเกิน 3m หรือ noise บนบัส</td><td>ใช้ shielded cable, twisted pair, ลด pull-up เหลือ 2.2kΩ สำหรับสายยาว</td></tr>
         <tr><td>Conversion ไม่เสร็จ — อ่านค่าค้าง</td><td>ใช้ความละเอียด 12bit แต่รอแค่ 93ms</td><td>รอ 750ms สำหรับ 12bit — หรือใช้ <code>SetResolution(9)</code> ลดเวลารอ</td></tr>
     </table>
@@ -145,7 +145,7 @@ int main(void) {
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "DS18B20.h"
-#include "LCD1602_I2C.h"
+#include "lcd1602_i2c.h"
 
 int main(void) {
     SystemCoreClockUpdate();
@@ -153,8 +153,8 @@ int main(void) {
     I2C_SimpleInit(I2C_SPEED_100K, I2C_PINS_DEFAULT);
 
     OneWire_Init(PC0);
-    DS18B20_Init();
-    LCD1602_I2C_Init(0x27);
+    DS18B20_SearchDevices();
+    LCD_Init(0x27);
 
     Timer_t tmr;
     Start_Timer(&tmr, 2000, 1);
@@ -168,10 +168,10 @@ int main(void) {
                 DS18B20_ROM_t rom;
                 DS18B20_GetROM(i, &rom);
                 float t = DS18B20_GetTempC(&rom);
-                LCD1602_I2C_SetCursor(i, 0);
-                LCD1602_I2C_Print("S"); LCD1602_I2C_PrintNum(i+1);
-                LCD1602_I2C_Print(":"); LCD1602_I2C_PrintFloat(t, 1);
-                LCD1602_I2C_Print("C   ");
+                LCD_SetCursor(i, 0);
+                LCD_Print("S"); LCD_Print(i+1);
+                LCD_Print(":"); LCD_Print(t, 1);
+                LCD_Print("C   ");
             }
         }
         IWDG_Feed();

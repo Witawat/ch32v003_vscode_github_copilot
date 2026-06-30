@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>PZEM-004T v3 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head><body>
+﻿<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>PZEM-004T v3 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head><body>
 <nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_pzem004t.html">บทก่อน</a><a href="chapx_lib_oh49e.html">บทถัดไป →</a></nav>
 <h1>PZEM-004T v3 — Modbus-RTU แบบ ReadAll ในครั้งเดียว</h1><span class="level advanced">ระดับสูง</span>
 <section class="flowchart"><h2>🧭 แผนภาพการทำงาน</h2><pre class="mermaid">
@@ -101,7 +101,7 @@ int main(void) {
 <section><h2>🛠️ สร้าง Product: Smart Power Monitor</h2><p>PZEM v3 + OLED + EEPROM — บันทึกข้อมูลรายชั่วโมง — ตั้ง alarm ตัดไฟอัตโนมัติ</p><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "PZEM004Tv3.h"
-#include "OLED.h"
+#include "oled_i2c.h"
 
 int main(void)
 {
@@ -114,8 +114,8 @@ int main(void)
     PZEM004Tv3_Init(&pzem, PD6, PD5, 0x01);
     PZEM004Tv3_SetAlarmThreshold(&pzem, 2500, 10000, 22000);
 
-    OLED_t oled;
-    OLED_Init(&oled, 0x3C, OLED_128x64);
+    OLED_Handle oled;
+    OLED_Init(&oled, OLED_128x64, 0x3C);
     OLED_SetFont(&oled, FONT_8x16);
 
     Timer_t tmr;
@@ -159,7 +159,7 @@ int main(void)
                 OLED_Print(&oled, "CUT!");
             }
 
-            OLED_Display(&oled);
+            OLED_Update(&oled);
         }
     }
 }</code></pre></section>

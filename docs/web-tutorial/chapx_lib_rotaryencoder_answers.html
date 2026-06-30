@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย ROTARY ENCODER — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+﻿<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย ROTARY ENCODER — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
 <nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_rotaryencoder.html">กลับบท</a><a href="chapx_lib_pid_answers.html">เฉลยถัดไป →</a></nav>
 <h1>📝 เฉลย — Rotary Encoder</h1>
 <div class="answer"><h2>ข้อ 1: Volume Control — หมุนปรับ PWM 0–100%, กด mute</h2>
@@ -29,7 +29,7 @@ int main(void) {
     Timer_Init();
     USART_Init(115200);
 
-    RotaryEncoder_Init(ENC_CLK, ENC_DT, ENC_SW);
+    Rotary_Init(ENC_CLK, ENC_DT, ENC_SW);
     RotaryEncoder_AttachCW(enc_cw_cb);
     RotaryEncoder_AttachCCW(enc_ccw_cb);
     RotaryEncoder_AttachSW(enc_sw_cb);
@@ -72,7 +72,7 @@ int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
     OLED_Init();
-    RotaryEncoder_Init(ENC_CLK, ENC_DT, ENC_SW);
+    Rotary_Init(ENC_CLK, ENC_DT, ENC_SW);
     RotaryEncoder_AttachCW(enc_cw_cb);
     RotaryEncoder_AttachCCW(enc_ccw_cb);
     RotaryEncoder_AttachSW(enc_sw_cb);
@@ -140,7 +140,7 @@ int main(void) {
     Timer_Init();
     USART_Init(115200);
 
-    RotaryEncoder_Init(ENC_CLK, ENC_DT, 0xFF);  // ไม่มีปุ่มกด
+    Rotary_Init(ENC_CLK, ENC_DT, 0xFF);  // ไม่มีปุ่มกด
     RotaryEncoder_AttachTick(enc_tick_cb);
 
     Timer_t print_tmr;

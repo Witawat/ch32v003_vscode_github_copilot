@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย SERVOCLUSTER — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+﻿<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย SERVOCLUSTER — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
 <nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_servocluster.html">กลับบท</a><a href="chapx_lib_esc_answers.html">เฉลยถัดไป →</a></nav>
 <h1>📝 เฉลย — Servo Cluster</h1>
 
@@ -21,34 +21,34 @@ int main(void) {
         ServoCluster_MoveTo(&arm, 0, 90,  EASE_LINEAR);
         ServoCluster_MoveTo(&arm, 1, 45,  EASE_LINEAR);
         ServoCluster_MoveTo(&arm, 2, 160, EASE_LINEAR);
-        while (!ServoCluster_IsDone(&arm)) { Delay_Ms(5); }
+        while (!ServoCluster_IsAllDone(&arm)) { Delay_Ms(5); }
         Delay_Ms(300);
 
         // Reach for object
         ServoCluster_MoveTo(&arm, 0, 135, EASE_IN_OUT_CUBIC);
         ServoCluster_MoveTo(&arm, 1, 30,  EASE_IN_OUT_CUBIC);
         ServoCluster_MoveTo(&arm, 2, 160, EASE_LINEAR);
-        while (!ServoCluster_IsDone(&arm)) { Delay_Ms(5); }
+        while (!ServoCluster_IsAllDone(&arm)) { Delay_Ms(5); }
         Delay_Ms(200);
 
         // Gripper close
         ServoCluster_MoveTo(&arm, 2, 90, EASE_LINEAR);
-        while (!ServoCluster_IsDone(&arm)) { Delay_Ms(5); }
+        while (!ServoCluster_IsAllDone(&arm)) { Delay_Ms(5); }
 
         // Lift
         ServoCluster_MoveTo(&arm, 0, 90,  EASE_IN_OUT_CUBIC);
         ServoCluster_MoveTo(&arm, 1, 135, EASE_IN_OUT_CUBIC);
-        while (!ServoCluster_IsDone(&arm)) { Delay_Ms(5); }
+        while (!ServoCluster_IsAllDone(&arm)) { Delay_Ms(5); }
         Delay_Ms(200);
 
         // Place
         ServoCluster_MoveTo(&arm, 0, 45,  EASE_IN_OUT_CUBIC);
         ServoCluster_MoveTo(&arm, 1, 30,  EASE_IN_OUT_CUBIC);
-        while (!ServoCluster_IsDone(&arm)) { Delay_Ms(5); }
+        while (!ServoCluster_IsAllDone(&arm)) { Delay_Ms(5); }
 
         // Gripper open
         ServoCluster_MoveTo(&arm, 2, 160, EASE_LINEAR);
-        while (!ServoCluster_IsDone(&arm)) { Delay_Ms(5); }
+        while (!ServoCluster_IsAllDone(&arm)) { Delay_Ms(5); }
 
         Delay_Ms(1000);
     }
@@ -108,7 +108,7 @@ int main(void) {
         // Servo 1: EASE_IN_OUT_CUBIC (เร่ง-ชะลอ นุ่มนวล)
         ServoCluster_MoveTo(&cluster, 1, targets[idx], EASE_IN_OUT_CUBIC);
 
-        while (!ServoCluster_IsDone(&cluster))
+        while (!ServoCluster_IsAllDone(&cluster))
             Delay_Ms(5);
 
         Delay_Ms(500);

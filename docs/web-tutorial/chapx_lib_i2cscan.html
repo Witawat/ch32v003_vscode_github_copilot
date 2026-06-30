@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="th">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -77,6 +77,7 @@ flowchart TD
     <div class="step"><h3>ขั้นที่ 1: Init + Setup</h3>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
+#include "I2CScan.h"
 #include "I2C_Scanner.h"
 
 int main(void) {
@@ -161,6 +162,7 @@ int main(void) {
     <p>สแกน I2C ทุก 5 วินาที — แสดงอุปกรณ์ที่ต่ออยู่, ตรวจจับเมื่ออุปกรณ์ถูกถอด/เพิ่ม</p>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
+#include "I2CScan.h"
 
 int main(void)
 {

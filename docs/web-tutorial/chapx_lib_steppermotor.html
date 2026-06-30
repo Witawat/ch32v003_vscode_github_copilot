@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="th">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -20,7 +20,7 @@
     <h2>🧭 แผนภาพการทำงาน</h2>
     <pre class="mermaid">
 flowchart TD
-    A["Stepper_Init(IN1,IN2,IN3,IN4)"] --> B{"Mode"}
+    A["StepperMotor_InitULN2003(IN1,IN2,IN3,IN4)"] --> B{"Mode"}
     B -->|"Full-Step"| C["4 steps/cycle → 2048 steps/rev"]
     B -->|"Half-Step"| D["8 steps/cycle → 4096 steps/rev"]
     C --> E["Stepper_Step(N, speed, dir)"]
@@ -69,6 +69,7 @@ flowchart TD
     <div class="step"><h3>ขั้นที่ 1: Init Stepper Pins</h3>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
+#include "StepperMotor.h"
 
 #define IN1 PC0
 #define IN2 PC1
@@ -138,10 +139,10 @@ int main(void) {
     <h2>📋 API Reference</h2>
     <table>
         <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
-        <tr><td><code>Stepper_Init(a,b,c,d)</code></td><td>ตั้งค่า 4 GPIO pins</td><td><code>Stepper_Init(PC0,PC1,PC2,PC3)</code></td></tr>
+        <tr><td><code>StepperMotor_InitULN2003(a,b,c,d)</code></td><td>ตั้งค่า 4 GPIO pins</td><td><code>StepperMotor_InitULN2003(PC0,PC1,PC2,PC3)</code></td></tr>
         <tr><td><code>Stepper_SetMode(mode)</code></td><td>เลือก FULL_STEP หรือ HALF_STEP</td><td><code>Stepper_SetMode(HALF_STEP)</code></td></tr>
         <tr><td><code>Stepper_Step(n, speed, dir)</code></td><td>หมุน n steps, speed μs, dir ±1</td><td><code>Stepper_Step(2048, 1200, 1)</code></td></tr>
-        <tr><td><code>Stepper_Rotate(deg, speed)</code></td><td>หมุนเป็นองศา (full-step)</td><td><code>Stepper_Rotate(360, 1000)</code></td></tr>
+        <tr><td><code>StepperMotor_Move(deg, speed)</code></td><td>หมุนเป็นองศา (full-step)</td><td><code>StepperMotor_Move(360, 1000)</code></td></tr>
         <tr><td><code>Stepper_Stop()</code></td><td>หยุด — ปล่อย coil (no hold)</td><td><code>Stepper_Stop()</code></td></tr>
         <tr><td><code>Stepper_Hold()</code></td><td>หยุดแต่จ่ายไฟ coil — hold torque</td><td><code>Stepper_Hold()</code></td></tr>
     </table>
@@ -164,6 +165,7 @@ int main(void) {
     <p>หมุน stepper ไปตำแหน่งองศาที่ต้องการด้วย acceleration — ใช้ Potentiometer ตั้งองศา + ปุ่มกด start</p>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
+#include "StepperMotor.h"
 
 #define IN1 PC0
 #define IN2 PC1

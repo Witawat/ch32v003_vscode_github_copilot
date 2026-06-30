@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="th">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -80,6 +80,7 @@ flowchart TD
     <div class="step"><h3>ขั้นที่ 1: Init GPIO + Microstepping Pins</h3>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
+#include "DRV8825.h"
 
 #define STEP PC0
 #define DIR  PC1
@@ -173,6 +174,7 @@ int main(void) {
     <p>NEMA17 + DRV8825 + Lead Screw GT2 — เคลื่อนที่ตำแหน่ง mm ที่แม่นยำ — ใช้ Endstop + Home sequence</p>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
+#include "DRV8825.h"
 
 #define STEP PC0
 #define DIR  PC1

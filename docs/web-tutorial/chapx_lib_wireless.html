@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="th">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -24,9 +24,9 @@ PD5(TX)─RX(ESP01)  PD6(RX)─TX(ESP01)  3.3V─VCC+CH_PD  GND─GND+GPIO0
 ESP01_Handle wifi;
 ESP01_Init(&wifi, USART1, BAUD_115200);
 ESP01_Reset(&wifi); Delay_Ms(2000);
-ESP01_ConnectWiFi(&wifi, "SSID", "PASSWORD");
+ESP01_JoinAP(&wifi, "SSID", "PASSWORD");
 // HTTP GET:
-ESP01_HTTPGet(&wifi, "api.thingspeak.com", "/update?api_key=XXX&field1=25", 80);
+ESP01_TCPConnect( "api.thingspeak.com", "/update?api_key=XXX&field1=25", 80);
 // TCP:
 ESP01_ConnectTCP(&wifi, "192.168.1.100", 8080);
 ESP01_Send(&wifi, "hello");
@@ -79,16 +79,16 @@ uint8_t tx_addr[] = {0xE7,0xE7,0xE7,0xE7,0xE7};
 uint8_t rx_addr[] = {0xC2,0xC2,0xC2,0xC2,0xC2};
 // === SENDER ===
 nRF24_Init(PC4, PC3); // CSN, CE
-nRF24_TXMode(tx_addr, 0x60); // RF channel 0x60
+nRF24_SetTxAddrtx_addr, 0x60); // RF channel 0x60
 char msg[] = "Hello CH32V003";
-nRF24_Send((uint8_t*)msg, sizeof(msg));
+nRF24_Transmit((uint8_t*)msg, sizeof(msg));
 // === RECEIVER ===
 nRF24_Init(PC4, PC3);
-nRF24_RXMode(rx_addr, 0x60);
+nRF24_SetRxAddrrx_addr, 0x60);
 while(1) {
-    if(nRF24_Available()) {
+    if(nRF24_StartListening)) {
         char buf[32];
-        nRF24_Read((uint8_t*)buf, 32);
+        nRF24_StartListening(uint8_t*)buf, 32);
         USART_Print("RX: "); USART_Println(buf);
     }
 }</code></pre>
@@ -96,9 +96,9 @@ while(1) {
 
 <h3>API หลัก</h3>
 <table>
-<tr><td><code>nRF24_Init(csn, ce)</code></td><td>Init SPI + config</td><td><code>nRF24_TXMode(addr, ch)</code></td><td>เข้าโหมดส่ง</td></tr>
-<tr><td><code>nRF24_RXMode(addr, ch)</code></td><td>เข้าโหมดรับ</td><td><code>nRF24_Send(buf, len)</code></td><td>ส่ง packet</td></tr>
-<tr><td><code>nRF24_Available()</code></td><td>เช็คข้อมูลรอรับ</td><td><code>nRF24_Read(buf, len)</code></td><td>อ่าน packet</td></tr>
+<tr><td><code>nRF24_Init(csn, ce)</code></td><td>Init SPI + config</td><td><code>nRF24_SetTxAddraddr, ch)</code></td><td>เข้าโหมดส่ง</td></tr>
+<tr><td><code>nRF24_SetRxAddraddr, ch)</code></td><td>เข้าโหมดรับ</td><td><code>nRF24_Transmit(buf, len)</code></td><td>ส่ง packet</td></tr>
+<tr><td><code>nRF24_StartListening)</code></td><td>เช็คข้อมูลรอรับ</td><td><code>nRF24_StartListeningbuf, len)</code></td><td>อ่าน packet</td></tr>
 <tr><td><code>nRF24_SetChannel(ch)</code></td><td>เปลี่ยน RF channel</td><td><code>nRF24_SetPower(db)</code></td><td>ตั้งกำลังส่ง (0/-6/-12/-18dBm)</td></tr>
 </table>
 
@@ -106,7 +106,7 @@ while(1) {
 <pre class="ascii-circuit">
 PD5(RX)─TX(GPS)  PD6(TX)─RX(GPS) optional  3.3-5V─VCC  GND─GND
 ต้องมี active antenna — indoor = no signal</pre>
-<pre><code class="language-c">#include "GPS_NEO6M.h"
+<pre><code class="language-c">#include "GPS.h"
 GPS_Handle gps;
 GPS_Init(&gps, USART1, BAUD_9600);
 while(1) {

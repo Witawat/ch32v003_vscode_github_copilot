@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="th">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -71,6 +71,7 @@ flowchart TD
     <div class="step"><h3>ขั้นที่ 1: Init + Setup</h3>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
+#include "IR.h"
 #include "IR_Remote.h"
 
 int main(void) {
@@ -150,6 +151,7 @@ int main(void) {
     <p>รับคำสั่งจากรีโมท NEC → ควบคุม LED 4 ดวง + บันทึกปุ่มล่าสุด</p>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
+#include "IR.h"
 #include "IR_Remote.h"
 
 uint8_t led_pins[4] = {PC0, PC1, PC2, PC3};

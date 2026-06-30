@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="th">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -23,16 +23,16 @@ VIN+ ── load+ ── Rshunt 0.1Ω ── VIN- ── load- ── GND
 (High-side: วัดกระแสก่อน load — ปลอดภัยกว่า low-side)</pre>
 <pre><code class="language-c">#include "INA219.h"
 INA219_Init(0x40, INA219_32V_2A); // range เลือกตาม shunt
-float voltage = INA219_ReadBusVoltage();   // V
-float current = INA219_ReadCurrent();       // mA
-float power   = INA219_ReadPower();         // mW
+float voltage = INA219_GetBusVoltage();   // V
+float current = INA219_GetCurrent();       // mA
+float power   = INA219_GetPower();         // mW
 // Calibrate: INA219_SetCalibration(shunt_resistance_ohm, max_current_A);</code></pre>
 <p class="explain">⚠️ 4 I2C addresses (0x40-0x4F via A0,A1 jumpers), shunt R = 0.1Ω (default), max V=32V, max I depends on shunt (0.1Ω → 3.2A), high-side measurement (ต่อ shunt ก่อน GND — อ่านทั้ง V bus และ voltage drop ข้าม shunt), PGA + 12-bit ADC ในตัว — แม่นกว่า ADC ทั่วไป, calibration: <code>current_LSB = max_current / 32768</code>, <code>cal_value = 0.04096 / (current_LSB * Rshunt)</code></p>
 
 <h3>API หลัก</h3>
 <table>
-<tr><td><code>INA219_Init(addr, range)</code></td><td>Init + ตั้ง range</td><td><code>INA219_ReadBusVoltage()</code></td><td>อ่านแรงดัน V (bus)</td></tr>
-<tr><td><code>INA219_ReadCurrent()</code></td><td>อ่านกระแส mA</td><td><code>INA219_ReadPower()</code></td><td>อ่านกำลังไฟฟ้า mW</td></tr>
+<tr><td><code>INA219_Init(addr, range)</code></td><td>Init + ตั้ง range</td><td><code>INA219_GetBusVoltage()</code></td><td>อ่านแรงดัน V (bus)</td></tr>
+<tr><td><code>INA219_GetCurrent()</code></td><td>อ่านกระแส mA</td><td><code>INA219_GetPower()</code></td><td>อ่านกำลังไฟฟ้า mW</td></tr>
 <tr><td><code>INA219_ReadShuntVoltage()</code></td><td>Shunt voltage mV</td><td><code>INA219_SetCalibration(r, maxA)</code></td><td>เปลี่ยน shunt/range</td></tr>
 </table>
 

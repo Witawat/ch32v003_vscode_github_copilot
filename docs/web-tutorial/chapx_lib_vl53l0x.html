@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="th">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -19,7 +19,7 @@
     <pre class="mermaid">
 flowchart TD
     A["VL53L0X_Init(addr)"] --> B["VL53L0X_SetMode(CONTINUOUS)"]
-    B --> C["VL53L0X_ReadRange()"]
+    B --> C["VL53L0X_ReadRangeMM()"]
     C --> D["Range (mm) = Time_of_Flight"]
     D --> E["Status OK?"]
     E -->|"Yes"| F["Display / Use"]
@@ -83,7 +83,7 @@ int main(void) {
 
     <div class="step"><h3>ขั้นที่ 2: อ่าน/เขียนค่า</h3>
     <pre><code class="language-c">    // Continuous mode: อ่านได้เลย
-    VL53L0X_ReadRange(&range);
+    VL53L0X_ReadRangeMM(&range);
 
     USART_Print("Range: ");
     USART_PrintInt(range.range_mm);
@@ -98,14 +98,14 @@ int main(void) {
         USART_PrintInt(range.status);
         USART_Println("");
     }</code></pre>
-    <p class="explain">🔍 <code>VL53L0X_ReadRange()</code> — คืน <code>range.range_mm</code> (30–2000) และ <code>range.status</code> — status 0 = OK, 4 = weak signal, 7 = wrap-around — ใช้ status กรองค่าที่ผิดพลาด</p></div>
+    <p class="explain">🔍 <code>VL53L0X_ReadRangeMM()</code> — คืน <code>range.range_mm</code> (30–2000) และ <code>range.status</code> — status 0 = OK, 4 = weak signal, 7 = wrap-around — ใช้ status กรองค่าที่ผิดพลาด</p></div>
 
     <div class="step"><h3>ขั้นที่ 3: Loop + แสดงผล</h3>
-    <pre><code class="language-c">    OLED_t oled;
-    OLED_Init(&oled, 0x3C, OLED_128x64);
+    <pre><code class="language-c">    OLED_Handle oled;
+    OLED_Init(&oled, OLED_128x64, 0x3C);
 
     while(1) {
-        VL53L0X_ReadRange(&range);
+        VL53L0X_ReadRangeMM(&range);
 
         OLED_Clear(&oled);
         OLED_SetCursor(&oled, 0, 0);
@@ -126,7 +126,7 @@ int main(void) {
             OLED_Print(&oled, "Out of range / Sun");
         }
 
-        OLED_Display(&oled);
+        OLED_Update(&oled);
         Delay_Ms(50);
     }
 }</code></pre>
@@ -139,7 +139,7 @@ int main(void) {
         <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
         <tr><td><code>VL53L0X_Init(addr)</code></td><td>เริ่มต้นเซนเซอร์</td><td><code>VL53L0X_Init(0x29)</code></td></tr>
         <tr><td><code>VL53L0X_SetMode(mode)</code></td><td>CONTINUOUS หรือ SINGLE</td><td><code>VL53L0X_SetMode(VL53L0X_MODE_CONTINUOUS)</code></td></tr>
-        <tr><td><code>VL53L0X_ReadRange(&data)</code></td><td>อ่านระยะ + status</td><td><code>VL53L0X_ReadRange(&range)</code></td></tr>
+        <tr><td><code>VL53L0X_ReadRangeMM(&data)</code></td><td>อ่านระยะ + status</td><td><code>VL53L0X_ReadRangeMM(&range)</code></td></tr>
         <tr><td><code>VL53L0X_StartSingle()</code></td><td>เริ่มวัดครั้งเดียว (single mode)</td><td><code>VL53L0X_StartSingle()</code></td></tr>
         <tr><td><code>VL53L0X_IsDataReady()</code></td><td>เช็คว่า data พร้อมหรือยัง</td><td><code>if(VL53L0X_IsDataReady())</code></td></tr>
         <tr><td><code>VL53L0X_SetAddress(addr)</code></td><td>เปลี่ยน I2C address</td><td><code>VL53L0X_SetAddress(0x30)</code></td></tr>
@@ -184,7 +184,7 @@ int main(void)
 
     while(1)
     {
-        VL53L0X_ReadRange(&range);
+        VL53L0X_ReadRangeMM(&range);
 
         if(range.status == 0 && range.range_mm < 500 && !doorOpen) {
             Servo_SetAngle(90);   // เปิดประตู

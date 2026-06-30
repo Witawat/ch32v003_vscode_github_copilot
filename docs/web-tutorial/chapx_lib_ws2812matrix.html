@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="th">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -56,6 +56,7 @@ flowchart TD
     <div class="step"><h3>ขั้นที่ 1: Init + Setup</h3>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
+#include "WS2812Matrix.h"
 
 int main(void) {
     SystemCoreClockUpdate();
@@ -136,6 +137,7 @@ int main(void) {
     <p>8×8 Matrix แสดง 3 โหมด — Scroll Text → Rainbow → Sparkle — กดปุ่มเปลี่ยนโหมด</p>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
+#include "WS2812Matrix.h"
 
 int main(void) {
     SystemCoreClockUpdate();

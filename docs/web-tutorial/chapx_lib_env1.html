@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="th">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -40,7 +40,7 @@ if(DHT_Read(&t, &h) == DHT_OK) {
 </pre>
 <pre><code class="language-c">#include "DS18B20.h"
 OneWire_Init(PC0);
-DS18B20_Init();
+DS18B20_SearchDevices();
 DS18B20_RequestTemperatures();
 Delay_Ms(750);  // ★ รอ conversion เสร็จ
 float t = DS18B20_GetTempCByIndex(0);  // ตัวแรก
@@ -58,7 +58,7 @@ for(uint8_t i = 0; i < n; i++) {
 
 <h3>API หลัก</h3>
 <table>
-<tr><td><code>OneWire_Init(pin)</code></td><td>Init 1-Wire bus</td><td><code>DS18B20_Init()</code></td><td>ค้นหา devices ทั้งหมดบน bus</td></tr>
+<tr><td><code>OneWire_Init(pin)</code></td><td>Init 1-Wire bus</td><td><code>DS18B20_SearchDevices()</code></td><td>ค้นหา devices ทั้งหมดบน bus</td></tr>
 <tr><td><code>DS18B20_RequestTemperatures()</code></td><td>ส่งคำสั่ง convert (ทั้งหมด)</td><td><code>DS18B20_GetTempCByIndex(i)</code></td><td>อ่าน temp ตัวที่ i</td></tr>
 <tr><td><code>DS18B20_GetDeviceCount()</code></td><td>จำนวน devices</td><td><code>DS18B20_GetROM(i, &rom)</code></td><td>อ่าน ROM ID</td></tr>
 <tr><td><code>DS18B20_GetTempC(&rom)</code></td><td>อ่านตาม ROM</td><td><code>DS18B20_SetResolution(bits)</code></td><td>9/10/11/12 bit</td></tr>

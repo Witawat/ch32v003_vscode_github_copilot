@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>YF-S201 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head><body>
+﻿<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>YF-S201 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head><body>
 <nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_rainsensor_yl83.html">บทก่อน</a><a href="chapx_lib_hx711.html">บทถัดไป →</a></nav>
 <h1>YF-S201 — Water Flow Sensor นับพัลส์วัดอัตราการไหล</h1><span class="level intermediate">ระดับกลาง</span>
 <section class="flowchart"><h2>🧭 แผนภาพการทำงาน</h2><pre class="mermaid">
@@ -29,6 +29,7 @@ flowchart TD
 <section><h2>💻 เขียน Code ทีละขั้น</h2>
 <div class="step"><h3>ขั้นที่ 1: Init GPIO + Interrupt</h3><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
+#include "WaterFlow.h"
 
 #define FLOW_PIN PC3
 volatile uint32_t pulse_count = 0;
@@ -123,7 +124,8 @@ int main(void) {
 </table></section>
 <section><h2>🛠️ สร้าง Product: Smart Water Meter</h2><p>YF-S201 + OLED + Solenoid Valve — วัดปริมาณน้ำ ควบคุมวาล์ว — แสดง Flow Rate + Total</p><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
-#include "OLED.h"
+#include "WaterFlow.h"
+#include "oled_i2c.h"
 
 #define FLOW_PIN PC3
 #define VALVE_PIN PC0
@@ -151,8 +153,8 @@ int main(void)
     NVIC_EnableIRQ(EXTI7_0_IRQn);
     digitalWrite(VALVE_PIN, LOW);
 
-    OLED_t oled;
-    OLED_Init(&oled, 0x3C, OLED_128x64);
+    OLED_Handle oled;
+    OLED_Init(&oled, OLED_128x64, 0x3C);
     OLED_SetFont(&oled, FONT_8x16);
 
     float total_L = 0;
@@ -191,7 +193,7 @@ int main(void)
                 OLED_Print(&oled, "MAX!");
             }
 
-            OLED_Display(&oled);
+            OLED_Update(&oled);
         }
     }
 }</code></pre></section>

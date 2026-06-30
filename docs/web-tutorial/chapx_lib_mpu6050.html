@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="th">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -18,7 +18,7 @@
     <h2>🧭 แผนภาพการทำงาน</h2>
     <pre class="mermaid">
 flowchart TD
-    A["MPU6050_Init(fsGyro, fsAccel)"] --> B["MPU6050_ReadAll(&a, &g, &t)"]
+    A["MPU6050_Init(fsGyro, fsAccel)"] --> B["MPU6050_GetAll(&a, &g, &t)"]
     B --> C["Raw → Real Units"]
     C --> D["Complementary Filter<br/>angle = 0.98*(angle+gyro*dt) + 0.02*accel"]
     D --> E["Pitch / Roll / Yaw"]
@@ -86,7 +86,7 @@ int main(void) {
     <pre><code class="language-c">    float accel[3], gyro[3];  // x, y, z
     float temp, pitch, roll;
 
-    MPU6050_ReadAll(accel, gyro, &temp);
+    MPU6050_GetAll(accel, gyro, &temp);
 
     // แปลง accel → มุม (pitch, roll)
     pitch = atan2(accel[1], accel[2]) * 180.0f / M_PI;
@@ -96,7 +96,7 @@ int main(void) {
     USART_Print(" Roll: "); USART_PrintFloat(roll, 1);
     USART_Print(" Temp: "); USART_PrintFloat(temp, 1);
     USART_Println(" C");</code></pre>
-    <p class="explain">🔍 <code>MPU6050_ReadAll(accel, gyro, &temp)</code> — accel ในหน่วย g, gyro ในหน่วย °/s, temp ใน °C — ใช้ pin int สำหรับ interrupt-driven จะประหยัด CPU กว่า polling</p></div>
+    <p class="explain">🔍 <code>MPU6050_GetAll(accel, gyro, &temp)</code> — accel ในหน่วย g, gyro ในหน่วย °/s, temp ใน °C — ใช้ pin int สำหรับ interrupt-driven จะประหยัด CPU กว่า polling</p></div>
 
     <div class="step"><h3>ขั้นที่ 3: Loop + แสดงผล</h3>
     <pre><code class="language-c">    float anglePitch = 0, angleRoll = 0;
@@ -104,7 +104,7 @@ int main(void) {
 
     while(1) {
         float accel[3], gyro[3], temp;
-        MPU6050_ReadAll(accel, gyro, &temp);
+        MPU6050_GetAll(accel, gyro, &temp);
 
         uint32_t now = Get_CurrentMs();
         float dt = (now - lastTime) / 1000.0f;  // sec
@@ -134,7 +134,7 @@ int main(void) {
         <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
         <tr><td><code>MPU6050_Init(gyroFS, accelFS)</code></td><td>เริ่มต้น, ตั้ง full scale</td><td><code>MPU6050_Init(MPU6050_GYRO_250, MPU6050_ACCEL_2G)</code></td></tr>
         <tr><td><code>MPU6050_Calibrate(samples)</code></td><td>เก็บ offset gyro (อย่าขยับ)</td><td><code>MPU6050_Calibrate(200)</code></td></tr>
-        <tr><td><code>MPU6050_ReadAll(a, g, &t)</code></td><td>อ่าน accel(g)+gyro(°/s)+temp(°C)</td><td><code>MPU6050_ReadAll(accel, gyro, &temp)</code></td></tr>
+        <tr><td><code>MPU6050_GetAll(a, g, &t)</code></td><td>อ่าน accel(g)+gyro(°/s)+temp(°C)</td><td><code>MPU6050_GetAll(accel, gyro, &temp)</code></td></tr>
         <tr><td><code>MPU6050_ReadGyro(g)</code></td><td>อ่าน gyro อย่างเดียว</td><td><code>MPU6050_ReadGyro(gyro)</code></td></tr>
         <tr><td><code>MPU6050_ReadAccel(a)</code></td><td>อ่าน accel อย่างเดียว</td><td><code>MPU6050_ReadAccel(accel)</code></td></tr>
         <tr><td><code>MPU6050_ReadTemp()</code></td><td>อ่านอุณหภูมิ (°C)</td><td><code>float t = MPU6050_ReadTemp()</code></td></tr>
@@ -183,7 +183,7 @@ int main(void)
     while(1)
     {
         float accel[3], gyro[3], temp;
-        MPU6050_ReadAll(accel, gyro, &temp);
+        MPU6050_GetAll(accel, gyro, &temp);
 
         uint32_t now = Get_CurrentMs();
         float dt = (now - lastTime) / 1000.0f;

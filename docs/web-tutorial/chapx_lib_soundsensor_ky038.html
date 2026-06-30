@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>KY-038 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head><body>
+﻿<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>KY-038 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head><body>
 <nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_flamesensor_ky026.html">บทก่อน</a><a href="chapx_lib_rainsensor_yl83.html">บทถัดไป →</a></nav>
 <h1>KY-038 — Sound Sensor ตรวจจับเสียงผ่าน ADC + LM393</h1><span class="level intermediate">ระดับกลาง</span>
 <section class="flowchart"><h2>🧭 แผนภาพการทำงาน</h2><pre class="mermaid">
@@ -29,6 +29,7 @@ flowchart TD
 <section><h2>💻 เขียน Code ทีละขั้น</h2>
 <div class="step"><h3>ขั้นที่ 1: Init ADC + Digital</h3><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
+#include "SoundSensor.h"
 
 #define SOUND_ADC PD2
 #define SOUND_DIG PC3
@@ -103,6 +104,7 @@ int main(void) {
 </table></section>
 <section><h2>🛠️ สร้าง Product: Clap Switch — ตบมือเปิด/ปิดไฟ</h2><p>KY-038 + Relay — Double clap = toggle ไฟ — Single clap = ignore — แสดงสถานะด้วย LED</p><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
+#include "SoundSensor.h"
 
 #define SOUND_ADC PD2
 #define SOUND_DIG PC3

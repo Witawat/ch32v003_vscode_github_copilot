@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="th">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -20,10 +20,10 @@
 flowchart TD
     A["RC522_Init(spi,cs,rst)"] --> B["RC522_SelfTest()"]
     B --> C{"Pass?"}
-    C -->|"Yes"| D["RC522_Request(PICC_REQIDL)"]
+    C -->|"Yes"| D["RC522_IsCardPresentPICC_REQIDL)"]
     C -->|"No"| E["Check wiring"]
     D --> F{"Card Present?"}
-    F -->|"Yes"| G["RC522_Anticoll(uid)"]
+    F -->|"Yes"| G["RC522_ReadUID(uid)"]
     F -->|"No"| D
     G --> H["RC522_SelectTag(uid)"]
     H --> I["RC522_Auth(KEY_A, block, key)"]
@@ -96,11 +96,11 @@ int main(void) {
     <pre><code class="language-c">    uint8_t uid[7], uid_len;
     while(1) {
         // Step 1: Request — มีบัตรไหม?
-        if(RC522_Request(PICC_REQIDL, &uid_len) == MI_OK) {
+        if(RC522_IsCardPresentPICC_REQIDL, &uid_len) == MI_OK) {
             USART_Println("Card detected!");
 
             // Step 2: Anticollision — อ่าน UID
-            if(RC522_Anticoll(uid, &uid_len) == MI_OK) {
+            if(RC522_ReadUID(uid, &uid_len) == MI_OK) {
                 USART_Print("UID: ");
                 for(uint8_t i=0; i<uid_len; i++) {
                     USART_PrintHex(uid[i]); USART_Print(" ");
@@ -114,7 +114,7 @@ int main(void) {
         Delay_Ms(200);
     }
 }</code></pre>
-    <p class="explain">🔍 <code>PICC_REQIDL</code> — request บัตรที่ยังไม่ได้เข้า sleep (idle state), <code>RC522_Anticoll(uid, &len)</code> — อ่าน UID, ความยาว 4 byte (single size) หรือ 7 byte (double size)</p></div>
+    <p class="explain">🔍 <code>PICC_REQIDL</code> — request บัตรที่ยังไม่ได้เข้า sleep (idle state), <code>RC522_ReadUID(uid, &len)</code> — อ่าน UID, ความยาว 4 byte (single size) หรือ 7 byte (double size)</p></div>
 
     <div class="step"><h3>ขั้นที่ 3: Authenticate + Read/Write Block</h3>
     <pre><code class="language-c">    // Default Key A for MIFARE Classic (new cards)
@@ -152,8 +152,8 @@ int main(void) {
         <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
         <tr><td><code>RC522_Init(spi, cs, rst)</code></td><td>เริ่มต้น RC522</td><td><code>RC522_Init(SPI1, PC3, PC4)</code></td></tr>
         <tr><td><code>RC522_SelfTest()</code></td><td>ทดสอบ SPI + RC522</td><td><code>if(RC522_SelfTest()){...}</code></td></tr>
-        <tr><td><code>RC522_Request(mode, &len)</code></td><td>ตรวจจับการ์ด</td><td><code>RC522_Request(PICC_REQIDL, &len)</code></td></tr>
-        <tr><td><code>RC522_Anticoll(uid, &len)</code></td><td>อ่าน UID การ์ด</td><td><code>RC522_Anticoll(uid, &uid_len)</code></td></tr>
+        <tr><td><code>RC522_IsCardPresentmode, &len)</code></td><td>ตรวจจับการ์ด</td><td><code>RC522_IsCardPresentPICC_REQIDL, &len)</code></td></tr>
+        <tr><td><code>RC522_ReadUID(uid, &len)</code></td><td>อ่าน UID การ์ด</td><td><code>RC522_ReadUID(uid, &uid_len)</code></td></tr>
         <tr><td><code>RC522_SelectTag(uid, len)</code></td><td>เลือกการ์ด</td><td><code>RC522_SelectTag(uid, 4)</code></td></tr>
         <tr><td><code>RC522_Auth(mode,blk,key,uid)</code></td><td>ยืนยันตัวตนด้วย key</td><td><code>RC522_Auth(AUTH1A, 4, key, uid)</code></td></tr>
         <tr><td><code>RC522_Read(block, buf, &len)</code></td><td>อ่าน block 16B</td><td><code>RC522_Read(4, buf, &size)</code></td></tr>
@@ -201,10 +201,10 @@ int main(void)
 
     while(1)
     {
-        if(RC522_Request(PICC_REQIDL, &uid_len) != MI_OK) {
+        if(RC522_IsCardPresentPICC_REQIDL, &uid_len) != MI_OK) {
             Delay_Ms(100); continue;
         }
-        if(RC522_Anticoll(uid, &uid_len) != MI_OK) continue;
+        if(RC522_ReadUID(uid, &uid_len) != MI_OK) continue;
         RC522_SelectTag(uid, uid_len);
 
         USART_Print("UID: ");

@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย DS18B20 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+﻿<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย DS18B20 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
 <nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_ds18b20.html">กลับบท</a><a href="chapx_lib_bmp280_answers.html">เฉลยถัดไป →</a></nav>
 <h1>📝 เฉลย — DS18B20</h1>
 <div class="answer"><h2>ข้อ 1: แสดง ROM ID ทั้งหมดของทุกเซนเซอร์</h2>
@@ -10,7 +10,7 @@ int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
     USART_Init(115200);
-    DS18B20_Init(PC0);
+    DS18B20_SearchDevices(PC0);
 
     uint8_t n = DS18B20_GetDeviceCount();
     USART_Print("Found "); USART_PrintNum(n);
@@ -44,7 +44,7 @@ int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
     USART_Init(115200);
-    DS18B20_Init(PC0);
+    DS18B20_SearchDevices(PC0);
 
     DS18B20_SetParasiteMode(1);   // เปิด parasite (2-wire)
     USART_Println("Parasite Power Mode Enabled");
@@ -90,7 +90,7 @@ int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
     USART_Init(115200);
-    DS18B20_Init(PC0);
+    DS18B20_SearchDevices(PC0);
 
     uint8_t n = DS18B20_GetDeviceCount();
     USART_Print("Found "); USART_PrintNum(n);

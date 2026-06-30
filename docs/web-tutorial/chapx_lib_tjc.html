@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="th">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -59,6 +59,7 @@ flowchart TD
     <div class="step"><h3>ขั้นที่ 1: Init + Setup</h3>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
+#include "TJC.h"
 
 TJC_Handle_t hmi;
 void OnTouch(uint8_t page, uint8_t id, uint8_t event) {
@@ -119,6 +120,7 @@ int main(void) {
     <p>TJC HMI 2 หน้า — หน้า 1: แสดงอุณหภูมิ+ความชื้นจาก DHT11, หน้า 2: ตั้งค่า Threshold — ใช้ callback เปลี่ยนหน้าและปรับค่า</p>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
+#include "TJC.h"
 
 TJC_Handle_t hmi;
 DHT11_Data_t dht;

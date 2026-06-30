@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="th">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -39,7 +39,7 @@ int main(void) {
 
     while(1) {
         ServoCluster_Update(&sc); // ★ non-blocking — ต้องเรียกบ่อย
-        if(ServoCluster_IsDone(&sc)) {
+        if(ServoCluster_IsAllDone(&sc)) {
             USART_Println("All servos reached target!");
         }
         IWDG_Feed();
@@ -51,7 +51,7 @@ int main(void) {
 <table>
 <tr><td><code>ServoCluster_Init(sc)</code></td><td>Init PCA9685</td><td><code>ServoCluster_AddServo(sc, ch, minµs, maxµs)</code></td><td>เพิ่ม servo</td></tr>
 <tr><td><code>ServoCluster_MoveTo(sc, ch, deg, time_ms, ease)</code></td><td>เคลื่อนที่</td><td><code>ServoCluster_MoveAll(sc, deg, time_ms, ease)</code></td><td>ทุกตัวพร้อมกัน</td></tr>
-<tr><td><code>ServoCluster_Update(sc)</code></td><td>★ เรียกใน loop</td><td><code>ServoCluster_IsDone(sc)</code></td><td>ถึงเป้าหรือยัง</td></tr>
+<tr><td><code>ServoCluster_Update(sc)</code></td><td>★ เรียกใน loop</td><td><code>ServoCluster_IsAllDone(sc)</code></td><td>ถึงเป้าหรือยัง</td></tr>
 <tr><td><code>ServoCluster_Stop(sc, ch)</code></td><td>หยุดทันที</td><td><code>ServoCluster_SetSpeed(sc, ch, deg_per_sec)</code></td><td>ความเร็ว</td></tr>
 </table>
 </section>

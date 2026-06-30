@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>LCDMenu — ระบบเมนูบน LCD1602 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head><body>
+﻿<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>LCDMenu — ระบบเมนูบน LCD1602 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head><body>
 
 <nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_pid.html">บทก่อน</a><a href="chapx_lib_circularbuffer.html">บทถัดไป →</a></nav>
 
@@ -60,7 +60,7 @@ flowchart TD
 <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "LCDMenu.h"
-#include "LCD1602_I2C.h"
+#include "lcd1602_i2c.h"
 
 LCDMenu_Handle menu;
 uint8_t setpoint = 40;
@@ -77,7 +77,7 @@ int main(void) {
     Timer_Init();
     USART_Init(115200);
 
-    LCD1602_I2C_Init(0x27);
+    LCD_Init(0x27);
     LCDMenu_Init(&menu, 0x27, 16, 2);  // LCD addr, 16 chars, 2 rows
     pinMode(PC3, PIN_MODE_INPUT_PULLUP);  // UP
     pinMode(PC4, PIN_MODE_INPUT_PULLUP);  // DOWN
@@ -124,7 +124,7 @@ int main(void) {
 </table></section>
 
 <section><h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2><table><tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
-<tr><td>จอไม่แสดงอะไรเลย</td><td>ลืม <code>LCD1602_I2C_Init()</code> ก่อน <code>LCDMenu_Init()</code></td><td>ต้อง Init LCD ก่อน — <code>LCD1602_I2C_Init(0x27)</code> แล้วตามด้วย <code>LCDMenu_Init()</code></td></tr>
+<tr><td>จอไม่แสดงอะไรเลย</td><td>ลืม <code>LCD_Init()</code> ก่อน <code>LCDMenu_Init()</code></td><td>ต้อง Init LCD ก่อน — <code>LCD_Init(0x27)</code> แล้วตามด้วย <code>LCDMenu_Init()</code></td></tr>
 <tr><td>กด UP/DOWN แล้วกระโดดหลายช่อง</td><td>Refresh rate เร็วเกินไป + ไม่มี debounce</td><td>เพิ่ม Delay_Ms เป็น 80-100ms — หรือใช้ Button library สำหรับ debounce</td></tr>
 <tr><td>SUBMENU ไม่ยอมเข้า</td><td>ลืม BACK item — หรือลูกศรไม่ตรงกับ ENTER</td><td>ทุก SUBMENU ต้องมี BACK เป็น item สุดท้าย — เช็ค pin mapping ปุ่ม</td></tr>
 <tr><td>TOGGLE ค่าไม่เปลี่ยน</td><td>Callback signature ไม่ตรง — ต้องรับ (LCDMenu_Handle*, uint8_t)</td><td>Callback TOGGLE ต้องเป็น <code>void cb(LCDMenu_Handle *m, uint8_t val)</code></td></tr>
@@ -136,7 +136,7 @@ int main(void) {
 <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "LCDMenu.h"
-#include "LCD1602_I2C.h"
+#include "lcd1602_i2c.h"
 #include "Flash.h"
 
 LCDMenu_Handle menu;
@@ -160,7 +160,7 @@ int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
     USART_Init(115200);
-    LCD1602_I2C_Init(0x27);
+    LCD_Init(0x27);
     LCDMenu_Init(&menu, 0x27, 16, 2);
     pinMode(PC3, PIN_MODE_INPUT_PULLUP);
     pinMode(PC4, PIN_MODE_INPUT_PULLUP);
@@ -183,7 +183,7 @@ int main(void) {
 
 <section><h2>✏️ ลองทำดู</h2><ol>
 <li>เพิ่ม Password Protect — ก่อนเข้า Settings Menu ต้องพิมพ์รหัส 4 หลักด้วย KeyMatrix</li>
-<li>Rotary Encoder Navigation — ใช้ Rotary Encoder แทนปุ่ม UP/DOWN — หมุน=เลื่อน, กด=Enter — ใช้ <code>RotaryEncoder_OnRotate()</code> + <code>LCDMenu_MoveCursor()</code></li>
+<li>Rotary Encoder Navigation — ใช้ Rotary Encoder แทนปุ่ม UP/DOWN — หมุน=เลื่อน, กด=Enter — ใช้ <code>Rotary_SetCallback()</code> + <code>LCDMenu_MoveCursor()</code></li>
 <li>Dynamic Menu — เพิ่ม Wi-Fi network list ที่ scan แล้วแสดงแบบ realtime — ใช้ <code>LCDMenu_AddItem()</code> ใน runtime</li>
 </ol></section>
 

@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="th">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -25,8 +25,8 @@ flowchart TD
     E --> F["Check TX_DS (sent?)"]
     F -->|"Yes"| G["Clear IRQ"]
     F -->|"No/MaxRetry"| H["Retry/Error"]
-    D --> I["NRF24_Available()?"]
-    I -->|"Yes"| J["NRF24_Read(buf,len)"]
+    D --> I["nRF24_StartListening)?"]
+    I -->|"Yes"| J["nRF24_StartListeningbuf,len)"]
     I -->|"No"| I
     </pre>
 </section>
@@ -104,15 +104,15 @@ int main(void) {
     NRF24_StartListening();
 
     while(1) {
-        if(NRF24_Available()) {             // data ready?
+        if(nRF24_StartListening)) {             // data ready?
             uint8_t rx_buf[32];
-            NRF24_Read(rx_buf, 32);         // read payload
+            nRF24_StartListeningrx_buf, 32);         // read payload
             USART_Print("RX: ");
             USART_Println((char*)rx_buf);
         }
     }
 }</code></pre>
-    <p class="explain">🔍 <code>NRF24_Available()</code> — non-blocking เช็ค RX FIFO, <code>NRF24_Read(buf, len)</code> — อ่าน payload + clear RX_DR flag, RX รองรับ 6 pipes — ใช้ pipe ต่างกันรับข้อมูลจาก 6 nodes พร้อมกัน</p></div>
+    <p class="explain">🔍 <code>nRF24_StartListening)</code> — non-blocking เช็ค RX FIFO, <code>nRF24_StartListeningbuf, len)</code> — อ่าน payload + clear RX_DR flag, RX รองรับ 6 pipes — ใช้ pipe ต่างกันรับข้อมูลจาก 6 nodes พร้อมกัน</p></div>
 </section>
 
 <section>
@@ -123,8 +123,8 @@ int main(void) {
         <tr><td><code>NRF24_OpenPipe(addr)</code></td><td>ตั้ง TX address</td><td><code>NRF24_OpenPipe(tx_addr)</code></td></tr>
         <tr><td><code>NRF24_OpenReadingPipe(n,addr)</code></td><td>ตั้ง RX pipe address</td><td><code>NRF24_OpenReadingPipe(0, addr)</code></td></tr>
         <tr><td><code>NRF24_Write(data, len)</code></td><td>ส่ง payload (สูงสุด 32B)</td><td><code>NRF24_Write(buf, 10)</code></td></tr>
-        <tr><td><code>NRF24_Read(buf, len)</code></td><td>อ่าน payload ที่รับ</td><td><code>NRF24_Read(buf, 32)</code></td></tr>
-        <tr><td><code>NRF24_Available()</code></td><td>เช็คข้อมูลใน RX FIFO</td><td><code>if(NRF24_Available()){...}</code></td></tr>
+        <tr><td><code>nRF24_StartListeningbuf, len)</code></td><td>อ่าน payload ที่รับ</td><td><code>nRF24_StartListeningbuf, 32)</code></td></tr>
+        <tr><td><code>nRF24_StartListening)</code></td><td>เช็คข้อมูลใน RX FIFO</td><td><code>if(nRF24_StartListening)){...}</code></td></tr>
         <tr><td><code>NRF24_SetChannel(ch)</code></td><td>เลือก channel 0-125</td><td><code>NRF24_SetChannel(76)</code></td></tr>
         <tr><td><code>NRF24_SetTXMode()</code></td><td>เข้า TX mode</td><td><code>NRF24_SetTXMode()</code></td></tr>
     </table>
@@ -170,8 +170,8 @@ int main(void)
     uint8_t buf[32]; uint8_t pipe;
     while(1)
     {
-        if(NRF24_Available(&pipe)) {
-            NRF24_Read(buf, 32);
+        if(nRF24_StartListening&pipe)) {
+            nRF24_StartListeningbuf, 32);
             USART_Print("Pipe "); USART_PrintInt(pipe);
             USART_Print(": "); USART_Println((char*)buf);
         }

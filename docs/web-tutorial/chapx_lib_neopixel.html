@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="th">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -17,7 +17,7 @@
     <h2>🧭 แผนภาพการทำงาน</h2>
     <pre class="mermaid">
 flowchart TD
-    A["NeoPixel_Init(PC0, N)"] --> B["NeoPixel_SetPixel(i, R,G,B)"]
+    A["NeoPixel_Init(PC0, N)"] --> B["NeoPixel_SetPixelColor(i, R,G,B)"]
     B --> C["NeoPixel_SetHSV(i, H,S,V)"]
     C --> D["NeoPixel_Show()"]
     D --> E["Disable Interrupts"]
@@ -48,7 +48,7 @@ flowchart TD
     <h2>📚 หลักการทำงาน</h2>
     <p><strong>WS2812B Protocol:</strong> ใช้ NRZ (Non-Return-to-Zero) ที่ 800kHz — แต่ละ LED รับ 24-bit (G→R→B, 8-bit ต่อสี) — BIT 0: HIGH 0.4µs + LOW 0.85µs, BIT 1: HIGH 0.85µs + LOW 0.4µs — RESET: LOW >50µs — ความแม่นยำระดับนาโนวินาที</p>
     <p><strong>Timing Critical:</strong> CH32V003 @ 48MHz — instruction ~21ns — ใช้ assembly bit-bang เพื่อความแม่นยำ — ต้องปิด interrupt ทั้งหมดระหว่าง Show() เพราะ interrupt จังหวะเดียวทำให้สีเพี้ยน</p>
-    <p><strong>GRB Color Order:</strong> WS2812B ใช้ GRB (Green-Red-Blue) — ไม่ใช่ RGB มาตรฐาน — NeoPixel_SetPixel(i, r, g, b) จัดการให้แล้ว — SetHSV() ใช้ HSL→RGB conversion</p>
+    <p><strong>GRB Color Order:</strong> WS2812B ใช้ GRB (Green-Red-Blue) — ไม่ใช่ RGB มาตรฐาน — NeoPixel_SetPixelColor(i, r, g, b) จัดการให้แล้ว — SetHSV() ใช้ HSL→RGB conversion</p>
     <p><strong>Chain Topology:</strong> ข้อมูลส่งเรียงตาม LED — LED[0] → LED[1] → ... → LED[N-1] — LED แต่ละตัวกินข้อมูลของตัวเอง 24-bit แล้วส่งที่เหลือต่อไป — บัฟเฟอร์ต้องมีขนาด N × 24-bit</p>
 </section>
 <section>
@@ -56,6 +56,7 @@ flowchart TD
     <div class="step"><h3>ขั้นที่ 1: Init + Setup</h3>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
+#include "NeoPixel.h"
 
 #define NUM_LEDS 8
 
@@ -68,9 +69,9 @@ int main(void) {
     <p class="explain">🔍 NeoPixel_Init(pin, count) จอง buffer ขนาด count × 3 bytes — SetBrightness() ปรับความสว่างโดยรวม (scale ทุกสี) — ต้องต่อระดับสัญญาณ 5V!</p></div>
     <div class="step"><h3>ขั้นที่ 2: ตั้งสี LED แต่ละดวง</h3>
     <pre><code class="language-c">    // LED 0 = Red
-    NeoPixel_SetPixel(0, 255, 0, 0);
+    NeoPixel_SetPixelColor(0, 255, 0, 0);
     // LED 1 = Green
-    NeoPixel_SetPixel(1, 0, 255, 0);
+    NeoPixel_SetPixelColor(1, 0, 255, 0);
     // Set all to Blue
     NeoPixel_SetAll(0, 0, 255);
     // LED 2 = HSV (Hue=120=Green)
@@ -98,7 +99,7 @@ int main(void) {
     <table>
         <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
         <tr><td><code>NeoPixel_Init(pin, count)</code></td><td>เริ่มต้น NeoPixel จอง buffer</td><td><code>NeoPixel_Init(PC0, 8)</code></td></tr>
-        <tr><td><code>NeoPixel_SetPixel(i, r, g, b)</code></td><td>ตั้งสี LED ดวงที่ i</td><td><code>NeoPixel_SetPixel(0, 255,0,0)</code></td></tr>
+        <tr><td><code>NeoPixel_SetPixelColor(i, r, g, b)</code></td><td>ตั้งสี LED ดวงที่ i</td><td><code>NeoPixel_SetPixelColor(0, 255,0,0)</code></td></tr>
         <tr><td><code>NeoPixel_SetAll(r, g, b)</code></td><td>ตั้งสีทุก LED</td><td><code>NeoPixel_SetAll(0, 255, 0)</code></td></tr>
         <tr><td><code>NeoPixel_SetHSV(i, h, s, v)</code></td><td>ตั้งสีแบบ HSV (h=0-360)</td><td><code>NeoPixel_SetHSV(0, 180, 255, 255)</code></td></tr>
         <tr><td><code>NeoPixel_Show()</code></td><td>ส่ง buffer ไป strip (ปิด interrupt)</td><td><code>NeoPixel_Show()</code></td></tr>
@@ -123,6 +124,7 @@ int main(void) {
     <p>8 LEDs แสดงสถานะ 3 แบบ — เขียว=ปกติ, แดง=เตือน (Blink), น้ำเงิน=โหมดตั้งค่า — กดปุ่มเปลี่ยนโหมด</p>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
+#include "NeoPixel.h"
 
 #define NUM_LEDS 8
 typedef enum { MODE_NORMAL, MODE_WARNING, MODE_SETUP } Mode_t;

@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย LCD1602 I2C — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+﻿<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย LCD1602 I2C — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
 <nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_lcd1602_i2c.html">กลับบท</a><a href="chapx_lib_max7219_answers.html">เฉลยถัดไป →</a></nav>
 <h1>📝 เฉลย — LCD1602 I2C</h1>
 
@@ -9,10 +9,10 @@
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    LCD1602_I2C_Init(0x27, 16, 2);
+    LCD_Init(0x27, 16, 2);
 
-    LCD1602_I2C_SetCursor(0, 0);
-    LCD1602_I2C_Print("Hello CH32V003  World!");
+    LCD_SetCursor(0, 0);
+    LCD_Print("Hello CH32V003  World!");
     uint8_t scroll_count = 0;
 
     while(1) {
@@ -48,18 +48,18 @@ const uint8_t big_digits[10][8] = {
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    LCD1602_I2C_Init(0x27, 16, 2);
+    LCD_Init(0x27, 16, 2);
 
     for(uint8_t i = 0; i < 8; i++) {
-        LCD1602_I2C_CreateChar(i, big_digits[i]);
+        LCD_CreateChar(i, big_digits[i]);
     }
-    LCD1602_I2C_CreateChar(8, big_digits[8]);
-    LCD1602_I2C_CreateChar(9, big_digits[9]);
+    LCD_CreateChar(8, big_digits[8]);
+    LCD_CreateChar(9, big_digits[9]);
 
-    LCD1602_I2C_SetCursor(0, 0);
+    LCD_SetCursor(0, 0);
     for(uint8_t i = 0; i < 10; i++) {
         LCD1602_I2C_WriteChar(i);
-        LCD1602_I2C_Print(" ");
+        LCD_Print(" ");
     }
 
     while(1) {}
@@ -77,7 +77,7 @@ int main(void) {
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    LCD1602_I2C_Init(0x27, 16, 2);
+    LCD_Init(0x27, 16, 2);
     pinMode(BTN_PIN, PIN_MODE_INPUT_PULLUP);
 
     bool english = true;
@@ -91,16 +91,16 @@ int main(void) {
         }
         last_btn = btn;
 
-        LCD1602_I2C_Clear();
-        LCD1602_I2C_SetCursor(0, 0);
+        LCD_Clear();
+        LCD_SetCursor(0, 0);
         if(english) {
-            LCD1602_I2C_Print("Temp: 25.5 C");
-            LCD1602_I2C_SetCursor(0, 1);
-            LCD1602_I2C_Print("Status: Normal");
+            LCD_Print("Temp: 25.5 C");
+            LCD_SetCursor(0, 1);
+            LCD_Print("Status: Normal");
         } else {
-            LCD1602_I2C_Print("อุณหภูมิ: 25.5C");
-            LCD1602_I2C_SetCursor(0, 1);
-            LCD1602_I2C_Print("สถานะ: ปกติ");
+            LCD_Print("อุณหภูมิ: 25.5C");
+            LCD_SetCursor(0, 1);
+            LCD_Print("สถานะ: ปกติ");
         }
         Delay_Ms(200);
     }

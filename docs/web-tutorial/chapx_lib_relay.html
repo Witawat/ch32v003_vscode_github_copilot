@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="th">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -67,6 +67,7 @@ flowchart TD
     <div class="step"><h3>ขั้นที่ 1: Init GPIO + ตรวจสอบ Logic</h3>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
+#include "Relay.h"
 
 #define RELAY1 PC0  // Relay 1
 #define RELAY2 PC1  // Relay 2 (2-channel module)
@@ -186,6 +187,7 @@ int main(void) {
     <p>ใช้ Relay + OLED + RTC DS1307 — ตั้งเวลาเปิด-ปิดไฟอัตโนมัติ — ปุ่มปรับเวลา — Non-Blocking timer</p>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
+#include "Relay.h"
 
 #define RELAY PC0
 uint8_t schedule_h = 18, schedule_m = 30; // เปิด 18:30
