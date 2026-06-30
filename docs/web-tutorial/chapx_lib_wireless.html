@@ -37,7 +37,7 @@ if(ESP01_IsConnected(&wifi)) ESP01_GetIP(&wifi);</code></pre>
 <h3>API หลัก</h3>
 <table>
 <tr><td><code>ESP01_Init(&h, usart, baud)</code></td><td>Init USART + test AT</td><td><code>ESP01_Reset(&h)</code></td><td>Hardware reset</td></tr>
-<tr><td><code>ESP01_ConnectWiFi(&h, ssid, pass)</code></td><td>เชื่อม WiFi</td><td><code>ESP01_HTTPGet(&h, host, path, port)</code></td><td>HTTP GET request</td></tr>
+<tr><td><code>ESP01_JoinAP(&h, ssid, pass)</code></td><td>เชื่อม WiFi</td><td><code>ESP01_TCPConnect(&h, host, port)</code></td><td>TCP เชื่อมต่อ</td></tr>
 <tr><td><code>ESP01_ConnectTCP(&h, ip, port)</code></td><td>เปิด TCP connection</td><td><code>ESP01_Send(&h, data)</code></td><td>ส่งข้อมูลผ่าน TCP</td></tr>
 <tr><td><code>ESP01_IsConnected(&h)</code></td><td>เช็ค WiFi connection</td><td><code>ESP01_GetIP(&h)</code></td><td>อ่าน IP address</td></tr>
 </table>

@@ -84,14 +84,15 @@ int main(void) {
     Start_Timer(&tmr, 2000, 1);
 
     float t, h;
+    char buf[64];
     while(1) {
         if(Is_Timer_Expired(&tmr)) {
             if(AHT10_Read(&sensor, &t, &h)) {
                 OLED_Clear(&oled);
-                OLED_SetCursor(&oled, 0, 0);
-                OLED_PrintFloat(&oled, "Temp:", t, 1); OLED_Print(&oled, " C");
-                OLED_SetCursor(&oled, 0, 2);
-                OLED_PrintFloat(&oled, "Hum :", h, 1); OLED_Print(&oled, " %");
+                snprintf(buf, sizeof(buf), "Temp: %.1fC", t);
+                OLED_DrawStringAlign(&oled, 0, 0, buf, ALIGN_LEFT);
+                snprintf(buf, sizeof(buf), "Hum : %.1f %%", h);
+                OLED_DrawStringAlign(&oled, 0, 20, buf, ALIGN_LEFT);
                 OLED_Update(&oled);
             }
         }

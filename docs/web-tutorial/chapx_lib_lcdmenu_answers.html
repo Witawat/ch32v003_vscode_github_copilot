@@ -1,11 +1,11 @@
-<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย LCD MENU — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+﻿<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย LCD MENU — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
 <nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_lcdmenu.html">กลับบท</a><a href="chapx_lib_circularbuffer_answers.html">เฉลยถัดไป →</a></nav>
 <h1>📝 เฉลย — LCD Menu</h1>
 <div class="answer"><h2>ข้อ 1: WiFi SSID Edit — แก้ไขชื่อ WiFi ผ่านปุ่มกด</h2>
 <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "LCDMenu.h"
-#include "I2C_LCD.h"
+#include "lcd1602_i2c.h"
 
 LCD1602_Handle lcd;
 Button_Instance btn_up, btn_down, btn_enter, btn_back;
@@ -58,7 +58,7 @@ int main(void) {
 <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "LCDMenu.h"
-#include "I2C_LCD.h"
+#include "lcd1602_i2c.h"
 
 LCD1602_Handle lcd;
 Button_Instance btn_up, btn_down, btn_enter, btn_back;
@@ -102,7 +102,7 @@ int main(void) {
 <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "LCDMenu.h"
-#include "I2C_LCD.h"
+#include "lcd1602_i2c.h"
 #include "AT24Cxx.h"
 
 LCD1602_Handle lcd;

@@ -36,34 +36,29 @@ int main(void) {
             }
 
             OLED_Clear(&oled);
+            char buf[64];
 
-            OLED_SetCursor(&oled, 0, 0);
-            OLED_PrintFloat(&oled, "", d.voltage, 1);
-            OLED_Print(&oled, "V ");
+            snprintf(buf, sizeof(buf), "%.1fV ", d.voltage);
+            OLED_DrawStringAlign(&oled, 0, 0, buf, ALIGN_LEFT);
 
-            OLED_SetCursor(&oled, 55, 0);
-            OLED_PrintFloat(&oled, "", d.current, 2);
-            OLED_Print(&oled, "A");
+            snprintf(buf, sizeof(buf), "%.2fA", d.current);
+            OLED_DrawStringAlign(&oled, 55, 0, buf, ALIGN_LEFT);
 
-            OLED_SetCursor(&oled, 0, 2);
-            OLED_PrintFloat(&oled, "", d.power, 1);
-            OLED_Print(&oled, "W ");
+            snprintf(buf, sizeof(buf), "%.1fW ", d.power);
+            OLED_DrawStringAlign(&oled, 0, 20, buf, ALIGN_LEFT);
 
-            OLED_SetCursor(&oled, 55, 2);
-            OLED_PrintFloat(&oled, "PF:", d.pf, 2);
+            snprintf(buf, sizeof(buf), "PF: %.2f", d.pf);
+            OLED_DrawStringAlign(&oled, 55, 20, buf, ALIGN_LEFT);
 
-            OLED_SetCursor(&oled, 0, 4);
-            OLED_PrintFloat(&oled, "", d.frequency, 1);
-            OLED_Print(&oled, "Hz ");
+            snprintf(buf, sizeof(buf), "%.1fHz ", d.frequency);
+            OLED_DrawStringAlign(&oled, 0, 40, buf, ALIGN_LEFT);
 
-            OLED_SetCursor(&oled, 55, 4);
-            OLED_PrintFloat(&oled, "", d.energy, 2);
-            OLED_Print(&oled, "kWh");
+            snprintf(buf, sizeof(buf), "%.2fkWh", d.energy);
+            OLED_DrawStringAlign(&oled, 55, 40, buf, ALIGN_LEFT);
 
             float cost = d.energy * COST_PER_KWH;
-            OLED_SetCursor(&oled, 0, 6);
-            OLED_PrintFloat(&oled, "Cost:", cost, 2);
-            OLED_Print(&oled, "B");
+            snprintf(buf, sizeof(buf), "Cost: %.2fB", cost);
+            OLED_DrawStringAlign(&oled, 0, 60, buf, ALIGN_LEFT);
 
             OLED_Update(&oled);
         }

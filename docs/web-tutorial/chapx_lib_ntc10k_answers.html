@@ -51,30 +51,32 @@ void ntc_voltage_divider_demo(void) {
 }
 </code></pre><div class="approach"><strong>🧠 แนวคิด:</strong> Voltage divider: ADC อ่านแรงดันที่จุดกึ่งกลางระหว่าง R_fixed กับ NTC — สูตร <code>R_ntc = R_fixed × Vout / (VCC − Vout)</code> — กรอง out-of-range: ADC ~0 = NTC short, ADC ~1023 = NTC ขาด — ตาราง ADC→Temp ช่วยดีบักและเลือก R_fixed ที่เหมาะสม</div></div>
 <div class="answer"><h2>ข้อ 3: เทียบความแม่นยำ NTC10K vs DS18B20</h2><pre><code class="language-c">void ntc_vs_ds18b20(void) {
-    OLED_Init(I2C_PINS_DEFAULT);
+    OLED_Handle oled;
+    OLED_Init(&oled, OLED_128x64, 0x3C);
 
     DS18B20_Device* ds = DS18B20_Init(PC3);
 
+    char buf[64];
     while(1) {
         float ntc_temp = ntc_read_calibrated();
         float ds_temp = DS18B20_ReadTemperatureBlocking(ds);
 
         float diff = fabsf(ntc_temp - ds_temp);
 
-        OLED_SetCursor(0, 0);
-        OLED_Print("NTC:  "); OLED_PrintFloat(ntc_temp, 1); OLED_Print(" C ");
+        snprintf(buf, sizeof(buf), "NTC:  %.1f C ", ntc_temp);
+        OLED_DrawStringAlign(&oled, 0, 0, buf, ALIGN_LEFT);
 
-        OLED_SetCursor(0, 1);
-        OLED_Print("DS18: "); OLED_PrintFloat(ds_temp, 1); OLED_Print(" C ");
+        snprintf(buf, sizeof(buf), "DS18: %.1f C ", ds_temp);
+        OLED_DrawStringAlign(&oled, 0, 10, buf, ALIGN_LEFT);
 
-        OLED_SetCursor(0, 2);
-        OLED_Print("Diff: "); OLED_PrintFloat(diff, 2); OLED_Print(" C ");
+        snprintf(buf, sizeof(buf), "Diff: %.2f C ", diff);
+        OLED_DrawStringAlign(&oled, 0, 20, buf, ALIGN_LEFT);
 
-        OLED_SetCursor(0, 3);
-        if(diff < 0.5f)       OLED_Print("Excellent    ");
-        else if(diff < 1.0f)  OLED_Print("Good         ");
-        else if(diff < 2.0f)  OLED_Print("Acceptable   ");
-        else                  OLED_Print("Recalibrate!  ");
+        if(diff < 0.5f)       snprintf(buf, sizeof(buf), "Excellent    ");
+        else if(diff < 1.0f)  snprintf(buf, sizeof(buf), "Good         ");
+        else if(diff < 2.0f)  snprintf(buf, sizeof(buf), "Acceptable   ");
+        else                  snprintf(buf, sizeof(buf), "Recalibrate!  ");
+        OLED_DrawStringAlign(&oled, 0, 30, buf, ALIGN_LEFT);
 
         USART_PrintFloat(ntc_temp, 2);
         USART_Print(",");

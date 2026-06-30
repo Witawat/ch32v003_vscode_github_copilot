@@ -132,31 +132,26 @@ int main(void)
             float pf = PZEM004Tv3_GetPowerFactor(&pzem);
 
             OLED_Clear(&oled);
-            OLED_SetCursor(&oled, 0, 0);
-            OLED_PrintFloat(&oled, "", v, 1);
-            OLED_Print(&oled, "V  ");
+            char buf[64];
+            snprintf(buf, sizeof(buf), "%.1fV  ", v);
+            OLED_DrawStringAlign(&oled, 0, 0, buf, ALIGN_LEFT);
 
-            OLED_SetCursor(&oled, 60, 0);
-            OLED_PrintFloat(&oled, "", a, 2);
-            OLED_Print(&oled, "A");
+            snprintf(buf, sizeof(buf), "%.2fA", a);
+            OLED_DrawStringAlign(&oled, 60, 0, buf, ALIGN_LEFT);
 
-            OLED_SetCursor(&oled, 0, 2);
-            OLED_PrintFloat(&oled, "", w, 1);
-            OLED_Print(&oled, "W");
+            snprintf(buf, sizeof(buf), "%.1fW", w);
+            OLED_DrawStringAlign(&oled, 0, 20, buf, ALIGN_LEFT);
 
-            OLED_SetCursor(&oled, 0, 4);
-            OLED_PrintFloat(&oled, "", f, 1);
-            OLED_Print(&oled, "Hz  PF:");
-            OLED_PrintFloat(&oled, "", pf, 2);
+            snprintf(buf, sizeof(buf), "%.1fHz  PF: %.2f", f, pf);
+            OLED_DrawStringAlign(&oled, 0, 40, buf, ALIGN_LEFT);
 
-            OLED_SetCursor(&oled, 0, 6);
-            OLED_PrintFloat(&oled, "", e, 2);
-            OLED_Print(&oled, "kWh");
+            snprintf(buf, sizeof(buf), "%.2fkWh", e);
+            OLED_DrawStringAlign(&oled, 0, 60, buf, ALIGN_LEFT);
 
             if(v > 250.0f || a > 10.0f) {
                 digitalWrite(PC0, HIGH); // ตัด relay
-                OLED_SetCursor(&oled, 90, 0);
-                OLED_Print(&oled, "CUT!");
+                snprintf(buf, sizeof(buf), "CUT!");
+                OLED_DrawStringAlign(&oled, 90, 0, buf, ALIGN_LEFT);
             }
 
             OLED_Update(&oled);

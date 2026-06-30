@@ -12,20 +12,23 @@ int main(void) {
     OLED_Handle oled;
     OLED_Init(&oled, OLED_128x64, 0x3C);
 
-    OLED_SetFont(FONT_16X16_THAI);
-    OLED_Print(0, 0, "สวัสดี");
-    OLED_SetFont(FONT_6X8);
-    OLED_Print(60, 0, "Hello");
-    OLED_SetFont(FONT_8X16);
-    OLED_Print(0, 20, "อุณหภูมิ:");
-    OLED_SetFont(FONT_6X8);
-    OLED_PrintFloat(72, 20, 25.5f, 1);
-    OLED_Print(0, 40, "Celsius");
+    OLED_SetFont(&oled, FONT_16X16_THAI);
+    OLED_DrawStringAlign(&oled, 0, 0, "สวัสดี", ALIGN_LEFT);
+    OLED_SetFont(&oled, FONT_6X8);
+    OLED_DrawStringAlign(&oled, 60, 0, "Hello", ALIGN_LEFT);
+    OLED_SetFont(&oled, FONT_8X16);
+    char buf[64];
+    snprintf(buf, sizeof(buf), "อุณหภูมิ:");
+    OLED_DrawStringAlign(&oled, 0, 20, buf, ALIGN_LEFT);
+    OLED_SetFont(&oled, FONT_6X8);
+    snprintf(buf, sizeof(buf), "%.1f", 25.5f);
+    OLED_DrawStringAlign(&oled, 72, 20, buf, ALIGN_LEFT);
+    OLED_DrawStringAlign(&oled, 0, 40, "Celsius", ALIGN_LEFT);
     OLED_Update(&oled);
 
     while(1) {}
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> เรียก <code>OLED_SetFont</code> เพื่อเปลี่ยนฟอนต์ระหว่างไทยกับอังกฤษก่อนพิมพ์แต่ละครั้ง — ฟอนต์ไทยเป็น 16x16 พิกเซล อังกฤษ 6x8 — ต้องคำนวณตำแหน่ง x ให้ไม่ทับกัน — ใช้ <code>OLED_PrintFloat</code> สำหรับตัวเลขทศนิยม — ถ้าต้องการสลับภาษาแบบไดนามิก ให้เก็บ state ของภาษาที่ใช้อยู่แล้วเรียก SetFont ก่อนพิมพ์เสมอ</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> เรียก <code>OLED_SetFont</code> เพื่อเปลี่ยนฟอนต์ระหว่างไทยกับอังกฤษก่อนพิมพ์แต่ละครั้ง — ฟอนต์ไทยเป็น 16x16 พิกเซล อังกฤษ 6x8 — ต้องคำนวณตำแหน่ง x ให้ไม่ทับกัน — ใช้ <code>snprintf</code> จัดรูปแบบตัวเลขทศนิยมก่อนส่งให้ <code>OLED_DrawStringAlign</code> — ถ้าต้องการสลับภาษาแบบไดนามิก ให้เก็บ state ของภาษาที่ใช้อยู่แล้วเรียก SetFont ก่อนพิมพ์เสมอ</div>
 </div>
 
 <div class="answer">
@@ -43,13 +46,16 @@ int main(void) {
         uint16_t adc = ADC_Read(ADC_CH0);
         uint8_t bar_height = (uint8_t)((uint32_t)adc * 48 / 4095);
 
-        OLED_Clear();
-        OLED_DrawRect(10, 5, 30, 50, 1);       // กรอบนอก
-        OLED_DrawRect(11, 5 + 50 - bar_height,
-                      28, bar_height, 1);        // แท่งข้างใน
-        OLED_SetFont(FONT_6X8);
-        OLED_Print(45, 20, "ADC:");
-        OLED_PrintNum(45, 30, adc);
+        OLED_Clear(&oled);
+        OLED_DrawRect(&oled, 10, 5, 30, 50, 1);       // กรอบนอก
+        OLED_DrawRect(&oled, 11, 5 + 50 - bar_height,
+                      28, bar_height, 1);               // แท่งข้างใน
+        OLED_SetFont(&oled, FONT_6X8);
+        char buf[64];
+        snprintf(buf, sizeof(buf), "ADC:");
+        OLED_DrawStringAlign(&oled, 45, 20, buf, ALIGN_LEFT);
+        snprintf(buf, sizeof(buf), "%d", adc);
+        OLED_DrawStringAlign(&oled, 45, 30, buf, ALIGN_LEFT);
         OLED_Update(&oled);
 
         Delay_Ms(100);
@@ -76,7 +82,7 @@ int main(void) {
 
     while(1) {
         // ลบบอลเก่า
-        OLED_DrawCircle(x, y, BALL_R, 0);
+        OLED_DrawCircle(&oled, x, y, BALL_R, 0);
 
         // อัปเดตตำแหน่งด้วยฟิสิกส์
         vy += gravity;
@@ -93,7 +99,7 @@ int main(void) {
         if(abs(vx) < 1 && abs(vy) < 1 && y >= 60) { vx = 0; vy = 0; }
 
         // วาดบอลใหม่
-        OLED_DrawCircle(x, y, BALL_R, 1);
+        OLED_DrawCircle(&oled, x, y, BALL_R, 1);
         OLED_Update(&oled);
         Delay_Ms(20);
     }
@@ -143,11 +149,11 @@ int main(void) {
     OLED_Handle oled;
     OLED_Init(&oled, OLED_128x64, 0x3C);
 
-    OLED_Clear();
+    OLED_Clear(&oled);
     for(uint8_t y = 0; y < 29; y++) {
         for(uint8_t x = 0; x < 29; x++) {
             if(qr[y][x]) {
-                OLED_SetPixel(20 + x, 10 + y, 1);
+                OLED_SetPixel(&oled, 20 + x, 10 + y, 1);
             }
         }
     }

@@ -113,6 +113,6 @@ int main(void) {
         IWDG_Feed();
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> รองรับ 3 จุดวัด — <code>RequestTemperatures</code> สั่ง convert พร้อมกันทุกตัว — <code>Flash_WriteLog</code> บันทึก struct ที่มี timestamp + array อุณหภูมิ — เลือกอ่านเฉพาะ ROM 3 ตัวแรก (หรือใช้ <code>DS18B20_GetTempCByIndex</code>) — อ่านกลับด้วย <code>Flash_ReadLog</code> เมื่อต้องการ dump ข้อมูลผ่าน USART</div></div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> รองรับ 3 จุดวัด — <code>RequestTemperatures</code> สั่ง convert พร้อมกันทุกตัว — <code>Flash_WriteLog</code> บันทึก struct ที่มี timestamp + array อุณหภูมิ — เลือกอ่านเฉพาะ ROM 3 ตัวแรก (หรือใช้ <code>DS18B20_DS18B20_ReadTemperatureBlocking</code>) — อ่านกลับด้วย <code>Flash_ReadLog</code> เมื่อต้องการ dump ข้อมูลผ่าน USART</div></div>
 <nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_ds18b20.html">กลับบท</a><a href="chapx_lib_bmp280_answers.html">เฉลยถัดไป →</a></nav>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

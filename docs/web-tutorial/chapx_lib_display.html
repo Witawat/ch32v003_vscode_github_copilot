@@ -24,16 +24,19 @@
 OLED_Handle oled;
 OLED_Init(&oled, OLED_128x64, 0x3C);
 OLED_Clear(&oled);
-OLED_SetCursor(&oled, 0, 0); OLED_Print(&oled, "สวัสดี CH32V003!");
-OLED_SetCursor(&oled, 0, 2); OLED_PrintFloat(&oled, "Temp:", 25.5f, 1);
+char buf[32];
+snprintf(buf, sizeof(buf), "สวัสดี CH32V003!");
+OLED_DrawStringAlign(&oled, 0, 0, buf, ALIGN_LEFT);
+snprintf(buf, sizeof(buf), "Temp: %.1f", 25.5f);
+OLED_DrawStringAlign(&oled, 0, 16, buf, ALIGN_LEFT);
 OLED_DrawRect(&oled, 100, 0, 127, 63, 1);
 OLED_Update(&oled);  // ★ ต้องเรียก — push buffer ลงจอ</code></pre>
 <p class="explain">⚠️ 3 ขนาด (128x64/128x32/64x48) → เลือกตอน Init, buffer ~1KB ใน RAM, I2C addr 0x3C(0x78<<1) หรือ 0x3D, Font 6x8/8x16 สลับด้วย OLED_SetFont(&oled, FONT_8x16)</p></div>
 
 <h3>API หลัก</h3>
 <table>
-<tr><td><code>OLED_Init(o, addr, size)</code></td><td>Init + clear</td><td><code>OLED_SetCursor(o, x, y)</code></td><td>ตำแหน่ง text</td></tr>
-<tr><td><code>OLED_Print(o, str)</code></td><td>พิมพ์ข้อความ</td><td><code>OLED_PrintFloat(o, prefix, val, decimals)</code></td><td>เลขทศนิยม</td></tr>
+<tr><td><code>OLED_Init(&o, size, addr)</code></td><td>Init + clear</td><td><code>OLED_DrawStringAlign(&o, x,y, str, ALIGN_LEFT)</code></td><td>พิมพ์ข้อความ</td></tr>
+<tr><td><code>snprintf(buf, sz, fmt, val)</code> + <code>OLED_DrawStringAlign</code></td><td>แสดงเลขทศนิยม</td></tr>
 <tr><td><code>OLED_SetPixel(o, x, y)</code></td><td>จุด</td><td><code>OLED_DrawLine(o, x1,y1,x2,y2)</code></td><td>เส้น</td></tr>
 <tr><td><code>OLED_DrawRect(o, x,y,w,h, fill)</code></td><td>สี่เหลี่ยม</td><td><code>OLED_DrawCircle(o, cx,cy,r, fill)</code></td><td>วงกลม</td></tr>
 <tr><td><code>OLED_Display(o)</code></td><td>Push buffer → จอ</td><td><code>OLED_Clear(o)</code></td><td>ล้าง buffer</td></tr>
@@ -41,10 +44,11 @@ OLED_Update(&oled);  // ★ ต้องเรียก — push buffer ลง�
 
 <h2>LCD1602 I2C — จอตัวอักษร 16x2</h2>
 <pre><code class="language-c">#include "lcd1602_i2c.h"
-LCD_Init(0x27);  // หรือ 0x3F
-LCD_SetCursor(0, 0); LCD_Print("Hello World!");
-LCD_SetCursor(1, 0); LCD_Print("Line 2");
-// Custom char: LCD_CreateChar(0, custom_pattern); LCD1602_I2C_WriteChar(0);</code></pre>
+LCD1602_Handle lcd;
+LCD_Init(&lcd, 0x27, LCD_16x2);  // หรือ 0x3F
+LCD_SetCursor(&lcd, 0, 0); LCD_Print(&lcd, "Hello World!");
+LCD_SetCursor(&lcd, 1, 0); LCD_Print(&lcd, "Line 2");
+// Custom char: LCD_CreateChar(&lcd, 0, custom_pattern); LCD_WriteChar(&lcd, 0);</code></pre>
 <p class="explain">⚠️ 2 address หลัก: 0x27 vs 0x3F — ใช้ I2CScan ตรวจสอบ, backlight เปิด/ปิดด้วย jumper หรือคำสั่ง</p>
 
 <h2>MAX7219 — LED Matrix 8x8 (SPI)</h2>

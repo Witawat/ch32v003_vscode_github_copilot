@@ -59,22 +59,25 @@ CH32V003 TSSOP-20
 
 OLED_Handle oled;
 PID_Handle pid;
+DS18B20_Device* ds;
+RotaryEncoder enc;
+Relay_Instance relay;
 float setpoint = 25.0f, current_temp = 0, pid_output = 0;
 uint8_t heater_on = 0, alarm_active = 0;
 uint32_t alarm_start = 0;
+char buf[32];
 
 // ---- Tasks (called by Scheduler) ----
 void task_read_sensors(void) {
     float t1 = BMP280_ReadTemperature();           // room
-    DS18B20_RequestTemperatures(); Delay_Ms(750);
-    float t2 = DS18B20_GetTempCByIndex(0);        // target zone
+    float t2 = DS18B20_ReadTemperatureBlocking(ds); // target zone
     current_temp = (t1 + t2) / 2.0f;
 }
 
 void task_pid_control(void) {
     pid_output = PID_Compute(&pid, current_temp);
-    if(pid_output > 5) { Relay_On(PC5); heater_on = 1; }
-    else { Relay_Off(PC5); heater_on = 0; }
+    if(pid_output > 5) { Relay_On(&relay); heater_on = 1; }
+    else { Relay_Off(&relay); heater_on = 0; }
     // Alarm if 2°C above setpoint for 10 seconds
     if(current_temp > setpoint + 2.0f) {
         if(!alarm_active) { alarm_active = 1; alarm_start = Get_CurrentMs(); }
@@ -88,26 +91,18 @@ void task_pid_control(void) {
 
 void task_update_display(void) {
     OLED_Clear(&oled);
-    OLED_SetCursor(&oled, 0, 0);
-    OLED_PrintFloat(&oled, "T:", current_temp, 1);
-    OLED_Print(&oled, "C  ");
-    OLED_Print(&oled, heater_on ? "[ON]" : "[  ]");
-
-    OLED_SetCursor(&oled, 0, 2);
-    OLED_PrintFloat(&oled, "Set:", setpoint, 1);
-    OLED_Print(&oled, "C");
-
-    OLED_SetCursor(&oled, 0, 4);
-    OLED_PrintFloat(&oled, "PWR:", pid_output, 1);
-    OLED_Print(&oled, "% ");
-    OLED_PrintFloat(&oled, "", (float)(Get_CurrentMs()/1000), 0);
-    OLED_Print(&oled, "s");
-
+    snprintf(buf, sizeof(buf), "T:%.1f C  %s", current_temp, heater_on ? "[ON]" : "[  ]");
+    OLED_DrawStringAlign(&oled, 0, 0, buf, ALIGN_LEFT);
+    snprintf(buf, sizeof(buf), "Set:%.1f C", setpoint);
+    OLED_DrawStringAlign(&oled, 0, 16, buf, ALIGN_LEFT);
+    snprintf(buf, sizeof(buf), "PWR:%.1f%%  %lus", pid_output, (uint32_t)(Get_CurrentMs()/1000));
+    OLED_DrawStringAlign(&oled, 0, 32, buf, ALIGN_LEFT);
     OLED_Update(&oled);
 }
 
 // ---- Rotary Encoder Callbacks ----
-void on_rotate(int8_t dir) {
+void on_rotate(RotaryEncoder* e) {
+    int32_t dir = Rotary_GetPosition(e);
     setpoint += dir * 0.5f;
     if(setpoint < 0)  setpoint = 0;
     if(setpoint > 50) setpoint = 50;
@@ -116,7 +111,7 @@ void on_rotate(int8_t dir) {
     Buzzer_Tone(PA1, 1000, 20); // short click feedback
 }
 
-void on_button(void) {
+void on_button(RotaryEncoder* e) {
     heater_on = !heater_on;
     USART_Println(heater_on ? "Controller ON" : "Controller OFF");
 }
@@ -128,23 +123,25 @@ int main(void) {
 
     // Init communication
     I2C_SimpleInit(I2C_SPEED_400K, I2C_PINS_DEFAULT);
-    OneWire_Init(PC0);
+    ds = DS18B20_Init(PC0);
     USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
 
     // Init sensors
     BMP280_Init(0x76);
     BMP280_SetMode(BMP280_MODE_NORMAL);
-    DS18B20_SearchDevices();
 
     // Init display
     OLED_Init(&oled, OLED_128x64, 0x3C);
-    OLED_Clear(&oled); OLED_SetCursor(&oled, 0, 2);
-    OLED_Print(&oled, "Temp Controller"); OLED_SetCursor(&oled, 0, 4);
-    OLED_Print(&oled, "Booting..."); OLED_Update(&oled);
+    OLED_Clear(&oled);
+    snprintf(buf, sizeof(buf), "Temp Controller");
+    OLED_DrawStringAlign(&oled, 0, 16, buf, ALIGN_LEFT);
+    snprintf(buf, sizeof(buf), "Booting...");
+    OLED_DrawStringAlign(&oled, 0, 32, buf, ALIGN_LEFT);
+    OLED_Update(&oled);
     Delay_Ms(2000);
 
     // Init actuators
-    Relay_Init(PC5, RELAY_ACTIVE_HIGH);
+    Relay_Init(&relay, PC5, RELAY_ACTIVE_HIGH);
     Buzzer_Init(PA1, BUZZER_ACTIVE);
 
     // Init PID
@@ -154,9 +151,9 @@ int main(void) {
     PID_SetSetpoint(&pid, setpoint);
 
     // Init input
-    Rotary_Init(PC3, PC4, PC6);
-    Rotary_SetCallback(on_rotate);
-    Rotary_SetCallback(on_button);
+    Rotary_Init(&enc, PC3, PC4, PC6);
+    Rotary_SetCallback(&enc, ROTARY_EVENT_ROTATE, on_rotate);
+    Rotary_SetCallback(&enc, ROTARY_EVENT_PRESS, on_button);
 
     // Init scheduler
     Scheduler_Init();
@@ -168,9 +165,9 @@ int main(void) {
     USART_Println("=== Temp Controller Ready ===");
 
     while(1) {
-        Rotary_Update();  // fast poll for responsiveness
-        Scheduler_Run();   // run timed tasks
-        yield();                 // feed IWDG
+        Rotary_Update(&enc);  // fast poll for responsiveness
+        Scheduler_Run();      // run timed tasks
+        yield();              // feed IWDG
 
         // Optional: sleep when idle
         // PWR_Sleep();

@@ -13,32 +13,35 @@
 }
 
 void pms_aqi_dashboard(void) {
-    OLED_Init(I2C_PINS_DEFAULT);
+    OLED_Handle oled;
+    OLED_Init(&oled, OLED_128x64, 0x3C);
 
     PMS5003_Instance s;
     PMS5003_Init(&s, USART_PINS_DEFAULT);
 
+    char buf[64];
     while(1) {
         PMS5003_Data_t data;
         if(!PMS5003_GetData(&s, &data)) {
-            OLED_SetCursor(0, 0); OLED_Print("PMS5003 No Data  ");
+            snprintf(buf, sizeof(buf), "PMS5003 No Data  ");
+            OLED_DrawStringAlign(&oled, 0, 0, buf, ALIGN_LEFT);
             Delay_Ms(1000);
             continue;
         }
 
         uint16_t aqi = pm25_to_aqi(data.pm25);
 
-        OLED_SetCursor(0, 0);
-        OLED_Print("PM2.5: "); OLED_PrintNum(data.pm25); OLED_Print(" ug/m3");
-        OLED_SetCursor(0, 1);
-        OLED_Print("PM10:  "); OLED_PrintNum(data.pm10);  OLED_Print(" ug/m3");
-        OLED_SetCursor(0, 2);
-        OLED_Print("AQI:   "); OLED_PrintNum(aqi); OLED_Print("     ");
-        OLED_SetCursor(0, 3);
-        if(aqi <= 50)        OLED_Print("Good      ");
-        else if(aqi <= 100)  OLED_Print("Moderate  ");
-        else if(aqi <= 150)  OLED_Print("Unhealthy S");
-        else                 OLED_Print("Unhealthy   ");
+        snprintf(buf, sizeof(buf), "PM2.5: %d ug/m3", data.pm25);
+        OLED_DrawStringAlign(&oled, 0, 0, buf, ALIGN_LEFT);
+        snprintf(buf, sizeof(buf), "PM10:  %d ug/m3", data.pm10);
+        OLED_DrawStringAlign(&oled, 0, 10, buf, ALIGN_LEFT);
+        snprintf(buf, sizeof(buf), "AQI:   %d     ", aqi);
+        OLED_DrawStringAlign(&oled, 0, 20, buf, ALIGN_LEFT);
+        if(aqi <= 50)        snprintf(buf, sizeof(buf), "Good      ");
+        else if(aqi <= 100)  snprintf(buf, sizeof(buf), "Moderate  ");
+        else if(aqi <= 150)  snprintf(buf, sizeof(buf), "Unhealthy S");
+        else                 snprintf(buf, sizeof(buf), "Unhealthy   ");
+        OLED_DrawStringAlign(&oled, 0, 30, buf, ALIGN_LEFT);
 
         Delay_Ms(2000);
     }

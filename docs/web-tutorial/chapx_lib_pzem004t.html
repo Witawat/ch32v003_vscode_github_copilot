@@ -107,23 +107,19 @@ int main(void)
             if(PZEM004T_ReadAll(&pzem))
             {
                 OLED_Clear(&oled);
-                OLED_SetCursor(&oled, 0, 0);
-                OLED_PrintFloat(&oled, "", pzem.voltage, 1);
-                OLED_Print(&oled, "V ");
-                OLED_SetCursor(&oled, 60, 0);
-                OLED_PrintFloat(&oled, "", pzem.current, 2);
-                OLED_Print(&oled, "A");
-                OLED_SetCursor(&oled, 0, 2);
-                OLED_PrintFloat(&oled, "", pzem.power, 1);
-                OLED_Print(&oled, "W ");
-                OLED_SetCursor(&oled, 60, 2);
-                OLED_PrintFloat(&oled, "PF:", pzem.pf, 2);
-                OLED_SetCursor(&oled, 0, 4);
-                OLED_PrintFloat(&oled, "", pzem.freq, 1);
-                OLED_Print(&oled, "Hz ");
-                OLED_SetCursor(&oled, 0, 6);
-                OLED_PrintFloat(&oled, "", pzem.energy, 1);
-                OLED_Print(&oled, "kWh");
+                char buf[64];
+                snprintf(buf, sizeof(buf), "%.1fV ", pzem.voltage);
+                OLED_DrawStringAlign(&oled, 0, 0, buf, ALIGN_LEFT);
+                snprintf(buf, sizeof(buf), "%.2fA", pzem.current);
+                OLED_DrawStringAlign(&oled, 60, 0, buf, ALIGN_LEFT);
+                snprintf(buf, sizeof(buf), "%.1fW ", pzem.power);
+                OLED_DrawStringAlign(&oled, 0, 20, buf, ALIGN_LEFT);
+                snprintf(buf, sizeof(buf), "PF: %.2f", pzem.pf);
+                OLED_DrawStringAlign(&oled, 60, 20, buf, ALIGN_LEFT);
+                snprintf(buf, sizeof(buf), "%.1fHz ", pzem.freq);
+                OLED_DrawStringAlign(&oled, 0, 40, buf, ALIGN_LEFT);
+                snprintf(buf, sizeof(buf), "%.1fkWh", pzem.energy);
+                OLED_DrawStringAlign(&oled, 0, 60, buf, ALIGN_LEFT);
                 OLED_Update(&oled);
             }
         }

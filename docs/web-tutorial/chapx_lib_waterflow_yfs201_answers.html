@@ -45,20 +45,18 @@ int main(void) {
             }
 
             OLED_Clear(&oled);
-            OLED_SetCursor(&oled, 0, 0);
-            OLED_Print(&oled, "WATER METER");
+            char wbuf[64];
+            snprintf(wbuf, sizeof(wbuf), "WATER METER");
+            OLED_DrawStringAlign(&oled, 0, 0, wbuf, ALIGN_LEFT);
 
-            OLED_SetCursor(&oled, 0, 2);
-            OLED_PrintFloat(&oled, "Flow:", flow_lpm, 1);
-            OLED_Print(&oled, " L/min");
+            snprintf(wbuf, sizeof(wbuf), "Flow: %.1f L/min", flow_lpm);
+            OLED_DrawStringAlign(&oled, 0, 20, wbuf, ALIGN_LEFT);
 
-            OLED_SetCursor(&oled, 0, 4);
-            OLED_PrintFloat(&oled, "Total:", total_m3, 2);
-            OLED_Print(&oled, " m3");
+            snprintf(wbuf, sizeof(wbuf), "Total: %.2f m3", total_m3);
+            OLED_DrawStringAlign(&oled, 0, 40, wbuf, ALIGN_LEFT);
 
-            OLED_SetCursor(&oled, 0, 6);
-            OLED_PrintFloat(&oled, "", total_liters, 1);
-            OLED_Print(&oled, " L  ");
+            snprintf(wbuf, sizeof(wbuf), "%.1f L  ", total_liters);
+            OLED_DrawStringAlign(&oled, 0, 60, wbuf, ALIGN_LEFT);
 
             OLED_Update(&oled);
 
@@ -110,24 +108,27 @@ int main(void) {
             hist_idx = (hist_idx + 1) % 8;
 
             OLED_Clear(&oled);
-            OLED_SetCursor(&oled, 0, 0);
-            OLED_Print(&oled, "FLOW RATE");
+            char wbuf2[64];
+            snprintf(wbuf2, sizeof(wbuf2), "FLOW RATE");
+            OLED_DrawStringAlign(&oled, 0, 0, wbuf2, ALIGN_LEFT);
 
-            OLED_SetCursor(&oled, 0, 2);
-            OLED_PrintFloat(&oled, "", flow_lpm, 1);
-            OLED_Print(&oled, " L/min");
+            snprintf(wbuf2, sizeof(wbuf2), "%.1f L/min", flow_lpm);
+            OLED_DrawStringAlign(&oled, 0, 20, wbuf2, ALIGN_LEFT);
 
-            OLED_SetCursor(&oled, 0, 4);
-            OLED_Print(&oled, "[");
+            int bi = 0;
+            bi += snprintf(wbuf2 + bi, sizeof(wbuf2) - bi, "[");
             for(uint8_t i = 0; i < 8; i++) {
                 uint8_t idx = (hist_idx + i) % 8;
-                if(flow_history[idx] > 20.0f)      OLED_Print(&oled, "#");
-                else if(flow_history[idx] > 10.0f) OLED_Print(&oled, "=");
-                else if(flow_history[idx] > 5.0f)  OLED_Print(&oled, "-");
-                else if(flow_history[idx] > 1.0f)  OLED_Print(&oled, ".");
-                else                                OLED_Print(&oled, " ");
+                char c;
+                if(flow_history[idx] > 20.0f)      c = '#';
+                else if(flow_history[idx] > 10.0f) c = '=';
+                else if(flow_history[idx] > 5.0f)  c = '-';
+                else if(flow_history[idx] > 1.0f)  c = '.';
+                else                                c = ' ';
+                bi += snprintf(wbuf2 + bi, sizeof(wbuf2) - bi, "%c", c);
             }
-            OLED_Print(&oled, "]");
+            snprintf(wbuf2 + bi, sizeof(wbuf2) - bi, "]");
+            OLED_DrawStringAlign(&oled, 0, 40, wbuf2, ALIGN_LEFT);
 
             const char* status;
             if(flow_lpm > 25.0f) {
@@ -144,8 +145,8 @@ int main(void) {
                 GPIO_WriteBit(VALVE_PIN, 0);
             }
 
-            OLED_SetCursor(&oled, 0, 6);
-            OLED_Print(&oled, status);
+            snprintf(wbuf2, sizeof(wbuf2), "%s", status);
+            OLED_DrawStringAlign(&oled, 0, 60, wbuf2, ALIGN_LEFT);
 
             OLED_Update(&oled);
         }

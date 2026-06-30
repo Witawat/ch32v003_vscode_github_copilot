@@ -77,17 +77,17 @@ int main(void) {
 <pre><code class="language-c">    OLED_Handle oled;
     OLED_Init(&oled, OLED_128x64, 0x3C);
 
+    char buf[64];
     while(1) {
         if(PMS5003_GetData(&sensor, &data)) {
             OLED_Clear(&oled);
-            OLED_SetCursor(&oled, 0, 0);
-            OLED_PrintFloat(&oled, "PM2.5:", (float)data.pm2_5_std, 0);
-            OLED_Print(&oled, " ug/m3");
+            snprintf(buf, sizeof(buf), "PM2.5: %d ug/m3", data.pm2_5_std);
+            OLED_DrawStringAlign(&oled, 0, 0, buf, ALIGN_LEFT);
 
-            OLED_SetCursor(&oled, 0, 2);
-            if(data.pm2_5_std <= 25)      OLED_Print(&oled, "AIR: GOOD");
-            else if(data.pm2_5_std <= 50) OLED_Print(&oled, "AIR: MODERATE");
-            else                          OLED_Print(&oled, "AIR: UNHEALTHY!");
+            if(data.pm2_5_std <= 25)      snprintf(buf, sizeof(buf), "AIR: GOOD");
+            else if(data.pm2_5_std <= 50) snprintf(buf, sizeof(buf), "AIR: MODERATE");
+            else                          snprintf(buf, sizeof(buf), "AIR: UNHEALTHY!");
+            OLED_DrawStringAlign(&oled, 0, 20, buf, ALIGN_LEFT);
 
             OLED_Update(&oled);
         }
@@ -134,11 +134,12 @@ int main(void)
     PMS5003_Data_t data;
     PMS5003_Init(&sensor, USART_PINS_DEFAULT);
 
+    char buf[64];
     OLED_Clear(&oled);
-    OLED_SetCursor(&oled, 0, 0);
-    OLED_Print(&oled, "PM2.5 Monitor");
-    OLED_SetCursor(&oled, 0, 2);
-    OLED_Print(&oled, "Warming up...");
+    snprintf(buf, sizeof(buf), "PM2.5 Monitor");
+    OLED_DrawStringAlign(&oled, 0, 0, buf, ALIGN_LEFT);
+    snprintf(buf, sizeof(buf), "Warming up...");
+    OLED_DrawStringAlign(&oled, 0, 20, buf, ALIGN_LEFT);
     OLED_Update(&oled);
     Delay_Ms(5000);
 
@@ -146,12 +147,12 @@ int main(void)
     {
         if(PMS5003_GetData(&sensor, &data)) {
             OLED_Clear(&oled);
-            OLED_SetCursor(&oled, 0, 0);
-            OLED_PrintFloat(&oled, "PM1.0:", (float)data.pm1_0_std, 0);
-            OLED_SetCursor(&oled, 0, 1);
-            OLED_PrintFloat(&oled, "PM2.5:", (float)data.pm2_5_std, 0);
-            OLED_SetCursor(&oled, 0, 2);
-            OLED_PrintFloat(&oled, "PM10:", (float)data.pm10_std, 0);
+            snprintf(buf, sizeof(buf), "PM1.0: %d", data.pm1_0_std);
+            OLED_DrawStringAlign(&oled, 0, 0, buf, ALIGN_LEFT);
+            snprintf(buf, sizeof(buf), "PM2.5: %d", data.pm2_5_std);
+            OLED_DrawStringAlign(&oled, 0, 10, buf, ALIGN_LEFT);
+            snprintf(buf, sizeof(buf), "PM10: %d", data.pm10_std);
+            OLED_DrawStringAlign(&oled, 0, 20, buf, ALIGN_LEFT);
             OLED_Update(&oled);
         }
         Delay_Ms(1000);

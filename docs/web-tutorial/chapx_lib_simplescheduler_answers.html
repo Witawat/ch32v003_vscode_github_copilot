@@ -25,14 +25,17 @@ void task_sensor(void) {
 }
 
 void task_display(void) {
-    OLED_Clear();
-    OLED_SetFont(FONT_8X16);
-    OLED_SetCursor(0, 0); OLED_Print("Temp/Humid");
-    OLED_SetCursor(0, 1);
+    OLED_Clear(&oled);
+    OLED_SetFont(&oled, FONT_8X16);
+    char sbuf[64];
+    snprintf(sbuf, sizeof(sbuf), "Temp/Humid");
+    OLED_DrawStringAlign(&oled, 0, 0, sbuf, ALIGN_LEFT);
     if(sensor_ok) {
-        char buf[32]; snprintf(buf, 32, "T:%.1fC H:%.1f%%", temp, hum);
-        OLED_Print(buf);
-    } else OLED_Print("Sensor ERR");
+        snprintf(sbuf, sizeof(sbuf), "T:%.1fC H:%.1f%%", temp, hum);
+    } else {
+        snprintf(sbuf, sizeof(sbuf), "Sensor ERR");
+    }
+    OLED_DrawStringAlign(&oled, 0, 10, sbuf, ALIGN_LEFT);
     OLED_Update(&oled);
 }
 

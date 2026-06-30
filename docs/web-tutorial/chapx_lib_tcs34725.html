@@ -135,7 +135,6 @@ int main(void)
         }
 
         OLED_Clear(&oled);
-        OLED_SetCursor(&oled, 0, 0);
 
         const char *color;
         if(c < 150) color = "DARK";
@@ -144,7 +143,9 @@ int main(void)
         else if(b > r*1.2 && b > g*1.2) color = "BLUE";
         else color = "OTHER";
 
-        OLED_Print(&oled, color);
+        char buf[64];
+        snprintf(buf, sizeof(buf), "%s", color);
+        OLED_DrawStringAlign(&oled, 0, 0, buf, ALIGN_LEFT);
         OLED_Update(&oled);
         Delay_Ms(300);
     }

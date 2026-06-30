@@ -76,7 +76,7 @@ int main(void) {
     USART_Init(115200);
 
     // Init LCD1602 I2C
-    LCD1602_I2C_Init(&lcd, 0x27, 16, 2);
+    LCD_Init(&lcd, 0x27, LCD_16x2);
 
     // Init 4 buttons
     Button_Init(&btn_up,   PC3, BUTTON_ACTIVE_LOW);
@@ -122,7 +122,7 @@ int main(void) {
 </table></section>
 
 <section><h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2><table><tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
-<tr><td>จอไม่แสดงอะไรเลย</td><td>ลืม <code>LCD1602_I2C_Init()</code> ก่อน <code>LCDMenu_Init()</code></td><td>ต้อง Init LCD ก่อน — <code>LCD1602_I2C_Init(&lcd, 0x27, 16, 2)</code> แล้วตามด้วย <code>LCDMenu_Init()</code></td></tr>
+<tr><td>จอไม่แสดงอะไรเลย</td><td>ลืม <code>LCD_Init()</code> ก่อน <code>LCDMenu_Init()</code></td><td>ต้อง Init LCD ก่อน — <code>LCD_Init(&lcd, 0x27, 16, 2)</code> แล้วตามด้วย <code>LCDMenu_Init()</code></td></tr>
 <tr><td>กด UP/DOWN แล้วกระโดดหลายช่อง</td><td>Refresh rate เร็วเกินไป + ไม่มี debounce</td><td>เพิ่ม Delay_Ms เป็น 80-100ms — Button_Instance มี debounce ในตัว</td></tr>
 <tr><td>SUBMENU ไม่ยอมเข้า</td><td>ลืม BACK item — หรือลูกศรไม่ตรงกับ ENTER</td><td>ทุก SUBMENU ต้องมี BACK เป็น item สุดท้าย — เช็ค pin mapping ปุ่ม</td></tr>
 <tr><td>TOGGLE ค่าไม่เปลี่ยน</td><td>Callback signature ไม่ตรง</td><td>Callback TOGGLE ต้องเป็น <code>void cb(uint8_t val)</code></td></tr>
@@ -135,7 +135,6 @@ int main(void) {
 #include "SimpleHAL.h"
 #include "LCDMenu.h"
 #include "lcd1602_i2c.h"
-#include "Flash.h"
 
 LCD1602_Handle lcd;
 Button_Instance btn_up, btn_down, btn_enter, btn_back;
@@ -161,7 +160,7 @@ int main(void) {
     Timer_Init();
     USART_Init(115200);
 
-    LCD1602_I2C_Init(&lcd, 0x27, 16, 2);
+    LCD_Init(&lcd, 0x27, LCD_16x2);
     Button_Init(&btn_up,   PC3, BUTTON_ACTIVE_LOW);
     Button_Init(&btn_down, PC4, BUTTON_ACTIVE_LOW);
     Button_Init(&btn_enter,PC5, BUTTON_ACTIVE_LOW);

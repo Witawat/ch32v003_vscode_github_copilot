@@ -110,6 +110,7 @@ int main(void)
     Timer_t tmr;
     Start_Timer(&tmr, 1000, 1);
 
+    char buf[64];
     while(1) {
         if(Is_Timer_Expired(&tmr)) {
             float v = INA219_GetBusVoltage(&ina);
@@ -118,25 +119,21 @@ int main(void)
             mah_used += (a * 1000.0f) / 3600.0f;
 
             OLED_Clear(&oled);
-            OLED_SetCursor(&oled, 0, 0);
-            OLED_PrintFloat(&oled, "V:", v, 2);
-            OLED_Print(&oled, "V");
+            snprintf(buf, sizeof(buf), "V: %.2fV", v);
+            OLED_DrawStringAlign(&oled, 0, 0, buf, ALIGN_LEFT);
 
-            OLED_SetCursor(&oled, 0, 2);
-            OLED_PrintFloat(&oled, "I:", a * 1000, 1);
-            OLED_Print(&oled, "mA");
+            snprintf(buf, sizeof(buf), "I: %.1fmA", a * 1000);
+            OLED_DrawStringAlign(&oled, 0, 20, buf, ALIGN_LEFT);
 
-            OLED_SetCursor(&oled, 0, 4);
-            OLED_PrintFloat(&oled, "P:", w * 1000, 1);
-            OLED_Print(&oled, "mW");
+            snprintf(buf, sizeof(buf), "P: %.1fmW", w * 1000);
+            OLED_DrawStringAlign(&oled, 0, 40, buf, ALIGN_LEFT);
 
-            OLED_SetCursor(&oled, 0, 6);
-            OLED_PrintFloat(&oled, "Used:", mah_used, 1);
-            OLED_Print(&oled, "mAh");
+            snprintf(buf, sizeof(buf), "Used: %.1fmAh", mah_used);
+            OLED_DrawStringAlign(&oled, 0, 60, buf, ALIGN_LEFT);
 
             if(v < 2.8f) {
-                OLED_SetCursor(&oled, 70, 2);
-                OLED_Print(&oled, "LOW!");
+                snprintf(buf, sizeof(buf), "LOW!");
+                OLED_DrawStringAlign(&oled, 70, 20, buf, ALIGN_LEFT);
             }
 
             OLED_Update(&oled);

@@ -28,21 +28,17 @@ PD2─Signal(orange)  5V external─VCC(servo,red)  GND─GND(common,brown)  ⚡
 <tr><td>180°</td><td>2.5ms</td><td>12.5%</td></tr>
 </table>
 <pre><code class="language-c">#include "Servo.h"
-PWM_SimpleInit(1, PD2, 50);   // TIM1 CH1, 50Hz (คาบ 20ms)
-PWM_Start(1);
-PWM_SetDuty(1, 2.5f); Delay_Ms(1000);  // 0°  (pulse 0.5ms)
-PWM_SetDuty(1, 7.5f); Delay_Ms(1000);  // 90° (pulse 1.5ms)
-PWM_SetDuty(1, 12.5f); Delay_Ms(1000); // 180°(pulse 2.5ms)
-
-// สูตรแปลงมุม→duty:
-// angle_to_duty = 2.5 + angle * 10.0 / 180   (0.5-2.5ms pulse — SG90)
-// angle_to_duty = 5.0 + angle * 5.0 / 180    (1.0-2.0ms pulse — servo บางรุ่น)
-float duty = 2.5f + (angle * 10.0f / 180.0f);
-PWM_SetDuty(1, duty);
+Servo_Instance s;
+Servo_Init(&s, PWM1_CH4);
+Servo_Attach(&s);
+Servo_Write(&s, 0);   Delay_Ms(1000);  // 0°
+Servo_Write(&s, 90);  Delay_Ms(1000);  // 90°
+Servo_Write(&s, 180); Delay_Ms(1000);  // 180°
 
 // ป้องกันมุมเกินขอบ (soft limit):
-if(angle < 0) angle = 0;
-if(angle > 180) angle = 180;</code></pre>
+uint8_t angle = 90;
+if(angle > 180) angle = 180;
+Servo_Write(&s, angle);</code></pre>
 <p class="explain">⚠️ <strong>50Hz = ค่าคงที่ ห้ามเปลี่ยน!</strong> — servo ทุกตัวใช้ 50Hz (20ms frame), pulse range 0.5-2.5ms เป็นค่ามาตรฐาน SG90 — servo บางตัวใช้ 1-2ms (เช็ค datasheet), servo กินไฟ ~500mA ตอน stall (มอเตอร์ติดขัด) → <strong>ต้องใช้ external 5V, ห้ามจ่ายจาก WCH-Link</strong> (Link จ่ายได้ ~100mA), GND ต้องต่อร่วมระหว่าง MCU กับ servo power supply, ควรมี min/max angle protection (soft limit) ป้องกัน servo พยายามหมุนเกินขอบเขตเชิงกล → servo พัง, ถ้าต่อ servo หลายตัว → ใช้ external 5V 2A+ และต่อ capacitor 470µF-1000µF ขนานกับ power rail ป้องกัน voltage sag</p>
 
 <h3>API หลัก</h3>
@@ -78,32 +74,33 @@ PC0─IN1(blue)  PC1─IN2(pink)  PC2─IN3(yellow)  PC3─IN4(orange)  5V exter
 
 28BYJ-48 specs: 5V, 0.3 kg·cm torque, 1:64 gear ratio, 5-wire unipolar</pre>
 <pre><code class="language-c">#include "StepperMotor.h"
-StepperMotor_InitULN2003(PC0, PC1, PC2, PC3);
-StepperMotor_SetSpeed(5);              // 5 RPM
-Stepper_SetMode(STEPPER_FULL_STEP);
+StepperMotor_Instance st;
+StepperMotor_InitULN2003(&st, PC0, PC1, PC2, PC3, 2048);
+StepperMotor_SetSpeed(&st, 5);              // 5 RPM
+Stepper_SetMode(&st, STEPPER_FULL_STEP);
 
 // Full-step: 2048 steps = 1 revolution
-StepperMotor_Move(2048);             // หมุน 1 รอบ
-StepperMotor_MoveDegrees(90);       // หมุน 90°
+StepperMotor_Move(&st, 2048);             // หมุน 1 รอบ
+StepperMotor_MoveDegrees(&st, 90);       // หมุน 90°
 
 // Half-step: 4096 steps = 1 revolution (นุ่มนวลกว่า)
-Stepper_SetMode(STEPPER_HALF_STEP);
-StepperMotor_SetSpeed(3);              // ลด speed เพราะ step เพิ่ม 2 เท่า
-StepperMotor_Move(4096);             // หมุน 1 รอบ (half-step)
+Stepper_SetMode(&st, STEPPER_HALF_STEP);
+StepperMotor_SetSpeed(&st, 3);              // ลด speed เพราะ step เพิ่ม 2 เท่า
+StepperMotor_Move(&st, 4096);             // หมุน 1 รอบ (half-step)
 
 // Direction control:
-Stepper_SetDirection(STEPPER_CW);     // clockwise
-StepperMotor_Move(1024);                 // หมุนครึ่งรอบ
-Stepper_SetDirection(STEPPER_CCW);    // counter-clockwise
-StepperMotor_Move(1024);                 // หมุนกลับครึ่งรอบ
+Stepper_SetDirection(&st, STEPPER_CW);     // clockwise
+StepperMotor_Move(&st, 1024);                 // หมุนครึ่งรอบ
+Stepper_SetDirection(&st, STEPPER_CCW);    // counter-clockwise
+StepperMotor_Move(&st, 1024);                 // หมุนกลับครึ่งรอบ
 
 // Pattern: conveyor belt forward → pause → backward
 while(1) {
-    Stepper_SetDirection(STEPPER_CW);
-    StepperMotor_Move(8192);  // 4 รอบ (ระยะทาง conveyor)
+    Stepper_SetDirection(&st, STEPPER_CW);
+    StepperMotor_Move(&st, 8192);  // 4 รอบ (ระยะทาง conveyor)
     Delay_Ms(2000);        // หยุด 2s
-    Stepper_SetDirection(STEPPER_CCW);
-    StepperMotor_Move(8192);  // กลับ
+    Stepper_SetDirection(&st, STEPPER_CCW);
+    StepperMotor_Move(&st, 8192);  // กลับ
     Delay_Ms(2000);
 }</code></pre>
 <p class="explain">⚠️ 28BYJ-48 = 2048 steps/rev (full-step), 4096 steps/rev (half-step) — gear ratio 1:64, torque ~0.3 kg·cm (เบามาก), ULN2003 รับ 5V logic (CH32V003 3.3V → marginal แต่ใช้งานได้ — ULN2003 threshold ~2.5V), <strong>ควรทำ acceleration (ramp speed)</strong>: ค่อยๆ เพิ่มความเร็วตอน start และลดความเร็วตอน stop → ป้องกัน step loss, Full-step vs Half-step: half-step torque ลดลง ~30% แต่หมุนนุ่มนวลกว่าและเพิ่ม resolution 2 เท่า, การคำนวณระยะทาง: 1 รอบ = 2048 steps → ถ้ารู้ระยะทางต่อรอบ (เช่น lead screw pitch) → ขั้นต่อ mm = 2048 / pitch_mm, 28BYJ-48 กินไฟ ~200mA ตอน full load → ใช้ external 5V 1A</p>
@@ -220,15 +217,16 @@ COM─common  NO─normally open  NC─normally closed  → load
 Module ภายใน: optocoupler + transistor + flyback diode + relay coil
 Typical relay: SRD-05VDC (5V coil, 10A/250VAC or 10A/30VDC)</pre>
 <pre><code class="language-c">#include "Relay.h"
-Relay_Init(PC0, RELAY_ACTIVE_HIGH);
+Relay_Instance r;
+Relay_Init(&r, PC0, RELAY_ACTIVE_HIGH);
 
 // Basic on/off:
-Relay_On(PC0); Delay_Ms(5000); Relay_Off(PC0);
+Relay_On(&r); Delay_Ms(5000); Relay_Off(&r);
 
 // Toggle:
-Relay_Toggle(PC0);  // flip state
+Relay_Toggle(&r);  // flip state
 Delay_Ms(1000);
-Relay_Toggle(PC0);  // flip back
+Relay_Toggle(&r);  // flip back
 
 // === Pattern: Timer relay (on 5 min, off 5 min) ===
 uint32_t start = Timer_GetMillis();
@@ -237,15 +235,15 @@ while(1) {
     uint32_t elapsed = Timer_GetMillis() - start;
     if(elapsed > 300000) { // 5 minutes = 300,000ms
         relay_state = !relay_state;
-        if(relay_state) Relay_On(PC0);
-        else Relay_Off(PC0);
+        if(relay_state) Relay_On(&r);
+        else Relay_Off(&r);
         start = Timer_GetMillis();
     }
     IWDG_Feed();
 }
 
 // === Active Low module (บางโมดูลใช้ LOW→ON) ===
-// Relay_Init(PC0, RELAY_ACTIVE_LOW);
+// Relay_Init(&r, PC0, RELAY_ACTIVE_LOW);
 // HIGH = OFF, LOW = ON</code></pre>
 <p class="explain">⚠️ <strong>เช็ค ACTIVE_HIGH vs ACTIVE_LOW ก่อนใช้!</strong> — บางโมดูล HIGH→ON, บางโมดูล LOW→ON (ต้องอ่าน datasheet), flyback diode มีในโมดูลแล้ว (optocoupler + diode + transistor) → ไม่ต้องเพิ่ม external diode, switching inductive load (มอเตอร์, solenoid, pump) → <strong>ควรเพิ่ม snubber circuit</strong> (RC: 100Ω + 0.1µF ในอนุกรม ขนานกับ contact) — ลด arcing และ EMI, ⚡ <strong>ห้ามต่อ 220VAC ถ้าไม่รู้วิธี!</strong> — ไฟบ้านอันตรายถึงชีวิต ต้องมีความรู้และอุปกรณ์ป้องกัน (MCB, fuse, enclosure), รีเลย์ contact มีอายุการใช้งาน: electrical ~100,000 cycles (ที่ rated load), mechanical ~10,000,000 cycles, switching speed: ~5-10ms on, ~3-5ms off — ไม่เหมาะกับ PWM หรือ switching ความถี่สูง → ใช้ MOSFET/SSR แทน, ใช้ external 5V จ่าย relay module (coil กิน ~70mA) — CH32V003 pin จ่ายได้ ~8mA ไม่พอ</p>
 

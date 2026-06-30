@@ -38,29 +38,18 @@ int main(void) {
                 read_count++;
 
                 OLED_Clear(&oled);
-                OLED_SetCursor(&oled, 0, 0);
-                OLED_PrintFloat(&oled, "", d.voltage, 1);
-                OLED_Print(&oled, "V ");
-                OLED_PrintFloat(&oled, "", d.current, 2);
-                OLED_Print(&oled, "A");
+                char buf[64];
+                snprintf(buf, sizeof(buf), "%.1fV %.2fA", d.voltage, d.current);
+                OLED_DrawStringAlign(&oled, 0, 0, buf, ALIGN_LEFT);
 
-                OLED_SetCursor(&oled, 0, 2);
-                OLED_PrintFloat(&oled, "", d.power, 1);
-                OLED_Print(&oled, "W ");
-                OLED_PrintFloat(&oled, "PF:", d.pf, 2);
+                snprintf(buf, sizeof(buf), "%.1fW PF:%.2f", d.power, d.pf);
+                OLED_DrawStringAlign(&oled, 0, 20, buf, ALIGN_LEFT);
 
-                OLED_SetCursor(&oled, 0, 4);
-                OLED_PrintFloat(&oled, "", d.frequency, 1);
-                OLED_Print(&oled, "Hz ");
-                OLED_PrintFloat(&oled, "", d.energy, 2);
-                OLED_Print(&oled, "kWh");
+                snprintf(buf, sizeof(buf), "%.1fHz %.2fkWh", d.frequency, d.energy);
+                OLED_DrawStringAlign(&oled, 0, 40, buf, ALIGN_LEFT);
 
-                OLED_SetCursor(&oled, 0, 6);
-                OLED_PrintDec(&oled, elapsed);
-                OLED_Print(&oled, "ms ");
-                OLED_PrintDec(&oled, read_count);
-                OLED_Print(&oled, "/");
-                OLED_PrintDec(&oled, fail_count);
+                snprintf(buf, sizeof(buf), "%dms %d/%d", elapsed, read_count, fail_count);
+                OLED_DrawStringAlign(&oled, 0, 60, buf, ALIGN_LEFT);
 
                 OLED_Update(&oled);
 

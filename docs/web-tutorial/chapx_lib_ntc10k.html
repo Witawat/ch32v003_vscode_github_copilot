@@ -83,20 +83,20 @@ int main(void) {
     <pre><code class="language-c">    OLED_Handle oled;
     OLED_Init(&oled, OLED_128x64, 0x3C);
 
+    char buf[64];
     while(1) {
         float temp = NTC_ReadTemperature();
 
         OLED_Clear(&oled);
-        OLED_SetCursor(&oled, 0, 0);
-        OLED_PrintFloat(&oled, "Temp:", temp, 1);
-        OLED_Print(&oled, " C");
+        snprintf(buf, sizeof(buf), "Temp: %.1f C", temp);
+        OLED_DrawStringAlign(&oled, 0, 0, buf, ALIGN_LEFT);
 
-        OLED_SetCursor(&oled, 0, 2);
-        if(temp < 0)           OLED_Print(&oled, "COLD!");
-        else if(temp < 20)     OLED_Print(&oled, "Cool");
-        else if(temp < 30)     OLED_Print(&oled, "Comfortable");
-        else if(temp < 40)     OLED_Print(&oled, "Warm");
-        else                   OLED_Print(&oled, "HOT!");
+        if(temp < 0)           snprintf(buf, sizeof(buf), "COLD!");
+        else if(temp < 20)     snprintf(buf, sizeof(buf), "Cool");
+        else if(temp < 30)     snprintf(buf, sizeof(buf), "Comfortable");
+        else if(temp < 40)     snprintf(buf, sizeof(buf), "Warm");
+        else                   snprintf(buf, sizeof(buf), "HOT!");
+        OLED_DrawStringAlign(&oled, 0, 20, buf, ALIGN_LEFT);
 
         OLED_Update(&oled);
         Delay_Ms(500);
@@ -145,18 +145,18 @@ int main(void)
     pinMode(PC0, PIN_MODE_OUTPUT);  // Buzzer
     NTC_Init(ADC_CH_PC4);
 
+    char buf[64];
     while(1)
     {
         float temp = NTC_ReadTemperature();
 
         OLED_Clear(&oled);
-        OLED_SetCursor(&oled, 0, 0);
-        OLED_PrintFloat(&oled, "Temperature", temp, 1);
-        OLED_Print(&oled, " C");
+        snprintf(buf, sizeof(buf), "Temperature: %.1f C", temp);
+        OLED_DrawStringAlign(&oled, 0, 0, buf, ALIGN_LEFT);
 
         if(temp > 50.0f || temp < -10.0f) {
-            OLED_SetCursor(&oled, 0, 4);
-            OLED_Print(&oled, "ALERT!");
+            snprintf(buf, sizeof(buf), "ALERT!");
+            OLED_DrawStringAlign(&oled, 0, 40, buf, ALIGN_LEFT);
             digitalWrite(PC0, HIGH);  // Buzzer
         } else {
             digitalWrite(PC0, LOW);

@@ -90,25 +90,26 @@ int main(void) {
     <pre><code class="language-c">    OLED_Handle oled;
     OLED_Init(&oled, OLED_128x64, 0x3C);
 
+    char buf[64];
     while(1) {
         uint16_t mm = VL53L0X_ReadRangeMM(&tof);
 
         OLED_Clear(&oled);
-        OLED_SetCursor(&oled, 0, 0);
 
         if(mm > 0) {
-            OLED_PrintFloat(&oled, "Dist:", mm / 10.0f, 1);
-            OLED_Print(&oled, " cm");
+            snprintf(buf, sizeof(buf), "Dist: %.1f cm", mm / 10.0f);
+            OLED_DrawStringAlign(&oled, 0, 0, buf, ALIGN_LEFT);
 
-            OLED_SetCursor(&oled, 0, 2);
-            if(mm < 100)       OLED_Print(&oled, "Very Close");
-            else if(mm < 500)  OLED_Print(&oled, "Close");
-            else if(mm < 1500) OLED_Print(&oled, "Medium");
-            else               OLED_Print(&oled, "Far");
+            if(mm < 100)       snprintf(buf, sizeof(buf), "Very Close");
+            else if(mm < 500)  snprintf(buf, sizeof(buf), "Close");
+            else if(mm < 1500) snprintf(buf, sizeof(buf), "Medium");
+            else               snprintf(buf, sizeof(buf), "Far");
+            OLED_DrawStringAlign(&oled, 0, 20, buf, ALIGN_LEFT);
         } else {
-            OLED_Print(&oled, "Signal Error");
-            OLED_SetCursor(&oled, 0, 2);
-            OLED_Print(&oled, "Out of range / Sun");
+            snprintf(buf, sizeof(buf), "Signal Error");
+            OLED_DrawStringAlign(&oled, 0, 0, buf, ALIGN_LEFT);
+            snprintf(buf, sizeof(buf), "Out of range / Sun");
+            OLED_DrawStringAlign(&oled, 0, 20, buf, ALIGN_LEFT);
         }
 
         OLED_Update(&oled);

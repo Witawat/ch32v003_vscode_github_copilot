@@ -61,29 +61,29 @@ mm_color_t tcs34725_sort_mm(TCS34725_Instance *s) {
 }
 
 void tcs34725_oled_rgb(void) {
-    OLED_Init(I2C_PINS_DEFAULT);
+    OLED_Handle oled;
+    OLED_Init(&oled, OLED_128x64, 0x3C);
 
     TCS34725_Instance s;
     TCS34725_Init(&s, TCS34725_GAIN_1X, TCS34725_INTEG_24MS);
 
+    char buf[64];
     while(1) {
         Delay_Ms(200);
         uint16_t r, g, b, c;
         if(!TCS34725_ReadRGBC(&s, &r, &g, &b, &c)) continue;
 
-        OLED_SetCursor(0, 0);
-        OLED_Print("R:"); OLED_PrintNum(r); OLED_Print(" ");
-        OLED_Print("G:"); OLED_PrintNum(g); OLED_Print(" ");
-        OLED_Print("B:"); OLED_PrintNum(b);
+        snprintf(buf, sizeof(buf), "R:%d G:%d B:%d", r, g, b);
+        OLED_DrawStringAlign(&oled, 0, 0, buf, ALIGN_LEFT);
 
         uint16_t cct = tcs34725_cct(r, g, b);
-        OLED_SetCursor(0, 1);
-        OLED_Print("CCT: "); OLED_PrintNum(cct); OLED_Print(" K  ");
+        snprintf(buf, sizeof(buf), "CCT: %d K  ", cct);
+        OLED_DrawStringAlign(&oled, 0, 10, buf, ALIGN_LEFT);
 
-        OLED_SetCursor(0, 2);
-        if(cct < 3500)     OLED_Print("Warm White   ");
-        else if(cct < 5000)OLED_Print("Neutral White");
-        else               OLED_Print("Cool White   ");
+        if(cct < 3500)     snprintf(buf, sizeof(buf), "Warm White   ");
+        else if(cct < 5000) snprintf(buf, sizeof(buf), "Neutral White");
+        else               snprintf(buf, sizeof(buf), "Cool White   ");
+        OLED_DrawStringAlign(&oled, 0, 20, buf, ALIGN_LEFT);
     }
 }
 </code></pre><div class="approach"><strong>🧠 แนวคิด:</strong> McCamy's formula ใช้ RGB ratio หา CCT (Correlated Color Temperature) — ไม่ต้องแปลงเป็น xy chromaticity แยก — Warm (<3500K) / Neutral (3500–5000K) / Cool (>5000K) — OLED_PrintNum สำหรับ integer ค่าใหญ่กว่า 999</div></div>

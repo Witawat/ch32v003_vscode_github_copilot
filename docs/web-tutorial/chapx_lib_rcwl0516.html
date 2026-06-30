@@ -202,11 +202,12 @@ int main(void)
     uint16_t count = 0;
     uint32_t lastTrigger = 0;
 
+    char buf[64];
     OLED_Clear(&oled);
-    OLED_SetCursor(&oled, 0, 0);
-    OLED_Print(&oled, "Radar Security");
-    OLED_SetCursor(&oled, 0, 2);
-    OLED_Print(&oled, "Active...");
+    snprintf(buf, sizeof(buf), "Radar Security");
+    OLED_DrawStringAlign(&oled, 0, 0, buf, ALIGN_LEFT);
+    snprintf(buf, sizeof(buf), "Active...");
+    OLED_DrawStringAlign(&oled, 0, 20, buf, ALIGN_LEFT);
     OLED_Update(&oled);
     Delay_Ms(2000);
 
@@ -226,11 +227,10 @@ int main(void)
                 digitalWrite(PC1, LOW);
 
                 OLED_Clear(&oled);
-                OLED_SetCursor(&oled, 0, 0);
-                OLED_Print(&oled, "ALERT!");
-                OLED_SetCursor(&oled, 0, 2);
-                OLED_Print(&oled, "Motion #");
-                OLED_PrintInt(&oled, count);
+                snprintf(buf, sizeof(buf), "ALERT!");
+                OLED_DrawStringAlign(&oled, 0, 0, buf, ALIGN_LEFT);
+                snprintf(buf, sizeof(buf), "Motion #%d", count);
+                OLED_DrawStringAlign(&oled, 0, 20, buf, ALIGN_LEFT);
                 OLED_Update(&oled);
 
                 USART_Print("Alert #");

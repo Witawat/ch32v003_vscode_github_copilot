@@ -129,24 +129,24 @@ int main(void)
     HX711_Tare(&hx, 15);
     USART_Println("Scale Ready");
 
+    char buf[64];
     while(1)
     {
         float kg = HX711_GetWeight(&hx);
 
         OLED_Clear(&oled);
-        OLED_SetCursor(&oled, 0, 1);
-        OLED_Print(&oled, "Weight:");
+        snprintf(buf, sizeof(buf), "Weight:");
+        OLED_DrawStringAlign(&oled, 0, 10, buf, ALIGN_LEFT);
 
-        OLED_SetCursor(&oled, 0, 3);
         if(kg < 0.001f) {
-            OLED_Print(&oled, "  0.000 kg");
+            snprintf(buf, sizeof(buf), "  0.000 kg");
         } else {
-            OLED_PrintFloat(&oled, "", kg, 3);
-            OLED_Print(&oled, " kg");
+            snprintf(buf, sizeof(buf), "%.3f kg", kg);
         }
+        OLED_DrawStringAlign(&oled, 0, 30, buf, ALIGN_LEFT);
 
-        OLED_SetCursor(&oled, 0, 6);
-        OLED_Print(&oled, "Press to TARE");
+        snprintf(buf, sizeof(buf), "Press to TARE");
+        OLED_DrawStringAlign(&oled, 0, 60, buf, ALIGN_LEFT);
 
         if(GPIO_Read(TARE_BTN) == 0) {
             Delay_Ms(100);

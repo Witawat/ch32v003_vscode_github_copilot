@@ -62,30 +62,26 @@ int main(void) {
         }
 
         OLED_Clear(&oled);
-        OLED_SetCursor(&oled, 0, 0);
-        OLED_Print(&oled, "DIGITAL SCALE");
+        char buf[64];
+        snprintf(buf, sizeof(buf), "DIGITAL SCALE");
+        OLED_DrawStringAlign(&oled, 0, 0, buf, ALIGN_LEFT);
 
-        OLED_SetCursor(&oled, 20, 2);
         if(unit == UNIT_GRAM) {
             if(fabs(weight_g) < 0.5f) {
-                OLED_Print(&oled, "  0.0 g");
+                snprintf(buf, sizeof(buf), "  0.0 g");
             } else if(weight_g > 1000.0f) {
-                OLED_PrintFloat(&oled, "", weight_g / 1000.0f, 3);
-                OLED_Print(&oled, " kg");
+                snprintf(buf, sizeof(buf), "%.3f kg", weight_g / 1000.0f);
             } else {
-                OLED_PrintFloat(&oled, "", weight_g, 1);
-                OLED_Print(&oled, " g");
+                snprintf(buf, sizeof(buf), "%.1f g", weight_g);
             }
         } else {
             float weight_oz = weight_g * 0.035274f;
-            OLED_PrintFloat(&oled, "", weight_oz, 2);
-            OLED_Print(&oled, " oz");
+            snprintf(buf, sizeof(buf), "%.2f oz", weight_oz);
         }
+        OLED_DrawStringAlign(&oled, 20, 20, buf, ALIGN_LEFT);
 
-        OLED_SetCursor(&oled, 0, 6);
-        OLED_Print(&oled, "TARE ");
-        OLED_Print(unit == UNIT_GRAM ? "g" : "oz");
-        OLED_Print(&oled, "  UNIT");
+        snprintf(buf, sizeof(buf), "TARE %s  UNIT", unit == UNIT_GRAM ? "g" : "oz");
+        OLED_DrawStringAlign(&oled, 0, 60, buf, ALIGN_LEFT);
 
         OLED_Update(&oled);
         Delay_Ms(200);
@@ -267,24 +263,22 @@ int main(void) {
         }
 
         OLED_Clear(&oled);
-        OLED_SetCursor(&oled, 0, 0);
-        OLED_Print(&oled, "AUTO-ZERO SCALE");
+        char buf[64];
+        snprintf(buf, sizeof(buf), "AUTO-ZERO SCALE");
+        OLED_DrawStringAlign(&oled, 0, 0, buf, ALIGN_LEFT);
 
-        OLED_SetCursor(&oled, 10, 2);
         if(fabs(weight) < 0.3f) {
-            OLED_Print(&oled, "   0.0 g");
+            snprintf(buf, sizeof(buf), "   0.0 g");
         } else {
-            OLED_PrintFloat(&oled, "", weight, 1);
-            OLED_Print(&oled, " g");
+            snprintf(buf, sizeof(buf), "%.1f g", weight);
         }
+        OLED_DrawStringAlign(&oled, 10, 20, buf, ALIGN_LEFT);
 
-        OLED_SetCursor(&oled, 0, 5);
-        OLED_Print(&oled, "Zero wait: ");
-        OLED_PrintDec(&oled, stable_count);
-        OLED_Print(&oled, "/20");
+        snprintf(buf, sizeof(buf), "Zero wait: %d/20", stable_count);
+        OLED_DrawStringAlign(&oled, 0, 50, buf, ALIGN_LEFT);
 
-        OLED_SetCursor(&oled, 0, 7);
-        OLED_Print(auto_zero_done ? "Zero: DONE" : "Zero: WAIT...");
+        snprintf(buf, sizeof(buf), "%s", auto_zero_done ? "Zero: DONE" : "Zero: WAIT...");
+        OLED_DrawStringAlign(&oled, 0, 70, buf, ALIGN_LEFT);
 
         OLED_Update(&oled);
 

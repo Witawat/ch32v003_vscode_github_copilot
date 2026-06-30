@@ -36,7 +36,7 @@ flowchart TD
 <p><strong>RotaryEncoder Struct:</strong> <code>RotaryEncoder encoder;</code> — <code>Rotary_Init(&encoder, CLK, DT, SW)</code> — ใช้ polling โดยเรียก <code>Rotary_GetPosition(&encoder)</code></p>
 <p><strong>Callback System:</strong> <code>Rotary_SetCallback(&encoder, ROTARY_EVENT_ROTATE, my_callback)</code> — callback รับ <code>RotaryEncoder* e</code> — ภายใน callback อ่านตำแหน่งด้วย <code>Rotary_GetPosition(e)</code></p>
 <p><strong>Debounce:</strong> <code>Rotary_SetDebounceTime(&encoder, 30)</code> — ตั้งค่า debounce ในหน่วย ms — default 30ms เหมาะกับ encoder ทั่วไป</p>
-<p><strong>ไม่มี Interrupt Mode แยก:</strong> API ใช้ polling ผ่าน Rotary_GetPosition — ไม่มี RotaryEncoder_InitInt — ไม่มี acceleration</p>
+<p><strong>ไม่มี Interrupt Mode แยก:</strong> API ใช้ polling ผ่าน Rotary_GetPosition — ไม่มี Rotary_InitInt — ไม่มี acceleration</p>
 </section>
 
 <section><h2>💻 เขียน Code ทีละขั้น</h2>

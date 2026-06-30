@@ -128,22 +128,21 @@ int main(void)
             float total = WaterFlow_GetTotalVolume(&w);
 
             OLED_Clear(&oled);
-            OLED_SetCursor(&oled, 0, 0);
-            OLED_Print(&oled, "Flow Rate:");
-            OLED_SetCursor(&oled, 0, 2);
-            OLED_PrintFloat(&oled, "", lpm, 1);
-            OLED_Print(&oled, " L/min");
+            char buf[64];
+            snprintf(buf, sizeof(buf), "Flow Rate:");
+            OLED_DrawStringAlign(&oled, 0, 0, buf, ALIGN_LEFT);
+            snprintf(buf, sizeof(buf), "%.1f L/min", lpm);
+            OLED_DrawStringAlign(&oled, 0, 20, buf, ALIGN_LEFT);
 
-            OLED_SetCursor(&oled, 0, 4);
-            OLED_Print(&oled, "Total:");
-            OLED_SetCursor(&oled, 0, 6);
-            OLED_PrintFloat(&oled, "", total, 1);
-            OLED_Print(&oled, " L");
+            snprintf(buf, sizeof(buf), "Total:");
+            OLED_DrawStringAlign(&oled, 0, 40, buf, ALIGN_LEFT);
+            snprintf(buf, sizeof(buf), "%.1f L", total);
+            OLED_DrawStringAlign(&oled, 0, 60, buf, ALIGN_LEFT);
 
             if(lpm > 15.0f) {
                 digitalWrite(VALVE_PIN, HIGH);
-                OLED_SetCursor(&oled, 80, 0);
-                OLED_Print(&oled, "MAX!");
+                snprintf(buf, sizeof(buf), "MAX!");
+                OLED_DrawStringAlign(&oled, 80, 0, buf, ALIGN_LEFT);
             }
 
             OLED_Update(&oled);

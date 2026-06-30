@@ -163,36 +163,33 @@ int main(void) {
 
         OLED_Clear(&oled);
 
-        OLED_SetCursor(&oled, 0, 0);
-        OLED_Print(&oled, "=== GAUSS METER ===");
+        char buf[64];
+        snprintf(buf, sizeof(buf), "=== GAUSS METER ===");
+        OLED_DrawStringAlign(&oled, 0, 0, buf, ALIGN_LEFT);
 
-        OLED_SetCursor(&oled, 0, 1);
-        OLED_PrintFloat(&oled, "Live: ", gauss, 1);
-        OLED_Print(&oled, " G");
+        snprintf(buf, sizeof(buf), "Live: %.1f G", gauss);
+        OLED_DrawStringAlign(&oled, 0, 10, buf, ALIGN_LEFT);
 
-        OLED_SetCursor(&oled, 60, 1);
-        if(gauss > 5)      OLED_Print(&oled, "(S)");
-        else if(gauss < -5) OLED_Print(&oled, "(N)");
-        else                OLED_Print(&oled, "--");
+        if(gauss > 5)       snprintf(buf, sizeof(buf), "(S)");
+        else if(gauss < -5) snprintf(buf, sizeof(buf), "(N)");
+        else                snprintf(buf, sizeof(buf), "--");
+        OLED_DrawStringAlign(&oled, 60, 10, buf, ALIGN_LEFT);
 
         int bar = (int)(abs_gauss * 0.5f);
         if(bar > 64) bar = 64;
-        OLED_SetCursor(&oled, 0, 3);
-        OLED_Print(&oled, "[");
-        for(int i = 0; i < bar; i++) {
-            OLED_Print(&oled, abs_gauss > 50 ? "#" : "=");
+        int bi = 0;
+        bi += snprintf(buf + bi, sizeof(buf) - bi, "[");
+        for(int i = 0; i < bar && bi < (int)sizeof(buf) - 1; i++) {
+            bi += snprintf(buf + bi, sizeof(buf) - bi, "%s", abs_gauss > 50 ? "#" : "=");
         }
-        OLED_Print(&oled, "]");
+        snprintf(buf + bi, sizeof(buf) - bi, "]");
+        OLED_DrawStringAlign(&oled, 0, 30, buf, ALIGN_LEFT);
 
-        OLED_SetCursor(&oled, 0, 5);
-        OLED_PrintFloat(&oled, "Peak S:", peak_south, 0);
-        OLED_Print(&oled, " ");
-        OLED_PrintFloat(&oled, "N:", peak_north, 0);
-        OLED_Print(&oled, " G");
+        snprintf(buf, sizeof(buf), "Peak S:%.0f N:%.0f G", peak_south, peak_north);
+        OLED_DrawStringAlign(&oled, 0, 50, buf, ALIGN_LEFT);
 
-        OLED_SetCursor(&oled, 0, 7);
-        OLED_PrintFloat(&oled, "V:", voltage, 3);
-        OLED_Print(&oled, " ");
+        snprintf(buf, sizeof(buf), "V: %.3f ", voltage);
+        OLED_DrawStringAlign(&oled, 0, 70, buf, ALIGN_LEFT);
 
         OLED_Update(&oled);
         Delay_Ms(50);

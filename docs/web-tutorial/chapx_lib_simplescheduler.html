@@ -122,8 +122,11 @@ void task_sensor(void) {
 }
 void task_display(void) {
     OLED_Clear(&oled);
-    OLED_SetCursor(&oled,0,0); OLED_PrintFloat(&oled,"T:",temp,1);
-    OLED_SetCursor(&oled,0,1); OLED_PrintFloat(&oled,"H:",hum,1);
+    char buf[64];
+    snprintf(buf, sizeof(buf), "T: %.1f", temp);
+    OLED_DrawStringAlign(&oled, 0, 0, buf, ALIGN_LEFT);
+    snprintf(buf, sizeof(buf), "H: %.1f", hum);
+    OLED_DrawStringAlign(&oled, 0, 10, buf, ALIGN_LEFT);
     OLED_Update(&oled);
     digitalToggle(PC3);  // Heartbeat
 }

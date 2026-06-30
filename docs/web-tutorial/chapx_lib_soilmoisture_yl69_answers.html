@@ -48,20 +48,19 @@ int main(void) {
             GPIO_WriteBit(SOIL_VCC, 0);
 
             OLED_Clear(&oled);
-            OLED_SetCursor(&oled, 0, 0);
-            OLED_Print(&oled, "Smart Watering");
+            char sbuf[64];
+            snprintf(sbuf, sizeof(sbuf), "Smart Watering");
+            OLED_DrawStringAlign(&oled, 0, 0, sbuf, ALIGN_LEFT);
 
-            OLED_SetCursor(&oled, 0, 2);
-            OLED_PrintFloat(&oled, "Soil:", moisture, 1);
-            OLED_Print(&oled, "%");
+            snprintf(sbuf, sizeof(sbuf), "Soil: %.1f%%", moisture);
+            OLED_DrawStringAlign(&oled, 0, 20, sbuf, ALIGN_LEFT);
 
-            OLED_SetCursor(&oled, 0, 4);
-            OLED_Print(&oled, "Pumps:");
-            OLED_PrintDec(&oled, pump_run_count);
+            snprintf(sbuf, sizeof(sbuf), "Pumps: %d", pump_run_count);
+            OLED_DrawStringAlign(&oled, 0, 40, sbuf, ALIGN_LEFT);
 
             if(moisture < DRY_THRESHOLD) {
-                OLED_SetCursor(&oled, 0, 6);
-                OLED_Print(&oled, "WATERING...");
+                snprintf(sbuf, sizeof(sbuf), "WATERING...");
+                OLED_DrawStringAlign(&oled, 0, 60, sbuf, ALIGN_LEFT);
                 OLED_Update(&oled);
 
                 GPIO_WriteBit(PUMP_PIN, 1);
@@ -72,8 +71,8 @@ int main(void) {
                 GPIO_WriteBit(PUMP_PIN, 0);
                 pump_run_count++;
             } else {
-                OLED_SetCursor(&oled, 0, 6);
-                OLED_Print(&oled, "Soil OK   ");
+                snprintf(sbuf, sizeof(sbuf), "Soil OK   ");
+                OLED_DrawStringAlign(&oled, 0, 60, sbuf, ALIGN_LEFT);
             }
 
             OLED_Update(&oled);

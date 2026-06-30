@@ -150,9 +150,13 @@ int main(void) {
         }
         if(Is_Timer_Expired(&tmr_display)) {
             OLED_Clear(&oled);
-            OLED_SetCursor(&oled,0,0); OLED_PrintFloat(&oled,"T:",temp,1);
-            OLED_SetCursor(&oled,0,2); OLED_PrintFloat(&oled,"P:",out,1);
-            OLED_SetCursor(&oled,0,4); OLED_Print(&oled,relay?"HEAT":" IDLE");
+            char buf[64];
+            snprintf(buf, sizeof(buf), "T: %.1f", temp);
+            OLED_DrawStringAlign(&oled, 0, 0, buf, ALIGN_LEFT);
+            snprintf(buf, sizeof(buf), "P: %.1f", out);
+            OLED_DrawStringAlign(&oled, 0, 20, buf, ALIGN_LEFT);
+            snprintf(buf, sizeof(buf), "%s", relay ? "HEAT" : " IDLE");
+            OLED_DrawStringAlign(&oled, 0, 40, buf, ALIGN_LEFT);
             OLED_Update(&oled);
         }
         IWDG_Feed();

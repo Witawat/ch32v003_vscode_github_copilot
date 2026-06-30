@@ -42,29 +42,25 @@ int main(void) {
             float percent = (mah_remain / mah_capacity) * 100.0f;
 
             OLED_Clear(&oled);
-            OLED_SetCursor(&oled, 0, 0);
-            OLED_PrintFloat(&oled, "V:", v, 2);
-            OLED_Print(&oled, "V");
+            char buf[64];
+            snprintf(buf, sizeof(buf), "V: %.2fV", v);
+            OLED_DrawStringAlign(&oled, 0, 0, buf, ALIGN_LEFT);
 
-            OLED_SetCursor(&oled, 70, 0);
-            OLED_PrintFloat(&oled, "I:", a * 1000, 0);
-            OLED_Print(&oled, "mA");
+            snprintf(buf, sizeof(buf), "I: %.0fmA", a * 1000);
+            OLED_DrawStringAlign(&oled, 70, 0, buf, ALIGN_LEFT);
 
-            OLED_SetCursor(&oled, 0, 2);
-            OLED_PrintFloat(&oled, "P:", w, 2);
-            OLED_Print(&oled, "W");
+            snprintf(buf, sizeof(buf), "P: %.2fW", w);
+            OLED_DrawStringAlign(&oled, 0, 20, buf, ALIGN_LEFT);
 
-            OLED_SetCursor(&oled, 0, 4);
-            OLED_PrintFloat(&oled, "Used:", mah_used, 0);
-            OLED_Print(&oled, "mAh");
+            snprintf(buf, sizeof(buf), "Used: %.0fmAh", mah_used);
+            OLED_DrawStringAlign(&oled, 0, 40, buf, ALIGN_LEFT);
 
-            OLED_SetCursor(&oled, 0, 6);
-            OLED_PrintFloat(&oled, "Left:", percent, 0);
-            OLED_Print(&oled, "%");
+            snprintf(buf, sizeof(buf), "Left: %.0f%%", percent);
+            OLED_DrawStringAlign(&oled, 0, 60, buf, ALIGN_LEFT);
 
             if(v < 3.0f) {
-                OLED_SetCursor(&oled, 70, 6);
-                OLED_Print(&oled, "LOW!");
+                snprintf(buf, sizeof(buf), "LOW!");
+                OLED_DrawStringAlign(&oled, 70, 60, buf, ALIGN_LEFT);
             }
 
             OLED_Update(&oled);
@@ -172,39 +168,35 @@ int main(void) {
             energy_wh += (w / 3600.0f);
 
             OLED_Clear(&oled);
-            OLED_SetCursor(&oled, 0, 0);
-            OLED_Print(&oled, "=== POWER DASH ===");
+            char buf[64];
+            snprintf(buf, sizeof(buf), "=== POWER DASH ===");
+            OLED_DrawStringAlign(&oled, 0, 0, buf, ALIGN_LEFT);
 
-            OLED_SetCursor(&oled, 0, 1);
-            OLED_PrintFloat(&oled, "V:", v, 2);
-            OLED_Print(&oled, "V  ");
-            OLED_PrintFloat(&oled, "I:", a * 1000, 0);
-            OLED_Print(&oled, "mA");
+            snprintf(buf, sizeof(buf), "V: %.2fV  I: %.0fmA", v, a * 1000);
+            OLED_DrawStringAlign(&oled, 0, 10, buf, ALIGN_LEFT);
 
-            OLED_SetCursor(&oled, 0, 2);
-            OLED_PrintFloat(&oled, "P:", w, 2);
-            OLED_Print(&oled, "W  ");
-            OLED_PrintFloat(&oled, "E:", energy_wh, 1);
-            OLED_Print(&oled, "Wh");
+            snprintf(buf, sizeof(buf), "P: %.2fW  E: %.1fWh", w, energy_wh);
+            OLED_DrawStringAlign(&oled, 0, 20, buf, ALIGN_LEFT);
 
             uint8_t bar_len = (uint8_t)(w / OVERPOWER_W * 100);
             if(bar_len > 100) bar_len = 100;
-            OLED_SetCursor(&oled, 0, 4);
-            OLED_Print(&oled, "[");
-            for(uint8_t i = 0; i < bar_len / 5; i++)
-                OLED_Print(&oled, "=");
-            OLED_Print(&oled, "]");
+            int bi = 0;
+            bi += snprintf(buf + bi, sizeof(buf) - bi, "[");
+            for(uint8_t i = 0; i < bar_len / 5 && bi < (int)sizeof(buf) - 1; i++)
+                bi += snprintf(buf + bi, sizeof(buf) - bi, "=");
+            snprintf(buf + bi, sizeof(buf) - bi, "]");
+            OLED_DrawStringAlign(&oled, 0, 40, buf, ALIGN_LEFT);
 
             if(a > OVERCURRENT_A) {
                 digitalWrite(PC0, HIGH);
                 digitalWrite(PC1, HIGH);
-                OLED_SetCursor(&oled, 0, 6);
-                OLED_Print(&oled, "OVERLOAD! RELAY CUT");
+                snprintf(buf, sizeof(buf), "OVERLOAD! RELAY CUT");
+                OLED_DrawStringAlign(&oled, 0, 60, buf, ALIGN_LEFT);
             } else {
                 digitalWrite(PC0, LOW);
                 digitalWrite(PC1, LOW);
-                OLED_SetCursor(&oled, 0, 6);
-                OLED_Print(&oled, "Status: NORMAL  ");
+                snprintf(buf, sizeof(buf), "Status: NORMAL  ");
+                OLED_DrawStringAlign(&oled, 0, 60, buf, ALIGN_LEFT);
             }
 
             OLED_Update(&oled);

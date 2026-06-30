@@ -96,27 +96,29 @@ float hcsr04_read_filtered(HCSR04_Instance *s) {
     VL53L0X_Instance tof;
     VL53L0X_Init(&tof, 0x29);
 
-    OLED_Init(I2C_PINS_DEFAULT);
+    OLED_Handle oled;
+    OLED_Init(&oled, OLED_128x64, 0x3C);
 
+    char buf[64];
     while(1) {
         float dist_us = HCSR04_MeasureCm(&us);
         uint16_t dist_lx = VL53L0X_ReadRangeMM(&tof);
 
-        OLED_SetCursor(0, 0);
-        OLED_Print("US: "); OLED_PrintFloat(dist_us, 1); OLED_Print(" cm  ");
+        snprintf(buf, sizeof(buf), "US: %.1f cm  ", dist_us);
+        OLED_DrawStringAlign(&oled, 0, 0, buf, ALIGN_LEFT);
 
-        OLED_SetCursor(0, 1);
-        OLED_Print("LX: "); OLED_PrintNum(dist_lx); OLED_Print(" mm  ");
+        snprintf(buf, sizeof(buf), "LX: %d mm  ", dist_lx);
+        OLED_DrawStringAlign(&oled, 0, 10, buf, ALIGN_LEFT);
 
         // Comment on accuracy
-        OLED_SetCursor(0, 2);
         if(dist_us < 10 && dist_lx < 100) {
-            OLED_Print("Near — laser wins ");
+            snprintf(buf, sizeof(buf), "Near \xE2\x80\x94 laser wins ");
         } else if(dist_us > 200) {
-            OLED_Print("Far  — US wins    ");
+            snprintf(buf, sizeof(buf), "Far  \xE2\x80\x94 US wins    ");
         } else {
-            OLED_Print("Mid  — both OK    ");
+            snprintf(buf, sizeof(buf), "Mid  \xE2\x80\x94 both OK    ");
         }
+        OLED_DrawStringAlign(&oled, 0, 20, buf, ALIGN_LEFT);
 
         Delay_Ms(500);
     }

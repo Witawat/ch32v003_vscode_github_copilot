@@ -56,20 +56,19 @@ int main(void) {
         }
 
         OLED_Clear(&oled);
-        OLED_SetCursor(&oled, 0, 0);
-        OLED_Print(&oled, "Clap Counter");
+        snprintf(buf, sizeof(buf), "Clap Counter");
+    OLED_DrawStringAlign(&oled, 0, 0, buf, ALIGN_LEFT);
 
-        OLED_SetCursor(&oled, 0, 2);
-        OLED_Print(&oled, "Total: ");
+        snprintf(buf, sizeof(buf), "Total: ");
+    OLED_DrawStringAlign(&oled, 0, 2, buf, ALIGN_LEFT);
         OLED_PrintDec(&oled, total_claps);
 
-        OLED_SetCursor(&oled, 0, 4);
-        OLED_Print(&oled, "Seq: ");
+        snprintf(buf, sizeof(buf), "Seq: ");
+    OLED_DrawStringAlign(&oled, 0, 4, buf, ALIGN_LEFT);
         OLED_PrintDec(&oled, clap_count);
-
-        OLED_SetCursor(&oled, 0, 6);
         OLED_PrintDec(&oled, level);
-        OLED_Print(&oled, " ");
+        snprintf(buf, sizeof(buf), " ");
+    OLED_DrawStringAlign(&oled, 0, 0, buf, ALIGN_LEFT);
         OLED_Print(dig ? "LOUD" : "---");
 
         OLED_Update(&oled);
@@ -193,35 +192,37 @@ int main(void) {
         if(level > 7) level = 7;
 
         OLED_Clear(&oled);
-        OLED_SetCursor(&oled, 0, 0);
-        OLED_Print(&oled, "VOLUME METER");
-
-        OLED_SetCursor(&oled, 0, 1);
+        snprintf(buf, sizeof(buf), "VOLUME METER");
+    OLED_DrawStringAlign(&oled, 0, 0, buf, ALIGN_LEFT);
         OLED_Print(&oled, level_labels[level]);
-        OLED_Print(&oled, "   ");
+        snprintf(buf, sizeof(buf), "   ");
+    OLED_DrawStringAlign(&oled, 0, 0, buf, ALIGN_LEFT);
         OLED_PrintDec(&oled, avg);
 
-        OLED_SetCursor(&oled, 10, 3);
-        OLED_Print(&oled, "[");
+        snprintf(buf, sizeof(buf), "[");
+    OLED_DrawStringAlign(&oled, 10, 3, buf, ALIGN_LEFT);
         for(uint8_t i = 0; i < 8; i++) {
             if(i < level + 1)
                 OLED_Print(&oled, level >= 6 ? "#" : "|");
             else
-                OLED_Print(&oled, " ");
+                snprintf(buf, sizeof(buf), " ");
+    OLED_DrawStringAlign(&oled, 0, 0, buf, ALIGN_LEFT);
         }
-        OLED_Print(&oled, "]");
+        snprintf(buf, sizeof(buf), "]");
+    OLED_DrawStringAlign(&oled, 0, 0, buf, ALIGN_LEFT);
 
-        OLED_SetCursor(&oled, 0, 5);
-        OLED_Print(&oled, "History: ");
+        snprintf(buf, sizeof(buf), "History: ");
+    OLED_DrawStringAlign(&oled, 0, 5, buf, ALIGN_LEFT);
         for(uint8_t i = 0; i < 8; i++) {
             char c = peaks[i] > 700 ? '#' : peaks[i] > 400 ? '=' : peaks[i] > 200 ? '-' : '.';
             OLED_PrintChar(&oled, c);
         }
 
-        OLED_SetCursor(&oled, 0, 7);
-        OLED_Print(&oled, "Peak: ");
+        snprintf(buf, sizeof(buf), "Peak: ");
+    OLED_DrawStringAlign(&oled, 0, 7, buf, ALIGN_LEFT);
         OLED_PrintDec(&oled, peak_max);
-        OLED_Print(&oled, " ");
+        snprintf(buf, sizeof(buf), " ");
+    OLED_DrawStringAlign(&oled, 0, 0, buf, ALIGN_LEFT);
         OLED_Print(GPIO_ReadBit(SOUND_DIG) ? "!" : " ");
 
         OLED_Update(&oled);

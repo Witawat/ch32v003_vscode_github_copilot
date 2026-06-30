@@ -39,27 +39,25 @@ if(DHT_Read(&t, &h) == DHT_OK) {
 3.3V─VCC  GND─GND  PC0─DQ  (R 4.7kΩ pull-up DQ↔3.3V)
 </pre>
 <pre><code class="language-c">#include "DS18B20.h"
-OneWire_Init(PC0);
-DS18B20_SearchDevices();
-DS18B20_RequestTemperatures();
-Delay_Ms(750);  // ★ รอ conversion เสร็จ
-float t = DS18B20_GetTempCByIndex(0);  // ตัวแรก
+DS18B20_Device* s = DS18B20_Init(PD2);
+float t = DS18B20_ReadTemperatureBlocking(s);
 
-// Multi-sensor — อ่าน ROM ทุกตัวบน bus เดียว
-DS18B20_ROM_t rom;
-uint8_t n = DS18B20_GetDeviceCount();
-for(uint8_t i = 0; i < n; i++) {
-    DS18B20_GetROM(i, &rom);
-    float ti = DS18B20_GetTempC(&rom);
-    USART_Print("ROM "); USART_PrintHex(rom.bytes, 8);
+// Multi-sensor — หลาย DS18B20 บน bus เดียว
+DS18B20_Device* sensors[3];
+sensors[0] = DS18B20_Init(PD2);
+sensors[1] = DS18B20_Init(PC0);
+sensors[2] = DS18B20_Init(PC1);
+for(uint8_t i = 0; i < 3; i++) {
+    float ti = DS18B20_ReadTemperatureBlocking(sensors[i]);
+    USART_Print("T"); USART_PrintNum(i);
     USART_Print(" = "); USART_PrintFloat(ti, 2);
 }</code></pre>
 <p class="explain">⚠️ 1-Wire timing critical — <strong>ห้ามมี interrupt ตอนอ่าน</strong>, conversion time 750ms (12-bit) / 93.75ms (9-bit), parasite power mode ใช้ 2 wires (DQ+GND) — ต้องมี strong pull-up ระหว่าง conversion, แต่ละตัวมี unique 64-bit ROM ID, bus เดียวต่อได้หลายร้อยตัว, range -55°C ~ +125°C, accuracy ±0.5°C</p>
 
 <h3>API หลัก</h3>
 <table>
-<tr><td><code>OneWire_Init(pin)</code></td><td>Init 1-Wire bus</td><td><code>DS18B20_SearchDevices()</code></td><td>ค้นหา devices ทั้งหมดบน bus</td></tr>
-<tr><td><code>DS18B20_RequestTemperatures()</code></td><td>ส่งคำสั่ง convert (ทั้งหมด)</td><td><code>DS18B20_GetTempCByIndex(i)</code></td><td>อ่าน temp ตัวที่ i</td></tr>
+<tr><td><code>DS18B20_Init(pin)</code></td><td>Init sensor (returns DS18B20_Device*)</td><td><code>DS18B20_ReadTemperatureBlocking(dev)</code></td><td>อ่าน temp (blocking)</td></tr>
+<tr><td><code>DS18B20_ReadTemperature(dev)</code></td><td>อ่าน temp (non-blocking)</td><td><code>DS18B20_SearchDevices(dev)</code></td><td>ค้นหา devices ทั้งหมดบน bus</td></tr>
 <tr><td><code>DS18B20_GetDeviceCount()</code></td><td>จำนวน devices</td><td><code>DS18B20_GetROM(i, &rom)</code></td><td>อ่าน ROM ID</td></tr>
 <tr><td><code>DS18B20_GetTempC(&rom)</code></td><td>อ่านตาม ROM</td><td><code>DS18B20_SetResolution(bits)</code></td><td>9/10/11/12 bit</td></tr>
 </table>
@@ -141,7 +139,7 @@ float cj = MAX31855_ReadInternal(); // cold-junction temp
 uint8_t fault = MAX31855_ReadFault(); // 0=OK, bit0=OC, bit1=SCG, bit2=SCV
 
 // MAX6675 variant (16-bit, simpler):
-#include "MAX6675.h"
+
 MAX6675_Init(PC4);
 float t = MAX6675_ReadCelsius();</code></pre>
 <p class="explain">⚠️ SPI mode 0, MAX31855 = 32-bit read (14-bit TC + 12-bit CJ + fault bits), MAX6675 = 16-bit read (12-bit TC), ทั้งคู่เป็น K-type, cold-junction compensation ฝังในชิป → ไม่ต้องคำนวณเอง, thermocouple ไม่ต้องใช้ ADC — ชิปอ่าน mV ตรง, MAX31855 range -270°C ~ +1372°C, accuracy ±2°C, SPI pins ใน SOP-8 ไม่มี — ใช้กับ SOP-16/QFN เท่านั้น</p>

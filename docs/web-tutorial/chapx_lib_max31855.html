@@ -93,8 +93,7 @@ int main(void) {
     if(fault & 0x04) USART_Println("⚠️ Short to VCC!");
 
     // MAX6675 variant (simpler API):
-    // #include "MAX6675.h"
-    // float t = MAX6675_ReadTemp(PC4);  // 0-1024°C, no fault</code></pre>
+    //     // float t = MAX6675_ReadTemp(PC4);  // 0-1024°C, no fault</code></pre>
     <p class="explain">🔍 <code>MAX31855_ReadTemp()</code> — thermocouple temp — <code>MAX31855_ReadInternalTemp()</code> — CJ temp — <code>MAX31855_GetFault()</code> — 0=OK, bit0=OC, bit1=SCG, bit2=SCV</p></div>
 
     <div class="step"><h3>ขั้นที่ 3: Loop</h3>
@@ -167,6 +166,7 @@ int main(void) {
     Timer_t tmr;
     Start_Timer(&tmr, 500, 1);
 
+    char buf[64];
     while(1) {
         if(Is_Timer_Expired(&tmr)) {
             float tc = MAX31855_ReadTemp(&therm);
@@ -175,15 +175,15 @@ int main(void) {
 
             OLED_Clear(&oled);
             if(fault == 0) {
-                OLED_SetCursor(&oled, 0, 0);
-                OLED_PrintFloat(&oled, "TC:", tc, 1); OLED_Print(&oled, " C");
-                OLED_SetCursor(&oled, 0, 2);
-                OLED_PrintFloat(&oled, "CJ:", cj, 1); OLED_Print(&oled, " C");
+                snprintf(buf, sizeof(buf), "TC: %.1f C", tc);
+                OLED_DrawStringAlign(&oled, 0, 0, buf, ALIGN_LEFT);
+                snprintf(buf, sizeof(buf), "CJ: %.1f C", cj);
+                OLED_DrawStringAlign(&oled, 0, 20, buf, ALIGN_LEFT);
             } else {
-                OLED_SetCursor(&oled, 0, 1);
-                OLED_Print(&oled, "FAULT! Check");
-                OLED_SetCursor(&oled, 0, 2);
-                OLED_Print(&oled, "Thermocouple!");
+                snprintf(buf, sizeof(buf), "FAULT! Check");
+                OLED_DrawStringAlign(&oled, 0, 10, buf, ALIGN_LEFT);
+                snprintf(buf, sizeof(buf), "Thermocouple!");
+                OLED_DrawStringAlign(&oled, 0, 20, buf, ALIGN_LEFT);
             }
             OLED_Update(&oled);
         }

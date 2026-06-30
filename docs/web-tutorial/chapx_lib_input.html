@@ -20,16 +20,16 @@
 PC1─Button─GND (active LOW, ใช้ internal pull-up)
 </pre>
 <pre><code class="language-c">#include "Button.h"
-Button_Handle btn;
-Button_Init(&btn, PC1, BUTTON_ACTIVE_LOW, 50); // debounce 50ms
+Button_Instance btn;
+Button_Init(&btn, PC1, BUTTON_ACTIVE_LOW);
 
 void on_press(void)    { USART_Println("Pressed"); }
 void on_long(void)     { USART_Println("Long press 1s"); }
 void on_double(void)   { USART_Println("Double click"); }
 
-Button_SetCallback(&btn, on_press);
-Button_SetAdvancedCallback(&btn, on_long, 1000);
-Button_OnDoubleClick(&btn, on_double, 400);
+Button_SetCallback(&btn, BUTTON_EVENT_PRESS, on_press);
+Button_SetCallback(&btn, BUTTON_EVENT_LONG_PRESS, on_long);
+Button_SetCallback(&btn, BUTTON_EVENT_DOUBLE_CLICK, on_double);
 
 while(1) { Button_Update(&btn); IWDG_Feed(); }</code></pre>
 <p class="explain">⚠️ debounce 50ms=default, ACTIVE_LOW=button→GND (use pull-up), ACTIVE_HIGH=button→VCC (pull-down), long press threshold ms, double click window ms, callback-based (ไม่ต้อง poll flag), ต้อง Update() ใน loop</p>
@@ -57,16 +57,16 @@ while(1) {
 PC0─CLK, PC1─DT, PC2─SW (pull-up on all)
 </pre>
 <pre><code class="language-c">#include "RotaryEncoder.h"
+RotaryEncoder enc;
 int32_t pos = 0;
 void on_rotate(int8_t dir) { pos += dir; USART_PrintNum(pos); USART_Println(""); }
 void on_button(void)       { pos = 0; USART_Println("Zero"); }
 
-Rotary_Init(PC0, PC1, PC2);
-Rotary_SetCallback(on_rotate);
-Rotary_SetCallback(on_button);
-// OR interrupt: RotaryEncoder_InitInt(PC0, PC1, PC2); // no polling
+Rotary_Init(&enc, PC0, PC1, PC2);
+Rotary_SetCallback(&enc, ROTARY_EVENT_ROTATE, on_rotate);
+Rotary_SetCallback(&enc, ROTARY_EVENT_PRESS, on_button);
 
-while(1) { Rotary_Update(); IWDG_Feed(); }</code></pre>
+while(1) { Rotary_Update(&enc); IWDG_Feed(); }</code></pre>
 <p class="explain">⚠️ quadrature encoding, CLK lead=±, 20 steps/rev common, interrupt mode saves CPU, acceleration: if speed > threshold → multiply step</p>
 
 <h2>PID — Control Algorithm</h2>
@@ -92,6 +92,7 @@ Buttons: PC3─UP, PC4─DOWN, PC5─ENTER, PC6─BACK (pull-up)
 </pre>
 <pre><code class="language-c">#include "LCDMenu.h"
 #include "lcd1602_i2c.h"
+LCD1602_Handle lcd;
 LCDMenu_Handle menu;
 
 void on_temp(void) { USART_Println("Temp menu"); }
@@ -99,16 +100,15 @@ void on_fan_toggle(LCDMenu_Handle *m, uint8_t val) {
     USART_Print(val ? "Fan ON\r\n" : "Fan OFF\r\n");
 }
 
-LCD_Init(0x27);
-LCDMenu_Init(&menu, 0x27, 16, 2);
+LCD_Init(&lcd, 0x27, LCD_16x2);
+LCDMenu_Init(&menu, &lcd, &btn_up, &btn_down, &btn_enter, &btn_back);
 LCDMenu_AddItem(&menu, "Temperature",   LCDMENU_SUBMENU, NULL);
 LCDMenu_AddItem(&menu, "  Set Max",     LCDMENU_EDIT,    on_temp);
 LCDMenu_AddItem(&menu, "Fan Control",   LCDMENU_TOGGLE,  on_fan_toggle);
 LCDMenu_AddItem(&menu, "Back",          LCDMENU_BACK,    NULL);
 
 while(1) {
-    LCDMenu_Update(&menu, !digitalRead(PC3), !digitalRead(PC4),
-                   !digitalRead(PC5), !digitalRead(PC6));
+    LCDMenu_Update(&menu);
     Delay_Ms(50);
 }</code></pre>
 <p class="explain">⚠️ 4 callback types: SUBMENU/EDIT/TOGGLE/ACTION/BACK, static memory pool, LCD1602 16x2, edit mode: UP/DOWN change value, refresh 50ms</p>

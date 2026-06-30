@@ -5,7 +5,6 @@
 <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "RotaryEncoder.h"
-#include "PWM.h"
 
 #define ENC_CLK PC0
 #define ENC_DT  PC1
@@ -89,21 +88,25 @@ int main(void) {
             last_pos2 = pos;
         }
 
-        OLED_Clear();
-        OLED_SetFont(FONT_8X16);
-        OLED_Print(0, 0, "-- Menu --");
+        OLED_Clear(&oled);
+        OLED_SetFont(&oled, FONT_8X16);
+        char mbuf[64];
+        snprintf(mbuf, sizeof(mbuf), "-- Menu --");
+        OLED_DrawStringAlign(&oled, 0, 0, mbuf, ALIGN_LEFT);
         for(uint8_t i = 0; i < MENU_COUNT; i++) {
-            OLED_SetCursor(0, 1 + i);
-            if(i == idx) { OLED_Print(">"); OLED_Print(menu[i]); }
-            else          OLED_Printf(" %s", menu[i]);
+            if(i == idx) { snprintf(mbuf, sizeof(mbuf), ">%s", menu[i]); }
+            else          { snprintf(mbuf, sizeof(mbuf), " %s", menu[i]); }
+            OLED_DrawStringAlign(&oled, 0, 10 + i * 10, mbuf, ALIGN_LEFT);
         }
         OLED_Update(&oled);
 
         if(selected) {
             selected = false;
-            OLED_Clear();
-            OLED_SetCursor(0, 0); OLED_Print("Selected:");
-            OLED_SetCursor(0, 1); OLED_Print(menu[idx]);
+            OLED_Clear(&oled);
+            snprintf(mbuf, sizeof(mbuf), "Selected:");
+            OLED_DrawStringAlign(&oled, 0, 0, mbuf, ALIGN_LEFT);
+            snprintf(mbuf, sizeof(mbuf), "%s", menu[idx]);
+            OLED_DrawStringAlign(&oled, 0, 10, mbuf, ALIGN_LEFT);
             OLED_Update(&oled);
             Delay_Ms(1500);
         }

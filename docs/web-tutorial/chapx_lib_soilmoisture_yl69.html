@@ -127,22 +127,22 @@ int main(void)
             if(pct > 100) pct = 100;
 
             OLED_Clear(&oled);
-            OLED_SetCursor(&oled, 0, 0);
-            OLED_Print(&oled, "Soil Moisture");
+            char buf[64];
+            snprintf(buf, sizeof(buf), "Soil Moisture");
+            OLED_DrawStringAlign(&oled, 0, 0, buf, ALIGN_LEFT);
 
-            OLED_SetCursor(&oled, 0, 2);
-            OLED_PrintFloat(&oled, "", pct, 1);
-            OLED_Print(&oled, " %");
+            snprintf(buf, sizeof(buf), "%.1f %%", pct);
+            OLED_DrawStringAlign(&oled, 0, 20, buf, ALIGN_LEFT);
 
             if(pct < DRY_THRESHOLD) {
                 digitalWrite(PUMP_PIN, HIGH);
-                OLED_SetCursor(&oled, 0, 4);
-                OLED_Print(&oled, "PUMP ON!");
+                snprintf(buf, sizeof(buf), "PUMP ON!");
+                OLED_DrawStringAlign(&oled, 0, 40, buf, ALIGN_LEFT);
                 Delay_Ms(3000);
                 digitalWrite(PUMP_PIN, LOW);
             } else {
-                OLED_SetCursor(&oled, 0, 4);
-                OLED_Print(&oled, "Soil OK");
+                snprintf(buf, sizeof(buf), "Soil OK");
+                OLED_DrawStringAlign(&oled, 0, 40, buf, ALIGN_LEFT);
             }
 
             OLED_Update(&oled);

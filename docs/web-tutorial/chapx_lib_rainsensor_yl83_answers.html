@@ -85,20 +85,18 @@ int main(void) {
             }
 
             OLED_Clear(&oled);
-            OLED_SetCursor(&oled, 0, 0);
-            OLED_Print(&oled, "Rain Alert");
-
-            OLED_SetCursor(&oled, 0, 2);
+            snprintf(buf, sizeof(buf), "Rain Alert");
+    OLED_DrawStringAlign(&oled, 0, 0, buf, ALIGN_LEFT);
             OLED_Print(&oled, status);
-            OLED_Print(&oled, "  ADC:");
+            snprintf(buf, sizeof(buf), "  ADC:");
+    OLED_DrawStringAlign(&oled, 0, 0, buf, ALIGN_LEFT);
             OLED_PrintDec(&oled, adc);
 
-            OLED_SetCursor(&oled, 0, 4);
-            OLED_Print(&oled, "Streak: ");
+            snprintf(buf, sizeof(buf), "Streak: ");
+    OLED_DrawStringAlign(&oled, 0, 4, buf, ALIGN_LEFT);
             OLED_PrintDec(&oled, rain_streak);
-            OLED_Print(&oled, "/3");
-
-            OLED_SetCursor(&oled, 0, 6);
+            snprintf(buf, sizeof(buf), "/3");
+    OLED_DrawStringAlign(&oled, 0, 0, buf, ALIGN_LEFT);
             OLED_Print(alert_active ? "<< ALERT >>" : "Status: OK");
             OLED_Update(&oled);
 
