@@ -58,30 +58,12 @@ static const char *error_strings[] = {
 /* ========== Private Helper Functions ========== */
 
 /**
- * @brief ส่ง 1 byte ผ่าน UART
- */
-static void TJC_SendByte(uint8_t data) {
-  while (USART_GetFlagStatus(USART1, USART_FLAG_TXE) == RESET)
-    ;
-  USART_SendData(USART1, data);
-}
-
-/**
- * @brief ส่ง string ผ่าน UART
- */
-static void TJC_SendString(const char *str) {
-  while (*str) {
-    TJC_SendByte(*str++);
-  }
-}
-
-/**
  * @brief ส่ง terminator (0xFF 0xFF 0xFF)
  */
 static void TJC_SendTerminator(void) {
-  TJC_SendByte(0xFF);
-  TJC_SendByte(0xFF);
-  TJC_SendByte(0xFF);
+  USART_WriteByte(0xFF);
+  USART_WriteByte(0xFF);
+  USART_WriteByte(0xFF);
 }
 
 /**
@@ -282,91 +264,19 @@ static void TJC_ProcessCommand(uint8_t *data, uint16_t len) {
 /**
  * @brief เริ่มต้นการใช้งาน TJC HMI
  */
-void TJC_Init(uint32_t baudrate, TJC_PinConfig pin_config) {
-  GPIO_InitTypeDef GPIO_InitStructure = {0};
-  USART_InitTypeDef USART_InitStructure = {0};
+void TJC_Init(USART_BaudRate baudrate, USART_PinConfig pin_config) {
   NVIC_InitTypeDef NVIC_InitStructure = {0};
 
-  // 0. ตรวจสอบ SystemCoreClock และ clamp baud rate
-  if (SystemCoreClock == 0) {
-    SystemCoreClockUpdate();
-  }
-  if (baudrate > TJC_MAX_BAUDRATE) {
-    baudrate = TJC_MAX_BAUDRATE;
-  }
+  USART_SimpleInit(baudrate, pin_config);
 
-  // 1. เปิด Clock (รวม AFIO สำหรับ pin remapping)
-  RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO | RCC_APB2Periph_GPIOD | RCC_APB2Periph_USART1, ENABLE);
-
-  // 2. ตั้งค่า Pin Remapping และ GPIO
-  switch (pin_config) {
-  case TJC_PINS_DEFAULT:
-    // Default: TX=PD5, RX=PD6
-    GPIO_PinRemapConfig(GPIO_PartialRemap1_USART1, DISABLE);
-    GPIO_PinRemapConfig(GPIO_PartialRemap2_USART1, DISABLE);
-
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_5;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
-    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
-    GPIO_Init(GPIOD, &GPIO_InitStructure);
-
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_6;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
-    GPIO_Init(GPIOD, &GPIO_InitStructure);
-    break;
-
-  case TJC_PINS_REMAP1:
-    // Remap1: TX=PD0, RX=PD1
-    GPIO_PinRemapConfig(GPIO_PartialRemap1_USART1, ENABLE);
-
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_0;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
-    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
-    GPIO_Init(GPIOD, &GPIO_InitStructure);
-
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_1;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
-    GPIO_Init(GPIOD, &GPIO_InitStructure);
-    break;
-
-  case TJC_PINS_REMAP2:
-    // Remap2: TX=PD6, RX=PD5
-    GPIO_PinRemapConfig(GPIO_PartialRemap2_USART1, ENABLE);
-
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_6;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
-    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
-    GPIO_Init(GPIOD, &GPIO_InitStructure);
-
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_5;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
-    GPIO_Init(GPIOD, &GPIO_InitStructure);
-    break;
-  }
-
-  // 3. ตั้งค่า USART
-  USART_InitStructure.USART_BaudRate = baudrate;
-  USART_InitStructure.USART_WordLength = USART_WordLength_8b;
-  USART_InitStructure.USART_StopBits = USART_StopBits_1;
-  USART_InitStructure.USART_Parity = USART_Parity_No;
-  USART_InitStructure.USART_Mode = USART_Mode_Tx | USART_Mode_Rx;
-  USART_InitStructure.USART_HardwareFlowControl =
-      USART_HardwareFlowControl_None;
-
-  USART_Init(USART1, &USART_InitStructure);
-
-  // 4. ตั้งค่า NVIC สำหรับ UART interrupt
   NVIC_InitStructure.NVIC_IRQChannel = USART1_IRQn;
   NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 1;
   NVIC_InitStructure.NVIC_IRQChannelSubPriority = 1;
   NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
   NVIC_Init(&NVIC_InitStructure);
 
-  // 5. เปิดใช้งาน USART และ RX interrupt
   USART_ITConfig(USART1, USART_IT_RXNE, ENABLE);
-  USART_Cmd(USART1, ENABLE);
 
-  // 6. เคลียร์ buffer
   rx_buffer.head = 0;
   rx_buffer.tail = 0;
 }
@@ -375,7 +285,7 @@ void TJC_Init(uint32_t baudrate, TJC_PinConfig pin_config) {
  * @brief ส่งคำสั่งแบบธรรมดา
  */
 void TJC_SendCommand(const char *cmd) {
-  TJC_SendString(cmd);
+  USART_Print(cmd);
   TJC_SendTerminator();
 }
 
@@ -384,21 +294,17 @@ void TJC_SendCommand(const char *cmd) {
  */
 void TJC_SendCommandParams(const char *cmd, const char **params,
                            uint8_t param_count, uint8_t use_semicolon) {
-  // ส่งคำสั่งหลัก
-  TJC_SendString(cmd);
+  USART_Print(cmd);
 
-  // ส่ง parameters
   for (uint8_t i = 0; i < param_count; i++) {
-    TJC_SendByte('|');
-    TJC_SendString(params[i]);
+    USART_WriteByte('|');
+    USART_Print(params[i]);
   }
 
-  // ส่ง semicolon ถ้าต้องการ
   if (use_semicolon) {
-    TJC_SendByte(';');
+    USART_WriteByte(';');
   }
 
-  // ส่ง terminator
   TJC_SendTerminator();
 }
 

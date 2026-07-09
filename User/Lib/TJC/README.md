@@ -32,10 +32,10 @@ Library สำหรับควบคุม **TJC HMI Display** ผ่าน UA
 
 | Library | หมายเหตุ |
 |---------|----------|
-| `Peripheral/inc/ch32v00x.h` | CH32V003 HAL |
+| `SimpleHAL.h` | SimpleHAL (umbrella header) |
 | `<string.h>` | Standard C |
 
-> ไม่ขึ้นกับ SimpleHAL — ใช้ Hardware Register โดยตรง
+> ใช้ SimpleHAL สำหรับ USART TX และ Init — RX interrupt ใช้ register-level โดยตรง (SimpleUSART ไม่มี interrupt-driven RX)
 
 ---
 
@@ -79,11 +79,13 @@ bkcmd=0   // ปิด response (ใช้เมื่อไม่ต้อง�
 
 ## Pin Configuration
 
+ใช้ enum จาก SimpleUSART (`USART_PinConfig`):
+
 | Enum | TX | RX | หมายเหตุ |
 |------|----|----|----------|
-| `TJC_PINS_DEFAULT` | PD5 | PD6 | Default |
-| `TJC_PINS_REMAP1` | PD0 | PD1 | Partial Remap 1 |
-| `TJC_PINS_REMAP2` | PD6 | PD5 | Partial Remap 2 (สลับ TX/RX) |
+| `USART_PINS_DEFAULT` | PD5 | PD6 | Default |
+| `USART_PINS_REMAP1` | PD0 | PD1 | Partial Remap 1 (TSSOP-20/QFN-20 only) |
+| `USART_PINS_REMAP2` | PD6 | PD5 | Partial Remap 2 (สลับ TX/RX) |
 
 ---
 
@@ -92,7 +94,7 @@ bkcmd=0   // ปิด response (ใช้เมื่อไม่ต้อง�
 ### `TJC_SendCommand(cmd)` — ส่งคำสั่งตรง
 
 ```c
-TJC_Init(115200, TJC_PINS_DEFAULT);
+TJC_Init(BAUD_115200, USART_PINS_DEFAULT);
 
 /* ควบคุม Page */
 TJC_SendCommand("page 0");          // เปิด page 0
@@ -341,8 +343,11 @@ prints ";"
 ### ฝั่ง MCU
 
 ```c
+#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include <SimpleHAL.h>
 #include <string.h>
 #include <stdlib.h>
+#include "TJC.h"
 
 void OnTJCCommand(TJC_ReceivedCommand_t *cmd) {
     /* cmd->command     : คำสั่งหลัก */
@@ -352,7 +357,7 @@ void OnTJCCommand(TJC_ReceivedCommand_t *cmd) {
     /* --- สั่งงาน GPIO --- */
     if (strcmp(cmd->command, "led") == 0 && cmd->param_count >= 1) {
         uint8_t state = (uint8_t)atoi(cmd->params[0]);
-        GPIO_WriteBit(GPIOD, GPIO_Pin_3, state ? Bit_SET : Bit_RESET);
+        digitalWrite(PD3, state);
     }
 
     /* --- ควบคุม Relay --- */
@@ -407,13 +412,13 @@ TJC_ProcessResponse()                     [main loop]
 
 ## API Reference ฉบับเต็ม
 
-### `void TJC_Init(uint32_t baudrate, TJC_PinConfig pin_config)`
+### `void TJC_Init(USART_BaudRate baudrate, USART_PinConfig pin_config)`
 
 เริ่มต้น UART, GPIO, AFIO, NVIC และ RX interrupt พร้อมใช้งาน
 
 ```c
-TJC_Init(115200, TJC_PINS_DEFAULT);
-TJC_Init(9600,   TJC_PINS_REMAP1);
+TJC_Init(BAUD_115200, USART_PINS_DEFAULT);
+TJC_Init(BAUD_9600,   USART_PINS_REMAP1);
 ```
 
 ---
@@ -470,8 +475,7 @@ if (no_response_for_1_second) {
 
 ```c
 void OnError(uint8_t code) {
-    // ใช้กับ SimpleUSART
-    // USART_Print(TJC_GetErrorString(code));
+    USART_Print(TJC_GetErrorString(code));
 }
 ```
 
@@ -524,7 +528,6 @@ void OnError(uint8_t code) {
 | `TJC_MAX_PARAMS` | `10` | จำนวน parameters สูงสุดต่อคำสั่ง |
 | `TJC_TERMINATOR_SIZE` | `3` | ขนาด terminator (`0xFF 0xFF 0xFF`) |
 | `TJC_PACKET_MAX_SIZE` | `132` | ขนาด packet สูงสุดก่อน auto-reset |
-| `TJC_MAX_BAUDRATE` | `115200` | Baud rate สูงสุดที่อนุญาต (override ได้ด้วย `#define` ก่อน include) |
 
 ---
 
@@ -533,6 +536,8 @@ void OnError(uint8_t code) {
 ### `main.c`
 
 ```c
+#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include <SimpleHAL.h>
 #include <string.h>
 #include <stdlib.h>
 #include "TJC.h"
@@ -575,7 +580,7 @@ void OnString(const char *str, uint16_t len) {
 void OnTJCCommand(TJC_ReceivedCommand_t *cmd) {
     if (strcmp(cmd->command, "led") == 0 && cmd->param_count >= 1) {
         uint8_t state = (uint8_t)atoi(cmd->params[0]);
-        GPIO_WriteBit(GPIOD, GPIO_Pin_3, state ? Bit_SET : Bit_RESET);
+        digitalWrite(PD3, state);
         TJC_SendCommand(state ? "t_led.txt=\"ON\"" : "t_led.txt=\"OFF\"");
     }
     else if (strcmp(cmd->command, "status") == 0) {
@@ -591,9 +596,10 @@ void OnError(uint8_t error_code) {
 
 int main(void) {
     SystemCoreClockUpdate();
+    Timer_Init();
 
     /* Init TJC */
-    TJC_Init(115200, TJC_PINS_DEFAULT);
+    TJC_Init(BAUD_115200, USART_PINS_DEFAULT);
 
     /* ลงทะเบียน callbacks */
     TJC_RegisterSystemEventCallback(OnSystemEvent);
@@ -635,11 +641,18 @@ prints "status;"
 
 ---
 
+## แหล่งข้อมูลเพิ่มเติม
+
+- [TJC Editor Download](https://tjc.com.cn) — ซอฟต์แวร์ออกแบบ UI
+- [TJC Instruction Set](https://tjc.com.cn/document) — เอกสารคำสั่งทั้งหมด
+- `User/Examples/16_TJC_HMI_Display/TJC_T1_Design_Guide.md` — คู่มือออกแบบ UI สำหรับ T1 series
+- `User/Examples/16_TJC_HMI_Display/` — ตัวอย่างโค้ด MCU ทุกรูปแบบ
+
 ## หมายเหตุ
 
 - ทุกคำสั่งต้องจบด้วย `0xFF 0xFF 0xFF` — library จัดการให้อัตโนมัติ
 - **`TJC_ProcessResponse()` ต้องเรียกสม่ำเสมอ** มิฉะนั้น RX buffer จะเต็มและข้อมูลหาย
 - `TJC_RegisterCommandCallback()` ต้องลงทะเบียนเสมอ ถ้าต้องการรับคำสั่งจาก TJC — ถ้าไม่ลงทะเบียน คำสั่งที่ TJC ส่งมาจะถูกทิ้งไปเงียบ ๆ
-- ถ้า Baud rate ไม่ตรง TJC จะตอบ `TJC_ERR_INVALID_BAUDRATE (0x11)`
+- Baud rate ที่รองรับ: `BAUD_9600`, `BAUD_19200`, `BAUD_38400`, `BAUD_57600`, `BAUD_115200`, `BAUD_230400`, `BAUD_460800`
 - `TJC_PACKET_MAX_SIZE` ควรตั้งให้ใหญ่กว่าความยาว string สูงสุดที่ส่ง+4 เสมอ
 - Numeric data ที่ TJC ส่งคือ **little-endian** 32-bit — library แปลงให้อัตโนมัติแล้ว

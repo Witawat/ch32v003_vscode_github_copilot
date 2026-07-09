@@ -20,7 +20,7 @@
 extern "C" {
 #endif
 
-#include "ch32v00x.h"
+#include "SimpleHAL.h"
 
 /* ========== Configuration ========== */
 
@@ -32,21 +32,7 @@ extern "C" {
 /** @brief ขนาด packet สูงสุดที่ยอมรับได้ก่อน reset buffer (string + header + terminator) */
 #define TJC_PACKET_MAX_SIZE  (TJC_MAX_STRING_LENGTH + 4)
 
-/** @brief Baud rate สูงสุดที่อนุญาต (ป้องกันการตั้งค่าที่ไม่เสถียร) */
-#ifndef TJC_MAX_BAUDRATE
-#define TJC_MAX_BAUDRATE 115200
-#endif
-
 /* ========== Enumerations ========== */
-
-/**
- * @brief UART Pin Configuration (ตาม CH32V003 Datasheet)
- */
-typedef enum {
-  TJC_PINS_DEFAULT = 0, // Default: TX=PD5, RX=PD6
-  TJC_PINS_REMAP1 = 1,  // Remap1:  TX=PD0, RX=PD1
-  TJC_PINS_REMAP2 = 2   // Remap2:  TX=PD6, RX=PD5
-} TJC_PinConfig;
 
 /**
  * @brief TJC Error Codes (ตามเอกสาร TJC - bkcmd ไม่เป็น 0: รูปแบบการแจ้งเตือน)
@@ -151,11 +137,11 @@ typedef void (*TJC_CommandCallback_t)(TJC_ReceivedCommand_t *cmd);
 
 /**
  * @brief เริ่มต้นการใช้งาน TJC HMI
- * @param baudrate ความเร็วการสื่อสาร (เช่น 9600, 115200)
- * @param pin_config การตั้งค่า pin (TJC_PINS_DEFAULT, TJC_PINS_REMAP1,
- * TJC_PINS_REMAP2)
+ * @param baudrate ความเร็วการสื่อสาร (BAUD_9600, BAUD_115200, ฯลฯ)
+ * @param pin_config การตั้งค่า pin (USART_PINS_DEFAULT, USART_PINS_REMAP1,
+ * USART_PINS_REMAP2)
  */
-void TJC_Init(uint32_t baudrate, TJC_PinConfig pin_config);
+void TJC_Init(USART_BaudRate baudrate, USART_PinConfig pin_config);
 
 /**
  * @brief ส่งคำสั่งแบบธรรมดาไปยัง TJC

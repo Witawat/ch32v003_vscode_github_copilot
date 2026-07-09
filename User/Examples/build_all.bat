@@ -26,7 +26,7 @@ set GCC="%TC_BIN%\%GCC_PREFIX%gcc.exe"
 
 set ARCH=-march=rv32ecxw -mabi=ilp32e
 set CFLAGS=%ARCH% -msmall-data-limit=0 -msave-restore -Os -fmessage-length=0 -fsigned-char -ffunction-sections -fdata-sections -fno-common -Wunused -Wuninitialized -g
-set INCLUDES=-I"%PROJECT_ROOT%\Debug" -I"%PROJECT_ROOT%\Core" -I"%PROJECT_ROOT%\User" -I"%PROJECT_ROOT%\Peripheral\inc" -I"%PROJECT_ROOT%\User\SimpleHAL"
+set INCLUDES=-I"%PROJECT_ROOT%\Debug" -I"%PROJECT_ROOT%\Core" -I"%PROJECT_ROOT%\User" -I"%PROJECT_ROOT%\Peripheral\inc" -I"%PROJECT_ROOT%\User\SimpleHAL" -I"%PROJECT_ROOT%\User\Lib\TJC"
 
 echo [OK] Compiler: %TC_BIN%\%GCC_PREFIX%gcc.exe
 echo.
