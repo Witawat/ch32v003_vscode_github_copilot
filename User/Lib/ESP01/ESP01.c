@@ -9,6 +9,19 @@
 
 /* ========== Private ========== */
 
+static USART_BaudRate _validate_baud(uint32_t baud) {
+    switch (baud) {
+        case 9600:   return BAUD_9600;
+        case 19200:  return BAUD_19200;
+        case 38400:  return BAUD_38400;
+        case 57600:  return BAUD_57600;
+        case 115200: return BAUD_115200;
+        case 230400: return BAUD_230400;
+        case 460800: return BAUD_460800;
+        default:     return BAUD_115200;  // fallback to safe default
+    }
+}
+
 static void _uart_send_str(const char* s) {
     while (*s) {
         USART_WriteByte((uint8_t)*s++);
@@ -141,7 +154,7 @@ ESP01_Status ESP01_Init(ESP01_Instance* esp, uint32_t baudrate, USART_PinConfig 
     esp->retry = ESP01_DEFAULT_RETRY;
     esp->initialized = 0;
 
-    USART_SimpleInit((USART_BaudRate)baudrate, pin_config);
+    USART_SimpleInit(_validate_baud(baudrate), pin_config);
     Delay_Ms(100);
 
     esp->initialized = 1;
@@ -541,7 +554,7 @@ ESP01_Status ESP01_SetBaud(ESP01_Instance* esp, uint32_t new_baud) {
 
     esp->baudrate = new_baud;
     Delay_Ms(50);
-    USART_SimpleInit((USART_BaudRate)new_baud, esp->pin_config);
+    USART_SimpleInit(_validate_baud(new_baud), esp->pin_config);
     Delay_Ms(100);
 
     /* ยืนยัน */

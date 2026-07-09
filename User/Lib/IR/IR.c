@@ -26,8 +26,9 @@ static struct {
 
 // Transmitter state
 static struct {
-    uint8_t pin;        // GPIO pin สำหรับ transmitter
-    bool    initialized; // Transmitter ถูกเริ่มต้นแล้วหรือไม่
+    uint8_t       pin;           // GPIO pin สำหรับ transmitter
+    PWM_Channel   pwm_ch;        // PWM channel ที่แมปกับ pin
+    bool          initialized;   // Transmitter ถูกเริ่มต้นแล้วหรือไม่
 } ir_tx;
 
 /* ========== Private Function Prototypes ========== */
@@ -171,24 +172,34 @@ void IR_TransmitterInit(uint8_t pin) {
     ir_tx.pin = pin;
     ir_tx.initialized = true;
     
-    // ตั้งค่า PWM สำหรับ 38kHz carrier
-    // Note: SimplePWM uses channel enum, not pin directly
-    // For now, we'll use PWM1_CH1 (PD2) as default
-    // TODO: Map pin to appropriate PWM channel
-    PWM_Channel pwm_ch = PWM1_CH1;  // Default channel
+    // แมป GPIO pin เป็น PWM channel
+    // SimplePWM: PWM1_CH1=PD2, PWM1_CH2=PA1, PWM1_CH3=PC3, PWM1_CH4=PC4
+    //           PWM2_CH1=PD4, PWM2_CH2=PD3, PWM2_CH3=PC0, PWM2_CH4=PD7
+    switch (pin) {
+        case PD2: ir_tx.pwm_ch = PWM1_CH1; break;
+        case PA1: ir_tx.pwm_ch = PWM1_CH2; break;
+        case PC3: ir_tx.pwm_ch = PWM1_CH3; break;
+        case PC4: ir_tx.pwm_ch = PWM1_CH4; break;
+        case PD4: ir_tx.pwm_ch = PWM2_CH1; break;
+        case PD3: ir_tx.pwm_ch = PWM2_CH2; break;
+        case PC0: ir_tx.pwm_ch = PWM2_CH3; break;
+        case PD7: ir_tx.pwm_ch = PWM2_CH4; break;
+        default:  ir_tx.pwm_ch = PWM1_CH1; break;  // fallback
+    }
     
-    PWM_Init(pwm_ch, IR_CARRIER_FREQ);
-    PWM_SetDutyCycle(pwm_ch, 33);  // Duty cycle 33%
-    PWM_Stop(pwm_ch);  // ปิด carrier ก่อน
+    // ตั้งค่า PWM สำหรับ 38kHz carrier
+    PWM_Init(ir_tx.pwm_ch, IR_CARRIER_FREQ);
+    PWM_SetDutyCycle(ir_tx.pwm_ch, 33);  // Duty cycle 33%
+    PWM_Stop(ir_tx.pwm_ch);  // ปิด carrier ก่อน
 }
 
 /**
  * @brief ส่ง mark (carrier on)
  */
 static void IR_Mark(uint16_t us) {
-    PWM_Start(ir_tx.pin);
+    PWM_Start(ir_tx.pwm_ch);
     Delay_Us(us);
-    PWM_Stop(ir_tx.pin);
+    PWM_Stop(ir_tx.pwm_ch);
 }
 
 /**

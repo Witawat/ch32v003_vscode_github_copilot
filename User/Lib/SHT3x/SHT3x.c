@@ -106,7 +106,7 @@ SHT3x_Status SHT3x_Read(SHT3x_Instance* sht, float* temp, float* hum) {
 SHT3x_Status SHT3x_Reset(SHT3x_Instance* sht) {
     if (sht == NULL || !sht->initialized) return SHT3X_ERROR_PARAM;
     uint8_t cmd[2] = {_CMD_SOFT_RESET[0], _CMD_SOFT_RESET[1]};
-    if (I2C_Write(sht->i2c_addr, cmd, 2) != 0) return SHT3X_ERROR_I2C;
+    if (I2C_Write(sht->i2c_addr, cmd, 2) != I2C_OK) return SHT3X_ERROR_I2C;
     Delay_Ms(15);
     return SHT3X_OK;
 }
@@ -116,10 +116,10 @@ SHT3x_Status SHT3x_GetStatus(SHT3x_Instance* sht, uint16_t* status) {
         return SHT3X_ERROR_PARAM;
 
     uint8_t cmd[2] = {_CMD_READ_STATUS[0], _CMD_READ_STATUS[1]};
-    if (I2C_Write(sht->i2c_addr, cmd, 2) != 0) return SHT3X_ERROR_I2C;
+    if (I2C_Write(sht->i2c_addr, cmd, 2) != I2C_OK) return SHT3X_ERROR_I2C;
 
     uint8_t buf[3];
-    if (I2C_Read(sht->i2c_addr, buf, 3) != 0) return SHT3X_ERROR_I2C;
+    if (I2C_Read(sht->i2c_addr, buf, 3) != I2C_OK) return SHT3X_ERROR_I2C;
 
     if (_crc8(buf, 2) != buf[2]) return SHT3X_ERROR_CRC;
     *status = ((uint16_t)buf[0] << 8) | buf[1];

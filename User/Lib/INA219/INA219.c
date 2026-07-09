@@ -10,13 +10,13 @@
 
 static INA219_Status _write_reg16(INA219_Instance* ina, uint8_t reg, uint16_t val) {
     uint8_t buf[3] = {reg, (uint8_t)(val >> 8), (uint8_t)(val & 0xFF)};
-    return (I2C_Write(ina->i2c_addr, buf, 3) == 0) ? INA219_OK : INA219_ERROR_I2C;
+    return (I2C_Write(ina->i2c_addr, buf, 3) == I2C_OK) ? INA219_OK : INA219_ERROR_I2C;
 }
 
 static INA219_Status _read_reg16(INA219_Instance* ina, uint8_t reg, uint16_t* val) {
     uint8_t buf[2];
-    if (I2C_Write(ina->i2c_addr, &reg, 1) != 0) return INA219_ERROR_I2C;
-    if (I2C_Read(ina->i2c_addr, buf, 2) != 0)  return INA219_ERROR_I2C;
+    if (I2C_Write(ina->i2c_addr, &reg, 1) != I2C_OK) return INA219_ERROR_I2C;
+    if (I2C_Read(ina->i2c_addr, buf, 2) != I2C_OK)  return INA219_ERROR_I2C;
     *val = ((uint16_t)buf[0] << 8) | buf[1];
     return INA219_OK;
 }

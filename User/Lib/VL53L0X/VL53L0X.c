@@ -10,12 +10,12 @@
 
 static VL53L0X_Status _write(VL53L0X_Instance* tof, uint8_t reg, uint8_t val) {
     uint8_t buf[2] = {reg, val};
-    return (I2C_Write(tof->i2c_addr, buf, 2) == 0) ? VL53L0X_OK : VL53L0X_ERROR_I2C;
+    return (I2C_Write(tof->i2c_addr, buf, 2) == I2C_OK) ? VL53L0X_OK : VL53L0X_ERROR_I2C;
 }
 
 static VL53L0X_Status _write16(VL53L0X_Instance* tof, uint8_t reg, uint16_t val) {
     uint8_t buf[3] = {reg, (uint8_t)(val >> 8), (uint8_t)(val & 0xFF)};
-    return (I2C_Write(tof->i2c_addr, buf, 3) == 0) ? VL53L0X_OK : VL53L0X_ERROR_I2C;
+    return (I2C_Write(tof->i2c_addr, buf, 3) == I2C_OK) ? VL53L0X_OK : VL53L0X_ERROR_I2C;
 }
 
 static uint8_t _read(VL53L0X_Instance* tof, uint8_t reg) {

@@ -26,13 +26,13 @@ static const uint16_t _conv_delay[] = {
 
 static ADS1115_Status _write_reg(ADS1115_Instance* ads, uint8_t reg, uint16_t val) {
     uint8_t buf[3] = {reg, (uint8_t)(val >> 8), (uint8_t)(val & 0xFF)};
-    return (I2C_Write(ads->i2c_addr, buf, 3) == 0) ? ADS1115_OK : ADS1115_ERROR_I2C;
+    return (I2C_Write(ads->i2c_addr, buf, 3) == I2C_OK) ? ADS1115_OK : ADS1115_ERROR_I2C;
 }
 
 static ADS1115_Status _read_reg(ADS1115_Instance* ads, uint8_t reg, uint16_t* val) {
     uint8_t buf[2];
-    if (I2C_Write(ads->i2c_addr, &reg, 1) != 0) return ADS1115_ERROR_I2C;
-    if (I2C_Read(ads->i2c_addr, buf, 2) != 0)  return ADS1115_ERROR_I2C;
+    if (I2C_Write(ads->i2c_addr, &reg, 1) != I2C_OK) return ADS1115_ERROR_I2C;
+    if (I2C_Read(ads->i2c_addr, buf, 2) != I2C_OK)  return ADS1115_ERROR_I2C;
     *val = ((uint16_t)buf[0] << 8) | buf[1];
     return ADS1115_OK;
 }

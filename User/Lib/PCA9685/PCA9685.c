@@ -9,12 +9,12 @@
 
 static PCA9685_Status _write_reg(PCA9685_Instance* pca, uint8_t reg, uint8_t val) {
     uint8_t buf[2] = {reg, val};
-    return (I2C_Write(pca->i2c_addr, buf, 2) == 0) ? PCA9685_OK : PCA9685_ERROR_I2C;
+    return (I2C_Write(pca->i2c_addr, buf, 2) == I2C_OK) ? PCA9685_OK : PCA9685_ERROR_I2C;
 }
 
 static PCA9685_Status _read_reg(PCA9685_Instance* pca, uint8_t reg, uint8_t* val) {
-    if (I2C_Write(pca->i2c_addr, &reg, 1) != 0) return PCA9685_ERROR_I2C;
-    if (I2C_Read(pca->i2c_addr, val, 1) != 0)  return PCA9685_ERROR_I2C;
+    if (I2C_Write(pca->i2c_addr, &reg, 1) != I2C_OK) return PCA9685_ERROR_I2C;
+    if (I2C_Read(pca->i2c_addr, val, 1) != I2C_OK)  return PCA9685_ERROR_I2C;
     return PCA9685_OK;
 }
 
@@ -79,7 +79,7 @@ PCA9685_Status PCA9685_SetPWM(PCA9685_Instance* pca, uint8_t channel,
     buf[2] = (uint8_t)(on >> 8);
     buf[3] = (uint8_t)(off & 0xFF);
     buf[4] = (uint8_t)(off >> 8);
-    return (I2C_Write(pca->i2c_addr, buf, 5) == 0) ? PCA9685_OK : PCA9685_ERROR_I2C;
+    return (I2C_Write(pca->i2c_addr, buf, 5) == I2C_OK) ? PCA9685_OK : PCA9685_ERROR_I2C;
 }
 
 PCA9685_Status PCA9685_SetDuty(PCA9685_Instance* pca, uint8_t channel, float duty) {
@@ -117,7 +117,7 @@ PCA9685_Status PCA9685_Off(PCA9685_Instance* pca, uint8_t channel) {
     if (channel == 255) {
         /* ทุก channel */
         uint8_t buf[5] = {PCA9685_REG_ALL_OFF_L, 0x00, 0x00, 0x00, 0x10};
-        return (I2C_Write(pca->i2c_addr, buf, 5) == 0) ? PCA9685_OK : PCA9685_ERROR_I2C;
+        return (I2C_Write(pca->i2c_addr, buf, 5) == I2C_OK) ? PCA9685_OK : PCA9685_ERROR_I2C;
     }
     return PCA9685_SetPWM(pca, channel, 0, 0x1000);  /* bit 12 = full OFF */
 }

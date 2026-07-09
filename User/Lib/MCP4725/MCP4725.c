@@ -14,7 +14,7 @@ MCP4725_Status MCP4725_Init(MCP4725_Instance* dac, uint8_t addr) {
 
     /* ทดสอบ I2C connection: ส่งค่า 0 */
     uint8_t buf[2] = {0x00, 0x00};
-    if (I2C_Write(dac->i2c_addr, buf, 2) != 0)
+    if (I2C_Write(dac->i2c_addr, buf, 2) != I2C_OK)
         return MCP4725_ERROR_I2C;
 
     dac->initialized = 1;
@@ -33,7 +33,7 @@ MCP4725_Status MCP4725_SetRaw(MCP4725_Instance* dac, uint16_t value) {
     buf[0] = (uint8_t)((value >> 8) & 0x0F);  /* D11-D8, PD=00 */
     buf[1] = (uint8_t)(value & 0xFF);           /* D7-D0 */
 
-    if (I2C_Write(dac->i2c_addr, buf, 2) != 0)
+    if (I2C_Write(dac->i2c_addr, buf, 2) != I2C_OK)
         return MCP4725_ERROR_I2C;
 
     dac->value = value;
@@ -64,7 +64,7 @@ MCP4725_Status MCP4725_SetRawEEPROM(MCP4725_Instance* dac, uint16_t value) {
     buf[1] = (uint8_t)((value >> 4) & 0xFF);
     buf[2] = (uint8_t)((value & 0x0F) << 4);
 
-    if (I2C_Write(dac->i2c_addr, buf, 3) != 0)
+    if (I2C_Write(dac->i2c_addr, buf, 3) != I2C_OK)
         return MCP4725_ERROR_I2C;
 
     dac->value = value;
@@ -78,7 +78,7 @@ MCP4725_Status MCP4725_GetRaw(MCP4725_Instance* dac, uint16_t* value) {
 
     /* อ่าน 3 bytes: status, DAC MSB, DAC LSB */
     uint8_t buf[3] = {0, 0, 0};
-    if (I2C_Read(dac->i2c_addr, buf, 3) != 0)
+    if (I2C_Read(dac->i2c_addr, buf, 3) != I2C_OK)
         return MCP4725_ERROR_I2C;
 
     /* Byte 1: D11-D4, Byte 2: D3-D0 (upper nibble) */
@@ -94,7 +94,7 @@ MCP4725_Status MCP4725_SetPowerDown(MCP4725_Instance* dac, MCP4725_PowerDown pd)
     buf[0] = (uint8_t)(((uint8_t)pd & 0x03) << 4) | (uint8_t)((dac->value >> 8) & 0x0F);
     buf[1] = (uint8_t)(dac->value & 0xFF);
 
-    if (I2C_Write(dac->i2c_addr, buf, 2) != 0)
+    if (I2C_Write(dac->i2c_addr, buf, 2) != I2C_OK)
         return MCP4725_ERROR_I2C;
 
     return MCP4725_OK;

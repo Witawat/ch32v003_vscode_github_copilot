@@ -5,6 +5,21 @@
 
 #include "HC05.h"
 
+/* ========== Private ========== */
+
+static USART_BaudRate _validate_baud(uint32_t baud) {
+    switch (baud) {
+        case 9600:   return BAUD_9600;
+        case 19200:  return BAUD_19200;
+        case 38400:  return BAUD_38400;
+        case 57600:  return BAUD_57600;
+        case 115200: return BAUD_115200;
+        case 230400: return BAUD_230400;
+        case 460800: return BAUD_460800;
+        default:     return BAUD_9600;  // HC-05 default
+    }
+}
+
 /* ========== Public ========== */
 
 HC05_Status HC05_Init(HC05_Instance* bt, uint32_t baudrate) {
@@ -16,7 +31,7 @@ HC05_Status HC05_Init(HC05_Instance* bt, uint32_t baudrate) {
     bt->initialized = 0;
 
     /* Init USART ผ่าน SimpleUSART */
-    USART_SimpleInit((USART_BaudRate)baudrate, USART_PINS_DEFAULT);
+    USART_SimpleInit(_validate_baud(baudrate), USART_PINS_DEFAULT);
 
     bt->initialized = 1;
     return HC05_OK;
