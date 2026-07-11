@@ -11,7 +11,7 @@ set OPENOCD_CFG=%OPENOCD_DIR%\wch-riscv.cfg
 
 set WORKSPACE=%~dp0..
 for %%I in ("%WORKSPACE%") do set "WORKSPACE=%%~fI"
-set ELF_FILE=%WORKSPACE%output\CH32V003.elf
+set ELF_FILE=%WORKSPACE%\output\CH32V003.elf
 
 echo ============================================================
 echo  CH32V003 Upload via WCH-Link
