@@ -429,9 +429,9 @@ int main(void) {
 </section>
 
 <section>
-<h2>ex07_PIR_Amplifier — ขยายสัญญาณ PIR RE200B ด้วย OPAMP Non-Inverting</h2>
+<h2>ex07_PIR_Amplifier — ขยายสัญญาณ PIR RE200B/D202S ด้วย OPAMP Non-Inverting</h2>
 <h3>📖 แนวคิด</h3>
-<p>ใช้ OPAMP1 ในโหมด Non-Inverting ขยายสัญญาณขนาดเล็กจาก pyroelectric sensor <strong>RE200B</strong> (~0.5–2mV peak) ก่อนเข้า ADC — RE200B เป็น Dual Element pyroelectric sensor ที่ต้องมีวงจรขยายสัญญาณภายนอก (ต่างจาก HC-SR501 ที่มี comparator ในตัว)</p>
+<p>ใช้ OPAMP1 ในโหมด Non-Inverting ขยายสัญญาณขนาดเล็กจาก pyroelectric sensor <strong>RE200B</strong> หรือ <strong>D202S</strong> (~0.5–2mV peak) ก่อนเข้า ADC — ทั้งคู่เป็น Dual Element pyroelectric sensor ที่ต้องมีวงจรขยายสัญญาณภายนอก (ต่างจาก HC-SR501 ที่มี comparator ในตัว) — D202S ของ Murata ใช้แทน RE200B ได้ โดยไม่ต้องปรับเปลี่ยนวงจร</p>
 
 <h3>🔌 วงจร</h3>
 <pre class="ascii-circuit">

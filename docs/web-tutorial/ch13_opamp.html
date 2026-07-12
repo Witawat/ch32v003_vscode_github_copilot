@@ -246,8 +246,8 @@ int main(void)
 </section>
 
 <section>
-    <h2>🛠️ สร้าง Product: ขยายสัญญาณ PIR Motion Sensor (RE200B)</h2>
-    <p>ใช้ OPAMP ในโหมด Non-Inverting ขยายสัญญาณขนาดเล็กจาก pyroelectric element <strong>RE200B</strong> (~0.5–2mV เมื่อมีการเคลื่อนไหว) ให้ ADC อ่านค่าได้</p>
+    <h2>🛠️ สร้าง Product: ขยายสัญญาณ PIR Motion Sensor (RE200B / D202S)</h2>
+    <p>ใช้ OPAMP ในโหมด Non-Inverting ขยายสัญญาณขนาดเล็กจาก pyroelectric element <strong>RE200B</strong> หรือ <strong>D202S</strong> (~0.5–2mV เมื่อมีการเคลื่อนไหว) ให้ ADC อ่านค่าได้</p>
 
     <pre class="ascii-circuit">
     RE200B Pyroelectric Element — ต้องขยายสัญญาณด้วย OPAMP
@@ -299,8 +299,9 @@ int main(void)
       </tbody>
     </table>
 
-    <p><strong>RE200B</strong> เป็น pyroelectric element แบบ Dual Element — มี 2 พิน (Drain/Source) — ให้สัญญาณ differential เมื่อมีความร้อนเคลื่อนที่ผ่าน — สัญญาณออกเป็น AC (~0.5–2mV peak) ที่ 0.1–10Hz — <strong>ต้องใช้ OPAMP ขยายก่อน ADC จึงจะอ่านค่าได้</strong></p>
-    <p><strong>Signal Chain:</strong> RE200B → R_load 10kΩ → C 1µF DC block → HPF 0.16Hz (R 1MΩ+C 1µF) → OPAMP Non-Inverting ×101 → ADC ภายใน → ประมวลผล</p>
+    <p><strong>RE200B</strong> และ <strong>D202S</strong> เป็น pyroelectric element แบบ Dual Element — มี 2 พิน (Drain/Source) — ให้สัญญาณ differential เมื่อมีความร้อนเคลื่อนที่ผ่าน — สัญญาณออกเป็น AC (~0.5–2mV peak) ที่ 0.1–10Hz — <strong>ต้องใช้ OPAMP ขยายก่อน ADC จึงจะอ่านค่าได้</strong></p>
+    <p><strong>Signal Chain:</strong> RE200B/D202S → R_load 10kΩ → C 1µF DC block → HPF 0.16Hz (R 1MΩ+C 1µF) → OPAMP Non-Inverting ×101 → ADC ภายใน → ประมวลผล</p>
+    <p><strong>เทียบ D202S กับ RE200B:</strong> D202S (หรือ D203S) ของ Murata มีคุณสมบัติทางไฟฟ้าใกล้เคียง RE200B — ใช้แทนกันได้ — สเปกต่างกันเล็กน้อยในค่า responsivity (RE200B ~3.5kV/W, D202S ~4.0kV/W) — ไม่ต้องปรับวงจร — อาจต้องปรับ threshold ใน code เล็กน้อย</p>
 
     <h3>💻 โค้ดอ่านสัญญาณ PIR ผ่าน OPAMP</h3>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
