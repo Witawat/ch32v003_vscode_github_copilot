@@ -246,6 +246,164 @@ int main(void)
 </section>
 
 <section>
+    <h2>🛠️ สร้าง Product: ขยายสัญญาณ PIR Motion Sensor (RE200B)</h2>
+    <p>ใช้ OPAMP ในโหมด Non-Inverting ขยายสัญญาณขนาดเล็กจาก pyroelectric element <strong>RE200B</strong> (~0.5–2mV เมื่อมีการเคลื่อนไหว) ให้ ADC อ่านค่าได้</p>
+
+    <pre class="ascii-circuit">
+    RE200B Pyroelectric Element — ต้องขยายสัญญาณด้วย OPAMP
+    ┌──────────────────────────────────────────────────────────┐
+    │                                                           │
+    │  RE200B (มองจากด้านบน — Dual Element)                     │
+    │     ┌─────┐                                               │
+    │     │  ○  │  Pin 1 (Drain/S) ──── GND                     │
+    │     │ ○○  │  Pin 2 (Source/D) ──── R_load=10kΩ ── VDD/2  │
+    │     └─────┘                       │                       │
+    │                                   ├── C=1µF (DC block)    │
+    │                                   │     │                  │
+    │                                   │  R=1MΩ ── GND         │
+    │                                   │     │                  │
+    │                                   │  OPAMP_IN+ (PD5)      │
+    │                                   │     │                  │
+    │  CH32V003                          │     │                 │
+    │  ┌──────────────────────────────┐ │     │                 │
+    │  │ OPAMP1 Non-Inverting         │ │     │                 │
+    │  │ Gain = 1 + Rf/Rg             │ │     │                 │
+    │  │                              │ │     │                 │
+    │  │ PD5(IN+) ── สัญญาณ AC-coupled │ │     │                 │
+    │  │ PA6(IN-) ─┬── Rf=1MΩ ── PA5(OUT)─┘     │                 │
+    │  │           │                             │                 │
+    │  │           └── Rg=10kΩ ── GND            │                 │
+    │  │                              │                           │
+    │  │ PA5(OUT) ──→ ADC (ภายใน)    │                           │
+    │  └──────────────────────────────┘                           │
+    │                                                           │
+    │  Gain = 1 + 1MΩ/10kΩ = 101x                               │
+    │  Input 1mV → Output ~100mV — ADC อ่านได้สบาย               │
+    │                                                           │
+    │  ⚠️ VDD/2 bias: ใช้ R divider 10kΩ+10kΩ จาก 3.3V → 1.65V  │
+    │  หรือใช้ internal DAC / PWM+filter ถ้ามี                     │
+    └──────────────────────────────────────────────────────────┘
+    </pre>
+
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>PD5 (OPAMP1_IN+)</td><td>←</td><td>RE200B (ผ่าน C 1µF + R 1MΩ)</td><td>Pin 2 (Source)</td><td>สัญญาณ AC-coupled, bias VDD/2</td></tr>
+        <tr><td>PA6 (OPAMP1_IN-)</td><td>↔</td><td>Rf=1MΩ → PA5(OUT), Rg=10kΩ → GND</td><td>—</td><td>Non-Inverting feedback</td></tr>
+        <tr><td>PA5 (OPAMP1_OUT)</td><td>→</td><td>ADC ภายใน</td><td>—</td><td>Gain=101x, ต่อ ADC อัตโนมัติ</td></tr>
+        <tr><td>RE200B Pin 1</td><td>→</td><td>GND</td><td>Drain</td><td>ขาต่อกราวด์ของ pyroelectric element</td></tr>
+        <tr><td>RE200B Pin 2</td><td>→</td><td>R_load=10kΩ → VDD/2 (1.65V)</td><td>Source</td><td>DC bias จ่ายให้ RE200B</td></tr>
+        <tr><td>3.3V</td><td>→</td><td>R divider 10k+10k → VDD/2</td><td>—</td><td>สร้าง 1.65V สำหรับ bias RE200B และ OPAMP</td></tr>
+      </tbody>
+    </table>
+
+    <p><strong>RE200B</strong> เป็น pyroelectric element แบบ Dual Element — มี 2 พิน (Drain/Source) — ให้สัญญาณ differential เมื่อมีความร้อนเคลื่อนที่ผ่าน — สัญญาณออกเป็น AC (~0.5–2mV peak) ที่ 0.1–10Hz — <strong>ต้องใช้ OPAMP ขยายก่อน ADC จึงจะอ่านค่าได้</strong></p>
+    <p><strong>Signal Chain:</strong> RE200B → R_load 10kΩ → C 1µF DC block → HPF 0.16Hz (R 1MΩ+C 1µF) → OPAMP Non-Inverting ×101 → ADC ภายใน → ประมวลผล</p>
+
+    <h3>💻 โค้ดอ่านสัญญาณ PIR ผ่าน OPAMP</h3>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+// ค่า threshold สำหรับตรวจจับ motion
+// RE200B + OPAMP gain 101x → output ~50-200mV peak
+#define MOTION_THRESHOLD_MV  30   // mV เปลี่ยนแปลง
+
+void setup_bias(void) {
+    // สร้าง VDD/2 = 1.65V สำหรับ bias RE200B
+    // ใช้ PWM + RC filter หรือ R divider ภายนอก
+    pinMode(PC1, PIN_MODE_OUTPUT);
+    digitalWrite(PC1, HIGH);  // ใช้ digital output + R divider
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    ADC_SimpleInit();
+
+    // OPAMP Non-Inverting — gain = 1 + Rf/Rg
+    OPAMP_SimpleInit(OPAMP1, OPAMP_MODE_NON_INVERTING);
+    OPAMP_Enable(OPAMP1);
+
+    USART_Print("PIR RE200B Amplifier Ready\r\n");
+
+    uint16_t last_raw = 0;
+    uint16_t baseline = 2048;  // ADC 12-bit, VDD/2 ≈ 2048
+    uint8_t motion = 0;
+
+    while(1) {
+        // อ่าน ADC จาก OPAMP output
+        uint16_t raw = ADC_Read(ADC_CH_PA5);
+        float mv = (float)raw * 3300.0f / 4095.0f;
+
+        if(last_raw > 0) {
+            int16_t diff = (int16_t)raw - (int16_t)last_raw;
+            int16_t diff_mv = (int16_t)(mv - (last_raw * 3300.0f / 4095.0f));
+
+            if(abs(diff) > (MOTION_THRESHOLD_MV * 4095 / 3300)) {
+                if(!motion) {
+                    motion = 1;
+                    USART_Print("🔥 Motion detected! (");
+                    USART_PrintNum(diff_mv);
+                    USART_Print(" mV change)\r\n");
+                }
+            } else {
+                motion = 0;
+            }
+        }
+
+        USART_Print("ADC: ");
+        USART_PrintNum(raw);
+        USART_Print(" (");
+        USART_PrintFloat(mv, 1);
+        USART_Print(" mV)");
+        USART_Print(motion ? " 🔥\r\n" : "\r\n");
+
+        last_raw = raw;
+        Delay_Ms(50);  // sample 20Hz
+    }
+}</code></pre>
+    <p><strong>หลักการ:</strong> ADC อ่านค่า amplified signal ทุก 50ms — เปรียบเทียบกับค่าก่อนหน้า — ถ้าเปลี่ยนแปลงเกิน threshold → มี motion — RE200B ให้สัญญาณ AC เมื่อมีการเคลื่อนไหวเท่านั้น (ถ้านั่งนิ่ง output จะกลับมาที่ baseline)</p>
+    <p><strong>ปรับปรุงเพิ่มเติม:</strong> ใช้ค่าเฉลี่ย running average ลด noise — ใช้ HPF digital cutoff 0.5Hz — ปรับ threshold ตามสภาพแวดล้อมอัตโนมัติ (adaptive threshold)</p>
+</section>
+
+<section>
+    <h2>🛠️ สร้าง Product: เครื่องวัดอุณหภูมิแบบไม่สัมผัสด้วย Thermopile + OPAMP</h2>
+    <p>ใช้ OPAMP PGA + thermopile sensor (เช่น <strong>MLX90614</strong> หรือ <strong>TPS-334</strong>) — ขยายสัญญาณ voltage ขนาดเล็ก (~µV/°C) ก่อนเข้า ADC — วัดอุณหภูมิวัตถุระยะไกล</p>
+
+    <pre class="ascii-circuit">
+    Thermopile + OPAMP PGA
+    ┌──────────────────────────────────┐
+    │  Thermopile (TPS-334)            │
+    │  ┌──────────┐                    │
+    │  │ +OUT ────┤─── OPAMP_IN+ (PD5) │
+    │  │ -OUT ────┤─── GND             │
+    │  │ VCC ─────┤─── 3.3V            │
+    │  └──────────┘                    │
+    │                                  │
+    │  OPAMP = PGA Gain 16x            │
+    │  Output → ADC                    │
+    │                                  │
+    │  Resolution: ~2.5µV/step         │
+    │  (3.3V / 4095 / 16)              │
+    └──────────────────────────────────┘
+    </pre>
+
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>PD5 (OPAMP1_IN+)</td><td>←</td><td>Thermopile +OUT</td><td>—</td><td>สัญญาณ ~10-50µV/°C</td></tr>
+        <tr><td>PA5 (OPAMP1_OUT)</td><td>→</td><td>ADC ภายใน</td><td>—</td><td>PGA gain=16 → ~0.16-0.8mV/°C</td></tr>
+      </tbody>
+    </table>
+    <p><strong>Thermopile</strong> วัดความแตกต่างของอุณหภูมิระหว่างวัตถุกับ ambient — สร้างแรงดันตามความต่างอุณหภูมิ (Seebeck effect) — สัญญาณเล็กมาก (~10-50µV/°C) — OPAMP PGA ขยาย 16x → ADC อ่านค่าความต่างได้ละเอียดถึง ~2.5µV/step — ใช้สำหรับวัดอุณหภูมิแบบไม่สัมผัส (ear thermometer, temperature gun)</p>
+</section>
+
+<section>
     <h2>✏️ ลองทำดู</h2>
     <ol>
         <li>เปลี่ยนจาก Follower เป็น PGA gain 8x — ใช้กับเซ็นเซอร์ที่ให้สัญญาณอ่อน (เช่น Thermocouple type-K ~40µV/°C)</li>
