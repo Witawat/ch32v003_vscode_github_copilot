@@ -61,6 +61,20 @@ flowchart TD
     │  // ตื่นอัตโนมัติ → ทำงาน → หลับต่อ           │
     └────────────────────────────────────────────┘
     </pre>
+
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>VDD</td><td>→</td><td>CR2032 → LDO 3.3V</td><td>VCC</td><td>หรือ ADC_GetVDD() วัดแบต</td></tr>
+        <tr><td>GND</td><td>→</td><td>GND</td><td>GND</td><td></td></tr>
+        <tr><td>PC0</td><td>→</td><td>LED</td><td>Anode(+)</td><td>กระพริบเมื่อตื่นจาก Sleep</td></tr>
+        <tr><td>PA1</td><td>←</td><td>ปุ่มกด → GND</td><td>ขาใดขาหนึ่ง</td><td>Wake from Sleep (Interrupt)</td></tr>
+        <tr><td>PD5</td><td>→</td><td>Sensor ภายนอก</td><td>Signal</td><td>อ่านค่าสเตตัส/ข้อมูล</td></tr>
+      </tbody>
+    </table>
+
     <p><strong>สำคัญ:</strong> Standby mode รีเซ็ต MCU! — ตัวแปร RAM หายหมด — ต้องเก็บข้อมูลสำคัญใน Flash/BKP register ก่อนเข้า Standby</p>
 </section>
 

@@ -37,7 +37,19 @@ flowchart TD
     │ PC0  ─────────────── CLK      │
     │ PC1  ─────────────── DIO      │
     └────────────────────────────────┘
-</pre></section>
+    </pre>
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>PC0</td><td>→</td><td>TM1637</td><td>CLK</td><td>Proprietary 2-wire protocol</td></tr>
+        <tr><td>PC1</td><td>↔</td><td>TM1637</td><td>DIO</td><td>Data bidirectional</td></tr>
+        <tr><td>3.3V</td><td>→</td><td>TM1637</td><td>VCC</td><td></td></tr>
+        <tr><td>GND</td><td>→</td><td>TM1637</td><td>GND</td><td></td></tr>
+      </tbody>
+    </table>
+    <p>TM1637 ใช้โปรโตคอล 2 เส้นแบบ proprietary — ไม่ใช่ I2C</p></section>
 <section><h2>📚 หลักการทำงาน</h2>
 <p><strong>TM1637</strong> ใช้โปรโตคอล 2 เส้นแบบ proprietary — ไม่ใช่ I2C — TM1637_Init() รับ CLK, DIO, และจำนวนหลัก — ไม่มี instance (global functions)</p></section>
 <section><h2>💻 เขียน Code ทีละขั้น</h2>

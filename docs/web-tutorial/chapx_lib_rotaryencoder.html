@@ -29,7 +29,20 @@ flowchart TD
 │ ใช้ internal pull-up ทั้ง 3 ขา      │
 │ 20 pulses/rev (typical)            │
 └────────────────────────────────────┘
-</pre><p>Rotary Encoder มาตรฐานมี 3 ขา (CLK, DT, SW) — CLK/DT สร้างสัญญาณ quadrature — SW เป็นปุ่มในตัว</p></section>
+</pre>
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>PC0</td><td>→</td><td>Rotary Encoder</td><td>CLK (A)</td><td>Quadrature สัญญาณ</td></tr>
+        <tr><td>PC1</td><td>→</td><td>Rotary Encoder</td><td>DT (B)</td><td>Quadrature สัญญาณ</td></tr>
+        <tr><td>PC2</td><td>→</td><td>Rotary Encoder</td><td>SW</td><td>ปุ่มกดในตัว</td></tr>
+        <tr><td>3.3V</td><td>→</td><td>Rotary Encoder</td><td>VCC</td><td></td></tr>
+        <tr><td>GND</td><td>→</td><td>Rotary Encoder</td><td>GND</td><td></td></tr>
+      </tbody>
+    </table>
+    <p>Rotary Encoder มาตรฐานมี 3 ขา (CLK, DT, SW) — CLK/DT สร้างสัญญาณ quadrature — SW เป็นปุ่มในตัว</p></section>
 
 <section><h2>📚 หลักการทำงาน</h2>
 <p><strong>Quadrature Decoding:</strong> CLK และ DT มีเฟสห่างกัน 90° — เมื่อหมุนตามเข็ม (CW) CLK จะนำ DT — เมื่อหมุนทวนเข็ม (CCW) DT จะนำ CLK — ตรวจจับ edge การเปลี่ยนแปลงเพื่อนับ step</p>

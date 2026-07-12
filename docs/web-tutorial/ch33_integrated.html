@@ -50,6 +50,22 @@ flowchart LR
     GND ----------------- GND
 </pre>
 
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC1 (SCL)</td><td>→</td><td>BMP280 (SCL)</td><td>SCL</td><td>I2C clock</td></tr>
+    <tr><td>PC2 (SDA)</td><td>↔</td><td>BMP280 (SDA)</td><td>SDA</td><td>I2C data</td></tr>
+    <tr><td>BMP280 (VDD)</td><td>←</td><td>3.3V</td><td>—</td><td>—</td></tr>
+    <tr><td>BMP280 (GND)</td><td>→</td><td>GND</td><td>—</td><td>—</td></tr>
+    <tr><td>PD5</td><td>↔</td><td>R 4.7kΩ → 3.3V</td><td>—</td><td>Pull-up สำหรับ 1-Wire</td></tr>
+    <tr><td>PD5</td><td>↔</td><td>DS18B20 (DATA)</td><td>ขา 2 (กลาง)</td><td>1-Wire data</td></tr>
+    <tr><td>DS18B20 (VDD)</td><td>←</td><td>3.3V</td><td>ขา 3 (ขวา)</td><td>—</td></tr>
+    <tr><td>DS18B20 (GND)</td><td>→</td><td>GND</td><td>ขา 1 (ซ้าย)</td><td>—</td></tr>
+  </tbody>
+</table>
+
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">
 flowchart TD
@@ -129,6 +145,19 @@ int main(void)
     PD5(TX) ---- USB-to-Serial
     PD6(RX) ---- USB-to-Serial
 </pre>
+
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PA2 (PWM)</td><td>→</td><td>R 220Ω → LED</td><td>แอโนด</td><td>PWM control brightness</td></tr>
+    <tr><td>LED</td><td>→</td><td>GND</td><td>แคโทด</td><td>—</td></tr>
+    <tr><td>PD5 (TX)</td><td>→</td><td>USB-Serial (RX)</td><td>RX</td><td>Cross-connect</td></tr>
+    <tr><td>PD6 (RX)</td><td>←</td><td>USB-Serial (TX)</td><td>TX</td><td>Cross-connect</td></tr>
+    <tr><td>GND</td><td>↔</td><td>USB-Serial GND</td><td>GND</td><td>Common ground</td></tr>
+  </tbody>
+</table>
 
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">

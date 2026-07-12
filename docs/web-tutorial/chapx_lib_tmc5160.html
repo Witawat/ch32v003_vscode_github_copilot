@@ -55,6 +55,18 @@ flowchart TD
     │ GND──GND    VMOT─┤1000μF├GND    │
     └──────────────────────────────────┘
     </pre>
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>PC5</td><td>→</td><td>TMC5160</td><td>SCK</td><td>SPI Clock</td></tr>
+        <tr><td>PC6</td><td>→</td><td>TMC5160</td><td>MOSI</td><td>SPI Data In</td></tr>
+        <tr><td>PC7</td><td>←</td><td>TMC5160</td><td>MISO</td><td>SPI Data Out</td></tr>
+        <tr><td>PC4</td><td>→</td><td>TMC5160</td><td>CSN</td><td>Chip Select</td></tr>
+        <tr><td>GND</td><td>↔</td><td>TMC5160</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+      </tbody>
+    </table>
     <p>⚠️ TMC5160 รองรับมอเตอร์กระแสสูงสุด 10A — VMOT 8-60V — SPI Mode 3 (CPOL=1, CPHA=1) ที่ 4MHz+ — CSN LOW ก่อนส่ง HIGH หลังเสร็จ — ต่อ capacitor 1000μF ขนาน VMOT-GND</p>
 </section>
 

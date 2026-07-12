@@ -36,7 +36,20 @@ flowchart TD
     │                                    │
     │ ADDR=LOW → 0x23  ADDR=HIGH → 0x5C │
     └────────────────────────────────────┘
-</pre></section>
+</pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC1</td><td>↔</td><td>SDA</td><td>-</td><td>สายข้อมูล I2C — ต้องมี R 4.7kΩ pull-up ไป 3.3V</td></tr>
+    <tr><td>PC2</td><td>→</td><td>SCL</td><td>-</td><td>สายนาฬิกา I2C — ต้องมี R 4.7kΩ pull-up ไป 3.3V</td></tr>
+    <tr><td>3.3V</td><td>→</td><td>VCC</td><td>-</td><td>ไฟเลี้ยง 3.3V</td></tr>
+    <tr><td>GND</td><td>→</td><td>GND</td><td>-</td><td>กราวด์ร่วม</td></tr>
+    <tr><td>GND</td><td>→</td><td>ADDR</td><td>-</td><td>ต่อ GND = address 0x23, ต่อ VCC = 0x5C</td></tr>
+  </tbody>
+</table>
+</section>
 
 <section><h2>📚 หลักการทำงาน</h2>
 <p><strong>BH1750</strong> เป็นเซนเซอร์วัดความสว่างแบบ I2C ambient light sensor ย่านวัด 1–65535 lux — การตอบสนองสเปกตรัมใกล้เคียงกับตามนุษย์</p></section>

@@ -52,6 +52,21 @@ flowchart TD
     │ ⚡ ต่อ GND ให้แน่น — noise เยอะ                  │
     └──────────────────────────────────────────────────┘
     </pre>
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>PC5</td><td>→</td><td>nRF24L01+</td><td>SCK</td><td>SPI Clock</td></tr>
+        <tr><td>PC6</td><td>←</td><td>nRF24L01+</td><td>MISO</td><td>SPI Data Out</td></tr>
+        <tr><td>PC7</td><td>→</td><td>nRF24L01+</td><td>MOSI</td><td>SPI Data In</td></tr>
+        <tr><td>PC3</td><td>→</td><td>nRF24L01+</td><td>CSN</td><td>Chip Select</td></tr>
+        <tr><td>PC4</td><td>→</td><td>nRF24L01+</td><td>CE</td><td>Chip Enable</td></tr>
+        <tr><td>PC0</td><td>←</td><td>nRF24L01+</td><td>IRQ</td><td>Interrupt (Optional)</td></tr>
+        <tr><td>3.3V</td><td>↔</td><td>nRF24L01+</td><td>VCC</td><td>จ่ายไฟ 3.3V</td></tr>
+        <tr><td>GND</td><td>↔</td><td>nRF24L01+</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+      </tbody>
+    </table>
     <p>nRF24L01+ ใช้ SPI + 2 control pins (CE, CSN) + optional IRQ, ห้ามต่อ 5V เด็ดขาด — module พังทันที, capacitor ที่ VCC สำคัญมากเพราะ module กินกระแสกระชากตอน TX สูงถึง ~13mA</p>
 </section>
 

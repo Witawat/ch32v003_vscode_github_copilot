@@ -49,6 +49,19 @@ flowchart TD
     │      │            │     Sig─┘    │
     └──────────────────────────────────┘
     </pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC0</td><td>←</td><td>Push Button</td><td>BTN1 → GND</td><td>Mode Select, Active LOW</td></tr>
+    <tr><td>PC1</td><td>←</td><td>Push Button</td><td>BTN2 → GND</td><td>Step/Confirm, Active LOW</td></tr>
+    <tr><td>PA1</td><td>←</td><td>Potentiometer 10kΩ</td><td>Wiper (ADC)</td><td>Manual mode adjust</td></tr>
+    <tr><td>PD2</td><td>→</td><td>Servo</td><td>Signal</td><td>PWM 50Hz</td></tr>
+    <tr><td>PC1</td><td>↔</td><td>OLED 128x64</td><td>SDA</td><td>I2C data</td></tr>
+    <tr><td>PC2</td><td>→</td><td>OLED 128x64</td><td>SCL</td><td>I2C clock</td></tr>
+  </tbody>
+</table>
     <p>Station สำหรับทดสอบและ calibrate servo — มี 4 โหมด: Sweep อัตโนมัติ, Center หาจุดกึ่งกลาง, Manual ปรับด้วย Pot, Step ทีละ 10° — แสดงผลผ่าน OLED จอ 128x64</p>
 </section>
 

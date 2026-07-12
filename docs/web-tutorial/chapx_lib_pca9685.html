@@ -43,7 +43,19 @@ flowchart TD
     │ ⚡ VCC logic = 3.3V     │ ...                │
     │ ⚡ V+ motor = 5-6V      │ PWM15──Servo16     │
     └──────────────────────────────────────────────┘
-</pre></section>
+</pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC1</td><td>↔</td><td>SDA</td><td>-</td><td>สายข้อมูล I2C — ต้องมี R 4.7kΩ pull-up ไป 3.3V</td></tr>
+    <tr><td>PC2</td><td>↔</td><td>SCL</td><td>-</td><td>สายนาฬิกา I2C — ต้องมี R 4.7kΩ pull-up ไป 3.3V</td></tr>
+    <tr><td>3.3V</td><td>→</td><td>VCC</td><td>-</td><td>ไฟเลี้ยง logic 3.3V; I2C addr 0x40–0x7F (A0–A5)</td></tr>
+    <tr><td>GND</td><td>→</td><td>GND</td><td>-</td><td>กราวด์ร่วม (logic + motor)</td></tr>
+  </tbody>
+</table>
+</section>
 
 <section><h2>📚 หลักการทำงาน</h2>
 <p><strong>PCA9685</strong> เป็น I2C 16-channel PWM controller — แต่ละ channel ความละเอียด 12-bit (4096 steps), ตั้ง servo angle ได้โดยตรงผ่าน PCA9685_SetServoAngle()</p></section>

@@ -23,7 +23,18 @@ flowchart TD
    │  ⚠ อย่าเสียบเซนเซอร์ค้างในดินตลอดเวลา  │
    │  ⚠ Library จัดการ VCC อัตโนมัติ     │
    └────────────────────────────────────┘
-</pre><p>YL-69 (HL-69) ใช้หลักการวัดความต้านทานของดิน — Probe 2 ขั้วเสียบลงดิน — Library จัดการ VCC control อัตโนมัติเพื่อป้องกัน probe กัดกร่อน</p></section>
+</pre>
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>3.3V</td><td>→</td><td>YL-69</td><td>VCC</td><td>จ่ายไฟ 3.3V (library จัดการเปิด/ปิดอัตโนมัติ)</td></tr>
+        <tr><td>PC4 (ADC)</td><td>←</td><td>YL-69</td><td>A0</td><td>Analog Output — ความชื้นดิน</td></tr>
+        <tr><td>GND</td><td>→</td><td>YL-69</td><td>GND</td><td>Ground ร่วม</td></tr>
+      </tbody>
+    </table>
+    <p>YL-69 (HL-69) ใช้หลักการวัดความต้านทานของดิน — Probe 2 ขั้วเสียบลงดิน — Library จัดการ VCC control อัตโนมัติเพื่อป้องกัน probe กัดกร่อน</p></section>
 <section><h2>📚 หลักการทำงาน</h2><p><strong>YL-69 (HL-69)</strong> เป็น Soil Moisture Sensor ใช้หลักการวัดความต้านทานของดิน — Probe 2 ขั้วเสียบลงดิน — เมื่อดินเปียก ความต้านทานต่ำ → ADC สูง — เมื่อดินแห้ง ความต้านทานสูง → ADC ต่ำ</p><p><strong>Corrosion Warning:</strong> Probe เป็นโลหะ — ถ้าเปิดไฟเลี้ยงตลอดเวลา จะเกิด electrolysis ทำให้ probe กัดกร่อนเร็ว — Library จัดการ VCC เปิดเฉพาะตอนวัด (~100ms) แล้วปิดทันที — เพิ่มอายุ probe ได้หลายเท่า</p><p><strong>การใช้งาน:</strong> รดน้ำต้นไม้อัตโนมัติ, ตรวจจับน้ำรั่ว, วัดระดับน้ำ, Smart farming</p></section>
 <section><h2>💻 เขียน Code ทีละขั้น</h2>
 <div class="step"><h3>ขั้นที่ 1: Init SoilMoisture</h3><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20

@@ -42,6 +42,21 @@ flowchart TD
     │ PC5 ──────────────── OE        │
     └────────────────────────────────┘
     </pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC0</td><td>→</td><td>P10 LED Panel</td><td>A</td><td>Row select bit 0</td></tr>
+    <tr><td>PC1</td><td>→</td><td>P10 LED Panel</td><td>B</td><td>Row select bit 1</td></tr>
+    <tr><td>PC2</td><td>→</td><td>P10 LED Panel</td><td>CLK</td><td>Shift register clock</td></tr>
+    <tr><td>PC3</td><td>→</td><td>P10 LED Panel</td><td>SCLK</td><td>Latch clock</td></tr>
+    <tr><td>PC4</td><td>→</td><td>P10 LED Panel</td><td>R1</td><td>Red data input</td></tr>
+    <tr><td>PC5</td><td>→</td><td>P10 LED Panel</td><td>OE</td><td>Output enable (active LOW)</td></tr>
+    <tr><td>5V</td><td>→</td><td>P10 LED Panel</td><td>VCC</td><td>External 5V 2A+</td></tr>
+    <tr><td>GND</td><td>↔</td><td>P10 LED Panel</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+  </tbody>
+</table>
     <p>P10 ต้องใช้ external 5V 2A+ จ่ายไฟ — CH32V003 ใช้ 3.3V logic — ใช้ config struct กำหนดขา</p>
 </section>
 <section>

@@ -79,6 +79,18 @@ flowchart TD
     │  └─ สื่อสารได้หลายตัวบนบัสเดียวกัน             │
     └────────────────────────────────────────────┘
     </pre>
+
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>PC0 (DQ)</td><td>↔</td><td>DS18B20</td><td>DQ (Pin 2)</td><td>1-Wire Data — ต้องมี R 4.7kΩ pull-up → 3.3V</td></tr>
+        <tr><td>3.3V</td><td>→</td><td>DS18B20</td><td>VDD (Pin 3)</td><td>ไฟเลี้ยง</td></tr>
+        <tr><td>GND</td><td>→</td><td>DS18B20</td><td>GND (Pin 1)</td><td></td></tr>
+      </tbody>
+    </table>
+
     <p><strong>Pull-up 4.7kΩ สำคัญมาก!</strong> — 1-Wire เป็น open-drain — ต้องมี pull-up เพื่อให้บัสกลับเป็น HIGH — ถ้าไม่มี pull-up บัสจะเป็น LOW ตลอด</p>
 </section>
 

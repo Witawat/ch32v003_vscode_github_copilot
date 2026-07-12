@@ -38,7 +38,19 @@ flowchart TD
 │ ADDR ─── GND → addr = 0x44         │
 │ ADDR ─── VCC → addr = 0x45         │
 └────────────────────────────────────┘
-</pre></section>
+</pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC1</td><td>↔</td><td>SDA</td><td>-</td><td>สายข้อมูล I2C — ต้องมี R 4.7kΩ pull-up ไป 3.3V</td></tr>
+    <tr><td>PC2</td><td>↔</td><td>SCL</td><td>-</td><td>สายนาฬิกา I2C — ต้องมี R 4.7kΩ pull-up ไป 3.3V</td></tr>
+    <tr><td>3.3V</td><td>→</td><td>VCC</td><td>-</td><td>ไฟเลี้ยง 3.3V</td></tr>
+    <tr><td>GND</td><td>→</td><td>GND</td><td>-</td><td>กราวด์ร่วม; ADDR→GND=0x44, ADDR→VCC=0x45</td></tr>
+  </tbody>
+</table>
+</section>
 
 <section><h2>📚 หลักการทำงาน</h2>
 <p><strong>SHT3x</strong> เซนเซอร์อุณหภูมิ+ความชื้นความแม่นยำสูง — accuracy ±0.3°C / ±2%RH — range -40°C ถึง +125°C — มี heater ในตัวไล่ condensation</p></section>

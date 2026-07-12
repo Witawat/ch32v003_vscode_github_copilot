@@ -53,6 +53,18 @@ flowchart TD
     │       │                 PD5=CH5, PD6=CH6
     └───────┘                 PD7 ไม่รองรับ ADC!
     </pre>
+
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>PD2 (ADC_CH3)</td><td>→</td><td>Potentiometer 10kΩ</td><td>Wiper (ขากลาง)</td><td>3.3V → POT → GND</td></tr>
+        <tr><td>PD3 (ADC_CH4)</td><td>→</td><td>NTC 10kΩ + R 10kΩ</td><td>จุดกึ่งกลาง voltage divider</td><td>3.3V → NTC → PD3 → R → GND</td></tr>
+        <tr><td>PD2 (ADC_CH3)</td><td>→</td><td>Voltage Divider แบต</td><td>จุดกึ่งกลาง 10kΩ+10kΩ</td><td>BAT+(4.2V) → 10kΩ → PD2 → 10kΩ → GND</td></tr>
+      </tbody>
+    </table>
+
     <p><strong>Voltage Divider แบตเตอรี่:</strong> R บน 10k + R ล่าง 10k = ratio 2:1 — 4.2V input → 2.1V ที่ ADC pin (ปลอดภัยสำหรับ 3.3V MCU)</p>
 </section>
 

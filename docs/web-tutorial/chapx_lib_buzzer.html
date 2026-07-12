@@ -47,6 +47,18 @@ flowchart TD
 │ (ใช้ transistor ถ้า > 8mA)│       │ (ใช้ transistor ถ้า > 8mA)│
 └────────────────────────┘        └────────────────────────┘
     </pre>
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>PC0</td><td>→</td><td>Active Buzzer</td><td>(+)</td><td>GPIO — มี osc ในตัว</td></tr>
+        <tr><td>GND</td><td>→</td><td>Active Buzzer</td><td>(−)</td><td></td></tr>
+        <tr><td>PC4</td><td>→</td><td>Passive Buzzer</td><td>(+)</td><td>PWM — ต้องใช้ขา PWM (TIM1_CH4)</td></tr>
+        <tr><td>GND</td><td>→</td><td>Passive Buzzer</td><td>(−)</td><td></td></tr>
+        <tr><td colspan="4"></td><td>buzzer ~30mA — ใช้ transistor ถ้าเกิน 8mA</td></tr>
+      </tbody>
+    </table>
     <p>Active Buzzer: ต่อ GPIO ขาไหนก็ได้ — Passive Buzzer: ต้องต่อกับขา PWM (PC4=TIM1_CH4 หรือ PC3=TIM1_CH3)</p>
 </section>
 

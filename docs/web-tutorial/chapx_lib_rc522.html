@@ -53,6 +53,21 @@ flowchart TD
     │ ⚡ ทำ SelfTest ก่อนใช้ทุกครั้ง                │
     └──────────────────────────────────────────────┘
     </pre>
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>PC5</td><td>→</td><td>RC522</td><td>SCK</td><td>SPI Clock</td></tr>
+        <tr><td>PC6</td><td>←</td><td>RC522</td><td>MISO</td><td>SPI Data Out</td></tr>
+        <tr><td>PC7</td><td>→</td><td>RC522</td><td>MOSI</td><td>SPI Data In</td></tr>
+        <tr><td>PC3</td><td>→</td><td>RC522</td><td>SDA (CS)</td><td>Chip Select</td></tr>
+        <tr><td>PC4</td><td>→</td><td>RC522</td><td>RST</td><td>Reset</td></tr>
+        <tr><td>PC0</td><td>←</td><td>RC522</td><td>IRQ</td><td>Interrupt (Optional)</td></tr>
+        <tr><td>3.3V</td><td>↔</td><td>RC522</td><td>VCC</td><td>จ่ายไฟ 3.3V</td></tr>
+        <tr><td>GND</td><td>↔</td><td>RC522</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+      </tbody>
+    </table>
     <p>RC522 เป็น RFID reader/writer 13.56MHz — อ่านบัตร MIFARE Classic 1K/4K, ISO14443A, รองรับการเข้ารหัส (authentication) ด้วย key A/B, ต้องทำ self-test เพื่อตรวจสอบการเชื่อมต่อ SPI</p>
 </section>
 

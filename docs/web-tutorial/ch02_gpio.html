@@ -43,6 +43,18 @@ flowchart TD
           │                     │       │                 GND │
           └─────────────────────┘       └─────────────────────┘
     </pre>
+
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>PC0</td><td>→</td><td>R 220Ω → LED</td><td>Anode(+)</td><td>Active-HIGH (HIGH = ติด)</td></tr>
+        <tr><td>PC1</td><td>→</td><td>R 10kΩ → 3.3V</td><td>Pull-up</td><td>หรือใช้ PIN_MODE_INPUT_PULLUP ภายใน</td></tr>
+        <tr><td>PC1</td><td>←</td><td>ปุ่มกด → GND</td><td>ขาใดขาหนึ่ง</td><td>กด = LOW (Active LOW)</td></tr>
+      </tbody>
+    </table>
+
     <p>ต่อ LED + R 220Ω แบบ Active-HIGH (HIGH = ติด, LOW = ดับ)<br>
     ต่อปุ่มกด + R 10kΩ Pull-up ภายนอก หรือใช้ <code>PIN_MODE_INPUT_PULLUP</code></p>
     <p><strong>CH32V003 Pins:</strong> GPIOA (PA1-PA2), GPIOC (PC0-PC7), GPIOD (PD2-PD7) — PD0/PD1 มีเฉพาะ TSSOP-20/QFN-20</p>

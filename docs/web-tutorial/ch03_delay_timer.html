@@ -44,6 +44,17 @@ flowchart TD
     │ LED2: กระพริบแบบ Blocking     │
     └────────────────────────────────┘
     </pre>
+
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>PC0</td><td>→</td><td>R 220Ω → LED1</td><td>Anode(+)</td><td>Non-Blocking (500ms)</td></tr>
+        <tr><td>PC1</td><td>→</td><td>R 220Ω → LED2</td><td>Anode(+)</td><td>Blocking (500ms)</td></tr>
+      </tbody>
+    </table>
+
     <p>วงจรเดียวกับบทก่อน — LED 2 ดวงแสดงความแตกต่างระหว่าง Blocking vs Non-Blocking</p>
 </section>
 

@@ -41,6 +41,18 @@ flowchart TD
     │ AD0─GND → 0x68  AD0─VCC → 0x69   │
     └────────────────────────────────────┘
     </pre>
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>PC1</td><td>↔</td><td>SDA</td><td>-</td><td>สายข้อมูล I2C — ต้องมี R 4.7kΩ pull-up ไป 3.3V</td></tr>
+        <tr><td>PC2</td><td>↔</td><td>SCL</td><td>-</td><td>สายนาฬิกา I2C — ต้องมี R 4.7kΩ pull-up ไป 3.3V</td></tr>
+        <tr><td>3.3V</td><td>→</td><td>VCC</td><td>-</td><td>ไฟเลี้ยง 3.3V</td></tr>
+        <tr><td>GND</td><td>→</td><td>GND</td><td>-</td><td>กราวด์ร่วม; AD0→GND=0x68, AD0→VCC=0x69</td></tr>
+        <tr><td>PC3</td><td>←</td><td>INT</td><td>-</td><td>optional — data ready interrupt</td></tr>
+      </tbody>
+    </table>
     <p>PC1─SDA, PC2─SCL — AD0=GND → addr 0x68 — INT (PC3) optional สำหรับ interrupt แจ้ง data ready — ใช้ 3.3V</p>
 </section>
 

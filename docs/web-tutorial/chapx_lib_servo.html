@@ -49,6 +49,16 @@ flowchart TD
     │            └─────────────────│
     └──────────────────────────────┘
     </pre>
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>PD2</td><td>→</td><td>SG90 Servo</td><td>Signal (ส้ม)</td><td>PWM 50Hz</td></tr>
+        <tr><td>5V (External)</td><td>→</td><td>SG90 Servo</td><td>VCC (แดง)</td><td>⚠️ ใช้ไฟแยก — ห้ามใช้ 3.3V MCU</td></tr>
+        <tr><td>GND</td><td>→</td><td>SG90 Servo</td><td>GND (น้ำตาล)</td><td>ต่อ GND ร่วม MCU + External</td></tr>
+      </tbody>
+    </table>
     <p>⚠️ <strong>สำคัญ:</strong> Servo กินกระแสสูงสุด 500mA+ — ต้องใช้ไฟ 5V แยก ไม่ใช้ไฟ 3.3V จาก MCU ตรง ๆ! อย่าลืมต่อ GND ร่วมกันระหว่าง MCU กับ External Supply</p>
 </section>
 

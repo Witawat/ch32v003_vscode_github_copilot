@@ -43,6 +43,19 @@ flowchart TD
     TIM2 Channels:
       CH1=PD4, CH2=PD3, CH3=PC0, CH4=PD7
     </pre>
+
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>PD2 (PWM1_CH1)</td><td>→</td><td>R 220Ω → LED</td><td>Anode(+)</td><td>LED Fade (PWM 1kHz)</td></tr>
+        <tr><td>PD2 (PWM1_CH1)</td><td>→</td><td>Servo SG90</td><td>Signal (Orange)</td><td>PWM 50Hz</td></tr>
+        <tr><td>VCC (Servo)</td><td>←</td><td>ไฟเลี้ยง 5V ภายนอก</td><td>+5V</td><td>ห้ามใช้ 3.3V จาก MCU — ไฟไม่พอ</td></tr>
+        <tr><td>GND (MCU)</td><td>↔</td><td>Servo SG90</td><td>GND (Brown)</td><td>GND ต่อร่วมกัน</td></tr>
+      </tbody>
+    </table>
+
     <p><strong>วงจร LED:</strong> R 220Ω จำกัดกระแส (PWM ทำให้ LED สว่างน้อยลงเฉลี่ย แต่วูบที่ความถี่สูงจนตามองไม่เห็น)<br>
     <strong>วงจร Servo:</strong> สายสัญญาณจาก PD2, <strong>ไฟ 5V ต้องจ่ายแยก!</strong> — CH32V003 จ่าย 3.3V ไม่พอสำหรับ Servo — GND ต้องต่อรวมกัน</p>
     <p><strong>SOP-8:</strong> PWM pins ที่ใช้ได้: PA1 (PWM1_CH2), PC4 (PWM1_CH4) — 2 channels เท่านั้น</p>

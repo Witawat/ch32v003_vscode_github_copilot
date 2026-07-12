@@ -40,6 +40,19 @@ flowchart TD
     │ ต่อ chain: Q7'(9)→DATA ตัวถัดไป│
     └────────────────────────────────┘
     </pre>
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>PC0</td><td>→</td><td>74HC595</td><td>DATA (14)</td><td>Serial data input</td></tr>
+        <tr><td>PC1</td><td>→</td><td>74HC595</td><td>CLK (11)</td><td>Shift clock</td></tr>
+        <tr><td>PC2</td><td>→</td><td>74HC595</td><td>LATCH (12)</td><td>Latch output</td></tr>
+        <tr><td>3.3V</td><td>→</td><td>74HC595</td><td>VCC (16)</td><td>3.3V logic ใช้กับ 74HC595 ได้</td></tr>
+        <tr><td>GND</td><td>→</td><td>74HC595</td><td>GND (8)</td><td></td></tr>
+        <tr><td>Q0–Q7</td><td>→</td><td>LED + 220Ω</td><td>GND</td><td>8 outputs ต่อ chip</td></tr>
+      </tbody>
+    </table>
     <p>74HC595 ใช้ 3 ขา (DATA, CLK, LATCH) — 8 outputs ต่อ chip — ต่อพ่วงหลายตัวได้ — output กระแส ~6mA ต่อขา — ใช้ external 5V ได้ (CH32V003 3.3V logic ใช้ได้กับ 74HC595 5V)</p>
 </section>
 <section>

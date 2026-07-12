@@ -36,7 +36,19 @@ flowchart TD
     │ GND─────────GND          │ on-chip  │
     │ addr=0x29 (fixed)        └─────────┤
     └────────────────────────────────────┘
-</pre></section>
+</pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC1</td><td>↔</td><td>SDA</td><td>-</td><td>สายข้อมูล I2C — ต้องมี R 4.7kΩ pull-up ไป 3.3V</td></tr>
+    <tr><td>PC2</td><td>↔</td><td>SCL</td><td>-</td><td>สายนาฬิกา I2C — ต้องมี R 4.7kΩ pull-up ไป 3.3V</td></tr>
+    <tr><td>3.3V</td><td>→</td><td>VCC</td><td>-</td><td>ไฟเลี้ยง 3.3V; I2C addr 0x29 (fixed)</td></tr>
+    <tr><td>GND</td><td>→</td><td>GND</td><td>-</td><td>กราวด์ร่วม</td></tr>
+  </tbody>
+</table>
+</section>
 
 <section><h2>📚 หลักการทำงาน</h2>
 <p><strong>TCS34725</strong> เป็น RGB color light-to-digital converter — photodiode 4 ช่อง: Red, Green, Blue, Clear — กรองแสงผ่าน IR filter</p></section>

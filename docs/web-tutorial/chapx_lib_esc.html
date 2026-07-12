@@ -54,6 +54,16 @@ flowchart TD
     └──────────────────────────────────┘
     ⚠️ ถอดใบพัดทุกครั้งขณะพัฒนา!
     </pre>
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>PD2</td><td>→</td><td>ESC</td><td>Signal</td><td>PWM 50Hz 1–2ms</td></tr>
+        <tr><td>GND</td><td>→</td><td>ESC</td><td>GND</td><td>Ground ร่วมกับแบตเตอรี่</td></tr>
+        <tr><td>LiPo 3S (11.1V)</td><td>→</td><td>ESC</td><td>VCC</td><td>แหล่งจ่ายไฟหลัก</td></tr>
+      </tbody>
+    </table>
     <p><strong>⚠️ อันตราย!</strong> BLDC Motor หมุนเร็วหลายพัน RPM — <strong>ต้องถอด Propeller ออกทุกครั้ง</strong> ขณะเขียนโค้ดและทดสอบ — ใช้ 12V LiPo หรือ DC Power Supply — ต่อ GND ร่วมกันระหว่าง MCU, ESC, และ Battery</p>
 </section>
 

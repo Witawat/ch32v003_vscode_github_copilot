@@ -18,7 +18,19 @@ flowchart TD
    │  CT Clamp 100A ─── CT ──|Load|── L(220V)   │
    │  (ทิศทางลูกศร → โหลด)                       │
    └────────────────────────────────────────────┘
-</pre><p>⚠️ <strong>220VAC!</strong> — ต่อผ่าน USART (9600 8N1) — ใช้ ReadAll ในคำขอเดียว — มีฟังก์ชัน Get แยกแต่ละค่า</p></section>
+</pre>
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>PD5 (TX)</td><td>→</td><td>PZEM-004T v3</td><td>RX</td><td>USART ส่ง Modbus request</td></tr>
+        <tr><td>PD6 (RX)</td><td>←</td><td>PZEM-004T v3</td><td>TX</td><td>USART รับ Modbus response</td></tr>
+        <tr><td>5V</td><td>→</td><td>PZEM-004T v3</td><td>VCC</td><td>จ่ายไฟ 5V</td></tr>
+        <tr><td>GND</td><td>→</td><td>PZEM-004T v3</td><td>GND</td><td>Ground ร่วม</td></tr>
+      </tbody>
+    </table>
+    <p>⚠️ <strong>220VAC!</strong> — ต่อผ่าน USART (9600 8N1) — ใช้ ReadAll ในคำขอเดียว — มีฟังก์ชัน Get แยกแต่ละค่า</p></section>
 <section><h2>📚 หลักการทำงาน</h2><p><strong>PZEM-004T v3</strong> เป็นรุ่นอัพเกรดจาก v1 — รองรับ <code>ReadAll</code> ในคำขอเดียว (อ่าน 10 registers รวดเดียว) — ใช้ฟังก์ชัน Get แยกเช่น <code>GetVoltage()</code>, <code>GetCurrent()</code> แทนการเข้าถึง struct โดยตรง</p><p><strong>ReadAll Request</strong> ส่งคำสั่งอ่าน registers 0x0000 ถึง 0x0009 ในครั้งเดียว — Response มี 25 bytes — ลด overhead จาก 8 คำขอเหลือ 1 คำขอ</p></section>
 <section><h2>💻 เขียน Code ทีละขั้น</h2>
 <div class="step"><h3>ขั้นที่ 1: Init PZEM v3</h3><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20

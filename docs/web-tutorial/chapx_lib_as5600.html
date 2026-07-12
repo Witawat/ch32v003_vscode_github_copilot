@@ -43,6 +43,18 @@ flowchart TD
     └────────────────────────────────────┘
     </pre>
     <p>PC1─SDA, PC2─SCL — ต้องใช้แม่เหล็ก diametric (ขั้ว N-S ตามเส้นผ่านศูนย์กลาง) วางห่างจากชิป 0.5–2 มม., DIR pin กลับทิศการนับ</p>
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>PC1</td><td>↔</td><td>SDA</td><td>-</td><td>สายข้อมูล I2C — ต้องมี R 4.7kΩ pull-up ไป 3.3V</td></tr>
+        <tr><td>PC2</td><td>→</td><td>SCL</td><td>-</td><td>สายนาฬิกา I2C — ต้องมี R 4.7kΩ pull-up ไป 3.3V</td></tr>
+        <tr><td>3.3V</td><td>→</td><td>VCC</td><td>-</td><td>ไฟเลี้ยง 3.3V</td></tr>
+        <tr><td>GND</td><td>→</td><td>GND</td><td>-</td><td>กราวด์ร่วม</td></tr>
+        <tr><td>PC0</td><td>→</td><td>DIR</td><td>-</td><td>กลับทิศทางการนับ (optional)</td></tr>
+      </tbody>
+    </table>
 </section>
 
 <section>

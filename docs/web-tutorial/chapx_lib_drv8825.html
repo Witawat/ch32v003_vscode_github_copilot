@@ -55,6 +55,21 @@ flowchart TD
     │                     100μF cap │
     └──────────────────────────────────┘
     </pre>
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>PC0</td><td>→</td><td>DRV8825</td><td>STEP</td><td>Pulse input</td></tr>
+        <tr><td>PC1</td><td>→</td><td>DRV8825</td><td>DIR</td><td>ทิศทางหมุน</td></tr>
+        <tr><td>PC2</td><td>→</td><td>DRV8825</td><td>EN</td><td>LOW = เปิดใช้งาน</td></tr>
+        <tr><td>PC3</td><td>→</td><td>DRV8825</td><td>M0</td><td>Microstep MS1</td></tr>
+        <tr><td>PC4</td><td>→</td><td>DRV8825</td><td>M1</td><td>Microstep MS2</td></tr>
+        <tr><td>PC5</td><td>→</td><td>DRV8825</td><td>M2</td><td>Microstep MS3</td></tr>
+        <tr><td>GND</td><td>→</td><td>DRV8825</td><td>GND</td><td>Ground ร่วม</td></tr>
+        <tr><td>VMOT (8.2–45V)</td><td>→</td><td>DRV8825</td><td>VMOT</td><td>แหล่งจ่ายไฟ motor</td></tr>
+      </tbody>
+    </table>
     <p>⚠️ VMOT 8.2–45V — ต่อ capacitor 100μF ขนาน VMOT-GND ใกล้ driver — ปรับ Current Limit ด้วย potentiometer บนบอร์ด — DRV8825 ร้อนเร็วที่กระแสสูง ควรติด heatsink</p>
 </section>
 

@@ -41,7 +41,20 @@ flowchart TD
     │ GND────────────GND    │ Accuracy: ±2ppm     │
     │                        │ +--BAT--CR2032---┐ │
     └──────────────────────────────────────────────┘
-</pre></section>
+</pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC1</td><td>↔</td><td>SDA</td><td>-</td><td>สายข้อมูล I2C — ต้องมี R 4.7kΩ pull-up ไป 3.3V</td></tr>
+    <tr><td>PC2</td><td>→</td><td>SCL</td><td>-</td><td>สายนาฬิกา I2C — ต้องมี R 4.7kΩ pull-up ไป 3.3V</td></tr>
+    <tr><td>3.3V</td><td>→</td><td>VCC</td><td>-</td><td>ไฟเลี้ยง 3.3V</td></tr>
+    <tr><td>GND</td><td>→</td><td>GND</td><td>-</td><td>กราวด์ร่วม</td></tr>
+    <tr><td>CR2032</td><td>→</td><td>BAT</td><td>-</td><td>แบตเตอรี่สำรอง 3V — รักษาเวลาเมื่อไม่มีไฟหลัก</td></tr>
+  </tbody>
+</table>
+</section>
 
 <section><h2>📚 หลักการทำงาน</h2>
 <p><strong>DS3231</strong> เป็น RTC (Real-Time Clock) แบบ I2C — แม่นยำสูง TCXO ในตัว, เก็บวินาที-นาที-ชั่วโมง-วัน-เดือน-ปี, จัดการ leap year อัตโนมัติ, มี temperature sensor ในตัว</p></section>

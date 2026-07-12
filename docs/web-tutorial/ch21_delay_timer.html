@@ -51,6 +51,18 @@
                      (Pull-up external)
 </pre>
 
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC0</td><td>→</td><td>R 220Ω → LED (Green)</td><td>แอโนด</td><td>Output, LED blink</td></tr>
+    <tr><td>LED (Green)</td><td>→</td><td>GND</td><td>แคโทด</td><td>—</td></tr>
+    <tr><td>PC1</td><td>→</td><td>Push Button</td><td>ขา 1</td><td>Input pull-up, กด=LOW</td></tr>
+    <tr><td>Push Button</td><td>→</td><td>GND</td><td>ขา 2</td><td>—</td></tr>
+  </tbody>
+</table>
+
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">
 flowchart TD
@@ -176,6 +188,16 @@ int main(void)
                       GND
 </pre>
 
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC0</td><td>→</td><td>R 220Ω → LED (Red)</td><td>แอโนด</td><td>Output, blink sequence</td></tr>
+    <tr><td>LED (Red)</td><td>→</td><td>GND</td><td>แคโทด</td><td>—</td></tr>
+  </tbody>
+</table>
+
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">
 flowchart TD
@@ -278,6 +300,19 @@ int main(void)
                        |
                       GND
 </pre>
+
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PD5 (TX)</td><td>→</td><td>USB-Serial (RX)</td><td>RX</td><td>Cross-connect, 115200 baud</td></tr>
+    <tr><td>PD6 (RX)</td><td>←</td><td>USB-Serial (TX)</td><td>TX</td><td>Cross-connect</td></tr>
+    <tr><td>GND</td><td>↔</td><td>USB-Serial GND</td><td>GND</td><td>Common ground</td></tr>
+    <tr><td>PC0</td><td>→</td><td>R 220Ω → LED (Yellow)</td><td>แอโนด</td><td>Output, indication LED</td></tr>
+    <tr><td>LED (Yellow)</td><td>→</td><td>GND</td><td>แคโทด</td><td>—</td></tr>
+  </tbody>
+</table>
 
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">
@@ -416,6 +451,18 @@ int main(void)
                     Button
                      (Pull-up external)
 </pre>
+
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC0</td><td>→</td><td>R 220Ω → LED (Blue)</td><td>แอโนด</td><td>Output, timer ISR blink</td></tr>
+    <tr><td>LED (Blue)</td><td>→</td><td>GND</td><td>แคโทด</td><td>—</td></tr>
+    <tr><td>PC1</td><td>→</td><td>Push Button</td><td>ขา 1</td><td>Input pull-up, กด=LOW</td></tr>
+    <tr><td>Push Button</td><td>→</td><td>GND</td><td>ขา 2</td><td>—</td></tr>
+  </tbody>
+</table>
 
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">
@@ -557,6 +604,19 @@ int main(void)
      USART (TX=PD5, RX=PD6) เชื่อมต่อ PC ผ่าน USB-Serial
 </pre>
 
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC0</td><td>→</td><td>R 220Ω → LED (Green)</td><td>แอโนด</td><td>Output, counter wrap toggle</td></tr>
+    <tr><td>LED (Green)</td><td>→</td><td>GND</td><td>แคโทด</td><td>—</td></tr>
+    <tr><td>PD5 (TX)</td><td>→</td><td>USB-Serial (RX)</td><td>RX</td><td>Cross-connect</td></tr>
+    <tr><td>PD6 (RX)</td><td>←</td><td>USB-Serial (TX)</td><td>TX</td><td>Cross-connect</td></tr>
+    <tr><td>GND</td><td>↔</td><td>USB-Serial GND</td><td>GND</td><td>Common ground</td></tr>
+  </tbody>
+</table>
+
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">
 flowchart TD
@@ -692,6 +752,21 @@ int main(void)
 
      (Pull-up ในตัว CH32V003 — ใช้ PIN_MODE_INPUT_PULLUP)
 </pre>
+
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC0</td><td>→</td><td>Push Button 1 (Start/Stop)</td><td>ขา 1</td><td>Input pull-up, กด=LOW</td></tr>
+    <tr><td>Push Button 1</td><td>→</td><td>GND</td><td>ขา 2</td><td>—</td></tr>
+    <tr><td>PC1</td><td>→</td><td>Push Button 2 (Reset)</td><td>ขา 1</td><td>Input pull-up, กด=LOW</td></tr>
+    <tr><td>Push Button 2</td><td>→</td><td>GND</td><td>ขา 2</td><td>—</td></tr>
+    <tr><td>PD5 (TX)</td><td>→</td><td>USB-Serial (RX)</td><td>RX</td><td>Cross-connect</td></tr>
+    <tr><td>PD6 (RX)</td><td>←</td><td>USB-Serial (TX)</td><td>TX</td><td>Cross-connect</td></tr>
+    <tr><td>GND</td><td>↔</td><td>USB-Serial GND</td><td>GND</td><td>Common ground</td></tr>
+  </tbody>
+</table>
 
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">
@@ -845,6 +920,21 @@ int main(void)
 
      USART (TX=PD5, RX=PD6) เชื่อมต่อ PC ผ่าน USB-Serial
 </pre>
+
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC0</td><td>→</td><td>R 220Ω → LED (Red)</td><td>แอโนด</td><td>Alarm indicator</td></tr>
+    <tr><td>LED (Red)</td><td>→</td><td>GND</td><td>แคโทด</td><td>—</td></tr>
+    <tr><td>PC1</td><td>→</td><td>Push Button (Start/Pause)</td><td>ขา 1</td><td>Input pull-up, กด=LOW</td></tr>
+    <tr><td>Push Button</td><td>→</td><td>GND</td><td>ขา 2</td><td>—</td></tr>
+    <tr><td>PD5 (TX)</td><td>→</td><td>USB-Serial (RX)</td><td>RX</td><td>Cross-connect</td></tr>
+    <tr><td>PD6 (RX)</td><td>←</td><td>USB-Serial (TX)</td><td>TX</td><td>Cross-connect</td></tr>
+    <tr><td>GND</td><td>↔</td><td>USB-Serial GND</td><td>GND</td><td>Common ground</td></tr>
+  </tbody>
+</table>
 
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">
@@ -1001,6 +1091,21 @@ int main(void)
 
      (ไม่ใช้ TIM2 เลย — หลีกเลี่ยง conflict)
 </pre>
+
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PD2 (PWM1_CH1)</td><td>→</td><td>R 220Ω → LED (Fade)</td><td>แอโนด</td><td>Hardware PWM fade</td></tr>
+    <tr><td>LED (Fade)</td><td>→</td><td>GND</td><td>แคโทด</td><td>—</td></tr>
+    <tr><td>PC0</td><td>→</td><td>R 220Ω → LED (Toggle)</td><td>แอโนด</td><td>Software SysTick timer</td></tr>
+    <tr><td>LED (Toggle)</td><td>→</td><td>GND</td><td>แคโทด</td><td>—</td></tr>
+    <tr><td>PD5 (TX)</td><td>→</td><td>USB-Serial (RX)</td><td>RX</td><td>Cross-connect</td></tr>
+    <tr><td>PD6 (RX)</td><td>←</td><td>USB-Serial (TX)</td><td>TX</td><td>Cross-connect</td></tr>
+    <tr><td>GND</td><td>↔</td><td>USB-Serial GND</td><td>GND</td><td>Common ground</td></tr>
+  </tbody>
+</table>
 
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">

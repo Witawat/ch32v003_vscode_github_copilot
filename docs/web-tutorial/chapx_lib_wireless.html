@@ -20,6 +20,17 @@
 <pre class="ascii-circuit">
 PD5(TX)─RX(ESP01)  PD6(RX)─TX(ESP01)  3.3V─VCC+CH_PD  GND─GND+GPIO0
 ⚠️ ESP01 กินไฟ 300mA peak → ใช้ external 3.3V regulator (AMS1117-3.3, 500mA+)</pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PD5</td><td>→</td><td>ESP01</td><td>RX</td><td>USART TX → device RX</td></tr>
+    <tr><td>PD6</td><td>←</td><td>ESP01</td><td>TX</td><td>USART RX ← device TX</td></tr>
+    <tr><td>3.3V</td><td>→</td><td>ESP01</td><td>VCC + CH_PD</td><td>External 3.3V regulator 500mA+</td></tr>
+    <tr><td>GND</td><td>↔</td><td>ESP01</td><td>GND + GPIO0</td><td>กราวด์ร่วม</td></tr>
+  </tbody>
+</table>
 <pre><code class="language-c">#include "ESP01.h"
 ESP01_Handle wifi;
 ESP01_Init(&wifi, USART1, BAUD_115200);
@@ -46,6 +57,18 @@ if(ESP01_IsConnected(&wifi)) ESP01_GetIP(&wifi);</code></pre>
 <pre class="ascii-circuit">
 PD5(TX)─RX(HC05)  PD6(RX)─TX(HC05)  5V─VCC  GND─GND  EN─PC3 (HIGH=AT mode)
 HC05 TX 3.3V OK → CH32V003 RX, CH32V003 TX 3.3V → HC05 RX OK</pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PD5</td><td>→</td><td>HC05</td><td>RX</td><td>USART TX → device RX</td></tr>
+    <tr><td>PD6</td><td>←</td><td>HC05</td><td>TX</td><td>USART RX ← device TX</td></tr>
+    <tr><td>5V</td><td>→</td><td>HC05</td><td>VCC</td><td>จ่ายไฟ 5V</td></tr>
+    <tr><td>GND</td><td>↔</td><td>HC05</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+    <tr><td>PC3</td><td>→</td><td>HC05</td><td>EN</td><td>HIGH = AT mode, LOW = data mode</td></tr>
+  </tbody>
+</table>
 <pre><code class="language-c">#include "HC05.h"
 HC05_Handle bt;
 HC05_Init(&bt, USART1, BAUD_38400);
@@ -74,6 +97,20 @@ while(1) {
 <pre class="ascii-circuit">
 PC4─CSN  PC5─SCK  PC6─MOSI  PC7─MISO  PC3─CE  3.3V─VCC (ห้าม 5V!)
 Decoupling 100nF ceramic ใกล้ขา VCC</pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC4</td><td>→</td><td>nRF24L01</td><td>CSN</td><td>SPI chip select</td></tr>
+    <tr><td>PC5</td><td>→</td><td>nRF24L01</td><td>SCK</td><td>SPI clock</td></tr>
+    <tr><td>PC6</td><td>→</td><td>nRF24L01</td><td>MOSI</td><td>SPI data in</td></tr>
+    <tr><td>PC7</td><td>←</td><td>nRF24L01</td><td>MISO</td><td>SPI data out</td></tr>
+    <tr><td>PC3</td><td>→</td><td>nRF24L01</td><td>CE</td><td>Chip enable (RX/TX control)</td></tr>
+    <tr><td>3.3V</td><td>→</td><td>nRF24L01</td><td>VCC</td><td>3.3V ONLY — 100nF decoupling</td></tr>
+    <tr><td>GND</td><td>↔</td><td>nRF24L01</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+  </tbody>
+</table>
 <pre><code class="language-c">#include "nRF24L01.h"
 uint8_t tx_addr[] = {0xE7,0xE7,0xE7,0xE7,0xE7};
 uint8_t rx_addr[] = {0xC2,0xC2,0xC2,0xC2,0xC2};
@@ -106,6 +143,17 @@ while(1) {
 <pre class="ascii-circuit">
 PD5(RX)─TX(GPS)  PD6(TX)─RX(GPS) optional  3.3-5V─VCC  GND─GND
 ต้องมี active antenna — indoor = no signal</pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PD5</td><td>←</td><td>GPS NEO6M</td><td>TX</td><td>USART RX ← device TX</td></tr>
+    <tr><td>PD6 (optional)</td><td>→</td><td>GPS NEO6M</td><td>RX</td><td>USART TX → device RX (optional)</td></tr>
+    <tr><td>3.3–5V</td><td>→</td><td>GPS NEO6M</td><td>VCC</td><td>จ่ายไฟ 3.3–5V</td></tr>
+    <tr><td>GND</td><td>↔</td><td>GPS NEO6M</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+  </tbody>
+</table>
 <pre><code class="language-c">#include "GPS.h"
 GPS_Handle gps;
 GPS_Init(&gps, USART1, BAUD_9600);
@@ -135,6 +183,16 @@ while(1) {
 <pre class="ascii-circuit">
 PC0─OUT(IR receiver)  3.3V─VCC  GND─GND
 ใช้ VS1838B หรือ TSOP38238 (38kHz carrier)</pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC0</td><td>←</td><td>IR Receiver VS1838B</td><td>OUT</td><td>Demodulated IR signal</td></tr>
+    <tr><td>3.3V</td><td>→</td><td>IR Receiver VS1838B</td><td>VCC</td><td>จ่ายไฟ 3.3V</td></tr>
+    <tr><td>GND</td><td>↔</td><td>IR Receiver VS1838B</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+  </tbody>
+</table>
 <pre><code class="language-c">#include "IR.h"
 IR_Handle ir;
 IR_Init(&ir, PC0);
@@ -162,6 +220,15 @@ while(1) {
 <pre class="ascii-circuit">
 PC0─TX(soft)  PC1─RX(soft)  (pin ไหนก็ได้ — software bit-bang)
 ใช้เมื่อ USART1 ถูกใช้แล้ว → 1 USART HW + 1 SoftUART = 2 UART ports</pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC0 (pin ใดก็ได้)</td><td>→</td><td>SoftUART</td><td>TX</td><td>Software bit-bang TX</td></tr>
+    <tr><td>PC1 (pin ใดก็ได้)</td><td>←</td><td>SoftUART</td><td>RX</td><td>Software bit-bang RX</td></tr>
+  </tbody>
+</table>
 <pre><code class="language-c">#include "SoftUART.h"
 SoftUART_Handle suart;
 SoftUART_Init(&suart, PC0, PC1, BAUD_9600); // TX, RX, baud

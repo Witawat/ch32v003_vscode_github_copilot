@@ -48,6 +48,17 @@ flowchart TD
     │              │    │   │         │
     │              └────┘   │         │
     └──────────────────────────────────┘
+    </pre>
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>PC0</td><td>→</td><td>Relay Module</td><td>IN</td><td>Active LOW (LOW = ON)</td></tr>
+        <tr><td>5V</td><td>→</td><td>Relay Module</td><td>VCC</td><td></td></tr>
+        <tr><td>GND</td><td>→</td><td>Relay Module</td><td>GND</td><td></td></tr>
+      </tbody>
+    </table>
     ⚡ ห้ามจับขณะต่อ AC! ใช้ความระมัดระวังสูงสุด
     </pre>
     <p><strong>⚡ อันตรายถึงชีวิต!</strong> ห้ามสัมผัสขั้ว Relay ขณะต่อกับไฟ AC 220V — ตรวจสอบให้แน่ใจว่าถอดปลั๊กก่อนแก้ไขวงจร — ต่อสายดินให้เรียบร้อย — ผู้เริ่มต้นควรใช้ Relay กับโหลด DC 12V ก่อน</p>

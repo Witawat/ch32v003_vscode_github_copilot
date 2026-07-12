@@ -39,7 +39,21 @@ flowchart TD
     │ 3.3V───────────VCC              │           │
     │ GND────────────GND              └───────────┤
     └──────────────────────────────────────────────┘
-</pre></section>
+</pre>
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>PC5</td><td>→</td><td>W25Qxx</td><td>CLK</td><td>SPI Clock</td></tr>
+        <tr><td>PC6</td><td>←</td><td>W25Qxx</td><td>DO (IO1)</td><td>SPI Data Out</td></tr>
+        <tr><td>PC7</td><td>→</td><td>W25Qxx</td><td>DI (IO0)</td><td>SPI Data In</td></tr>
+        <tr><td>PC4</td><td>→</td><td>W25Qxx</td><td>CS</td><td>Chip Select</td></tr>
+        <tr><td>3.3V</td><td>↔</td><td>W25Qxx</td><td>VCC</td><td>จ่ายไฟ 3.3V</td></tr>
+        <tr><td>GND</td><td>↔</td><td>W25Qxx</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+      </tbody>
+    </table>
+</section>
 
 <section><h2>📚 หลักการทำงาน</h2>
 <p><strong>W25Qxx</strong> เป็น SPI NOR Flash — ต้อง Erase Sector ก่อนเขียนเสมอ — 1 sector = 4KB, endurance 100K cycles</p></section>

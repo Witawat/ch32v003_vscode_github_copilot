@@ -20,6 +20,17 @@
 <pre class="ascii-circuit">
 PC0─TRIG  PC1─ECHO  5V─VCC  GND─GND
 ⚠️ ECHO 5V → voltage divider 2.2kΩ+3.3kΩ ลดเหลือ ~3.3V</pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC0</td><td>→</td><td>HC-SR04</td><td>TRIG</td><td>สั่งส่ง ultrasonic 10µs pulse</td></tr>
+    <tr><td>PC1</td><td>←</td><td>HC-SR04</td><td>ECHO</td><td>รับ pulse ตามระยะทาง</td></tr>
+    <tr><td>5V</td><td>→</td><td>HC-SR04</td><td>VCC</td><td>จ่ายไฟ 5V</td></tr>
+    <tr><td>GND</td><td>↔</td><td>HC-SR04</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+  </tbody>
+</table>
 <pre><code class="language-c">#include "HCSR04.h"
 HCSR04_Init(PC0, PC1);
 float dist = HCSR04_MeasureCm();
@@ -37,6 +48,18 @@ if(dist > 0) { USART_PrintFloat(dist, 1); USART_Println(" cm"); }
 <pre class="ascii-circuit">
 PC1─SDA  PC2─SCL  3.3V─VCC  GND─GND  XSHUT─3.3V (หรือ GPIO สำหรับ multi-sensor)
 </pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC1</td><td>↔</td><td>VL53L0X</td><td>SDA</td><td>I2C data</td></tr>
+    <tr><td>PC2</td><td>→</td><td>VL53L0X</td><td>SCL</td><td>I2C clock</td></tr>
+    <tr><td>3.3V</td><td>→</td><td>VL53L0X</td><td>VCC</td><td>จ่ายไฟ 3.3V</td></tr>
+    <tr><td>GND</td><td>↔</td><td>VL53L0X</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+    <tr><td>XSHUT</td><td>→</td><td>VL53L0X</td><td>XSHUT</td><td>ต่อ 3.3V หรือ GPIO ควบคุม</td></tr>
+  </tbody>
+</table>
 <pre><code class="language-c">#include "VL53L0X.h"
 VL53L0X_Init(0x29); // I2C addr (เปลี่ยน XSHUT สำหรับ multiple)
 uint16_t mm = VL53L0X_ReadRangeMM();
@@ -54,6 +77,18 @@ uint16_t mm = VL53L0X_ReadRangeMM();
 <pre class="ascii-circuit">
 PC1─SDA  PC2─SCL  3.3V─VCC  GND─GND  AD0─GND (=0x68, หรือ VCC =0x69)
 </pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC1</td><td>↔</td><td>MPU6050</td><td>SDA</td><td>I2C data</td></tr>
+    <tr><td>PC2</td><td>→</td><td>MPU6050</td><td>SCL</td><td>I2C clock</td></tr>
+    <tr><td>3.3V</td><td>→</td><td>MPU6050</td><td>VCC</td><td>จ่ายไฟ 3.3V</td></tr>
+    <tr><td>GND</td><td>↔</td><td>MPU6050</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+    <tr><td>AD0</td><td>→</td><td>MPU6050</td><td>AD0</td><td>ต่อ GND = 0x68, VCC = 0x69</td></tr>
+  </tbody>
+</table>
 <pre><code class="language-c">#include "MPU6050.h"
 MPU6050_Data_t data;
 MPU6050_Init(0x68);
@@ -75,6 +110,18 @@ float angle = 0.98f * (angle + gx*dt) + 0.02f * (atan2(ay, az)*57.3f);</code></p
 <pre class="ascii-circuit">
 PC1─SDA  PC2─SCL  3.3V─VCC  GND─GND  DIR─GND (clockwise, หรือ VCC กลับทิศ)
 </pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC1</td><td>↔</td><td>AS5600</td><td>SDA</td><td>I2C data</td></tr>
+    <tr><td>PC2</td><td>→</td><td>AS5600</td><td>SCL</td><td>I2C clock</td></tr>
+    <tr><td>3.3V</td><td>→</td><td>AS5600</td><td>VCC</td><td>จ่ายไฟ 3.3V</td></tr>
+    <tr><td>GND</td><td>↔</td><td>AS5600</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+    <tr><td>DIR</td><td>→</td><td>AS5600</td><td>DIR</td><td>ต่อ GND = clockwise, VCC = reverse</td></tr>
+  </tbody>
+</table>
 <pre><code class="language-c">#include "AS5600.h"
 AS5600_Init();
 uint16_t raw = AS5600_ReadAngle();        // 0-4095
@@ -94,6 +141,16 @@ float deg = AS5600_ReadAngleDegrees();    // 0.0-359.9
 <pre class="ascii-circuit">
 PC1─OUT  5V─VCC  GND─GND  (OUT 3.3V compatible — ต่อตรงได้)
 </pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC1</td><td>←</td><td>PIR Motion Sensor</td><td>OUT</td><td>HIGH เมื่อ detect การเคลื่อนไหว</td></tr>
+    <tr><td>5V</td><td>→</td><td>PIR Motion Sensor</td><td>VCC</td><td>จ่ายไฟ 5V</td></tr>
+    <tr><td>GND</td><td>↔</td><td>PIR Motion Sensor</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+  </tbody>
+</table>
 <pre><code class="language-c">volatile uint8_t motion = 0;
 void pir_isr(void) { motion = 1; }
 pinMode(PC1, PIN_MODE_INPUT);
@@ -114,6 +171,16 @@ while(1) {
 <pre class="ascii-circuit">
 PC1─OUT  3.3-5V─VCC  GND─GND  (OUT 3.3V compatible)
 </pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC1</td><td>←</td><td>RCWL0516</td><td>OUT</td><td>HIGH เมื่อ detect movement</td></tr>
+    <tr><td>3.3–5V</td><td>→</td><td>RCWL0516</td><td>VCC</td><td>จ่ายไฟ 3.3–5V</td></tr>
+    <tr><td>GND</td><td>↔</td><td>RCWL0516</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+  </tbody>
+</table>
 <pre><code class="language-c">volatile uint8_t radar = 0;
 void radar_isr(void) { radar = 1; }
 pinMode(PC1, PIN_MODE_INPUT);

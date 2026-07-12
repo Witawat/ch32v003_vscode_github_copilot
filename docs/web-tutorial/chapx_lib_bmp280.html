@@ -43,6 +43,18 @@ flowchart TD
 └────────────────────────────────────┘
     </pre>
     <p>SDO pin เลือก I2C address — ต่อ GND = 0x76 (BMP280_ADDR_LOW), ต่อ VCC = 0x77 (BMP280_ADDR_HIGH) — ต่อ BMP280 ได้ 2 ตัวบนบัสเดียวกัน</p>
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>PC1</td><td>↔</td><td>SDA</td><td>-</td><td>สายข้อมูล I2C — ต้องมี R 4.7kΩ pull-up ไป 3.3V</td></tr>
+        <tr><td>PC2</td><td>→</td><td>SCL</td><td>-</td><td>สายนาฬิกา I2C — ต้องมี R 4.7kΩ pull-up ไป 3.3V</td></tr>
+        <tr><td>3.3V</td><td>→</td><td>VCC</td><td>-</td><td>ไฟเลี้ยง 3.3V</td></tr>
+        <tr><td>GND</td><td>→</td><td>GND</td><td>-</td><td>กราวด์ร่วม</td></tr>
+        <tr><td>GND</td><td>→</td><td>SDO</td><td>-</td><td>ต่อ GND = address 0x76, ต่อ VCC = address 0x77</td></tr>
+      </tbody>
+    </table>
 </section>
 
 <section>

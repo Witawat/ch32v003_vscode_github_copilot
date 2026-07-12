@@ -13,9 +13,9 @@
 #define ENABLE_PRINTF  0
 
 /* ตั้งค่า PACKAGE ของ MCU — เลือกให้ตรงกับแพ็กเกจที่ใช้จริง */
-// #define CH32V003_PACKAGE  PACKAGE_SOP8      // SOP-8 (J4M6, 6 pins)
+#define CH32V003_PACKAGE  PACKAGE_SOP8      // SOP-8 (J4M6, 6 pins)
 // #define CH32V003_PACKAGE  PACKAGE_SOP16     // SOP-16 (A4M6, 14+ pins)
-#define CH32V003_PACKAGE  PACKAGE_TSSOP20   // TSSOP-20 (F4P6, 18 pins) ← default
+// #define CH32V003_PACKAGE  PACKAGE_TSSOP20   // TSSOP-20 (F4P6, 18 pins) ← default
 // #define CH32V003_PACKAGE  PACKAGE_QFN20     // QFN-20 (F4U6, 18 pins)
 
 #include <main.h>

@@ -45,6 +45,17 @@ flowchart LR
     - ขาแคโทด (- สั้น) ต่อ GND
 </pre>
 
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PD2 (PWM1_CH1)</td><td>→</td><td>R 220Ω</td><td>ขา 1</td><td>จำกัดกระแส LED</td></tr>
+    <tr><td>R 220Ω</td><td>→</td><td>LED (แอโนด)</td><td>ขายาว (+)</td><td>—</td></tr>
+    <tr><td>LED (แคโทด)</td><td>→</td><td>GND</td><td>ขาสั้น (-)</td><td>—</td></tr>
+  </tbody>
+</table>
+
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">
 flowchart TD
@@ -118,6 +129,17 @@ int main(void)
     - GND Servo + MCU ต่อรวมกัน (common ground)
 </pre>
 
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PD2 (PWM1_CH1)</td><td>→</td><td>Servo SG90 (Signal)</td><td>ส้ม</td><td>PWM 50Hz, duty 5-10%</td></tr>
+    <tr><td>Servo SG90 (VCC)</td><td>←</td><td>+5V ภายนอก</td><td>แดง</td><td>ห้ามใช้ 3.3V จาก MCU</td></tr>
+    <tr><td>Servo SG90 (GND)</td><td>↔</td><td>GND (MCU + 5V)</td><td>น้ำตาล</td><td>Common ground</td></tr>
+  </tbody>
+</table>
+
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">
 flowchart TD
@@ -185,6 +207,21 @@ int main(void)
     PA1 ---(Signal)-- Servo    (PWM1_CH2, TIM1, 50Hz)
     PC0 ---R---|LED2|---GND    (PWM2_CH3, TIM2, 1kHz)
 </pre>
+
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PD2 (PWM1_CH1)</td><td>→</td><td>R 220Ω → LED1</td><td>แอโนด</td><td>TIM1, 50Hz fade</td></tr>
+    <tr><td>LED1</td><td>→</td><td>GND</td><td>แคโทด</td><td>—</td></tr>
+    <tr><td>PA1 (PWM1_CH2)</td><td>→</td><td>Servo SG90 (Signal)</td><td>ส้ม</td><td>TIM1, 50Hz</td></tr>
+    <tr><td>Servo VCC</td><td>←</td><td>+5V ภายนอก</td><td>แดง</td><td>—</td></tr>
+    <tr><td>Servo GND</td><td>↔</td><td>GND</td><td>น้ำตาล</td><td>Common ground</td></tr>
+    <tr><td>PC0 (PWM2_CH3)</td><td>→</td><td>R 220Ω → LED2</td><td>แอโนด</td><td>TIM2, 1kHz blink</td></tr>
+    <tr><td>LED2</td><td>→</td><td>GND</td><td>แคโทด</td><td>—</td></tr>
+  </tbody>
+</table>
 
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">
@@ -344,6 +381,19 @@ int main(void)
                              Buzzer
     - ใช้ทรานซิสเตอร์ขับ Buzzer เพราะกระแสเกิน MCU จ่าย
 </pre>
+
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PD2 (PWM1_CH1)</td><td>→</td><td>R 1kΩ</td><td>ขา 1</td><td>Base resistor</td></tr>
+    <tr><td>R 1kΩ</td><td>→</td><td>2N2222 (Base)</td><td>B</td><td>Drive transistor</td></tr>
+    <tr><td>2N2222 (Collector)</td><td>→</td><td>Piezo Buzzer (-)</td><td>—</td><td>—</td></tr>
+    <tr><td>Piezo Buzzer (+)</td><td>→</td><td>VCC (5V)</td><td>—</td><td>แหล่งจ่ายภายนอก</td></tr>
+    <tr><td>2N2222 (Emitter)</td><td>→</td><td>GND</td><td>E</td><td>—</td></tr>
+  </tbody>
+</table>
 
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">
@@ -570,6 +620,22 @@ int main(void) {
     LED: PC0 --- 220Ω ---|>|--- GND
     USART: PD5=TX, PD6=RX
 </pre>
+
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PD2 (ADC_IN2)</td><td>←</td><td>Potentiometer (wiper)</td><td>ขากลาง</td><td>ADC input 0-3.3V</td></tr>
+    <tr><td>Potentiometer</td><td>←</td><td>VCC (3.3V)</td><td>ขาบน</td><td>—</td></tr>
+    <tr><td>Potentiometer</td><td>→</td><td>GND</td><td>ขาล่าง</td><td>—</td></tr>
+    <tr><td>PC0 (PWM2_CH3)</td><td>→</td><td>R 220Ω → LED</td><td>แอโนด</td><td>PWM output 0-100%</td></tr>
+    <tr><td>LED</td><td>→</td><td>GND</td><td>แคโทด</td><td>—</td></tr>
+    <tr><td>PD5 (TX)</td><td>→</td><td>USB-Serial (RX)</td><td>RX</td><td>Cross-connect</td></tr>
+    <tr><td>PD6 (RX)</td><td>←</td><td>USB-Serial (TX)</td><td>TX</td><td>Cross-connect</td></tr>
+    <tr><td>GND</td><td>↔</td><td>USB-Serial GND</td><td>GND</td><td>Common ground</td></tr>
+  </tbody>
+</table>
 
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">

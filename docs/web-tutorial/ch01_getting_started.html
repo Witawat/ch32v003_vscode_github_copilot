@@ -45,6 +45,18 @@ flowchart TD
     │     │ GND ──── GND
     └─────┘
     </pre>
+
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>PC0</td><td>→</td><td>R 220Ω → LED</td><td>Anode(+)</td><td>LED Cathode(−) → GND</td></tr>
+        <tr><td>VDD</td><td>→</td><td>ไฟเลี้ยง 3.3V</td><td>VCC</td><td></td></tr>
+        <tr><td>GND</td><td>→</td><td>GND</td><td>GND</td><td></td></tr>
+      </tbody>
+    </table>
+
     <p>บอร์ด CH32V003 ขั้นต่ำต้องการไฟ 3.3V, GND, และ LED ต่อผ่าน R 220Ω ที่ PC0</p>
     <p><strong>หมายเหตุ SOP-8:</strong> หากใช้ SOP-8 (CH32V003J4M6) ให้ใช้ <code>PACKAGE_SOP8</code> และใช้ PC1 หรือ PA1 แทน PC0 (PC0 ไม่มีบน SOP-8)</p>
 </section>

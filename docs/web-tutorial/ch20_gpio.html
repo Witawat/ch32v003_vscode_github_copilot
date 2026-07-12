@@ -46,6 +46,17 @@ flowchart LR
     - ขาแคโทด (- สั้น) ต่อ GND
 </pre>
 
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC0</td><td>→</td><td>R 220Ω</td><td>ขา 1</td><td>จำกัดกระแส LED</td></tr>
+    <tr><td>R 220Ω</td><td>→</td><td>LED (แอโนด)</td><td>ขายาว (+)</td><td>—</td></tr>
+    <tr><td>LED (แคโทด)</td><td>→</td><td>GND</td><td>ขาสั้น (-)</td><td>ต่อร่วม GND</td></tr>
+  </tbody>
+</table>
+
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">
 flowchart TD
@@ -109,6 +120,19 @@ int main(void)
     PD5(TX) -- USB-to-Serial -- PC  (115200 baud)
     PD6(RX) -- USB-to-Serial -- PC
 </pre>
+
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC1</td><td>→</td><td>Push Button</td><td>ขา 1</td><td>ACTIVE_LOW, internal pull-up ~40kΩ</td></tr>
+    <tr><td>Push Button</td><td>→</td><td>GND</td><td>ขา 2</td><td>กด=LOW</td></tr>
+    <tr><td>PD5 (TX)</td><td>→</td><td>USB-Serial (RX)</td><td>RX</td><td>Cross-connect</td></tr>
+    <tr><td>PD6 (RX)</td><td>←</td><td>USB-Serial (TX)</td><td>TX</td><td>Cross-connect</td></tr>
+    <tr><td>GND</td><td>↔</td><td>USB-Serial GND</td><td>GND</td><td>Common ground</td></tr>
+  </tbody>
+</table>
 
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">
@@ -248,6 +272,22 @@ int main(void) {
     PC3 ---R---|LED4|---GND
 </pre>
 
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC0</td><td>→</td><td>R 220Ω → LED1</td><td>แอโนด</td><td>LED ดวงที่ 1</td></tr>
+    <tr><td>LED1 (แคโทด)</td><td>→</td><td>GND</td><td>—</td><td>—</td></tr>
+    <tr><td>PC1</td><td>→</td><td>R 220Ω → LED2</td><td>แอโนด</td><td>LED ดวงที่ 2</td></tr>
+    <tr><td>LED2 (แคโทด)</td><td>→</td><td>GND</td><td>—</td><td>—</td></tr>
+    <tr><td>PC2</td><td>→</td><td>R 220Ω → LED3</td><td>แอโนด</td><td>LED ดวงที่ 3</td></tr>
+    <tr><td>LED3 (แคโทด)</td><td>→</td><td>GND</td><td>—</td><td>—</td></tr>
+    <tr><td>PC3</td><td>→</td><td>R 220Ω → LED4</td><td>แอโนด</td><td>LED ดวงที่ 4</td></tr>
+    <tr><td>LED4 (แคโทด)</td><td>→</td><td>GND</td><td>—</td><td>—</td></tr>
+  </tbody>
+</table>
+
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">
 flowchart TD
@@ -313,6 +353,21 @@ portWrite(GPIOC, 0b10101010);  // PC7=HIGH, PC6=LOW, PC5=HIGH, ...
     PC2 -- LATCH (ST_CP)
     74HC595 outputs Q0-Q7 -- R 220Ω -- LED 8 ดวง -- GND
 </pre>
+
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC0</td><td>→</td><td>74HC595 (DS)</td><td>14 (Data)</td><td>Serial data input</td></tr>
+    <tr><td>PC1</td><td>→</td><td>74HC595 (SH_CP)</td><td>11 (Clock)</td><td>Shift register clock</td></tr>
+    <tr><td>PC2</td><td>→</td><td>74HC595 (ST_CP)</td><td>12 (Latch)</td><td>Storage register clock</td></tr>
+    <tr><td>74HC595 (Q0–Q7)</td><td>→</td><td>R 220Ω → LED 8 ดวง</td><td>แอโนด</td><td>ขยาย output 3→8</td></tr>
+    <tr><td>LED 8 ดวง (แคโทด)</td><td>→</td><td>GND</td><td>—</td><td>—</td></tr>
+    <tr><td>74HC595 (VCC)</td><td>←</td><td>3.3V</td><td>16</td><td>—</td></tr>
+    <tr><td>74HC595 (GND)</td><td>→</td><td>GND</td><td>8</td><td>—</td></tr>
+  </tbody>
+</table>
 
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">

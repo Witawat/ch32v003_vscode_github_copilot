@@ -45,6 +45,16 @@ flowchart LR
     - OPAMP output เชื่อม ADC ภายใน — ไม่ต้องต่อสายภายนอก
 </pre>
 
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PD5 (OPAMP1_IN)</td><td>←</td><td>สัญญาณอนาล็อก</td><td>—</td><td>OPAMP non-inverting input</td></tr>
+    <tr><td>OPAMP1_OUT</td><td>→</td><td>ADC_IN (PA1)</td><td>ภายใน MCU</td><td>ต่อภายใน — ไม่ต้องใช้สาย</td></tr>
+  </tbody>
+</table>
+
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">
 flowchart TD
@@ -119,6 +129,17 @@ int main(void)
                    +---- R2=10kΩ ---- PA1 (ADC in)
     - Gain = 1 + R2/R1 = 1 + 10k/10k = 2
 </pre>
+
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PD5 (OPAMP1_IN)</td><td>←</td><td>สัญญาณอนาล็อกเข้า</td><td>—</td><td>Non-inverting input</td></tr>
+    <tr><td>OPAMP1_OUT</td><td>→</td><td>R1=10kΩ → GND</td><td>—</td><td>Divider ขาล่าง</td></tr>
+    <tr><td>OPAMP1_OUT</td><td>→</td><td>R2=10kΩ → PA1 (ADC_IN)</td><td>—</td><td>Divider ขาบน, gain=2</td></tr>
+  </tbody>
+</table>
 
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">

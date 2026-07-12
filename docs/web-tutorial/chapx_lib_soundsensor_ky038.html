@@ -21,7 +21,19 @@ flowchart TD
    │                                    │
    │  Mic → LM393 Comparator            │
    └────────────────────────────────────┘
-</pre><p>KY-038 ใช้ Electret Microphone + LM393 Comparator — Analog output เป็นสัญญาณเสียงขยาย — Digital output เป็น comparator เทียบกับ threshold (ปรับด้วย Pot)</p></section>
+</pre>
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>3.3V</td><td>→</td><td>KY-038</td><td>VCC</td><td>จ่ายไฟ 3.3V</td></tr>
+        <tr><td>GND</td><td>→</td><td>KY-038</td><td>GND</td><td>Ground ร่วม</td></tr>
+        <tr><td>PC4 (ADC)</td><td>←</td><td>KY-038</td><td>A0</td><td>Analog Output — amplitude เสียง</td></tr>
+        <tr><td>PC1 (GPIO)</td><td>←</td><td>KY-038</td><td>D0</td><td>Digital Output — เสียงเกิน threshold</td></tr>
+      </tbody>
+    </table>
+    <p>KY-038 ใช้ Electret Microphone + LM393 Comparator — Analog output เป็นสัญญาณเสียงขยาย — Digital output เป็น comparator เทียบกับ threshold (ปรับด้วย Pot)</p></section>
 <section><h2>📚 หลักการทำงาน</h2><p><strong>KY-038 Sound Sensor</strong> ใช้ Electret Microphone จับเสียง → ขยายผ่าน Op-Amp → แบ่งเป็น 2 outputs — Analog (A0): ค่าแรงดันตาม amplitude ของเสียง — Digital (D0): LM393 comparator — HIGH เมื่อเสียงเกิน threshold</p><p><strong>Analog Output</strong> วัด amplitude ของเสียง — ใช้ ADC อ่านเพื่อวัดระดับเสียงแบบ continuous</p><p><strong>Clap Detection:</strong> วัด pattern ของเสียง — ตบมือ 1 ครั้ง = peak สั้น ~100ms — ตบ 2 ครั้ง = peak 2 ครั้งห่าง ~200-500ms — ตรวจจับด้วย state machine</p></section>
 <section><h2>💻 เขียน Code ทีละขั้น</h2>
 <div class="step"><h3>ขั้นที่ 1: Init SoundSensor</h3><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20

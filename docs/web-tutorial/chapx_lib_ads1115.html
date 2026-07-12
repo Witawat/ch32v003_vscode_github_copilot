@@ -24,7 +24,21 @@ flowchart TD
    │  Sensor3 ─────── AIN2              │
    │  Sensor4 ─────── AIN3              │
    └────────────────────────────────────┘
-</pre><p>ต่อ I2C ปกติ — ADDR pin เลือก 4 address (GND=0x48, VDD=0x49, SDA=0x4A, SCL=0x4B)</p></section>
+</pre><p>ต่อ I2C ปกติ — ADDR pin เลือก 4 address (GND=0x48, VDD=0x49, SDA=0x4A, SCL=0x4B)</p>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC1</td><td>↔</td><td>SDA</td><td>-</td><td>สายข้อมูล I2C — ต้องมี R 4.7kΩ pull-up ไป 3.3V</td></tr>
+    <tr><td>PC2</td><td>→</td><td>SCL</td><td>-</td><td>สายนาฬิกา I2C — ต้องมี R 4.7kΩ pull-up ไป 3.3V</td></tr>
+    <tr><td>3.3V</td><td>→</td><td>VDD</td><td>-</td><td>ไฟเลี้ยง 3.3V</td></tr>
+    <tr><td>GND</td><td>→</td><td>GND</td><td>-</td><td>กราวด์ร่วม</td></tr>
+    <tr><td>GND</td><td>→</td><td>ADDR</td><td>-</td><td>ตั้งค่า I2C address เป็น 0x48</td></tr>
+    <tr><td>PD4</td><td>→</td><td>ALRT</td><td>-</td><td>ขาแจ้งเตือน (optional)</td></tr>
+  </tbody>
+</table>
+</section>
 <section><h2>📚 หลักการทำงาน</h2><p><strong>ADS1115</strong> เป็น ADC แบบ Delta-Sigma ความละเอียด 16-bit สื่อสารผ่าน I2C มี 4 ช่องสัญญาณ Analog Input — ADS1115_ReadVoltage() คืนค่าแรงดันเป็น float โดยตรง — PGA gain ตั้งด้วย ADS1115_SetGain()</p></section>
 <section><h2>💻 เขียน Code ทีละขั้น</h2>
 <div class="step"><h3>ขั้นที่ 1: Init ADS1115</h3><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20

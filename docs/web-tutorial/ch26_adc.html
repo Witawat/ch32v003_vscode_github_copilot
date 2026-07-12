@@ -42,6 +42,17 @@ flowchart LR
     - หรือใช้สายจั้มต่อ PA1 กับจุดแบ่งแรงดันใด ๆ
 </pre>
 
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PA1 (ADC_IN1)</td><td>←</td><td>Potentiometer (wiper)</td><td>ขากลาง</td><td>ADC input 0-3.3V</td></tr>
+    <tr><td>Potentiometer</td><td>←</td><td>VCC (3.3V)</td><td>ขาบน</td><td>—</td></tr>
+    <tr><td>Potentiometer</td><td>→</td><td>GND</td><td>ขาล่าง</td><td>—</td></tr>
+  </tbody>
+</table>
+
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">
 flowchart TD
@@ -108,6 +119,21 @@ int main(void)
     PC4 ---- Potentiometer 2 (10kΩ)
     PD6 ---- LDR + 10kΩ pull-down
 </pre>
+
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PA1 (ADC_IN1)</td><td>←</td><td>Potentiometer 1 (wiper)</td><td>ขากลาง</td><td>10kΩ</td></tr>
+    <tr><td>PC4 (ADC_IN4)</td><td>←</td><td>Potentiometer 2 (wiper)</td><td>ขากลาง</td><td>10kΩ</td></tr>
+    <tr><td>PD6 (ADC_IN6)</td><td>←</td><td>LDR + R 10kΩ (pull-down)</td><td>—</td><td>Voltage divider</td></tr>
+    <tr><td>Pot 1/2</td><td>←</td><td>VCC (3.3V)</td><td>ขาบน</td><td>—</td></tr>
+    <tr><td>Pot 1/2</td><td>→</td><td>GND</td><td>ขาล่าง</td><td>—</td></tr>
+    <tr><td>LDR</td><td>←</td><td>3.3V</td><td>—</td><td>—</td></tr>
+    <tr><td>R 10kΩ</td><td>→</td><td>GND</td><td>—</td><td>Pull-down</td></tr>
+  </tbody>
+</table>
 
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">
@@ -176,6 +202,18 @@ int main(void) {
     Voltage divider: Vout = Vin × 1k / (2k + 1k) = Vin / 3
     (4.2V → 1.4V, 3.7V → 1.23V, 3.0V → 1.0V)
 </pre>
+
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Li-Po (+)</td><td>→</td><td>R 2kΩ</td><td>—</td><td>Voltage divider top</td></tr>
+    <tr><td>R 2kΩ</td><td>→</td><td>PC4 (ADC_IN4)</td><td>—</td><td>จุดแบ่งแรงดัน</td></tr>
+    <tr><td>PC4</td><td>→</td><td>R 1kΩ → GND</td><td>—</td><td>Divider bottom</td></tr>
+    <tr><td>Li-Po (-)</td><td>↔</td><td>GND</td><td>—</td><td>Common ground</td></tr>
+  </tbody>
+</table>
 
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">

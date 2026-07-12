@@ -20,6 +20,18 @@
 <pre class="ascii-circuit">
 3.3V─VCC  GND─GND  PC1─SDA  PC2─SCL  (ADDR─GND = 0x23, ADDR─VCC = 0x5C)
 </pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC1</td><td>↔</td><td>BH1750</td><td>SDA</td><td>I2C data</td></tr>
+    <tr><td>PC2</td><td>→</td><td>BH1750</td><td>SCL</td><td>I2C clock</td></tr>
+    <tr><td>3.3V</td><td>→</td><td>BH1750</td><td>VCC</td><td>จ่ายไฟ 3.3V</td></tr>
+    <tr><td>GND</td><td>↔</td><td>BH1750</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+    <tr><td>ADDR</td><td>→</td><td>BH1750</td><td>ADDR</td><td>ต่อ GND = 0x23, VCC = 0x5C</td></tr>
+  </tbody>
+</table>
 <pre><code class="language-c">#include "BH1750.h"
 BH1750_Init(0x23, BH1750_CONT_HIRES);  // 1lx resolution
 uint16_t lux = BH1750_ReadLux();
@@ -40,6 +52,18 @@ USART_Print("Light: "); USART_PrintNum(lux); USART_Print(" lx");
 <pre class="ascii-circuit">
 3.3V─VCC  GND─GND  PC1─SDA  PC2─SCL  (LED pin — optional, built-in white LED)
 </pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC1</td><td>↔</td><td>TCS34725</td><td>SDA</td><td>I2C data</td></tr>
+    <tr><td>PC2</td><td>→</td><td>TCS34725</td><td>SCL</td><td>I2C clock</td></tr>
+    <tr><td>3.3V</td><td>→</td><td>TCS34725</td><td>VCC</td><td>จ่ายไฟ 3.3V</td></tr>
+    <tr><td>GND</td><td>↔</td><td>TCS34725</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+    <tr><td>LED</td><td>→</td><td>TCS34725</td><td>LED</td><td>ควบคุม built-in white LED</td></tr>
+  </tbody>
+</table>
 <pre><code class="language-c">#include "TCS34725.h"
 TCS34725_Init(0x29, TCS34725_GAIN_1X, TCS34725_INTEG_24MS);
 uint16_t r, g, b, c;
@@ -64,6 +88,16 @@ TCS34725_SetLED(1);  // 1=ON, 0=OFF
 <pre class="ascii-circuit">
 5V─VCC  GND─GND  PC4(AIN2)─AO  (R 10kΩ load — บนโมดูลมีแล้ว)
 </pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC4</td><td>←</td><td>MQ Gas Sensor</td><td>AO</td><td>Analog output (ADC)</td></tr>
+    <tr><td>5V</td><td>→</td><td>MQ Gas Sensor</td><td>VCC</td><td>จ่ายไฟ 5V (heater ~800mW)</td></tr>
+    <tr><td>GND</td><td>↔</td><td>MQ Gas Sensor</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+  </tbody>
+</table>
 <pre><code class="language-c">#include "MQGas.h"
 MQGas_Init(ADC_CH_PC4, MQ2);   // MQ2/MQ3/MQ5/MQ7/MQ135
 MQGas_Calibrate();              // ★ ในอากาศสะอาด — หาค่า Ro
@@ -88,6 +122,17 @@ MQGas_SetType(MQ135);  // เปลี่ยนระหว่าง MQ2→MQ135
 <pre class="ascii-circuit">
 5V─VCC  GND─GND  PD5(TX)─RX(PMS)  PD6(RX)─TX(PMS)
 </pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PD5</td><td>→</td><td>PMS5003</td><td>RX</td><td>USART TX → device RX</td></tr>
+    <tr><td>PD6</td><td>←</td><td>PMS5003</td><td>TX</td><td>USART RX ← device TX</td></tr>
+    <tr><td>5V</td><td>→</td><td>PMS5003</td><td>VCC</td><td>จ่ายไฟ 5V</td></tr>
+    <tr><td>GND</td><td>↔</td><td>PMS5003</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+  </tbody>
+</table>
 <pre><code class="language-c">#include "PMS5003.h"
 PMS5003_Init(USART1);             // ใช้ USART1, baud 9600
 PMS5003_SetMode(PMS5003_MODE_ACTIVE);  // Auto-send ทุก ~1s
@@ -118,6 +163,16 @@ PMS5003_Read(&data);</code></pre>
 <pre class="ascii-circuit">
 3.3V─NTC─PC4(AIN2)─R10kΩ─GND  (voltage divider — วัดแรงดันคร่อม R_fixed)
 </pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC4</td><td>←</td><td>NTC 10kΩ + R 10kΩ</td><td>Voltage divider midpoint</td><td>ADC แรงดันคร่อม R_fixed</td></tr>
+    <tr><td>3.3V</td><td>→</td><td>NTC 10kΩ</td><td>VCC (ผ่าน NTC)</td><td>จ่ายไฟ voltage divider</td></tr>
+    <tr><td>GND</td><td>↔</td><td>R 10kΩ</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+  </tbody>
+</table>
 <pre><code class="language-c">#include "NTC10K.h"
 NTC10K_Init(ADC_CH_PC4, 10000.0f);  // R_fixed = 10kΩ
 float temp = NTC10K_ReadCelsius();
@@ -142,6 +197,15 @@ float avg = sum / 10.0f;</code></pre>
 <pre class="ascii-circuit">
 PC0─Buzzer(+)  GND─Buzzer(-)  (Active: transistor optional ถ้า curr > 20mA)
 </pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC0 / PC4</td><td>→</td><td>Buzzer</td><td>+ (Signal)</td><td>Active: GPIO, Passive: PWM</td></tr>
+    <tr><td>GND</td><td>↔</td><td>Buzzer</td><td>−</td><td>กราวด์ร่วม</td></tr>
+  </tbody>
+</table>
 <pre><code class="language-c">#include "Buzzer.h"
 
 // === Active Buzzer (มี oscillator ในตัว — ต่อไฟก็ดัง) ===

@@ -38,7 +38,20 @@ flowchart TD
     │ PC2  ─────────────── SCL      │
     │                 (pull-up 4.7k)│
     └────────────────────────────────┘
-</pre></section>
+    </pre>
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>PC1</td><td>↔</td><td>TM1650</td><td>SDA</td><td>I2C data</td></tr>
+        <tr><td>PC2</td><td>→</td><td>TM1650</td><td>SCL</td><td>I2C clock</td></tr>
+        <tr><td>3.3V</td><td>→</td><td>TM1650</td><td>VCC</td><td></td></tr>
+        <tr><td>GND</td><td>→</td><td>TM1650</td><td>GND</td><td></td></tr>
+        <tr><td>3.3V</td><td>→</td><td>R 4.7kΩ pull-up</td><td>SDA/SCL</td><td>I2C bus — จำเป็นต่อ I2C</td></tr>
+      </tbody>
+    </table>
+    <p>TM1650 เป็น I2C variant ของ TM1637 — address 0x24-0x27 — ต้องมี pull-up 4.7kΩ บน SDA/SCL</p></section>
 <section><h2>📚 หลักการทำงาน</h2>
 <p><strong>TM1650</strong> เป็น I2C variant ของ TM1637 — ใช้ I2C มาตรฐาน — TM1650_Handle instance — address 0x24-0x27</p></section>
 <section><h2>💻 เขียน Code ทีละขั้น</h2>

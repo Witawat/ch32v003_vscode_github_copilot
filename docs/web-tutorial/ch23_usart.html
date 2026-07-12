@@ -47,6 +47,17 @@ flowchart LR
     - GND ต้องต่อร่วมกันเสมอ!
 </pre>
 
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PD5 (TX)</td><td>→</td><td>USB-Serial (RX)</td><td>RX</td><td>Cross-connect</td></tr>
+    <tr><td>PD6 (RX)</td><td>←</td><td>USB-Serial (TX)</td><td>TX</td><td>Cross-connect</td></tr>
+    <tr><td>GND</td><td>↔</td><td>USB-Serial GND</td><td>GND</td><td>Common ground</td></tr>
+  </tbody>
+</table>
+
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">
 flowchart TD
@@ -106,6 +117,17 @@ int main(void)
     GND ------------------ GND
     (เหมือน ex01 — ต่อแบบ Cross-connect, Baud 115200)
 </pre>
+
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PD5 (TX)</td><td>→</td><td>USB-Serial (RX)</td><td>RX</td><td>Cross-connect</td></tr>
+    <tr><td>PD6 (RX)</td><td>←</td><td>USB-Serial (TX)</td><td>TX</td><td>Cross-connect</td></tr>
+    <tr><td>GND</td><td>↔</td><td>USB-Serial GND</td><td>GND</td><td>Common ground</td></tr>
+  </tbody>
+</table>
 
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">
@@ -178,6 +200,19 @@ int main(void)
 
     PC0 --- 220Ω ---|>|--- GND    (LED เอาต์พุต)
 </pre>
+
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PD5 (TX)</td><td>→</td><td>USB-Serial (RX)</td><td>RX</td><td>Cross-connect</td></tr>
+    <tr><td>PD6 (RX)</td><td>←</td><td>USB-Serial (TX)</td><td>TX</td><td>Cross-connect</td></tr>
+    <tr><td>GND</td><td>↔</td><td>USB-Serial GND</td><td>GND</td><td>Common ground</td></tr>
+    <tr><td>PC0</td><td>→</td><td>R 220Ω → LED</td><td>แอโนด</td><td>Output, ควบคุม via serial</td></tr>
+    <tr><td>LED</td><td>→</td><td>GND</td><td>แคโทด</td><td>—</td></tr>
+  </tbody>
+</table>
 
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">

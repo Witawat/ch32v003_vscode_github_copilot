@@ -21,7 +21,19 @@ flowchart TD
    │                   A0─GND (0x60)  │
    │  Vout ──────────── Output        │
    └──────────────────────────────────┘
-</pre><p>ต่อ I2C ปกติ — A0 pin เลือก address (GND=0x60, VDD=0x61) — Output ต่อตรงเข้า Oscilloscope</p></section>
+</pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC1</td><td>↔</td><td>SDA</td><td>-</td><td>สายข้อมูล I2C — ต้องมี R 4.7kΩ pull-up ไป 3.3V</td></tr>
+    <tr><td>PC2</td><td>↔</td><td>SCL</td><td>-</td><td>สายนาฬิกา I2C — ต้องมี R 4.7kΩ pull-up ไป 3.3V</td></tr>
+    <tr><td>3.3V</td><td>→</td><td>VDD</td><td>-</td><td>ไฟเลี้ยง 3.3V</td></tr>
+    <tr><td>GND</td><td>→</td><td>GND</td><td>-</td><td>กราวด์ร่วม; A0→GND=0x60, A0→VDD=0x61</td></tr>
+  </tbody>
+</table>
+<p>ต่อ I2C ปกติ — A0 pin เลือก address (GND=0x60, VDD=0x61) — Output ต่อตรงเข้า Oscilloscope</p></section>
 <section><h2>📚 หลักการทำงาน</h2><p><strong>MCP4725</strong> เป็น DAC 12-bit สื่อสารผ่าน I2C — รับค่า 0-4095 แปลงเป็นแรงดัน 0V ถึง VDD (3.3V) — ความละเอียด 3.3V/4096 ≈ 0.8mV ต่อ step</p><p><strong>MCP4725_SetVoltage(&dac, volt, vref)</strong> ตั้งแรงดันโดยตรง — vref เป็น MCP4725_VREF_VDD หรือค่าแรงดันอ้างอิงภายนอก</p></section>
 <section><h2>💻 เขียน Code ทีละขั้น</h2>
 <div class="step"><h3>ขั้นที่ 1: Init MCP4725</h3><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20

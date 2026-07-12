@@ -38,7 +38,19 @@ flowchart TD
     │ 5V───────────────VCC              │         │
     │ GND──────────────GND              │         │
     └──────────────────────────────────────────────┘
-</pre></section>
+</pre>
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>PD5 (TX)</td><td>→</td><td>HC-05</td><td>RX</td><td>MCU→HC-05</td></tr>
+        <tr><td>PD6 (RX)</td><td>←</td><td>HC-05</td><td>TX</td><td>HC-05→MCU</td></tr>
+        <tr><td>5V</td><td>↔</td><td>HC-05</td><td>VCC</td><td>จ่ายไฟ 5V</td></tr>
+        <tr><td>GND</td><td>↔</td><td>HC-05</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+      </tbody>
+    </table>
+</section>
 
 <section><h2>📚 หลักการทำงาน</h2>
 <p><strong>HC-05</strong> เป็น Bluetooth SPP module — เมื่อจับคู่กับสมาร์ทโฟน/PC แล้ว ทำงานเหมือน serial cable ไร้สาย — HC05_SendString() ส่งข้อความ</p></section>

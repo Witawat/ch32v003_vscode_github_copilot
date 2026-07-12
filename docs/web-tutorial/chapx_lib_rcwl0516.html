@@ -46,6 +46,16 @@ flowchart TD
     │ Range: ~5-7m, ทะลุกำแพงไม้/แผ่นยิปซัม│
     └────────────────────────────────────┘
     </pre>
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>PC0</td><td>←</td><td>RCWL-0516</td><td>OUT</td><td>HIGH = ตรวจจับ motion ได้</td></tr>
+        <tr><td>3.3V / 5V</td><td>→</td><td>RCWL-0516</td><td>VCC</td><td>มี LDO ในตัว รองรับ 3.3V-5V</td></tr>
+        <tr><td>GND</td><td>→</td><td>RCWL-0516</td><td>GND</td><td></td></tr>
+      </tbody>
+    </table>
     <p>PC0─OUT (INPUT) — ไม่ต้องใช้ Fresnel lens — สามารถทะลุผ่านวัสดุบางได้ (ไม้, แผ่นยิปซัม, กระจก) — ใช้ไฟ 5V (มี LDO ในตัว)</p>
 </section>
 

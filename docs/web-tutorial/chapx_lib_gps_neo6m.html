@@ -40,7 +40,19 @@ flowchart TD
     │ ⚡ ใช้ภายนอกอาคารเท่านั้น          │         │
     │ ⚡ Cold start ~30s                │         │
     └──────────────────────────────────────────────┘
-</pre></section>
+</pre>
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>PD5 (TX)</td><td>→</td><td>NEO-6M</td><td>RX</td><td>MCU→GPS</td></tr>
+        <tr><td>PD6 (RX)</td><td>←</td><td>NEO-6M</td><td>TX</td><td>GPS→MCU</td></tr>
+        <tr><td>3.3V</td><td>↔</td><td>NEO-6M</td><td>VCC</td><td>จ่ายไฟ 3.3V</td></tr>
+        <tr><td>GND</td><td>↔</td><td>NEO-6M</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+      </tbody>
+    </table>
+</section>
 
 <section><h2>📚 หลักการทำงาน</h2>
 <p><strong>GPS NEO-6M</strong> รับสัญญาณจากดาวเทียม GPS — ส่งข้อมูลออกเป็น NMEA sentences ผ่าน USART ที่ 9600 baud (default) — GPS_Update() parse NMEA, GPS_GetLatitude()/GPS_GetLongitude() คืนค่าพิกัด</p></section>

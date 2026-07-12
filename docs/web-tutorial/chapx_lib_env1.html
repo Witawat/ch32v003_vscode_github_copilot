@@ -20,6 +20,16 @@
 <pre class="ascii-circuit">
 3.3V─VCC  GND─GND  PC0─DATA  (R 4.7kΩ pull-up DATA↔3.3V)
 </pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC0</td><td>↔</td><td>DHT11/DHT22</td><td>DATA</td><td>GPIO bit-bang, ต้องมี pull-up 4.7kΩ</td></tr>
+    <tr><td>3.3V</td><td>→</td><td>DHT11/DHT22</td><td>VCC</td><td>จ่ายไฟ 3.3V</td></tr>
+    <tr><td>GND</td><td>↔</td><td>DHT11/DHT22</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+  </tbody>
+</table>
 <pre><code class="language-c">#include "DHT.h"
 DHT_Init(PC0, DHT11);   // หรือ DHT22
 float t, h;
@@ -38,6 +48,16 @@ if(DHT_Read(&t, &h) == DHT_OK) {
 <pre class="ascii-circuit">
 3.3V─VCC  GND─GND  PC0─DQ  (R 4.7kΩ pull-up DQ↔3.3V)
 </pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC0 / PD2</td><td>↔</td><td>DS18B20</td><td>DQ</td><td>1-Wire bus, ต้องมี pull-up 4.7kΩ</td></tr>
+    <tr><td>3.3V</td><td>→</td><td>DS18B20</td><td>VCC</td><td>จ่ายไฟ 3.3V (หรือ parasite power)</td></tr>
+    <tr><td>GND</td><td>↔</td><td>DS18B20</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+  </tbody>
+</table>
 <pre><code class="language-c">#include "DS18B20.h"
 DS18B20_Device* s = DS18B20_Init(PD2);
 float t = DS18B20_ReadTemperatureBlocking(s);
@@ -66,6 +86,18 @@ for(uint8_t i = 0; i < 3; i++) {
 <pre class="ascii-circuit">
 3.3V─VCC  GND─GND  PC1─SDA  PC2─SCL  (SDO─GND = 0x76, SDO─VCC = 0x77)
 </pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC1</td><td>↔</td><td>BMP280</td><td>SDA</td><td>I2C data</td></tr>
+    <tr><td>PC2</td><td>→</td><td>BMP280</td><td>SCL</td><td>I2C clock</td></tr>
+    <tr><td>3.3V</td><td>→</td><td>BMP280</td><td>VCC</td><td>จ่ายไฟ 3.3V</td></tr>
+    <tr><td>GND</td><td>↔</td><td>BMP280</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+    <tr><td>SDO</td><td>→</td><td>BMP280</td><td>SDO</td><td>ต่อ GND = 0x76, VCC = 0x77</td></tr>
+  </tbody>
+</table>
 <pre><code class="language-c">#include "BMP280.h"
 BMP280_Init(0x76);                  // หรือ 0x77
 BMP280_SetMode(BMP280_MODE_NORMAL); // SLEEP / FORCED / NORMAL
@@ -86,6 +118,17 @@ float alt = BMP280_ReadAltitude(1013.25f);  // ความสูงจากร
 <pre class="ascii-circuit">
 3.3V─VCC  GND─GND  PC1─SDA  PC2─SCL
 </pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC1</td><td>↔</td><td>AHT10/AHT20</td><td>SDA</td><td>I2C data</td></tr>
+    <tr><td>PC2</td><td>→</td><td>AHT10/AHT20</td><td>SCL</td><td>I2C clock</td></tr>
+    <tr><td>3.3V</td><td>→</td><td>AHT10/AHT20</td><td>VCC</td><td>จ่ายไฟ 3.3V</td></tr>
+    <tr><td>GND</td><td>↔</td><td>AHT10/AHT20</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+  </tbody>
+</table>
 <pre><code class="language-c">#include "AHT10.h"
 AHT10_Init(0x38);          // I2C addr fixed
 AHT10_TriggerMeasurement();
@@ -104,6 +147,18 @@ float h = AHT10_ReadHumidity();</code></pre>
 <pre class="ascii-circuit">
 3.3V─VCC  GND─GND  PC1─SDA  PC2─SCL  (ADDR─GND = 0x44, ADDR─VCC = 0x45)
 </pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC1</td><td>↔</td><td>SHT3x</td><td>SDA</td><td>I2C data</td></tr>
+    <tr><td>PC2</td><td>→</td><td>SHT3x</td><td>SCL</td><td>I2C clock</td></tr>
+    <tr><td>3.3V</td><td>→</td><td>SHT3x</td><td>VCC</td><td>จ่ายไฟ 3.3V</td></tr>
+    <tr><td>GND</td><td>↔</td><td>SHT3x</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+    <tr><td>ADDR</td><td>→</td><td>SHT3x</td><td>ADDR</td><td>ต่อ GND = 0x44, VCC = 0x45</td></tr>
+  </tbody>
+</table>
 <pre><code class="language-c">#include "SHT3x.h"
 SHT3x_Init(0x44);         // หรือ 0x45
 SHT3x_ReadSingle();       // single-shot measurement
@@ -132,6 +187,19 @@ while(1) {
 <pre class="ascii-circuit">
 3.3V─VCC  GND─GND  PC4─CS  PC5─SCK  PC7─MISO  (Thermocouple → K-type)
 </pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC4</td><td>→</td><td>MAX31855/MAX6675</td><td>CS</td><td>Chip select (SPI)</td></tr>
+    <tr><td>PC5</td><td>→</td><td>MAX31855/MAX6675</td><td>SCK</td><td>SPI clock</td></tr>
+    <tr><td>PC7</td><td>←</td><td>MAX31855/MAX6675</td><td>MISO</td><td>SPI data out (อ่านค่า)</td></tr>
+    <tr><td>3.3V</td><td>→</td><td>MAX31855/MAX6675</td><td>VCC</td><td>จ่ายไฟ 3.3V</td></tr>
+    <tr><td>GND</td><td>↔</td><td>MAX31855/MAX6675</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+    <tr><td>Thermocouple</td><td>←</td><td>MAX31855/MAX6675</td><td>T+/T−</td><td>K-type thermocouple</td></tr>
+  </tbody>
+</table>
 <pre><code class="language-c">#include "MAX31855.h"
 MAX31855_Init(PC4);               // CS pin
 float tc = MAX31855_ReadCelsius();  // thermocouple temp

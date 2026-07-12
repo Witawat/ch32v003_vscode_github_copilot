@@ -20,6 +20,16 @@
 <pre class="ascii-circuit">
 PC4(ADC)─AO  3.3V─VCC  GND─GND  (DO optional — digital threshold)
 ⚠️ ใช้ transistor switch VCC — เปิดเฉพาะตอนวัด ลด corrosion</pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC4</td><td>←</td><td>Soil Moisture YL69</td><td>AO</td><td>Analog output (ADC)</td></tr>
+    <tr><td>3.3V</td><td>→</td><td>Soil Moisture YL69</td><td>VCC</td><td>จ่ายไฟ (ใช้ transistor switch)</td></tr>
+    <tr><td>GND</td><td>↔</td><td>Soil Moisture YL69</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+  </tbody>
+</table>
 <pre><code class="language-c">#include "SoilMoisture.h"
 SoilMoisture_Init(ADC_CH_PC4);
 uint16_t raw = SoilMoisture_ReadRaw();
@@ -39,6 +49,17 @@ float percent = SoilMoisture_ReadPercent(); // 0-100%
 <pre class="ascii-circuit">
 PC4(ADC)─AO  PC1─DO  3.3V─VCC  GND─GND
 (IR photodiode — จับ IR จากเปลวไฟ 760-1100nm)</pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC4</td><td>←</td><td>Flame Sensor KY026</td><td>AO</td><td>Analog output (ADC)</td></tr>
+    <tr><td>PC1</td><td>←</td><td>Flame Sensor KY026</td><td>DO</td><td>Digital threshold (Active LOW)</td></tr>
+    <tr><td>3.3V</td><td>→</td><td>Flame Sensor KY026</td><td>VCC</td><td>จ่ายไฟ 3.3V</td></tr>
+    <tr><td>GND</td><td>↔</td><td>Flame Sensor KY026</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+  </tbody>
+</table>
 <pre><code class="language-c">#include "FlameSensor.h"
 FlameSensor_Init(ADC_CH_PC4);
 uint16_t raw = FlameSensor_ReadRaw();
@@ -57,6 +78,17 @@ uint8_t flame = FlameSensor_ReadDigital(PC1); // 0 = flame detected
 <pre class="ascii-circuit">
 PC4(ADC)─AO  PC1─DO  3.3V─VCC  GND─GND
 (electret mic + LM393 op-amp comparator)</pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC4</td><td>←</td><td>Sound Sensor KY038</td><td>AO</td><td>Analog output (ADC)</td></tr>
+    <tr><td>PC1</td><td>←</td><td>Sound Sensor KY038</td><td>DO</td><td>Digital threshold (Active LOW)</td></tr>
+    <tr><td>3.3V</td><td>→</td><td>Sound Sensor KY038</td><td>VCC</td><td>จ่ายไฟ 3.3V</td></tr>
+    <tr><td>GND</td><td>↔</td><td>Sound Sensor KY038</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+  </tbody>
+</table>
 <pre><code class="language-c">#include "SoundSensor.h"
 SoundSensor_Init(ADC_CH_PC4);
 uint16_t level = SoundSensor_ReadLevel();
@@ -77,6 +109,17 @@ if(claps == 2) { USART_Println("Double clap!"); claps=0; }</code></pre>
 <pre class="ascii-circuit">
 PC4(ADC)─AO  PC1─DO  3.3V─VCC  GND─GND
 ⚠️ corrosion! — ใช้ transistor switch VCC, nickel/gold-plated probe ทนกว่า</pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC4</td><td>←</td><td>Rain Sensor YL83</td><td>AO</td><td>Analog output (ADC)</td></tr>
+    <tr><td>PC1</td><td>←</td><td>Rain Sensor YL83</td><td>DO</td><td>Digital threshold (Active LOW)</td></tr>
+    <tr><td>3.3V</td><td>→</td><td>Rain Sensor YL83</td><td>VCC</td><td>จ่ายไฟ (ใช้ transistor switch)</td></tr>
+    <tr><td>GND</td><td>↔</td><td>Rain Sensor YL83</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+  </tbody>
+</table>
 <pre><code class="language-c">#include "RainSensor.h"
 RainSensor_Init(ADC_CH_PC4);
 uint16_t raw = RainSensor_ReadRaw();         // low = wet, high = dry
@@ -96,6 +139,16 @@ uint8_t rain = RainSensor_ReadDigital(PC1);  // 0 = rain detected</code></pre>
 PC1─Signal (pulse)  5V─VCC  GND─GND  (inline pipe)
 ⚠️ 5V signal → voltage divider 2.2k+3.3k for CH32V003
 YF-S201 = 450 pulses/L, YF-S402 = 98 pulses/L</pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC1</td><td>←</td><td>Water Flow YF-S201</td><td>Signal</td><td>Pulse output (interrupt)</td></tr>
+    <tr><td>5V</td><td>→</td><td>Water Flow YF-S201</td><td>VCC</td><td>จ่ายไฟ 5V</td></tr>
+    <tr><td>GND</td><td>↔</td><td>Water Flow YF-S201</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+  </tbody>
+</table>
 <pre><code class="language-c">#include "WaterFlow.h"
 WaterFlow_Init(PC1);
 volatile uint32_t pulses = 0;
@@ -122,6 +175,19 @@ while(1) {
 PC0─SCK  PC1─DOUT  3.3V─VCC  GND─GND
 Load Cell bridge: E+ = red, E- = black, A+ = green, A- = white
 ⚠️ Keep wires short, twisted pair — 24-bit noise-sensitive</pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC0</td><td>→</td><td>HX711</td><td>SCK</td><td>Serial clock</td></tr>
+    <tr><td>PC1</td><td>←</td><td>HX711</td><td>DOUT</td><td>Data ready / data out</td></tr>
+    <tr><td>3.3V</td><td>→</td><td>HX711</td><td>VCC</td><td>จ่ายไฟ 3.3V</td></tr>
+    <tr><td>GND</td><td>↔</td><td>HX711</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+    <tr><td>HX711 A+ / A−</td><td>←</td><td>Load Cell</td><td>Signal (Green/White)</td><td>Differential input</td></tr>
+    <tr><td>HX711 E+ / E−</td><td>→</td><td>Load Cell</td><td>Excitation (Red/Black)</td><td>จ่ายไฟ bridge</td></tr>
+  </tbody>
+</table>
 <pre><code class="language-c">#include "HX711.h"
 HX711_Init(PC0, PC1); // SCK, DOUT
 HX711_SetGain(HX711_GAIN_128);

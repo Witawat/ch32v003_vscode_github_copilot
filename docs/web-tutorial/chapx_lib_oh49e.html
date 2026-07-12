@@ -25,7 +25,18 @@ flowchart TD
    │  (North pole = Vout < VCC/2)       │
    │  (No field = Vout ≈ VCC/2)        │
    └────────────────────────────────────┘
-</pre><p>OH49E เป็น Linear Hall Sensor แบบ Ratiometric — Output เป็น analog voltage แปรผันตามสนามแม่เหล็ก — Sensitivity ประมาณ 1.4mV/Gauss</p></section>
+</pre>
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>PC4 (ADC)</td><td>←</td><td>OH49E</td><td>OUT</td><td>Analog Output (VCC/2 ที่ 0 Gauss)</td></tr>
+        <tr><td>3.3V</td><td>→</td><td>OH49E</td><td>VCC</td><td>จ่ายไฟ 3.3V</td></tr>
+        <tr><td>GND</td><td>→</td><td>OH49E</td><td>GND</td><td>Ground ร่วม</td></tr>
+      </tbody>
+    </table>
+    <p>OH49E เป็น Linear Hall Sensor แบบ Ratiometric — Output เป็น analog voltage แปรผันตามสนามแม่เหล็ก — Sensitivity ประมาณ 1.4mV/Gauss</p></section>
 <section><h2>📚 หลักการทำงาน</h2><p><strong>OH49E</strong> เป็น Linear Hall Effect Sensor — ตรวจจับสนามแม่เหล็กและคืนค่าแรงดัน analog แบบ Ratiometric (แปรผันตาม VCC) — Sensitivity ประมาณ 1.4mV/Gauss — วัดได้ทั้งขั้ว North และ South</p><p><strong>Ratiometric Output</strong> หมายความว่าแรงดัน output เป็นสัดส่วนกับ VCC — ที่ 0 Gauss output = VCC/2 — ถ้า VCC=3.3V → zero=1.65V</p><p><strong>การใช้งาน:</strong> วัดความแรงสนามแม่เหล็ก, ตรวจจับตำแหน่งแม่เหล็ก, Current Sensor, ตรวจจับการเปิด-ปิด (Proximity Switch)</p></section>
 <section><h2>💻 เขียน Code ทีละขั้น</h2>
 <div class="step"><h3>ขั้นที่ 1: Init OH49E</h3><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20

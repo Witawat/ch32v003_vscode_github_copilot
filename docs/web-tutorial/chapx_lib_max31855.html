@@ -47,8 +47,20 @@ flowchart TD
 │                                    │
 │ MAX6675: 16-bit, 0-1024°C          │
 │ MAX31855: 32-bit, -270-1372°C      │
-└────────────────────────────────────┘
+    └────────────────────────────────────┘
     </pre>
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>PC4</td><td>→</td><td>MAX31855</td><td>CS</td><td>Chip Select</td></tr>
+        <tr><td>PC5</td><td>→</td><td>MAX31855</td><td>SCK</td><td>SPI Clock</td></tr>
+        <tr><td>PC7</td><td>←</td><td>MAX31855</td><td>MISO</td><td>SPI Data Output</td></tr>
+        <tr><td>3.3V</td><td>↔</td><td>MAX31855</td><td>VCC</td><td>จ่ายไฟ 3.3V</td></tr>
+        <tr><td>GND</td><td>↔</td><td>MAX31855</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+      </tbody>
+    </table>
     <p>SPI mode 0 — MAX31855 อ่าน 32-bit (14-bit TC + 12-bit CJ + fault), MAX6675 อ่าน 16-bit (12-bit TC)</p>
 </section>
 

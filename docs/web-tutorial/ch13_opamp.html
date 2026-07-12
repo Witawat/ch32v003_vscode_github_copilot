@@ -63,6 +63,18 @@ flowchart TD
     │  └─ Inverting: PA6(-), PA4(+), PA5(OUT)     │
     └────────────────────────────────────────────┘
     </pre>
+
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>PA4 (OP_IN+)</td><td>←</td><td>Sensor (high-Z)</td><td>Output</td><td>เช่น pH Probe 100MΩ</td></tr>
+        <tr><td>PA5 (OP_OUT)</td><td>→</td><td>PA2 (ADC_CH0)</td><td>ADC Input</td><td>OPAMP Buffer → ADC</td></tr>
+        <tr><td>PA6 (OP_IN-)</td><td>—</td><td>(ภายใน)</td><td>—</td><td>ใช้สำหรับ PGA / Non-Inverting / Inverting mode</td></tr>
+      </tbody>
+    </table>
+
     <p><strong>CH32V003 OPAMP pins:</strong> PA4 = OP_IN+, PA5 = OP_OUT, PA6 = OP_IN- — เช็ค datasheet ว่ารุ่นที่ใช้มี OPAMP หรือไม่</p>
 </section>
 

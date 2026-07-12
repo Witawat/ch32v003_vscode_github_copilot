@@ -50,6 +50,19 @@ flowchart TD
     REMAP2   : TX=PD6, RX=PD5  (สลับขั้ว — มีประโยชน์มาก!)
     REMAP1   : TX=PD0, RX=PD1  (เฉพาะ TSSOP-20/QFN-20)
     </pre>
+
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>PD5 (TX)</td><td>→</td><td>USB-Serial (CH340G/CP2102)</td><td>RX</td><td>Cross-connect: TX→RX</td></tr>
+        <tr><td>PD6 (RX)</td><td>←</td><td>USB-Serial</td><td>TX</td><td>RX→TX</td></tr>
+        <tr><td>GND</td><td>↔</td><td>USB-Serial</td><td>GND</td><td>GND ต้องต่อร่วมกัน</td></tr>
+        <tr><td>PC0</td><td>→</td><td>R 220Ω → LED</td><td>Anode(+)</td><td>LED บอกสถานะ (ไม่บังคับ)</td></tr>
+      </tbody>
+    </table>
+
     <p>CH32V003 มี 1 USART — ใช้ RX/TX แบบ cross-connect: MCU-TX → USB-RX, MCU-RX → USB-TX, GND ต้องต่อร่วมกัน</p>
 </section>
 

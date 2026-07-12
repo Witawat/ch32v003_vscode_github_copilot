@@ -40,6 +40,16 @@ flowchart TD
     │ ต่อ 5V แยก — อย่าพึ่ง MCU!     │
     └────────────────────────────────┘
     </pre>
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>PC0</td><td>→</td><td>WS2812B Matrix</td><td>DIN</td><td>⚠️ ต้องใช้ level shifter 3.3V→5V</td></tr>
+        <tr><td>5V (External 2A+)</td><td>→</td><td>WS2812B Matrix</td><td>VCC</td><td>⚠️ 64 LEDs × 60mA = ~3.8A peak</td></tr>
+        <tr><td>GND</td><td>→</td><td>WS2812B Matrix</td><td>GND</td><td>ต่อ GND ร่วม</td></tr>
+      </tbody>
+    </table>
     <p>WS2812B 8×8 Matrix มี LED 64 ดวงเรียงแบบ Serpentine (S-curve) — ใช้ protocol เดียวกับ NeoPixel — ต้องต่อ 5V แยก ≥ 2A — Level Shifter จำเป็น</p>
 </section>
 <section>

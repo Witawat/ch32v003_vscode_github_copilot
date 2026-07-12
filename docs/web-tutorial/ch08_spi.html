@@ -59,6 +59,24 @@ flowchart TD
     Default Pins: SCK=PC5, MISO=PC7, MOSI=PC6, NSS=PC4
     Remap Pins:   SCK=PD1, MISO=PD2, MOSI=PD3, NSS=PD0 (เฉพาะ TSSOP-20/QFN-20)
     </pre>
+
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>PC4 (NSS)</td><td>→</td><td>MAX7219</td><td>CS</td><td>Chip Select (LOW = active)</td></tr>
+        <tr><td>PC5 (SCK)</td><td>→</td><td>MAX7219</td><td>CLK</td><td>SPI Clock</td></tr>
+        <tr><td>PC6 (MOSI)</td><td>→</td><td>MAX7219</td><td>DIN</td><td>Data In</td></tr>
+        <tr><td>PC7 (MISO)</td><td>←</td><td>MAX7219</td><td>DOUT</td><td>ไม่จำเป็นสำหรับ MAX7219</td></tr>
+        <tr><td>PC4 (NSS)</td><td>→</td><td>W25Qxx</td><td>/CS</td><td>Chip Select (LOW = active)</td></tr>
+        <tr><td>PC5 (SCK)</td><td>→</td><td>W25Qxx</td><td>CLK</td><td>SPI Clock</td></tr>
+        <tr><td>PC6 (MOSI)</td><td>→</td><td>W25Qxx</td><td>DI</td><td>Data In</td></tr>
+        <tr><td>PC7 (MISO)</td><td>←</td><td>W25Qxx</td><td>DO</td><td>Data Out</td></tr>
+        <tr><td>3.3V</td><td>→</td><td>W25Qxx</td><td>/WP, /HOLD, VCC</td><td>ไฟเลี้ยง + disable WP/HOLD</td></tr>
+      </tbody>
+    </table>
+
     <p><strong>SOP-8/SOP-16 ไม่มี Hardware SPI!</strong> — ต้องใช้ <code>shiftOut()</code> / <code>shiftIn()</code> แบบ software แทน</p>
 </section>
 

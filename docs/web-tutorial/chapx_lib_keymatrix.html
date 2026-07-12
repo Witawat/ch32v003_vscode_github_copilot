@@ -46,7 +46,23 @@ flowchart TD
 │  │ * │ 0 │ # │ D │                   │
 │  └───┴───┴───┴───┘                   │
 └──────────────────────────────────────┘
-</pre><p>Rows เป็น Output (active LOW), Columns เป็น Input พร้อม internal pull-up — เมื่อกดปุ่ม Column ที่ตรงกันจะถูกดึงลง LOW</p></section>
+</pre>
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>PC0</td><td>→</td><td>Keypad 4×4</td><td>ROW1</td><td>Output active LOW</td></tr>
+        <tr><td>PC1</td><td>→</td><td>Keypad 4×4</td><td>ROW2</td><td>Output active LOW</td></tr>
+        <tr><td>PC2</td><td>→</td><td>Keypad 4×4</td><td>ROW3</td><td>Output active LOW</td></tr>
+        <tr><td>PC3</td><td>→</td><td>Keypad 4×4</td><td>ROW4</td><td>Output active LOW</td></tr>
+        <tr><td>PC4</td><td>←</td><td>Keypad 4×4</td><td>COL1</td><td>Input พร้อม internal pull-up</td></tr>
+        <tr><td>PC5</td><td>←</td><td>Keypad 4×4</td><td>COL2</td><td>Input พร้อม internal pull-up</td></tr>
+        <tr><td>PC6</td><td>←</td><td>Keypad 4×4</td><td>COL3</td><td>Input พร้อม internal pull-up</td></tr>
+        <tr><td>PC7</td><td>←</td><td>Keypad 4×4</td><td>COL4</td><td>Input พร้อม internal pull-up</td></tr>
+      </tbody>
+    </table>
+    <p>Rows เป็น Output (active LOW), Columns เป็น Input พร้อม internal pull-up — เมื่อกดปุ่ม Column ที่ตรงกันจะถูกดึงลง LOW</p></section>
 
 <section><h2>📚 หลักการทำงาน</h2>
 <p><strong>Row Scan</strong>: เริ่มจาก Row1=0 (Active) ส่วน Row2-4=1 — อ่านค่าที่ Column ทั้ง 4 ถ้า Column ไหนอ่านได้ 0 แสดงว่าปุ่มที่ intersection นั้นถูกกด แล้วเลื่อนไป Row ถัดไป — สแกนวนครบ 4 Row</p>

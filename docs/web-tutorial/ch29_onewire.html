@@ -42,6 +42,18 @@ flowchart LR
     - ต้องมี R pull-up 4.7kΩ เสมอ — 1-Wire ใช้ open-drain
 </pre>
 
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC0</td><td>↔</td><td>R 4.7kΩ → 3.3V</td><td>—</td><td>Pull-up, open-drain bus</td></tr>
+    <tr><td>PC0</td><td>↔</td><td>DS18B20 (DQ)</td><td>ขา 2 (กลาง)</td><td>1-Wire data (two-way)</td></tr>
+    <tr><td>DS18B20 (VDD)</td><td>←</td><td>3.3V</td><td>ขา 3 (ขวา)</td><td>—</td></tr>
+    <tr><td>DS18B20 (GND)</td><td>→</td><td>GND</td><td>ขา 1 (ซ้าย)</td><td>—</td></tr>
+  </tbody>
+</table>
+
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">
 flowchart TD

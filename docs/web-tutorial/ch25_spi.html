@@ -44,6 +44,23 @@ flowchart LR
     SPI_PINS_DEFAULT: SCK=PC5, MISO=PC7, MOSI=PC6, NSS=PC4
 </pre>
 
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC4 (CS)</td><td>→</td><td>W25Qxx (CS)</td><td>CS</td><td>Chip select</td></tr>
+    <tr><td>PC5 (SCK)</td><td>→</td><td>W25Qxx (SCK)</td><td>SCK</td><td>SPI clock</td></tr>
+    <tr><td>PC6 (MOSI)</td><td>→</td><td>W25Qxx (MOSI)</td><td>MOSI</td><td>Data → Flash</td></tr>
+    <tr><td>PC6 (MOSI)</td><td>—</td><td>PC7 (MISO)</td><td>—</td><td>Loopback (จัumper)</td></tr>
+    <tr><td>PC7 (MISO)</td><td>←</td><td>W25Qxx (MISO)</td><td>MISO</td><td>Data ← Flash</td></tr>
+    <tr><td>W25Qxx (/WP)</td><td>←</td><td>3.3V</td><td>—</td><td>Write protect off</td></tr>
+    <tr><td>W25Qxx (/HOLD)</td><td>←</td><td>3.3V</td><td>—</td><td>Hold off</td></tr>
+    <tr><td>W25Qxx (VCC)</td><td>←</td><td>3.3V</td><td>—</td><td>—</td></tr>
+    <tr><td>GND</td><td>↔</td><td>W25Qxx (GND)</td><td>GND</td><td>Common ground</td></tr>
+  </tbody>
+</table>
+
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">
 flowchart TD
@@ -128,6 +145,22 @@ int main(void)
     3.3V              VCC=3.3V
     GND               GND
 </pre>
+
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC4 (CS)</td><td>→</td><td>W25Qxx (CS)</td><td>CS</td><td>Chip select</td></tr>
+    <tr><td>PC5 (SCK)</td><td>→</td><td>W25Qxx (SCK)</td><td>SCK</td><td>SPI clock</td></tr>
+    <tr><td>PC6 (MOSI)</td><td>→</td><td>W25Qxx (MOSI)</td><td>MOSI</td><td>Data → Flash</td></tr>
+    <tr><td>PC7 (MISO)</td><td>←</td><td>W25Qxx (MISO)</td><td>MISO</td><td>Data ← Flash</td></tr>
+    <tr><td>W25Qxx (/WP)</td><td>←</td><td>3.3V</td><td>—</td><td>Write protect off</td></tr>
+    <tr><td>W25Qxx (/HOLD)</td><td>←</td><td>3.3V</td><td>—</td><td>Hold off</td></tr>
+    <tr><td>W25Qxx (VCC)</td><td>←</td><td>3.3V</td><td>—</td><td>—</td></tr>
+    <tr><td>GND</td><td>↔</td><td>W25Qxx (GND)</td><td>GND</td><td>Common ground</td></tr>
+  </tbody>
+</table>
 
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">

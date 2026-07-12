@@ -38,6 +38,17 @@ flowchart TD
     │                  pull-up ในตัว) │
     └────────────────────────────────┘
     </pre>
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>PC1</td><td>↔</td><td>SDA</td><td>-</td><td>สายข้อมูล I2C — backpack มี pull-up ในตัว; I2C addr 0x27/0x3F</td></tr>
+        <tr><td>PC2</td><td>↔</td><td>SCL</td><td>-</td><td>สายนาฬิกา I2C — backpack มี pull-up ในตัว</td></tr>
+        <tr><td>5V</td><td>→</td><td>VCC</td><td>-</td><td>ไฟเลี้ยง 5V — backpack มี regulator ในตัว</td></tr>
+        <tr><td>GND</td><td>→</td><td>GND</td><td>-</td><td>กราวด์ร่วม</td></tr>
+      </tbody>
+    </table>
     <p>LCD1602 ใช้ PCF8574 I2C backpack — address 0x27 หรือ 0x3F ขึ้นอยู่กับรุ่น — ใช้ 5V จ่ายไฟ (backpack มี regulator ในตัว)</p>
 </section>
 <section>

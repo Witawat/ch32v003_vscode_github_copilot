@@ -20,6 +20,16 @@
 <pre class="ascii-circuit">
 PD2─Signal(orange)  5V external─VCC(servo,red)  GND─GND(common,brown)  ⚡ ห้ามจ่าย servo จาก WCH-Link!
 </pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PD2 (PWM)</td><td>→</td><td>Servo SG90</td><td>Signal (Orange)</td><td>PWM 50Hz ควบคุมมุม</td></tr>
+    <tr><td>5V</td><td>→</td><td>Servo SG90</td><td>VCC (Red)</td><td>External 5V, ห้ามใช้ WCH-Link</td></tr>
+    <tr><td>GND</td><td>↔</td><td>Servo SG90</td><td>GND (Brown)</td><td>กราวด์ร่วม MCU + servo power</td></tr>
+  </tbody>
+</table>
 <p>Servo RC ใช้สัญญาณ PWM ความถี่ 50Hz (คาบ 20ms) ควบคุมมุมด้วยความกว้าง pulse:</p>
 <table>
 <tr><th>มุม</th><th>Pulse (SG90 มาตรฐาน)</th><th>Duty ที่ 50Hz</th></tr>
@@ -73,6 +83,19 @@ ServoTester_Sweep(0, 180, 1);      // 1°/step — สังเกตว่า s
 PC0─IN1(blue)  PC1─IN2(pink)  PC2─IN3(yellow)  PC3─IN4(orange)  5V external─VCC(ULN2003+)  GND─GND(ULN2003-)
 
 28BYJ-48 specs: 5V, 0.3 kg·cm torque, 1:64 gear ratio, 5-wire unipolar</pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC0</td><td>→</td><td>ULN2003 → Stepper</td><td>IN1 (Blue)</td><td>Coil 1 drive</td></tr>
+    <tr><td>PC1</td><td>→</td><td>ULN2003 → Stepper</td><td>IN2 (Pink)</td><td>Coil 2 drive</td></tr>
+    <tr><td>PC2</td><td>→</td><td>ULN2003 → Stepper</td><td>IN3 (Yellow)</td><td>Coil 3 drive</td></tr>
+    <tr><td>PC3</td><td>→</td><td>ULN2003 → Stepper</td><td>IN4 (Orange)</td><td>Coil 4 drive</td></tr>
+    <tr><td>5V</td><td>→</td><td>ULN2003</td><td>VCC (ULN2003+)</td><td>External 5V จ่าย motor</td></tr>
+    <tr><td>GND</td><td>↔</td><td>ULN2003</td><td>GND (ULN2003−)</td><td>กราวด์ร่วม</td></tr>
+  </tbody>
+</table>
 <pre><code class="language-c">#include "StepperMotor.h"
 StepperMotor_Instance st;
 StepperMotor_InitULN2003(&st, PC0, PC1, PC2, PC3, 2048);
@@ -121,6 +144,22 @@ Motor B: PC2─IN3  PC3─IN4  PC5(PWM)─ENB (optional)
 
 ⚠️ ถ้าใช้ไฟ motor >12V → ถอด jumper 5V regulator ออก!
 ⚠️ 5V terminal ใช้จ่าย CH32V003 ได้ (ถ้า motor ≤12V, regulator in use)</pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC0</td><td>→</td><td>L298N Motor A</td><td>IN1</td><td>Direction bit 1</td></tr>
+    <tr><td>PC1</td><td>→</td><td>L298N Motor A</td><td>IN2</td><td>Direction bit 2</td></tr>
+    <tr><td>PC4</td><td>→</td><td>L298N Motor A</td><td>ENA</td><td>PWM speed (หรือ jumper = full)</td></tr>
+    <tr><td>PC2</td><td>→</td><td>L298N Motor B</td><td>IN3</td><td>Direction bit 1</td></tr>
+    <tr><td>PC3</td><td>→</td><td>L298N Motor B</td><td>IN4</td><td>Direction bit 2</td></tr>
+    <tr><td>PC5</td><td>→</td><td>L298N Motor B</td><td>ENB</td><td>PWM speed (หรือ jumper = full)</td></tr>
+    <tr><td>5–12V</td><td>→</td><td>L298N Motor</td><td>VCC (terminal)</td><td>External power สำหรับ motor</td></tr>
+    <tr><td>5V</td><td>→</td><td>L298N Logic</td><td>5V (logic)</td><td>ใช้ onboard regulator หรือ external</td></tr>
+    <tr><td>GND</td><td>↔</td><td>L298N</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+  </tbody>
+</table>
 <pre><code class="language-c">#include "L298N.h"
 // Init motor A (IN1, IN2, ENA)
 pinMode(PC0, PIN_MODE_OUTPUT); pinMode(PC1, PIN_MODE_OUTPUT);
@@ -169,6 +208,23 @@ PC0─DIR    PC1─STEP   PC2─ENABLE(opt,LOW=on)   PC3─M0   PC4─M1   PC5�
 12-24V external─VMOT  GND─GND(common)  Motor: A1/A2(1 coil)  B1/B2(1 coil)
 
 ⚠️ ต้องตั้ง current limit pot ก่อนใช้! — หมุน Vref ให้ถูกต้อง ก่อนต่อ motor</pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC0</td><td>→</td><td>DRV8825</td><td>DIR</td><td>ทิศทาง CW/CCW</td></tr>
+    <tr><td>PC1</td><td>→</td><td>DRV8825</td><td>STEP</td><td>Step pulse (rising edge)</td></tr>
+    <tr><td>PC2</td><td>→</td><td>DRV8825</td><td>ENABLE</td><td>Active LOW = on (optional)</td></tr>
+    <tr><td>PC3</td><td>→</td><td>DRV8825</td><td>M0</td><td>Microstep select bit 0</td></tr>
+    <tr><td>PC4</td><td>→</td><td>DRV8825</td><td>M1</td><td>Microstep select bit 1</td></tr>
+    <tr><td>PC5</td><td>→</td><td>DRV8825</td><td>M2</td><td>Microstep select bit 2</td></tr>
+    <tr><td>12–24V</td><td>→</td><td>DRV8825</td><td>VMOT</td><td>External motor power</td></tr>
+    <tr><td>GND</td><td>↔</td><td>DRV8825</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+    <tr><td>DRV8825 A1/A2</td><td>→</td><td>Stepper Motor</td><td>Coil A</td><td>ขดลวดชุด A</td></tr>
+    <tr><td>DRV8825 B1/B2</td><td>→</td><td>Stepper Motor</td><td>Coil B</td><td>ขดลวดชุด B</td></tr>
+  </tbody>
+</table>
 <pre><code class="language-c">#include "DRV8825.h"
 DRV8825_Init(PC0, PC1, PC2);             // DIR, STEP, ENABLE
 DRV8825_SetMicrostep(DRV8825_1_32_STEP);  // 1/32 microstep
@@ -216,6 +272,19 @@ COM─common  NO─normally open  NC─normally closed  → load
 
 Module ภายใน: optocoupler + transistor + flyback diode + relay coil
 Typical relay: SRD-05VDC (5V coil, 10A/250VAC or 10A/30VDC)</pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC0</td><td>→</td><td>Relay Module</td><td>IN (Signal)</td><td>HIGH/LOW ควบคุม relay</td></tr>
+    <tr><td>5V</td><td>→</td><td>Relay Module</td><td>VCC</td><td>จ่ายไฟ 5V (coil ~70mA)</td></tr>
+    <tr><td>GND</td><td>↔</td><td>Relay Module</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+    <tr><td>COM</td><td>↔</td><td>Load</td><td>COM</td><td>ขั้วกลาง relay</td></tr>
+    <tr><td>NO</td><td>→</td><td>Load</td><td>NO</td><td>ปกติเปิด (ต่อเมื่อ relay ON)</td></tr>
+    <tr><td>NC</td><td>→</td><td>Load</td><td>NC</td><td>ปกติปิด (ต่อเมื่อ relay OFF)</td></tr>
+  </tbody>
+</table>
 <pre><code class="language-c">#include "Relay.h"
 Relay_Instance r;
 Relay_Init(&r, PC0, RELAY_ACTIVE_HIGH);

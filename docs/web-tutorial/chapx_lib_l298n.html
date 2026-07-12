@@ -59,6 +59,22 @@ flowchart TD
     │              └────────┘          │
     └──────────────────────────────────┘
     </pre>
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>PC0</td><td>→</td><td>L298N</td><td>IN1</td><td>Motor A — Input 1</td></tr>
+        <tr><td>PC1</td><td>→</td><td>L298N</td><td>IN2</td><td>Motor A — Input 2</td></tr>
+        <tr><td>PD2</td><td>→</td><td>L298N</td><td>ENA</td><td>Motor A — PWM speed</td></tr>
+        <tr><td>PC2</td><td>→</td><td>L298N</td><td>IN3</td><td>Motor B — Input 3</td></tr>
+        <tr><td>PC3</td><td>→</td><td>L298N</td><td>IN4</td><td>Motor B — Input 4</td></tr>
+        <tr><td>PD3</td><td>→</td><td>L298N</td><td>ENB</td><td>Motor B — PWM speed</td></tr>
+        <tr><td>5V</td><td>→</td><td>L298N</td><td>VCC/VSS</td><td>Logic supply 5V</td></tr>
+        <tr><td>GND</td><td>→</td><td>L298N</td><td>GND</td><td>Ground ร่วม</td></tr>
+        <tr><td>12V Power</td><td>→</td><td>L298N</td><td>VMS</td><td>Motor supply 5–35V</td></tr>
+      </tbody>
+    </table>
     <p>L298N เป็น Dual H-Bridge — ขับมอเตอร์ DC ได้ 2 ตัว (Motor A, Motor B) หรือ Stepper 1 ตัว — รับแรงดัน VMS 5V–35V, กระแส 2A ต่อช่อง — ใช้ PWM ที่ ENA/ENB ปรับความเร็ว — ต่อ GND ของ MCU, L298N logic, และ Motor Supply รวมกัน</p>
 </section>
 

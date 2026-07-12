@@ -21,6 +21,19 @@
 PC1─SDA  PC2─SCL  3.3V─VCC  GND─GND
 VIN+ ── load+ ── Rshunt 0.1Ω ── VIN- ── load- ── GND
 (High-side: วัดกระแสก่อน load — ปลอดภัยกว่า low-side)</pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC1</td><td>↔</td><td>INA219</td><td>SDA</td><td>I2C data</td></tr>
+    <tr><td>PC2</td><td>→</td><td>INA219</td><td>SCL</td><td>I2C clock</td></tr>
+    <tr><td>3.3V</td><td>→</td><td>INA219</td><td>VCC</td><td>จ่ายไฟ 3.3V</td></tr>
+    <tr><td>GND</td><td>↔</td><td>INA219</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+    <tr><td>VIN+</td><td>↔</td><td>Load +</td><td>Rshunt 0.1Ω</td><td>High-side measurement</td></tr>
+    <tr><td>VIN-</td><td>↔</td><td>Load −</td><td>Rshunt 0.1Ω</td><td>วัด voltage drop ข้าม shunt</td></tr>
+  </tbody>
+</table>
 <pre><code class="language-c">#include "INA219.h"
 INA219_Init(0x40, INA219_32V_2A); // range เลือกตาม shunt
 float voltage = INA219_GetBusVoltage();   // V
@@ -40,6 +53,19 @@ float power   = INA219_GetPower();         // mW
 <pre class="ascii-circuit">
 PC1─SDA  PC2─SCL  3.3V─VCC  GND─GND  A0-A3 ── signal inputs
 ADDR─GND = 0x48, ADDR─VCC = 0x49, ADDR─SDA = 0x4A, ADDR─SCL = 0x4B</pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC1</td><td>↔</td><td>ADS1115</td><td>SDA</td><td>I2C data</td></tr>
+    <tr><td>PC2</td><td>→</td><td>ADS1115</td><td>SCL</td><td>I2C clock</td></tr>
+    <tr><td>3.3V</td><td>→</td><td>ADS1115</td><td>VCC</td><td>จ่ายไฟ 3.3V</td></tr>
+    <tr><td>GND</td><td>↔</td><td>ADS1115</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+    <tr><td>A0–A3</td><td>←</td><td>สัญญาณอนาล็อก</td><td>AIN0–AIN3</td><td>4-ch single-ended / 2-ch differential</td></tr>
+    <tr><td>ADDR</td><td>→</td><td>ADS1115</td><td>ADDR</td><td>ต่อ GND/VCC/SDA/SCL เลือก I2C addr</td></tr>
+  </tbody>
+</table>
 <pre><code class="language-c">#include "ADS1115.h"
 ADS1115_Init(0x48); // 0x48-0x4B via ADDR pin
 ADS1115_SetGain(ADS1115_GAIN_1);      // ±4.096V (0.125mV/step)
@@ -63,6 +89,19 @@ float volt = ADS1115_ToVoltage(val0);   // convert to voltage
 <pre class="ascii-circuit">
 PC1─SDA  PC2─SCL  3.3V─VCC  GND─GND  VOUT ── scope/load
 (A0 pin — GND=0x60, VCC=0x61, SDA=0x62, SCL=0x63)</pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC1</td><td>↔</td><td>MCP4725</td><td>SDA</td><td>I2C data</td></tr>
+    <tr><td>PC2</td><td>→</td><td>MCP4725</td><td>SCL</td><td>I2C clock</td></tr>
+    <tr><td>3.3V</td><td>→</td><td>MCP4725</td><td>VCC</td><td>จ่ายไฟ 3.3V</td></tr>
+    <tr><td>GND</td><td>↔</td><td>MCP4725</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+    <tr><td>VOUT</td><td>→</td><td>Scope / Load</td><td>VOUT</td><td>Analog output 0–3.3V (12-bit)</td></tr>
+    <tr><td>A0</td><td>→</td><td>MCP4725</td><td>A0</td><td>ต่อ GND/VCC/SDA/SCL เลือก addr</td></tr>
+  </tbody>
+</table>
 <pre><code class="language-c">#include "MCP4725.h"
 MCP4725_Init(0x60); // 0x60-0x67 (A0 pin + factory bits)
 MCP4725_SetVoltage(2048, MCP4725_VREF_VDD); // 2048/4096 = 1.65V (3.3V VDD)
@@ -82,6 +121,19 @@ MCP4725_SetVoltage(2048, MCP4725_VREF_VDD); // 2048/4096 = 1.65V (3.3V VDD)
 PD5(TX)─RX(PZEM)  PD6(RX)─TX(PZEM)  5V─VCC  GND─GND
 CT clamp ⇛ live wire (แค่ 1 เส้น), voltage probe ⤏ socket L-N
 ⚡ 220VAC อันตราย! — ต่อเฉพาะเมื่อรู้วิธี</pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PD5</td><td>→</td><td>PZEM004T</td><td>RX</td><td>USART TX → device RX</td></tr>
+    <tr><td>PD6</td><td>←</td><td>PZEM004T</td><td>TX</td><td>USART RX ← device TX</td></tr>
+    <tr><td>5V</td><td>→</td><td>PZEM004T</td><td>VCC</td><td>จ่ายไฟ 5V</td></tr>
+    <tr><td>GND</td><td>↔</td><td>PZEM004T</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+    <tr><td>CT Clamp</td><td>←</td><td>สายไฟ (Live)</td><td>คล้อง</td><td>วัดกระแส AC แบบไม่ต้องตัดสาย</td></tr>
+    <tr><td>Voltage Probe</td><td>←</td><td>Socket L–N</td><td>Probe</td><td>วัดแรงดัน AC 220V</td></tr>
+  </tbody>
+</table>
 <pre><code class="language-c">#include "PZEM004T.h"
 PZEM004T_Init(USART1);
 float v  = PZEM004T_ReadVoltage();       // V
@@ -105,6 +157,19 @@ float pf = PZEM004T_ReadPowerFactor();   // 0-1
 <pre class="ascii-circuit">
 PD5(TX)─RX(PZEM)  PD6(RX)─TX(PZEM)  5V─VCC  GND─GND
 (ต่อแบบเดียวกับ PZEM004T — ต่างที่ firmware protocol)</pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PD5</td><td>→</td><td>PZEM004Tv3</td><td>RX</td><td>USART TX → device RX</td></tr>
+    <tr><td>PD6</td><td>←</td><td>PZEM004Tv3</td><td>TX</td><td>USART RX ← device TX</td></tr>
+    <tr><td>5V</td><td>→</td><td>PZEM004Tv3</td><td>VCC</td><td>จ่ายไฟ 5V</td></tr>
+    <tr><td>GND</td><td>↔</td><td>PZEM004Tv3</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+    <tr><td>CT Clamp</td><td>←</td><td>สายไฟ (Live)</td><td>คล้อง</td><td>วัดกระแส AC แบบไม่ต้องตัดสาย</td></tr>
+    <tr><td>Voltage Probe</td><td>←</td><td>Socket L–N</td><td>Probe</td><td>วัดแรงดัน AC 220V</td></tr>
+  </tbody>
+</table>
 <pre><code class="language-c">#include "PZEM004Tv3.h"
 PZEM004Tv3_Init(USART1, 3); // address=3
 PZEM004Tv3_Data_t data;
@@ -127,6 +192,16 @@ if(PZEM004Tv3_ReadAll(&data)) {
 <pre class="ascii-circuit">
 3.3V─VCC  GND─GND  PC4(ADC)─OUT
 (ใช้แม่เหล็กถาวร — ขั้วเหนือ/ใต้ให้ผลลัพธ์ตรงข้าม)</pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC4</td><td>←</td><td>OH49E</td><td>OUT</td><td>Analog output (ADC)</td></tr>
+    <tr><td>3.3V</td><td>→</td><td>OH49E</td><td>VCC</td><td>จ่ายไฟ 3.3V</td></tr>
+    <tr><td>GND</td><td>↔</td><td>OH49E</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+  </tbody>
+</table>
 <pre><code class="language-c">ADC_SimpleInit();
 uint16_t raw = analogRead(PC4);
 float voltage = ADC_ToVoltage(raw, 3.3f);

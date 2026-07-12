@@ -43,6 +43,16 @@ flowchart TD
     │ R_fixed = 10k (เท่ากับ NTC@25°C)    │
     └────────────────────────────────────┘
     </pre>
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>3.3V</td><td>→</td><td>R_fixed 10kΩ</td><td>—</td><td>จ่ายไฟให้ voltage divider</td></tr>
+        <tr><td>PC4 (ADC)</td><td>↔</td><td>R_fixed / NTC</td><td>Vout</td><td>วัดแรงดันกลาง divider</td></tr>
+        <tr><td>GND</td><td>→</td><td>วงจร</td><td>GND</td><td>Ground ร่วม</td></tr>
+      </tbody>
+    </table>
     <p>PC4─ADC — วงจรแบ่งแรงดัน: R_fixed 10kΩ + NTC 10kΩ — NTC ลดความต้านทานเมื่อร้อนขึ้น → Vout ลดลง</p>
 </section>
 

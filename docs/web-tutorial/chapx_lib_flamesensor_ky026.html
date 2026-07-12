@@ -24,7 +24,19 @@ flowchart TD
    │  ⚠ ตรวจจับ IR ย่าน 760-1100nm      │
    │  ⚠ Digital Threshold ปรับด้วย Pot  │
    └────────────────────────────────────┘
-</pre><p>KY-026 ใช้ IR Photodiode ตรวจจับเปลวไฟในช่วงความยาวคลื่น 760-1100nm — มี LM393 Comparator สำหรับ Digital Output — Pot ปรับ sensitivity — มุมตรวจจับ ~60° ระยะไกลสุด ~1m สำหรับไฟแช็ก</p></section>
+</pre>
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>3.3V</td><td>→</td><td>KY-026</td><td>VCC</td><td>จ่ายไฟ 3.3V</td></tr>
+        <tr><td>GND</td><td>→</td><td>KY-026</td><td>GND</td><td>Ground ร่วม</td></tr>
+        <tr><td>PC4 (ADC)</td><td>←</td><td>KY-026</td><td>A0</td><td>Analog Output — ความเข้ม IR</td></tr>
+        <tr><td>PC1 (GPIO)</td><td>←</td><td>KY-026</td><td>D0</td><td>Digital Output — ตรวจจับไฟ</td></tr>
+      </tbody>
+    </table>
+    <p>KY-026 ใช้ IR Photodiode ตรวจจับเปลวไฟในช่วงความยาวคลื่น 760-1100nm — มี LM393 Comparator สำหรับ Digital Output — Pot ปรับ sensitivity — มุมตรวจจับ ~60° ระยะไกลสุด ~1m สำหรับไฟแช็ก</p></section>
 <section><h2>📚 หลักการทำงาน</h2><p><strong>KY-026 Flame Sensor</strong> ใช้ Infrared Photodiode ตรวจจับรังสี IR จากเปลวไฟ — เปลวไฟปล่อย IR ในช่วง 760-1100nm — เซนเซอร์กรองแสง visible ออก — เมื่อมีเปลวไฟ ADC จะสูงขึ้น (แสง IR มากขึ้น)</p><p><strong>2 Outputs:</strong> Analog (A0) — ใช้ ADC อ่านความเข้ม IR (0-3.3V) — Digital (D0) — LM393 Comparator เทียบกับ threshold ที่ปรับด้วย Pot — D0 = HIGH เมื่อ IR เกิน threshold — ใช้ขัดจังหวะ MCU ได้</p><p><strong>Digital vs Analog:</strong> Digital ใช้ตรวจจับเร็ว (GPIO interrupt) — Analog ใช้บอกระยะทาง/ความแรงของไฟ — การใช้ทั้งคู่ช่วยลด False Positive (แสงแดด vs เปลวไฟจริง)</p><p><strong>ข้อควรระวัง:</strong> แสงแดดมี IR สูง อาจ trigger false positive — หลีกเลี่ยงการติดตั้งที่โดนแดดตรง — ใช้ Analog threshold หลายระดับเพื่อยืนยัน</p></section>
 <section><h2>💻 เขียน Code ทีละขั้น</h2>
 <div class="step"><h3>ขั้นที่ 1: Init FlameSensor</h3><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20

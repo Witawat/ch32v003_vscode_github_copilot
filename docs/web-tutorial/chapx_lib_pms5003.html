@@ -37,7 +37,19 @@ flowchart TD
     │                                    │
     │ Frame: 32 bytes, baud=9600         │
     └────────────────────────────────────┘
-</pre></section>
+</pre>
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>PD5 (TX)</td><td>→</td><td>PMS5003</td><td>RX (pin5)</td><td>MCU→เซนเซอร์</td></tr>
+        <tr><td>PD6 (RX)</td><td>←</td><td>PMS5003</td><td>TX (pin4)</td><td>เซนเซอร์→MCU</td></tr>
+        <tr><td>5V</td><td>↔</td><td>PMS5003</td><td>VCC (pin1)</td><td>จ่ายไฟ 5V</td></tr>
+        <tr><td>GND</td><td>↔</td><td>PMS5003</td><td>GND (pin2)</td><td>กราวด์ร่วม</td></tr>
+      </tbody>
+    </table>
+</section>
 
 <section><h2>📚 หลักการทำงาน</h2>
 <p><strong>PMS5003</strong> เป็นเซนเซอร์วัดฝุ่นละออง PM1.0/PM2.5/PM10 แบบ laser scattering — สื่อสารผ่าน USART 9600 baud — 32-byte binary frame</p></section>

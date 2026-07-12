@@ -36,7 +36,18 @@ flowchart TD
     │ GND──────────────GND              │GPS, BT, │
     │ ⚡ Baud สูงสุด ~19200              │ESP, PC  │
     └──────────────────────────────────────────────┘
-</pre></section>
+</pre>
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>PC0 (TX)</td><td>→</td><td>Device</td><td>RX</td><td>MCU→อุปกรณ์</td></tr>
+        <tr><td>PC1 (RX)</td><td>←</td><td>Device</td><td>TX</td><td>อุปกรณ์→MCU</td></tr>
+        <tr><td>GND</td><td>↔</td><td>Device</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+      </tbody>
+    </table>
+</section>
 
 <section><h2>📚 หลักการทำงาน</h2>
 <p><strong>Bit-Bang UART</strong> จำลองการส่ง-รับข้อมูลแบบ asynchronous serial โดยใช้ GPIO + delay แม่นยำ — TX: สร้าง start bit → 8 data bits → stop bit, RX: รอ falling edge → sample ที่กลางบิต</p></section>

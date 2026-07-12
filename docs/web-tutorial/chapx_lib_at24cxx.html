@@ -39,7 +39,21 @@ flowchart TD
     │ WP─GND = write enable  │ AT24C32  4KB   0x50│
     │ A0,A1,A2─GND = 0x50   └────────────────────┤
     └──────────────────────────────────────────────┘
-</pre></section>
+</pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC1</td><td>↔</td><td>SDA</td><td>-</td><td>สายข้อมูล I2C — ต้องมี R 4.7kΩ pull-up ไป 3.3V</td></tr>
+    <tr><td>PC2</td><td>→</td><td>SCL</td><td>-</td><td>สายนาฬิกา I2C — ต้องมี R 4.7kΩ pull-up ไป 3.3V</td></tr>
+    <tr><td>3.3V</td><td>→</td><td>VCC</td><td>-</td><td>ไฟเลี้ยง 3.3V</td></tr>
+    <tr><td>GND</td><td>→</td><td>GND</td><td>-</td><td>กราวด์ร่วม</td></tr>
+    <tr><td>GND</td><td>→</td><td>WP</td><td>-</td><td>ต่อ GND = เปิดใช้งานการเขียน</td></tr>
+    <tr><td>GND</td><td>→</td><td>A0/A1/A2</td><td>-</td><td>ต่อ GND = ตั้งค่า I2C address เป็น 0x50</td></tr>
+  </tbody>
+</table>
+</section>
 
 <section><h2>📚 หลักการทำงาน</h2>
 <p><strong>AT24Cxx</strong> เป็น EEPROM แบบ I2C — เก็บข้อมูลได้แม้ไม่มีไฟ, endurance 1,000,000 write cycles, data retention >100 ปี</p></section>

@@ -45,6 +45,17 @@ flowchart TD
 │   ต้อง strong pull-up ตอน convert  │
 └────────────────────────────────────┘
     </pre>
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>PD2</td><td>↔</td><td>DS18B20</td><td>DQ</td><td>1-Wire bidirectional</td></tr>
+        <tr><td>3.3V</td><td>→</td><td>DS18B20</td><td>VCC</td><td></td></tr>
+        <tr><td>GND</td><td>→</td><td>DS18B20</td><td>GND</td><td></td></tr>
+        <tr><td>3.3V</td><td>↔</td><td>R 4.7kΩ pull-up</td><td>DQ</td><td>จำเป็นต้องมี — ไม่มี pull-up จะ Init ไม่พบ</td></tr>
+      </tbody>
+    </table>
     <p>1-Wire ต่อได้หลายร้อยตัวบนบัสเส้นเดียว — แต่ละตัวมี unique 64-bit ROM ID</p>
 </section>
 

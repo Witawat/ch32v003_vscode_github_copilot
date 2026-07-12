@@ -32,6 +32,11 @@ flowchart LR
 </section>
 
 <section>
+    <h2>🔌 การต่อวงจร</h2>
+    <p><strong>⚠️ ไม่ต้องต่อวงจรภายนอก:</strong> เป็น peripheral ภายในชิป CH32V003 — ทำงานทั้งหมดภายใน MCU ไม่ต้องต่ออุปกรณ์ใด ๆ เพิ่มเติม</p>
+</section>
+
+<section>
 <h2>ex01_MemCopy_Sync — คัดลอกหน่วยความจำแบบ DMA แบบรอเสร็จ</h2>
 <h3>📖 แนวคิด</h3>
 <p>ใช้ DMA_MemCopy คัดลอกข้อมูลจาก buffer หนึ่งไปอีก buffer หนึ่งด้วย DMA — รอจนกว่าจะเสร็จ (blocking) — ใช้ MemSet เติมค่าให้ buffer ด้วย DMA เช่นกัน</p>

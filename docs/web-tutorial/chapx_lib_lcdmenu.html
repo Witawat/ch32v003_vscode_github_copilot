@@ -38,7 +38,23 @@ flowchart TD
 │  PC5 ─── ENTER  ─── GND            │
 │  PC6 ─── BACK   ─── GND            │
 └────────────────────────────────────┘
-</pre><p>LCD 16×2 ตัวอักษรผ่าน I2C (ลด pin usage) — 4 ปุ่มสำหรับนำทางเมนู — ทุกปุ่มใช้ internal pull-up (ACTIVE_LOW) — ต้อง init Button_Instance ก่อน LCDMenu_Init</p></section>
+</pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC1</td><td>↔</td><td>LCD1602 I2C</td><td>SDA</td><td>I2C data</td></tr>
+    <tr><td>PC2</td><td>→</td><td>LCD1602 I2C</td><td>SCL</td><td>I2C clock</td></tr>
+    <tr><td>5V</td><td>→</td><td>LCD1602 I2C</td><td>VCC</td><td>จ่ายไฟ 5V</td></tr>
+    <tr><td>GND</td><td>↔</td><td>LCD1602 I2C</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+    <tr><td>PC3</td><td>←</td><td>Push Button</td><td>UP → GND</td><td>Active LOW, internal pull-up</td></tr>
+    <tr><td>PC4</td><td>←</td><td>Push Button</td><td>DOWN → GND</td><td>Active LOW, internal pull-up</td></tr>
+    <tr><td>PC5</td><td>←</td><td>Push Button</td><td>ENTER → GND</td><td>Active LOW, internal pull-up</td></tr>
+    <tr><td>PC6</td><td>←</td><td>Push Button</td><td>BACK → GND</td><td>Active LOW, internal pull-up</td></tr>
+  </tbody>
+</table>
+<p>LCD 16×2 ตัวอักษรผ่าน I2C (ลด pin usage) — 4 ปุ่มสำหรับนำทางเมนู — ทุกปุ่มใช้ internal pull-up (ACTIVE_LOW) — ต้อง init Button_Instance ก่อน LCDMenu_Init</p></section>
 
 <section><h2>📚 หลักการทำงาน</h2>
 <p><strong>LCDMenu</strong>: ไลบรารีเมนูแบบลำดับชั้น (hierarchical) สำหรับ LCD1602 16×2 — ใช้ร่วมกับ LCD1602_I2C และ Button — ออกแบบมาสำหรับ MCU หน่วยความจำจำกัดด้วย static memory pool</p>

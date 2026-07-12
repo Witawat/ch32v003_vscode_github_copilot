@@ -50,6 +50,19 @@ flowchart TD
     │                  └──────────┘   │
     └──────────────────────────────────┘
     </pre>
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>PC0</td><td>→</td><td>ULN2003</td><td>IN1</td><td>Motor A coil</td></tr>
+        <tr><td>PC1</td><td>→</td><td>ULN2003</td><td>IN2</td><td>Motor B coil</td></tr>
+        <tr><td>PC2</td><td>→</td><td>ULN2003</td><td>IN3</td><td>Motor C coil</td></tr>
+        <tr><td>PC3</td><td>→</td><td>ULN2003</td><td>IN4</td><td>Motor D coil</td></tr>
+        <tr><td>5V</td><td>→</td><td>ULN2003</td><td>VCC</td><td>จ่ายไฟ 5V สำหรับ ULN2003</td></tr>
+        <tr><td>GND</td><td>→</td><td>ULN2003</td><td>GND</td><td>Ground ร่วม</td></tr>
+      </tbody>
+    </table>
     <p>ULN2003 เป็น Darlington array ขับกระแสสูง — ต่อ MCU 4 GPIO เข้ากับ IN1–IN4 — ใช้ไฟ 5V เลี้ยงมอเตอร์ (ห้ามใช้ 3.3V) — 28BYJ-48 มี gear ratio 1:64, stride angle 5.625°, 2048 steps/rev (full-step)</p>
 </section>
 

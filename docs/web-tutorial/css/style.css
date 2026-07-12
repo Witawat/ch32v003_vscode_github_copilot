@@ -91,6 +91,12 @@ table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
 th, td { padding: 0.6rem 0.8rem; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.92em; }
 th { background: var(--code-bg); font-weight: 700; color: var(--accent); }
 
+/* Wiring table — ขนาดกะทัดรัดสำหรับตารางต่อวงจร */
+table.wiring-table { font-size: 0.88em; margin: 0.8rem 0; }
+table.wiring-table th { white-space: nowrap; }
+table.wiring-table td:first-child { font-weight: 700; font-family: 'Courier New', 'Consolas', monospace; white-space: nowrap; }
+table.wiring-table td:nth-child(2) { text-align: center; font-weight: 700; color: var(--accent); }
+
 /* Callout boxes */
 .callout {
     padding: 1rem 1.2rem; border-radius: var(--radius); margin: 1rem 0;

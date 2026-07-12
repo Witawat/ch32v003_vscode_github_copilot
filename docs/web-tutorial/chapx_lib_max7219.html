@@ -45,6 +45,18 @@ flowchart TD
     │ ต่อหลาย module: DOUT→DIN ต่อไป │
     └────────────────────────────────┘
     </pre>
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>5V</td><td>↔</td><td>MAX7219</td><td>VCC</td><td>จ่ายไฟ 5V</td></tr>
+        <tr><td>GND</td><td>↔</td><td>MAX7219</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+        <tr><td>PC4</td><td>→</td><td>MAX7219</td><td>CS</td><td>Chip Select</td></tr>
+        <tr><td>PC5</td><td>→</td><td>MAX7219</td><td>SCK (CLK)</td><td>SPI Clock</td></tr>
+        <tr><td>PC6</td><td>→</td><td>MAX7219</td><td>DIN (MOSI)</td><td>SPI Data In</td></tr>
+      </tbody>
+    </table>
     <p>MAX7219 สื่อสารผ่าน SPI — ใช้ 5V จ่ายไฟมอดูลละ ~330mA (8×8 LEDs on) — ต่อพ่วงหลายโมดูลได้โดย DOUT → DIN</p>
 </section>
 <section>

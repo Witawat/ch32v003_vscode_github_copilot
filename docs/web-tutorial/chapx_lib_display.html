@@ -20,6 +20,17 @@
 <pre class="ascii-circuit">
 3.3V─VCC  GND─GND  PC1─SDA  PC2─SCL   (I2C addr=0x3C)
 </pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC1</td><td>↔</td><td>OLED SSD1306</td><td>SDA</td><td>I2C data</td></tr>
+    <tr><td>PC2</td><td>→</td><td>OLED SSD1306</td><td>SCL</td><td>I2C clock</td></tr>
+    <tr><td>3.3V</td><td>→</td><td>OLED SSD1306</td><td>VCC</td><td>จ่ายไฟ 3.3V</td></tr>
+    <tr><td>GND</td><td>↔</td><td>OLED SSD1306</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+  </tbody>
+</table>
 <pre><code class="language-c">#include "oled_i2c.h"
 OLED_Handle oled;
 OLED_Init(&oled, OLED_128x64, 0x3C);
@@ -55,6 +66,18 @@ LCD_SetCursor(&lcd, 1, 0); LCD_Print(&lcd, "Line 2");
 <pre class="ascii-circuit">
 PC4─CS  PC5─SCK  PC6─DIN  5V─VCC  GND─GND  (chain ได้หลาย module)
 </pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC4</td><td>→</td><td>MAX7219 LED Matrix</td><td>CS</td><td>Chip select</td></tr>
+    <tr><td>PC5</td><td>→</td><td>MAX7219 LED Matrix</td><td>SCK</td><td>SPI clock</td></tr>
+    <tr><td>PC6</td><td>→</td><td>MAX7219 LED Matrix</td><td>DIN</td><td>SPI data in (MOSI)</td></tr>
+    <tr><td>5V</td><td>→</td><td>MAX7219 LED Matrix</td><td>VCC</td><td>จ่ายไฟ 5V</td></tr>
+    <tr><td>GND</td><td>↔</td><td>MAX7219 LED Matrix</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+  </tbody>
+</table>
 <pre><code class="language-c">#include "MAX7219.h"
 MAX7219_Init(PC5, PC6, PC4, 1);       // 1 module, CS=PC4
 MAX7219_SetIntensity(5);    // 0-15
@@ -85,6 +108,16 @@ TM1650_DisplayTime(8, 30);  // "08:30"</code></pre>
 <pre class="ascii-circuit">
 PC0─DATA  5V─VCC  GND─GND  (ห้าม 3.3V! WS2812B ต้อง 5V logic → level shifter)
 </pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC0</td><td>→</td><td>NeoPixel WS2812B</td><td>DATA</td><td>ต้องใช้ level shifter 3.3V→5V</td></tr>
+    <tr><td>5V</td><td>→</td><td>NeoPixel WS2812B</td><td>VCC</td><td>จ่ายไฟ 5V</td></tr>
+    <tr><td>GND</td><td>↔</td><td>NeoPixel WS2812B</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+  </tbody>
+</table>
 <pre><code class="language-c">#include "NeoPixel.h"
 #define LED_COUNT 8
 NeoPixel_Init(GPIOC, GPIO_Pin_0, LED_COUNT);
@@ -117,6 +150,21 @@ WS2815Matrix_Init(PC0, MATRIX_8x8);
 <pre class="ascii-circuit">
 PC0─A  PC1─B  PC2─CLK  PC3─SCLK  PC4─R1  PC5─OE  5V─VCC
 </pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC0</td><td>→</td><td>P10 LED Panel</td><td>A</td><td>Row select</td></tr>
+    <tr><td>PC1</td><td>→</td><td>P10 LED Panel</td><td>B</td><td>Row select</td></tr>
+    <tr><td>PC2</td><td>→</td><td>P10 LED Panel</td><td>CLK</td><td>Shift register clock</td></tr>
+    <tr><td>PC3</td><td>→</td><td>P10 LED Panel</td><td>SCLK</td><td>Latch clock</td></tr>
+    <tr><td>PC4</td><td>→</td><td>P10 LED Panel</td><td>R1</td><td>Red data</td></tr>
+    <tr><td>PC5</td><td>→</td><td>P10 LED Panel</td><td>OE</td><td>Output enable</td></tr>
+    <tr><td>5V</td><td>→</td><td>P10 LED Panel</td><td>VCC</td><td>External 5V</td></tr>
+    <tr><td>GND</td><td>↔</td><td>P10 LED Panel</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+  </tbody>
+</table>
 <pre><code class="language-c">#include "P10.h"
 P10_Init(PC2, PC4, PC0, PC1, PC3, PC5); // CLK, R1, A, B, SCLK, OE
 P10_Clear();
@@ -129,6 +177,17 @@ P10_SetCursor(0, 8); P10_Print("32x16");
 <pre class="ascii-circuit">
 PD5(TX)─RX(TJC)  PD6(RX)─TX(TJC)  5V─VCC  GND─GND
 </pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PD5</td><td>→</td><td>TJC HMI Display</td><td>RX</td><td>USART TX → display RX</td></tr>
+    <tr><td>PD6</td><td>←</td><td>TJC HMI Display</td><td>TX</td><td>USART RX ← display TX</td></tr>
+    <tr><td>5V</td><td>→</td><td>TJC HMI Display</td><td>VCC</td><td>จ่ายไฟ 5V</td></tr>
+    <tr><td>GND</td><td>↔</td><td>TJC HMI Display</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+  </tbody>
+</table>
 <pre><code class="language-c">#include "TJC.h"
 TJC_Handle hmi;
 TJC_Init(&hmi, USART1, BAUD_9600);
@@ -148,6 +207,18 @@ TJC_ProcessResponse(&hmi);  // ★ ต้องเรียกบ่อย — p
 <pre class="ascii-circuit">
 PC0─DATA  PC1─CLK  PC2─LATCH  3.3V─VCC  GND─GND
 </pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC0</td><td>→</td><td>74HC595</td><td>DS (DATA)</td><td>Serial data input</td></tr>
+    <tr><td>PC1</td><td>→</td><td>74HC595</td><td>SH_CP (CLK)</td><td>Shift register clock</td></tr>
+    <tr><td>PC2</td><td>→</td><td>74HC595</td><td>ST_CP (LATCH)</td><td>Latch clock (update outputs)</td></tr>
+    <tr><td>3.3V</td><td>→</td><td>74HC595</td><td>VCC</td><td>จ่ายไฟ 3.3V</td></tr>
+    <tr><td>GND</td><td>↔</td><td>74HC595</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+  </tbody>
+</table>
 <pre><code class="language-c">#include "ShiftReg595.h"
 ShiftReg595_Init(PC0, PC1, PC2);  // DATA, CLK, LATCH
 ShiftReg595_Write(0b10101010);     // 8-bit output

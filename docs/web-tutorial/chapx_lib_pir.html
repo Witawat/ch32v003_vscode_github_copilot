@@ -47,6 +47,16 @@ flowchart TD
     │ OUT: HIGH when motion, LOW idle    │
     └────────────────────────────────────┘
     </pre>
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>PC0</td><td>←</td><td>HC-SR501 PIR</td><td>OUT</td><td>HIGH = ตรวจจับ motion ได้</td></tr>
+        <tr><td>3.3V / 5V</td><td>→</td><td>HC-SR501 PIR</td><td>VCC</td><td>เลือกไฟตาม jumper</td></tr>
+        <tr><td>GND</td><td>→</td><td>HC-SR501 PIR</td><td>GND</td><td></td></tr>
+      </tbody>
+    </table>
     <p>PC0─OUT (INPUT_PULLUP หรือ INPUT) — ใช้ไฟ 3.3V หรือ 5V — มีปุ่มปรับ Sensitivity (ระยะ) และ Delay Time (นานในการค้าง HIGH หลังตรวจจับ)</p>
 </section>
 

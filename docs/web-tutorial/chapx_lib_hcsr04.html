@@ -43,6 +43,17 @@ flowchart TD
     │ Angle: 15° cone                   │
     └────────────────────────────────────┘
     </pre>
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>PC0</td><td>→</td><td>HC-SR04</td><td>TRIG</td><td>ส่งพัลส์ 10µs HIGH</td></tr>
+        <tr><td>PC1</td><td>←</td><td>HC-SR04</td><td>ECHO</td><td>ต้อง voltage divider (1k+2k) ลด 5V→3.3V</td></tr>
+        <tr><td>5V</td><td>→</td><td>HC-SR04</td><td>VCC</td><td>ไฟ 5V จากแหล่งจ่าย</td></tr>
+        <tr><td>GND</td><td>→</td><td>HC-SR04</td><td>GND</td><td></td></tr>
+      </tbody>
+    </table>
     <p>PC0─TRIG (output), PC1─ECHO (input) — ใช้ไฟ 5V แต่ TRIG รับ 3.3V logic ได้, ECHO output เป็น 5V → ใช้ voltage divider 2 ตัว (1k+2k) ลดเหลือ ~3.3V</p>
 </section>
 

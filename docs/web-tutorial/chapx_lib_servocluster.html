@@ -57,6 +57,19 @@ flowchart TD
     │               └───────┘           │
     └───────────────────────────────────┘
     </pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC1</td><td>↔</td><td>PCA9685</td><td>SDA</td><td>I2C data</td></tr>
+    <tr><td>PC2</td><td>→</td><td>PCA9685</td><td>SCL</td><td>I2C clock</td></tr>
+    <tr><td>3.3V</td><td>→</td><td>PCA9685</td><td>VCC</td><td>จ่ายไฟ 3.3V</td></tr>
+    <tr><td>GND</td><td>↔</td><td>PCA9685</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+    <tr><td>5V</td><td>→</td><td>Servo x16</td><td>V+ (PCA9685)</td><td>External 5V ≥3A</td></tr>
+    <tr><td>PCA9685 CH0–CH15</td><td>→</td><td>Servo 1–16</td><td>Signal</td><td>PWM 50Hz ควบคุมมุม</td></tr>
+  </tbody>
+</table>
     <p>⚠️ PCA9685 ขับ servo ได้สูงสุด 16 ตัวผ่าน I²C — ต่อ V+ เข้ากับ External 5V (ต้องจ่ายกระแสได้ ≥3A สำหรับ 16 servo) — ใช้ Address 0x40 (default)</p>
 </section>
 

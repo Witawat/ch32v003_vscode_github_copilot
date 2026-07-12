@@ -30,6 +30,11 @@ flowchart LR
 </section>
 
 <section>
+    <h2>🔌 การต่อวงจร</h2>
+    <p><strong>⚠️ ไม่ต้องต่อวงจรภายนอก:</strong> เป็น peripheral ภายในชิป CH32V003 — ทำงานทั้งหมดภายใน MCU ไม่ต้องต่ออุปกรณ์ใด ๆ เพิ่มเติม</p>
+</section>
+
+<section>
 <h2>ex01_Read_Write_Basics — อ่าน/เขียน Flash พื้นฐาน</h2>
 <h3>📖 แนวคิด</h3>
 <p>เรียนรู้การเขียนและอ่าน Flash ของ CH32V003 — ขนาดหน้า 64 bytes — ต้องลบ (erase) ก่อนเขียนทุกครั้ง — ใช้ Flash_Init เปิด clock, ErasePage ลบทีละหน้า, WriteByte เขียนทีละ byte, ReadWord อ่าน 32-bit</p>

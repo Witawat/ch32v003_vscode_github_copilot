@@ -24,7 +24,23 @@ flowchart TD
    │                  A0─GND (addr 0x40)  │
    │                  A1─GND              │
    └──────────────────────────────────────┘
-</pre><p>ต่อ Shunt Resistor 0.1Ω ระหว่าง Load(+) กับ VCC — วัด High-Side (ด้านบวกของโหลด) รองรับแรงดัน 0-32V, กระแสสูงสุด ±3.2A (ที่ shunt 0.1Ω)</p></section>
+</pre><p>ต่อ Shunt Resistor 0.1Ω ระหว่าง Load(+) กับ VCC — วัด High-Side (ด้านบวกของโหลด) รองรับแรงดัน 0-32V, กระแสสูงสุด ±3.2A (ที่ shunt 0.1Ω)</p>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC1</td><td>↔</td><td>SDA</td><td>-</td><td>สายข้อมูล I2C — ต้องมี R 4.7kΩ pull-up ไป 3.3V</td></tr>
+    <tr><td>PC2</td><td>→</td><td>SCL</td><td>-</td><td>สายนาฬิกา I2C — ต้องมี R 4.7kΩ pull-up ไป 3.3V</td></tr>
+    <tr><td>Vin+</td><td>←</td><td>Shunt (Load side)</td><td>-</td><td>ด้านโหลดของ shunt resistor 0.1Ω — วัด high-side current</td></tr>
+    <tr><td>Vin-</td><td>←</td><td>Shunt (VCC side)</td><td>-</td><td>ด้าน VCC ของ shunt resistor 0.1Ω</td></tr>
+    <tr><td>3.3V</td><td>→</td><td>VCC</td><td>-</td><td>ไฟเลี้ยง 3.3V</td></tr>
+    <tr><td>GND</td><td>→</td><td>GND</td><td>-</td><td>กราวด์ร่วม</td></tr>
+    <tr><td>GND</td><td>→</td><td>A0</td><td>-</td><td>ต่อ GND = ตั้งค่า I2C address เป็น 0x40</td></tr>
+    <tr><td>GND</td><td>→</td><td>A1</td><td>-</td><td>ต่อ GND = ตั้งค่า I2C address เป็น 0x40</td></tr>
+  </tbody>
+</table>
+</section>
 <section><h2>📚 หลักการทำงาน</h2><p><strong>INA219</strong> เป็น Bi-directional Current/Power Monitor แบบ I2C วัดแรงดันตกคร่อม Shunt Resistor แล้วคำนวณกระแสด้วยกฎของโอห์ม <code>I = Vshunt / Rshunt</code> — มี ADC 12-bit ภายใน วัดได้ทั้ง Bus Voltage (0-32V) และ Shunt Voltage (±320mV full-scale)</p><p><strong>Calibration Register</strong> ต้องตั้งค่าให้ถูกต้องตาม Rshunt และ Max Current ที่ใช้ — Lib จะคำนวณ calibration value ให้อัตโนมัติจากค่าที่กำหนด (shunt Ω และ max_amps)</p><p><strong>4 Addresses</strong> เลือกผ่านขา A0/A1 — ต่อ GND หรือ VCC ได้ 4 ค่า: 0x40, 0x41, 0x44, 0x45 — ต่อหลายตัวบน I2C bus เดียวกันได้</p><p><strong>การวัดกำลัง</strong> ใช้ Bus Voltage × Current — INA219 คำนวณ power register ให้ในตัว แต่ Lib อ่าน Bus Voltage จริง (ไม่รวม shunt drop) แล้วคูณกระแสให้ถูกต้อง</p></section>
 <section><h2>💻 เขียน Code ทีละขั้น</h2>
 <div class="step"><h3>ขั้นที่ 1: Init INA219 + ตั้งค่า</h3><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20

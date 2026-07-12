@@ -49,6 +49,19 @@ flowchart TD
     │ ห้ามจ่ายจาก WCH-Link เด็ดขาด!      └─────────┤
     └──────────────────────────────────────────────┘
     </pre>
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>PD5 (TX)</td><td>→</td><td>ESP-01</td><td>RX</td><td>MCU→ESP</td></tr>
+        <tr><td>PD6 (RX)</td><td>←</td><td>ESP-01</td><td>TX</td><td>ESP→MCU</td></tr>
+        <tr><td>PC0</td><td>→</td><td>ESP-01</td><td>RST</td><td>Reset (Optional)</td></tr>
+        <tr><td>PC1</td><td>→</td><td>ESP-01</td><td>CH_PD/EN</td><td>Enable (ต้อง HIGH)</td></tr>
+        <tr><td>3.3V</td><td>↔</td><td>ESP-01</td><td>VCC</td><td>จ่ายไฟ 3.3V (≥500mA)</td></tr>
+        <tr><td>GND</td><td>↔</td><td>ESP-01</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+      </tbody>
+    </table>
     <p>⚠️ ESP8266 กินกระแสสูงสุด ~300mA ตอนส่ง WiFi — ต้องใช้ external 3.3V regulator อย่างน้อย 500mA (AMS1117-3.3 หรือดีกว่า), CH_PD ต้องต่อ HIGH ตลอดเวลา, GPIO0 ต่อ GND = Flash mode (ตอนโปรแกรม ESP), GPIO0 ลอย = Normal mode</p>
 </section>
 

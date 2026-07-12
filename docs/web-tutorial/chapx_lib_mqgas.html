@@ -37,7 +37,18 @@ flowchart TD
     │ GND────────GND     └──────────────┤
     │ Heater กินไฟ ~150mA @ 5V           │
     └────────────────────────────────────┘
-</pre></section>
+</pre>
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>PA1 (ADC)</td><td>←</td><td>MQ-xxx</td><td>AOUT</td><td>Analog Output ความเข้มข้นแก๊ส</td></tr>
+        <tr><td>5V</td><td>→</td><td>MQ-xxx</td><td>VCC</td><td>Heater 5V ~150mA</td></tr>
+        <tr><td>GND</td><td>→</td><td>MQ-xxx</td><td>GND</td><td>Ground ร่วม</td></tr>
+      </tbody>
+    </table>
+</section>
 
 <section><h2>📚 หลักการทำงาน</h2>
 <p><strong>MQ Gas Sensors</strong> ใช้หลักการเปลี่ยนความต้านทานของวัสดุ SnO₂ เมื่อสัมผัสแก๊ส — ต้อง preheat 24–48 ชม. ก่อน Calibrate — MQGas_Init รับ channel, type, VCC, VREF</p></section>

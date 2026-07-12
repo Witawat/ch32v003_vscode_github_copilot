@@ -20,6 +20,18 @@
 PCA9685 Board: PC1─SDA, PC2─SCL, 5V external─VCC(PCA9685+servos), GND common
 Servo SG90 x N: Signal→PCA9685 ch0-15, VCC→external 5V, GND→common
 </pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC1</td><td>↔</td><td>PCA9685</td><td>SDA</td><td>I2C data</td></tr>
+    <tr><td>PC2</td><td>→</td><td>PCA9685</td><td>SCL</td><td>I2C clock</td></tr>
+    <tr><td>5V</td><td>→</td><td>PCA9685</td><td>VCC</td><td>External 5V จ่าย PCA9685 + servos</td></tr>
+    <tr><td>GND</td><td>↔</td><td>PCA9685</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+    <tr><td>PCA9685 CH0–CH15</td><td>→</td><td>Servo SG90 × N</td><td>Signal</td><td>PWM 50Hz ควบคุมมุม</td></tr>
+  </tbody>
+</table>
 <pre><code class="language-c">#include "ServoCluster.h"
 ServoCluster_Handle sc;
 
@@ -62,6 +74,16 @@ int main(void) {
 PD2─Signal(ESC), Battery 7.4-14.8V─ESC power, Motor 3 wires─ESC output
 ⚠️ ห้ามต่อ MCU กับ ESC battery GND โดยตรง — ใช้ BEC 5V output หรือแยก regulator
 </pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PD2</td><td>→</td><td>ESC</td><td>Signal</td><td>PWM 50Hz, 1ms=stop, 2ms=full</td></tr>
+    <tr><td>Battery 7.4–14.8V</td><td>→</td><td>ESC</td><td>Power</td><td>LiPo/Battery input</td></tr>
+    <tr><td>ESC Output</td><td>→</td><td>BLDC Motor</td><td>3 wires</td><td>มอเตอร์ไร้แปรงถ่าน 3 เฟส</td></tr>
+  </tbody>
+</table>
 <pre><code class="language-c">#include "ESC.h"
 ESC_Handle esc;
 
@@ -101,6 +123,20 @@ int main(void) {
 PD5(TX)─PDN_UART(TMC), PC0─ENABLE, PC1─DIR, PC2─STEP, 12-24V─VMOT, GND common
 MS1/MS2─GND (address 0)
 </pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PD5</td><td>↔</td><td>TMC220x</td><td>PDN_UART</td><td>1-wire UART config</td></tr>
+    <tr><td>PC0</td><td>→</td><td>TMC220x</td><td>ENABLE</td><td>เปิด/ปิด driver</td></tr>
+    <tr><td>PC1</td><td>→</td><td>TMC220x</td><td>DIR</td><td>ทิศทาง</td></tr>
+    <tr><td>PC2</td><td>→</td><td>TMC220x</td><td>STEP</td><td>Step pulse</td></tr>
+    <tr><td>12–24V</td><td>→</td><td>TMC220x</td><td>VMOT</td><td>External motor power</td></tr>
+    <tr><td>GND</td><td>↔</td><td>TMC220x</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+    <tr><td>MS1/MS2</td><td>→</td><td>TMC220x</td><td>MS1/MS2</td><td>ต่อ GND = address 0</td></tr>
+  </tbody>
+</table>
 <pre><code class="language-c">#include "TMC220x.h"
 
 int main(void) {
@@ -134,6 +170,20 @@ int main(void) {
 <pre class="ascii-circuit">
 PC4─CSN, PC5─SCK, PC6─MOSI, PC7─MISO, PC0─ENABLE, 24-48V─VMOT, GND common
 </pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC4</td><td>→</td><td>TMC5160</td><td>CSN</td><td>SPI chip select</td></tr>
+    <tr><td>PC5</td><td>→</td><td>TMC5160</td><td>SCK</td><td>SPI clock</td></tr>
+    <tr><td>PC6</td><td>→</td><td>TMC5160</td><td>MOSI</td><td>SPI data in</td></tr>
+    <tr><td>PC7</td><td>←</td><td>TMC5160</td><td>MISO</td><td>SPI data out</td></tr>
+    <tr><td>PC0</td><td>→</td><td>TMC5160</td><td>ENABLE</td><td>เปิด/ปิด driver</td></tr>
+    <tr><td>24–48V</td><td>→</td><td>TMC5160</td><td>VMOT</td><td>External motor power</td></tr>
+    <tr><td>GND</td><td>↔</td><td>TMC5160</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+  </tbody>
+</table>
 <pre><code class="language-c">#include "TMC5160.h"
 
 int main(void) {

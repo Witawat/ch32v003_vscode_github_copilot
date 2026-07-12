@@ -71,6 +71,19 @@ flowchart TD
     │  └─ yield()                                 │
     └────────────────────────────────────────────┘
     </pre>
+
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>PC0</td><td>→</td><td>R 220Ω → LED</td><td>Anode(+)</td><td>digitalWrite() / analogWrite()</td></tr>
+        <tr><td>PA1</td><td>←</td><td>ปุ่มกด → GND</td><td>ขาใดขาหนึ่ง</td><td>ใช้ pull-up ภายใน (INPUT_PULLUP)</td></tr>
+        <tr><td>PD2</td><td>→</td><td>Potentiometer 10kΩ</td><td>Wiper (ขากลาง)</td><td>analogRead() — 3.3V → POT → GND</td></tr>
+        <tr><td>PC4</td><td>→</td><td>Servo (PWM)</td><td>Signal</td><td>analogWrite() / PWM_Init()</td></tr>
+      </tbody>
+    </table>
+
     <p><strong>หมายเหตุ:</strong> SimpleHAL รองรับ Arduino API โดยตรง — ไม่ต้องใช้ Arduino core — คอมไพล์ด้วย GCC RISC-V — โค้ดเล็กกว่า Arduino หลายเท่า</p>
 </section>
 

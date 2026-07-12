@@ -54,6 +54,20 @@ flowchart TD
     │                     └──────┘    │
     └──────────────────────────────────┘
     </pre>
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>PC0</td><td>→</td><td>TMC2209</td><td>STEP</td><td>Pulse input</td></tr>
+        <tr><td>PC1</td><td>→</td><td>TMC2209</td><td>DIR</td><td>ทิศทางหมุน</td></tr>
+        <tr><td>PC2</td><td>→</td><td>TMC2209</td><td>EN</td><td>LOW = เปิดใช้งาน</td></tr>
+        <tr><td>PD5</td><td>↔</td><td>TMC2209</td><td>TX</td><td>1-Wire UART (1kΩ→PD5, 1kΩ→GND)</td></tr>
+        <tr><td>3.3V</td><td>→</td><td>TMC2209</td><td>VIO</td><td>Logic voltage 3.3V</td></tr>
+        <tr><td>GND</td><td>→</td><td>TMC2209</td><td>GND</td><td>Ground ร่วม</td></tr>
+        <tr><td>VMOT (12V)</td><td>→</td><td>TMC2209</td><td>VMOT</td><td>Motor supply 4.75–29V</td></tr>
+      </tbody>
+    </table>
     <p>⚠️ TMC2209 ใช้ <strong>1-Wire UART</strong> — ต้องมี resistor 1kΩ ต่อระหว่าง TX pin กับ PD5, และ 1kΩ ต่อ PD5 ลง GND — VIO ต่อ 3.3V (logic level) — VMOT 4.75-29V — address 0–3 ตั้งด้วย MS1/MS2 pins</p>
 </section>
 

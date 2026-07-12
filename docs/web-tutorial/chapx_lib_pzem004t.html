@@ -21,7 +21,19 @@ flowchart TD
     │  PD6─RX ────────── TX   GND──GND           │
     │  CT Clamp ──────── CT ──|Load|── L(220V)   │
     └────────────────────────────────────────────┘
-</pre></section>
+</pre>
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>PD5 (TX)</td><td>→</td><td>PZEM-004T</td><td>RX</td><td>USART ส่ง Modbus request</td></tr>
+        <tr><td>PD6 (RX)</td><td>←</td><td>PZEM-004T</td><td>TX</td><td>USART รับ Modbus response</td></tr>
+        <tr><td>5V</td><td>→</td><td>PZEM-004T</td><td>VCC</td><td>จ่ายไฟ 5V</td></tr>
+        <tr><td>GND</td><td>→</td><td>PZEM-004T</td><td>GND</td><td>Ground ร่วม</td></tr>
+      </tbody>
+    </table>
+</section>
 <section><h2>📚 หลักการทำงาน</h2><p><strong>PZEM-004T</strong> เป็น AC Energy Meter สื่อสารผ่าน USART ด้วย Modbus-RTU — PZEM004T_ReadAll() อ่านทุกค่าพร้อมกันในครั้งเดียว</p></section>
 <section><h2>💻 เขียน Code ทีละขั้น</h2>
 <div class="step"><h3>ขั้นที่ 1: Init PZEM + USART</h3><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20

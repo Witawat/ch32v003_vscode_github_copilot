@@ -43,6 +43,19 @@ flowchart LR
     PC1 -- Button -- GND     (INPUT_PULLUP, ปลุกด้วย FALLING)
 </pre>
 
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC0</td><td>→</td><td>R 220Ω</td><td>ขา 1</td><td>จำกัดกระแส LED</td></tr>
+    <tr><td>R 220Ω</td><td>→</td><td>LED (แอโนด)</td><td>ขายาว (+)</td><td>—</td></tr>
+    <tr><td>LED (แคโทด)</td><td>→</td><td>GND</td><td>ขาสั้น (-)</td><td>—</td></tr>
+    <tr><td>PC1</td><td>→</td><td>Push Button</td><td>ขา 1</td><td>Input pull-up, wake from sleep</td></tr>
+    <tr><td>Push Button</td><td>→</td><td>GND</td><td>ขา 2</td><td>FALLING edge triggers wake</td></tr>
+  </tbody>
+</table>
+
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">
 flowchart TD

@@ -45,6 +45,18 @@ flowchart TD
     └──────────────────────────────────────────────┘
     </pre>
     <p>I2C Scanner เป็นเครื่องมือพื้นฐานที่สุด — ใช้หา address ของอุปกรณ์ I2C ทุกตัวบนบัส — ฟังก์ชันเดียว: <code>I2CScan_Run()</code></p>
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>PC1</td><td>↔</td><td>SDA</td><td>-</td><td>สายข้อมูล I2C — ต้องมี R 4.7kΩ pull-up ไป 3.3V</td></tr>
+        <tr><td>PC2</td><td>→</td><td>SCL</td><td>-</td><td>สายนาฬิกา I2C — ต้องมี R 4.7kΩ pull-up ไป 3.3V</td></tr>
+        <tr><td>3.3V</td><td>→</td><td>SDA</td><td>-</td><td>ผ่าน R 4.7kΩ pull-up ไป 3.3V</td></tr>
+        <tr><td>3.3V</td><td>→</td><td>SCL</td><td>-</td><td>ผ่าน R 4.7kΩ pull-up ไป 3.3V</td></tr>
+        <tr><td>GND</td><td>→</td><td>GND</td><td>-</td><td>กราวด์ร่วม</td></tr>
+      </tbody>
+    </table>
 </section>
 
 <section>

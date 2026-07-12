@@ -46,6 +46,19 @@ flowchart LR
     ใช้ I2C_PINS_PARTIAL_REMAP → PD2=SCL, PD1=SDA (SOP-8 compatible)
 </pre>
 
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC2 (SCL)</td><td>→</td><td>R 4.7kΩ → 3.3V</td><td>—</td><td>Pull-up บนสาย SCL</td></tr>
+    <tr><td>PC2 (SCL)</td><td>→</td><td>I2C Device (SCL)</td><td>SCL</td><td>I2C clock</td></tr>
+    <tr><td>PC1 (SDA)</td><td>↔</td><td>R 4.7kΩ → 3.3V</td><td>—</td><td>Pull-up บนสาย SDA</td></tr>
+    <tr><td>PC1 (SDA)</td><td>↔</td><td>I2C Device (SDA)</td><td>SDA</td><td>I2C data (two-way)</td></tr>
+    <tr><td>GND</td><td>↔</td><td>I2C Device (GND)</td><td>GND</td><td>Common ground</td></tr>
+  </tbody>
+</table>
+
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">
 flowchart TD
@@ -128,6 +141,22 @@ int main(void)
                            +-- VCC=3.3V
     GND                   +-- GND
 </pre>
+
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC2 (SCL)</td><td>→</td><td>R 4.7kΩ → 3.3V</td><td>—</td><td>Pull-up</td></tr>
+    <tr><td>PC2 (SCL)</td><td>→</td><td>AT24Cxx (SCL)</td><td>SCL</td><td>I2C clock</td></tr>
+    <tr><td>PC1 (SDA)</td><td>↔</td><td>R 4.7kΩ → 3.3V</td><td>—</td><td>Pull-up</td></tr>
+    <tr><td>PC1 (SDA)</td><td>↔</td><td>AT24Cxx (SDA)</td><td>SDA</td><td>I2C data</td></tr>
+    <tr><td>AT24Cxx (WP)</td><td>→</td><td>GND</td><td>—</td><td>Write protect = disable</td></tr>
+    <tr><td>AT24Cxx (A0/A1/A2)</td><td>→</td><td>GND</td><td>—</td><td>Address 0x50</td></tr>
+    <tr><td>AT24Cxx (VCC)</td><td>←</td><td>3.3V</td><td>—</td><td>—</td></tr>
+    <tr><td>GND</td><td>↔</td><td>AT24Cxx (GND)</td><td>GND</td><td>Common ground</td></tr>
+  </tbody>
+</table>
 
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">
@@ -214,6 +243,21 @@ int main(void)
     GND                   +-- GND
 </pre>
 
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC2 (SCL)</td><td>→</td><td>R 4.7kΩ → 3.3V</td><td>—</td><td>Pull-up</td></tr>
+    <tr><td>PC2 (SCL)</td><td>→</td><td>BH1750 (SCL)</td><td>SCL</td><td>I2C clock</td></tr>
+    <tr><td>PC1 (SDA)</td><td>↔</td><td>R 4.7kΩ → 3.3V</td><td>—</td><td>Pull-up</td></tr>
+    <tr><td>PC1 (SDA)</td><td>↔</td><td>BH1750 (SDA)</td><td>SDA</td><td>I2C data</td></tr>
+    <tr><td>BH1750 (ADDR)</td><td>→</td><td>GND</td><td>—</td><td>Address 0x23</td></tr>
+    <tr><td>BH1750 (VCC)</td><td>←</td><td>3.3V</td><td>—</td><td>—</td></tr>
+    <tr><td>GND</td><td>↔</td><td>BH1750 (GND)</td><td>GND</td><td>Common ground</td></tr>
+  </tbody>
+</table>
+
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">
 flowchart TD
@@ -299,6 +343,19 @@ int main(void)
 
     ใช้ PD2, PD3 — แต่เลือก pin GPIO ไหนก็ได้!
 </pre>
+
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PD2 (Soft SCL)</td><td>→</td><td>R 4.7kΩ → 3.3V</td><td>—</td><td>Pull-up, software bit-bang</td></tr>
+    <tr><td>PD2 (Soft SCL)</td><td>→</td><td>I2C Device (SCL)</td><td>SCL</td><td>Software I2C clock</td></tr>
+    <tr><td>PD3 (Soft SDA)</td><td>↔</td><td>R 4.7kΩ → 3.3V</td><td>—</td><td>Pull-up</td></tr>
+    <tr><td>PD3 (Soft SDA)</td><td>↔</td><td>I2C Device (SDA)</td><td>SDA</td><td>Software I2C data</td></tr>
+    <tr><td>GND</td><td>↔</td><td>I2C Device (GND)</td><td>GND</td><td>Common ground</td></tr>
+  </tbody>
+</table>
 
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">

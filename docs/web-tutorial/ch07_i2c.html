@@ -56,6 +56,18 @@ flowchart TD
     PARTIAL_REMAP  : SCL=PD2, SDA=PD1  (SOP-8 compatible)
     FULL_REMAP     : SCL=PD0, SDA=PD1  (เฉพาะ TSSOP-20/QFN-20)
     </pre>
+
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>PC1 (SDA)</td><td>↔</td><td>BH1750 / MPU6050 / AT24Cxx</td><td>SDA</td><td>I2C Data — ต้องมี R 4.7kΩ pull-up → 3.3V</td></tr>
+        <tr><td>PC2 (SCL)</td><td>→</td><td>BH1750 / MPU6050 / AT24Cxx</td><td>SCL</td><td>I2C Clock — ต้องมี R 4.7kΩ pull-up → 3.3V</td></tr>
+        <tr><td>GND</td><td>↔</td><td>อุปกรณ์ I2C ทั้งหมด</td><td>GND</td><td>GND ต่อร่วมกันทุกตัว</td></tr>
+      </tbody>
+    </table>
+
     <p><strong>Pull-up 4.7kΩ จำเป็น!</strong> — I2C เป็น open-drain ต้องมี pull-up ถึงจะทำงาน — SOP-8 ใช้ PC1/PC2 หรือ PARTIAL_REMAP (PD1/PD2)<br>
     สามารถต่อหลายอุปกรณ์บนบัสเดียวกันได้ (แต่ละตัวมี address ไม่ซ้ำกัน)</p>
 </section>

@@ -19,6 +19,14 @@
 <pre class="ascii-circuit">
 PC1─Button─GND (active LOW, ใช้ internal pull-up)
 </pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC1 (หรือ pin ใด)</td><td>←</td><td>Push Button</td><td>ขา → GND</td><td>Active LOW, internal pull-up</td></tr>
+  </tbody>
+</table>
 <pre><code class="language-c">#include "Button.h"
 Button_Instance btn;
 Button_Init(&btn, PC1, BUTTON_ACTIVE_LOW);
@@ -38,6 +46,15 @@ while(1) { Button_Update(&btn); IWDG_Feed(); }</code></pre>
 <pre class="ascii-circuit">
 PC0-PC3─ROW1-4, PC4-PC7─COL1-4 (pull-up on columns)
 </pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC0–PC3</td><td>→</td><td>4×4 Keypad</td><td>ROW1–ROW4</td><td>Row scan outputs (active LOW)</td></tr>
+    <tr><td>PC4–PC7</td><td>←</td><td>4×4 Keypad</td><td>COL1–COL4</td><td>Column inputs (pull-up)</td></tr>
+  </tbody>
+</table>
 <pre><code class="language-c">#include "KeyMatrix.h"
 KeyMatrix_Handle keypad;
 uint8_t rows[] = {PC0,PC1,PC2,PC3}, cols[] = {PC4,PC5,PC6,PC7};
@@ -56,6 +73,16 @@ while(1) {
 <pre class="ascii-circuit">
 PC0─CLK, PC1─DT, PC2─SW (pull-up on all)
 </pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC0</td><td>←</td><td>Rotary Encoder</td><td>CLK</td><td>Quadrature A, internal pull-up</td></tr>
+    <tr><td>PC1</td><td>←</td><td>Rotary Encoder</td><td>DT</td><td>Quadrature B, internal pull-up</td></tr>
+    <tr><td>PC2</td><td>←</td><td>Rotary Encoder</td><td>SW</td><td>Push button, internal pull-up</td></tr>
+  </tbody>
+</table>
 <pre><code class="language-c">#include "RotaryEncoder.h"
 RotaryEncoder enc;
 int32_t pos = 0;
@@ -90,6 +117,19 @@ while(1) {
 LCD1602 I2C: PC1─SDA, PC2─SCL
 Buttons: PC3─UP, PC4─DOWN, PC5─ENTER, PC6─BACK (pull-up)
 </pre>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PC1</td><td>↔</td><td>LCD1602 I2C</td><td>SDA</td><td>I2C data</td></tr>
+    <tr><td>PC2</td><td>→</td><td>LCD1602 I2C</td><td>SCL</td><td>I2C clock</td></tr>
+    <tr><td>PC3</td><td>←</td><td>Push Button</td><td>UP → GND</td><td>Active LOW, internal pull-up</td></tr>
+    <tr><td>PC4</td><td>←</td><td>Push Button</td><td>DOWN → GND</td><td>Active LOW, internal pull-up</td></tr>
+    <tr><td>PC5</td><td>←</td><td>Push Button</td><td>ENTER → GND</td><td>Active LOW, internal pull-up</td></tr>
+    <tr><td>PC6</td><td>←</td><td>Push Button</td><td>BACK → GND</td><td>Active LOW, internal pull-up</td></tr>
+  </tbody>
+</table>
 <pre><code class="language-c">#include "LCDMenu.h"
 #include "lcd1602_i2c.h"
 LCD1602_Handle lcd;

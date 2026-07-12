@@ -29,6 +29,11 @@ flowchart LR
 </section>
 
 <section>
+    <h2>🔌 การต่อวงจร</h2>
+    <p><strong>⚠️ ไม่ต้องต่อวงจรภายนอก:</strong> เป็น peripheral ภายในชิป CH32V003 — ทำงานทั้งหมดภายใน MCU ไม่ต้องต่ออุปกรณ์ใด ๆ เพิ่มเติม</p>
+</section>
+
+<section>
 <h2>ex01_IWDG_Simple — ตั้งค่า IWDG + Feed พื้นฐาน</h2>
 <h3>📖 แนวคิด</h3>
     <p>Independent Watchdog (IWDG) ใช้ clock แยก 40kHz ในตัว — ไม่ขึ้นกับ main clock — รีเซ็ต MCU ถ้าไม่ Feed ทันเวลา ตั้งค่า prescaler + reload ง่าย ๆ ด้วยฟังก์ชัน IWDG_SimpleInit</p>
