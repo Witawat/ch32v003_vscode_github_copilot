@@ -250,15 +250,22 @@ int main(void)
     <p>ใช้ OPAMP ในโหมด Non-Inverting ขยายสัญญาณขนาดเล็กจาก pyroelectric element <strong>RE200B</strong> หรือ <strong>D202S</strong> (~0.5–2mV เมื่อมีการเคลื่อนไหว) ให้ ADC อ่านค่าได้</p>
 
     <pre class="ascii-circuit">
-    RE200B Pyroelectric Element — ต้องขยายสัญญาณด้วย OPAMP
+    RE200B/D202S Pyroelectric Element — ต้องขยายสัญญาณด้วย OPAMP
     ┌──────────────────────────────────────────────────────────┐
     │                                                           │
-    │  RE200B (มองจากด้านบน — Dual Element)                     │
-    │     ┌─────┐                                               │
-    │     │  ○  │  Pin 1 (Drain/S) ──── GND                     │
-    │     │ ○○  │  Pin 2 (Source/D) ──── R_load=10kΩ ── VDD/2  │
-    │     └─────┘                       │                       │
-    │                                   ├── C=1µF (DC block)    │
+    │  RE200B (2 พิน) / D202S (3 พิน) — Dual Element            │
+    │                                                           │
+    │  D202S (TO-5):        RE200B (TO-5):                     │
+    │     ┌─────┐               ┌─────┐                         │
+    │     │  ○  │ Pin1(Drain)   │  ○  │ Pin1(Drain)             │
+    │     │ ○○  │ Pin2(Source)  │ ○○  │ Pin2(Source)            │
+    │     │  ○  │ Pin3(Ground)  └─────┘                         │
+    │     └─────┘                                               │
+    │                                                           │
+    │  Drain (Pin1) ──── GND                                    │
+    │  Source(Pin2) ──── R_load=10kΩ ── VDD/2                   │
+    │                    │                                      │
+    │                    ├── C=1µF (DC block)                    │
     │                                   │     │                  │
     │                                   │  R=1MΩ ── GND         │
     │                                   │     │                  │
@@ -290,11 +297,12 @@ int main(void)
         <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
       </thead>
       <tbody>
-        <tr><td>PD5 (OPAMP1_IN+)</td><td>←</td><td>RE200B (ผ่าน C 1µF + R 1MΩ)</td><td>Pin 2 (Source)</td><td>สัญญาณ AC-coupled, bias VDD/2</td></tr>
+        <tr><td>PD5 (OPAMP1_IN+)</td><td>←</td><td>RE200B/D202S Source (ผ่าน C 1µF + R 1MΩ)</td><td>Pin 2</td><td>สัญญาณ AC-coupled, bias VDD/2</td></tr>
         <tr><td>PA6 (OPAMP1_IN-)</td><td>↔</td><td>Rf=1MΩ → PA5(OUT), Rg=10kΩ → GND</td><td>—</td><td>Non-Inverting feedback</td></tr>
         <tr><td>PA5 (OPAMP1_OUT)</td><td>→</td><td>ADC ภายใน</td><td>—</td><td>Gain=101x, ต่อ ADC อัตโนมัติ</td></tr>
-        <tr><td>RE200B Pin 1</td><td>→</td><td>GND</td><td>Drain</td><td>ขาต่อกราวด์ของ pyroelectric element</td></tr>
-        <tr><td>RE200B Pin 2</td><td>→</td><td>R_load=10kΩ → VDD/2 (1.65V)</td><td>Source</td><td>DC bias จ่ายให้ RE200B</td></tr>
+        <tr><td>Drain</td><td>→</td><td>GND</td><td>Pin 1</td><td>ทั้ง RE200B และ D202S</td></tr>
+        <tr><td>Source</td><td>→</td><td>R_load=10kΩ → VDD/2 (1.65V)</td><td>Pin 2</td><td>DC bias จ่ายให้ pyroelectric element</td></tr>
+        <tr><td>D202S Pin 3</td><td>→</td><td>GND</td><td>Ground (Shield)</td><td>กราวด์ตัวถัง — ลด noise coupling — RE200B 2 พินไม่มีขานี้</td></tr>
         <tr><td>3.3V</td><td>→</td><td>R divider 10k+10k → VDD/2</td><td>—</td><td>สร้าง 1.65V สำหรับ bias RE200B และ OPAMP</td></tr>
       </tbody>
     </table>

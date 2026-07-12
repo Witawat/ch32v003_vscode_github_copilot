@@ -435,10 +435,12 @@ int main(void) {
 
 <h3>🔌 วงจร</h3>
 <pre class="ascii-circuit">
-    RE200B → OPAMP Non-Inverting Gain ~101x → ADC
+    RE200B/D202S → OPAMP Non-Inverting Gain ~101x → ADC
 
-    RE200B (Pin1=Drain ── GND)
-           (Pin2=Source ── 10kΩ ── 1.65V bias)
+    D202S (3 พิน TO-5):     RE200B (2-3 พิน TO-5):
+    Pin1=Drain ── GND       Pin1=Drain ── GND
+    Pin2=Source ── 10kΩ ── 1.65V bias
+    Pin3=Ground ── GND     (RE200B 2 พินไม่มีขา Ground)
                                 │
                                1µF (DC block)
                                 │
@@ -464,9 +466,10 @@ int main(void) {
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
   </thead>
   <tbody>
-    <tr><td>PD5 (OPAMP1_IN+)</td><td>←</td><td>RE200B Source (ผ่าน AC coupling)</td><td>Pin 2</td><td>สัญญาณ PIR ~0.5-2mV, bias VDD/2</td></tr>
+    <tr><td>PD5 (OPAMP1_IN+)</td><td>←</td><td>RE200B/D202S Source (ผ่าน AC coupling)</td><td>Pin 2</td><td>สัญญาณ PIR ~0.5-2mV, bias VDD/2</td></tr>
     <tr><td>PA6 (OPAMP1_IN-)</td><td>↔</td><td>Rf=1MΩ → PA5, Rg=10kΩ → GND</td><td>—</td><td>Non-Inverting feedback</td></tr>
     <tr><td>PA5 (OPAMP1_OUT)</td><td>→</td><td>ADC_IN ภายใน</td><td>—</td><td>Gain=101x, ตีค่า mV ได้</td></tr>
+    <tr><td>D202S Pin 3</td><td>→</td><td>GND</td><td>Ground (Shield)</td><td>RE200B 2 พินไม่มีขานี้ — ต่อ GND ลด noise</td></tr>
   </tbody>
 </table>
 
