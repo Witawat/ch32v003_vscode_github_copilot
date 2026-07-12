@@ -429,47 +429,46 @@ int main(void) {
 </section>
 
 <section>
-<h2>ex07_PIR_Amplifier — ขยายสัญญาณ PIR RE200B/D202S ด้วย OPAMP Non-Inverting</h2>
+<h2>ex07_PIR_Amplifier — ขยายสัญญาณ PIR RE200B/D202S ด้วย OPAMP</h2>
 <h3>📖 แนวคิด</h3>
-<p>ใช้ OPAMP1 ในโหมด Non-Inverting ขยายสัญญาณขนาดเล็กจาก pyroelectric sensor <strong>RE200B</strong> หรือ <strong>D202S</strong> (~0.5–2mV peak) ก่อนเข้า ADC — ทั้งคู่เป็น Dual Element pyroelectric sensor ที่ต้องมีวงจรขยายสัญญาณภายนอก (ต่างจาก HC-SR501 ที่มี comparator ในตัว) — D202S ของ Murata ใช้แทน RE200B ได้ โดยไม่ต้องปรับเปลี่ยนวงจร</p>
+<p>ใช้ OPAMP1 ขยายสัญญาณเล็กๆ (~0.5–2mV) จาก <strong>RE200B</strong> หรือ <strong>D202S</strong> ให้ใหญ่ขึ้น ~100 เท่า ก่อนส่งเข้า ADC — เซนเซอร์พวกนี้ให้สัญญาณออกมาเป็นแรงดันที่เล็กมาก ต่างจาก HC-SR501 ที่มีวงจรเปรียบเทียบในตัวอยู่แล้ว</p>
 
-<h3>🔌 วงจร</h3>
-<pre class="ascii-circuit">
-    RE200B/D202S → OPAMP Non-Inverting Gain ~101x → ADC
+<h3>🔌 วงจร — ต่อยังไง</h3>
 
-    D202S (3 พิน TO-5):     RE200B (2-3 พิน TO-5):
-    Pin1=Drain ── GND       Pin1=Drain ── GND
-    Pin2=Source ── 10kΩ ── 1.65V bias
-    Pin3=Ground ── GND     (RE200B 2 พินไม่มีขา Ground)
-                                │
-                               1µF (DC block)
-                                │
-                               ┌┴┐
-                               │ │ 1MΩ ── GND
-                               └┬┘
-                                │
-                    PD5(IN+) ───┘
-    CH32V003
-    PA6(IN-) ─┬── Rf=1MΩ ── PA5(OUT) ── ADC (ภายใน)
-              │
-              Rg=10kΩ
-              │
-             GND
+<p><strong>รู้จักขาเซนเซอร์:</strong></p>
+<ul>
+  <li><strong>RE200B:</strong> 2 ขา — ขา 1 = Drain (GND), ขา 2 = Source (สัญญาณออก)</li>
+  <li><strong>D202S:</strong> 3 ขา — ขา 1 = Drain (GND), ขา 2 = Source (สัญญาณออก), ขา 3 = Ground (ต่อ GND)</li>
+</ul>
 
-    - Bias VDD/2 (1.65V): R divider 10kΩ+10kΩ จาก 3.3V
-    - Gain = 1 + 1MΩ/10kΩ = 101x
-    - 1mV input → ~100mV output → ADC อ่านได้สบาย
-</pre>
+<p><strong>คำอธิบายทีละขั้น:</strong></p>
+<ol>
+  <li>ต่อ <strong>ขา 1 (Drain)</strong> ของ PIR ไป <strong>GND</strong></li>
+  <li>ต่อ <strong>ขา 2 (Source)</strong> ของ PIR ผ่าน <strong>R 10kΩ</strong> ไปไฟ <strong>1.65V</strong> (ไฟกึ่งกลางระหว่าง 3.3V กับ GND)</li>
+  <li>ต่อจากขา 2 (Source) ผ่าน <strong>C 1µF</strong> (ตัวเก็บประจุ) ไป <strong>PD5 (OPAMP_IN+)</strong> — C นี้กั้นไฟกระแสตรงไม่ให้เข้า OPAMP</li>
+  <li>ต่อ <strong>R 1MΩ</strong> จาก PD5 ลง GND — ดึงแรงดันให้กลับมาที่ 0V ตอนไม่มีสัญญาณ</li>
+  <li>ต่อ <strong>Rf=1MΩ</strong> ระหว่าง <strong>PA5(OP_OUT)</strong> กับ <strong>PA6(OP_IN-)</strong> — เส้นป้อนกลับ</li>
+  <li>ต่อ <strong>Rg=10kΩ</strong> จาก <strong>PA6(OP_IN-)</strong> ลง GND</li>
+  <li>ถ้าใช้ <strong>D202S</strong> ให้ต่อขา 3 (Ground) ไป <strong>GND</strong> ด้วย — ลดสัญญาณรบกวน</li>
+  <li>สร้างไฟ <strong>1.65V</strong> จาก R divider: 3.3V → R 10kΩ → จุด 1.65V → R 10kΩ → GND</li>
+</ol>
+
+<p><strong>อัตราขยาย:</strong> 1 + Rf/Rg = 1 + 1MΩ/10kΩ = <strong>101 เท่า</strong> — สัญญาณเข้า 1mV → ออก ~101mV</p>
 
 <table class="wiring-table">
   <thead>
-    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+    <tr><th>จาก</th><th>→</th><th>ไปที่</th><th>สายอะไร</th><th>ทำไมต้องต่อ</th></tr>
   </thead>
   <tbody>
-    <tr><td>PD5 (OPAMP1_IN+)</td><td>←</td><td>RE200B/D202S Source (ผ่าน AC coupling)</td><td>Pin 2</td><td>สัญญาณ PIR ~0.5-2mV, bias VDD/2</td></tr>
-    <tr><td>PA6 (OPAMP1_IN-)</td><td>↔</td><td>Rf=1MΩ → PA5, Rg=10kΩ → GND</td><td>—</td><td>Non-Inverting feedback</td></tr>
-    <tr><td>PA5 (OPAMP1_OUT)</td><td>→</td><td>ADC_IN ภายใน</td><td>—</td><td>Gain=101x, ตีค่า mV ได้</td></tr>
-    <tr><td>D202S Pin 3</td><td>→</td><td>GND</td><td>Ground (Shield)</td><td>RE200B 2 พินไม่มีขานี้ — ต่อ GND ลด noise</td></tr>
+    <tr><td>PIR ขา 1 (Drain)</td><td>→</td><td>GND</td><td>สายไฟ</td><td>กราวด์</td></tr>
+    <tr><td>PIR ขา 2 (Source)</td><td>→</td><td>R 10kΩ → 1.65V</td><td>สายไฟ</td><td>จ่ายไฟเลี้ยง</td></tr>
+    <tr><td>PIR ขา 2 (Source)</td><td>→</td><td>C 1µF → PD5</td><td>สายไฟ</td><td>ส่งสัญญาณ ตัดไฟนิ่งทิ้ง</td></tr>
+    <tr><td>D202S ขา 3</td><td>→</td><td>GND</td><td>สายไฟ</td><td>ลด noise (RE200B ไม่มี)</td></tr>
+    <tr><td>PD5 (OP_IN+)</td><td>←</td><td>R 1MΩ → GND</td><td>สายไฟ</td><td>ดึงลง GND ตอนไม่มีสัญญาณ</td></tr>
+    <tr><td>PA5 (OP_OUT)</td><td>↔</td><td>Rf=1MΩ → PA6</td><td>สายไฟ</td><td>ป้อนกลับ ตั้งค่าขยาย</td></tr>
+    <tr><td>PA6 (OP_IN-)</td><td>→</td><td>Rg=10kΩ → GND</td><td>สายไฟ</td><td>ขาล่างของวงจรขยาย</td></tr>
+    <tr><td>PA5 (OP_OUT)</td><td>→</td><td>ADC (ภายใน)</td><td>ในชิป</td><td>ส่งค่าที่ขยายแล้วให้ ADC</td></tr>
+    <tr><td>3.3V</td><td>→</td><td>R 10kΩ → จุด 1.65V → R 10kΩ → GND</td><td>สายไฟ</td><td>สร้างไฟกึ่งกลาง</td></tr>
   </tbody>
 </table>
 

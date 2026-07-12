@@ -247,69 +247,104 @@ int main(void)
 
 <section>
     <h2>🛠️ สร้าง Product: ขยายสัญญาณ PIR Motion Sensor (RE200B / D202S)</h2>
-    <p>ใช้ OPAMP ในโหมด Non-Inverting ขยายสัญญาณขนาดเล็กจาก pyroelectric element <strong>RE200B</strong> หรือ <strong>D202S</strong> (~0.5–2mV เมื่อมีการเคลื่อนไหว) ให้ ADC อ่านค่าได้</p>
+    <p>ใช้ OPAMP ขยายสัญญาณเล็กๆ จากเซนเซอร์ตรวจจับความร้อน <strong>RE200B</strong> หรือ <strong>D202S</strong> (~0.5–2mV เวลามีคนเดินผ่าน) ให้ใหญ่ขึ้น ~100 เท่า ก่อนส่งเข้า ADC</p>
 
+    <h3>รู้จัก RE200B / D202S ก่อน</h3>
+    <p>เซนเซอร์ PIR แบบนี้เป็น <strong>element ตรวจจับความร้อนล้วนๆ</strong> — ต่างจากโมดูล HC-SR501 ที่มีวงจรเปรียบเทียบในตัว — RE200B/D202S ให้สัญญาณออกมาเป็นแรงดันไฟฟ้าที่ <strong>เล็กมาก</strong> (~0.5–2mV) ถ้าไม่ขยาย ADC จะอ่านไม่ออก</p>
+    <ul>
+      <li><strong>RE200B:</strong> มี 2 ขา (Drain=ขา1, Source=ขา2) — ใช้คู่กับ Fresnel lens</li>
+      <li><strong>D202S/D203S (Murata):</strong> มี 3 ขา (Drain=ขา1, Source=ขา2, Ground=ขา3) — เหมือน RE200B แต่เพิ่มขา Ground ป้องกันสัญญาณรบกวน</li>
+    </ul>
+
+    <h3>ภาพรวมการต่อวงจร</h3>
     <pre class="ascii-circuit">
-    RE200B/D202S Pyroelectric Element — ต้องขยายสัญญาณด้วย OPAMP
-    ┌──────────────────────────────────────────────────────────┐
-    │                                                           │
-    │  RE200B (2 พิน) / D202S (3 พิน) — Dual Element            │
-    │                                                           │
-    │  D202S (TO-5):        RE200B (TO-5):                     │
-    │     ┌─────┐               ┌─────┐                         │
-    │     │  ○  │ Pin1(Drain)   │  ○  │ Pin1(Drain)             │
-    │     │ ○○  │ Pin2(Source)  │ ○○  │ Pin2(Source)            │
-    │     │  ○  │ Pin3(Ground)  └─────┘                         │
-    │     └─────┘                                               │
-    │                                                           │
-    │  Drain (Pin1) ──── GND                                    │
-    │  Source(Pin2) ──── R_load=10kΩ ── VDD/2                   │
-    │                    │                                      │
-    │                    ├── C=1µF (DC block)                    │
-    │                                   │     │                  │
-    │                                   │  R=1MΩ ── GND         │
-    │                                   │     │                  │
-    │                                   │  OPAMP_IN+ (PD5)      │
-    │                                   │     │                  │
-    │  CH32V003                          │     │                 │
-    │  ┌──────────────────────────────┐ │     │                 │
-    │  │ OPAMP1 Non-Inverting         │ │     │                 │
-    │  │ Gain = 1 + Rf/Rg             │ │     │                 │
-    │  │                              │ │     │                 │
-    │  │ PD5(IN+) ── สัญญาณ AC-coupled │ │     │                 │
-    │  │ PA6(IN-) ─┬── Rf=1MΩ ── PA5(OUT)─┘     │                 │
-    │  │           │                             │                 │
-    │  │           └── Rg=10kΩ ── GND            │                 │
-    │  │                              │                           │
-    │  │ PA5(OUT) ──→ ADC (ภายใน)    │                           │
-    │  └──────────────────────────────┘                           │
-    │                                                           │
-    │  Gain = 1 + 1MΩ/10kΩ = 101x                               │
-    │  Input 1mV → Output ~100mV — ADC อ่านได้สบาย               │
-    │                                                           │
-    │  ⚠️ VDD/2 bias: ใช้ R divider 10kΩ+10kΩ จาก 3.3V → 1.65V  │
-    │  หรือใช้ internal DAC / PWM+filter ถ้ามี                     │
-    └──────────────────────────────────────────────────────────┘
+         ┌─────────────────────────────────────────────┐
+         │                                             │
+         │  RE200B/D202S           CH32V003             │
+         │  ┌─────────┐            ┌───────────────┐    │
+         │  │ Pin1 ────┼──── GND   │ PD5(OP_IN+) ──┼──┐ │
+         │  │(Drain)  │            │              │  │ │
+         │  │         │            │ PA6(OP_IN-) ─┼─┐│ │ │
+         │  │ Pin2 ───┼┐           │              │ ││ │ │
+         │  │(Source) ││           │ PA5(OP_OUT) ─┼─┼┘ │ │
+         │  └─────────┘│           │              │ │  │ │
+         │             │ 10kΩ      │ ADC(ภายใน)  ←┘ │  │ │
+         │             ├──/\/\/──── VDD/2 (1.65V)   │  │ │
+         │             │                            │  │ │
+         │             │    1µF    ┌─────┐          │  │ │
+         │             ├────||────┤ 1MΩ ├──── GND   │  │ │
+         │             │          └─────┘           │  │ │
+         │             └────────────────────────────┘  │ │
+         │                                │            │ │
+         │             Rf=1MΩ             │            │ │
+         │      PA6 ──/\/\/───────────────┘ PA5       │ │
+         │                                             │ │
+         │      Rg=10kΩ                               │ │
+         │      PA6 ──/\/\/──── GND                   │ │
+         │                                             │ │
+         │  D202S ขา3(Ground) ──── GND                │ │
+         └─────────────────────────────────────────────┘ │
+           ↑ สัญญาณ PIR                                      │
+           จากการเคลื่อนไหว                              │ OPAMP ขยาย
+           (~0.5-2mV, เปลี่ยนช้าๆ)                         │ ~101 เท่า
+                                                           │
+         หมายเหตุ: Rf=1MΩ, Rg=10kΩ คือตัวต้านทานที่                     │
+         กำหนดอัตราขยาย = 1 + 1MΩ/10kΩ = 101 เท่า          │
+         └─────────────────────────────────────────────┘
     </pre>
 
+    <h3>วิธีต่อทีละขั้น</h3>
+    <ol>
+      <li><strong>ต่อไฟเลี้ยง PIR:</strong> ขา Source (ขา 2) ของ RE200B/D202S ต่อ R 10kΩ → ไปหาไฟกึ่งกลาง 1.65V (VDD/2)</li>
+      <li><strong>ต่อกราวด์ PIR:</strong> ขา Drain (ขา 1) ต่อ GND — ถ้าเป็น D202S ให้ต่อขา 3 (Ground) ไป GND ด้วย เพื่อลดสัญญาณรบกวน</li>
+      <li><strong>ตัดไฟกระแสตรง (DC block):</strong> ต่อ C 1µF (ตัวเก็บประจุ) ระหว่างขา Source กับขา PD5 ของ MCU — ตัวเก็บประจุนี้ทำหน้าที่ <strong>กั้นไฟกระแสตรงไม่ให้เข้า OPAMP</strong> แต่ยอมให้สัญญาณเคลื่อนไหวผ่านไปได้ เหมือนประตูที่เปิดให้เฉพาะคนขาเข้าเท่านั้น</li>
+      <li><strong>ตั้งจุดอ้างอิง:</strong> ต่อ R 1MΩ จาก PD5 ลง GND — ทำหน้าที่ดึงแรงดันที่ PD5 ให้กลับมาที่ 0V เวลาไม่มีสัญญาณ</li>
+      <li><strong>ตั้งอัตราขยาย:</strong>
+        <ul>
+          <li>ต่อ R 1MΩ (Rf) ระหว่าง PA5 (OPAMP output) ↔ PA6 (OPAMP input ลบ)</li>
+          <li>ต่อ R 10kΩ (Rg) จาก PA6 ลง GND</li>
+          <li>Rf+Rg นี้กำหนดว่า OPAMP จะขยายสัญญาณกี่เท่า — สูตร: ขยาย = 1 + Rf/Rg = 1 + 1MΩ/10kΩ = <strong>101 เท่า</strong></li>
+          <li>เช่น สัญญาณเข้า 1mV → ได้ออกมา ~101mV</li>
+        </ul>
+      </li>
+      <li><strong>ต่อไฟกึ่งกลาง 1.65V (VDD/2):</strong>
+        <ul>
+          <li>ใช้ R 10kΩ ต่อจาก 3.3V ต่อกับ R 10kΩ อีกตัว ต่อลง GND — จุดต่อระหว่าง R สองตัวนี้จะได้ไฟ ~1.65V</li>
+          <li>ไฟ 1.65V นี้ใช้จ่ายให้ R_load ของ PIR (ข้อ 1)</li>
+        </ul>
+      </li>
+      <li><strong>อ่านค่าด้วย ADC:</strong> PA5 (OPAMP output) ต่อภายในกับ ADC อยู่แล้ว — ไม่ต้องต่อสาย — เขียนโค้ดอ่าน ADC_Read() ได้เลย</li>
+    </ol>
+
+    <h3>ทำไมต้องมีอุปกรณ์พวกนี้?</h3>
+    <table>
+      <tr><th>อุปกรณ์</th><th>หน้าที่ (ภาษาชาวบ้าน)</th><th>ถ้าไม่มีจะเกิดอะไรขึ้น</th></tr>
+      <tr><td><strong>C 1µF</strong></td><td>กันไฟกระแสตรง — ให้เฉพาะสัญญาณ "การเคลื่อนไหว" ผ่าน</td><td>OPAMP จะขยายไฟนิ่ง 1.65V ไปด้วย → output ติดเพดาน 3.3V ตลอด</td></tr>
+      <tr><td><strong>R 1MΩ</strong></td><td>ดึงแรงดันที่ขา OPAMP กลับลง GND เวลาไม่มีสัญญาณ</td><td>แรงดันที่ขา OPAMP จะลอย ไม่แน่นอน</td></tr>
+      <tr><td><strong>Rf=1MΩ, Rg=10kΩ</strong></td><td>กำหนดอัตราขยาย 101 เท่า</td><td>สัญญาณเล็กเกินไป → ADC อ่านไม่ออก</td></tr>
+      <tr><td><strong>ไฟ 1.65V</strong></td><td>จ่ายไฟเลี้ยงให้ PIR element ทำงานที่จุดกึ่งกลาง</td><td>PIR element ไม่มีไฟเลี้ยง → ไม่ทำงาน</td></tr>
+    </table>
+
+    <h3>ตารางต่อขา</h3>
     <table class="wiring-table">
       <thead>
-        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+        <tr><th>จาก</th><th>→</th><th>ไปที่</th><th>สายอะไร</th><th>ทำไมต้องต่อ</th></tr>
       </thead>
       <tbody>
-        <tr><td>PD5 (OPAMP1_IN+)</td><td>←</td><td>RE200B/D202S Source (ผ่าน C 1µF + R 1MΩ)</td><td>Pin 2</td><td>สัญญาณ AC-coupled, bias VDD/2</td></tr>
-        <tr><td>PA6 (OPAMP1_IN-)</td><td>↔</td><td>Rf=1MΩ → PA5(OUT), Rg=10kΩ → GND</td><td>—</td><td>Non-Inverting feedback</td></tr>
-        <tr><td>PA5 (OPAMP1_OUT)</td><td>→</td><td>ADC ภายใน</td><td>—</td><td>Gain=101x, ต่อ ADC อัตโนมัติ</td></tr>
-        <tr><td>Drain</td><td>→</td><td>GND</td><td>Pin 1</td><td>ทั้ง RE200B และ D202S</td></tr>
-        <tr><td>Source</td><td>→</td><td>R_load=10kΩ → VDD/2 (1.65V)</td><td>Pin 2</td><td>DC bias จ่ายให้ pyroelectric element</td></tr>
-        <tr><td>D202S Pin 3</td><td>→</td><td>GND</td><td>Ground (Shield)</td><td>กราวด์ตัวถัง — ลด noise coupling — RE200B 2 พินไม่มีขานี้</td></tr>
-        <tr><td>3.3V</td><td>→</td><td>R divider 10k+10k → VDD/2</td><td>—</td><td>สร้าง 1.65V สำหรับ bias RE200B และ OPAMP</td></tr>
+        <tr><td>RE200B/D202S ขา 1 (Drain)</td><td>→</td><td>GND</td><td>สายไฟ</td><td>กราวด์ให้ PIR element</td></tr>
+        <tr><td>RE200B/D202S ขา 2 (Source)</td><td>→</td><td>R 10kΩ → ไฟ 1.65V</td><td>สายไฟ</td><td>จ่ายไฟเลี้ยงให้ PIR</td></tr>
+        <tr><td>RE200B/D202S ขา 2 (Source)</td><td>→</td><td>C 1µF → R 1MΩ → PD5(OP_IN+)</td><td>สายไฟ</td><td>ส่งสัญญาณ PIR เข้า OPAMP</td></tr>
+        <tr><td>D202S ขา 3 (Ground)</td><td>→</td><td>GND</td><td>สายไฟ</td><td>ลดสัญญาณรบกวน (RE200B 2 ขาไม่มี)</td></tr>
+        <tr><td>PD5 (OPAMP_IN+)</td><td>←</td><td>สัญญาณ PIR (ผ่าน C+R)</td><td>ภายใน</td><td>ขาเข้าบวกของ OPAMP</td></tr>
+        <tr><td>PA6 (OPAMP_IN-)</td><td>↔</td><td>Rf=1MΩ → PA5, Rg=10kΩ → GND</td><td>สาย + breadboard</td><td>วงจรป้อนกลับ กำหนดอัตราขยาย</td></tr>
+        <tr><td>PA5 (OPAMP_OUT)</td><td>→</td><td>ADC ภายใน MCU</td><td>ภายใน (ไม่ต้องต่อสาย)</td><td>OPAMP ต่อกับ ADC อัตโนมัติ</td></tr>
+        <tr><td>3.3V</td><td>→</td><td>R 10kΩ + R 10kΩ → GND (จ่ายไฟ 1.65V)</td><td>สาย + breadboard</td><td>สร้างไฟกึ่งกลาง 1.65V จาก 3.3V</td></tr>
       </tbody>
     </table>
 
-    <p><strong>RE200B</strong> และ <strong>D202S</strong> เป็น pyroelectric element แบบ Dual Element — มี 2 พิน (Drain/Source) — ให้สัญญาณ differential เมื่อมีความร้อนเคลื่อนที่ผ่าน — สัญญาณออกเป็น AC (~0.5–2mV peak) ที่ 0.1–10Hz — <strong>ต้องใช้ OPAMP ขยายก่อน ADC จึงจะอ่านค่าได้</strong></p>
-    <p><strong>Signal Chain:</strong> RE200B/D202S → R_load 10kΩ → C 1µF DC block → HPF 0.16Hz (R 1MΩ+C 1µF) → OPAMP Non-Inverting ×101 → ADC ภายใน → ประมวลผล</p>
-    <p><strong>เทียบ D202S กับ RE200B:</strong> D202S (หรือ D203S) ของ Murata มีคุณสมบัติทางไฟฟ้าใกล้เคียง RE200B — ใช้แทนกันได้ — สเปกต่างกันเล็กน้อยในค่า responsivity (RE200B ~3.5kV/W, D202S ~4.0kV/W) — ไม่ต้องปรับวงจร — อาจต้องปรับ threshold ใน code เล็กน้อย</p>
+    <h3>สรุปภาพรวม</h3>
+    <p>สัญญาณจากการเคลื่อนไหว (~1mV) → C 1µF ตัดไฟนิ่งทิ้ง → OPAMP ขยาย 101 เท่า → ได้ ~100mV → ADC อ่านค่า → ถ้าค่าเปลี่ยนไปเรื่อยๆ แปลว่ามีการเคลื่อนไหว</p>
+    <p><strong>RE200B</strong> (2 ขา) และ <strong>D202S</strong> (3 ขา) ใช้แทนกันได้ — D202S มีขา Ground เพิ่มมาป้องกันสัญญาณรบกวน — วงจรเดียวกัน ต่อขา 3 เพิ่มลง GND</p>
 
     <h3>💻 โค้ดอ่านสัญญาณ PIR ผ่าน OPAMP</h3>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
