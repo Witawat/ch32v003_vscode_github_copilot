@@ -32,8 +32,17 @@ static void enable_dma_clock(void);
  * @brief เริ่มต้นการใช้งาน DMA channel
  */
 void DMA_SimpleInit(DMA_Config_t* config) {
+    if (config == NULL) return;
+
+    // CH32V003 DMA ฮาร์ดแวร์ไม่อนุญาต Circular mode ร่วมกับ Memory-to-Memory
+    // transfer (ระบุใน Reference Manual) — ถ้าตั้งค่าแบบนี้ให้ปฏิเสธ init แทนที่
+    // จะปล่อยให้ hardware อยู่ในสถานะที่ไม่นิยาม
+    if (config->direction == DMA_DIR_MEM_TO_MEM && config->mode == DMA_MODE_CIRCULAR) {
+        return;
+    }
+
     DMA_InitTypeDef DMA_InitStructure = {0};
-    
+
     // 1. เปิด Clock
     enable_dma_clock();
     
@@ -260,10 +269,12 @@ void DMA_Reset(DMA_Channel channel) {
     // Disable channel
     DMA_Cmd(dma_ch, DISABLE);
     
-    // Clear all flags
+    // Clear all flags (GL/TC/HT/TE) — เคลียร์เฉพาะ GL ไม่พอ ถ้า TC/HT/TE ค้างอยู่
+    // จะ trigger false interrupt ทันทีที่เปิด channel ใหม่
     uint32_t flag_base = ((channel - 1) * 4);
-    DMA_ClearFlag(DMA1_FLAG_GL1 << flag_base);
-    
+    uint32_t flag_mask = (DMA1_FLAG_GL1 | DMA1_FLAG_TC1 | DMA1_FLAG_HT1 | DMA1_FLAG_TE1) << flag_base;
+    DMA_ClearFlag(flag_mask);
+
     // Reset status
     channel_status[channel - 1] = DMA_STATUS_IDLE;
 }

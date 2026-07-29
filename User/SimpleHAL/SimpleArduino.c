@@ -117,6 +117,11 @@ void arduino_SetIWDGActive(void) {
 char* dtostrf(double val, int width, unsigned int precision, char* buf) {
     if (buf == NULL) return NULL;
 
+    // ป้องกัน div overflow: 10^10 > 2^32 (unsigned long 32-bit ล้นที่ precision>=10)
+    if (precision > 9) {
+        precision = 9;
+    }
+
     int is_neg = 0;
     if (val < 0.0) {
         is_neg = 1;
@@ -135,10 +140,12 @@ char* dtostrf(double val, int width, unsigned int precision, char* buf) {
         div = 1;
     }
 
-    // ปัดเศษและแยกส่วน
+    // ปัดเศษและแยกส่วน — ปัดเศษแค่ครั้งเดียวตรงนี้ (rounder) ไม่ต้อง +0.5 ซ้ำ
+    // ตอนแยก frac_part ข้างล่าง ไม่งั้นจะปัดเศษ 2 ครั้งซ้อนกัน
+    // (เช่น dtostrf(0.07, 0, 2, buf) เคยได้ "0.08" ที่ผิด ควรได้ "0.07")
     val += rounder;
     unsigned long int_part = (unsigned long)val;
-    unsigned long frac_part = (unsigned long)((val - (double)int_part) * (double)div + 0.5);
+    unsigned long frac_part = (unsigned long)((val - (double)int_part) * (double)div);
 
     // จัดการ carry จาก fractional → integer
     if (frac_part >= div) {

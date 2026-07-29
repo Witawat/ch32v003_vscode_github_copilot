@@ -78,7 +78,16 @@ static void calculateTimerParams(uint32_t frequency_hz, uint16_t* prescaler, uin
     }
 
     uint32_t ticks = SystemCoreClock / frequency_hz;
-    
+
+    if (ticks == 0) {
+        // frequency_hz > SystemCoreClock — cannot generate this frequency,
+        // clamp to the fastest possible rate (1 tick per period) instead of
+        // wrapping ticks-1 around to 65535 and producing a wildly wrong freq
+        *prescaler = 0;
+        *period = 0;
+        return;
+    }
+
     if (ticks <= 65536) {
         // ไม่ต้องใช้ prescaler
         *prescaler = 0;
@@ -110,7 +119,8 @@ void TIM_SimpleInit(TIM_Instance timer, uint32_t frequency_hz) {
     if (*owner != TIM_OWNER_NONE && *owner != TIM_OWNER_TIMER) {
         return;  // already used by PWM or TIM_Ext — do not overwrite
     }
-    
+    *owner = TIM_OWNER_TIMER;  // claim ownership so PWM can't collide later
+
     // เปิด clock
     enableTimerClock(timer);
     
@@ -158,7 +168,13 @@ void TIM_Stop(TIM_Instance timer) {
 void TIM_SetFrequency(TIM_Instance timer, uint32_t frequency_hz) {
     TIM_TypeDef* TIMx = getTIM(timer);
     if (!TIMx) return;
-    
+
+    // Guard: refuse to touch a timer owned by PWM/TIM_Ext
+    uint8_t* owner = (timer == TIM_1) ? &g_tim1_owner : &g_tim2_owner;
+    if (*owner != TIM_OWNER_NONE && *owner != TIM_OWNER_TIMER) {
+        return;
+    }
+
     // หยุด timer
     TIM_Cmd(TIMx, DISABLE);
     
@@ -213,17 +229,22 @@ uint16_t TIM_GetPeriod(TIM_Instance timer) {
 void TIM_AttachInterrupt(TIM_Instance timer, void (*callback)(void)) {
     TIM_TypeDef* TIMx = getTIM(timer);
     if (!TIMx || !callback) return;
-    
+
+    // Guard: refuse to attach if this timer is owned by PWM
+    uint8_t* owner = (timer == TIM_1) ? &g_tim1_owner : &g_tim2_owner;
+    if (*owner != TIM_OWNER_NONE && *owner != TIM_OWNER_TIMER) {
+        return;
+    }
+
     // Atomic pointer store on 32-bit RISC-V (volatile ensures no reorder)
     tim_callbacks[timer] = callback;
-    
+
     // เปิด update interrupt
     TIM_ITConfig(TIMx, TIM_IT_Update, ENABLE);
-    
+
     // จอง timer resource
-    uint8_t* owner = (timer == TIM_1) ? &g_tim1_owner : &g_tim2_owner;
     *owner = TIM_OWNER_TIMER;
-    
+
     // ตั้งค่า NVIC
     NVIC_InitTypeDef NVIC_InitStructure = {0};
     NVIC_InitStructure.NVIC_IRQChannel = tim_irq[timer];
@@ -239,20 +260,26 @@ void TIM_AttachInterrupt(TIM_Instance timer, void (*callback)(void)) {
 void TIM_DetachInterrupt(TIM_Instance timer) {
     TIM_TypeDef* TIMx = getTIM(timer);
     if (!TIMx) return;
-    
+
     // ปิด interrupt
     TIM_ITConfig(TIMx, TIM_IT_Update, DISABLE);
-    
+
     // ลบ callback (กัน ISR อ่านค่ากลางทาง)
     __disable_irq();
     tim_callbacks[timer] = NULL;
     __enable_irq();
-    
+
     // ปิด NVIC
     NVIC_InitTypeDef NVIC_InitStructure = {0};
     NVIC_InitStructure.NVIC_IRQChannel = tim_irq[timer];
     NVIC_InitStructure.NVIC_IRQChannelCmd = DISABLE;
     NVIC_Init(&NVIC_InitStructure);
+
+    // คืน ownership ให้ timer นี้ว่างอีกครั้ง (ถ้า SimpleTIM เป็นเจ้าของ)
+    uint8_t* owner = (timer == TIM_1) ? &g_tim1_owner : &g_tim2_owner;
+    if (*owner == TIM_OWNER_TIMER) {
+        *owner = TIM_OWNER_NONE;
+    }
 }
 
 /* ========== Advanced Functions ========== */
@@ -263,7 +290,14 @@ void TIM_DetachInterrupt(TIM_Instance timer) {
 void TIM_AdvancedInit(TIM_Instance timer, uint16_t prescaler, uint16_t period, TIM_Mode mode) {
     TIM_TypeDef* TIMx = getTIM(timer);
     if (!TIMx) return;
-    
+
+    // Guard: prevent conflict with PWM or TIM_Ext (same ownership rules as TIM_SimpleInit)
+    uint8_t* owner = (timer == TIM_1) ? &g_tim1_owner : &g_tim2_owner;
+    if (*owner != TIM_OWNER_NONE && *owner != TIM_OWNER_TIMER) {
+        return;
+    }
+    *owner = TIM_OWNER_TIMER;
+
     enableTimerClock(timer);
     
     TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure = {0};

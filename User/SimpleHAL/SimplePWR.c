@@ -123,6 +123,12 @@ void PWR_StandbyUntilInterrupt(void)
  */
 void PWR_EnterSleepMode(uint8_t entry_method)
 {
+    // เคลียร์ PDDS bit ก่อนเสมอ — ถ้าเคยเรียก PWR_EnterStandbyMode() มาก่อน
+    // (ซึ่งตั้ง PDDS=1) แล้ว MCU ไม่ได้ reset เต็มรูปแบบจริง (เช่น debugger
+    // ต่ออยู่ทำให้ standby ไม่ power-down จริง) ค่า PDDS จะค้างและทำให้ WFI
+    // ครั้งต่อไปกลายเป็น standby แทนที่จะเป็น sleep ธรรมดาโดยไม่ตั้งใจ
+    PWR->CTLR &= (uint16_t)~PWR_CTLR_PDDS;
+
     // RISC-V: Sleep mode entered via WFI/WFE instruction directly
     // (ไม่มี SLEEPDEEP bit เหมือน ARM Cortex-M)
     if (entry_method == PWR_ENTRY_WFE) {
@@ -256,6 +262,10 @@ uint8_t PWR_WasStandbyWakeup(void)
 
 /**
  * @brief  Clear standby wake-up flag
+ * @note   WCH SDK ไม่มี selective clear — RCC_ClearFlag() เคลียร์ reset flag
+ *         ทุกตัวพร้อมกัน (POR, PIN, Software, IWDG, WWDG, LowPower) ไม่ใช่แค่
+ *         LPWRRST เท่านั้น (ข้อจำกัดของฮาร์ดแวร์ RCC_RSTSCKR.RMVF ไม่ใช่ library)
+ *         ถ้าต้องอ่านสาเหตุ reset อื่นด้วย ให้เรียก RCC_GetFlagStatus() ก่อน
  */
 void PWR_ClearStandbyFlag(void)
 {

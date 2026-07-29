@@ -8,17 +8,23 @@
 #include "SimpleI2C.h"
 #include "SimpleDelay.h"
 
-// I2C_PINS_PARTIAL_REMAP: SCL=PD2, SDA=PD1 — works on all packages including SOP-8
+// I2C_PINS_PARTIAL_REMAP: SCL=PD2, SDA=PD1 — PD2 ไม่มีขาบน SOP-8 (6-pin
+// package) จึงใช้ไม่ได้บน SOP-8 (I2C_SimpleInit() จะ no-op ถ้าเลือก config
+// นี้บน SOP-8 — ดู guard ใน I2C_SimpleInit())
 
 /* ========== Private Helper Functions ========== */
 
 /**
- * @brief รอ event flag พร้อม timeout
+ * @brief รอ event flag พร้อม timeout — ตรวจ NACK (AF flag) ภายใน loop ด้วย
+ *        เพื่อไม่ต้องรอจน timeout เต็ม (มีผลมากตอน I2C_Scan สแกน 112 addresses)
  */
 static I2C_Status I2C_WaitEvent(uint32_t event, uint32_t timeout_ms) {
     uint32_t timeout = timeout_ms * 1000;  // แปลงเป็น microseconds
-    
+
     while(!I2C_CheckEvent(I2C1, event)) {
+        if (I2C_GetFlagStatus(I2C1, I2C_FLAG_AF)) {
+            return I2C_ERROR_NACK;  // caller clears the flag + sends STOP
+        }
         if(timeout-- == 0) {
             return I2C_ERROR_TIMEOUT;
         }
@@ -58,13 +64,19 @@ void I2C_SimpleInit(I2C_Speed speed, I2C_PinConfig pin_config) {
             break;
             
         case I2C_PINS_PARTIAL_REMAP:
-            // Partial Remap: SCL=PD2, SDA=PD1 (ใช้ได้บน SOP-8!)
+#if CH32V003_IS_SOP8
+            // PD2 ไม่มีขาบน SOP-8 (6-pin package) — ปฏิเสธ config นี้แทนที่จะ
+            // ตั้งค่า GPIO ผิดขาแบบเงียบๆ ผู้ใช้ต้องเลือก I2C_PINS_DEFAULT แทน
+            return;
+#else
+            // Partial Remap: SCL=PD2, SDA=PD1 (ไม่รองรับ SOP-8)
             GPIO_PinRemapConfig(GPIO_PartialRemap_I2C1, ENABLE);
-            
+
             GPIO_InitStructure.GPIO_Pin = GPIO_Pin_2 | GPIO_Pin_1;  // PD2=SCL, PD1=SDA
             GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_OD;
             GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
             GPIO_Init(GPIOD, &GPIO_InitStructure);
+#endif
             break;
             
         case I2C_PINS_REMAP:
@@ -97,8 +109,12 @@ void I2C_SimpleInit(I2C_Speed speed, I2C_PinConfig pin_config) {
  * @brief เขียนข้อมูลไปยัง I2C device
  */
 I2C_Status I2C_Write(uint8_t addr, uint8_t* data, uint16_t len) {
+    if (data == NULL || len == 0) {
+        return I2C_ERROR_PARAM;
+    }
+
     I2C_Status status;
-    
+
     // 1. ส่ง START condition
     I2C_GenerateSTART(I2C1, ENABLE);
     status = I2C_WaitEvent(I2C_EVENT_MASTER_MODE_SELECT, I2C_TIMEOUT_MS);
@@ -136,8 +152,12 @@ I2C_Status I2C_Write(uint8_t addr, uint8_t* data, uint16_t len) {
  * @brief อ่านข้อมูลจาก I2C device
  */
 I2C_Status I2C_Read(uint8_t addr, uint8_t* data, uint16_t len) {
+    if (data == NULL || len == 0) {
+        return I2C_ERROR_PARAM;
+    }
+
     I2C_Status status;
-    
+
     // 1. ส่ง START condition
     I2C_GenerateSTART(I2C1, ENABLE);
     status = I2C_WaitEvent(I2C_EVENT_MASTER_MODE_SELECT, I2C_TIMEOUT_MS);
@@ -203,11 +223,31 @@ uint8_t I2C_ReadReg(uint8_t addr, uint8_t reg) {
 }
 
 /**
+ * @brief อ่านข้อมูลจาก register แบบแยก error ออกจากข้อมูลได้ชัดเจน (ดู #16 ใน PLAN.md)
+ */
+I2C_Status I2C_TryReadReg(uint8_t addr, uint8_t reg, uint8_t* data) {
+    if (data == NULL) {
+        return I2C_ERROR_PARAM;
+    }
+
+    I2C_Status status = I2C_Write(addr, &reg, 1);
+    if (status != I2C_OK) {
+        return status;
+    }
+
+    return I2C_Read(addr, data, 1);
+}
+
+/**
  * @brief เขียนหลาย bytes ไปยัง register
  */
 I2C_Status I2C_WriteRegMulti(uint8_t addr, uint8_t reg, uint8_t* data, uint16_t len) {
+    if (data == NULL || len == 0) {
+        return I2C_ERROR_PARAM;
+    }
+
     I2C_Status status;
-    
+
     // 1. ส่ง START condition
     I2C_GenerateSTART(I2C1, ENABLE);
     status = I2C_WaitEvent(I2C_EVENT_MASTER_MODE_SELECT, I2C_TIMEOUT_MS);
@@ -255,6 +295,10 @@ I2C_Status I2C_WriteRegMulti(uint8_t addr, uint8_t reg, uint8_t* data, uint16_t 
  * @brief อ่านหลาย bytes จาก register
  */
 I2C_Status I2C_ReadRegMulti(uint8_t addr, uint8_t reg, uint8_t* data, uint16_t len) {
+    if (data == NULL || len == 0) {
+        return I2C_ERROR_PARAM;
+    }
+
     // 1. เขียน register address
     I2C_Status status = I2C_Write(addr, &reg, 1);
     if(status != I2C_OK) return status;
@@ -267,8 +311,12 @@ I2C_Status I2C_ReadRegMulti(uint8_t addr, uint8_t reg, uint8_t* data, uint16_t l
  * @brief สแกนหา I2C devices บน bus
  */
 uint8_t I2C_Scan(uint8_t* found_devices, uint8_t max_devices) {
+    if (found_devices == NULL || max_devices == 0) {
+        return 0;
+    }
+
     uint8_t count = 0;
-    
+
     for(uint8_t addr = 0x08; addr < 0x78; addr++) {
         if(I2C_IsDeviceReady(addr)) {
             if(count < max_devices) {

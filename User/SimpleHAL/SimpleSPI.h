@@ -61,16 +61,22 @@ typedef enum {
 
 /**
  * @brief ความเร็ว SPI
+ * @warning ชื่อ enum อิงจาก PCLK2 = 24MHz (สมมติฐานเดิม) แต่ project นี้รัน
+ *          SystemCoreClock = 48MHz (HSI+PLL, ดู AGENT.MD) และ PCLK2 ไม่ได้ถูก
+ *          หาร (PCLK2 = HCLK = 48MHz) ดังนั้นความเร็วจริงคือ **2 เท่า** ของชื่อ
+ *          enum เช่น SPI_12MHZ ได้ความเร็วจริง 24MHz ไม่ใช่ 12MHz — ชื่อ enum
+ *          คงไว้เพื่อ backward compatibility (ไม่เปลี่ยน API) แต่ให้ยึดค่า
+ *          จริงในคอลัมน์ "ความเร็วจริง" ด้านล่าง
  */
 typedef enum {
-    SPI_125KHZ = 7,   /**< 125 kHz (PCLK/256) */
-    SPI_250KHZ = 6,   /**< 250 kHz (PCLK/128) */
-    SPI_500KHZ = 5,   /**< 500 kHz (PCLK/64) */
-    SPI_1MHZ   = 4,   /**< 1 MHz (PCLK/32) */
-    SPI_2MHZ   = 3,   /**< 2 MHz (PCLK/16) */
-    SPI_4MHZ   = 2,   /**< 4 MHz (PCLK/8) */
-    SPI_8MHZ   = 1,   /**< 8 MHz (PCLK/4) */
-    SPI_12MHZ  = 0    /**< 12 MHz (PCLK/2) */
+    SPI_125KHZ = 7,   /**< ความเร็วจริง 250 kHz (PCLK2/256, PCLK2=48MHz) */
+    SPI_250KHZ = 6,   /**< ความเร็วจริง 500 kHz (PCLK2/128) */
+    SPI_500KHZ = 5,   /**< ความเร็วจริง 1 MHz (PCLK2/64) */
+    SPI_1MHZ   = 4,   /**< ความเร็วจริง 2 MHz (PCLK2/32) */
+    SPI_2MHZ   = 3,   /**< ความเร็วจริง 4 MHz (PCLK2/16) */
+    SPI_4MHZ   = 2,   /**< ความเร็วจริง 8 MHz (PCLK2/8) */
+    SPI_8MHZ   = 1,   /**< ความเร็วจริง 16 MHz (PCLK2/4) */
+    SPI_12MHZ  = 0    /**< ความเร็วจริง 24 MHz (PCLK2/2) — สูงสุด */
 } SPI_Speed;
 
 /**

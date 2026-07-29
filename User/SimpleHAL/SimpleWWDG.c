@@ -57,7 +57,12 @@ void WWDG_Init(uint8_t counter, uint8_t window, uint32_t prescaler)
     if(counter > WWDG_COUNTER_MAX) counter = WWDG_COUNTER_MAX;
     if(window < WWDG_WINDOW_MIN) window = WWDG_WINDOW_MIN;
     if(window > WWDG_WINDOW_MAX) window = WWDG_WINDOW_MAX;
-    
+
+    // window must never exceed counter — refresh is only valid while
+    // window < counter < 0x40. If window > counter, no refresh would ever
+    // be accepted and the WWDG would reset in a permanent loop.
+    if(window > counter) window = counter;
+
     // Enable WWDG clock
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_WWDG, ENABLE);
     
@@ -83,10 +88,13 @@ void WWDG_InitWithInterrupt(uint8_t counter, uint8_t window, uint32_t prescaler)
     if(counter > WWDG_COUNTER_MAX) counter = WWDG_COUNTER_MAX;
     if(window < WWDG_WINDOW_MIN) window = WWDG_WINDOW_MIN;
     if(window > WWDG_WINDOW_MAX) window = WWDG_WINDOW_MAX;
-    
+
+    // window must never exceed counter — see WWDG_Init() for rationale
+    if(window > counter) window = counter;
+
     // Enable WWDG clock
     RCC_APB1PeriphClockCmd(RCC_APB1Periph_WWDG, ENABLE);
-    
+
     // Configure NVIC for WWDG interrupt
     NVIC_InitStructure.NVIC_IRQChannel = WWDG_IRQn;
     NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0;
@@ -162,7 +170,13 @@ void WWDG_ClearInterruptFlag(void)
 }
 
 /**
- * @brief  Disable WWDG (reset peripheral)
+ * @brief  Reset the WWDG peripheral registers.
+ * @warning Once WDGA is set (i.e. after WWDG_Init()/WWDG_SimpleInit() has
+ *          run), the CH32V003 Reference Manual states the WWDG CANNOT be
+ *          disabled by software. This function resets prescaler/window/
+ *          counter registers but the watchdog keeps counting down and will
+ *          still reset the MCU if not refreshed in time. Do not rely on
+ *          this to turn the watchdog off.
  */
 void WWDG_Disable(void)
 {

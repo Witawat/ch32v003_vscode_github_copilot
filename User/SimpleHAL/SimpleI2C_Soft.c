@@ -11,8 +11,24 @@ static uint8_t _SCL_PIN;
 static uint8_t _SDA_PIN;
 static uint16_t _DELAY_US;
 
+/**
+ * @brief ปล่อย SCL ขึ้น HIGH แล้วรอจนกว่าสายจะขึ้นจริง (clock stretching) แบบมี
+ *        timeout — ถ้า slave ค้าง SCL ไว้ที่ LOW (เสีย/noise/short) จะไม่ทำให้
+ *        MCU ค้างตลอดไปเหมือนเดิม อย่างมากรอ ~5ms แล้วเดินหน้าต่อ
+ */
+static void SCL_ReleaseAndWait(void) {
+    digitalWrite(_SCL_PIN, HIGH);
+    uint16_t timeout = 5000;  // ~5ms bound (1us step)
+    while (!digitalRead(_SCL_PIN)) {
+        if (timeout-- == 0) {
+            return;  // bus stuck — bail out instead of hanging forever
+        }
+        Delay_Us(1);
+    }
+}
+
 /* Helper Macros */
-#define SCL_H()   digitalWrite(_SCL_PIN, HIGH)
+#define SCL_H()   SCL_ReleaseAndWait()
 #define SCL_L()   digitalWrite(_SCL_PIN, LOW)
 #define SDA_H()   digitalWrite(_SDA_PIN, HIGH)
 #define SDA_L()   digitalWrite(_SDA_PIN, LOW)

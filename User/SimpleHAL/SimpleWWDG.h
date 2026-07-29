@@ -56,6 +56,9 @@ extern "C" {
  * @param  counter: Initial counter value (0x40 - 0x7F)
  * @param  window: Window value (0x40 - 0x7F)
  * @note   Counter must be refreshed when: window < counter < 0x40
+ * @note   If window > counter it is silently clamped down to counter —
+ *         otherwise no refresh would ever be accepted and WWDG would
+ *         reset in a permanent loop
  * @note   Uses default prescaler of 8 (WWDG_PRESCALER_8)
  * @retval None
  * 
@@ -168,10 +171,13 @@ uint8_t WWDG_GetInterruptFlag(void);
 void WWDG_ClearInterruptFlag(void);
 
 /**
- * @brief  Disable WWDG (reset peripheral)
- * @note   This completely resets the WWDG peripheral
+ * @brief  Reset the WWDG peripheral registers (NOT a true disable)
+ * @warning Per CH32V003 Reference Manual, once WDGA is set the WWDG cannot
+ *          be disabled by software — it keeps counting and will still
+ *          reset the MCU if not refreshed. This only resets the config
+ *          registers, it does not stop the countdown.
  * @retval None
- * 
+ *
  * Example:
  *   WWDG_Disable();
  */

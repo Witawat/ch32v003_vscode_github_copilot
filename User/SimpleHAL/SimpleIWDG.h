@@ -140,8 +140,13 @@ uint8_t IWDG_WasResetCause(void);
 
 /**
  * @brief  Clear IWDG reset flag
+ * @warning ฮาร์ดแวร์ CH32V003 ไม่รองรับการเคลียร์ reset flag แบบเลือกเฉพาะตัว —
+ *          RCC_ClearFlag() เคลียร์ reset flag ทุกตัวพร้อมกัน (POR, PIN, Software,
+ *          IWDG, WWDG, LowPower) ไม่ใช่แค่ IWDGRST เท่านั้น ถ้าต้องอ่านสาเหตุ
+ *          reset อื่นด้วย ให้เรียก RCC_GetFlagStatus() ของ flag อื่นๆ **ก่อน**
+ *          เรียกฟังก์ชันนี้
  * @retval None
- * 
+ *
  * Example:
  *   IWDG_ClearResetFlag();
  */

@@ -169,6 +169,8 @@ uint8_t IWDG_WasResetCause(void)
 
 /**
  * @brief  Clear IWDG reset flag
+ * @note   WCH SDK ไม่มี selective clear — RCC_ClearFlag() เคลียร์ทุก reset flag
+ *         พร้อมกัน (ข้อจำกัดของฮาร์ดแวร์ RCC_RSTSCKR.RMVF ไม่ใช่ library)
  */
 void IWDG_ClearResetFlag(void)
 {

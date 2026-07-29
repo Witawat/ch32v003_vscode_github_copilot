@@ -8,6 +8,13 @@
 #include "SimpleADC.h"
 #include "SimpleDelay.h"
 
+/* ========== Private Variables ========== */
+
+// ADC init is idempotent (ADC_InitPeripheral calls ADC_DeInit first) —
+// shared by every entry point that touches ADC registers so none of them
+// can run before the peripheral clock/calibration is set up.
+static uint8_t s_adc_inited = 0;
+
 /* ========== Private Helper Functions ========== */
 
 /**
@@ -94,6 +101,16 @@ static void ADC_InitPeripheral(void) {
 }
 
 /**
+ * @brief เรียก ADC_InitPeripheral() ครั้งแรกเท่านั้น (lazy init แบบ idempotent)
+ */
+static void ADC_EnsureInit(void) {
+  if (!s_adc_inited) {
+    ADC_InitPeripheral();
+    s_adc_inited = 1;
+  }
+}
+
+/**
  * @brief เปิดใช้งาน ADC channel เพิ่มเติม
  */
 void ADC_EnableChannel(ADC_Channel channel) {
@@ -120,8 +137,13 @@ void ADC_EnableChannel(ADC_Channel channel) {
  * @brief เริ่มต้นการใช้งาน ADC แบบกำหนด channels เอง
  */
 void ADC_SimpleInitChannels(ADC_Channel *channels, uint8_t count) {
+  if (channels == NULL || count == 0) {
+    return;
+  }
+
   // เริ่มต้น ADC peripheral
   ADC_InitPeripheral();
+  s_adc_inited = 1;
 
   // เปิดใช้งานเฉพาะ channels ที่ระบุ
   for (uint8_t i = 0; i < count; i++) {
@@ -155,12 +177,7 @@ void ADC_SimpleInit(void) {
  * @brief อ่านค่า ADC จากช่องที่ระบุ
  */
 uint16_t ADC_Read(ADC_Channel channel) {
-  // ADC init is idempotent (calls ADC_DeInit first) — safe from multiple callers
-  static uint8_t adc_inited = 0;
-  if (!adc_inited) {
-    ADC_InitPeripheral();
-    adc_inited = 1;
-  }
+  ADC_EnsureInit();
   if (channel <= ADC_CH_7) {
     ADC_EnableChannel(channel);
   }
@@ -234,6 +251,10 @@ float ADC_ToPercent(uint16_t adc_value) {
  * @brief อ่านค่า Internal Reference Voltage (Vrefint)
  */
 uint16_t ADC_ReadVrefInt(void) {
+  // ต้องเปิด ADC clock/calibration ก่อนแตะ register — ถ้าเรียกก่อน ADC_Read()
+  // ครั้งแรกโดยไม่มี lazy init ตรงนี้ ADC clock ยังไม่เปิด conversion จะ hang ถาวร
+  ADC_EnsureInit();
+
   // ตั้งค่า channel และ sample time สำหรับ internal channel
   // Internal channels ต้องใช้ sample time ที่นานกว่า (241 cycles)
   ADC_RegularChannelConfig(ADC1, ADC_Channel_Vrefint, 1, ADC_SampleTime_241Cycles);
@@ -289,6 +310,11 @@ float ADC_ReadVoltageCompensated(ADC_Channel channel) {
  * @brief คำนวณเปอร์เซ็นต์แบตเตอรี่
  */
 float ADC_GetBatteryPercent(float vdd, float v_min, float v_max) {
+  // ป้องกัน division by zero ถ้า v_max == v_min (config ผิด)
+  if (v_max == v_min) {
+    return 0.0f;
+  }
+
   // คำนวณเปอร์เซ็นต์
   float percent = ((vdd - v_min) / (v_max - v_min)) * 100.0f;
 

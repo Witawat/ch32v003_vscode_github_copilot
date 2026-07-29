@@ -10,6 +10,15 @@
 
 #warning "USART_PINS_FULL_REMAP: Pin mapping needs CH32V003 datasheet verification."
 
+/* ========== RX Ring Buffer ========== */
+
+// Hardware RXNE buffer is only 1 byte — without this, a byte arriving while
+// the app is busy is silently overwritten by the next one. Filled by
+// USART1_IRQHandler(), drained by USART_Read()/USART_Available().
+static volatile uint8_t s_rx_buffer[USART_RX_BUFFER_SIZE];
+static volatile uint16_t s_rx_head = 0;
+static volatile uint16_t s_rx_tail = 0;
+
 /* ========== Private Helper Functions ========== */
 
 /**
@@ -157,9 +166,21 @@ void USART_SimpleInit(USART_BaudRate baud, USART_PinConfig pin_config) {
     USART_InitStructure.USART_HardwareFlowControl = USART_HardwareFlowControl_None;
     
     USART_Init(USART1, &USART_InitStructure);
-    
+
     // 4. เปิดใช้งาน USART
     USART_Cmd(USART1, ENABLE);
+
+    // 5. เปิด RX interrupt เพื่อเติม ring buffer (กัน byte หายเมื่ออ่านไม่ทัน)
+    s_rx_head = 0;
+    s_rx_tail = 0;
+    USART_ITConfig(USART1, USART_IT_RXNE, ENABLE);
+
+    NVIC_InitTypeDef NVIC_InitStructure = {0};
+    NVIC_InitStructure.NVIC_IRQChannel = USART1_IRQn;
+    NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 1;
+    NVIC_InitStructure.NVIC_IRQChannelSubPriority = 2;
+    NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+    NVIC_Init(&NVIC_InitStructure);
 }
 
 /**
@@ -209,19 +230,24 @@ void USART_WriteByte(uint8_t data) {
 }
 
 /**
- * @brief ตรวจสอบว่ามีข้อมูลรอรับหรือไม่
+ * @brief ตรวจสอบว่ามีข้อมูลรอรับหรือไม่ (เช็ค ring buffer ไม่ใช่ hardware flag ตรงๆ)
  */
 uint8_t USART_Available(void) {
-    return (USART_GetFlagStatus(USART1, USART_FLAG_RXNE) != RESET) ? 1 : 0;
+    return (s_rx_head != s_rx_tail) ? 1 : 0;
 }
 
 /**
- * @brief อ่านข้อมูล 1 byte (blocking)
+ * @brief อ่านข้อมูล 1 byte จาก ring buffer (blocking จนกว่า ISR จะเติมข้อมูล)
  */
 uint8_t USART_Read(void) {
-    // รอจนกว่าจะมีข้อมูล
-    while(USART_GetFlagStatus(USART1, USART_FLAG_RXNE) == RESET);
-    return (uint8_t)USART_ReceiveData(USART1);
+    while (!USART_Available());
+
+    __disable_irq();
+    uint8_t data = s_rx_buffer[s_rx_tail];
+    s_rx_tail = (uint16_t)((s_rx_tail + 1) % USART_RX_BUFFER_SIZE);
+    __enable_irq();
+
+    return data;
 }
 
 /**
@@ -238,11 +264,33 @@ uint16_t USART_ReadBytes(uint8_t* buffer, uint16_t length) {
 }
 
 /**
- * @brief ล้างข้อมูลใน receive buffer
+ * @brief ล้างข้อมูลใน receive buffer (ring buffer)
  */
 void USART_Flush(void) {
-    // อ่านข้อมูลทิ้งจนกว่าจะหมด
-    while(USART_Available()) {
-        (void)USART_ReceiveData(USART1);
+    __disable_irq();
+    s_rx_head = 0;
+    s_rx_tail = 0;
+    __enable_irq();
+}
+
+/* ========== Interrupt Handler ========== */
+
+/**
+ * @brief USART1 RX interrupt handler — เติม ring buffer ทุกครั้งที่มี byte เข้ามา
+ * @warning มี ISR ได้แค่ตัวเดียวต่อ vector — ห้ามใช้ library อื่นที่ต้องการ
+ *          USART1_IRQHandler ของตัวเอง (เช่น TJC) พร้อมกับ SimpleUSART
+ */
+void USART1_IRQHandler(void) __attribute__((interrupt("WCH-Interrupt-fast")));
+void USART1_IRQHandler(void) {
+    if (USART_GetITStatus(USART1, USART_IT_RXNE) != RESET) {
+        // อ่านข้อมูล (การอ่านจะเคลียร์ RXNE flag ไปในตัว)
+        uint8_t data = (uint8_t)USART_ReceiveData(USART1);
+
+        uint16_t next_head = (uint16_t)((s_rx_head + 1) % USART_RX_BUFFER_SIZE);
+        if (next_head != s_rx_tail) {
+            s_rx_buffer[s_rx_head] = data;
+            s_rx_head = next_head;
+        }
+        // buffer เต็ม — ทิ้ง byte นี้ (ดีกว่าเขียนทับข้อมูลเก่าที่ยังไม่ได้อ่าน)
     }
 }

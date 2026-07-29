@@ -16,7 +16,7 @@
 /* ========== Private Variables ========== */
 
 static GPIO_TypeDef* cs_port = GPIOC;
-static volatile uint16_t cs_pin = GPIO_Pin_4;
+static uint16_t cs_pin = GPIO_Pin_4;  // ไม่ได้แชร์กับ ISR — ไม่จำเป็นต้อง volatile
 
 /* ========== Public Functions ========== */
 

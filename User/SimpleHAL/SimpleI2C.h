@@ -78,7 +78,8 @@ typedef enum {
     I2C_OK = 0,              /**< Success */
     I2C_ERROR_TIMEOUT,       /**< Timeout error */
     I2C_ERROR_NACK,          /**< NACK received */
-    I2C_ERROR_BUS_BUSY       /**< Bus busy */
+    I2C_ERROR_BUS_BUSY,      /**< Bus busy */
+    I2C_ERROR_PARAM          /**< Invalid parameter (NULL pointer / zero length) */
 } I2C_Status;
 
 /* ========== Constants ========== */
@@ -151,11 +152,28 @@ I2C_Status I2C_WriteReg(uint8_t addr, uint8_t reg, uint8_t data);
  * @param addr ที่อยู่ของ device (7-bit address)
  * @param reg ที่อยู่ของ register
  * @return ข้อมูลที่อ่านได้ (0xFF ถ้าเกิด error)
- * 
+ * @warning 0xFF เป็นได้ทั้ง "error" และ "ค่าจริงที่อ่านได้ 0xFF" แยกกันไม่ออก —
+ *          ถ้าต้องแยกแยะ error จากข้อมูลจริง ให้ใช้ I2C_TryReadReg() แทน
+ *
  * @example
  * uint8_t value = I2C_ReadReg(0x50, 0x00);
  */
 uint8_t I2C_ReadReg(uint8_t addr, uint8_t reg);
+
+/**
+ * @brief อ่านข้อมูลจาก register ของ device แบบแยก error ออกจากข้อมูลได้ชัดเจน
+ * @param addr ที่อยู่ของ device (7-bit address)
+ * @param reg ที่อยู่ของ register
+ * @param data pointer สำหรับเก็บค่าที่อ่านได้ (เขียนเฉพาะเมื่อ return เป็น I2C_OK)
+ * @return I2C_Status (I2C_OK = สำเร็จ)
+ *
+ * @example
+ * uint8_t value;
+ * if (I2C_TryReadReg(0x50, 0x00, &value) == I2C_OK) {
+ *     // value ถูกต้อง แม้จะเป็น 0xFF ก็ตาม
+ * }
+ */
+I2C_Status I2C_TryReadReg(uint8_t addr, uint8_t reg, uint8_t* data);
 
 /**
  * @brief เขียนหลาย bytes ไปยัง register

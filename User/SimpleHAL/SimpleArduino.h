@@ -131,6 +131,24 @@ long _randomMax(long max);
  */
 long _randomRange(long min, long max);
 
+/**
+ * @brief (Optional) Arduino-style random(max) / random(min,max) macro
+ * @note ปิดไว้เป็นค่าเริ่มต้น เพราะ stdlib.h มี `long random(void)` อยู่แล้ว —
+ *       ถ้าไฟล์นี้ include stdlib.h ด้วยจะชื่อชนกัน เปิดใช้เฉพาะไฟล์ที่ไม่ต้อง
+ *       ใช้ stdlib random() โดย #define ENABLE_ARDUINO_RANDOM_MACRO ก่อน include
+ *
+ * @example
+ * #define ENABLE_ARDUINO_RANDOM_MACRO
+ * #include "SimpleArduino.h"
+ * ...
+ * uint8_t r1 = random(10);       // [0, 9]   -> _randomMax(10)
+ * uint8_t r2 = random(10, 20);   // [10, 19] -> _randomRange(10, 20)
+ */
+#ifdef ENABLE_ARDUINO_RANDOM_MACRO
+  #define _RANDOM_PICK(_1, _2, NAME, ...) NAME
+  #define random(...) _RANDOM_PICK(__VA_ARGS__, _randomRange, _randomMax)(__VA_ARGS__)
+#endif
+
 /* ========== yield() — Cooperative Multitasking ========== */
 
 /**

@@ -46,6 +46,12 @@ extern "C" {
 #include <stdint.h>
 #include "SimpleHAL.h"
 
+/* ========== Configuration ========== */
+
+#ifndef USART_RX_BUFFER_SIZE
+#define USART_RX_BUFFER_SIZE  64  /**< ขนาด RX ring buffer (bytes) — #define ค่าใหม่ก่อน include ถ้าต้องการเปลี่ยน */
+#endif
+
 /* ========== Enumerations ========== */
 
 /**
@@ -89,8 +95,12 @@ typedef enum {
  *       1. เปิด Clock สำหรับ USART และ GPIO
  *       2. ตั้งค่า Pin remapping ตามที่เลือก
  *       3. ตั้งค่า USART (8N1, no flow control)
- *       4. เปิดใช้งาน USART
- * 
+ *       4. เปิดใช้งาน USART พร้อม RX interrupt + ring buffer (กัน byte หายถ้า
+ *          โปรแกรมอ่านไม่ทัน — hardware buffer มีแค่ 1 byte)
+ * @warning ฟังก์ชันนี้ define USART1_IRQHandler() เอง — ห้ามใช้ร่วมกับ library
+ *          อื่นที่ต้องการ owns USART1 IRQ เอง (เช่น TJC) เพราะมี ISR ได้แค่ตัวเดียว
+ *          ต่อ interrupt vector
+ *
  * @example
  * USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
  */
