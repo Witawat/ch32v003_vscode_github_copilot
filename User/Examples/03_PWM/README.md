@@ -27,10 +27,15 @@
 
 ## Remap ใช้ยังไง?
 
+> ⛔ **v2.1: `PWM_REMAP_PARTIAL1`/`PWM_REMAP_PARTIAL2` ถูกปิดใช้งานแล้ว (no-op)** — pin mapping
+> ของ TIM1/TIM2 partial remap บน CH32V003 ยังไม่เคยถูกยืนยันกับ datasheet เดิมโค้ดตั้งค่า AFIO
+> remap register โดยไม่อัปเดต GPIO pin ให้ตรงปลายทางจริง ทำให้สัญญาณ PWM หายแบบเงียบๆ ตอนนี้
+> โค้ดด้านล่างยัง compile/รันได้ปกติ แต่จะได้ **default pin เสมอ** ไม่ว่าจะตั้ง remap หรือไม่
+
 ```c
 // วิธีง่าย — ตั้งรีแมปล่วงหน้า แล้ว analogWrite จัดการ auto-init เอง
 PWM_SetRemap(PWM1_CH1, PWM_REMAP_PARTIAL1);
-PWM_Write(PWM1_CH1, 128);  // 50% @ 1kHz + PARTIAL1 remap
+PWM_Write(PWM1_CH1, 128);  // 50% @ 1kHz — ได้ default pin (PD2) เพราะ remap เป็น no-op
 
 // หรือ manual
 PWM_InitRemap(PWM1_CH1, 1000, PWM_REMAP_PARTIAL1);

@@ -8,6 +8,14 @@
 
 SimpleFlash ให้บันทึกและโหลดข้อมูลถาวรลงใน Flash memory โดยใช้ **2 หน้าสุดท้าย** ของ Flash (page 254-255 = 128 bytes) ข้อมูลที่บันทึกจะยังคงอยู่แม้ไฟดับหรือ MCU reset พร้อม **CRC validation** เพื่อตรวจสอบความถูกต้อง
 
+> **v2.1 — IRQ-safe:** ทุกฟังก์ชัน erase/program (`Flash_ErasePage`, `Flash_WriteByte/HalfWord/Word`,
+> `Flash_Write*WithErase`, `Flash_WriteString`, `Flash_WriteStruct`) ตอนนี้ปิด interrupt
+> อัตโนมัติรอบช่วง busy ของฮาร์ดแวร์แล้ว (CH32V003 fetch คำสั่งจาก Flash ระหว่าง erase/program
+> ไม่ได้ — ถ้ามี ISR ทำงานตรงจังหวะนั้นเสี่ยง crash/stall) เดิมต้องระวังเองว่าอย่าเรียกฟังก์ชัน
+> เหล่านี้ตอนมี interrupt (เช่น USART RX, timer) ทำงานอยู่ ตอนนี้ปลอดภัยแล้วโดยไม่ต้องทำอะไรเพิ่ม
+> — นอกจากนี้ `Flash_WriteString`/`Flash_WriteStruct` unlock/lock Flash ครั้งเดียวสำหรับทั้งก้อน
+> ข้อมูล (เดิม unlock/lock ทุก byte ทำให้ช้ากว่าที่ควร)
+
 ---
 
 ## Flash Layout
@@ -154,7 +162,7 @@ uint16_t val = Flash_ReadHalfWord(FLASH_CONFIG_ADDR);
 
 เขียนโดย erase page ให้อัตโนมัติ — สะดวกแต่**ช้า** (modify-erase-write)
 
-| ⚠️ | ใช้ RAM 64 bytes เป็น buffer | ไม่เหมาะเขียนบ่อย — ใช้ manual erase + write แทน |
+| ⚠️ | ใช้ RAM 64 bytes เป็น shared buffer ระหว่าง 3 ฟังก์ชันนี้ (v2.1 — เดิมแยก buffer ละ 64 bytes ทำให้เปลือง RAM 128 bytes โดยไม่จำเป็น) | ไม่เหมาะเขียนบ่อย — ใช้ manual erase + write แทน |
 
 ```c
 Flash_WriteByteWithErase(FLASH_CONFIG_ADDR + 5, 0xAB);  // 1 ขั้นตอน
@@ -368,6 +376,6 @@ int main(void) {
 | Flash อายุสั้น | save บ่อยมาก (~10,000 cycle) | save เฉพาะเมื่อข้อมูลเปลี่ยน |
 | ข้อมูลใหญ่เกิน 60 bytes | เกิน page limit | แยก struct ให้เล็กลง |
 | เขียนช้า 4× erase | ใช้ `WriteWordWithErase` v1.x | v2.0 แก้เป็น 1 erase ต่อ operation |
-| บันทึกระหว่าง interrupt | Flash write ต้องการ disable IRQ | ทำใน main loop เท่านั้น |
+| ~~บันทึกระหว่าง interrupt~~ | ~~Flash write ต้องการ disable IRQ~~ | **แก้แล้วใน v2.1** — library ปิด IRQ ให้อัตโนมัติรอบช่วง busy ของฮาร์ดแวร์ เรียกจากที่ไหนก็ได้ |
 
 > ⚠️ Flash endurance ~10,000-80,000 cycles ต่อหน้า — สำหรับข้อมูลที่เปลี่ยนบ่อยมาก ใช้ external EEPROM

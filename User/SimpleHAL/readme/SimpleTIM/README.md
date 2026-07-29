@@ -47,6 +47,12 @@ TIM_SimpleInit(TIM_2, 1);       // TIM2 → Timer — OK คนละตัว
 
 > ⚠️ ถ้า `TIM_SimpleInit()` return ทันที — แสดงว่า timer นั้นถูกจองโดยโมดูลอื่นแล้ว  
 > 💡 ดู Timer Resource Map ใน [README หลัก](../README.md)
+>
+> **v2.1:** ปิดช่องโหว่ ownership ที่เหลือครบแล้ว — `TIM_SimpleInit()` ตอนนี้ **จอง** owner
+> จริง (เดิมแค่เช็คแต่ไม่จอง), `TIM_AttachInterrupt()`/`TIM_AdvancedInit()`/
+> `TIM_SetFrequency()` เช็ค owner ก่อนแตะ timer ทุกตัว, และ `TIM_DetachInterrupt()` คืน
+> ownership เป็น `TIM_OWNER_NONE` ให้แล้ว (เดิมไม่คืนเลย ทำให้ timer ที่เลิกใช้แล้วยังถูกจอง
+> อยู่ตลอดไป)
 
 ## API Reference
 
@@ -322,6 +328,8 @@ int main(void) {
 ## ข้อควรระวัง
 
 > **⚡ v2.0:** `frequency_hz=0` ป้องกัน divide-by-zero → hard fault
+> **⚡ v2.1:** `frequency_hz` สูงกว่า `SystemCoreClock` ตอนนี้ clamp เป็นความถี่สูงสุดที่เป็นไปได้
+> แทนที่จะ wraparound เป็นค่าความถี่ผิดๆ (เดิม `ticks-1` เมื่อ `ticks==0` จะกลายเป็น 65535)
 
 | ปัญหา | สาเหตุ | วิธีแก้ |
 |-------|--------|---------|

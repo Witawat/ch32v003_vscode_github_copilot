@@ -46,6 +46,9 @@ SimpleSPI ห่อหุ้ม Hardware SPI1 ให้ใช้งานง่�
 | `SPI_125KHZ` | PCLK/256 | 93.75 kHz | 187.5 kHz |
 
 > **หมายเหตุ:** ความเร็วจริงขึ้นกับ `SystemCoreClock` — ตารางอ้างอิง PCLK2=24MHz และ 48MHz
+> ⚠️ ชื่อ enum (เช่น `SPI_12MHZ`) อิงจาก PCLK2=24MHz (สมมติฐานเดิม) แต่โปรเจกต์นี้รัน
+> `SystemCoreClock`=48MHz (HSI+PLL) และ PCLK2 ไม่ถูกหาร — **ให้ยึดคอลัมน์ "@48MHz PCLK"
+> เป็นความเร็วจริง** ไม่ใช่ตัวเลขในชื่อ enum
 
 ## ข้อจำกัดแพ็กเกจ
 
@@ -176,7 +179,7 @@ void max7219_write(uint8_t reg, uint8_t data) {
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    SPI_SimpleInit(SPI_MODE0, SPI_1_5MHZ, SPI_PINS_DEFAULT);
+    SPI_SimpleInit(SPI_MODE0, SPI_1MHZ, SPI_PINS_DEFAULT);
     pinMode(CS_PIN, PIN_MODE_OUTPUT);
     digitalWrite(CS_PIN, HIGH);
 
@@ -231,7 +234,7 @@ int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
     USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
-    SPI_SimpleInit(SPI_MODE0, SPI_6MHZ, SPI_PINS_DEFAULT);
+    SPI_SimpleInit(SPI_MODE0, SPI_4MHZ, SPI_PINS_DEFAULT);  // 6MHz จริงที่ PCLK2=48MHz
     pinMode(FLASH_CS, PIN_MODE_OUTPUT);
     digitalWrite(FLASH_CS, HIGH);
 

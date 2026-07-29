@@ -19,7 +19,9 @@ SimpleI2C ห่อหุ้ม Hardware I2C1 ให้ใช้งานง่�
 | `I2C_PINS_REMAP`   | PD0 | PD1 | ❌ ไม่มี PD0 |
 
 > ✅ **SOP-8:** ใช้ `I2C_PINS_DEFAULT` (SCL=PC2, SDA=PC1) — Hardware I2C ทำงานได้!  
-> ❌ `I2C_PINS_PARTIAL_REMAP` / `I2C_PINS_REMAP` ใช้ไม่ได้บน SOP-8 (ไม่มี PD2/PD0)
+> ❌ `I2C_PINS_PARTIAL_REMAP` / `I2C_PINS_REMAP` ใช้ไม่ได้บน SOP-8 (ไม่มี PD2/PD0) —
+> เลือก `I2C_PINS_PARTIAL_REMAP` บน SOP-8 แล้ว `I2C_SimpleInit()` จะ **no-op** ทันที
+> (compile-time guard ป้องกันไม่ให้ config ผิดขาแบบเงียบๆ ตั้งแต่ v2.1)
 
 > ต้องต่อ **pull-up resistor 4.7kΩ** ที่ SDA และ SCL ทุกครั้ง
 
@@ -32,9 +34,13 @@ typedef enum {
     I2C_OK = 0,           // สำเร็จ
     I2C_ERROR_TIMEOUT,    // หมดเวลา
     I2C_ERROR_NACK,       // Device ไม่ตอบ
-    I2C_ERROR_BUS_BUSY    // Bus ยุ่ง
+    I2C_ERROR_BUS_BUSY,   // Bus ยุ่ง
+    I2C_ERROR_PARAM 🆕     // NULL pointer หรือ len=0 (v2.1)
 } I2C_Status;
 ```
+
+> **v2.1:** `I2C_Write`, `I2C_Read`, `I2C_WriteRegMulti`, `I2C_ReadRegMulti`, `I2C_Scan`
+> ตอนนี้เช็ค NULL pointer/zero-length แล้ว คืน `I2C_ERROR_PARAM` แทนที่จะ crash
 
 ---
 
@@ -95,6 +101,21 @@ I2C_WriteReg(0x3C, 0x00, 0x8D);  // OLED: command byte
 
 ```c
 uint8_t who_am_i = I2C_ReadReg(0x68, 0x75);  // MPU6050: WHO_AM_I
+```
+
+> ⚠️ **`0xFF` แยกไม่ออกว่าเป็น error หรือค่าจริงที่อ่านได้ 0xFF** — ถ้าต้องแยกแยะให้ชัดเจน
+> ใช้ `I2C_TryReadReg()` แทน (ดูด้านล่าง)
+
+#### `I2C_Status I2C_TryReadReg(uint8_t addr, uint8_t reg, uint8_t* data)` 🆕
+
+อ่าน 1 byte จาก register แบบแยก error ออกจากข้อมูลได้ชัดเจน (v2.1) — เขียนค่าลง `data`
+เฉพาะเมื่อ return เป็น `I2C_OK` เท่านั้น
+
+```c
+uint8_t val;
+if (I2C_TryReadReg(0x68, 0x75, &val) == I2C_OK) {
+    // val ถูกต้อง แม้จะเป็น 0xFF ก็ตาม
+}
 ```
 
 #### `I2C_Status I2C_WriteRegMulti(uint8_t addr, uint8_t reg, uint8_t* data, uint16_t len)`
@@ -282,6 +303,6 @@ int main(void) {
 | `I2C_ERROR_NACK` ตลอด | Address ผิด หรือไม่มี pull-up | ตรวจสอบ address (7-bit) และต่อ 4.7kΩ |
 | Bus stuck (ค้างที่ SDA LOW) | MCU reset กลางกาน transaction | ต่อ clock 9 ครั้งบน SCL เพื่อ release |
 | ข้อมูลผิดพลาดที่ 400kHz | สาย/PCB track ยาวเกิน | ลดเป็น 100kHz หรือสายสั้นลง |
-| `I2C_ReadReg` คืน `0xFF` | Error แต่ตรวจจากค่าลำบาก | ใช้ `I2C_ReadRegMulti` แล้วตรวจ return status |
+| `I2C_ReadReg` คืน `0xFF` | Error แต่ตรวจจากค่าลำบาก | ใช้ `I2C_TryReadReg()` หรือ `I2C_ReadRegMulti` แล้วตรวจ return status |
 | Scan ช้ามาก (>10 วินาที) | NACK ไม่ถูกตรวจจับ (v1.x) | อัปเดตเป็น v2.0 — ใช้ I2C_FLAG_AF ตรวจจับเร็ว |
 | ใช้ I2C2 ไม่ได้ | CH32V003 มีแค่ I2C1 | ใช้ `SimpleI2C_Soft` ถ้าต้องการ bus ที่ 2 |

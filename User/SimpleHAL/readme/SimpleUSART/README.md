@@ -8,6 +8,13 @@
 
 SimpleUSART ห่อหุ้ม USART1 hardware ให้ใช้งานง่ายแบบ Arduino Serial รองรับ TX/RX, print helpers, non-blocking receive check และ pin remapping 3 แบบ
 
+> **v2.1:** `USART_SimpleInit()` เปิด RX interrupt + ring buffer อัตโนมัติแล้ว (ขนาดเริ่มต้น
+> 64 bytes, ปรับได้ด้วย `#define USART_RX_BUFFER_SIZE <n>` ก่อน `#include "SimpleUSART.h"`)
+> — เดิม hardware buffer มีแค่ 1 byte ถ้าโปรแกรมอ่านไม่ทันข้อมูลจะหาย ตอนนี้ไม่มีปัญหานี้แล้ว
+>
+> ⚠️ **ใช้ร่วมกับ library อื่นที่ต้องการ own `USART1_IRQHandler` เองไม่ได้** (เช่น TJC HMI —
+> ดู `16_TJC_HMI_Display`) เพราะมี ISR ได้แค่ตัวเดียวต่อ interrupt vector — เลือกใช้อย่างใดอย่างหนึ่ง
+
 ---
 
 ## Pin Configuration
@@ -106,7 +113,7 @@ USART_Flush();  // อ่านข้อมูล RX ค้างใน hardware
 
 #### `uint8_t USART_Available(void)`
 
-ตรวจว่ามีข้อมูลรอรับ — คืน `1` ถ้ามี
+ตรวจว่ามีข้อมูลรอรับใน **RX ring buffer** (เติมโดย interrupt อัตโนมัติ) — คืน `1` ถ้ามี
 
 ```c
 if (USART_Available()) {
@@ -116,7 +123,7 @@ if (USART_Available()) {
 
 #### `uint8_t USART_Read(void)`
 
-อ่าน 1 byte **(blocking — รอจนมีข้อมูล)**
+อ่าน 1 byte จาก ring buffer **(blocking — รอจนกว่า ISR จะเติมข้อมูล)**
 
 ```c
 uint8_t b = USART_Read();
@@ -124,13 +131,21 @@ uint8_t b = USART_Read();
 
 #### `uint16_t USART_ReadBytes(uint8_t* buffer, uint16_t length)`
 
-อ่านหลาย bytes (non-blocking — อ่านเฉพาะข้อมูลที่มีค้างใน hardware buffer ไม่รอ)
+อ่านหลาย bytes จาก ring buffer (non-blocking — อ่านเฉพาะข้อมูลที่มีอยู่ ไม่รอ)
 
 ```c
 uint8_t buf[64];
 uint16_t count = USART_ReadBytes(buf, sizeof(buf));
 // count = จำนวน byte ที่อ่านได้จริง
 ```
+
+> **v2.1:** RX buffer เป็น ring buffer ขนาด `USART_RX_BUFFER_SIZE` (default 64) เติมโดย
+> `USART1_IRQHandler()` อัตโนมัติ — ถ้า buffer เต็ม byte ใหม่ที่เข้ามาจะถูกทิ้ง (ไม่เขียนทับ
+> ข้อมูลเก่าที่ยังไม่ได้อ่าน) ถ้าข้อมูลมาเร็ว/เยอะกว่าที่โปรแกรมอ่านทัน ให้เพิ่มขนาด buffer:
+> ```c
+> #define USART_RX_BUFFER_SIZE 256
+> #include "SimpleHAL.h"
+> ```
 
 ---
 
@@ -249,31 +264,26 @@ int main(void) {
 }
 ```
 
-### ขั้นสูง — Circular RX Buffer (Non-blocking)
+### ขั้นสูง — RX Buffer ขนาดใหญ่ขึ้นสำหรับ Data Rate สูง
+
+> ตั้งแต่ v2.1 ไม่ต้องเขียน ring buffer เองแล้ว — `USART_SimpleInit()` มี RX interrupt +
+> ring buffer ในตัว (`USART_Available()`/`USART_Read()` อ่านจาก buffer นี้โดยตรง) ถ้า data
+> rate สูงหรือโปรแกรมอ่านไม่ทันบ่อยๆ แค่เพิ่มขนาด buffer ก่อน include:
 
 ```c
+#define USART_RX_BUFFER_SIZE 256   // default คือ 64
 #include "SimpleHAL.h"
 
-#define RX_BUF  64
-static uint8_t rx_buf[RX_BUF];
-static uint8_t rx_head = 0, rx_tail = 0;
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_460800, USART_PINS_DEFAULT);
 
-// เรียกใน main loop ทุก iteration
-void rx_poll(void) {
-    while (USART_Available()) {
-        uint8_t next = (rx_head + 1) % RX_BUF;
-        if (next != rx_tail) {
-            rx_buf[rx_head] = USART_Read();
-            rx_head = next;
+    while (1) {
+        if (USART_Available()) {
+            uint8_t b = USART_Read();  // ไม่มี byte หายแม้ main loop ช้า
         }
     }
-}
-
-uint8_t rx_has_data(void)   { return rx_head != rx_tail; }
-uint8_t rx_get_byte(void) {
-    uint8_t b = rx_buf[rx_tail];
-    rx_tail = (rx_tail + 1) % RX_BUF;
-    return b;
 }
 ```
 

@@ -126,13 +126,18 @@ if (IWDG_WasResetCause()) {
 
 > ⚠️ ข้อควรระวัง: ต้องเรียก `IWDG_WasResetCause()` **ก่อน** `IWDG_Init()` หรือ `IWDG_SimpleInit()` เพราะ flag จะถูกล้างระหว่าง init
 
-#### `void IWDG_ClearResetFlag(void)` — ล้าง IWDG reset flag
+#### `void IWDG_ClearResetFlag(void)` — ล้าง reset flag ทุกตัว (ไม่ใช่แค่ IWDG)
 
 ```c
 if (IWDG_WasResetCause()) {
     IWDG_ClearResetFlag();
 }
 ```
+
+> ⚠️ **ข้อจำกัดฮาร์ดแวร์:** WCH SDK ไม่มี selective clear — ฟังก์ชันนี้เรียก `RCC_ClearFlag()`
+> ซึ่งเคลียร์ reset flag **ทุกตัวพร้อมกัน** (POR, PIN, Software, IWDG, WWDG, LowPower) ไม่ใช่
+> แค่ `IWDGRSTF` เท่านั้น ถ้าต้องตรวจสอบสาเหตุ reset อื่นด้วย ให้เรียก `RCC_GetFlagStatus()`
+> ของ flag อื่นๆ **ก่อน** เรียกฟังก์ชันนี้ (ดูตัวอย่าง "ขั้นสูง — ตรวจสอบสาเหตุ Reset" ด้านล่าง)
 
 ---
 

@@ -238,4 +238,6 @@ int main(void) {
 - Software I2C ช้ากว่า hardware I2C ประมาณ 10-50x สำหรับ 400kHz จริงอาจได้แค่ 100-200kHz
 - ห้ามใช้ pin เดียวกับ hardware I2C (PC1/PC2) เพราะ peripheral จะ interfere
 - `ignore_ack=1` ใช้สำหรับ debug เท่านั้น อย่าใช้ใน production
-- ไม่มี timeout protection — ถ้า bus stuck จะค้างไปเลย
+- **v2.1:** เพิ่ม timeout protection แล้ว (~5ms ต่อการรอ SCL ขึ้น) — ถ้า bus stuck (SCL ถูก slave
+  ค้าง/short) จะ bail out แทนที่จะค้างตลอดไปเหมือนเดิม (ไม่ propagate เป็น error กลับไปยัง caller
+  ตอนนี้ — แค่ป้องกันไม่ให้ค้างถาวร)

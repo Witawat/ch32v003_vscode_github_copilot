@@ -1,15 +1,22 @@
 /**
  * @example ex06_PWM_Remap.c
- * @brief สาธิต PWM Remap — ตั้งค่ารีแมปล่วงหน้า + analogWrite() auto-init
+ * @brief สาธิต PWM Remap API — ตั้งค่ารีแมปล่วงหน้า + analogWrite() auto-init
  *
  * @details
  * PWM_InitRemap() ใช้เปลี่ยน pin ของ PWM output ได้
- * PWM_SetRemap() (ใหม่!) เก็บค่ารีแมปไว้ แล้ว PWM_Write()/analogWrite() ใช้ตอน auto-init
+ * PWM_SetRemap() เก็บค่ารีแมปไว้ แล้ว PWM_Write()/analogWrite() ใช้ตอน auto-init
  *
  * Remap options:
- * - PWM_REMAP_NONE    : default pins
- * - PWM_REMAP_PARTIAL1: partial remap 1
- * - PWM_REMAP_PARTIAL2: partial remap 2
+ * - PWM_REMAP_NONE    : default pins — ใช้งานได้เต็มรูปแบบ
+ * - PWM_REMAP_PARTIAL1: ⛔ ปิดใช้งาน (no-op ตั้งแต่ v2.1) — ได้ default pin เหมือนไม่ตั้ง remap
+ * - PWM_REMAP_PARTIAL2: ⛔ ปิดใช้งาน (no-op ตั้งแต่ v2.1) — ได้ default pin เหมือนไม่ตั้ง remap
+ *
+ * @warning v2.1: PARTIAL1/PARTIAL2 ถูกปิดใช้งานแล้ว เพราะ pin mapping ของ TIM1/TIM2 partial
+ *          remap บน CH32V003 ยังไม่เคยถูกยืนยันกับ datasheet/reference manual — เดิมโค้ดตั้งค่า
+ *          AFIO remap register โดยไม่อัปเดต GPIO pin ให้ตรงปลายทางจริง ทำให้สัญญาณ PWM หายทั้ง
+ *          จากพิน default และพินที่คิดว่า remap ไปแบบเงียบๆ ตัวอย่างนี้ยัง compile และรันได้ปกติ
+ *          แต่ทุก channel ด้านล่างจะได้ pin ตาม default (PWM1_CH1=PD2, PWM2_CH1=PD4) เสมอ
+ *          ไม่ว่าจะเรียก PWM_SetRemap/PWM_InitRemap ด้วย remap ใดก็ตาม
  *
  * วิธีใช้งาน:
  *   1. PWM_SetRemap(channel, remap)   — ตั้งรีแมปล่วงหน้า

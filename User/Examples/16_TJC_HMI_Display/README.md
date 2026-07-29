@@ -2,6 +2,24 @@
 
 ตัวอย่างการใช้งาน TJC HMI Display Library กับ CH32V003
 
+> ⛔ **สำคัญ — v2.1 ใช้ร่วมกับ SimpleUSART ไม่ได้แล้วในสภาพปัจจุบัน:**
+> `SimpleUSART.c` เพิ่ม RX ring buffer แบบ interrupt-driven ในตัว (ดู
+> [SimpleUSART README](../../SimpleHAL/readme/SimpleUSART/README.md)) ทำให้
+> `SimpleUSART.c` เป็นผู้ define `USART1_IRQHandler()` เองแล้ว **ถ้าทำตามขั้นตอนที่ 2 ด้านล่าง
+> (เพิ่ม `USART1_IRQHandler()` ของตัวเองใน `ch32v00x_it.c`) จะได้ linker error "multiple
+> definition of USART1_IRQHandler"** ทันที เพราะมีนิยามซ้ำ 2 ที่
+>
+> ที่ร้ายแรงกว่านั้น: `TJC_Init()` เรียก `USART_SimpleInit()` ภายใน ซึ่งตอนนี้แย่งชิง
+> `USART1_IRQHandler()` ไปแล้ว — แม้จะ**ไม่**เพิ่ม handler ของตัวเองตามขั้นตอนที่ 2 (เลี่ยง link
+> error ได้) แต่ `TJC_UART_IRQHandler()` ก็จะไม่ถูกเรียกโดยใครเลย ทำให้ `rx_buffer` ภายใน TJC.c
+> ไม่เคยถูกเติมข้อมูล และ **callback ทุกตัว (touch event, numeric, string, ฯลฯ) จะไม่ทำงาน**
+> แม้ build ผ่านก็ตาม
+>
+> **สถานะปัจจุบัน:** ตัวอย่างทั้ง 8 ไฟล์ในโฟลเดอร์นี้ยัง compile ได้ แต่ event-driven callback
+> จะไม่ทำงานเนื่องจาก conflict ข้างต้น จนกว่าจะมีการแก้ไขโค้ดระดับ library (ทำให้
+> `USART1_IRQHandler()` เรียกทั้ง SimpleUSART และ TJC ได้พร้อมกัน หรือให้ `USART_SimpleInit()`
+> เปิด auto-ISR แบบ opt-out ได้) — ถ้าต้องใช้ TJC ตอนนี้ ให้แจ้งขอแก้ไขจุดนี้ก่อน
+
 ## เอกสารเพิ่มเติม
 
 | ไฟล์ | คำอธิบาย |

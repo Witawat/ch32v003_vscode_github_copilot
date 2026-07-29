@@ -38,11 +38,15 @@ SimpleTIM_Ext ให้ฟังก์ชัน **Stopwatch** และ **Countd
 
 ```c
 typedef struct {
-    uint16_t hours;    // ชั่วโมง (ไม่จำกัด)
-    uint8_t  minutes;  // นาที 0-59
-    uint8_t  seconds;  // วินาที 0-59
+    uint32_t hours;    // ชั่วโมง (0-59 normalized, ไม่จำกัดค่า raw)
+    uint32_t minutes;  // นาที (0-59 normalized, ไม่จำกัดค่า raw)
+    uint32_t seconds;  // วินาที (0-59 normalized, ไม่จำกัดค่า raw)
 } Time_t;
 ```
+
+> **v2.1:** ทุก field เปลี่ยนเป็น `uint32_t` แล้ว (เดิมเป็น `uint16_t` ทั้งหมด) — RAW mode
+> เดิม `seconds` overflow ที่ ~18.2 ชั่วโมงเพราะเก็บใน `uint16_t` ตอนนี้ ceiling จริงคือข้อจำกัด
+> ของ `stopwatch_ms`/`countdown_ms` เอง (`uint32_t` มิลลิวินาที overflow ที่ ~49 วัน)
 
 ---
 
@@ -130,18 +134,22 @@ Stopwatch_GetTimeString(buf, TIME_FORMAT_HHMMSS, TIME_DISPLAY_NORMALIZED);
 ฟังก์ชัน mirror ของ Stopwatch สำหรับนับถอยหลัง
 
 ```c
-void Countdown_Init(void);
+void Countdown_Init(uint16_t hours, uint8_t minutes, uint8_t seconds);  // ตั้งเวลาเริ่มต้น
+void Countdown_InitFromSeconds(uint32_t total_seconds);  // ตั้งเวลาจากวินาทีรวม
 void Countdown_Start(void);
 void Countdown_Stop(void);
 void Countdown_Reset(void);
-void Countdown_SetTime(uint32_t seconds);      // ตั้งเวลา
 uint8_t Countdown_IsRunning(void);
 uint8_t Countdown_IsFinished(void);            // คืน 1 ถ้าหมดเวลา
 void Countdown_GetTime(Time_t* t);
-void Countdown_GetTimeString(char* buf, TIME_FORMAT fmt, TIME_DISPLAY mode);
+void Countdown_GetTimeString(char* buf, TimeFormat_t fmt, TimeDisplayMode_t mode);
 uint32_t Countdown_GetRemainingSeconds(void);
-uint32_t Countdown_GetRemainingMilliseconds(void);
+void Countdown_SetAlarmCallback(void (*callback)(void));
 ```
+
+> ไม่มีฟังก์ชัน `Countdown_SetTime()`/`Countdown_GetRemainingMilliseconds()` — ใช้
+> `Countdown_Init()`/`Countdown_InitFromSeconds()` ตั้งเวลา และ `Countdown_GetRemainingSeconds()`
+> อ่านเวลาที่เหลือแทน
 
 #### `void Countdown_InitFromSeconds(uint32_t total_seconds)` — เริ่มต้น Countdown โดยระบุวินาทีโดยตรง
 
@@ -286,8 +294,7 @@ int main(void) {
     USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
     pinMode(BUZZER_PIN, PIN_MODE_OUTPUT);
 
-    Countdown_Init();
-    Countdown_SetTime(COUNTDOWN_S);
+    Countdown_InitFromSeconds(COUNTDOWN_S);
     Countdown_Start();
 
     USART_Print("Countdown started!\r\n");
@@ -303,8 +310,7 @@ int main(void) {
             }
             USART_Print("TIME'S UP!\r\n");
             // รีเซ็ตและเริ่มใหม่
-            Countdown_Reset();
-            Countdown_SetTime(COUNTDOWN_S);
+            Countdown_InitFromSeconds(COUNTDOWN_S);
             Countdown_Start();
         }
 
@@ -390,6 +396,8 @@ int main(void) {
 
 > **⚡ v2.0:** `Time_t` fields (`minutes`, `seconds`) เปลี่ยนเป็น `uint16_t` — RAW mode เก็บค่าได้เกิน 255  
 > `Stopwatch_Init()` มี guard ไม่ re-init TIM2 ซ้ำ
+> **⚡ v2.1:** ทุก field ของ `Time_t` (`hours` ด้วย) เปลี่ยนเป็น `uint32_t` — แก้ RAW mode
+> overflow ที่ ~18.2 ชั่วโมง (เดิม `seconds` เป็น `uint16_t`)
 
 | ปัญหา | สาเหตุ | วิธีแก้ |
 |-------|--------|---------|

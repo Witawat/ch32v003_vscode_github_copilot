@@ -18,6 +18,9 @@
  * - PRNG ใช้ LCG glibc-style (1103515245 * seed + 12345) mod 2^31
  * - ใช้ _randomMax() / _randomRange() แทน random() เพราะ stdlib.h
  *   มี long random(void) อยู่แล้ว C จึงใช้ชื่อ random โดยตรงไม่ได้
+ * - (v2.1) ถ้าไฟล์นี้ไม่ได้ใช้ stdlib random() เลย เปิด
+ *   `#define ENABLE_ARDUINO_RANDOM_MACRO` ก่อน include ได้ เพื่อใช้ชื่อ
+ *   random(max) / random(min,max) แบบ Arduino ตรงๆ แทน _randomMax/_randomRange
  */
 #define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include <SimpleHAL.h>

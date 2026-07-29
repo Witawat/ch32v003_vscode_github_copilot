@@ -76,6 +76,22 @@ long val = _randomRange(100, 200);  // 100-199
 > ⚠️ ใช้ชื่อ `_randomMax` / `_randomRange` เพราะ `random` ชนกับ `stdlib.h`
 > ⚠️ ต้องเรียก `randomSeed()` ก่อน `_randomMax`/`_randomRange` ไม่งั้นจะได้ค่าเดิมทุกครั้งที่รีเซ็ต
 
+#### `random(...)` macro (Optional, v2.1) 🆕
+
+ถ้าไฟล์ของคุณไม่ได้ใช้ `stdlib.h`'s `random()` เลย เปิด macro นี้เพื่อใช้ชื่อสไตล์ Arduino ตรงๆ
+ได้ — รองรับทั้ง `random(max)` และ `random(min, max)` (เลือกตามจำนวน argument อัตโนมัติ)
+
+```c
+#define ENABLE_ARDUINO_RANDOM_MACRO
+#include "SimpleHAL.h"
+
+uint8_t dice = random(6) + 1;        // เหมือน _randomMax(6) + 1
+long val = random(100, 200);         // เหมือน _randomRange(100, 200)
+```
+
+> ปิดเป็นค่าเริ่มต้น (ต้อง `#define ENABLE_ARDUINO_RANDOM_MACRO` ก่อน include) เพราะถ้าไฟล์ไหน
+> `#include <stdlib.h>` ด้วย จะชื่อชนกับ `long random(void)` ของ stdlib
+
 ## yield() — Cooperative Multitasking
 
 #### `void yield(void)`
@@ -105,6 +121,10 @@ dtostrf(3.14159, 6, 2, buf);  // "  3.14"
 USART_Print(buf);
 ```
 
+> **v2.1:** แก้บั๊ก double-rounding (เช่น `dtostrf(0.07, 0, 2, buf)` เดิมได้ `"0.08"` ที่ผิด
+> ตอนนี้ได้ `"0.07"` ถูกต้อง) และ clamp `precision` ไม่เกิน 9 อัตโนมัติ (ป้องกัน integer
+> overflow ถ้า `precision >= 10`)
+
 ## USART Print Extensions (Optional)
 
 เปิด/ปิดด้วย define ก่อน include:
@@ -129,7 +149,7 @@ USART_Print(buf);
 
 | ปัญหา | วิธีแก้ |
 |-------|--------|
-| `random()` ชนกับ stdlib.h | ใช้ `_randomMax()` / `_randomRange()` |
+| `random()` ชนกับ stdlib.h | ใช้ `_randomMax()` / `_randomRange()` หรือเปิด `#define ENABLE_ARDUINO_RANDOM_MACRO` (v2.1) ถ้าไฟล์นั้นไม่ใช้ stdlib random() |
 | `yield()` ไม่ feed IWDG | ต้องเรียก `IWDG_Init()` ก่อน — `arduino_SetIWDGActive()` จะถูกเรียกอัตโนมัติ |
 | `dtostrf` buffer เล็กเกิน | แนะนำ `width + 2` bytes |
 | `delay()` ใน ISR | ห้ามใช้ — ISR ควรสั้นที่สุด ใช้ flag + main loop |

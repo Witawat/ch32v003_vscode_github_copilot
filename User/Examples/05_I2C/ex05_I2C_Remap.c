@@ -4,8 +4,9 @@
  *
  * @details
  * CH32V003 มี I2C1 ที่เปลี่ยน pin ได้ 3 แบบ:
- * - I2C_PINS_DEFAULT  : SCL=PC2, SDA=PC1 (default)
- * - I2C_PINS_PARTIAL_REMAP : SCL=PD2, SDA=PD1 (ใช้ได้ทุกแพ็กเกจรวม SOP-8!)
+ * - I2C_PINS_DEFAULT  : SCL=PC2, SDA=PC1 (default) — ใช้ได้ทุกแพ็กเกจรวม SOP-8
+ * - I2C_PINS_PARTIAL_REMAP : SCL=PD2, SDA=PD1 (ไม่มี PD2 บน SOP-8 — v2.1
+ *   `I2C_SimpleInit()` จะ no-op ถ้าเลือก config นี้บน SOP-8 แทนที่จะ config ผิดขาแบบเงียบๆ)
  * - I2C_PINS_REMAP    : SCL=PD0, SDA=PD1 (TSSOP-20/QFN-20 เท่านั้น)
  *
  * ตัวอย่าง: สแกน I2C bus ด้วย config ที่ต่างกัน

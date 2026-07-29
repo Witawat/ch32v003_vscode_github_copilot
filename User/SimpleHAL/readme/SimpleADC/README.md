@@ -209,11 +209,13 @@ ADC_ReadMultiple(ch, vals, 3);
 อ่านค่า Internal Reference Voltage (Vrefint)
 - **Return**: ค่า ADC ของ Vrefint (0-1023)
 - **ใช้สำหรับ**: คำนวณ VDD จริง
+- **v2.1**: มี lazy-init ในตัวแล้ว — เรียกได้แม้ยังไม่เคยเรียก `ADC_Read()`/`ADC_SimpleInit()`
+  มาก่อน (เดิมจะ hang ถ้าเรียกก่อน ADC clock ถูกเปิด)
 
 #### `ADC_GetVDD()`
 คำนวณแรงดัน VDD จริงจาก Vrefint
 - **Return**: แรงดัน VDD (V)
-- **หมายเหตุ**: อ่านค่าเฉลี่ย 10 ครั้งเพื่อความแม่นยำ
+- **หมายเหตุ**: อ่านค่าเฉลี่ย 10 ครั้งเพื่อความแม่นยำ, lazy-init เหมือน `ADC_ReadVrefInt()` (v2.1)
 
 #### `ADC_ReadVoltageCompensated(channel)`
 อ่านค่า ADC พร้อมชดเชย VDD อัตโนมัติ
@@ -228,7 +230,8 @@ ADC_ReadMultiple(ch, vals, 3);
   - `v_min` - แรงดันต่ำสุดของแบต (V)
   - `v_max` - แรงดันสูงสุดของแบต (V)
 - **Return**: เปอร์เซ็นต์ (0-100)
-- **หมายเหตุ**: ผลลัพธ์จะถูก clamp ให้อยู่ในช่วง 0-100%
+- **หมายเหตุ**: ผลลัพธ์จะถูก clamp ให้อยู่ในช่วง 0-100%, คืน 0% ถ้า `v_max == v_min` (v2.1 —
+  ป้องกัน division by zero)
 
 ---
 
@@ -282,6 +285,9 @@ if (percent < 20) {
 - 🆕 `ADC_SimpleInit()` กรอง channels ตามแพ็กเกจ (SOP-8/SOP-16/TSSOP-20)
 - 🆕 `ADC_EnableChannel()` — เปิด channel เพิ่มหลัง init
 - 🆕 `ADC_ReadMultiple()` — อ่านหลาย channels พร้อมกัน
+- 🐛 `ADC_ReadVrefInt()`/`ADC_GetVDD()` มี lazy-init แล้ว (เดิม hang ถ้าเรียกก่อน ADC clock เปิด)
+- 🐛 `ADC_GetBatteryPercent()` กัน division by zero เมื่อ `v_max == v_min`
+- 🐛 `ADC_SimpleInitChannels()` เช็ค NULL/count=0 แล้ว
 
 **v2.0** (2025-12-22)
 - **Breaking:** `Timer_Init()` ต้องเรียกเอง

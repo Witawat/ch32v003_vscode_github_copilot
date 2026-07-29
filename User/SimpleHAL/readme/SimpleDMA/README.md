@@ -49,6 +49,11 @@ DMA_Config_t cfg = {
 DMA_SimpleInit(&cfg);
 ```
 
+> **v2.1:** `config == NULL` ถูกเช็คแล้ว และฮาร์ดแวร์ CH32V003 DMA **ไม่รองรับ** Circular mode
+> ร่วมกับ Memory-to-Memory transfer (ระบุใน Reference Manual) — ถ้าตั้ง
+> `direction = DMA_DIR_MEM_TO_MEM` พร้อม `mode = DMA_MODE_CIRCULAR` ตอนนี้ `DMA_SimpleInit()`
+> จะปฏิเสธ (return โดยไม่ init) แทนที่จะปล่อยให้ฮาร์ดแวร์อยู่ในสถานะที่ไม่นิยาม
+
 #### `void DMA_Start(DMA_Channel channel)` / `void DMA_Stop(DMA_Channel channel)`
 
 เริ่ม/หยุด transfer
@@ -74,6 +79,9 @@ if (!DMA_WaitComplete(DMA_CH1, 1000)) {
 #### `void DMA_Reset(DMA_Channel channel)`
 
 รีเซ็ต DMA channel — หยุด transfer ทั้งหมด, เคลียร์ flags
+
+> **v2.1:** เคลียร์ครบทั้ง 4 flags (GL/TC/HT/TE) แล้ว — เดิมเคลียร์แค่ GL flag ทำให้ TC/HT/TE
+> ที่ค้างอยู่ trigger false interrupt ทันทีที่เปิด channel ใหม่
 
 #### `uint16_t DMA_GetRemainingCount(DMA_Channel channel)`
 

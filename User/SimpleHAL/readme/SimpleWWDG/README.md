@@ -64,6 +64,10 @@ WWDG_SimpleInit(0x7F, 0x5F);
 // Refresh ได้เมื่อ 0x5F < counter < 0x40
 ```
 
+> **v2.1:** ถ้าตั้งค่า `window > counter` (config ผิดที่ทำให้ refresh ไม่มีทาง valid ได้เลย
+> → MCU reset วนลูปถาวร) ตอนนี้ library จะ clamp `window` ให้ไม่เกิน `counter` อัตโนมัติแทน
+> ปล่อยให้ config พังแบบเงียบๆ
+
 ---
 
 ### Refresh
@@ -120,13 +124,19 @@ if (WWDG_GetInterruptFlag()) {
 
 ### Control
 
-#### `void WWDG_Disable(void)` — ปิดการทำงาน WWDG (reset peripheral)
+#### `void WWDG_Disable(void)` — รีเซ็ต WWDG config registers (**ไม่ใช่การปิดจริง**)
 
 ```c
-WWDG_Disable();  // ปิด WWDG โดยสมบูรณ์
+WWDG_Disable();
 ```
 
-> ใช้เมื่อต้องการปิด WWDG ก่อนเข้า sleep หรือเปลี่ยนไปใช้ IWDG
+> ⚠️ **สำคัญ:** ตาม CH32V003 Reference Manual เมื่อ WDGA bit ถูกตั้งแล้ว (คือหลังเรียก
+> `WWDG_Init()`/`WWDG_SimpleInit()`) **WWDG ปิดไม่ได้ด้วยซอฟต์แวร์อีกต่อไป** — เป็นข้อจำกัด
+> ของฮาร์ดแวร์ ไม่ใช่บั๊กของ library ฟังก์ชันนี้แค่รีเซ็ต prescaler/window/counter registers
+> แต่ counter จะยังคงนับถอยหลังต่อและ reset MCU ถ้าไม่ refresh ทัน (`SimpleIWDG` ก็มีข้อจำกัด
+> เดียวกัน — watchdog ทั้งสองแบบออกแบบมาให้ enable แล้วปิดไม่ได้ ตามเจตนาด้าน safety) —
+> ถ้ายังไม่มั่นใจเรื่อง timing ของโปรแกรม ให้ **เลื่อนการเรียก `WWDG_Init()`/`WWDG_SimpleInit()`
+> ออกไปจนกว่าจะพร้อม refresh ตรงเวลาจริง** แทนที่จะพึ่ง `WWDG_Disable()`
 
 #### `void WWDG_InitWithInterrupt(uint8_t counter, uint8_t window, uint8_t prescaler)` — เริ่ม WWDG พร้อมเปิด early warning interrupt
 

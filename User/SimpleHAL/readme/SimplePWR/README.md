@@ -68,6 +68,11 @@ PWR_EnterSleepMode(PWR_ENTRY_WFI);  // Wait For Interrupt
 PWR_EnterSleepMode(PWR_ENTRY_WFE);  // Wait For Event
 ```
 
+> **v2.1:** เคลียร์ PDDS bit ก่อนเข้า WFI/WFE เสมอแล้ว — ป้องกันกรณีที่เคยเรียก
+> `PWR_EnterStandbyMode()` มาก่อนแล้ว MCU ไม่ได้ reset เต็มรูปแบบจริง (เช่น debugger ต่ออยู่
+> ทำให้ standby ไม่ power-down จริง) ซึ่งเดิมจะทำให้ `PWR_Sleep()`/`PWR_EnterSleepMode()`
+> ครั้งต่อไปกลายเป็น standby แทนที่จะเป็น sleep ธรรมดาโดยไม่ตั้งใจ
+
 ---
 
 ### Standby Mode
@@ -108,6 +113,10 @@ if (PWR_WasStandbyWakeup()) { /* ตื่นจาก standby */ }
 #### `void PWR_ClearStandbyFlag(void)`
 
 เคลียร์ standby wakeup flag
+
+> ⚠️ **ข้อจำกัดฮาร์ดแวร์:** WCH SDK ไม่มี selective clear — ฟังก์ชันนี้เรียก `RCC_ClearFlag()`
+> ซึ่งเคลียร์ reset flag **ทุกตัวพร้อมกัน** (POR, PIN, Software, IWDG, WWDG, LowPower) ไม่ใช่
+> แค่ LPWRRST เท่านั้น ถ้าต้องอ่านสาเหตุ reset อื่นด้วย ให้เรียก `RCC_GetFlagStatus()` ก่อน
 
 ---
 

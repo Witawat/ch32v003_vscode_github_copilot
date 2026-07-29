@@ -50,29 +50,35 @@ PWM_Start(PWM1_CH1);
 PWM_SetDutyCycle(PWM1_CH1, 50);
 ```
 
+> ⛔ **v2.1 — `PWM_REMAP_PARTIAL1`/`PWM_REMAP_PARTIAL2` ถูกปิดใช้งานแล้ว (no-op)**
+> เดิม library ตั้งค่า AFIO remap register แต่ **ไม่ได้** อัปเดต GPIO pin config ให้ตรงกับ
+> ปลายทางจริง เพราะ pin mapping ของ TIM1/TIM2 partial remap บน CH32V003 ยังไม่เคยถูกยืนยันกับ
+> datasheet/reference manual — ผลคือสัญญาณ PWM หายทั้งจากพิน default (ถูก remap ออกไปแล้ว)
+> และจากพินที่โค้ดคิดว่า remap ไป (เดาผิด) แบบเงียบๆ ตอนนี้เรียก `PWM_InitRemap(..., PWM_REMAP_PARTIAL1)`
+> หรือ `PARTIAL2` จะ**ทำงานเหมือน `PWM_REMAP_NONE`** (ใช้ default pin ตาม Channel Map ด้านบน)
+> แทนที่จะพังแบบเงียบๆ — โค้ดเดิมที่เรียกด้วย remap เหล่านี้ยัง compile ผ่านและใช้งานได้ปกติ
+> เพียงแค่จะได้ pin ตาม Channel Map เริ่มต้นเสมอ ไม่ใช่ pin ที่ remap ไป
+
 #### `void PWM_SetRemap(PWM_Channel channel, PWM_Remap remap)` 🆕
 
 ตั้งค่ารีแมปล่วงหน้า — `PWM_Write()` / `analogWrite()` ใช้ตอน auto-init
+(⚠️ เช่นเดียวกับด้านบน — `PARTIAL1`/`PARTIAL2` เป็น no-op ตั้งแต่ v2.1 จะได้ default pin เสมอ)
 
 ```c
 // วิธีง่าย — ตั้ง remap ล่วงหน้า แล้ว analogWrite จัดการเอง
 PWM_SetRemap(PWM1_CH1, PWM_REMAP_PARTIAL1);
-analogWrite(PD2, 128);  // auto-init @1kHz + PARTIAL1 remap
-
-PWM_SetRemap(PWM2_CH1, PWM_REMAP_PARTIAL2);
-analogWrite(PD4, 255);  // เลือกใช้ remap คนละแบบ
+analogWrite(PD2, 128);  // ได้ default pin (PD2) เหมือนไม่ตั้ง remap เลย
 ```
 
 #### PWM_Remap Options
 
 | Option | ใช้กับ | หมายเหตุ |
 |--------|:---:|----------|
-| `PWM_REMAP_NONE` | TIM1, TIM2 | Default pins (ค่าเริ่มต้น) |
-| `PWM_REMAP_PARTIAL1` | TIM1, TIM2 | Partial remap 1 |
-| `PWM_REMAP_PARTIAL2` | TIM1, TIM2 | Partial remap 2 |
+| `PWM_REMAP_NONE` | TIM1, TIM2 | Default pins (ค่าเริ่มต้น) — ใช้งานได้เต็มรูปแบบ |
+| `PWM_REMAP_PARTIAL1` | TIM1, TIM2 | ⛔ **ปิดใช้งาน (no-op ตั้งแต่ v2.1)** — ได้ default pin |
+| `PWM_REMAP_PARTIAL2` | TIM1, TIM2 | ⛔ **ปิดใช้งาน (no-op ตั้งแต่ v2.1)** — ได้ default pin |
 
 > ⚠️ `PWM_REMAP_FULL` ถูกลบ — ใช้พอร์ท PE/PB ที่ไม่มีใน CH32V003
-> ⚠️ `PWM_REMAP_PARTIAL1`/`PWM_REMAP_PARTIAL2`: EXPERIMENTAL — ตรวจสอบ pin mapping กับ CH32V003 datasheet
 
 #### `IS_PWM_VALID_PACKAGE(ch)` 🆕
 
@@ -126,12 +132,16 @@ PWM_Write(PWM1_CH1, 255);   // 100%
 
 #### `void PWM_SetFrequency(PWM_Channel channel, uint32_t frequency_hz)`
 
-เปลี่ยน frequency — **duty cycle จะรีเซ็ตเป็น 0%**
+เปลี่ยน frequency — **duty cycle ของ channel นี้จะรีเซ็ตเป็น 0%**
 
 ```c
 PWM_SetFrequency(PWM1_CH1, 2000);   // เปลี่ยนเป็น 2kHz
 PWM_SetFrequency(PWM2_CH1, 20000);  // เปลี่ยนเป็น 20kHz
 ```
+
+> **v2.1:** ถ้ามี channel อื่นบน timer เดียวกันทำงานอยู่ (duty cycle ไม่ใช่ 0%) และ CCR ของ
+> channel นั้นเกิน period ใหม่ที่ตั้ง — ตอนนี้ library จะ clamp CCR ของ channel อื่นให้ไม่เกิน
+> period ใหม่อัตโนมัติ (เดิม output จะค้าง HIGH ตลอดถ้า CCR > ARR ใหม่)
 
 #### `uint16_t PWM_GetPeriod(PWM_Channel channel)`
 
