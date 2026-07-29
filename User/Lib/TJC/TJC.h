@@ -245,8 +245,13 @@ void TJC_ResetResponse(void);
 void TJC_EnableRxInterrupt(void);
 
 /**
- * @brief UART Interrupt Handler (ควรเรียกใน USART1_IRQHandler)
- * @note ต้องเพิ่ม TJC_UART_IRQHandler() ใน USART1_IRQHandler ของคุณ
+ * @brief UART Interrupt Handler
+ * @deprecated ไม่จำเป็นต้องเรียกเองแล้วตั้งแต่ v2.1 — TJC_Init() เรียก USART_SimpleInit()
+ *             ซึ่งเป็นเจ้าของ USART1_IRQHandler() อยู่แล้ว (มี ISR ได้แค่ตัวเดียวต่อ vector)
+ *             TJC.c รับข้อมูลผ่าน USART_RxByteHook() (weak hook ของ SimpleUSART) แทนโดย
+ *             อัตโนมัติ — **ห้ามเพิ่ม `USART1_IRQHandler()` ของตัวเองที่เรียกฟังก์ชันนี้**
+ *             จะทำให้เกิด linker error "multiple definition of USART1_IRQHandler"
+ *             เก็บฟังก์ชันนี้ไว้เพื่อ backward compatibility เท่านั้น
  */
 void TJC_UART_IRQHandler(void);
 

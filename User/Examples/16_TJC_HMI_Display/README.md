@@ -2,23 +2,16 @@
 
 ตัวอย่างการใช้งาน TJC HMI Display Library กับ CH32V003
 
-> ⛔ **สำคัญ — v2.1 ใช้ร่วมกับ SimpleUSART ไม่ได้แล้วในสภาพปัจจุบัน:**
-> `SimpleUSART.c` เพิ่ม RX ring buffer แบบ interrupt-driven ในตัว (ดู
-> [SimpleUSART README](../../SimpleHAL/readme/SimpleUSART/README.md)) ทำให้
-> `SimpleUSART.c` เป็นผู้ define `USART1_IRQHandler()` เองแล้ว **ถ้าทำตามขั้นตอนที่ 2 ด้านล่าง
-> (เพิ่ม `USART1_IRQHandler()` ของตัวเองใน `ch32v00x_it.c`) จะได้ linker error "multiple
-> definition of USART1_IRQHandler"** ทันที เพราะมีนิยามซ้ำ 2 ที่
+> ✅ **v2.1 — แก้ conflict กับ SimpleUSART แล้ว ไม่ต้องเพิ่ม IRQ handler เองอีกต่อไป:**
+> `SimpleUSART.c` เป็นเจ้าของ `USART1_IRQHandler()` แต่ต่อนี้จะเรียก weak hook
+> `USART_RxByteHook()` ให้ทุกครั้งที่ได้รับ byte ใหม่ — `TJC.c` override hook นี้เพื่อรับข้อมูล
+> เข้า `rx_buffer` ของตัวเองโดยอัตโนมัติ ไม่ต้องเขียน `USART1_IRQHandler()` เองอีกแล้ว
 >
-> ที่ร้ายแรงกว่านั้น: `TJC_Init()` เรียก `USART_SimpleInit()` ภายใน ซึ่งตอนนี้แย่งชิง
-> `USART1_IRQHandler()` ไปแล้ว — แม้จะ**ไม่**เพิ่ม handler ของตัวเองตามขั้นตอนที่ 2 (เลี่ยง link
-> error ได้) แต่ `TJC_UART_IRQHandler()` ก็จะไม่ถูกเรียกโดยใครเลย ทำให้ `rx_buffer` ภายใน TJC.c
-> ไม่เคยถูกเติมข้อมูล และ **callback ทุกตัว (touch event, numeric, string, ฯลฯ) จะไม่ทำงาน**
-> แม้ build ผ่านก็ตาม
->
-> **สถานะปัจจุบัน:** ตัวอย่างทั้ง 8 ไฟล์ในโฟลเดอร์นี้ยัง compile ได้ แต่ event-driven callback
-> จะไม่ทำงานเนื่องจาก conflict ข้างต้น จนกว่าจะมีการแก้ไขโค้ดระดับ library (ทำให้
-> `USART1_IRQHandler()` เรียกทั้ง SimpleUSART และ TJC ได้พร้อมกัน หรือให้ `USART_SimpleInit()`
-> เปิด auto-ISR แบบ opt-out ได้) — ถ้าต้องใช้ TJC ตอนนี้ ให้แจ้งขอแก้ไขจุดนี้ก่อน
+> ⛔ **ห้ามเพิ่ม `USART1_IRQHandler()` ของตัวเองที่เรียก `TJC_UART_IRQHandler()`** (ตามที่เอกสาร
+> รุ่นเก่าเคยแนะนำ) — จะได้ linker error "multiple definition of USART1_IRQHandler" ทันที
+> เพราะ `SimpleUSART.c` define ไว้แล้ว `TJC_UART_IRQHandler()` ถูกเก็บไว้เพื่อ backward
+> compatibility เท่านั้น (deprecated) ตัวอย่างทั้ง 8 ไฟล์ในโฟลเดอร์นี้ใช้งานได้ปกติแล้วโดยไม่ต้อง
+> แก้ไขอะไรเพิ่ม
 
 ## เอกสารเพิ่มเติม
 
@@ -48,18 +41,7 @@
 User/Lib/TJC/TJC.c
 ```
 
-### 2. เพิ่ม IRQ Handler ใน `User/ch32v00x_it.c`
-
-```c
-#include "TJC.h"
-
-void USART1_IRQHandler(void) __attribute__((interrupt("WCH-Interrupt-fast")));
-void USART1_IRQHandler(void) {
-    TJC_UART_IRQHandler();
-}
-```
-
-### 3. ตั้งค่า TJC Editor
+### 2. ตั้งค่า TJC Editor
 
 ```
 // Global Initialization Event

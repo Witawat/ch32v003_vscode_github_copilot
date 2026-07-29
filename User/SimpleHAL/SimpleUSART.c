@@ -19,6 +19,14 @@ static volatile uint8_t s_rx_buffer[USART_RX_BUFFER_SIZE];
 static volatile uint16_t s_rx_head = 0;
 static volatile uint16_t s_rx_tail = 0;
 
+/**
+ * @brief Weak default — override in your own code to tap into RX bytes
+ *        without needing your own USART1_IRQHandler (see SimpleUSART.h)
+ */
+__attribute__((weak)) void USART_RxByteHook(uint8_t data) {
+    (void)data;
+}
+
 /* ========== Private Helper Functions ========== */
 
 /**
@@ -292,5 +300,8 @@ void USART1_IRQHandler(void) {
             s_rx_head = next_head;
         }
         // buffer เต็ม — ทิ้ง byte นี้ (ดีกว่าเขียนทับข้อมูลเก่าที่ยังไม่ได้อ่าน)
+
+        // ให้โมดูลอื่น (เช่น TJC) แอบดู byte นี้ได้โดยไม่ต้องแย่งชิง ISR vector
+        USART_RxByteHook(data);
     }
 }

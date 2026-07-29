@@ -187,6 +187,24 @@ uint16_t USART_ReadBytes(uint8_t* buffer, uint16_t length);
  */
 void USART_Flush(void);
 
+/**
+ * @brief Hook เรียกจาก USART1_IRQHandler() ทุกครั้งที่ได้รับ byte ใหม่ (v2.1)
+ * @param data byte ที่เพิ่งรับมา (เติมลง ring buffer ของ SimpleUSART ไปแล้วก่อนเรียก hook นี้)
+ *
+ * @details
+ * Default implementation ไม่ทำอะไร (`__attribute__((weak))`) — override ได้โดย define
+ * ฟังก์ชันชื่อเดียวกันแบบไม่ใส่ weak ในไฟล์ของคุณเอง (compiler จะเลือกตัวที่ไม่ weak แทน)
+ * ใช้กรณีต้องการ "แอบดู" byte ที่เข้ามาโดยไม่ต้องเขียน `USART1_IRQHandler()` เอง — เพราะ
+ * `USART1_IRQHandler()` ถูก SimpleUSART.c เป็นเจ้าของแล้ว (มี ISR ได้แค่ตัวเดียวต่อ vector)
+ * ตัวอย่าง: `User/Lib/TJC/TJC.c` ใช้กลไกนี้แทนการ define `USART1_IRQHandler()` ของตัวเอง
+ *
+ * @example
+ * void USART_RxByteHook(uint8_t data) {
+ *     my_parser_feed(data);
+ * }
+ */
+void USART_RxByteHook(uint8_t data);
+
 #ifdef __cplusplus
 }
 #endif

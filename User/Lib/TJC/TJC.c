@@ -541,10 +541,24 @@ void TJC_EnableRxInterrupt(void) {
 
 /**
  * @brief UART Interrupt Handler
+ * @deprecated ไม่จำเป็นต้องเรียกฟังก์ชันนี้เองอีกต่อไปตั้งแต่ v2.1 — TJC_Init() เรียก
+ *             USART_SimpleInit() ซึ่งเป็นเจ้าของ USART1_IRQHandler() อยู่แล้ว และ TJC.c
+ *             รับ byte ผ่าน USART_RxByteHook() แทน (ดูฟังก์ชันด้านล่าง) เก็บฟังก์ชันนี้ไว้
+ *             เพื่อ backward compatibility เท่านั้น — ห้ามเรียกซ้ำเพราะจะอ่าน byte จาก
+ *             USART1->DATAR ซ้ำสอง (register จะถูก SimpleUSART's ISR อ่านไปแล้ว)
  */
 void TJC_UART_IRQHandler(void) {
   if (USART_GetITStatus(USART1, USART_IT_RXNE) != RESET) {
     uint8_t data = USART_ReceiveData(USART1);
     TJC_BufferPut(data);
   }
+}
+
+/**
+ * @brief รับ byte จาก SimpleUSART's USART1_IRQHandler() ผ่าน weak hook (v2.1)
+ * @note แทนที่การ define USART1_IRQHandler() เอง — ดู SimpleUSART.h §USART_RxByteHook
+ *       เติม byte ลง TJC's rx_buffer แบบเดียวกับที่ TJC_UART_IRQHandler() เคยทำ
+ */
+void USART_RxByteHook(uint8_t data) {
+  TJC_BufferPut(data);
 }

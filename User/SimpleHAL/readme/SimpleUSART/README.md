@@ -12,8 +12,9 @@ SimpleUSART ห่อหุ้ม USART1 hardware ให้ใช้งานง
 > 64 bytes, ปรับได้ด้วย `#define USART_RX_BUFFER_SIZE <n>` ก่อน `#include "SimpleUSART.h"`)
 > — เดิม hardware buffer มีแค่ 1 byte ถ้าโปรแกรมอ่านไม่ทันข้อมูลจะหาย ตอนนี้ไม่มีปัญหานี้แล้ว
 >
-> ⚠️ **ใช้ร่วมกับ library อื่นที่ต้องการ own `USART1_IRQHandler` เองไม่ได้** (เช่น TJC HMI —
-> ดู `16_TJC_HMI_Display`) เพราะมี ISR ได้แค่ตัวเดียวต่อ interrupt vector — เลือกใช้อย่างใดอย่างหนึ่ง
+> ⚠️ **ห้าม define `USART1_IRQHandler()` ซ้ำในโค้ดของคุณเอง** — `SimpleUSART.c` เป็นเจ้าของ
+> ISR นี้แล้ว (มี ISR ได้แค่ตัวเดียวต่อ interrupt vector) แต่ถ้า library อื่นต้องการรับ byte
+> ที่เข้ามาแบบ real-time (เช่น TJC HMI) ให้ override `USART_RxByteHook()` แทน — ดูด้านล่าง
 
 ---
 
@@ -108,6 +109,24 @@ USART_Flush();  // อ่านข้อมูล RX ค้างใน hardware
 > ⚠️ ต่างจาก Arduino `Serial.flush()` (ที่รอ TX เสร็จ) — CH32V003 `USART_Flush()` ล้าง RX buffer แทน ให้ใช้ `USART_Print` ตามด้วย `Delay_Ms(1)` แทนการรอ TX
 
 ---
+
+### RX Byte Hook (สำหรับ library อื่นที่ต้องการรับ byte แบบ real-time)
+
+#### `void USART_RxByteHook(uint8_t data)` 🆕 (v2.1)
+
+Weak function — เรียกจาก `USART1_IRQHandler()` ทุกครั้งที่ได้รับ byte ใหม่ (หลังเติมลง ring
+buffer ของ SimpleUSART แล้ว) default ไม่ทำอะไร override ได้โดย define ฟังก์ชันชื่อเดียวกัน
+แบบไม่ใส่ `weak` ในไฟล์ของคุณเอง
+
+```c
+// ในไฟล์ของคุณเอง (ไม่ต้องใส่ __attribute__((weak)))
+void USART_RxByteHook(uint8_t data) {
+    my_protocol_parser_feed(data);  // แอบดู byte ที่เข้ามาแบบ real-time
+}
+```
+
+> ใช้แทนการเขียน `USART1_IRQHandler()` เอง (ซึ่งจะชนกับของ SimpleUSART) — `User/Lib/TJC/TJC.c`
+> ใช้กลไกนี้เพื่อรับข้อมูลจาก TJC HMI display แบบ interrupt-driven
 
 ### Receive
 

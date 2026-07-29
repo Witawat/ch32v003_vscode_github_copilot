@@ -119,8 +119,10 @@ timeout 100ms เต็มก่อนรู้ว่าเจอ NACK (มี�
 default 64 bytes) `USART_SimpleInit()` เปิด RXNE interrupt + NVIC, เพิ่ม
 `USART1_IRQHandler()` เติม buffer, `USART_Available()`/`USART_Read()`/`USART_Flush()`
 ทำงานผ่าน ring buffer แทน hardware flag ตรงๆ — กัน byte หายเมื่ออ่านไม่ทัน
-⚠️ มี warning ใน header ว่าใช้ร่วมกับ library อื่นที่ต้องการ own USART1 IRQ เอง
-(เช่น TJC) ไม่ได้ เพราะมี ISR ได้แค่ตัวเดียวต่อ vector
+✅ **แก้ conflict กับ TJC แล้ว:** เพิ่ม weak hook `USART_RxByteHook(uint8_t data)` เรียกจาก
+ISR ทุกครั้งที่ได้รับ byte ใหม่ — `TJC.c` override hook นี้แทนการ define
+`USART1_IRQHandler()` เอง (ดู `TJC_UART_IRQHandler()` — deprecated แต่เก็บไว้เพื่อ backward
+compat) library อื่นที่ต้องการรับ byte แบบ real-time โดยไม่แย่งชิง ISR vector ก็ใช้กลไกนี้ได้
 
 **#23 SimpleADC — `IS_ADC_PIN` ไม่ package-aware (ซ้ำกับ #3)**
 แก้แล้วพร้อมข้อ #3
@@ -246,8 +248,8 @@ check ไม่ใช่ cycle count ต่อให้ ISR แทรกระ�
    - USART RX ring buffer ใหม่ (#22) — ทดสอบส่งข้อมูลเร็วๆ ต่อเนื่องว่าไม่มี byte หาย
    - SimpleFlash IRQ-safe (#12) — ทดสอบเขียน flash พร้อมมี interrupt อื่นทำงานร่วม
    - PWM ownership/CCR clamp (#8, #19) — ทดสอบเปลี่ยนความถี่ขณะมีหลาย channel ทำงาน
-2. **พิจารณาว่า product ใช้ Lib ไหนบ้าง** แล้วตรวจ README เฉพาะของ Lib นั้นเพิ่มเติม
-   (โฟกัสรอบนี้อยู่ที่ `User/SimpleHAL/` เท่านั้น ไม่ได้ตรวจ `User/Lib/` ทั้ง ~60 ตัว
-   ทีละไฟล์)
-3. **SimpleUSART + TJC library ใช้ร่วมกันไม่ได้** (ดู #22) — ถ้า product ใช้ TJC HMI
-   display ต้องเลือกอย่างใดอย่างหนึ่ง เพราะแย่งชิง `USART1_IRQHandler` เดียวกัน
+2. **พิจารณาว่า product ใช้ Lib ไหนบ้าง** แล้วตรวจ README เฉพาะของ Lib นั้นเพิ่มเติม —
+   ตรวจ `User/Lib/` ทั้ง 71 ไลบรารีแล้วเช่นกัน ดู [User/Lib/LIB_AUDIT.md](User/Lib/LIB_AUDIT.md)
+   (แยกจากไฟล์นี้ซึ่งครอบคลุมแค่ `User/SimpleHAL/`)
+3. ~~SimpleUSART + TJC library ใช้ร่วมกันไม่ได้~~ — **แก้แล้ว** ผ่าน `USART_RxByteHook()`
+   weak hook (ดู #22 ด้านบน)
