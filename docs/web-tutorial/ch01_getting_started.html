@@ -57,6 +57,21 @@ flowchart TD
       </tbody>
     </table>
 
+    <h3>รู้จักขา</h3>
+    <ul>
+      <li><strong>PC0:</strong> ขาสัญญาณออก — ควบคุม LED (HIGH = ติด, LOW = ดับ)</li>
+      <li><strong>VDD:</strong> ขาไฟเลี้ยง 3.3V</li>
+      <li><strong>GND:</strong> ขากราวด์</li>
+    </ul>
+
+    <h3>วิธีต่อทีละขั้น</h3>
+    <ol>
+      <li>ต่อ <strong>R 220Ω</strong> ระหว่าง <strong>PC0</strong> กับ <strong>LED ขาบวก (Anode)</strong> — ป้องกันกระแสเกิน</li>
+      <li>ต่อ <strong>LED ขาลบ (Cathode)</strong> ไป <strong>GND</strong> — ครบวงจร</li>
+      <li>ต่อ <strong>VDD</strong> ไป <strong>3.3V</strong> — จ่ายไฟ</li>
+      <li>ต่อ <strong>GND</strong> ไป <strong>GND</strong> — กราวด์ร่วม</li>
+    </ol>
+
     <p>บอร์ด CH32V003 ขั้นต่ำต้องการไฟ 3.3V, GND, และ LED ต่อผ่าน R 220Ω ที่ PC0</p>
     <p><strong>หมายเหตุ SOP-8:</strong> หากใช้ SOP-8 (CH32V003J4M6) ให้ใช้ <code>PACKAGE_SOP8</code> และใช้ PC1 หรือ PA1 แทน PC0 (PC0 ไม่มีบน SOP-8)</p>
 </section>

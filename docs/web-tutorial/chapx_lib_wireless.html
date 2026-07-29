@@ -20,6 +20,20 @@
 <pre class="ascii-circuit">
 PD5(TX)─RX(ESP01)  PD6(RX)─TX(ESP01)  3.3V─VCC+CH_PD  GND─GND+GPIO0
 ⚠️ ESP01 กินไฟ 300mA peak → ใช้ external 3.3V regulator (AMS1117-3.3, 500mA+)</pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>TX (PD5):</strong> ส่งข้อมูล USART ไป RX ของ ESP01</li>
+  <li><strong>RX (PD6):</strong> รับข้อมูล USART จาก TX ของ ESP01</li>
+  <li><strong>VCC + CH_PD (3.3V):</strong> จ่ายไฟ 3.3V ผ่าน regulator แยก 500mA+</li>
+  <li><strong>GND + GPIO0:</strong> กราวด์ร่วม (GPIO0 LOW = flash mode)</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PD5</strong> ไป <strong>RX ของ ESP01</strong> — ส่งคำสั่ง AT</li>
+  <li>ต่อ <strong>PD6</strong> ไป <strong>TX ของ ESP01</strong> — รับ response</li>
+  <li>ต่อ <strong>3.3V จาก regulator</strong> ไป <strong>VCC + CH_PD</strong></li>
+  <li>ต่อ <strong>GND</strong> ร่วม</li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
@@ -57,6 +71,21 @@ if(ESP01_IsConnected(&wifi)) ESP01_GetIP(&wifi);</code></pre>
 <pre class="ascii-circuit">
 PD5(TX)─RX(HC05)  PD6(RX)─TX(HC05)  5V─VCC  GND─GND  EN─PC3 (HIGH=AT mode)
 HC05 TX 3.3V OK → CH32V003 RX, CH32V003 TX 3.3V → HC05 RX OK</pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>TX (PD5):</strong> ส่งข้อมูล USART ไป RX ของ HC05</li>
+  <li><strong>RX (PD6):</strong> รับข้อมูล USART จาก TX ของ HC05</li>
+  <li><strong>VCC (5V):</strong> จ่ายไฟ 5V</li>
+  <li><strong>GND:</strong> กราวด์ร่วม</li>
+  <li><strong>EN (PC3):</strong> HIGH = AT mode, LOW = data mode</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PD5</strong> ไป <strong>RX ของ HC05</strong> — ส่งข้อมูล</li>
+  <li>ต่อ <strong>PD6</strong> ไป <strong>TX ของ HC05</strong> — รับข้อมูล</li>
+  <li>ต่อ <strong>5V</strong> ไป <strong>VCC</strong> และ <strong>GND</strong> ไป <strong>GND</strong></li>
+  <li>ต่อ <strong>PC3</strong> ไป <strong>EN</strong> — ควบคุม AT mode</li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
@@ -97,6 +126,23 @@ while(1) {
 <pre class="ascii-circuit">
 PC4─CSN  PC5─SCK  PC6─MOSI  PC7─MISO  PC3─CE  3.3V─VCC (ห้าม 5V!)
 Decoupling 100nF ceramic ใกล้ขา VCC</pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>CSN (PC4):</strong> เลือกชิป SPI</li>
+  <li><strong>SCK (PC5):</strong> สัญญาณนาฬิกา SPI</li>
+  <li><strong>MOSI (PC6):</strong> ส่งข้อมูลไป nRF24L01</li>
+  <li><strong>MISO (PC7):</strong> รับข้อมูลจาก nRF24L01</li>
+  <li><strong>CE (PC3):</strong> ควบคุมรับ/ส่ง</li>
+  <li><strong>VCC (3.3V ONLY):</strong> จ่ายไฟ 3.3V เท่านั้น!</li>
+  <li><strong>GND:</strong> กราวด์ร่วม</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PC4–PC7</strong> ไป <strong>CSN, SCK, MOSI, MISO</strong> — SPI</li>
+  <li>ต่อ <strong>PC3</strong> ไป <strong>CE</strong></li>
+  <li>ต่อ <strong>3.3V ONLY</strong> ไป <strong>VCC</strong> พร้อม capacitor 100nF</li>
+  <li>ต่อ <strong>GND</strong> ร่วม</li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
@@ -143,6 +189,20 @@ while(1) {
 <pre class="ascii-circuit">
 PD5(RX)─TX(GPS)  PD6(TX)─RX(GPS) optional  3.3-5V─VCC  GND─GND
 ต้องมี active antenna — indoor = no signal</pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>RX (PD5):</strong> รับข้อมูล USART จาก TX ของ GPS (NMEA)</li>
+  <li><strong>TX (PD6):</strong> ส่งข้อมูลไป GPS (optional)</li>
+  <li><strong>VCC (3.3–5V):</strong> จ่ายไฟ</li>
+  <li><strong>GND:</strong> กราวด์ร่วม</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PD5</strong> ไป <strong>TX ของ GPS</strong> — รับพิกัด</li>
+  <li>ต่อ <strong>VCC</strong> กับไฟ 3.3V หรือ 5V</li>
+  <li>ต่อ <strong>GND</strong> ร่วม</li>
+  <li>ต่อ <strong>active antenna</strong> เข้า GPS module</li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
@@ -183,6 +243,18 @@ while(1) {
 <pre class="ascii-circuit">
 PC0─OUT(IR receiver)  3.3V─VCC  GND─GND
 ใช้ VS1838B หรือ TSOP38238 (38kHz carrier)</pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>OUT (PC0):</strong> ขา output สัญญาณ IR ที่ demodulated แล้ว</li>
+  <li><strong>VCC (3.3V):</strong> จ่ายไฟ 3.3V</li>
+  <li><strong>GND:</strong> กราวด์ร่วม</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PC0</strong> ไป <strong>OUT</strong> ของ IR receiver</li>
+  <li>ต่อ <strong>3.3V</strong> ไป <strong>VCC</strong> และ <strong>GND</strong> ไป <strong>GND</strong></li>
+  <li>ใช้ interrupt จับ timing ในโค้ด</li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
@@ -220,6 +292,17 @@ while(1) {
 <pre class="ascii-circuit">
 PC0─TX(soft)  PC1─RX(soft)  (pin ไหนก็ได้ — software bit-bang)
 ใช้เมื่อ USART1 ถูกใช้แล้ว → 1 USART HW + 1 SoftUART = 2 UART ports</pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>TX (PC0):</strong> ขาส่งข้อมูล SoftUART (pin อะไรก็ได้)</li>
+  <li><strong>RX (PC1):</strong> ขารับข้อมูล SoftUART (pin อะไรก็ได้)</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>เลือก <strong>PC0</strong> เป็น <strong>TX</strong> ต่อกับ RX ของอุปกรณ์</li>
+  <li>เลือก <strong>PC1</strong> เป็น <strong>RX</strong> ต่อกับ TX ของอุปกรณ์</li>
+  <li>ตั้ง baud rate ให้ตรงกันในโค้ด</li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>

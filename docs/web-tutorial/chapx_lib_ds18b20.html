@@ -57,6 +57,19 @@ flowchart TD
       </tbody>
     </table>
     <p>1-Wire ต่อได้หลายร้อยตัวบนบัสเส้นเดียว — แต่ละตัวมี unique 64-bit ROM ID</p>
+    <h3>รู้จักขา</h3>
+    <ul>
+      <li><strong>VCC:</strong> จ่ายไฟ 3.3V (หรือ 5V)</li>
+      <li><strong>DQ (Data):</strong> ขาข้อมูล 1-Wire ต่อกับ PD2 ต้องมี pull-up 4.7kΩ</li>
+      <li><strong>GND:</strong> ต่อกราวด์ร่วมกับ MCU</li>
+    </ul>
+    <h3>วิธีต่อทีละขั้น</h3>
+    <ol>
+      <li>ต่อ <strong>PD2</strong> ไป <strong>DQ ของ DS18B20</strong> — สายสัญญาณ 1-Wire</li>
+      <li>ต่อ <strong>3.3V</strong> ไป <strong>VCC ของ DS18B20</strong> — จ่ายไฟให้เซนเซอร์</li>
+      <li>ต่อ <strong>GND</strong> ไป <strong>GND ของ DS18B20</strong> — กราวด์ร่วม</li>
+      <li>ต่อ <strong>R 4.7kΩ</strong> ระหว่าง <strong>DQ กับ 3.3V</strong> — pull-up จำเป็น! ถ้าไม่มีจะ Init ไม่พบ</li>
+    </ol>
 </section>
 
 <section>

@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>บทที่ 14: Flash Storage — เก็บข้อมูลถาวร</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+</head>
+<body>
+
+<nav class="top-nav">
+    <a href="ch13-dma.html">&larr; บทที่ 13: DMA</a>
+    <a href="index.html">&#x1f3e0; สารบัญ</a>
+    <a href="ch15-iwdg.html">บทที่ 15: IWDG &rarr;</a>
+</nav>
+
+<h1>บทที่ 14: Flash Storage — เก็บข้อมูลถาวร</h1>
+<span class="level level-advanced">ระดับสูง</span>
+
+<section>
+    <h2>สิ่งที่ต้องรู้ก่อน</h2>
+    <ul>
+        <li><a href="ch01-first-steps.html">บทที่ 1: ขั้นตอนแรก</a> (basic setup)</li>
+    </ul>
+</section>
+
+<section>
+    <h2>อุปกรณ์ที่ต้องใช้</h2>
+    <ul>
+        <li>CH32V003 Dev Board (ไม่ต้องใช้อุปกรณ์เสริมภายนอก)</li>
+    </ul>
+</section>
+
+<section>
+    <h2>ทำไมต้องใช้?</h2>
+    <p>เก็บ config ที่ไม่หายตอนไฟดับ — ค่า calibrate, ตั้งค่าผู้ใช้, เลข serial, counter — เหมือน EEPROM ใน Arduino</p>
+</section>
+
+<section>
+    <h2>Flowchart การทำงาน</h2>
+    <div class="flowchart">
+        <pre class="mermaid">
+flowchart TD
+    A["Flash_Init()"] --> B["Boot"]
+    B --> C["Flash_LoadConfig()"]
+    C --> D{"ข้อมูลถูกต้อง?"}
+    D -->|"ใช่ (CRC OK)"| E["ใช้ค่าจาก Flash"]
+    D -->|"ไม่ใช่"| F["ใช้ default"]
+    E --> G["ทำงานปกติ"]
+    F --> G
+    G --> H["Flash_SaveConfig()"]
+    H --> I["ปิดเครื่อง → ข้อมูลอยู่"]
+        </pre>
+    </div>
+</section>
+
+<section>
+    <h2>Flash Layout</h2>
+    <table>
+        <tr><th>Page</th><th>ขนาด</th><th>การใช้งาน</th></tr>
+        <tr><td>Page 254</td><td>64 bytes</td><td>Config (ตั้งค่าผู้ใช้)</td></tr>
+        <tr><td>Page 255</td><td>64 bytes</td><td>Data (ข้อมูลทั่วไป)</td></tr>
+    </table>
+    <div class="callout callout-note">
+        <strong>หมายเหตุ:</strong> ใช้งานได้จริง ~60 bytes (หัก CRC overhead) — Endurance ~10,000 รอบ
+    </div>
+</section>
+
+<section>
+    <h2>API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th></tr>
+        <tr><td><code>Flash_Init()</code></td><td>เริ่มต้น Flash subsystem</td></tr>
+        <tr><td><code>Flash_SaveConfig(data, size)</code></td><td>บันทึก config พร้อม CRC</td></tr>
+        <tr><td><code>Flash_LoadConfig(data, size)</code></td><td>โหลด config ตรวจ CRC</td></tr>
+        <tr><td><code>Flash_EraseAll()</code></td><td>ลบทั้งสองหน้า config</td></tr>
+        <tr><td><code>Flash_ErasePage(page)</code></td><td>ลบเฉพาะหน้า (254/255)</td></tr>
+        <tr><td><code>Flash_ReadByte/HalfWord/Word(addr)</code></td><td>อ่านจาก Flash address</td></tr>
+        <tr><td><code>Flash_WriteByte/HalfWord/Word(addr, data)</code></td><td>เขียนไปยัง Flash address</td></tr>
+        <tr><td><code>Flash_WriteByteWithErase(addr, data)</code></td><td>เขียน+auto-erase เมื่อจำเป็น</td></tr>
+        <tr><td><code>Flash_WriteString(addr, str)</code></td><td>เขียน string ลง Flash</td></tr>
+        <tr><td><code>Flash_ReadString(addr, buf, maxlen)</code></td><td>อ่าน string จาก Flash</td></tr>
+        <tr><td><code>Flash_WriteStruct(addr, ptr, size)</code></td><td>เขียน struct ลง Flash</td></tr>
+        <tr><td><code>Flash_ReadStruct(addr, ptr, size)</code></td><td>อ่าน struct จาก Flash</td></tr>
+        <tr><td><code>Flash_IsConfigValid(data, size)</code></td><td>ตรวจสอบ CRC ของ config</td></tr>
+        <tr><td><code>Flash_CalculateCRC16(data, size)</code></td><td>คำนวณ CRC16</td></tr>
+        <tr><td><code>FLASH_SAVE_CONFIG(data)</code></td><td>Macro: บันทึก struct config</td></tr>
+        <tr><td><code>FLASH_LOAD_CONFIG(data)</code></td><td>Macro: โหลด struct config</td></tr>
+    </table>
+</section>
+
+<div class="callout callout-good">
+    <strong>IRQ-safe v2.1:</strong> Flash write/erase ปิด interrupt อัตโนมัติระหว่าง busy period — ป้องกันข้อมูลเสียหาย
+</div>
+
+<section>
+    <h2>ขั้นตอนการใช้งาน (Step by Step)</h2>
+    <div class="step">
+        <h3>1. เริ่มต้น Flash</h3>
+        <p><code>Flash_Init()</code> — เรียกครั้งแรกใน main</p>
+    </div>
+    <div class="step">
+        <h3>2. โหลด Config</h3>
+        <p><code>Flash_LoadConfig(&my_config, sizeof(my_config))</code> — ถ้า CRC OK จะคืน 1</p>
+    </div>
+    <div class="step">
+        <h3>3. ตรวจสอบผล</h3>
+        <p>ถ้าโหลดไม่สำเร็จ → ใช้ค่า default แล้วบันทึกทับด้วย Flash_SaveConfig</p>
+    </div>
+    <div class="step">
+        <h3>4. บันทึกเมื่อมีการเปลี่ยนแปลง</h3>
+        <p><code>Flash_SaveConfig(&my_config, sizeof(my_config))</code> — เรียกเฉพาะเมื่อข้อมูลเปลี่ยน</p>
+    </div>
+</section>
+
+<section>
+    <h2>ระดับขั้นต้น: Save/Load Config Struct</h2>
+    <pre><code class="language-c">#include "SimpleHAL.h"
+
+typedef struct {
+    uint8_t brightness;
+    uint16_t interval_ms;
+    uint8_t uart_enabled;
+} AppConfig;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(USART_115200);
+    Flash_Init();
+
+    AppConfig cfg;
+    if (!Flash_LoadConfig(&cfg, sizeof(cfg))) {
+        // ยังไม่มี config → ใช้ default
+        cfg.brightness = 50;
+        cfg.interval_ms = 1000;
+        cfg.uart_enabled = 1;
+        Flash_SaveConfig(&cfg, sizeof(cfg));
+        printf("ใช้ค่า default\r\n");
+    } else {
+        printf("โหลด config สำเร็จ\r\n");
+    }
+
+    printf("Brightness: %d\r\n", cfg.brightness);
+    printf("Interval: %d ms\r\n", cfg.interval_ms);
+    printf("UART: %s\r\n", cfg.uart_enabled ? "ON" : "OFF");
+
+    while (1);
+}</code></pre>
+</section>
+
+<section>
+    <h2>ระดับขั้นกลาง: Config Manager พร้อม Version Check</h2>
+    <div class="approach">
+        <strong>แนวคิด:</strong> เพิ่ม version field ใน struct — ถ้า version ไม่ตรง → รีเซ็ตเป็นค่า default อัตโนมัติ
+    </div>
+    <pre><code class="language-c">#include "SimpleHAL.h"
+
+#define CONFIG_VERSION 2
+
+typedef struct {
+    uint8_t version;
+    uint8_t brightness;
+    uint16_t interval_ms;
+    uint8_t uart_enabled;
+} AppConfig;
+
+void config_load(AppConfig *cfg) {
+    if (!Flash_LoadConfig(cfg, sizeof(*cfg))) {
+        goto defaults;
+    }
+    if (cfg->version != CONFIG_VERSION) {
+        printf("Version mismatch: v%d → v%d\r\n", cfg->version, CONFIG_VERSION);
+        goto defaults;
+    }
+    return;
+
+defaults:
+    cfg->version = CONFIG_VERSION;
+    cfg->brightness = 50;
+    cfg->interval_ms = 1000;
+    cfg->uart_enabled = 1;
+    Flash_SaveConfig(cfg, sizeof(*cfg));
+    printf("ใช้ค่า default\r\n");
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(USART_115200);
+    Flash_Init();
+
+    AppConfig cfg;
+    config_load(&cfg);
+    printf("Brightness=%d Interval=%d\r\n", cfg.brightness, cfg.interval_ms);
+
+    // เปลี่ยน config เมื่อกดปุ่ม
+    cfg.brightness += 10;
+    Flash_SaveConfig(&cfg, sizeof(cfg));
+
+    while (1);
+}</code></pre>
+</section>
+
+<section>
+    <h2>ระดับขั้นสูง: Wear Leveling — บันทึก Counter ทุก 60 วินาที</h2>
+    <div class="approach">
+        <strong>แนวคิด:</strong> ใช้ counter นับจำนวนครั้งที่เขียน — หลีกเลี่ยงการเขียนซ้ำที่อยู่เดิม ๆ เพื่อยืดอายุ Flash (สูงสุด ~10,000 รอบ/หน้า)
+    </div>
+    <pre><code class="language-c">#include "SimpleHAL.h"
+
+typedef struct {
+    uint32_t write_count;
+    uint32_t total_runtime_s;
+    uint8_t led_brightness;
+} PersistentData;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(USART_115200);
+    Flash_Init();
+
+    PersistentData data;
+    if (!Flash_LoadConfig(&data, sizeof(data))) {
+        data.write_count = 0;
+        data.total_runtime_s = 0;
+        data.led_brightness = 50;
+        Flash_SaveConfig(&data, sizeof(data));
+    }
+
+    printf("Write count: %lu, Runtime: %lus\r\n",
+           data.write_count, data.total_runtime_s);
+
+    uint32_t last_save = Get_CurrentMs();
+    while (1) {
+        if (Get_CurrentMs() - last_save >= 60000) {
+            last_save = Get_CurrentMs();
+            data.total_runtime_s += 60;
+            data.write_count++;
+            Flash_SaveConfig(&data, sizeof(data));
+            printf("Saved: count=%lu runtime=%lus\r\n",
+                   data.write_count, data.total_runtime_s);
+        }
+        // งานอื่น ๆ...
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>อาการ</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>CRC error → ใช้ default</td><td>Flash ว่างเปล่าหรือข้อมูลเสีย</td><td>บันทึกค่า default ใหม่</td></tr>
+        <tr><td>ข้อมูลผิดพลาด</td><td>Invalid → ไม่เคยถูกบันทึก</td><td>เรียก Flash_SaveConfig ครั้งแรก</td></tr>
+        <tr><td>Flash เสื่อมเร็ว</td><td>เขียนบ่อยเกิน ~10k cycles</td><td>บันทึกเฉพาะเมื่อข้อมูลเปลี่ยน</td></tr>
+        <tr><td>ข้อมูลเกิน 60 bytes</td><td>Struct ใหญ่เกินหน้าเดียว</td><td>แยก struct หรือบีบอัดข้อมูล</td></tr>
+        <tr><td>ข้อมูลหายหลังเขียน</td><td>Interrupt ขัดจังหวะระหว่างเขียน</td><td>อัปเดตเป็น SimpleHAL v2.1+ (IRQ-safe)</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>คำถามที่พบบ่อย (FAQ)</h2>
+    <h3>Flash vs EEPROM ต่างกันอย่างไร?</h3>
+    <p>Flash ในตัวชิป — ฟรี ไม่ต้องซื้อเพิ่ม แต่ endurance ต่ำกว่า (~10k รอบ) ส่วน EEPROM ภายนอก endurance สูง (~1M รอบ) แต่ต้องซื้อเพิ่ม</p>
+    <h3>ข้อมูลเก็บได้นานแค่ไหน?</h3>
+    <p>~10+ ปี ที่อุณหภูมิใช้งานปกติ</p>
+    <h3>เขียนบ่อยได้ไหม?</h3>
+    <p>ไม่ควรเกิน 10,000 ครั้งต่อหน้า — สำหรับ counter ที่เขียนทุกวินาที ให้ใช้วิธีทอนรอบ (บันทึกทุก 60 วินาที) หรือใช้ wear leveling</p>
+</section>
+
+<section>
+    <h2>ลองทำดู (แบบฝึกหัด)</h2>
+    <ol>
+        <li>บันทึกและโหลด boolean config (เปิด/ปิด LED) ข้าม reset</li>
+        <li>Counter ที่คงค่าแม้ปิด-เปิดเครื่อง — นับจำนวนครั้งที่เปิดเครื่อง</li>
+        <li>Factory reset button — ล้าง Flash กลับเป็นค่า default เมื่อกดปุ่มค้าง 5 วินาที</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="ch13-dma.html">&larr; บทที่ 13: DMA</a>
+    <a href="index.html">&#x1f3e0; สารบัญ</a>
+    <a href="ch15-iwdg.html">บทที่ 15: IWDG &rarr;</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:false,theme:'base'});mermaid.run();</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

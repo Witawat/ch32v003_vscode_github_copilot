@@ -84,6 +84,23 @@ flowchart TD
       </tbody>
     </table>
 
+    <h3>รู้จักขา</h3>
+    <ul>
+      <li><strong>PC0:</strong> ขาเอาต์พุต — ต่อ LED (digitalWrite / analogWrite)</li>
+      <li><strong>PA1:</strong> ขาอินพุต — ต่อปุ่มกด → GND (INPUT_PULLUP)</li>
+      <li><strong>PD2:</strong> ขาอนาล็อก — ต่อ Potentiometer (analogRead)</li>
+      <li><strong>PC4:</strong> ขา PWM — ต่อ Servo (analogWrite)</li>
+    </ul>
+
+    <h3>วิธีต่อทีละขั้น</h3>
+    <ol>
+      <li>ต่อ <strong>PC0</strong> ไป <strong>R 220Ω → LED → GND</strong> — LED ทดสอบ</li>
+      <li>ต่อ <strong>PA1</strong> ไป <strong>ปุ่มกด → GND</strong> — ใช้อ่านสถานะปุ่ม (Pull-up ภายใน)</li>
+      <li>ต่อ <strong>Potentiometer 10kΩ</strong> — ขาบน → 3.3V, ขากลาง → PD2, ขาล่าง → GND</li>
+      <li>ต่อ <strong>PC4</strong> ไป <strong>สายสัญญาณ Servo</strong> — ควบคุมด้วย PWM</li>
+      <li>ต่อ <strong>ไฟ 5V</strong> ไป <strong>VCC ของ Servo</strong> และ <strong>GND</strong> ร่วมกัน</li>
+    </ol>
+
     <p><strong>หมายเหตุ:</strong> SimpleHAL รองรับ Arduino API โดยตรง — ไม่ต้องใช้ Arduino core — คอมไพล์ด้วย GCC RISC-V — โค้ดเล็กกว่า Arduino หลายเท่า</p>
 </section>
 

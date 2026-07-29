@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simple1Wire — 1-Wire Protocol | SimpleHAL API Reference</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+</head>
+<body>
+
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+</nav>
+
+<h1>Simple1Wire — 1-Wire Protocol</h1>
+<span class="level level-expert">ระดับผู้เชี่ยวชาญ</span>
+
+<div class="callout callout-note">
+    <strong>ไลบรารี:</strong> <code>SimpleHAL.h</code> — ใช้ <strong>ไม่ต้อง include ไฟล์ย่อยเอง</strong> ทุกฟังก์ชัน 1-Wire รวมอยู่ใน SimpleHAL.h แล้ว
+</div>
+
+<section>
+<h2>ภาพรวม</h2>
+<p><strong>1-Wire</strong> เป็นโปรโตคอลสื่อสารของ Dallas/Maxim — ใช้สายสัญญาณเส้นเดียว (1 data + GND) สื่อสารกับอุปกรณ์หลายตัวบนบัสเดียวกัน เช่น DS18B20, DS2431 EEPROM, iButton</p>
+<ul>
+    <li><strong>สายเดียว</strong> — 1 data line + GND</li>
+    <li><strong>Multi-device</strong> — ต่อได้หลายตัวบนบัสเดียวกัน</li>
+    <li><strong>ROM Search</strong> — ค้นหา device address ทั้งหมดบนบัส</li>
+    <li><strong>CRC8</strong> — ตรวจสอบความถูกต้องของข้อมูล</li>
+</ul>
+
+<div class="callout callout-warn">
+    <strong>Hardware:</strong> ต้องต่อ <strong>ตัวต้านทาน pull-up 4.7kΩ</strong> ภายนอกระหว่าง data line กับ VCC (3.3V) — ใช้ GPIO pin ใดก็ได้
+</div>
+</section>
+
+<section>
+<h2>โครงสร้าง OneWire_Bus</h2>
+<table>
+<thead><tr><th>สมาชิก</th><th>ชนิด</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>pin</code></td><td><code>uint8_t</code></td><td>GPIO pin ที่ใช้</td></tr>
+<tr><td><code>rom[8]</code></td><td><code>uint8_t[]</code></td><td>ROM address ปัจจุบัน (8 byte)</td></tr>
+<tr><td>search state</td><td>(private)</td><td>สถานะสำหรับ ROM search algorithm</td></tr>
+</tbody>
+</table>
+
+<div class="callout callout-note">
+    <strong>สูงสุด 4 buses:</strong> <code>ONEWIRE_MAX_BUSES = 4</code> — <code>OneWire_Init()</code> คืน <code>NULL</code> ถ้าเต็ม
+</div>
+</section>
+
+<section>
+<h2>Timing Constants</h2>
+<table>
+<thead><tr><th>พารามิเตอร์</th><th>Standard</th><th>Overdrive</th></tr></thead>
+<tbody>
+<tr><td>Time Slot</td><td>60-120 µs</td><td>6-16 µs</td></tr>
+<tr><td>Reset Pulse</td><td>480-960 µs</td><td>48-80 µs</td></tr>
+<tr><td>Presence Pulse</td><td>60-240 µs</td><td>8-24 µs</td></tr>
+<tr><td>Recovery Time</td><td>1-2 µs</td><td>1-2 µs</td></tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>ROM Commands</h2>
+<table>
+<thead><tr><th>Command</th><th>Code</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>SKIP_ROM</code></td><td>0xCC</td><td>คุยกับทุกอุปกรณ์บนบัส (ใช้ได้กรณีมีตัวเดียว)</td></tr>
+<tr><td><code>READ_ROM</code></td><td>0x33</td><td>อ่าน ROM — ใช้ได้เมื่อมีอุปกรณ์<strong>ตัวเดียว</strong>เท่านั้น</td></tr>
+<tr><td><code>MATCH_ROM</code></td><td>0x55</td><td>เลือกอุปกรณ์ตาม ROM address</td></tr>
+<tr><td><code>SEARCH_ROM</code></td><td>0xF0</td><td>ค้นหาอุปกรณ์ทั้งหมด — Maxim AN187 algorithm</td></tr>
+<tr><td><code>ALARM_SEARCH</code></td><td>0xEC</td><td>ค้นหาเฉพาะอุปกรณ์ที่ alarm active</td></tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>ROM Address Format</h2>
+<pre class="ascii-circuit">
+    [ Family Code 1B ] [ Serial Number 6B ] [ CRC8 1B ]
+   เช่น DS18B20 → 28 xx xx xx xx xx xx CR
+</pre>
+<p>8 byte = Family (1B) + Serial (6B) + CRC8 (1B) — CRC ครอบคลุมทั้ง 8 byte</p>
+</section>
+
+<section>
+<h2>ตารางอ้างอิงฟังก์ชัน</h2>
+<table>
+<thead>
+<tr><th>ฟังก์ชัน</th><th>พารามิเตอร์</th><th>คืนค่า</th><th>คำอธิบาย</th></tr>
+</thead>
+<tbody>
+<tr>
+    <td><code>OneWire_Init(pin)</code></td>
+    <td><code>pin</code>: GPIO pin</td>
+    <td><code>OneWire_Bus*</code> / NULL</td>
+    <td>สร้าง bus — NULL ถ้าเต็ม (max 4)</td>
+</tr>
+<tr>
+    <td><code>OneWire_Reset(bus)</code></td>
+    <td><code>bus</code>: OneWire_Bus*</td>
+    <td><code>bool</code></td>
+    <td>Reset + detect presence pulse</td>
+</tr>
+<tr>
+    <td><code>OneWire_WriteBit(bus, bit)</code></td>
+    <td><code>bus</code>: OneWire_Bus*<br><code>bit</code>: 0/1</td>
+    <td><code>void</code></td>
+    <td>เขียน 1 bit — low-level</td>
+</tr>
+<tr>
+    <td><code>OneWire_ReadBit(bus)</code></td>
+    <td><code>bus</code>: OneWire_Bus*</td>
+    <td><code>uint8_t</code> (0/1)</td>
+    <td>อ่าน 1 bit — low-level</td>
+</tr>
+<tr>
+    <td><code>OneWire_WriteByte(bus, data)</code></td>
+    <td><code>bus</code>: OneWire_Bus*<br><code>data</code>: uint8_t</td>
+    <td><code>void</code></td>
+    <td>เขียน 1 byte</td>
+</tr>
+<tr>
+    <td><code>OneWire_ReadByte(bus)</code></td>
+    <td><code>bus</code>: OneWire_Bus*</td>
+    <td><code>uint8_t</code></td>
+    <td>อ่าน 1 byte</td>
+</tr>
+<tr>
+    <td><code>OneWire_WriteBytes(bus, data, len)</code></td>
+    <td><code>bus</code>: OneWire_Bus*<br><code>data</code>: uint8_t*<br><code>len</code>: uint16_t</td>
+    <td><code>void</code></td>
+    <td>เขียนหลาย byte</td>
+</tr>
+<tr>
+    <td><code>OneWire_ReadBytes(bus, data, len)</code></td>
+    <td><code>bus</code>: OneWire_Bus*<br><code>data</code>: uint8_t*<br><code>len</code>: uint16_t</td>
+    <td><code>void</code></td>
+    <td>อ่านหลาย byte</td>
+</tr>
+<tr>
+    <td><code>OneWire_SkipROM(bus)</code></td>
+    <td><code>bus</code>: OneWire_Bus*</td>
+    <td><code>void</code></td>
+    <td>ข้าม ROM — ใช้ได้กรณีอุปกรณ์ตัวเดียวบนบัส</td>
+</tr>
+<tr>
+    <td><code>OneWire_ReadROM(bus, rom)</code></td>
+    <td><code>bus</code>: OneWire_Bus*<br><code>rom</code>: uint8_t[8]</td>
+    <td><code>bool</code></td>
+    <td>อ่าน ROM — ใช้ได้เมื่อมีอุปกรณ์<strong>ตัวเดียว</strong>เท่านั้น</td>
+</tr>
+<tr>
+    <td><code>OneWire_MatchROM(bus, rom)</code></td>
+    <td><code>bus</code>: OneWire_Bus*<br><code>rom</code>: uint8_t[8]</td>
+    <td><code>void</code></td>
+    <td>เลือกอุปกรณ์ตาม ROM address</td>
+</tr>
+<tr>
+    <td><code>OneWire_Select(bus, rom)</code></td>
+    <td><code>bus</code>: OneWire_Bus*<br><code>rom</code>: uint8_t[8]</td>
+    <td><code>bool</code></td>
+    <td>Reset + MatchROM — เลือกอุปกรณ์ในขั้นตอนเดียว</td>
+</tr>
+<tr>
+    <td><code>OneWire_ResetSearch(bus)</code></td>
+    <td><code>bus</code>: OneWire_Bus*</td>
+    <td><code>void</code></td>
+    <td>รีเซ็ตสถานะ search — เริ่มค้นหาใหม่</td>
+</tr>
+<tr>
+    <td><code>OneWire_Search(bus)</code></td>
+    <td><code>bus</code>: OneWire_Bus*</td>
+    <td><code>bool</code></td>
+    <td>ค้นหา ROM ถัดไป — ใช้ Maxim AN187 algorithm</td>
+</tr>
+<tr>
+    <td><code>OneWire_AlarmSearch(bus)</code></td>
+    <td><code>bus</code>: OneWire_Bus*</td>
+    <td><code>bool</code></td>
+    <td>ค้นหาเฉพาะอุปกรณ์ที่มี alarm active</td>
+</tr>
+<tr>
+    <td><code>OneWire_GetAddress(bus, rom)</code></td>
+    <td><code>bus</code>: OneWire_Bus*<br><code>rom</code>: uint8_t[8]</td>
+    <td><code>void</code></td>
+    <td>คัดลอก ROM address จาก bus state</td>
+</tr>
+<tr>
+    <td><code>OneWire_CRC8(data, len)</code></td>
+    <td><code>data</code>: uint8_t*<br><code>len</code>: uint8_t</td>
+    <td><code>uint8_t</code></td>
+    <td>คำนวณ Dallas CRC8 (x^8 + x^5 + x^4 + 1)</td>
+</tr>
+<tr>
+    <td><code>OneWire_VerifyCRC(data, len)</code></td>
+    <td><code>data</code>: uint8_t*<br><code>len</code>: uint8_t</td>
+    <td><code>bool</code></td>
+    <td>ตรวจสอบ CRC — true = ถูกต้อง</td>
+</tr>
+<tr>
+    <td><code>OneWire_Depower(bus)</code></td>
+    <td><code>bus</code>: OneWire_Bus*</td>
+    <td><code>void</code></td>
+    <td>หยุด parasite power</td>
+</tr>
+<tr>
+    <td><code>OneWire_GetBusByPin(pin)</code></td>
+    <td><code>pin</code>: GPIO pin</td>
+    <td><code>OneWire_Bus*</code> / NULL</td>
+    <td>ค้นหา bus จาก pin — NULL ถ้าไม่พบบัสที่ pin นั้น</td>
+</tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>Search Algorithm — Maxim AN187</h2>
+<p>ROM Search ใช้ binary tree traversal — ค้นหา ROM address ทีละ 1 bit (LSB first) โดยอ่านพร้อมกันจากทุกอุปกรณ์:</p>
+<ol>
+    <li><strong>Read 2 bits:</strong> bit จริง + complement — ถ้าทุกตัวตอบ 0 → bit = 0</li>
+    <li><strong>Conflict detection:</strong> ถ้า complement ต่างจาก bit → มีอุปกรณ์หลายตัว → เลือก branch</li>
+    <li><strong>Write direction:</strong> เขียน 0 หรือ 1 เพื่อเลือก branch — อุปกรณ์ที่ ROM ไม่ตรงจะหยุดตอบ</li>
+    <li><strong>ทำซ้ำ 64 รอบ</strong> จนได้ ROM address ครบ 64 bit</li>
+</ol>
+
+<div class="callout callout-warn">
+    <strong>Interrupt-safe:</strong> Search algorithm ต้องการ timing ที่แม่นยำ — library จะ <strong>ปิด IRQ ชั่วคราว</strong> ในช่วง critical section
+</div>
+</section>
+
+<section>
+<h2>ตัวอย่างโค้ด</h2>
+
+<h3>อ่านอุณหภูมิจาก DS18B20 ตัวเดียว</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+#define ONE_WIRE_PIN PC0
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    OneWire_Bus* bus = OneWire_Init(ONE_WIRE_PIN);
+    if (!bus) while(1);  // bus เต็ม (ไม่ควรเกิด)
+
+    while (1) {
+        uint8_t data[9];
+
+        // DS18B20 — เริ่มแปลงอุณหภูมิ
+        OneWire_Reset(bus);
+        OneWire_SkipROM(bus);
+        OneWire_WriteByte(bus, 0x44);  // Convert T
+
+        Delay_Ms(750);  // รอแปลงเสร็จ (max 750ms)
+
+        // อ่านผล
+        OneWire_Reset(bus);
+        OneWire_SkipROM(bus);
+        OneWire_WriteByte(bus, 0xBE);  // Read Scratchpad
+        OneWire_ReadBytes(bus, data, 9);
+
+        // ตรวจ CRC
+        if (!OneWire_VerifyCRC(data, 9)) continue;
+
+        // แปลงอุณหภูมิ — int16 ใน data[0:1]
+        int16_t temp_raw = (data[1] << 8) | data[0];
+        float temp_c = temp_raw / 16.0f;
+
+        (void)temp_c;
+        Delay_Ms(1000);
+    }
+}</code></pre>
+
+<h3>ค้นหาอุปกรณ์ทั้งหมดบนบัส</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+#define ONE_WIRE_PIN PC0
+uint8_t roms[10][8];  // เก็บ ROM ได้สูงสุด 10 ตัว
+uint8_t device_count = 0;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    OneWire_Bus* bus = OneWire_Init(ONE_WIRE_PIN);
+
+    OneWire_ResetSearch(bus);
+    while (OneWire_Search(bus) && device_count < 10) {
+        OneWire_GetAddress(bus, roms[device_count]);
+        device_count++;
+    }
+
+    // device_count = จำนวนอุปกรณ์ที่พบบนบัส
+    while (1) {
+        Delay_Ms(1000);
+    }
+}</code></pre>
+
+<h3>ตรวจสอบ CRC</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    uint8_t data[] = {0x28, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x00};
+
+    uint8_t crc = OneWire_CRC8(data, 8);
+
+    bool valid = OneWire_VerifyCRC(data, 8);
+
+    (void)crc;
+    (void)valid;
+
+    while (1) { Delay_Ms(1000); }
+}</code></pre>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="arduino.html">SimpleArduino →</a>
+</nav>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

@@ -19,6 +19,17 @@
 <pre class="ascii-circuit">
 PC1─Button─GND (active LOW, ใช้ internal pull-up)
 </pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>GPIO (PC1):</strong> ขาต่อปุ่ม ใช้ internal pull-up ภายใน MCU</li>
+  <li><strong>GND:</strong> อีกขาของปุ่มต่อลงกราวด์</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PC1</strong> ไปขาหนึ่งของปุ่ม</li>
+  <li>ต่ออีกขาของปุ่มไป <strong>GND</strong> — กดแล้วกราวด์</li>
+  <li>กำหนด <code>PIN_MODE_INPUT_PULLUP</code> ในโค้ด</li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
@@ -46,6 +57,16 @@ while(1) { Button_Update(&btn); IWDG_Feed(); }</code></pre>
 <pre class="ascii-circuit">
 PC0-PC3─ROW1-4, PC4-PC7─COL1-4 (pull-up on columns)
 </pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>ROW (PC0–PC3):</strong> ขาส่งสัญญาณสแกนแถว (output)</li>
+  <li><strong>COL (PC4–PC7):</strong> ขารับสัญญาณคอลัมน์ (input pull-up)</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PC0–PC3</strong> ไป <strong>ROW1–ROW4</strong> ของ keypad — ส่งสัญญาณสแกน</li>
+  <li>ต่อ <strong>PC4–PC7</strong> ไป <strong>COL1–COL4</strong> ของ keypad — อ่านค่าปุ่ม</li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
@@ -73,6 +94,18 @@ while(1) {
 <pre class="ascii-circuit">
 PC0─CLK, PC1─DT, PC2─SW (pull-up on all)
 </pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>CLK (PC0):</strong> สัญญาณ quadrature A บอกทิศทางการหมุน</li>
+  <li><strong>DT (PC1):</strong> สัญญาณ quadrature B บอกทิศทางการหมุน</li>
+  <li><strong>SW (PC2):</strong> ปุ่มกดในตัว encoder (Active LOW)</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PC0</strong> ไป <strong>CLK</strong> และ <strong>PC1</strong> ไป <strong>DT</strong> — อ่านทิศทางหมุน</li>
+  <li>ต่อ <strong>PC2</strong> ไป <strong>SW</strong> — อ่านปุ่มกด</li>
+  <li>ใช้ internal pull-up ในโค้ด</li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
@@ -117,6 +150,20 @@ while(1) {
 LCD1602 I2C: PC1─SDA, PC2─SCL
 Buttons: PC3─UP, PC4─DOWN, PC5─ENTER, PC6─BACK (pull-up)
 </pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>SDA (PC1):</strong> สายข้อมูล I2C ไป LCD1602</li>
+  <li><strong>SCL (PC2):</strong> สายนาฬิกา I2C</li>
+  <li><strong>PC3 (UP):</strong> ปุ่มเลื่อนขึ้น</li>
+  <li><strong>PC4 (DOWN):</strong> ปุ่มเลื่อนลง</li>
+  <li><strong>PC5 (ENTER):</strong> ปุ่มยืนยัน</li>
+  <li><strong>PC6 (BACK):</strong> ปุ่มกลับ</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PC1</strong> ไป <strong>SDA</strong> และ <strong>PC2</strong> ไป <strong>SCL</strong> — I2C ไป LCD</li>
+  <li>ต่อ <strong>PC3–PC6</strong> ไปปุ่ม UP, DOWN, ENTER, BACK อีกขาปุ่มไป GND</li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>

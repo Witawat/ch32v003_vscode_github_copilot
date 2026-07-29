@@ -69,6 +69,26 @@ flowchart TD
       </tbody>
     </table>
     <p>⚠️ TMC2209 ใช้ <strong>1-Wire UART</strong> — ต้องมี resistor 1kΩ ต่อระหว่าง TX pin กับ PD5, และ 1kΩ ต่อ PD5 ลง GND — VIO ต่อ 3.3V (logic level) — VMOT 4.75-29V — address 0–3 ตั้งด้วย MS1/MS2 pins</p>
+
+    <h3>รู้จักขา</h3>
+    <ul>
+      <li><strong>STEP:</strong> ขารับพัลส์ — 1 พัลส์ = 1 microstep</li>
+      <li><strong>DIR:</strong> กำหนดทิศทางหมุน</li>
+      <li><strong>EN:</strong> เปิด/ปิด driver — LOW = เปิด</li>
+      <li><strong>TX:</strong> 1-Wire UART — สื่อสารกับ MCU ผ่าน resistor 1kΩ</li>
+      <li><strong>VIO:</strong> จ่ายไฟ logic 3.3V</li>
+      <li><strong>VMOT:</strong> จ่ายไฟมอเตอร์ 4.75–29V</li>
+      <li><strong>GND:</strong> Ground ร่วม</li>
+      <li><strong>A1/A2/B1/B2:</strong> ขาต่อ NEMA17</li>
+    </ul>
+    <h3>วิธีต่อทีละขั้น</h3>
+    <ol>
+      <li>ต่อ <strong>STEP/DIR/EN</strong> ไป <strong>GPIO (PC0–PC2)</strong> — ควบคุมพัลส์และทิศทาง</li>
+      <li>ต่อ <strong>TX</strong> (1-Wire UART) ผ่าน <strong>1kΩ</strong> ไป <strong>PD5</strong> และอีก <strong>1kΩ</strong> ลง <strong>GND</strong> — สื่อสารกับ driver</li>
+      <li>ต่อ <strong>VIO</strong> ไป <strong>3.3V</strong> — จ่ายไฟ logic</li>
+      <li>ต่อ <strong>VMOT</strong> กับ <strong>แหล่งจ่าย 4.75–29V</strong> และ <strong>GND</strong> ไป <strong>GND</strong> — จ่ายไฟมอเตอร์</li>
+      <li>ต่อ <strong>NEMA17</strong> เข้ากับ <strong>A1/A2/B1/B2</strong> — ขดลวดมอเตอร์</li>
+    </ol>
 </section>
 
 <section>

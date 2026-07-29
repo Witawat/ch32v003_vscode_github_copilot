@@ -39,7 +39,30 @@ flowchart TD
     <tr><td>GND</td><td>→</td><td>A0</td><td>-</td><td>ต่อ GND = ตั้งค่า I2C address เป็น 0x40</td></tr>
     <tr><td>GND</td><td>→</td><td>A1</td><td>-</td><td>ต่อ GND = ตั้งค่า I2C address เป็น 0x40</td></tr>
   </tbody>
-</table>
+ </table>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>VCC:</strong> ไฟเลี้ยง 3.3V</li>
+  <li><strong>GND:</strong> กราวด์</li>
+  <li><strong>SDA (PC1):</strong> สายข้อมูล I2C</li>
+  <li><strong>SCL (PC2):</strong> สายนาฬิกา I2C</li>
+  <li><strong>Vin+:</strong> ต่อด้านโหลดของ shunt resistor (ด้าน Load)</li>
+  <li><strong>Vin-:</strong> ต่อด้าน VCC ของ shunt resistor (ด้านแหล่งจ่าย)</li>
+  <li><strong>A0/A1:</strong> เลือก I2C address — GND=0x40</li>
+  <li><strong>pull-up 4.7kΩ:</strong> ต่อระหว่าง SDA→3.3V และ SCL→3.3V (โมดูลส่วนมากมีในตัว)</li>
+</ul>
+
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>VCC</strong> ของ INA219 ไป <strong>3.3V</strong></li>
+  <li>ต่อ <strong>GND</strong> ของ INA219 ไป <strong>GND</strong></li>
+  <li>ต่อ <strong>SDA</strong> ของ INA219 ไป <strong>PC1 (ขา 13)</strong> ของ CH32V003</li>
+  <li>ต่อ <strong>SCL</strong> ของ INA219 ไป <strong>PC2 (ขา 14)</strong> ของ CH32V003</li>
+  <li>ต่อ <strong>Shunt Resistor 0.1Ω</strong> อนุกรมระหว่างแหล่งจ่ายกับโหลด — <strong>Vin+</strong> ต่อด้านโหลด, <strong>Vin-</strong> ต่อด้านแหล่งจ่าย</li>
+  <li>ต่อ <strong>A0</strong> และ <strong>A1</strong> ไป <strong>GND</strong> เพื่อใช้ address 0x40</li>
+  <li>ตรวจสอบว่าโมดูลมี R pull-up 4.7kΩ ในตัวหรือไม่ — ถ้าไม่มี ต่อ R เพิ่มจาก SDA→3.3V และ SCL→3.3V</li>
+</ol>
+
 </section>
 <section><h2>📚 หลักการทำงาน</h2><p><strong>INA219</strong> เป็น Bi-directional Current/Power Monitor แบบ I2C วัดแรงดันตกคร่อม Shunt Resistor แล้วคำนวณกระแสด้วยกฎของโอห์ม <code>I = Vshunt / Rshunt</code> — มี ADC 12-bit ภายใน วัดได้ทั้ง Bus Voltage (0-32V) และ Shunt Voltage (±320mV full-scale)</p><p><strong>Calibration Register</strong> ต้องตั้งค่าให้ถูกต้องตาม Rshunt และ Max Current ที่ใช้ — Lib จะคำนวณ calibration value ให้อัตโนมัติจากค่าที่กำหนด (shunt Ω และ max_amps)</p><p><strong>4 Addresses</strong> เลือกผ่านขา A0/A1 — ต่อ GND หรือ VCC ได้ 4 ค่า: 0x40, 0x41, 0x44, 0x45 — ต่อหลายตัวบน I2C bus เดียวกันได้</p><p><strong>การวัดกำลัง</strong> ใช้ Bus Voltage × Current — INA219 คำนวณ power register ให้ในตัว แต่ Lib อ่าน Bus Voltage จริง (ไม่รวม shunt drop) แล้วคูณกระแสให้ถูกต้อง</p></section>
 <section><h2>💻 เขียน Code ทีละขั้น</h2>

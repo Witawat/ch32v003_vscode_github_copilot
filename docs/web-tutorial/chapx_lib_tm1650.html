@@ -51,7 +51,22 @@ flowchart TD
         <tr><td>3.3V</td><td>→</td><td>R 4.7kΩ pull-up</td><td>SDA/SCL</td><td>I2C bus — จำเป็นต่อ I2C</td></tr>
       </tbody>
     </table>
-    <p>TM1650 เป็น I2C variant ของ TM1637 — address 0x24-0x27 — ต้องมี pull-up 4.7kΩ บน SDA/SCL</p></section>
+    <p>TM1650 เป็น I2C variant ของ TM1637 — address 0x24-0x27 — ต้องมี pull-up 4.7kΩ บน SDA/SCL</p>
+    <h3>รู้จักขา</h3>
+    <ul>
+      <li><strong>VCC:</strong> ไฟเลี้ยง 3.3V</li>
+      <li><strong>GND:</strong> ต่อกราวด์ร่วมกับ MCU</li>
+      <li><strong>SDA:</strong> ขาข้อมูล I2C ต่อกับ PC1</li>
+      <li><strong>SCL:</strong> ขาสัญญาณนาฬิกา I2C ต่อกับ PC2</li>
+    </ul>
+    <h3>วิธีต่อทีละขั้น</h3>
+    <ol>
+      <li>ต่อ <strong>PC1</strong> ไป <strong>SDA</strong> — ข้อมูล I2C (ต้องมี pull-up 4.7kΩ)</li>
+      <li>ต่อ <strong>PC2</strong> ไป <strong>SCL</strong> — นาฬิกา I2C (ต้องมี pull-up 4.7kΩ)</li>
+      <li>ต่อ <strong>3.3V</strong> ไป <strong>VCC</strong> — จ่ายไฟ</li>
+      <li>ต่อ <strong>GND</strong> ไป <strong>GND</strong> — กราวด์ร่วม</li>
+    </ol>
+</section>
 <section><h2>📚 หลักการทำงาน</h2>
 <p><strong>TM1650</strong> เป็น I2C variant ของ TM1637 — ใช้ I2C มาตรฐาน — TM1650_Handle instance — address 0x24-0x27</p></section>
 <section><h2>💻 เขียน Code ทีละขั้น</h2>

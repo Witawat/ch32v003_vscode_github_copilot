@@ -33,6 +33,22 @@ flowchart TD
         <tr><td>GND</td><td>→</td><td>PZEM-004T</td><td>GND</td><td>Ground ร่วม</td></tr>
       </tbody>
     </table>
+
+    <h3>รู้จักขา</h3>
+    <ul>
+      <li><strong>RX:</strong> ขารับคำสั่ง Modbus จาก MCU (TX)</li>
+      <li><strong>TX:</strong> ขาส่งข้อมูล Modbus ไป MCU (RX)</li>
+      <li><strong>VCC:</strong> จ่ายไฟ 5V</li>
+      <li><strong>GND:</strong> Ground ร่วม</li>
+      <li><strong>CT:</strong> Clamp ammeter — หนีบสาย L เส้นเดียว</li>
+    </ul>
+    <h3>วิธีต่อทีละขั้น</h3>
+    <ol>
+      <li>ต่อ <strong>RX</strong> ของ PZEM ไป <strong>PD5 (TX)</strong> ของ MCU — ส่ง Modbus request</li>
+      <li>ต่อ <strong>TX</strong> ของ PZEM ไป <strong>PD6 (RX)</strong> ของ MCU — รับข้อมูล</li>
+      <li>ต่อ <strong>VCC</strong> ไป <strong>5V</strong> และ <strong>GND</strong> ไป <strong>GND</strong> — จ่ายไฟ</li>
+      <li>หนีบ <strong>CT Clamp</strong> รอบ <strong>สาย L เส้นเดียว</strong> — วัดกระแสโหลด</li>
+    </ol>
 </section>
 <section><h2>📚 หลักการทำงาน</h2><p><strong>PZEM-004T</strong> เป็น AC Energy Meter สื่อสารผ่าน USART ด้วย Modbus-RTU — PZEM004T_ReadAll() อ่านทุกค่าพร้อมกันในครั้งเดียว</p></section>
 <section><h2>💻 เขียน Code ทีละขั้น</h2>

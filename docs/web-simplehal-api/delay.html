@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SimpleDelay — การหน่วงเวลา — SimpleHAL API Reference</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+</nav>
+
+<h1>SimpleDelay — การหน่วงเวลา</h1>
+<span class="level level-beginner">ระดับเริ่มต้น</span>
+
+<div class="callout callout-note">
+    <strong>ไลบรารี:</strong> <code>SimpleHAL.h</code> — SimpleDelay ใช้ <strong>SysTick timer</strong> เป็นฐานเวลา 1ms เริ่มต้นอัตโนมัติผ่าน constructor แบบ singleton
+</div>
+
+<section>
+<h2>ภาพรวม</h2>
+<p>SimpleDelay เป็นระบบหน่วงเวลาที่ทำงานบน <strong>SysTick interrupt ทุก 1ms</strong> — แม่นยำและไม่เปลือง hardware timer ตัวอื่น รองรับทั้งแบบ <strong>blocking</strong> (หยุดรอ) และ <strong>non-blocking</strong> (ทำงานต่อไปได้)</p>
+
+<ul>
+    <li><strong>Blocking:</strong> <code>Delay_Ms()</code>, <code>Delay_Us()</code> — หยุด CPU จนครบเวลา</li>
+    <li><strong>Non-blocking:</strong> <code>Start_Timer()</code> + <code>Is_Timer_Expired()</code> — ทำงานอื่นต่อได้ระหว่างรอ</li>
+    <li><strong>Timestamp:</strong> <code>Get_CurrentMs()</code>, <code>Get_CurrentUs()</code> — จับเวลาผ่านไป</li>
+    <li><strong>Timer_t:</strong> struct สำหรับสร้าง software timer หลายตัวพร้อมกัน</li>
+</ul>
+
+<div class="callout callout-warn">
+    <strong>สำคัญ:</strong> ต้องเรียก <code>Timer_Init()</code> หลัง <code>SystemCoreClockUpdate()</code> ใน <code>main()</code> — ถ้าลืม <code>Delay_Ms()</code> และฟังก์ชันทั้งหมดจะ<strong>คืนค่า 0 ทันที</strong> ไม่มีการหน่วงเวลา
+</div>
+</section>
+
+<section>
+<h2>ตารางอ้างอิงฟังก์ชัน</h2>
+<table>
+<thead><tr><th>ฟังก์ชัน</th><th>พารามิเตอร์</th><th>คืนค่า</th><th>คำอธิบาย</th><th>ใช้ร่วมกับ</th></tr></thead>
+<tbody>
+<tr>
+    <td><code>Timer_Init()</code></td>
+    <td>—</td>
+    <td><code>void</code></td>
+    <td>เริ่มต้น SysTick interrupt 1ms</td>
+    <td><strong>ต้องเรียกใน <code>main()</code> ก่อนใช้ทุกฟังก์ชัน</strong></td>
+</tr>
+<tr>
+    <td><code>Delay_Ms(n)</code></td>
+    <td><code>n</code>: มิลลิวินาที (uint32_t)</td>
+    <td><code>void</code></td>
+    <td>หน่วงเวลาแบบ blocking หน่วย ms</td>
+    <td>ใช้ใน main loop เท่านั้น, ห้ามใช้ใน ISR</td>
+</tr>
+<tr>
+    <td><code>Delay_Us(n)</code></td>
+    <td><code>n</code>: ไมโครวินาที (uint32_t)</td>
+    <td><code>void</code></td>
+    <td>หน่วงเวลาแบบ blocking หน่วย µs</td>
+    <td>ใช้สำหรับ pulse สั้นๆ (เช่น ultrasonic trigger 10µs)</td>
+</tr>
+<tr>
+    <td><code>Get_CurrentMs()</code></td>
+    <td>—</td>
+    <td><code>uint32_t</code></td>
+    <td>คืนค่าเวลาที่ผ่านไปตั้งแต่เริ่ม หน่วย ms</td>
+    <td>ใช้กับ <code>IS_TIMEOUT</code> หรือ <code>ELAPSED_TIME</code></td>
+</tr>
+<tr>
+    <td><code>Get_CurrentUs()</code></td>
+    <td>—</td>
+    <td><code>uint32_t</code></td>
+    <td>คืนค่าเวลาที่ผ่านไปตั้งแต่เริ่ม หน่วย µs</td>
+    <td>ใช้สำหรับวัดช่วงเวลาสั้น</td>
+</tr>
+<tr>
+    <td><code>Get_TickMicros()</code></td>
+    <td>—</td>
+    <td><code>uint32_t</code></td>
+    <td>คืนค่า µs ภายใน tick ปัจจุบัน (0-999)</td>
+    <td>รวมกับ <code>Get_CurrentMs()</code> เพื่อความละเอียดสูง</td>
+</tr>
+<tr>
+    <td><code>Start_Timer(timer, ms, repeat)</code></td>
+    <td><code>timer</code>: <code>Timer_t*</code><br><code>ms</code>: มิลลิวินาที<br><code>repeat</code>: 0=ครั้งเดียว, 1=วนซ้ำ</td>
+    <td><code>void</code></td>
+    <td>เริ่ม non-blocking timer</td>
+    <td>ใช้กับ <code>Is_Timer_Expired()</code> ใน main loop</td>
+</tr>
+<tr>
+    <td><code>Is_Timer_Expired(timer)</code></td>
+    <td><code>timer</code>: <code>Timer_t*</code></td>
+    <td><code>uint8_t</code></td>
+    <td>ตรวจสอบ timer หมดเวลา — 1=หมด, 0=ยัง</td>
+    <td>ใช้ร่วมกับ <code>Start_Timer</code>, เรียกใน main loop บ่อยๆ</td>
+</tr>
+<tr>
+    <td><code>Reset_Timer(timer, repeat)</code></td>
+    <td><code>timer</code>: <code>Timer_t*</code><br><code>repeat</code>: 0/1</td>
+    <td><code>void</code></td>
+    <td>รีเซ็ต timer เริ่มนับใหม่</td>
+    <td>ใช้กับ timer ที่ start แล้ว</td>
+</tr>
+<tr>
+    <td><code>Stop_Timer(timer)</code></td>
+    <td><code>timer</code>: <code>Timer_t*</code></td>
+    <td><code>void</code></td>
+    <td>หยุด timer</td>
+    <td><code>Is_Timer_Expired</code> จะคืน 0 หลังจากเรียก</td>
+</tr>
+<tr>
+    <td><code>ELAPSED_TIME(start, current)</code></td>
+    <td><code>start</code>: เวลาเริ่มต้น (ms)<br><code>current</code>: เวลาปัจจุบัน (ms)</td>
+    <td><code>uint32_t</code> (macro)</td>
+    <td>คำนวณเวลาที่ผ่านไป ปลอดภัย overflow</td>
+    <td>ใช้กับ <code>Get_CurrentMs()</code> แทนการลบตรง</td>
+</tr>
+<tr>
+    <td><code>IS_TIMEOUT(start, timeout)</code></td>
+    <td><code>start</code>: เวลาเริ่มต้น (ms)<br><code>timeout</code>: ระยะหมดเวลา (ms)</td>
+    <td><code>uint8_t</code> (macro)</td>
+    <td>ตรวจสอบ timeout ปลอดภัย overflow — 1=หมด, 0=ยัง</td>
+    <td>ทางเลือกแทน <code>Timer_t</code> สำหรับเคสง่ายๆ</td>
+</tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>โครงสร้าง Timer_t</h2>
+<p><code>Timer_t</code> เป็น struct สำหรับสร้าง software timer ที่ทำงานแบบ non-blocking — ใช้ timer หลายตัวพร้อมกันได้ไม่มีข้อจำกัด (ใช้ RAM ประมาณ 16 ไบต์ต่อ timer)</p>
+
+<pre><code class="language-c">typedef struct {
+    uint32_t start_time;  // เวลาเริ่มนับ (ms)
+    uint32_t duration;    // ระยะเวลาที่ตั้ง (ms)
+    uint8_t  active;      // 1=กำลังนับ, 0=หยุด
+    uint8_t  repeat;      // 1=วนซ้ำอัตโนมัติ, 0=ครั้งเดียว
+} Timer_t;</code></pre>
+
+<table>
+<thead><tr><th>ฟิลด์</th><th>ชนิด</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>start_time</code></td><td><code>uint32_t</code></td><td>timestamp เริ่มนับ — ตั้งโดย <code>Start_Timer()</code></td></tr>
+<tr><td><code>duration</code></td><td><code>uint32_t</code></td><td>ระยะเวลาเป็น ms — กำหนดตอน <code>Start_Timer(timer, ms, repeat)</code></td></tr>
+<tr><td><code>active</code></td><td><code>uint8_t</code></td><td>สถานะ — <code>Start_Timer</code> ตั้งเป็น 1, <code>Stop_Timer</code> ตั้งเป็น 0</td></tr>
+<tr><td><code>repeat</code></td><td><code>uint8_t</code></td><td>1 = รีเซ็ตอัตโนมัติเมื่อหมดเวลา, 0 = หยุดหลังหมด</td></tr>
+</tbody>
+</table>
+
+<pre><code class="language-c">Timer_t ledTimer;
+Timer_t btnTimer;
+
+Start_Timer(&ledTimer, 500, 1);   // repeat ทุก 500ms
+Start_Timer(&btnTimer, 50, 0);    // ครั้งเดียว 50ms (debounce)</code></pre>
+</section>
+
+<section>
+<h2>Blocking vs Non-Blocking</h2>
+<table>
+<thead><tr><th>ลักษณะ</th><th>Blocking (<code>Delay_Ms</code>)</th><th>Non-blocking (<code>Timer_t</code>)</th></tr></thead>
+<tbody>
+<tr><td>CPU ระหว่างรอ</td><td>หยุดนิ่ง — ทำอะไรไม่ได้</td><td>ทำงานอย่างอื่นต่อได้</td></tr>
+<tr><td>ใช้หลายงานพร้อมกัน</td><td>ไม่ได้ — ต้องทำทีละงาน</td><td>ได้ — ใช้หลาย Timer_t</td></tr>
+<tr><td>ความซับซ้อนของโค้ด</td><td>ง่าย — 2 บรรทัด</td><td>ปานกลาง — ต้องเช็ค <code>Is_Timer_Expired</code></td></tr>
+<tr><td>ใช้ใน ISR</td><td><strong>ห้ามเด็ดขาด</strong></td><td>ใช้ได้ (แต่เช็ค status เท่านั้น)</td></tr>
+<tr><td>ความแม่นยำ</td><td>±1ms</td><td>ขึ้นกับความถี่เรียกเช็ค</td></tr>
+</tbody>
+</table>
+
+<div class="callout callout-good">
+    <strong>แนะนำ:</strong> สำหรับ LED กระพริบตัวเดียว <code>Delay_Ms</code> ก็พอ — สำหรับโปรแกรมที่ต้องทำหลายอย่างพร้อมกัน (LED + ปุ่ม + UART) ใช้ <code>Timer_t</code> non-blocking ดีกว่า
+</div>
+</section>
+
+<section>
+<h2>ตัวอย่างโค้ด</h2>
+
+<h3>Blocking Blink (LED กระพริบ 1Hz)</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();                        // ★ ต้องเรียกก่อน Delay
+    pinMode(PC0, PIN_MODE_OUTPUT);
+
+    while (1) {
+        digitalWrite(PC0, HIGH);
+        Delay_Ms(500);                   // CPU หยุด 500ms
+        digitalWrite(PC0, LOW);
+        Delay_Ms(500);
+    }
+}</code></pre>
+
+<h3>Non-Blocking Blink (LED กระพริบแบบไม่ง่วง)</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+Timer_t ledTimer;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    pinMode(PC0, PIN_MODE_OUTPUT);
+    Start_Timer(&ledTimer, 500, 1);      // repeat ทุก 500ms
+
+    while (1) {
+        if (Is_Timer_Expired(&ledTimer)) {
+            digitalToggle(PC0);           // เปลี่ยนสถานะเมื่อ timer หมด
+        }
+        // ทำงานอย่างอื่นที่นี่ได้ — CPU ไม่ได้หยุด!
+    }
+}</code></pre>
+
+<h3>Multi-Timer (LED 2 ความถี่ + Debounce ปุ่ม)</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+Timer_t ledFast, ledSlow, btnDebounce;
+uint8_t btnPressed = 0;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    pinMode(PC0, PIN_MODE_OUTPUT);          // LED เร็ว
+    pinMode(PC1, PIN_MODE_OUTPUT);          // LED ช้า
+    pinMode(PC2, PIN_MODE_INPUT_PULLUP);    // ปุ่ม
+
+    Start_Timer(&ledFast, 100, 1);
+    Start_Timer(&ledSlow, 750, 1);
+
+    while (1) {
+        if (Is_Timer_Expired(&ledFast))  digitalToggle(PC0);
+        if (Is_Timer_Expired(&ledSlow))  digitalToggle(PC1);
+
+        // อ่านปุ่มพร้อม debounce 50ms
+        if (digitalRead(PC2) == LOW && !btnPressed) {
+            Start_Timer(&btnDebounce, 50, 0);
+            btnPressed = 1;
+        }
+        if (btnPressed && Is_Timer_Expired(&btnDebounce)) {
+            if (digitalRead(PC2) == LOW) {
+                // ปุ่มกดจริง — ทำบางอย่าง
+            }
+            btnPressed = 0;
+        }
+    }
+}</code></pre>
+
+<h3>วัดเวลาที่ผ่านไป (Elapsed Time)</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    pinMode(PC0, PIN_MODE_OUTPUT);
+
+    uint32_t startTime = Get_CurrentMs();
+
+    while (1) {
+        uint32_t now = Get_CurrentMs();
+        uint32_t elapsed = ELAPSED_TIME(startTime, now);  // ปลอดภัย overflow
+
+        if (elapsed >= 3000) {
+            digitalWrite(PC0, HIGH);   // ทำบางอย่างหลังผ่านไป 3s
+            startTime = now;
+        } else {
+            digitalWrite(PC0, LOW);
+        }
+    }
+}</code></pre>
+</section>
+
+<section>
+<h2>ปัญหาที่พบบ่อย</h2>
+<table>
+<thead><tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr></thead>
+<tbody>
+<tr>
+    <td><code>Delay_Ms</code> ไม่หน่วง (คืน 0 ทันที)</td>
+    <td>ลืมเรียก <code>Timer_Init()</code> หลัง <code>SystemCoreClockUpdate()</code></td>
+    <td>เพิ่ม <code>Timer_Init()</code> ใน <code>main()</code> ก่อนใช้ delay ทุกตัว</td>
+</tr>
+<tr>
+    <td>MCU ค้าง/ไม่ตอบสนอง</td>
+    <td>เรียก <code>Delay_Ms</code> หรือ <code>Delay_Us</code> ใน callback interrupt (ISR)</td>
+    <td>ห้ามใช้ delay แบบ blocking ใน ISR — ใช้ flag + main loop แทน</td>
+</tr>
+<tr>
+    <td>Timer นับผิดหลังจาก 49.7 วัน</td>
+    <td><code>Get_CurrentMs()</code> overflow ที่ 2^32 ms (~49.7 วัน)</td>
+    <td>ใช้ macro <code>ELAPSED_TIME</code> หรือ <code>IS_TIMEOUT</code> — จัดการ overflow ให้อัตโนมัติ</td>
+</tr>
+<tr>
+    <td><code>Get_CurrentUs()</code> overflow เร็ว</td>
+    <td> overflow ทุก 71.6 นาที (2^32 µs)</td>
+    <td>ใช้ <code>Get_CurrentMs()</code> แทนสำหรับงานนาน — ใช้ <code>Get_CurrentUs()</code> เฉพาะงานสั้นๆ (&lt; 1 ชม.)</td>
+</tr>
+<tr>
+    <td><code>Is_Timer_Expired</code> ไม่เคยเป็น 1</td>
+    <td>ลืม <code>Start_Timer(&timer, ms, repeat)</code> หรือ timer ถูก <code>Stop_Timer</code> แล้ว</td>
+    <td>ตรวจสอบว่ามี <code>Start_Timer</code> และไม่ได้เรียก <code>Stop_Timer</code> ก่อนหน้า</td>
+</tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>ข้อควรรู้เพิ่มเติม</h2>
+
+<h3>SysTick กับ Hardware Timer</h3>
+<ul>
+    <li><strong>SysTick</strong> เป็น hardware timer ภายใน Cortex-M core — ไม่ใช่ timer ทั่วไปของ CH32V003</li>
+    <li>ใช้งาน SysTick <strong>ไม่เปลือง</strong> TIM1/TIM2 — เหลือไว้ให้ PWM, input capture, encoder</li>
+    <li>ความละเอียด 1ms (1kHz) — เข้ากันกับ HAL ทั่วไป</li>
+</ul>
+
+<h3>ลำดับการเริ่มต้นที่ถูกต้อง</h3>
+<pre><code class="language-c">int main(void) {
+    SystemCoreClockUpdate();   // 1. อัปเดต SystemCoreClock
+    Timer_Init();              // 2. เริ่ม SysTick — ต้องหลัง SystemCoreClockUpdate
+    // ... โค้ดอื่น  ...
+    pinMode(PC0, PIN_MODE_OUTPUT);
+    // Delay_Ms, Get_CurrentMs ใช้งานได้แล้ว
+}</code></pre>
+
+<div class="callout callout-err">
+    <strong>ผิด:</strong> สลับลำดับ — <code>Timer_Init()</code> ก่อน <code>SystemCoreClockUpdate()</code> จะได้ความถี่ผิด หน่วงเวลาไม่ตรง
+</div>
+
+<h3>Overflow และวิธีรับมือ</h3>
+<p>การลบ timestamp ตรงๆ <code>now - start</code> <strong>จะผิด</strong> เมื่อ overflow — ใช้ macro ด้านล่างแทน:</p>
+
+<pre><code class="language-c">// ผิด — พังเมื่อ overflow
+uint32_t elapsed = Get_CurrentMs() - startTime;
+
+// ถูก — ปลอดภัย overflow
+uint32_t elapsed = ELAPSED_TIME(startTime, Get_CurrentMs());
+
+// ตรวจ timeout
+if (IS_TIMEOUT(startTime, 1000)) {
+    // ผ่านไป 1 วินาที
+}</code></pre>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+</nav>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

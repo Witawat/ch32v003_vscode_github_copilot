@@ -60,6 +60,18 @@ flowchart TD
       </tbody>
     </table>
     <p>⚠️ <strong>สำคัญ:</strong> Servo กินกระแสสูงสุด 500mA+ — ต้องใช้ไฟ 5V แยก ไม่ใช้ไฟ 3.3V จาก MCU ตรง ๆ! อย่าลืมต่อ GND ร่วมกันระหว่าง MCU กับ External Supply</p>
+    <h3>รู้จักขา</h3>
+    <ul>
+      <li><strong>Signal (ส้ม):</strong> ขาควบคุม PWM 50Hz ต่อกับ PD2</li>
+      <li><strong>VCC (แดง):</strong> ไฟเลี้ยง 5V ใช้ไฟแยก (⚠️ ห้ามใช้ 3.3V)</li>
+      <li><strong>GND (น้ำตาล):</strong> ต่อกราวด์ร่วมกับ MCU และไฟแยก</li>
+    </ul>
+    <h3>วิธีต่อทีละขั้น</h3>
+    <ol>
+      <li>ต่อ <strong>PD2</strong> ไป <strong>Signal (ส้ม)</strong> — PWM 50Hz ควบคุมมุม servo</li>
+      <li>ต่อ <strong>5V ภายนอก</strong> ไป <strong>VCC (แดง)</strong> — ⚠️ ต้องใช้ไฟแยก! Servo กินกระแสสูงสุด 500mA+</li>
+      <li>ต่อ <strong>GND</strong> ของ MCU และของไฟแยก ไป <strong>GND (น้ำตาล)</strong> — กราวด์ร่วมทุกแหล่งจ่าย</li>
+    </ol>
 </section>
 
 <section>

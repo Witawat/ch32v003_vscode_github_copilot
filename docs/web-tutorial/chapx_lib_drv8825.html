@@ -71,6 +71,24 @@ flowchart TD
       </tbody>
     </table>
     <p>⚠️ VMOT 8.2–45V — ต่อ capacitor 100μF ขนาน VMOT-GND ใกล้ driver — ปรับ Current Limit ด้วย potentiometer บนบอร์ด — DRV8825 ร้อนเร็วที่กระแสสูง ควรติด heatsink</p>
+
+    <h3>รู้จักขา</h3>
+    <ul>
+      <li><strong>STEP:</strong> ขารับพัลส์ — 1 พัลส์ = 1 microstep</li>
+      <li><strong>DIR:</strong> กำหนดทิศทางหมุน — HIGH หรือ LOW</li>
+      <li><strong>EN:</strong> เปิด/ปิด driver — LOW = เปิดใช้งาน</li>
+      <li><strong>M0/M1/M2:</strong> เลือกโหมด microstep (1/1 ถึง 1/32)</li>
+      <li><strong>VMOT:</strong> จ่ายไฟให้มอเตอร์ 8.2–45V</li>
+      <li><strong>GND:</strong> Ground ร่วมกับ MCU</li>
+    </ul>
+    <h3>วิธีต่อทีละขั้น</h3>
+    <ol>
+      <li>ต่อ <strong>STEP/DIR/EN</strong> ของ DRV8825 ไป <strong>GPIO (PC0–PC2)</strong> — สั่งพัลส์และควบคุมทิศทาง</li>
+      <li>ต่อ <strong>M0/M1/M2</strong> ไป <strong>GPIO (PC3–PC5)</strong> — เลือก microstep ratio</li>
+      <li>ต่อ <strong>VMOT</strong> กับ <strong>แหล่งจ่าย 8.2–45V</strong> และ <strong>GND</strong> ต่อ <strong>GND</strong> — จ่ายไฟให้มอเตอร์</li>
+      <li>ต่อ <strong>NEMA17</strong> เข้ากับ <strong>ขา A1/A2/B1/B2</strong> — ขดลวดมอเตอร์</li>
+      <li>ต่อ <strong>100µF capacitor</strong> ขนาน VMOT-GND — กรองสัญญาณรบกวน</li>
+    </ol>
 </section>
 
 <section>

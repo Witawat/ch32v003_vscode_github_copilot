@@ -62,6 +62,27 @@ flowchart TD
     <tr><td>PC2</td><td>→</td><td>OLED 128x64</td><td>SCL</td><td>I2C clock</td></tr>
   </tbody>
 </table>
+
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>PC0 (BTN1):</strong> ปุ่มเปลี่ยนโหมด Sweep / Center / Manual / Step</li>
+  <li><strong>PC1 (BTN2):</strong> ปุ่มยืนยันหรือเลื่อนทีละขั้นในโหมด Step</li>
+  <li><strong>PA1 (POT):</strong> อ่านค่าจาก potentiometer ใช้อะนาล็อกปรับมุม manual</li>
+  <li><strong>PD2 (Signal):</strong> ส่งสัญญาณ PWM 50Hz ไปควบคุม servo</li>
+  <li><strong>SDA (PC1):</strong> สายข้อมูล I2C ไปยัง OLED</li>
+  <li><strong>SCL (PC2):</strong> สายนาฬิกา I2C ไปยัง OLED</li>
+</ul>
+
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PC0</strong> ไปขาหนึ่งปุ่ม BTN1 อีกขาไป <strong>GND</strong> — เลือกโหมด</li>
+  <li>ต่อ <strong>PC1</strong> ไปขาหนึ่งปุ่ม BTN2 อีกขาไป <strong>GND</strong> — ยืนยันหรือ step</li>
+  <li>ต่อ <strong>PA1</strong> ไปขากลางของ potentiometer — อ่านค่าอะนาล็อก</li>
+  <li>ต่อ <strong>PD2</strong> ไป <strong>Signal ของ Servo</strong> — ส่ง PWM 50Hz</li>
+  <li>ต่อ <strong>PC1</strong> ไป <strong>SDA ของ OLED</strong> และ <strong>PC2</strong> ไป <strong>SCL ของ OLED</strong> — แสดงผล</li>
+  <li>ต่อ <strong>GND</strong> ร่วมทุกอุปกรณ์</li>
+</ol>
+
     <p>Station สำหรับทดสอบและ calibrate servo — มี 4 โหมด: Sweep อัตโนมัติ, Center หาจุดกึ่งกลาง, Manual ปรับด้วย Pot, Step ทีละ 10° — แสดงผลผ่าน OLED จอ 128x64</p>
 </section>
 

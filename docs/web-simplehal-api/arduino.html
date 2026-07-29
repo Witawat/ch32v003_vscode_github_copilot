@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SimpleArduino — Arduino API Compatibility | SimpleHAL API Reference</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+</head>
+<body>
+
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+</nav>
+
+<h1>SimpleArduino — Arduino API Compatibility</h1>
+<span class="level level-beginner">ระดับเริ่มต้น</span>
+
+<div class="callout callout-note">
+    <strong>ไลบรารี:</strong> <code>SimpleHAL.h</code> — ใช้ <strong>ไม่ต้อง include ไฟล์ย่อยเอง</strong> ทุกฟังก์ชัน Arduino compatibility รวมอยู่ใน SimpleHAL.h แล้ว
+</div>
+
+<section>
+<h2>ภาพรวม</h2>
+<p>SimpleArduino เป็นเลเยอร์เลียนแบบ Arduino API — ทำให้ผู้ที่คุ้นเคยกับ Arduino สามารถย้ายมาใช้ CH32V003 ได้ทันที โดยใช้ชื่อฟังก์ชันและรูปแบบที่คุ้นเคย</p>
+<p>ฟังก์ชันทั้งหมดเป็น <strong>alias macro</strong> หรือ <strong>wrapper function</strong> — ไม่มี overhead เพิ่ม เพราะถูกแปลงเป็นฟังก์ชัน SimpleHAL โดยตรงตอนคอมไพล์</p>
+</section>
+
+<section>
+<h2>Time Aliases</h2>
+<table>
+<thead><tr><th>Arduino Name</th><th>SimpleHAL Equivalent</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>millis()</code></td><td><code>Get_CurrentMs()</code></td><td>จำนวน ms ตั้งแต่เริ่ม</td></tr>
+<tr><td><code>micros()</code></td><td><code>Get_CurrentUs()</code></td><td>จำนวน µs ตั้งแต่เริ่ม</td></tr>
+<tr><td><code>delay(ms)</code></td><td><code>Delay_Ms(ms)</code></td><td>หน่วงเวลา ms</td></tr>
+<tr><td><code>delayMicroseconds(us)</code></td><td><code>Delay_Us(us)</code></td><td>หน่วงเวลา µs</td></tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>Interrupt Aliases</h2>
+<table>
+<thead><tr><th>Arduino Name</th><th>SimpleHAL Equivalent</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>interrupts()</code></td><td><code>__enable_irq()</code></td><td>เปิด global interrupt</td></tr>
+<tr><td><code>noInterrupts()</code></td><td><code>__disable_irq()</code></td><td>ปิด global interrupt</td></tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>ตารางอ้างอิงฟังก์ชัน</h2>
+<table>
+<thead>
+<tr><th>ฟังก์ชัน</th><th>พารามิเตอร์</th><th>คืนค่า</th><th>คำอธิบาย</th></tr>
+</thead>
+<tbody>
+<tr>
+    <td><code>digitalPinToInterrupt(pin)</code></td>
+    <td><code>pin</code>: GPIO pin</td>
+    <td><code>uint8_t</code></td>
+    <td>แปลง pin เป็น EXTI line number — ใช้กับ attachInterrupt</td>
+</tr>
+<tr>
+    <td><code>randomSeed(seed)</code></td>
+    <td><code>seed</code>: uint32_t</td>
+    <td><code>void</code></td>
+    <td>ตั้ง seed สำหรับ PRNG</td>
+</tr>
+<tr>
+    <td><code>_randomMax(max)</code></td>
+    <td><code>max</code>: long</td>
+    <td><code>long</code></td>
+    <td>สุ่ม [0, max-1] — ⚠️ ไม่ใช่ <code>random()</code> เพราะชื่อชนกับ stdlib</td>
+</tr>
+<tr>
+    <td><code>_randomRange(min, max)</code></td>
+    <td><code>min</code>: long<br><code>max</code>: long</td>
+    <td><code>long</code></td>
+    <td>สุ่ม [min, max-1]</td>
+</tr>
+<tr>
+    <td><code>yield()</code></td>
+    <td>—</td>
+    <td><code>void</code></td>
+    <td>Cooperative multitasking — feed IWDG ถ้า active</td>
+</tr>
+<tr>
+    <td><code>arduino_SetIWDGActive()</code></td>
+    <td>—</td>
+    <td><code>void</code></td>
+    <td>เปิด auto-feed IWDG ผ่าน yield() — ถูกเรียกโดย SimpleIWDG</td>
+</tr>
+<tr>
+    <td><code>dtostrf(val, width, precision, buf)</code></td>
+    <td><code>val</code>: double<br><code>width</code>: int<br><code>precision</code>: int<br><code>buf</code>: char*</td>
+    <td><code>char*</code></td>
+    <td>แปลง float → string (ไม่ต้องใช้ FPU)</td>
+</tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>Optional USART Extensions</h2>
+<p>ฟังก์ชันกลุ่มนี้เปิดใช้งานโดยการ <code>#define</code> ก่อน include:</p>
+
+<h3>USART_Println Series — ต้องการ <code>#define ENABLE_USART_PRINTLN</code></h3>
+<table>
+<thead><tr><th>ฟังก์ชัน</th><th>พารามิเตอร์</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>USART_Println(str)</code></td><td><code>str</code>: const char*</td><td>พิมพ์ string + ขึ้นบรรทัดใหม่</td></tr>
+<tr><td><code>USART_PrintlnNum(num)</code></td><td><code>num</code>: int32_t</td><td>พิมพ์ตัวเลข + ขึ้นบรรทัดใหม่</td></tr>
+<tr><td><code>USART_PrintlnHex(num, upper)</code></td><td><code>num</code>: uint32_t<br><code>upper</code>: uppercase? (1/0)</td><td>พิมพ์เลขฐาน 16 + ขึ้นบรรทัดใหม่</td></tr>
+</tbody>
+</table>
+
+<h3>USART_PrintFloat — ต้องการ <code>#define ENABLE_USART_PRINTFLOAT</code></h3>
+<table>
+<thead><tr><th>ฟังก์ชัน</th><th>พารามิเตอร์</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>USART_PrintFloat(val, dec)</code></td><td><code>val</code>: float<br><code>dec</code>: ตำแหน่งทศนิยม</td><td>พิมพ์ float ผ่าน USART</td></tr>
+<tr><td><code>USART_PrintlnFloat(val, dec)</code></td><td><code>val</code>: float<br><code>dec</code>: ตำแหน่งทศนิยม</td><td>พิมพ์ float + ขึ้นบรรทัดใหม่</td></tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>ทำไม _randomMax ไม่ใช่ random()</h2>
+<p><code>stdlib.h</code> (ไลบรารีมาตรฐาน C) มีฟังก์ชัน <code>long random(void)</code> อยู่แล้ว — ชื่อ <code>random()</code> จึงซ้ำกัน SimpleHAL เลือกใช้ <code>_randomMax()</code> และ <code>_randomRange()</code> เพื่อหลีกเลี่ยงการชน</p>
+
+<div class="callout callout-note">
+    <strong>ต้องการชื่อ <code>random()</code> แบบ Arduino:</strong> <code>#define ENABLE_ARDUINO_RANDOM_MACRO</code> ก่อน <code>#include &lt;SimpleHAL.h&gt;</code> — จะเปิด macro overload ชื่อ <code>random</code>
+</div>
+</section>
+
+<section>
+<h2>dtostrf — Float to String (ไม่ต้องใช้ FPU)</h2>
+<p><code>dtostrf()</code> แปลงเลขทศนิยมเป็น string โดยไม่ต้องใช้ FPU — เหมาะกับ CH32V003 ที่ไม่มี FPU hardware</p>
+<pre><code class="language-c">char buf[12];
+dtostrf(3.14159, 8, 3, buf);  // "   3.142"
+// width=8, precision=3 → มีช่องว่างด้านหน้า</code></pre>
+
+<div class="callout callout-warn">
+    <strong>Buffer size:</strong> เผื่อ buffer อย่างน้อย <code>width + 2</code> byte — สำหรับ null terminator และอาจมีเครื่องหมายลบ
+</div>
+</section>
+
+<section>
+<h2>yield() และ IWDG Integration</h2>
+<p><code>yield()</code> เป็นจุดแทรกสำหรับ cooperative multitasking — ถูกเรียกในฟังก์ชันที่รอนาน เช่น <code>Delay_Ms()</code>, <code>Delay_Us()</code>, ลูปต่างๆ</p>
+<p>เมื่อเปิด IWDG ด้วย <code>IWDG_SimpleInit()</code> — library จะเรียก <code>arduino_SetIWDGActive()</code> อัตโนมัติ ทำให้ yield() feed watchdog ให้ทุกครั้ง</p>
+
+<pre><code class="language-c">IWDG_SimpleInit(2000);   // timeout 2s
+// arduino_SetIWDGActive() ถูกเรียกอัตโนมัติ
+
+while (1) {
+    // ทำงานหนัก...
+    Delay_Ms(500);       // yield() → feed IWDG → ป้องกันรีเซ็ต
+}</code></pre>
+
+<div class="callout callout-warn">
+    <strong>Custom yield:</strong> สามารถ override <code>yield()</code> ได้ — ประกาศฟังก์ชัน <code>void yield(void)</code> เองเพื่อเพิ่มงานที่ต้องการทำระหว่างรอ
+</div>
+</section>
+
+<section>
+<h2>ตัวอย่างโค้ด</h2>
+
+<h3>Arduino-Style Blink</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    // ใช้ชื่อฟังก์ชันแบบ Arduino ได้ทันที
+    pinMode(PC0, OUTPUT);
+
+    while (1) {
+        digitalWrite(PC0, HIGH);
+        delay(500);
+        digitalWrite(PC0, LOW);
+        delay(500);
+    }
+}</code></pre>
+
+<h3>Random Number</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    randomSeed(analogRead(PC1));  // ใช้ ADC noise เป็น seed
+
+    pinMode(PC0, PIN_MODE_OUTPUT);
+
+    while (1) {
+        long r = _randomRange(100, 500);  // สุ่ม [100, 499]
+        digitalWrite(PC0, HIGH);
+        delay(r);
+        digitalWrite(PC0, LOW);
+        delay(200);
+    }
+}</code></pre>
+
+<h3>dtostrf — พิมพ์ Float ผ่าน USART</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#define ENABLE_USART_PRINTLN
+#define ENABLE_USART_PRINTFLOAT
+#include &lt;SimpleHAL.h&gt;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    USART_Printf_Init(115200);
+
+    float temperature = 25.75f;
+    char buf[12];
+
+    dtostrf(temperature, 6, 2, buf);  // " 25.75"
+    USART_Println(buf);
+
+    // หรือใช้ฟังก์ชันเฉพาะ
+    USART_PrintlnFloat(temperature, 2);  // "25.75"
+
+    while (1) { Delay_Ms(1000); }
+}</code></pre>
+
+<h3>yield() — Custom Cooperative Task</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+volatile uint8_t task_flag = 0;
+
+void OnTimer(void) {
+    task_flag = 1;
+}
+
+// Override yield — ทำงานเบื้องหลังระหว่าง delay
+void yield(void) {
+    if (task_flag) {
+        task_flag = 0;
+        digitalToggle(PC1);  // กระพริบ LED อีกตัวระหว่างรอ
+    }
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    pinMode(PC0, PIN_MODE_OUTPUT);
+    pinMode(PC1, PIN_MODE_OUTPUT);
+
+    // ตั้ง Timer interrupt สำหรับ task_flag
+    // ... (ดูโมดูล TIM)
+
+    while (1) {
+        digitalWrite(PC0, HIGH);
+        delay(1000);
+        digitalWrite(PC0, LOW);
+        delay(1000);
+        // ระหว่าง 2 วินาทีนี้ yield() ทำงาน → PC1 กระพริบ
+    }
+}</code></pre>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+</nav>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

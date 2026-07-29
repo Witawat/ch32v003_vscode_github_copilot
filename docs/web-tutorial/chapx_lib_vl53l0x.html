@@ -55,7 +55,28 @@ flowchart TD
         <tr><td>GND</td><td>→</td><td>GND</td><td>-</td><td>กราวด์ร่วม</td></tr>
         <tr><td>PC0</td><td>→</td><td>XSHUT</td><td>-</td><td>optional — ใช้เปลี่ยน I2C addr สำหรับ multi-sensor; HIGH=enable</td></tr>
       </tbody>
-    </table>
+     </table>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>VCC:</strong> ไฟเลี้ยง 3.3V</li>
+  <li><strong>GND:</strong> กราวด์</li>
+  <li><strong>SDA (PC1):</strong> สายข้อมูล I2C</li>
+  <li><strong>SCL (PC2):</strong> สายนาฬิกา I2C</li>
+  <li><strong>XSHUT (PC0):</strong> ขาเปิด/ปิดเซนเซอร์ — HIGH=enable, ใช้เปลี่ยน address สำหรับ multi-sensor</li>
+  <li><strong>pull-up 4.7kΩ:</strong> ต่อระหว่าง SDA→3.3V และ SCL→3.3V (โมดูลส่วนมากมีในตัว)</li>
+</ul>
+
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>VCC</strong> ของ VL53L0X ไป <strong>3.3V</strong></li>
+  <li>ต่อ <strong>GND</strong> ของ VL53L0X ไป <strong>GND</strong></li>
+  <li>ต่อ <strong>SDA</strong> ของ VL53L0X ไป <strong>PC1 (ขา 13)</strong> ของ CH32V003</li>
+  <li>ต่อ <strong>SCL</strong> ของ VL53L0X ไป <strong>PC2 (ขา 14)</strong> ของ CH32V003</li>
+  <li>ต่อ <strong>XSHUT</strong> ไป <strong>3.3V</strong> เพื่อเปิดเซนเซอร์ (HIGH=enable) — I2C address 0x29</li>
+  <li>(optional) ถ้าใช้หลายตัว ต่อ <strong>XSHUT</strong> แต่ละตัวไป <strong>GPIO</strong> ของ MCU เพื่อเปลี่ยน address</li>
+  <li>ตรวจสอบว่าโมดูลมี R pull-up 4.7kΩ ในตัวหรือไม่ — ถ้าไม่มี ต่อ R เพิ่มจาก SDA→3.3V และ SCL→3.3V</li>
+</ol>
+
     <p>PC1─SDA, PC2─SCL — I2C address 0x29 (default), XSHUT ใช้สลับ address ตอน init สำหรับ multi-sensor</p>
 </section>
 

@@ -64,6 +64,20 @@ flowchart TD
       </tbody>
     </table>
     <p>ULN2003 เป็น Darlington array ขับกระแสสูง — ต่อ MCU 4 GPIO เข้ากับ IN1–IN4 — ใช้ไฟ 5V เลี้ยงมอเตอร์ (ห้ามใช้ 3.3V) — 28BYJ-48 มี gear ratio 1:64, stride angle 5.625°, 2048 steps/rev (full-step)</p>
+
+    <h3>รู้จักขา</h3>
+    <ul>
+      <li><strong>IN1–IN4:</strong> ขาควบคุม线圈 4 เฟสของ ULN2003</li>
+      <li><strong>VCC (ULN2003):</strong> จ่ายไฟ 5V ให้ driver และมอเตอร์</li>
+      <li><strong>GND:</strong> Ground ร่วม</li>
+      <li><strong>OUT1–OUT4:</strong> ขาต่อขดลวดของ 28BYJ-48</li>
+    </ul>
+    <h3>วิธีต่อทีละขั้น</h3>
+    <ol>
+      <li>ต่อ <strong>IN1–IN4</strong> ของ ULN2003 ไป <strong>GPIO (PC0–PC3)</strong> — ส่ง step sequence</li>
+      <li>ต่อ <strong>VCC</strong> ของ ULN2003 ไป <strong>5V</strong> และ <strong>GND</strong> ไป <strong>GND</strong> — จ่ายไฟ</li>
+      <li>เสียบ <strong>28BYJ-48</strong> เข้ากับ <strong>ขา OUT1–OUT4</strong> — ต่อตรงขั้วต่อ 5-pin</li>
+    </ol>
 </section>
 
 <section>

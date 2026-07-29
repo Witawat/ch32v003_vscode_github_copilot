@@ -91,6 +91,21 @@ flowchart TD
       </tbody>
     </table>
 
+    <h3>รู้จักขา</h3>
+    <ul>
+      <li><strong>PC0 (DQ):</strong> ขาข้อมูล 1-Wire — ต่อกับ DQ ของ DS18B20</li>
+      <li><strong>R 4.7kΩ:</strong> ตัวต้านทาน Pull-up — ต่อจาก DQ ไป 3.3V (จำเป็น!)</li>
+      <li><strong>VDD (DS18B20):</strong> ขาไฟเลี้ยง — ต่อ 3.3V</li>
+    </ul>
+
+    <h3>วิธีต่อทีละขั้น</h3>
+    <ol>
+      <li>ต่อ <strong>R 4.7kΩ</strong> จาก <strong>PC0</strong> ไป <strong>3.3V</strong> — pull-up สำหรับ 1-Wire</li>
+      <li>ต่อ <strong>PC0</strong> ไป <strong>DQ (ขา 2) ของ DS18B20</strong> — สายข้อมูล</li>
+      <li>ต่อ <strong>3.3V</strong> ไป <strong>VDD (ขา 3) ของ DS18B20</strong> — จ่ายไฟ</li>
+      <li>ต่อ <strong>GND</strong> ไป <strong>GND (ขา 1) ของ DS18B20</strong> — กราวด์</li>
+    </ol>
+
     <p><strong>Pull-up 4.7kΩ สำคัญมาก!</strong> — 1-Wire เป็น open-drain — ต้องมี pull-up เพื่อให้บัสกลับเป็น HIGH — ถ้าไม่มี pull-up บัสจะเป็น LOW ตลอด</p>
 </section>
 

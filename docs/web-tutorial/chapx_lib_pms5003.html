@@ -49,6 +49,20 @@ flowchart TD
         <tr><td>GND</td><td>↔</td><td>PMS5003</td><td>GND (pin2)</td><td>กราวด์ร่วม</td></tr>
       </tbody>
     </table>
+    <h3>รู้จักขา</h3>
+    <ul>
+      <li><strong>VCC (pin1):</strong> ไฟเลี้ยง 5V</li>
+      <li><strong>GND (pin2):</strong> กราวด์</li>
+      <li><strong>RX (pin5):</strong> รับข้อมูลจาก MCU — ต่อขา PD5 (TX)</li>
+      <li><strong>TX (pin4):</strong> ส่งข้อมูลไป MCU — ต่อขา PD6 (RX)</li>
+    </ul>
+    <h3>วิธีต่อทีละขั้น</h3>
+    <ol>
+      <li>ต่อ <strong>VCC (pin1)</strong> PMS5003 ไป <strong>5V</strong> ของ MCU</li>
+      <li>ต่อ <strong>GND (pin2)</strong> PMS5003 ไป <strong>GND</strong> ของ MCU</li>
+      <li>ต่อ <strong>RX (pin5)</strong> PMS5003 ไปขา <strong>PD5 (TX)</strong> ของ MCU</li>
+      <li>ต่อ <strong>TX (pin4)</strong> PMS5003 ไปขา <strong>PD6 (RX)</strong> ของ MCU</li>
+    </ol>
 </section>
 
 <section><h2>📚 หลักการทำงาน</h2>

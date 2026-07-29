@@ -68,6 +68,28 @@ flowchart TD
         <tr><td>GND</td><td>↔</td><td>RC522</td><td>GND</td><td>กราวด์ร่วม</td></tr>
       </tbody>
     </table>
+    <h3>รู้จักขา</h3>
+    <ul>
+      <li><strong>VCC:</strong> ไฟเลี้ยง 3.3V เท่านั้น — ห้าม 5V!</li>
+      <li><strong>GND:</strong> กราวด์</li>
+      <li><strong>SCK:</strong> สัญญาณนาฬิกา SPI — ต่อขา PC5</li>
+      <li><strong>MISO:</strong> ข้อมูลจาก RC522 ส่งเข้า MCU — ต่อขา PC6</li>
+      <li><strong>MOSI:</strong> ข้อมูลจาก MCU เข้า RC522 — ต่อขา PC7</li>
+      <li><strong>SDA (CS):</strong> เลือกชิป (Chip Select) — ต่อขา PC3</li>
+      <li><strong>RST:</strong> รีเซ็ต — ต่อขา PC4</li>
+      <li><strong>IRQ:</strong> สัญญาณขัดจังหวะ (ไม่ต้องต่อก็ได้) — ต่อขา PC0</li>
+    </ul>
+    <h3>วิธีต่อทีละขั้น</h3>
+    <ol>
+      <li>ต่อ <strong>VCC</strong> RC522 ไป <strong>3.3V</strong> ของ MCU</li>
+      <li>ต่อ <strong>GND</strong> RC522 ไป <strong>GND</strong> ของ MCU</li>
+      <li>ต่อ <strong>SCK</strong> RC522 ไปขา <strong>PC5</strong> ของ MCU</li>
+      <li>ต่อ <strong>MISO</strong> RC522 ไปขา <strong>PC6</strong> ของ MCU</li>
+      <li>ต่อ <strong>MOSI</strong> RC522 ไปขา <strong>PC7</strong> ของ MCU</li>
+      <li>ต่อ <strong>SDA (CS)</strong> RC522 ไปขา <strong>PC3</strong> ของ MCU</li>
+      <li>ต่อ <strong>RST</strong> RC522 ไปขา <strong>PC4</strong> ของ MCU</li>
+      <li>(ไม่บังคับ) ต่อ <strong>IRQ</strong> RC522 ไปขา <strong>PC0</strong> ของ MCU</li>
+    </ol>
     <p>RC522 เป็น RFID reader/writer 13.56MHz — อ่านบัตร MIFARE Classic 1K/4K, ISO14443A, รองรับการเข้ารหัส (authentication) ด้วย key A/B, ต้องทำ self-test เพื่อตรวจสอบการเชื่อมต่อ SPI</p>
 </section>
 

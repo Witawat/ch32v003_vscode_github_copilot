@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>โมดูล 9: SimpleTIM + SimpleTIM_Ext — SimpleHAL API Reference</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="pwm.html">← โมดูลก่อนหน้า</a>
+    <a href="dma.html">โมดูลถัดไป →</a>
+</nav>
+
+<h1>โมดูล 9: SimpleTIM + SimpleTIM_Ext — Timer, Stopwatch, Countdown</h1>
+<span class="level level-intermediate">ระดับกลาง</span>
+
+<!-- ====== SECTION A: SimpleTIM ====== -->
+
+<h2>Part A: SimpleTIM</h2>
+
+<section>
+    <h2>ภาพรวม</h2>
+    <p>SimpleTIM ใช้ TIM1 และ TIM2 เป็น hardware timer ตั้งเวลา — คำนวณ prescaler และ period อัตโนมัติตามความถี่ที่ต้องการ รองรับ interrupt callback สำหรับงาน periodic</p>
+    <ul>
+        <li>คำนวณ prescaler + period อัตโนมัติจากความถี่ที่ต้องการ</li>
+        <li>รองรับ interrupt callback — เหมาะสำหรับงานที่ต้องทำเป็นจังหวะ</li>
+        <li>Timer Ownership Guard ป้องกันการแย่ง timer กับ SimplePWM</li>
+        <li>ฟังก์ชันอ่าน/เขียน counter และ period โดยตรง</li>
+    </ul>
+</section>
+
+<section>
+    <h2>Timer Ownership Guard</h2>
+    <p>SimpleTIM ใช้ระบบเดียวกับ SimplePWM เพื่อป้องกันการแย่ง TIM1/TIM2</p>
+    <table>
+        <tr><th>Owner State</th><th>ความหมาย</th></tr>
+        <tr><td><code>TIM_OWNER_NONE</code></td><td>ยังไม่ถูกใช้ — ใครก็ได้ใช้ก่อน</td></tr>
+        <tr><td><code>TIM_OWNER_PWM</code></td><td>ถูกใช้โดย SimplePWM</td></tr>
+        <tr><td><code>TIM_OWNER_TIMER</code></td><td>ถูกใช้โดย SimpleTIM</td></tr>
+        <tr><td><code>TIM_OWNER_TIMEXT</code></td><td>ถูกใช้โดย SimpleTIM_Ext</td></tr>
+    </table>
+
+    <div class="callout callout-err">
+        <strong>สำคัญ:</strong> ถ้า timer ถูกครอบครองแล้ว — ฟังก์ชันจะ return ทันทีโดยไม่ทำงาน Guard ป้องกันการเขียน register ทับกัน
+    </div>
+</section>
+
+<section>
+    <h2>Timer Resource Map</h2>
+    <table>
+        <tr><th>Timer</th><th>ใช้โดย</th><th>ข้อจำกัด</th></tr>
+        <tr><td><strong>TIM1</strong></td><td>PWM หรือ SimpleTIM</td><td>ใช้กับ PWM หรือ TIM — เลือกอย่างใดอย่างหนึ่ง</td></tr>
+        <tr><td><strong>TIM2</strong></td><td>PWM หรือ SimpleTIM หรือ SimpleTIM_Ext</td><td>ใช้กับ PWM หรือ TIM หรือ TIM_Ext — เลือกอย่างใดอย่างหนึ่ง</td></tr>
+    </table>
+
+    <div class="callout callout-warn">
+        <strong>TIM2 ขัดแย้งกับ PWM2 และ TIM_Ext:</strong> ถ้าใช้ TIM2 เป็น SimpleTIM — จะใช้ PWM2_CH1~CH4 หรือ Stopwatch/Countdown ร่วมกันไม่ได้
+    </div>
+</section>
+
+<section>
+    <h2>ตารางฟังก์ชัน</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คืนค่า</th><th>คำอธิบาย</th></tr>
+        <tr><td><code>TIM_SimpleInit(timer, freq_hz)</code></td><td>void</td><td>เริ่ม timer ที่ความถี่ที่กำหนด — ต้องเรียก <code>TIM_Start()</code> ต่อ</td></tr>
+        <tr><td><code>TIM_Start(timer)</code></td><td>void</td><td>เริ่มนับ</td></tr>
+        <tr><td><code>TIM_Stop(timer)</code></td><td>void</td><td>หยุดนับ</td></tr>
+        <tr><td><code>TIM_SetFrequency(timer, freq_hz)</code></td><td>void</td><td>เปลี่ยนความถี่ (คำนวณ prescaler + period ใหม่)</td></tr>
+        <tr><td><code>Simple_TIM_GetCounter(timer)</code></td><td>uint16_t</td><td>อ่านค่า counter ปัจจุบัน</td></tr>
+        <tr><td><code>Simple_TIM_SetCounter(timer, value)</code></td><td>void</td><td>ตั้งค่า counter</td></tr>
+        <tr><td><code>TIM_GetPeriod(timer)</code></td><td>uint16_t</td><td>อ่านค่า period</td></tr>
+        <tr><td><code>TIM_AttachInterrupt(timer, callback)</code></td><td>void</td><td>ติด interrupt callback — callback ห้ามใช้ delay</td></tr>
+        <tr><td><code>TIM_DetachInterrupt(timer)</code></td><td>void</td><td>ยกเลิก interrupt</td></tr>
+        <tr><td><code>TIM_AdvancedInit(timer, psc, period, mode)</code></td><td>void</td><td>ตั้งค่า timer เองทั้งหมด (ผู้เชี่ยวชาญ)</td></tr>
+        <tr><td><code>TIM_SetPrescaler(timer, psc)</code></td><td>void</td><td>ตั้งค่า prescaler เอง</td></tr>
+        <tr><td><code>TIM_GetPrescaler(timer)</code></td><td>uint16_t</td><td>อ่านค่า prescaler</td></tr>
+        <tr><td><code>TIM_SetMode(timer, mode)</code></td><td>void</td><td>ตั้งค่า timer mode</td></tr>
+        <tr><td><code>TIM_GenerateUpdate(timer)</code></td><td>void</td><td>สร้าง update event (บังคับ reload ค่า)</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>ตัวอย่างโค้ด — งาน Periodic</h2>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+void onTimerTick(void)
+{
+    // callback — ห้ามใช้ Delay ภายในนี้
+    digitalToggle(PC0);  // LED toggle ทุก 1ms
+}
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    pinMode(PC0, PIN_MODE_OUTPUT);
+
+    TIM_SimpleInit(TIM1, 1000);           // 1kHz = 1ms
+    TIM_AttachInterrupt(TIM1, onTimerTick);
+    TIM_Start(TIM1);
+
+    while(1)
+    {
+        // main loop อิสระ — ไม่ถูกบล็อก
+    }
+}</code></pre>
+
+    <div class="callout callout-err">
+        <strong>Callback ห้ามใช้ Delay:</strong> ภายใน interrupt callback — ห้ามเรียก <code>Delay_Ms()</code>, <code>Delay_Us()</code>, <code>printf()</code> — จะทำให้โปรแกรมค้าง
+    </div>
+</section>
+
+<!-- ====== SECTION B: SimpleTIM_Ext ====== -->
+
+<h2>Part B: SimpleTIM_Ext — Stopwatch + Countdown</h2>
+
+<section>
+    <h2>ภาพรวม</h2>
+    <p>SimpleTIM_Ext ใช้ TIM2 ที่ 1kHz เป็นฐานนับเวลา — รองรับทั้ง Stopwatch (นับขึ้น) และ Countdown (นับถอยหลัง) พร้อม format เวลาแบบ HH:MM:SS</p>
+    <ul>
+        <li>ใช้ TIM2 ที่ 1kHz — ขัดแย้งกับ PWM2 และ PWM2_CH1~CH4</li>
+        <li>รองรับเวลา format HHMMSS, MMSS, SS</li>
+        <li>โหมดแสดงผล: NORMALIZED (60 วิ = 1 นาที) และ RAW (ค่าตรง)</li>
+        <li>Countdown มี alarm callback เมื่อหมดเวลา</li>
+    </ul>
+
+    <div class="callout callout-warn">
+        <strong>TIM2 ขัดแย้ง:</strong> SimpleTIM_Ext ใช้ TIM2 — ไม่สามารถใช้ร่วมกับ PWM2 (PWM2_CH1~CH4) หรือ MOTIM2 ได้
+    </div>
+</section>
+
+<section>
+    <h2>รูปแบบเวลาและโหมดแสดงผล</h2>
+    <h3>Time Formats</h3>
+    <table>
+        <tr><th>Format</th><th>รูปแบบ</th><th>ตัวอย่าง</th></tr>
+        <tr><td><code>HHMMSS</code></td><td>ชั่วโมง:นาที:วินาที</td><td>01:23:45</td></tr>
+        <tr><td><code>MMSS</code></td><td>นาที:วินาที</td><td>83:45</td></tr>
+        <tr><td><code>SS</code></td><td>วินาที</td><td>5025</td></tr>
+    </table>
+
+    <h3>Display Modes</h3>
+    <table>
+        <tr><th>Mode</th><th>ความหมาย</th></tr>
+        <tr><td><code>DISPLAY_NORMALIZED</code></td><td>60 วินาที = 1 นาที, 60 นาที = 1 ชั่วโมง</td></tr>
+        <tr><td><code>DISPLAY_RAW</code></td><td>แสดงค่าตรง — นาทีอาจเกิน 60, วินาทีอาจเกิน 60</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>ขนาด Buffer สำหรับ String</h2>
+    <table>
+        <tr><th>Format</th><th>ขนาด Buffer</th></tr>
+        <tr><td><code>SS</code></td><td>12 ตัวอักษร</td></tr>
+        <tr><td><code>MMSS</code></td><td>16 ตัวอักษร</td></tr>
+        <tr><td><code>HHMMSS</code></td><td>20 ตัวอักษร</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>ตารางฟังก์ชัน Stopwatch</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คืนค่า</th><th>คำอธิบาย</th></tr>
+        <tr><td><code>Stopwatch_Init()</code></td><td>void</td><td>เริ่มต้น stopwatch</td></tr>
+        <tr><td><code>Stopwatch_Start()</code></td><td>void</td><td>เริ่มนับ</td></tr>
+        <tr><td><code>Stopwatch_Stop()</code></td><td>void</td><td>หยุดนับ</td></tr>
+        <tr><td><code>Stopwatch_Reset()</code></td><td>void</td><td>รีเซ็ตเวลาเป็น 0</td></tr>
+        <tr><td><code>Stopwatch_GetTime(Time_t*)</code></td><td>void</td><td>อ่านเวลาใส่ struct</td></tr>
+        <tr><td><code>Stopwatch_GetTimeString(buf, format, mode)</code></td><td>void</td><td>อ่านเวลาเป็น string</td></tr>
+        <tr><td><code>Stopwatch_GetTotalSeconds()</code></td><td>uint32_t</td><td>อ่านจำนวนวินาทีทั้งหมด</td></tr>
+        <tr><td><code>Stopwatch_GetMilliseconds()</code></td><td>uint32_t</td><td>อ่านจำนวนมิลลิวินาทีทั้งหมด</td></tr>
+        <tr><td><code>Stopwatch_IsRunning()</code></td><td>uint8_t</td><td>1 = กำลังนับ, 0 = หยุด</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>ตารางฟังก์ชัน Countdown</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คืนค่า</th><th>คำอธิบาย</th></tr>
+        <tr><td><code>Countdown_Init(h, m, s)</code></td><td>void</td><td>ตั้งเวลานับถอยหลัง (ชั่วโมง, นาที, วินาที)</td></tr>
+        <tr><td><code>Countdown_InitFromSeconds(s)</code></td><td>void</td><td>ตั้งเวลาจากจำนวนวินาที</td></tr>
+        <tr><td><code>Countdown_Start()</code></td><td>void</td><td>เริ่มนับถอยหลัง</td></tr>
+        <tr><td><code>Countdown_Stop()</code></td><td>void</td><td>หยุดนับ</td></tr>
+        <tr><td><code>Countdown_Reset()</code></td><td>void</td><td>รีเซ็ตกลับเป็นเวลาเริ่มต้น</td></tr>
+        <tr><td><code>Countdown_GetTime(Time_t*)</code></td><td>void</td><td>อ่านเวลาที่เหลือใส่ struct</td></tr>
+        <tr><td><code>Countdown_GetTimeString(buf, format, mode)</code></td><td>void</td><td>อ่านเวลาที่เหลือเป็น string</td></tr>
+        <tr><td><code>Countdown_IsFinished()</code></td><td>uint8_t</td><td>1 = หมดเวลาแล้ว</td></tr>
+        <tr><td><code>Countdown_SetAlarmCallback(callback)</code></td><td>void</td><td>ตั้ง callback เมื่อหมดเวลา</td></tr>
+        <tr><td><code>Countdown_GetRemainingSeconds()</code></td><td>uint32_t</td><td>อ่านวินาทีที่เหลือ</td></tr>
+        <tr><td><code>Countdown_IsRunning()</code></td><td>uint8_t</td><td>1 = กำลังนับถอยหลัง</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>ฟังก์ชัน Utility</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คืนค่า</th><th>คำอธิบาย</th></tr>
+        <tr><td><code>Time_ToString(Time_t, buf, format, mode)</code></td><td>void</td><td>แปลง struct เวลาเป็น string</td></tr>
+        <tr><td><code>Time_FromSeconds(seconds, Time_t*)</code></td><td>void</td><td>แปลงวินาทีเป็น struct</td></tr>
+        <tr><td><code>Time_ToSeconds(Time_t)</code></td><td>uint32_t</td><td>แปลง struct เป็นวินาที</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>ตัวอย่างโค้ด</h2>
+
+    <h3>Stopwatch</h3>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    USART_Printf_Init(USART1, BAUD_115200);
+
+    Stopwatch_Init();
+    Stopwatch_Start();
+
+    Delay_Ms(5000);  // หน่วง 5 วิ
+
+    uint32_t elapsed = Stopwatch_GetTotalSeconds();
+    printf("Elapsed: %lu seconds\r\n", elapsed);
+
+    char buf[16];
+    Stopwatch_GetTimeString(buf, MMSS, DISPLAY_NORMALIZED);
+    printf("Time: %s\r\n", buf);
+
+    while(1);
+}</code></pre>
+
+    <h3>Countdown with Alarm</h3>
+    <pre><code class="language-c">void onAlarm(void)
+{
+    // callback — ห้ามใช้ delay
+    printf("Time's up!\r\n");
+}
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    USART_Printf_Init(USART1, BAUD_115200);
+
+    Countdown_Init(0, 0, 10);  // 10 วินาที
+    Countdown_SetAlarmCallback(onAlarm);
+    Countdown_Start();
+
+    while(!Countdown_IsFinished())
+    {
+        char buf[12];
+        Countdown_GetTimeString(buf, SS, DISPLAY_NORMALIZED);
+        printf("Remaining: %s\r\n", buf);
+        Delay_Ms(1000);
+    }
+
+    printf("Done!\r\n");
+    while(1);
+}</code></pre>
+
+    <h3>อ่านเวลาแบบ RAW</h3>
+    <pre><code class="language-c">Stopwatch_Init();
+Stopwatch_Start();
+
+Delay_Ms(125000);  // 125 วิ = 2 นาที 5 วิ
+
+// NORMALIZED: "02:05"
+// RAW:         "02:05" (ค่าเท่ากันในกรณีนี้)
+char buf[16];
+Stopwatch_GetTimeString(buf, MMSS, DISPLAY_NORMALIZED);
+printf("Normalized: %s\r\n", buf);
+
+Stopwatch_GetTimeString(buf, MMSS, DISPLAY_RAW);
+printf("Raw: %s\r\n", buf);</code></pre>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="pwm.html">← โมดูลก่อนหน้า</a>
+    <a href="dma.html">โมดูลถัดไป →</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:false,theme:'base'});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

@@ -56,6 +56,22 @@ flowchart TD
       </tbody>
     </table>
 
+    <h3>รู้จักขา</h3>
+    <ul>
+      <li><strong>PD2 (PWM1_CH1):</strong> ขา PWM — ใช้กับ LED fade หรือ Servo signal</li>
+      <li><strong>VCC (Servo):</strong> ไฟเลี้ยง 5V แยก — ห้ามใช้ไฟ 3.3V จาก MCU</li>
+      <li><strong>GND:</strong> กราวด์ร่วมระหว่าง MCU, LED, Servo</li>
+    </ul>
+
+    <h3>วิธีต่อทีละขั้น</h3>
+    <ol>
+      <li>ต่อ <strong>PD2</strong> ไป <strong>R 220Ω → LED ขาบวก</strong> — สำหรับ LED fade</li>
+      <li>ต่อ <strong>LED ขาลบ</strong> ไป <strong>GND</strong></li>
+      <li>หรือต่อ <strong>PD2</strong> ไป <strong>สายสัญญาณ (สีส้ม) ของ Servo SG90</strong> — แทน LED</li>
+      <li>ต่อ <strong>ไฟ 5V ภายนอก</strong> ไป <strong>VCC (สีแดง) ของ Servo</strong> — ไฟแยก</li>
+      <li>ต่อ <strong>GND (สีน้ำตาล) ของ Servo</strong> ไป <strong>GND ของ MCU</strong> — กราวด์ร่วม</li>
+    </ol>
+
     <p><strong>วงจร LED:</strong> R 220Ω จำกัดกระแส (PWM ทำให้ LED สว่างน้อยลงเฉลี่ย แต่วูบที่ความถี่สูงจนตามองไม่เห็น)<br>
     <strong>วงจร Servo:</strong> สายสัญญาณจาก PD2, <strong>ไฟ 5V ต้องจ่ายแยก!</strong> — CH32V003 จ่าย 3.3V ไม่พอสำหรับ Servo — GND ต้องต่อรวมกัน</p>
     <p><strong>SOP-8:</strong> PWM pins ที่ใช้ได้: PA1 (PWM1_CH2), PC4 (PWM1_CH4) — 2 channels เท่านั้น</p>

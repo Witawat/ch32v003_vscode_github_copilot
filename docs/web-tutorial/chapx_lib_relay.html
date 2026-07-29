@@ -62,6 +62,20 @@ flowchart TD
     ⚡ ห้ามจับขณะต่อ AC! ใช้ความระมัดระวังสูงสุด
     </pre>
     <p><strong>⚡ อันตรายถึงชีวิต!</strong> ห้ามสัมผัสขั้ว Relay ขณะต่อกับไฟ AC 220V — ตรวจสอบให้แน่ใจว่าถอดปลั๊กก่อนแก้ไขวงจร — ต่อสายดินให้เรียบร้อย — ผู้เริ่มต้นควรใช้ Relay กับโหลด DC 12V ก่อน</p>
+    <h3>รู้จักขา</h3>
+    <ul>
+      <li><strong>IN:</strong> ขาควบคุม ต่อกับ PC0 — Active LOW (LOW = เปิด Relay)</li>
+      <li><strong>VCC:</strong> ไฟเลี้ยง 5V</li>
+      <li><strong>GND:</strong> ต่อกราวด์ร่วมกับ MCU</li>
+      <li><strong>COM / NO / NC:</strong> ขั้วต่อโหลด — COM กับ NO = ปกติเปิด, COM กับ NC = ปกติปิด</li>
+    </ul>
+    <h3>วิธีต่อทีละขั้น</h3>
+    <ol>
+      <li>ต่อ <strong>PC0</strong> ไป <strong>IN ของ Relay Module</strong> — ควบคุมเปิด/ปิด (LOW = ON)</li>
+      <li>ต่อ <strong>5V</strong> ไป <strong>VCC</strong> — จ่ายไฟให้รีเลย์</li>
+      <li>ต่อ <strong>GND</strong> ไป <strong>GND</strong> — กราวด์ร่วม</li>
+      <li><strong>ต่อโหลด:</strong> COM → ไฟเลี้ยง, NO → อุปกรณ์ — ⚡ ระวังไฟดูดถ้าต่อ AC 220V!</li>
+    </ol>
 </section>
 
 <section>

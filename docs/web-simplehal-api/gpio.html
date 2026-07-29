@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SimpleGPIO — Digital I/O — SimpleHAL API Reference</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+</nav>
+
+<h1>SimpleGPIO — Digital I/O</h1>
+<span class="level level-beginner">ระดับเริ่มต้น</span>
+
+<div class="callout callout-note">
+    <strong>ไลบรารี:</strong> <code>SimpleHAL.h</code> — ใช้ <strong>ไม่ต้อง include ไฟล์ย่อยเอง</strong> ทุกฟังก์ชัน GPIO รวมอยู่ใน SimpleHAL.h แล้ว
+</div>
+
+<section class="flowchart">
+    <h2>ผังการทำงาน SimpleGPIO</h2>
+    <pre class="mermaid">
+flowchart LR
+    PM["pinMode()"] --> OUT["Output"]
+    PM --> IN["Input"]
+    PM --> INT["Interrupt"]
+    OUT --> DW["digitalWrite()"]
+    OUT --> TG["digitalToggle()"]
+    OUT --> AW["analogWrite()"]
+    IN --> DR["digitalRead()"]
+    IN --> AR["analogRead()"]
+    INT --> AI["attachInterrupt()"]
+    INT --> DI["detachInterrupt()"]
+    </pre>
+</section>
+
+<section>
+<h2>รายชื่อ Pin ที่ใช้งานได้</h2>
+<table>
+<thead><tr><th>พอร์ท</th><th>Pin</th><th>ฟังก์ชันพิเศษ</th><th>หมายเหตุ</th></tr></thead>
+<tbody>
+<tr><td>PA</td><td>PA1, PA2</td><td>ADC, PWM</td><td>TSSOP20/SOP16/QFN20 เท่านั้น</td></tr>
+<tr><td>PC</td><td>PC0, PC1, PC2, PC3, PC4, PC5, PC6, PC7</td><td>ADC (PC1-PC7), PWM</td><td>ครบทุกแพ็กเกจ</td></tr>
+<tr><td>PD</td><td>PD0, PD1, PD2, PD3, PD4, PD5, PD6, PD7</td><td>ADC (PD1-PD7), PWM</td><td>PD0/PD1 = SWIO ใช้ร่วมกับ debugger; SOP8 <strong>ไม่มี PD ทั้งหมด</strong></td></tr>
+</tbody>
+</table>
+
+<div class="callout callout-warn">
+    <strong>ข้อจำกัด SOP8:</strong> PD0-PD7 <strong>ไม่มี</strong> ในแพ็กเกจ SOP8 (8 ขา) — ใช้ได้เฉพาะ PC0-PC7 เท่านั้น SOP8 มีเพียง 6 pin I/O (PC0-PC5), PC6/PC7 ซ้อนกับ NRST/MCLR
+</div>
+</section>
+
+<section>
+<h2>โหมด Pin (Pin Modes)</h2>
+<table>
+<thead><tr><th>ค่าคงที่</th><th>คำอธิบาย</th><th>ใช้เมื่อ</th></tr></thead>
+<tbody>
+<tr><td><code>PIN_MODE_INPUT</code></td><td>Input floating</td><td>อ่านสัญญาณภายนอก (ต้องมี pull ภายนอก)</td></tr>
+<tr><td><code>PIN_MODE_OUTPUT</code></td><td>Output push-pull</td><td>ขับ LED, relay, transistor โดยตรง</td></tr>
+<tr><td><code>PIN_MODE_INPUT_PULLUP</code></td><td>Input + pull-up ภายใน</td><td>ปุ่มกดต่อ GND, อ่านสวิตช์</td></tr>
+<tr><td><code>PIN_MODE_INPUT_PULLDOWN</code></td><td>Input + pull-down ภายใน</td><td>ปุ่มกดต่อ VCC</td></tr>
+<tr><td><code>PIN_MODE_OUTPUT_OD</code></td><td>Output open-drain</td><td>I2C, ต่อบัส shared, level-shifting</td></tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>การตรวจสอบ Pin (Compile-Time Validation)</h2>
+<p>SimpleHAL มี macro สำหรับตรวจสอบ pin <strong>ตั้งแต่ตอนคอมไพล์</strong> — ไม่ต้องรอรันแล้วเจอบั๊ก</p>
+<table>
+<thead><tr><th>Macro</th><th>คืนค่า</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>IS_VALID_PIN(pin)</code></td><td>1 = ใช้ได้, 0 = ใช้ไม่ได้</td><td>ตรวจ pin มีจริงตามแพ็กเกจ (SOP8 จำกัดแค่ PC0-PC5)</td></tr>
+<tr><td><code>IS_ADC_PIN(pin)</code></td><td>1 = เป็น ADC, 0 = ไม่ใช่</td><td>ตรวจ pin รองรับ ADC หรือไม่</td></tr>
+<tr><td><code>IS_PWM_PIN(pin)</code></td><td>1 = เป็น PWM, 0 = ไม่ใช่</td><td>ตรวจ pin รองรับ PWM หรือไม่</td></tr>
+</tbody>
+</table>
+
+<div class="callout callout-warn">
+    ใช้ <code>PACKAGE_SOP8</code> แต่เรียก <code>pinMode(PD0, ...)</code> = <strong>compile error</strong> ทันที — macro <code>IS_VALID_PIN</code> จะจับตั้งแต่ตอนคอมไพล์
+</div>
+</section>
+
+<section>
+<h2>ตารางอ้างอิงฟังก์ชัน</h2>
+<table>
+<thead>
+<tr><th>ฟังก์ชัน</th><th>พารามิเตอร์</th><th>คืนค่า</th><th>คำอธิบาย</th><th>ใช้ร่วมกับ</th></tr>
+</thead>
+<tbody>
+<tr>
+    <td><code>pinMode(pin, mode)</code></td>
+    <td><code>pin</code>: หมายเลข pin<br><code>mode</code>: PIN_MODE_*</td>
+    <td><code>void</code></td>
+    <td>ตั้งโหมด pin (input/output/pullup/ฯลฯ)</td>
+    <td>ต้องเรียกก่อนใช้งาน pin ทุกครั้ง</td>
+</tr>
+<tr>
+    <td><code>pinModeMultiple(pins_array, mode)</code></td>
+    <td><code>pins_array</code>: <code>const uint8_t[]</code><br><code>mode</code>: PIN_MODE_*</td>
+    <td><code>void</code> (macro)</td>
+    <td>ตั้งโหมดหลาย pin พร้อมกัน</td>
+    <td>ใช้กับ array <code>const uint8_t pins[] = {PC0, PC1, PC2};</code></td>
+</tr>
+<tr>
+    <td><code>digitalWrite(pin, value)</code></td>
+    <td><code>pin</code>: หมายเลข pin<br><code>value</code>: HIGH/LOW</td>
+    <td><code>void</code></td>
+    <td>เขียน HIGH (3.3V) หรือ LOW (0V)</td>
+    <td>ใช้หลัง <code>pinMode(pin, PIN_MODE_OUTPUT)</code></td>
+</tr>
+<tr>
+    <td><code>digitalRead(pin)</code></td>
+    <td><code>pin</code>: หมายเลข pin</td>
+    <td><code>uint8_t</code> (HIGH/LOW)</td>
+    <td>อ่านสถานะลอจิกจาก pin</td>
+    <td>ใช้หลัง <code>pinMode(pin, PIN_MODE_INPUT*)</code></td>
+</tr>
+<tr>
+    <td><code>digitalToggle(pin)</code></td>
+    <td><code>pin</code>: หมายเลข pin</td>
+    <td><code>void</code></td>
+    <td>สลับสถานะ HIGH↔LOW</td>
+    <td>ใช้หลัง <code>pinMode(pin, PIN_MODE_OUTPUT)</code></td>
+</tr>
+<tr>
+    <td><code>digitalWriteMultiple(pins, values)</code></td>
+    <td><code>pins</code>: array pin<br><code>values</code>: array HIGH/LOW</td>
+    <td><code>void</code> (macro)</td>
+    <td>เขียนหลาย pin พร้อมกัน</td>
+    <td><code>uint8_t vals[] = {HIGH, LOW, HIGH};</code></td>
+</tr>
+<tr>
+    <td><code>attachInterrupt(pin, callback, mode)</code></td>
+    <td><code>pin</code>: หมายเลข pin<br><code>callback</code>: ฟังก์ชัน<br><code>mode</code>: CHANGE/RISING/FALLING</td>
+    <td><code>void</code></td>
+    <td>ติด interrupt hardware ที่ pin</td>
+    <td>ต้อง <code>pinMode(pin, PIN_MODE_INPUT*)</code> ก่อน; callback ห้ามใช้ <code>Delay_Ms</code></td>
+</tr>
+<tr>
+    <td><code>detachInterrupt(pin)</code></td>
+    <td><code>pin</code>: หมายเลข pin</td>
+    <td><code>void</code></td>
+    <td>ยกเลิก interrupt ที่ pin</td>
+    <td>ใช้หลัง <code>attachInterrupt</code></td>
+</tr>
+<tr>
+    <td><code>pulseIn(pin, state, timeout)</code></td>
+    <td><code>pin</code>: หมายเลข pin<br><code>state</code>: HIGH/LOW<br><code>timeout</code>: µs (0=ไม่จำกัด)</td>
+    <td><code>uint32_t</code> (µs)</td>
+    <td>วัดความกว้าง pulse หน่วย µs</td>
+    <td>ใช้กับ ultrasonic HC-SR04 วัดระยะทาง</td>
+</tr>
+<tr>
+    <td><code>shiftOut(dataPin, clockPin, bitOrder, value)</code></td>
+    <td><code>dataPin</code>, <code>clockPin</code>: pin<br><code>bitOrder</code>: MSBFIRST/LSBFIRST<br><code>value</code>: uint8_t</td>
+    <td><code>void</code></td>
+    <td>ส่งข้อมูลแบบ software SPI</td>
+    <td>74HC595 shift register + latch pin</td>
+</tr>
+<tr>
+    <td><code>shiftIn(dataPin, clockPin, bitOrder)</code></td>
+    <td><code>dataPin</code>, <code>clockPin</code>: pin<br><code>bitOrder</code>: MSBFIRST/LSBFIRST</td>
+    <td><code>uint8_t</code></td>
+    <td>รับข้อมูลแบบ software SPI</td>
+    <td>74HC165 parallel-in serial-out</td>
+</tr>
+<tr>
+    <td><code>portWrite(port, value)</code></td>
+    <td><code>port</code>: 'C' หรือ 'D'<br><code>value</code>: 0-255</td>
+    <td><code>void</code></td>
+    <td>เขียนทั้งพอร์ท 8 bit พร้อมกัน</td>
+    <td>เร็วกว่า digitalWrite ทีละ pin</td>
+</tr>
+<tr>
+    <td><code>portRead(port)</code></td>
+    <td><code>port</code>: 'C' หรือ 'D'</td>
+    <td><code>uint8_t</code></td>
+    <td>อ่านทั้งพอร์ท 8 bit</td>
+    <td>อ่าน 8 input พร้อมกัน</td>
+</tr>
+<tr>
+    <td><code>analogRead(pin)</code></td>
+    <td><code>pin</code>: หมายเลข pin ADC</td>
+    <td><code>uint16_t</code> (0-1023)</td>
+    <td>อ่านค่า ADC 10-bit (macro)</td>
+    <td>compile-time validate ว่า pin เป็น ADC</td>
+</tr>
+<tr>
+    <td><code>analogReadMilliVolts(pin)</code></td>
+    <td><code>pin</code>: หมายเลข pin ADC</td>
+    <td><code>uint16_t</code> (mV)</td>
+    <td>อ่าน ADC แปลงเป็น mV โดยตรง (macro)</td>
+    <td>ใช้ Vref=3.3V; compile-time validate</td>
+</tr>
+<tr>
+    <td><code>analogWrite(pin, value)</code></td>
+    <td><code>pin</code>: หมายเลข pin PWM<br><code>value</code>: 0-255</td>
+    <td><code>void</code> (macro)</td>
+    <td>เขียน PWM 8-bit, auto-init 1kHz</td>
+    <td>เรียกครั้งแรก auto-config Timer PWM</td>
+</tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>กลุ่มฟังก์ชันที่ใช้ร่วมกัน</h2>
+
+<h3>1. Basic LED: pinMode → digitalWrite → Delay_Ms</h3>
+<pre><code class="language-c">pinMode(PC0, PIN_MODE_OUTPUT);
+while(1) {
+    digitalWrite(PC0, HIGH);
+    Delay_Ms(500);
+    digitalWrite(PC0, LOW);
+    Delay_Ms(500);
+}</code></pre>
+<p>กระพริบ LED 1Hz — ใช้ฟังก์ชันพื้นฐานที่สุด 3 ตัว</p>
+
+<h3>2. Button: pinMode(PULLUP) → digitalRead</h3>
+<pre><code class="language-c">pinMode(PC1, PIN_MODE_INPUT_PULLUP);
+if (digitalRead(PC1) == LOW) {
+    // ปุ่มถูกกด (ต่อปุ่มระหว่าง pin กับ GND)
+}</code></pre>
+<p>pull-up ภายใน = ไม่ต้องต่อ R ภายนอก; <code>LOW</code> = ปุ่มกด (วงจรครบ GND)</p>
+
+<h3>3. Interrupt: pinMode → attachInterrupt</h3>
+<pre><code class="language-c">volatile uint8_t flag = 0;
+
+void onButton() {
+    flag = 1;  // callback ต้องเร็ว ห้ามใช้ Delay
+}
+
+pinMode(PC2, PIN_MODE_INPUT_PULLUP);
+attachInterrupt(PC2, onButton, FALLING);  // จับขอบลง
+while(1) {
+    if (flag) {
+        flag = 0;
+        digitalToggle(PC0);  // ทำงานใน main loop
+    }
+}</code></pre>
+
+<div class="callout callout-warn">
+    <strong>Callback interrupt:</strong> ตัวแปรที่ใช้ใน callback <strong>ต้องประกาศเป็น <code>volatile</code></strong> และ<strong>ห้ามเรียก <code>Delay_Ms</code></strong> ใน callback เพราะทำให้ MCU ค้างใน ISR
+</div>
+
+<h3>4. Pulse Measure: pinMode → pulseIn</h3>
+<pre><code class="language-c">pinMode(PC3, PIN_MODE_INPUT);
+uint32_t duration = pulseIn(PC3, HIGH, 25000);  // timeout 25ms
+float distance = duration / 58.0;  // cm (HC-SR04)</code></pre>
+<p>วัดความกว้าง pulse จาก ultrasonic — <code>state</code> บอกขอบที่รอ, <code>timeout=0</code> คือไม่จำกัดเวลา</p>
+
+<h3>5. Shift Register: shiftOut + latch pin</h3>
+<pre><code class="language-c">pinMode(dataPin, PIN_MODE_OUTPUT);
+pinMode(clockPin, PIN_MODE_OUTPUT);
+pinMode(latchPin, PIN_MODE_OUTPUT);
+
+digitalWrite(latchPin, LOW);
+shiftOut(dataPin, clockPin, MSBFIRST, 0b10101010);
+digitalWrite(latchPin, HIGH);  // latch — ออก 8 ขาพร้อมกัน</code></pre>
+<p>74HC595: shiftOut ส่งข้อมูลทีละบิต → latch HIGH = ข้อมูลออก 8 ขาพร้อมกัน</p>
+</section>
+
+<section>
+<h2>ปัญหาที่พบบ่อย</h2>
+<table>
+<thead><tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr></thead>
+<tbody>
+<tr>
+    <td>LED ไม่ติด</td>
+    <td>ต่อกลับขั้ว LED หรือลืม R จำกัดกระแส</td>
+    <td>LED ขายาว (+) ต่อ R 220Ω → MCU pin; ขาสั้น (-) → GND</td>
+</tr>
+<tr>
+    <td>ปุ่มอ่านค่าผิด/เด้ง</td>
+    <td>ลืม pull-up หรือใช้ INPUT ธรรมดาไม่มี pull</td>
+    <td>ใช้ <code>PIN_MODE_INPUT_PULLUP</code> + debounce ในโค้ด</td>
+</tr>
+<tr>
+    <td>MCU รีเซ็ต/ค้าง</td>
+    <td>ดึงกระแสเกิน 8mA ต่อ pin (ต่อ LED โดยไม่มี R)</td>
+    <td>ต่อ R 220Ω-470Ω อนุกรมกับ LED เสมอ</td>
+</tr>
+<tr>
+    <td>Interrupt ไม่ทำงาน</td>
+    <td>ลืม <code>pinMode(pin, PIN_MODE_INPUT*)</code> ก่อน <code>attachInterrupt</code></td>
+    <td>ต้องตั้ง pin เป็น INPUT mode ก่อน attachInterrupt</td>
+</tr>
+<tr>
+    <td>Pin compile error</td>
+    <td>ใช้ pin ที่ไม่มีในแพ็กเกจ (เช่น PD0 บน SOP8)</td>
+    <td>ตรวจสอบ <code>IS_VALID_PIN(pin)</code> หรือดูตาราง pin ด้านบน</td>
+</tr>
+<tr>
+    <td><code>analogWrite</code> ไม่มี PWM</td>
+    <td>pin นั้นไม่รองรับ PWM</td>
+    <td>ใช้ <code>IS_PWM_PIN(pin)</code> เช็คก่อน หรือดู pin ที่ระบุ PWM</td>
+</tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>ตัวอย่างโค้ด</h2>
+
+<h3>LED Blink 1Hz</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    pinMode(PC0, PIN_MODE_OUTPUT);
+
+    while (1) {
+        digitalWrite(PC0, HIGH);
+        Delay_Ms(500);
+        digitalWrite(PC0, LOW);
+        Delay_Ms(500);
+    }
+}</code></pre>
+
+<h3>Button + LED (กดติด ปล่อยดับ)</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    pinMode(PC0, PIN_MODE_OUTPUT);
+    pinMode(PC1, PIN_MODE_INPUT_PULLUP);  // ปุ่มต่อระหว่าง PC1 กับ GND
+
+    while (1) {
+        if (digitalRead(PC1) == LOW) {
+            digitalWrite(PC0, HIGH);  // กด = ติด
+        } else {
+            digitalWrite(PC0, LOW);   // ปล่อย = ดับ
+        }
+    }
+}</code></pre>
+
+<h3>Interrupt Counter (นับจำนวนครั้งกดปุ่ม)</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+volatile uint16_t count = 0;
+
+void buttonISR() {
+    count++;  // นับทุกครั้งที่กด (ขอบลง)
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    pinMode(PC0, PIN_MODE_OUTPUT);        // LED แสดงผล
+    pinMode(PC1, PIN_MODE_INPUT_PULLUP);  // ปุ่ม
+    attachInterrupt(PC1, buttonISR, FALLING);
+
+    while (1) {
+        // กระพริบตามจำนวน count
+        for (uint16_t i = 0; i < count; i++) {
+            digitalWrite(PC0, HIGH);
+            Delay_Ms(200);
+            digitalWrite(PC0, LOW);
+            Delay_Ms(200);
+        }
+        Delay_Ms(1000);
+    }
+}</code></pre>
+
+<h3>Ultrasonic HC-SR04 วัดระยะ</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+#define TRIG PC0
+#define ECHO PC1
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    pinMode(TRIG, PIN_MODE_OUTPUT);
+    pinMode(ECHO, PIN_MODE_INPUT);
+
+    while (1) {
+        // ส่ง pulse 10µs
+        digitalWrite(TRIG, LOW);
+        Delay_Us(2);
+        digitalWrite(TRIG, HIGH);
+        Delay_Us(10);
+        digitalWrite(TRIG, LOW);
+
+        // วัด echo
+        uint32_t duration = pulseIn(ECHO, HIGH, 25000);
+        uint16_t distance = duration / 58;  // cm
+
+        Delay_Ms(100);
+    }
+}</code></pre>
+</section>
+
+<section>
+<h2>ความเข้ากันได้กับแพ็กเกจ</h2>
+<table>
+<thead><tr><th>แพ็กเกจ</th><th>ขา I/O</th><th>Pin ที่ใช้ได้</th><th>ข้อจำกัด</th></tr></thead>
+<tbody>
+<tr>
+    <td><strong>SOP8</strong></td>
+    <td>6</td>
+    <td>PC0, PC1, PC2, PC3, PC4, PC5</td>
+    <td>PD ทั้งหมดไม่มี; PC6/PC7 = NRST/MCLR</td>
+</tr>
+<tr>
+    <td><strong>SOP16</strong></td>
+    <td>14</td>
+    <td>PA1-PA2, PC0-PC7, PD0, PD1, PD6, PD7</td>
+    <td>PD2-PD5 ไม่มี</td>
+</tr>
+<tr>
+    <td><strong>TSSOP20</strong></td>
+    <td>18</td>
+    <td>PA1-PA2, PC0-PC7, PD0-PD7</td>
+    <td>ครบทุก pin</td>
+</tr>
+<tr>
+    <td><strong>QFN20</strong></td>
+    <td>18</td>
+    <td>PA1-PA2, PC0-PC7, PD0-PD7</td>
+    <td>ครบทุก pin</td>
+</tr>
+</tbody>
+</table>
+
+<div class="callout callout-good">
+    <strong>คำแนะนำ:</strong> ใช้ <code>#define CH32V003_PACKAGE PACKAGE_SOP8</code> (หรือแพ็กเกจที่ใช้จริง) <strong>ก่อน</strong> <code>#include &lt;SimpleHAL.h&gt;</code> — macro <code>IS_VALID_PIN</code> จะป้องกันการคอมไพล์ผ่านถ้าใช้ pin ที่ไม่มีในแพ็กเกจนั้น
+</div>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

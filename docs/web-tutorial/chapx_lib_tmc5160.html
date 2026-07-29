@@ -67,6 +67,24 @@ flowchart TD
         <tr><td>GND</td><td>↔</td><td>TMC5160</td><td>GND</td><td>กราวด์ร่วม</td></tr>
       </tbody>
     </table>
+    <h3>รู้จักขา</h3>
+    <ul>
+      <li><strong>VMOT:</strong> ไฟเลี้ยงมอเตอร์ 8-60V (ใช้แหล่งจ่ายแยก)</li>
+      <li><strong>GND:</strong> กราวด์ร่วม</li>
+      <li><strong>SCK:</strong> สัญญาณนาฬิกา SPI — ต่อขา PC5</li>
+      <li><strong>MOSI:</strong> ข้อมูลจาก MCU เข้า TMC5160 — ต่อขา PC6</li>
+      <li><strong>MISO:</strong> ข้อมูลจาก TMC5160 ส่งเข้า MCU — ต่อขา PC7</li>
+      <li><strong>CSN:</strong> เลือกชิป (Chip Select) — ต่อขา PC4</li>
+    </ul>
+    <h3>วิธีต่อทีละขั้น</h3>
+    <ol>
+      <li>ต่อ <strong>VMOT</strong> TMC5160 ไป <strong>แหล่งจ่าย 8-60V</strong> (พร้อม capacitor 1000µF ขนาน GND)</li>
+      <li>ต่อ <strong>GND</strong> TMC5160 ไป <strong>GND</strong> ของ MCU และแหล่งจ่ายไฟ</li>
+      <li>ต่อ <strong>SCK</strong> TMC5160 ไปขา <strong>PC5</strong> ของ MCU</li>
+      <li>ต่อ <strong>MOSI</strong> TMC5160 ไปขา <strong>PC6</strong> ของ MCU</li>
+      <li>ต่อ <strong>MISO</strong> TMC5160 ไปขา <strong>PC7</strong> ของ MCU</li>
+      <li>ต่อ <strong>CSN</strong> TMC5160 ไปขา <strong>PC4</strong> ของ MCU</li>
+    </ol>
     <p>⚠️ TMC5160 รองรับมอเตอร์กระแสสูงสุด 10A — VMOT 8-60V — SPI Mode 3 (CPOL=1, CPHA=1) ที่ 4MHz+ — CSN LOW ก่อนส่ง HIGH หลังเสร็จ — ต่อ capacitor 1000μF ขนาน VMOT-GND</p>
 </section>
 

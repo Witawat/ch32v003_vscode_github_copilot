@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>บทที่ 9: PWM — ควบคุมความสว่างและมอเตอร์</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+</head>
+<body>
+
+<nav class="top-nav">
+    <a href="ch08-adc.html">&larr; บทที่ 8: ADC</a>
+    <a href="index.html">&#x1f3e0; สารบัญ</a>
+    <a href="ch10-opamp.html">บทที่ 10: OPAMP &rarr;</a>
+</nav>
+
+<h1>บทที่ 9: PWM — ควบคุมความสว่างและมอเตอร์</h1>
+<span class="level level-intermediate">ระดับกลาง</span>
+
+<section>
+    <h2>สิ่งที่ต้องรู้ก่อน</h2>
+    <ul>
+        <li><a href="ch02-gpio.html">บทที่ 2: GPIO</a></li>
+        <li><a href="ch03-delay.html">บทที่ 3: Delay</a> (สำหรับ fade animation)</li>
+    </ul>
+</section>
+
+<section>
+    <h2>อุปกรณ์ที่ต้องใช้</h2>
+    <ul>
+        <li>CH32V003 Dev Board</li>
+        <li>LED + ตัวต้านทาน 220&Omega;</li>
+        <li>Servo motor</li>
+        <li>DC motor + L298N driver (อุปกรณ์เสริม)</li>
+    </ul>
+</section>
+
+<section>
+    <h2>ทำไมต้องใช้?</h2>
+    <p>ควบคุมความสว่าง LED, หมุน Servo, ความเร็วมอเตอร์ — ทั้งหมดใช้ PWM</p>
+</section>
+
+<section>
+    <h2>Flowchart การทำงาน</h2>
+    <div class="flowchart">
+        <pre class="mermaid">
+flowchart TD
+    A["PWM_Init()"] --> B{"อะไร?"}
+    B -->|"LED"| C["PWM_SetDutyCycle(%)"]
+    B -->|"Servo"| D["PWM_SetDutyCycleRaw()"]
+    B -->|"มอเตอร์"| E["2 PWM + dir control"]
+    C --> F["ความสว่าง 0-100%"]
+    D --> G["มุม 0-180°"]
+    E --> H["ความเร็ว+ทิศทาง"]
+        </pre>
+    </div>
+</section>
+
+<section>
+    <h2>PWM Channel Table</h2>
+    <table>
+        <tr><th>ชื่อ Channel</th><th>Pin</th><th>Timer</th></tr>
+        <tr><td>PWM1_CH1</td><td>PD2</td><td>TIM1</td></tr>
+        <tr><td>PWM1_CH2</td><td>PD3</td><td>TIM1</td></tr>
+        <tr><td>PWM1_CH3</td><td>PD4</td><td>TIM1</td></tr>
+        <tr><td>PWM1_CH4</td><td>PD5</td><td>TIM1</td></tr>
+        <tr><td>PWM2_CH1</td><td>PD6</td><td>TIM2</td></tr>
+        <tr><td>PWM2_CH2</td><td>PD7</td><td>TIM2</td></tr>
+        <tr><td>PWM2_CH3</td><td>PD0</td><td>TIM2</td></tr>
+        <tr><td>PWM2_CH4</td><td>PD1</td><td>TIM2</td></tr>
+    </table>
+    <div class="callout callout-warn">
+        <strong>สำคัญ:</strong> SOP-8 มีเฉพาะ PWM1_CH1 + PWM2_CH1 เท่านั้น<br>
+        <strong>Frequency sharing:</strong> ทุก channel บน timer เดียวกันใช้ความถี่เดียวกัน<br>
+        <strong>Auto-start:</strong> PWM_Init เริ่ม output อัตโนมัติ (v2.0+)
+    </div>
+</section>
+
+<section>
+    <h2>API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th></tr>
+        <tr><td><code>PWM_Init()</code></td><td>เริ่มต้น PWM channel</td></tr>
+        <tr><td><code>PWM_InitRemap()</code></td><td>เริ่มต้น PWM แบบ remap</td></tr>
+        <tr><td><code>PWM_SetDutyCycle()</code></td><td>ตั้งค่า duty cycle เป็น % (0-100)</td></tr>
+        <tr><td><code>PWM_SetDutyCycleRaw()</code></td><td>ตั้งค่า duty cycle แบบ raw value</td></tr>
+        <tr><td><code>PWM_Write()</code></td><td>analogWrite — ตั้งค่า 0-255</td></tr>
+        <tr><td><code>PWM_SetFrequency()</code></td><td>ตั้งค่าความถี่ PWM</td></tr>
+        <tr><td><code>PWM_GetPeriod()</code></td><td>อ่านค่า period ปัจจุบัน</td></tr>
+        <tr><td><code>PWM_Start()</code></td><td>เริ่ม PWM output</td></tr>
+        <tr><td><code>PWM_Stop()</code></td><td>หยุด PWM output</td></tr>
+        <tr><td><code>PWM_GetDutyCycle()</code></td><td>อ่านค่า duty cycle ปัจจุบัน</td></tr>
+        <tr><td><code>PWM_AdvancedInit()</code></td><td>เริ่มต้น PWM แบบปรับละเอียด</td></tr>
+        <tr><td><code>PWM_SetPolarity()</code></td><td>ตั้งค่าขั้วสัญญาณ (active high/low)</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>Timer Resource Guard</h2>
+    <p>ถ้า TIM1 หรือ TIM2 ถูกใช้โดย SimpleTIM อยู่แล้ว — <code>PWM_Init()</code> จะ return ทันที โดยไม่เขียนทับ</p>
+</section>
+
+<section>
+    <h2>ระดับขั้นต้น: Fade LED</h2>
+    <div class="approach">
+        <strong>แนวคิด:</strong> วนลูป 0% → 100% duty cycle
+    </div>
+    <pre><code class="language-c">#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    PWM_Init(PWM1_CH1, 1000); // 1kHz
+
+    while (1) {
+        // Fade in
+        for (uint8_t d = 0; d <= 100; d++) {
+            PWM_SetDutyCycle(PWM1_CH1, d);
+            Delay_Ms(10);
+        }
+        // Fade out
+        for (uint8_t d = 100; d > 0; d--) {
+            PWM_SetDutyCycle(PWM1_CH1, d);
+            Delay_Ms(10);
+        }
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>ระดับขั้นกลาง: Servo Control</h2>
+    <div class="approach">
+        <strong>แนวคิด:</strong> ตั้งค่า PWM 50Hz, คำนวณ pulse width สำหรับมุม 0-180&deg; (ปกติ 500-2500&mu;s)
+    </div>
+    <pre><code class="language-c">#include "SimpleHAL.h"
+
+#define SERVO_PWM PWM1_CH1
+
+void servo_set_angle(uint8_t angle) {
+    // 0° = 500us, 180° = 2500us, period = 20000us (50Hz)
+    uint16_t period = PWM_GetPeriod(SERVO_PWM);
+    uint16_t pulse = 500 + (2000 * angle / 180);
+    uint16_t raw = (uint32_t)pulse * period / 20000;
+    PWM_SetDutyCycleRaw(SERVO_PWM, raw);
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    // Servo ต้องการ 50Hz
+    PWM_Init(SERVO_PWM, 50);
+
+    while (1) {
+        servo_set_angle(0);   Delay_Ms(1000);
+        servo_set_angle(90);  Delay_Ms(1000);
+        servo_set_angle(180); Delay_Ms(1000);
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>ระดับขั้นสูง: DC Motor Speed + Direction (L298N)</h2>
+    <div class="approach">
+        <strong>แนวคิด:</strong> ใช้ 2 PWM channels + direction control — IN1=PWM, IN2=PWM ควบคุมทั้งความเร็วและทิศทาง
+    </div>
+    <pre><code class="language-c">#include "SimpleHAL.h"
+
+#define MOTOR_IN1 PWM1_CH1
+#define MOTOR_IN2 PWM1_CH2
+
+void motor_set(int8_t speed) {
+    // speed: -100..0..100 (ลบ=ถอยหลัง, บวก=เดินหน้า)
+    if (speed >= 0) {
+        PWM_SetDutyCycle(MOTOR_IN1, speed);
+        PWM_SetDutyCycle(MOTOR_IN2, 0);
+    } else {
+        PWM_SetDutyCycle(MOTOR_IN1, 0);
+        PWM_SetDutyCycle(MOTOR_IN2, -speed);
+    }
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    // มอเตอร์ต้องการความถี่สูง >10kHz กันเสียงหอน
+    PWM_Init(MOTOR_IN1, 20000);
+    PWM_Init(MOTOR_IN2, 20000);
+
+    while (1) {
+        motor_set(50);   Delay_Ms(2000); // เดินหน้า 50%
+        motor_set(0);    Delay_Ms(1000); // หยุด
+        motor_set(-50);  Delay_Ms(2000); // ถอยหลัง 50%
+        motor_set(0);    Delay_Ms(1000);
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>อาการ</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>Servo สั่น</td><td>คำนวณ pulse width ผิด</td><td>ตรวจสอบ servo datasheet (ปกติ 500-2500&mu;s)</td></tr>
+        <tr><td>PWM_Write ไม่ตรง %</td><td>255 &ne; 100%</td><td><code>PWM_Write(pin, 255)</code> = 100% เทียบกับ analogWrite</td></tr>
+        <tr><td>PC4 ADC+PWM ชนกัน</td><td>ขาเดี่ยวใช้ทั้ง ADC และ PWM</td><td>เลือกใช้อย่างใดอย่างหนึ่ง</td></tr>
+        <tr><td>Frequency sharing</td><td>ตั้งความถี่ผิด channel</td><td>ตั้งความถี่ก่อน init channel — ทุก channel timer เดียวกันใช้ freq เดียวกัน</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>คำถามที่พบบ่อย (FAQ)</h2>
+    <h3>analogWrite กับ PWM_Write ต่างกันอย่างไร?</h3>
+    <p><code>analogWrite(pin, 0-255)</code> เป็น macro ที่เรียก <code>PWM_Write()</code> — ให้ความรู้สึกแบบ Arduino</p>
+    <h3>ความถี่ PWM ไหนเหมาะกับอะไร?</h3>
+    <p>LED >100Hz (ไม่กระพริบ), Servo = 50Hz (มาตรฐาน), Motor >10kHz (ไม่หอน), Audio >20kHz</p>
+    <h3>SOP-8 มีกี่ PWM channels?</h3>
+    <p>แค่ 2 channels: PWM1_CH1 + PWM2_CH1</p>
+</section>
+
+<section>
+    <h2>ลองทำดู (แบบฝึกหัด)</h2>
+    <ol>
+        <li>Fade LED เข้า-ออก พร้อมปรับความเร็ว fade</li>
+        <li>หมุน Servo 0&deg; → 90&deg; → 180&deg; → 0&deg; วนซ้ำ</li>
+        <li>RGB LED 3 สี PWM — ผสมสีได้ทุกสี</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="ch08-adc.html">&larr; บทที่ 8: ADC</a>
+    <a href="index.html">&#x1f3e0; สารบัญ</a>
+    <a href="ch10-opamp.html">บทที่ 10: OPAMP &rarr;</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:false,theme:'base'});mermaid.run();</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

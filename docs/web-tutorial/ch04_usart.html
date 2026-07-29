@@ -63,6 +63,21 @@ flowchart TD
       </tbody>
     </table>
 
+    <h3>รู้จักขา</h3>
+    <ul>
+      <li><strong>PD5 (TX):</strong> ขาส่งข้อมูล — ต่อกับขา RX ของ USB-Serial</li>
+      <li><strong>PD6 (RX):</strong> ขารับข้อมูล — ต่อกับขา TX ของ USB-Serial</li>
+      <li><strong>GND:</strong> กราวด์ — ต้องต่อร่วมกับ USB-Serial</li>
+    </ul>
+
+    <h3>วิธีต่อทีละขั้น</h3>
+    <ol>
+      <li>ต่อ <strong>PD5 (TX)</strong> ไป <strong>RX ของ USB-Serial</strong> — MCU ส่ง → คอมรับ</li>
+      <li>ต่อ <strong>PD6 (RX)</strong> ไป <strong>TX ของ USB-Serial</strong> — คอมส่ง → MCUรับ</li>
+      <li>ต่อ <strong>GND (MCU)</strong> ไป <strong>GND (USB-Serial)</strong> — กราวด์ร่วม — ขาดไม่ได้!</li>
+      <li>(ไม่บังคับ) ต่อ <strong>PC0 → R 220Ω → LED → GND</strong> — LED บอกสถานะ</li>
+    </ol>
+
     <p>CH32V003 มี 1 USART — ใช้ RX/TX แบบ cross-connect: MCU-TX → USB-RX, MCU-RX → USB-TX, GND ต้องต่อร่วมกัน</p>
 </section>
 

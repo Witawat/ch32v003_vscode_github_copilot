@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>บทที่ 16: WWDG — Window Watchdog ตรวจจับ Timing Error</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+</head>
+<body>
+
+<nav class="top-nav">
+    <a href="ch15-iwdg.html">&larr; บทที่ 15: IWDG</a>
+    <a href="index.html">&#x1f3e0; สารบัญ</a>
+    <a href="ch17-1wire.html">บทที่ 17: 1-Wire &rarr;</a>
+</nav>
+
+<h1>บทที่ 16: WWDG — Window Watchdog ตรวจจับ Timing Error</h1>
+<span class="level level-advanced">ระดับสูง</span>
+
+<section>
+    <h2>สิ่งที่ต้องรู้ก่อน</h2>
+    <ul>
+        <li><a href="ch15-iwdg.html">บทที่ 15: IWDG</a> — เข้าใจแนวคิด watchdog ก่อน</li>
+    </ul>
+</section>
+
+<section>
+    <h2>อุปกรณ์ที่ต้องใช้</h2>
+    <ul>
+        <li>CH32V003 Dev Board (ไม่ต้องใช้อุปกรณ์เสริมภายนอก)</li>
+    </ul>
+</section>
+
+<section>
+    <h2>ทำไมต้องใช้?</h2>
+    <p>ตรวจจับว่าฟังก์ชันทำงานเร็วหรือช้าเกินไป — real-time system, motor control, safety-critical — ผิดปกติแค่ไหนก็รู้</p>
+</section>
+
+<section>
+    <h2>Flowchart การทำงาน</h2>
+    <div class="flowchart">
+        <pre class="mermaid">
+flowchart TD
+    A["Counter=0x7F"] --> B["นับถอยหลังทุก PCLK tick"]
+    B --> C{"Counter อยู่ใน Window?"}
+    C -->|"ใช่ (<window, >0x40)"| D["WWDG_Refresh() → OK"]
+    C -->|"ไม่ (เร็วเกิน) = ก่อน window"| E["RESET!"]
+    C -->|"ไม่ (ช้าเกิน) = <0x40"| F["Early Warning Interrupt"]
+    F --> G{"Refresh ทัน?"}
+    G -->|"ทัน"| D
+    G -->|"ไม่ทัน"| H["RESET! @0x3F"]
+        </pre>
+    </div>
+</section>
+
+<section>
+    <h2>หลักการทำงาน</h2>
+    <ul>
+        <li><strong>Counter:</strong> 0x7F → 0x3F (นับถอยหลังทุก PCLK1 tick)</li>
+        <li><strong>Window constraint:</strong> ต้อง refresh หลังจาก counter น้อยกว่าค่า window และก่อนถึง 0x40</li>
+        <li><strong>PCLK1:</strong> 24MHz (ใช้ร่วมกับ peripherals)</li>
+        <li><strong>Prescaler:</strong> /1, /2, /4, /8</li>
+    </ul>
+    <table>
+        <tr><th>Prescaler</th><th>Max Timeout</th></tr>
+        <tr><td>/1</td><td>~10.9ms</td></tr>
+        <tr><td>/2</td><td>~21.8ms</td></tr>
+        <tr><td>/4</td><td>~43.7ms</td></tr>
+        <tr><td>/8</td><td>~87.4ms</td></tr>
+    </table>
+    <div class="callout callout-note">
+        <strong>สูตรคำนวณ:</strong> T(ms) = (counter - 0x3F) &times; prescaler &times; 4096 / 24,000,000 &times; 1000
+    </div>
+</section>
+
+<section>
+    <h2>API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th></tr>
+        <tr><td><code>WWDG_SimpleInit(counter, window)</code></td><td>เริ่มต้น WWDG แบบง่าย</td></tr>
+        <tr><td><code>WWDG_Refresh()</code></td><td>ต่ออายุ watchdog (reload counter)</td></tr>
+        <tr><td><code>WWDG_CalcTimeout(counter, prescaler)</code></td><td>คำนวณ timeout เป็น ms</td></tr>
+        <tr><td><code>WWDG_GetInterruptFlag()</code></td><td>อ่าน flag Early Warning interrupt</td></tr>
+        <tr><td><code>WWDG_ClearInterruptFlag()</code></td><td>ล้าง flag Early Warning interrupt</td></tr>
+        <tr><td><code>WWDG_Disable()</code></td><td>ปิด WWDG (ใช้ได้ก่อน WDGA=1 เท่านั้น)</td></tr>
+        <tr><td><code>WWDG_InitWithInterrupt(counter, window)</code></td><td>เริ่มต้น WWDG พร้อม Early Warning interrupt</td></tr>
+        <tr><td><code>WWDG_SetCallback(fn)</code></td><td>ตั้ง callback สำหรับ Early Warning interrupt</td></tr>
+        <tr><td><code>WWDG_Init(counter, window, prescaler)</code></td><td>เริ่มต้น WWDG แบบกำหนดค่าครบ</td></tr>
+    </table>
+</section>
+
+<div class="callout callout-warn">
+    <h3>คำเตือนสำคัญ</h3>
+    <ol>
+        <li><strong>เมื่อ WDGA bit = 1 → หยุดด้วยซอฟต์แวร์ไม่ได้</strong> (hardware limitation)</li>
+        <li><strong>window > counter → auto-clamped v2.1</strong> (เวอร์ชันเก่าจะเกิด infinite reset loop)</li>
+        <li><strong>ต้องเรียก WWDG_SetCallback ก่อน WWDG_InitWithInterrupt</strong></li>
+    </ol>
+</div>
+
+<section>
+    <h2>ขั้นตอนการใช้งาน (Step by Step)</h2>
+    <div class="step">
+        <h3>1. คำนวณ Timeout</h3>
+        <p>เลือก counter (0x7F-0x40) และ window (0x7F-0x40) ให้เหมาะสมกับรอบการทำงาน</p>
+    </div>
+    <div class="step">
+        <h3>2. เริ่มต้น WWDG</h3>
+        <p><code>WWDG_SimpleInit(0x7F, 0x5F)</code> — counter=0x7F, window=0x5F</p>
+    </div>
+    <div class="step">
+        <h3>3. Refresh ในช่วงเวลาที่ถูกต้อง</h3>
+        <p><code>WWDG_Refresh()</code> — ต้องเรียกเมื่อ counter อยู่ในช่วง (0x40, window)</p>
+    </div>
+    <div class="step">
+        <h3>4. ระวัง Refresh เร็วเกิน!</h3>
+        <p class="explain">ถ้า refresh ก่อนที่ counter จะลดถึงค่า window → RESET ทันที</p>
+    </div>
+</section>
+
+<section>
+    <h2>ระดับขั้นต้น: Basic WWDG — Refresh ทุก 20ms</h2>
+    <pre><code class="language-c">#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(USART_115200);
+
+    // counter=0x7F, window=0x5F (ต้อง refresh ระหว่าง 0x5F-0x40)
+    WWDG_SimpleInit(0x7F, 0x5F);
+
+    printf("WWDG started\r\n");
+
+    while (1) {
+        Delay_Ms(20); // รอให้ counter อยู่ในช่วง window
+        WWDG_Refresh();
+        printf("Refresh ok\r\n");
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>ระดับขั้นกลาง: WWDG พร้อม Early Warning Interrupt</h2>
+    <div class="approach">
+        <strong>แนวคิด:</strong> ใช้ Early Warning interrupt (counter ≤ 0x40) — แจ้งเตือนก่อน reset จริง — บันทึกสถานะหรือ debug
+    </div>
+    <pre><code class="language-c">#include "SimpleHAL.h"
+
+void wwdg_warning_callback(void) {
+    printf("WARNING: WWDG near reset!\r\n");
+    // บันทึก debug info, เตรียม shutdown ฯลฯ
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(USART_115200);
+
+    // ต้องตั้ง callback ก่อน InitWithInterrupt
+    WWDG_SetCallback(wwdg_warning_callback);
+    WWDG_InitWithInterrupt(0x7F, 0x5F);
+
+    printf("WWDG with Early Warning started\r\n");
+
+    while (1) {
+        Delay_Ms(15);
+        WWDG_Refresh();
+        printf("Running...\r\n");
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>ระดับขั้นสูง: Timing Violation Detection</h2>
+    <div class="approach">
+        <strong>แนวคิด:</strong> งาน real-time ต้องเสร็จภายใน 10-40ms window — ถ้าเร็วเกินหรือช้าเกิน → WWDG reset → แจ้ง error
+    </div>
+    <pre><code class="language-c">#include "SimpleHAL.h"
+
+volatile uint8_t task_done = 0;
+
+void realtime_task(void) {
+    // งานสำคัญ: อ่าน sensor, คำนวณ PID, ส่ง motor command
+    // ห้ามช้ากว่า 40ms หรือเร็วเกิน 10ms
+    printf("Realtime task running...\r\n");
+    Delay_Ms(25);
+    task_done = 1;
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(USART_115200);
+
+    // counter=0x7F, window=0x5F (refresh window: ~10-40ms)
+    WWDG_SimpleInit(0x7F, 0x5F);
+
+    printf("Timing violation detector started\r\n");
+
+    while (1) {
+        task_done = 0;
+        realtime_task();
+
+        if (task_done) {
+            WWDG_Refresh(); // OK — เสร็จในเวลาที่กำหนด
+        }
+        // ถ้าไม่ refresh → WWDG reset → timing violation!
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>อาการ</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>Reset ทันทีที่เริ่ม</td><td>Refresh ก่อนที่ counter จะถึง window</td><td>delay พอก่อน refresh ครั้งแรก</td></tr>
+        <tr><td>Timeout สั้นเกินไป</td><td>Prescaler น้อยไป</td><td>ใช้ prescaler ใหญ่ขึ้น หรือลดรอบ</td></tr>
+        <tr><td>เข้าใจผิดว่าเหมือน IWDG</td><td>WWDG ต้อง refresh ในช่วงเวลาเท่านั้น</td><td>คิด window ก่อน-หลัง ไม่ใช่แค่ก่อนหมด</td></tr>
+        <tr><td>ใช้กับ sleep ไม่ได้</td><td>PCLK หยุดระหว่าง sleep</td><td>ใช้ IWDG แทนถ้าต้องการ sleep</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>คำถามที่พบบ่อย (FAQ)</h2>
+    <h3>ทำไมต้องมี Window?</h3>
+    <p>Window ป้องกันทั้งเร็วเกินและช้าเกิน — เหมาะกับ safety-critical — ดูรายละเอียดที่ <a href="ch15-iwdg.html">บทที่ 15</a></p>
+    <h3>Disable WWDG ได้ไหม?</h3>
+    <p><strong>ไม่ได้!</strong> — Hardware ตั้งใจให้เป็นแบบนี้เพื่อความปลอดภัย — WDGA bit = 1 แล้วปิดไม่ได้</p>
+</section>
+
+<section>
+    <h2>ลองทำดู (แบบฝึกหัด)</h2>
+    <ol>
+        <li>ตั้งค่า WWDG พื้นฐาน counter=0x7F, window=0x5F</li>
+        <li>เปิด Early Warning interrupt — ติด LED แจ้งเตือนก่อน reset</li>
+        <li>ทดสอบ refresh เร็วเกินไป (ก่อน window) → สังเกต reset</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="ch15-iwdg.html">&larr; บทที่ 15: IWDG</a>
+    <a href="index.html">&#x1f3e0; สารบัญ</a>
+    <a href="ch17-1wire.html">บทที่ 17: 1-Wire &rarr;</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:false,theme:'base'});mermaid.run();</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>บทที่ 12: Stopwatch & Countdown — จับเวลา นับถอยหลัง — SimpleHAL</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+</head>
+<body>
+
+<nav class="top-nav">
+    <a href="ch11-tim.html">← บทที่ 11: Hardware Timer</a>
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch13-dma.html">บทที่ 13: DMA →</a>
+</nav>
+
+<h1>บทที่ 12: Stopwatch & Countdown — จับเวลา นับถอยหลัง</h1>
+<span class="level level-advanced">ขั้นสูง</span>
+
+<section class="flowchart">
+    <h2>🧭 แผนภาพการทำงาน</h2>
+    <pre class="mermaid">
+flowchart TD
+    A{"ใช้แบบไหน?"} -->|"จับเวลา"| B["Stopwatch"]
+    A -->|"นับถอยหลัง"| C["Countdown"]
+    B --> D["Start / Stop / Reset"]
+    C --> E["Init(เวลา) → Start"]
+    D --> F["GetTimeString()"]
+    E --> G["IsFinished()?"]
+    G -->|"ใช่"| H["Buzzer / LED เตือน"]
+    F --> I["แสดงผล HH:MM:SS"]
+    </pre>
+</section>
+
+<section>
+    <h2>📋 สิ่งที่ต้องรู้ก่อน</h2>
+    <ul>
+        <li><a href="ch11-tim.html">บทที่ 11: Hardware Timer</a> — เข้าใจพื้นฐาน timer interrupt</li>
+        <li><a href="ch03-delay.html">บทที่ 3: Delay</a> — เข้าใจความแตกต่างของระบบเวลา</li>
+    </ul>
+</section>
+
+<section>
+    <h2>📦 อุปกรณ์ที่ต้องใช้</h2>
+    <ul>
+        <li>CH32V003 Dev Board</li>
+        <li>ปุ่มกด × 2 (Start/Stop + Reset)</li>
+        <li>Buzzer หรือ LED (สำหรับ alarm เมื่อหมดเวลา)</li>
+        <li>USART สำหรับแสดงผล (optional)</li>
+    </ul>
+</section>
+
+<section>
+    <h2>🤔 ทำไมต้องใช้?</h2>
+    <p>Stopwatch และ Countdown เป็นโมดูลสำเร็จรูปที่ต่อยอดจาก Hardware Timer — ไม่ต้องเขียน logic จับเวลาเอง ใช้ทำ <strong>นาฬิกาจับเวลาแข่งขัน</strong>, <strong>นับถอยหลังทำอาหาร</strong>, <strong>interval training</strong>, หรือ <strong>lap timer</strong> ได้ทันที</p>
+
+    <div class="callout callout-note">
+        <strong>เปลี่ยน Timer เริ่มต้น:</strong> ดีฟอลต์ใช้ TIM_2 — เปลี่ยนเป็น TIM_1 ด้วย <code>#define TIMEXT_DEFAULT_TIMER TIM_1</code> ก่อน include SimpleHAL
+    </div>
+</section>
+
+<section>
+    <h2>📚 โครงสร้างข้อมูล</h2>
+
+    <h3>Time_t Struct</h3>
+    <pre><code class="language-c">typedef struct {
+    uint32_t hours;
+    uint32_t minutes;
+    uint32_t seconds;
+} Time_t;</code></pre>
+
+    <h3>Display Modes</h3>
+    <table>
+        <thead><tr><th>Mode</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr></thead>
+        <tbody>
+            <tr><td><code>TIME_MODE_NORMALIZED</code></td><td>60 วินาที → 1 นาที, 60 นาที → 1 ชั่วโมง</td><td>130s → 2m 10s</td></tr>
+            <tr><td><code>TIME_MODE_RAW</code></td><td>แสดงค่าวินาทีดิบ ไม่ normalize</td><td>130s → 130s</td></tr>
+        </tbody>
+    </table>
+
+    <h3>Format Flags</h3>
+    <table>
+        <thead><tr><th>Flag</th><th>รูปแบบ</th><th>ตัวอย่าง</th></tr></thead>
+        <tbody>
+            <tr><td><code>TIME_FORMAT_SS</code></td><td>วินาที</td><td>125</td></tr>
+            <tr><td><code>TIME_FORMAT_MMSS</code></td><td>นาที:วินาที</td><td>02:05</td></tr>
+            <tr><td><code>TIME_FORMAT_HHMMSS</code></td><td>ชั่วโมง:นาที:วินาที</td><td>01:02:05</td></tr>
+        </tbody>
+    </table>
+</section>
+
+<section>
+    <h2>📋 API Reference — Stopwatch</h2>
+    <table>
+        <thead><tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr></thead>
+        <tbody>
+            <tr><td><code>Stopwatch_Init()</code></td><td>เริ่มต้น Stopwatch</td><td><code>Stopwatch_Init();</code></td></tr>
+            <tr><td><code>Stopwatch_Start()</code></td><td>เริ่มจับเวลา</td><td><code>Stopwatch_Start();</code></td></tr>
+            <tr><td><code>Stopwatch_Stop()</code></td><td>หยุดจับเวลา (ค้างค่า)</td><td><code>Stopwatch_Stop();</code></td></tr>
+            <tr><td><code>Stopwatch_Reset()</code></td><td>รีเซ็ตเวลาเป็น 0</td><td><code>Stopwatch_Reset();</code></td></tr>
+            <tr><td><code>Stopwatch_IsRunning()</code></td><td>เช็คว่ากำลังจับเวลาอยู่ไหม</td><td><code>if (Stopwatch_IsRunning()) { ... }</code></td></tr>
+            <tr><td><code>Stopwatch_GetTime()</code></td><td>อ่านค่า Time_t ปัจจุบัน</td><td><code>Time_t t = Stopwatch_GetTime();</code></td></tr>
+            <tr><td><code>Stopwatch_GetTotalSeconds()</code></td><td>วินาทีรวม (uint32_t)</td><td><code>uint32_t s = Stopwatch_GetTotalSeconds();</code></td></tr>
+            <tr><td><code>Stopwatch_GetTotalMilliseconds()</code></td><td>มิลลิวินาทีรวม</td><td><code>uint32_t ms = Stopwatch_GetTotalMilliseconds();</code></td></tr>
+            <tr><td><code>Stopwatch_GetTimeString(buf, format)</code></td><td>แปลงเป็น string</td><td><code>Stopwatch_GetTimeString(buf, TIME_FORMAT_HHMMSS);</code></td></tr>
+        </tbody>
+    </table>
+
+    <h3>API Reference — Countdown</h3>
+    <table>
+        <thead><tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr></thead>
+        <tbody>
+            <tr><td><code>Countdown_Init(time)</code></td><td>เริ่มต้นตัวนับถอยหลัง</td><td><code>Time_t t = {0, 1, 30}; Countdown_Init(t);</code></td></tr>
+            <tr><td><code>Countdown_InitFromSeconds(sec)</code></td><td>เริ่มต้นจากวินาที</td><td><code>Countdown_InitFromSeconds(90); // 1m30s</code></td></tr>
+            <tr><td><code>Countdown_Start()</code></td><td>เริ่มนับถอยหลัง</td><td><code>Countdown_Start();</code></td></tr>
+            <tr><td><code>Countdown_Stop()</code></td><td>หยุดนับ (ค้างค่า)</td><td><code>Countdown_Stop();</code></td></tr>
+            <tr><td><code>Countdown_Reset()</code></td><td>รีเซ็ตกลับค่าเริ่มต้น</td><td><code>Countdown_Reset();</code></td></tr>
+            <tr><td><code>Countdown_IsRunning()</code></td><td>กำลังนับถอยหลังอยู่ไหม</td><td><code>if (Countdown_IsRunning()) { ... }</code></td></tr>
+            <tr><td><code>Countdown_IsFinished()</code></td><td>นับถึงศูนย์แล้วหรือยัง</td><td><code>if (Countdown_IsFinished()) { alert(); }</code></td></tr>
+            <tr><td><code>Countdown_GetTime()</code></td><td>เวลาคงเหลือในรูปแบบ Time_t</td><td><code>Time_t r = Countdown_GetTime();</code></td></tr>
+            <tr><td><code>Countdown_GetTimeString(buf, fmt)</code></td><td>แปลงเวลาคงเหลือเป็น string</td><td><code>Countdown_GetTimeString(buf, TIME_FORMAT_MMSS);</code></td></tr>
+            <tr><td><code>Countdown_GetRemainingSeconds()</code></td><td>วินาทีคงเหลือ</td><td><code>uint32_t r = Countdown_GetRemainingSeconds();</code></td></tr>
+            <tr><td><code>Countdown_SetAlarmCallback(cb)</code></td><td>ตั้ง callback เมื่อหมดเวลา</td><td><code>Countdown_SetAlarmCallback(onAlarm);</code></td></tr>
+        </tbody>
+    </table>
+
+    <h3>Time Utilities</h3>
+    <table>
+        <thead><tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th></tr></thead>
+        <tbody>
+            <tr><td><code>Time_ToString(time, buf, size, mode, format)</code></td><td>แปลง Time_t → string</td></tr>
+            <tr><td><code>Time_FromSeconds(seconds, mode)</code></td><td>แปลงวินาที → Time_t</td></tr>
+            <tr><td><code>Time_ToSeconds(time)</code></td><td>แปลง Time_t → วินาทีรวม</td></tr>
+        </tbody>
+    </table>
+
+    <div class="callout callout-note">
+        <strong>Buffer Size:</strong> ใช้ <code>TIME_BUFFER_SIZE_HHMMSS</code>, <code>TIME_BUFFER_SIZE_MMSS</code>, <code>TIME_BUFFER_SIZE_SS</code> สำหรับขนาด array ที่เหมาะสม
+    </div>
+</section>
+
+<section>
+    <h2>💻 เขียน Code ทีละขั้น</h2>
+
+    <div class="step">
+        <h3>ขั้นที่ 1: Include + ตั้งค่าระบบ</h3>
+        <pre><code class="language-c">#include "simplehal.h"
+#include &lt;stdio.h&gt;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(USART_115200);</code></pre>
+        <p class="explain">🔍 ระบบพื้นฐานพร้อม — USART สำหรับแสดงผลเวลา</p>
+    </div>
+
+    <div class="step">
+        <h3>ขั้นที่ 2: เริ่มต้น Stopwatch</h3>
+        <pre><code class="language-c">    Stopwatch_Init();
+    Stopwatch_Start();
+
+    char time_buf[16];</code></pre>
+        <p class="explain">🔍 <code>Stopwatch_Init()</code> จะจอง TIM_2 อัตโนมัติ (ถ้าใช้ <code>#define TIMEXT_DEFAULT_TIMER TIM_1</code> จะจอง TIM_1 แทน)</p>
+    </div>
+
+    <div class="step">
+        <h3>ขั้นที่ 3: แสดงผลเวลาใน Loop</h3>
+        <pre><code class="language-c">    while (1) {
+        Stopwatch_GetTimeString(time_buf, TIME_FORMAT_HHMMSS);
+        printf("\r%s", time_buf);  // \r เขียนทับบรรทัดเดิม
+        Delay_Ms(200);
+    }</code></pre>
+        <p class="explain">🔍 <code>TIME_FORMAT_HHMMSS</code> ให้ผลลัพธ์เช่น <code>"01:23:45"</code></p>
+    </div>
+
+    <div class="step">
+        <h3>ขั้นที่ 4: เพิ่มปุ่มควบคุม</h3>
+        <pre><code class="language-c">    pinMode(PC1, PIN_MODE_INPUT_PULLUP);  // Start/Stop
+    pinMode(PC2, PIN_MODE_INPUT_PULLUP);  // Reset
+
+    while (1) {
+        if (digitalRead(PC1) == LOW) {
+            Delay_Ms(30);
+            if (Stopwatch_IsRunning())
+                Stopwatch_Stop();
+            else
+                Stopwatch_Start();
+            while (digitalRead(PC1) == LOW);  // รอปล่อยปุ่ม
+        }
+
+        if (digitalRead(PC2) == LOW) {
+            Delay_Ms(30);
+            Stopwatch_Reset();
+            while (digitalRead(PC2) == LOW);
+        }
+
+        Stopwatch_GetTimeString(time_buf, TIME_FORMAT_HHMMSS);
+        printf("\r%s", time_buf);
+        Delay_Ms(100);
+    }</code></pre>
+        <p class="explain">🔍 ปุ่มเดียวสลับ Start/Stop — <code>Stopwatch_IsRunning()</code> ใช้เช็คสถานะเพื่อตัดสินใจ</p>
+    </div>
+</section>
+
+<section>
+    <h2>🟢 ตัวอย่างขั้นต้น</h2>
+    <p>Stopwatch แสดงผลผ่าน USART — ใช้ปุ่ม Start/Stop แสดงเวลา HH:MM:SS</p>
+    <pre><code class="language-c">#include "simplehal.h"
+#include &lt;stdio.h&gt;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(USART_115200);
+
+    pinMode(PC1, PIN_MODE_INPUT_PULLUP);
+
+    Stopwatch_Init();
+    char buf[16];
+
+    printf("--- Stopwatch Ready ---\r\n");
+
+    while (1) {
+        if (digitalRead(PC1) == LOW) {
+            Delay_Ms(30);
+            if (Stopwatch_IsRunning())
+                Stopwatch_Stop();
+            else
+                Stopwatch_Start();
+            while (digitalRead(PC1) == LOW);
+            Delay_Ms(30);
+        }
+
+        Stopwatch_GetTimeString(buf, TIME_FORMAT_HHMMSS);
+        printf("\rTime: %s", buf);
+        Delay_Ms(200);
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>🟡 ตัวอย่างขั้นกลาง</h2>
+    <div class="approach">
+        <strong>แนวคิด:</strong> Countdown Timer 60 วินาที — เมื่อหมดเวลาให้ Buzzer ดัง
+    </div>
+    <pre><code class="language-c">#include "simplehal.h"
+#include &lt;stdio.h&gt;
+
+void onAlarm(void) {
+    // callback เมื่อนับถอยหลังถึง 0
+    digitalWrite(PA2, HIGH);  // เปิด Buzzer
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(USART_115200);
+
+    pinMode(PC1, PIN_MODE_INPUT_PULLUP); // Start
+    pinMode(PC3, PIN_MODE_INPUT_PULLUP); // Stop
+    pinMode(PA2, PIN_MODE_OUTPUT);       // Buzzer
+
+    Countdown_InitFromSeconds(60);  // 60 วินาที
+    Countdown_SetAlarmCallback(onAlarm);
+
+    char buf[16];
+    printf("--- Countdown 60s Ready ---\r\n");
+
+    while (1) {
+        if (digitalRead(PC1) == LOW) {
+            Delay_Ms(30);
+            Countdown_Start();
+            digitalWrite(PA2, LOW);  // ปิด buzzer
+            while (digitalRead(PC1) == LOW);
+            Delay_Ms(30);
+        }
+
+        if (digitalRead(PC3) == LOW) {
+            Delay_Ms(30);
+            Countdown_Stop();
+            while (digitalRead(PC3) == LOW);
+            Delay_Ms(30);
+        }
+
+        Countdown_GetTimeString(buf, TIME_FORMAT_MMSS);
+        printf("\rRemaining: %s", buf);
+
+        if (Countdown_IsFinished()) {
+            printf("\r\n*** TIME'S UP! ***\r\n");
+            Delay_Ms(3000);
+            Countdown_Reset();
+        }
+
+        Delay_Ms(200);
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>🔴 ตัวอย่างขั้นสูง</h2>
+    <div class="approach">
+        <strong>แนวคิด:</strong> Lap Timer — จับเวลา 5 laps, แสดง split time แต่ละ lap
+    </div>
+    <pre><code class="language-c">#include "simplehal.h"
+#include &lt;stdio.h&gt;
+
+#define MAX_LAPS 5
+
+uint32_t lap_times[MAX_LAPS];
+uint8_t lap_count = 0;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(USART_115200);
+
+    pinMode(PC1, PIN_MODE_INPUT_PULLUP); // Start
+    pinMode(PC2, PIN_MODE_INPUT_PULLUP); // Lap
+    pinMode(PC3, PIN_MODE_INPUT_PULLUP); // Reset
+
+    Stopwatch_Init();
+    char buf[16];
+
+    printf("--- Lap Timer (5 Laps) ---\r\n");
+
+    while (1) {
+        // Start / Stop
+        if (digitalRead(PC1) == LOW) {
+            Delay_Ms(30);
+            if (Stopwatch_IsRunning())
+                Stopwatch_Stop();
+            else
+                Stopwatch_Start();
+            while (digitalRead(PC1) == LOW);
+            Delay_Ms(30);
+        }
+
+        // Record Lap
+        if (digitalRead(PC2) == LOW && lap_count &lt; MAX_LAPS) {
+            Delay_Ms(30);
+            lap_times[lap_count] = Stopwatch_GetTotalMilliseconds();
+            printf("Lap %d: %lums\r\n", lap_count + 1, lap_times[lap_count]);
+            lap_count++;
+            while (digitalRead(PC2) == LOW);
+            Delay_Ms(30);
+        }
+
+        // Reset
+        if (digitalRead(PC3) == LOW) {
+            Delay_Ms(30);
+            Stopwatch_Reset();
+            lap_count = 0;
+            printf("--- Reset ---\r\n");
+            while (digitalRead(PC3) == LOW);
+            Delay_Ms(30);
+        }
+
+        if (lap_count >= MAX_LAPS) {
+            printf("=== ALL %d LAPS ===\r\n", MAX_LAPS);
+            for (uint8_t i = 0; i &lt; MAX_LAPS; i++)
+                printf("  Lap %d: %lums\r\n", i + 1, lap_times[i]);
+            lap_count = 0;
+        }
+
+        Stopwatch_GetTimeString(buf, TIME_FORMAT_MMSS);
+        printf("\rTime: %s", buf);
+        Delay_Ms(100);
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <thead><tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr></thead>
+        <tbody>
+            <tr>
+                <td>ใช้ SimpleTIM TIM_2 พร้อมกันไม่ได้</td>
+                <td>Stopwatch จอง TIM_2 อยู่ — SimpleTIM ก็อยากใช้ TIM_2</td>
+                <td>ใช้คนละ timer: <code>#define TIMEXT_DEFAULT_TIMER TIM_1</code> หรือใช้ SIMTIM กับ TIM_1</td>
+            </tr>
+            <tr>
+                <td>Stopwatch หยุดระหว่าง sleep</td>
+                <td>MCU เข้า standby/sleep → TIM2 ปิด</td>
+                <td>อย่าใช้ sleep mode เมื่อต้องการจับเวลา — ใช้ WFI หรือ WFE แทน</td>
+            </tr>
+            <tr>
+                <td>buffer เล็กเกินสำหรับ string</td>
+                <td>ใช้ char[8] เก็บ HH:MM:SS → เขียนเกิน buffer</td>
+                <td>ใช้ <code>TIME_BUFFER_SIZE_HHMMSS</code> (ค่าประมาณ 16) แทนการกำหนดเลขเอง</td>
+            </tr>
+            <tr>
+                <td>Countdown ไม่แจ้งเตือน</td>
+                <td>ลืม poll <code>Countdown_IsFinished()</code> ใน main loop</td>
+                <td>เรียก <code>Countdown_IsFinished()</code> ทุก loop iteration — หรือใช้ <code>SetAlarmCallback</code> ที่จะถูกเรียกใน ISR</td>
+            </tr>
+        </tbody>
+    </table>
+</section>
+
+<section>
+    <h2>💡 FAQ</h2>
+    <p><strong>Q: Stopwatch กับ SimpleTIM ต่างกันอย่างไร?</strong><br>
+    A: <strong>Stopwatch</strong> สร้างมาเพื่อจับเวลาที่เพิ่มขึ้น (elapsed time) — มี Start/Stop/Reset สำเร็จรูป <strong>SimpleTIM</strong> เป็น timer interrupt พื้นฐาน — คุณต้องเขียน logic เองทั้งหมด</p>
+
+    <p><strong>Q: จับเวลาได้นานสุดเท่าไร?</strong><br>
+    A: ใช้ uint32_t เก็บมิลลิวินาที — ค่าสูงสุด ≈ 4,294,967,295ms ≈ <strong>49.7 วัน</strong></p>
+
+    <p><strong>Q: ความละเอียดในการจับเวลาเป็นเท่าไร?</strong><br>
+    A: <code>Stopwatch_GetTotalMilliseconds()</code> ให้ความละเอียด 1ms — เกินพอกับการจับเวลาแบบคน (ปฏิกิริยามนุษย์ ~150–300ms)</p>
+</section>
+
+<section>
+    <h2>✏️ ลองทำดู <a href="ch12_answers.html" class="ans-link">[เฉลย]</a></h2>
+    <ol>
+        <li><strong>Countdown 5 นาทีพร้อมไฟเตือน</strong> — ตั้ง Countdown 300 วินาที แสดงผลผ่าน USART เมื่อหมดเวลา LED กระพริบ</li>
+        <li><strong>Stopwatch ปุ่มเริ่ม/หยุด</strong> — ปุ่ม 1 = Start/Stop, ปุ่ม 2 = Reset — แสดงผลแบบ MM:SS บน USART</li>
+        <li><strong>Pomodoro Timer</strong> — 25 นาที focus + 5 นาที break — สลับอัตโนมัติ ใช้ buzzer แจ้งเตือน</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch11-tim.html">บทที่ 11: Hardware Timer</a>
+    <a href="ch13-dma.html">บทที่ 13: DMA →</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

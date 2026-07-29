@@ -53,6 +53,19 @@ flowchart TD
       </tbody>
     </table>
     <p>WS2812B ต้องการ 5V logic — CH32V003 3.3V ไม่พอ! — ต้องใช้ level shifter (74HCT125) หรือลดแรงดัน VCC ของ WS2812B ลง (เสี่ยง) — ต่อ 5V แยกทุก 50-100 LEDs</p>
+    <h3>รู้จักขา</h3>
+    <ul>
+      <li><strong>VCC:</strong> ไฟเลี้ยง 5V (ต้องใช้ไฟแยกกำลังสูง)</li>
+      <li><strong>DATA (DI):</strong> ขาข้อมูล ต่อกับ PC0 ผ่าน level shifter</li>
+      <li><strong>GND:</strong> ต่อกราวด์ร่วมตลอด strip</li>
+    </ul>
+    <h3>วิธีต่อทีละขั้น</h3>
+    <ol>
+      <li>ต่อ <strong>PC0</strong> ผ่าน <strong>Level Shifter (74HCT125)</strong> ไป <strong>DATA</strong> — 3.3V→5V จำเป็น! มิฉะนั้นสีจะเพี้ยน</li>
+      <li>ต่อ <strong>5V ภายนอก</strong> ไป <strong>VCC</strong> — ⚠️ ใช้ไฟแยก กระแสสูง (60mA/LED)</li>
+      <li>ต่อ <strong>GND</strong> MCU และไฟแยก ไป <strong>GND</strong> — กราวด์ร่วมตลอดทั้ง strip</li>
+      <li><strong>ต่อ capacitor 1000µF</strong> ระหว่าง VCC กับ GND ใกล้ strip — ลดกระแสกระชาก</li>
+    </ol>
 </section>
 <section>
     <h2>📚 หลักการทำงาน</h2>

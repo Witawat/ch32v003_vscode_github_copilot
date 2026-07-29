@@ -49,6 +49,20 @@ flowchart TD
         <tr><td>PD6 (RX)</td><td>←</td><td>TJC HMI</td><td>TX</td><td>จอ→MCU</td></tr>
       </tbody>
     </table>
+    <h3>รู้จักขา</h3>
+    <ul>
+      <li><strong>VCC:</strong> ไฟเลี้ยง 5V</li>
+      <li><strong>GND:</strong> กราวด์</li>
+      <li><strong>RX:</strong> รับข้อมูลจาก MCU — ต่อขา PD5 (TX) ของ MCU</li>
+      <li><strong>TX:</strong> ส่งข้อมูลไป MCU — ต่อขา PD6 (RX) ของ MCU</li>
+    </ul>
+    <h3>วิธีต่อทีละขั้น</h3>
+    <ol>
+      <li>ต่อ <strong>VCC</strong> TJC ไป <strong>5V</strong> ของ MCU</li>
+      <li>ต่อ <strong>GND</strong> TJC ไป <strong>GND</strong> ของ MCU</li>
+      <li>ต่อ <strong>RX</strong> TJC ไปขา <strong>PD5 (TX)</strong> ของ MCU</li>
+      <li>ต่อ <strong>TX</strong> TJC ไปขา <strong>PD6 (RX)</strong> ของ MCU</li>
+    </ol>
 </section>
 <section><h2>📚 หลักการทำงาน</h2>
 <p><strong>TJC HMI</strong> สื่อสารผ่าน USART 9600 baud — TJC_Init() เริ่มต้น — TJC_SendCommand() ส่งคำสั่ง — TJC_ProcessResponse() ประมวลผล response — ไม่มี instance (global functions)</p></section>

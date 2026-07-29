@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SimpleSPI — สื่อสารความเร็วสูง | SimpleHAL API Reference</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+</head>
+<body>
+
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="i2c.html">← I2C</a>
+    <a href="adc.html">ADC →</a>
+</nav>
+
+<h1>SimpleSPI <span class="level level-intermediate">ระดับกลาง</span></h1>
+<p>สื่อสาร SPI ความเร็วสูง — Hardware SPI แบบ Full-Duplex</p>
+
+<section>
+<h2>ภาพรวม</h2>
+<p>SimpleSPI ใช้ Hardware SPI ของ CH32V003 รองรับ Full-Duplex (ส่งและรับพร้อมกัน), โหมด 0-3, ความเร็ว 8 ระดับ, และ Pin Config 2 แบบ</p>
+<p>SPI เป็นโปรโตคอลสื่อสาร 4 สาย: SCK (นาฬิกา), MOSI (Master Out Slave In), MISO (Master In Slave Out), NSS/CS (Chip Select) — เหมาะกับเซ็นเซอร์, จอแสดงผล, การ์ด SD และอุปกรณ์ความเร็วสูง</p>
+</section>
+
+<div class="callout callout-err">
+<strong>คำเตือนสำคัญ — ข้อจำกัดแพ็กเกจ</strong><br>
+SOP-8 และ SOP-16 <strong>ไม่มี SPI Hardware</strong> — โค้ดส่วน SPI จะถูกตัดออกตอนคอมไพล์ด้วย <code>#if defined(CH32V003)</code> / <code>#if defined(CH32V003A8P6)</code><br>
+ถ้าอยู่บน SOP-8/SOP-16 ให้ใช้ <code>shiftOut()</code> / <code>shiftIn()</code> แทน (ดู <a href="gpio.html">โมดูล GPIO</a>)
+</div>
+
+<section>
+<h2>โหมด SPI</h2>
+<p>เลือกโหมด SPI ผ่านพารามิเตอร์แรกของ <code>SPI_SimpleInit()</code> — โหมด 0 เป็นค่าเริ่มต้นและใช้แพร่หลายที่สุด</p>
+
+<table>
+<tr><th>โหมด</th><th>CPOL</th><th>CPHA</th><th>ขอบนาฬิกา</th><th>ใช้กับ</th></tr>
+<tr><td><strong>Mode 0</strong></td><td>0</td><td>0</td><td>ขาขึ้นอ่าน ขาลงเขียน</td><td>ทั่วไป, LCD, SD Card</td></tr>
+<tr><td>Mode 1</td><td>0</td><td>1</td><td>ขาลงอ่าน ขาขึ้นเขียน</td><td>เซ็นเซอร์บางตัว</td></tr>
+<tr><td>Mode 2</td><td>1</td><td>0</td><td>ขาลงอ่าน ขาขึ้นเขียน</td><td>ไม่ค่อยใช้</td></tr>
+<tr><td>Mode 3</td><td>1</td><td>1</td><td>ขาขึ้นอ่าน ขาลงเขียน</td><td>ไม่ค่อยใช้</td></tr>
+</table>
+
+<ul>
+    <li><strong>CPOL</strong> (Clock Polarity): ระดับสัญญาณนาฬิกาตอนว่าง — 0 = LOW, 1 = HIGH</li>
+    <li><strong>CPHA</strong> (Clock Phase): ตำแหน่งการสุ่มข้อมูล — 0 = ขอบแรก, 1 = ขอบที่สอง</li>
+</ul>
+</section>
+
+<section>
+<h2>ความเร็ว</h2>
+<p>เลือกความเร็วผ่าน enum — 8 ระดับจาก 125 kHz ถึง 12 MHz:</p>
+
+<div class="callout callout-warn">
+<strong>⚠️ ชื่อ enum ผิด!</strong> ความเร็วจริงเป็น <strong>2 เท่า</strong> ของชื่อ enum เพราะ PCLK2 = 48MHz (half of HCLK 96MHz) — <code>SPI_125KHZ</code> จริง ๆ อยู่ที่ ~250 kHz, <code>SPI_12MHZ</code> จริง ๆ อยู่ที่ ~24 MHz
+</div>
+
+<table>
+<tr><th>Enum</th><th>Divider</th><th>ความเร็วจริง (approx.)</th></tr>
+<tr><td><code>SPI_125KHZ</code></td><td>256</td><td>~187.5 kHz</td></tr>
+<tr><td><code>SPI_250KHZ</code></td><td>128</td><td>~375 kHz</td></tr>
+<tr><td><code>SPI_500KHZ</code></td><td>64</td><td>~750 kHz</td></tr>
+<tr><td><code>SPI_1MHZ</code></td><td>32</td><td>~1.5 MHz</td></tr>
+<tr><td><code>SPI_2MHZ</code></td><td>16</td><td>~3 MHz</td></tr>
+<tr><td><code>SPI_4MHZ</code></td><td>8</td><td>~6 MHz</td></tr>
+<tr><td><code>SPI_8MHZ</code></td><td>4</td><td>~12 MHz</td></tr>
+<tr><td><code>SPI_12MHZ</code></td><td>2</td><td>~24 MHz</td></tr>
+</table>
+</section>
+
+<section>
+<h2>Pin Config</h2>
+<p>2 รูปแบบการเชื่อมต่อขา:</p>
+
+<table class="wiring-table">
+<tr><th>Pin Config</th><th>SCK</th><th>MISO</th><th>MOSI</th><th>NSS</th><th>รองรับแพ็กเกจ</th></tr>
+<tr>
+    <td><code>SPI_PINS_DEFAULT</code></td>
+    <td>PC5</td><td>PC7</td><td>PC6</td><td>PC4</td>
+    <td>TSSOP20, QFN20</td>
+</tr>
+<tr>
+    <td><code>SPI_PINS_REMAP</code></td>
+    <td>PD1</td><td>PD2</td><td>PD3</td><td>PD0</td>
+    <td>TSSOP20, QFN20 เท่านั้น</td>
+</tr>
+</table>
+
+<p>REMAP เปิดใช้ผ่าน AFIO (Alternate Function I/O) — จะใช้ Pin Config นี้ก็ต่อเมื่อ DEFAULT ชนกับโมดูลอื่น</p>
+</section>
+
+<section>
+<h2>ตารางฟังก์ชัน</h2>
+
+<table>
+<tr><th>ฟังก์ชัน</th><th>รีเทิร์น</th><th>คำอธิบาย</th></tr>
+<tr>
+    <td><code>SPI_SimpleInit(mode, speed, pin_config)</code></td>
+    <td>void</td>
+    <td>เริ่มต้น SPI — กำหนดโหมด, ความเร็ว, และขา</td>
+</tr>
+<tr>
+    <td><code>SPI_Transfer(data)</code></td>
+    <td>uint8_t</td>
+    <td>ส่ง 1 byte พร้อมรับกลับ 1 byte</td>
+</tr>
+<tr>
+    <td><code>SPI_TransferBuffer(tx, rx, len)</code></td>
+    <td>void</td>
+    <td>ส่ง buffer พร้อมรับกลับ buffer</td>
+</tr>
+<tr>
+    <td><code>SPI_Write(data, len)</code></td>
+    <td>void</td>
+    <td>ส่งอย่างเดียว (ไม่สนใจข้อมูลรับ)</td>
+</tr>
+<tr>
+    <td><code>SPI_Read(data, len, dummy_byte)</code></td>
+    <td>void</td>
+    <td>รับอย่างเดียว — ส่ง dummy_byte เพื่อสร้างนาฬิกา</td>
+</tr>
+<tr>
+    <td><code>SPI_SetCS(state)</code></td>
+    <td>void</td>
+    <td>ควบคุม CS pin — <code>0</code> = LOW (active/เลือก), <code>1</code> = HIGH (ปล่อย)</td>
+</tr>
+<tr>
+    <td><code>SPI_SetCSPin(port, pin)</code></td>
+    <td>void</td>
+    <td>เปลี่ยน CS pin ไปขาอื่น — สำหรับหลายอุปกรณ์</td>
+</tr>
+<tr>
+    <td><code>SPI_SetBitOrder(order)</code></td>
+    <td>void</td>
+    <td>เปลี่ยนลำดับบิต — <code>MSB_FIRST</code> หรือ <code>LSB_FIRST</code></td>
+</tr>
+<tr>
+    <td><code>SPI_SetSpeed(speed)</code></td>
+    <td>void</td>
+    <td>เปลี่ยนความเร็วตอนรันไทม์</td>
+</tr>
+</table>
+</section>
+
+<section>
+<h2>การควบคุม CS (Chip Select)</h2>
+<p>ต้องควบคุม CS เองก่อนและหลัง Transfer ทุกครั้ง — SPI Hardware <strong>ไม่</strong> จัดการ CS ให้อัตโนมัติ</p>
+
+<pre><code class="language-c">// รูปแบบมาตรฐาน
+SPI_SetCS(0);              // CS LOW → เลือกอุปกรณ์
+SPI_Transfer(0x42);        // ส่ง/รับข้อมูล
+SPI_SetCS(1);              // CS HIGH → ปล่อยอุปกรณ์
+</code></pre>
+
+<p>ถ้าใช้หลายอุปกรณ์ต่อ SPI bus เดียวกัน:</p>
+<pre><code class="language-c">// อุปกรณ์ A — CS ที่ PA1
+SPI_SetCSPin('A', 1);
+SPI_SetCS(0);
+SPI_Transfer(0x10);
+SPI_SetCS(1);
+
+// อุปกรณ์ B — CS ที่ PA2
+SPI_SetCSPin('A', 2);
+SPI_SetCS(0);
+SPI_Transfer(0x20);
+SPI_SetCS(1);
+</code></pre>
+</section>
+
+<section>
+<h2>ลำดับบิต (Bit Order)</h2>
+
+<table>
+<tr><th>Enum</th><th>คำอธิบาย</th></tr>
+<tr><td><code>MSB_FIRST</code></td><td>ส่งบิตสูงสุด (Bit 7) ก่อน — ค่าเริ่มต้น</td></tr>
+<tr><td><code>LSB_FIRST</code></td><td>ส่งบิตต่ำสุด (Bit 0) ก่อน — บางอุปกรณ์ต้องการ</td></tr>
+</table>
+
+<pre><code class="language-c">SPI_SetBitOrder(LSB_FIRST);  // เปลี่ยนเป็น LSB first
+SPI_Transfer(data);
+SPI_SetBitOrder(MSB_FIRST);  // กลับเป็น MSB first
+</code></pre>
+</section>
+
+<section>
+<h2>ตัวอย่างโค้ด</h2>
+
+<h3>Transfer พื้นฐาน</h3>
+<pre><code class="language-c">#include "simplehal.h"
+
+void setup() {
+    SPI_SimpleInit(0, SPI_1MHZ, SPI_PINS_DEFAULT);
+}
+
+void loop() {
+    SPI_SetCS(0);
+    uint8_t response = SPI_Transfer(0x42);  // ส่ง 0x42 รับ response
+    SPI_SetCS(1);
+
+    if (response == 0xFF) {
+        // อุปกรณ์ตอบสนอง
+    }
+
+    Delay_Ms(100);
+}
+</code></pre>
+
+<h3>Transfer แบบ Buffer</h3>
+<pre><code class="language-c">uint8_t tx_data[] = {0x01, 0x02, 0x03, 0x04};
+uint8_t rx_data[4];
+
+SPI_SetCS(0);
+SPI_TransferBuffer(tx_data, rx_data, 4);
+SPI_SetCS(1);
+
+// rx_data[0..3] มีข้อมูลที่รับกลับมา
+</code></pre>
+
+<h3>หลายอุปกรณ์ — เปลี่ยน CS Pin</h3>
+<pre><code class="language-c">void setup() {
+    SPI_SimpleInit(0, SPI_2MHZ, SPI_PINS_DEFAULT);
+}
+
+uint8_t read_sensor_a() {
+    SPI_SetCSPin('A', 1);        // CS → PA1
+    SPI_SetCS(0);
+    uint8_t val = SPI_Transfer(0x00);
+    SPI_SetCS(1);
+    return val;
+}
+
+uint8_t read_sensor_b() {
+    SPI_SetCSPin('A', 2);        // CS → PA2
+    SPI_SetCS(0);
+    uint8_t val = SPI_Transfer(0x00);
+    SPI_SetCS(1);
+    return val;
+}
+</code></pre>
+
+<h3>ส่งข้อมูลอย่างเดียว (Write Only)</h3>
+<pre><code class="language-c">uint8_t data[] = {0x10, 0x20, 0x30, 0x40};
+
+SPI_SetCS(0);
+SPI_Write(data, 4);   // ส่ง 4 bytes — ไม่สนใจข้อมูลที่รับกลับ
+SPI_SetCS(1);
+</code></pre>
+
+<h3>รับข้อมูลอย่างเดียว (Read Only)</h3>
+<pre><code class="language-c">uint8_t buffer[8];
+
+SPI_SetCS(0);
+SPI_Read(buffer, 8, 0xFF);  // ส่ง 0xFF (dummy) เพื่อรับ 8 bytes
+SPI_SetCS(1);
+</code></pre>
+</section>
+
+<section>
+<h2>ข้อจำกัดแพ็กเกจ</h2>
+
+<table>
+<tr><th>แพ็กเกจ</th><th>SPI_PINS_DEFAULT</th><th>SPI_PINS_REMAP</th><th>SPI Hardware</th></tr>
+<tr>
+    <td><strong>SOP-8</strong></td>
+    <td><code>#error</code> — ไม่มีขา PC4-7</td>
+    <td><code>#error</code> — ไม่มีขา PD0-3</td>
+    <td>ไม่ถูกคอมไพล์</td>
+</tr>
+<tr>
+    <td><strong>SOP-16</strong></td>
+    <td><code>#error</code> — ไม่มีขา PC4-7</td>
+    <td><code>#error</code> — ไม่มีขา PD0-3</td>
+    <td>ไม่ถูกคอมไพล์</td>
+</tr>
+<tr>
+    <td><strong>TSSOP20 / QFN20</strong></td>
+    <td>ใช้งานได้</td>
+    <td>ใช้งานได้</td>
+    <td>ทำงานปกติ</td>
+</tr>
+</table>
+
+<div class="callout callout-note">
+<strong>ทางเลือกสำหรับ SOP-8 / SOP-16:</strong> ใช้ <code>shiftOut(dataPin, clockPin, bitOrder, value)</code> และ <code>shiftIn(dataPin, clockPin, bitOrder)</code> ซึ่งเป็น Software SPI ที่ใช้ GPIO ขาใดก็ได้
+</div>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="i2c.html">← I2C</a>
+    <a href="adc.html">ADC →</a>
+</nav>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

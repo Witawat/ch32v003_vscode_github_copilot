@@ -21,6 +21,21 @@
 PC1─SDA  PC2─SCL  3.3V─VCC  GND─GND
 VIN+ ── load+ ── Rshunt 0.1Ω ── VIN- ── load- ── GND
 (High-side: วัดกระแสก่อน load — ปลอดภัยกว่า low-side)</pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>SDA (PC1):</strong> สายข้อมูล I2C ไป INA219</li>
+  <li><strong>SCL (PC2):</strong> สายนาฬิกา I2C</li>
+  <li><strong>VCC (3.3V):</strong> จ่ายไฟเลี้ยง INA219</li>
+  <li><strong>GND:</strong> กราวด์ร่วม</li>
+  <li><strong>VIN+:</strong> ต่อด้าน load+ ก่อน shunt resistor 0.1Ω</li>
+  <li><strong>VIN-:</strong> ต่อด้าน load- หลัง shunt resistor</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PC1</strong> ไป <strong>SDA</strong> และ <strong>PC2</strong> ไป <strong>SCL</strong> — I2C</li>
+  <li>ต่อ <strong>3.3V</strong> ไป <strong>VCC</strong> และ <strong>GND</strong> ไป <strong>GND</strong> — จ่ายไฟ</li>
+  <li>ต่อ <strong>VIN+</strong> เข้า load+ ผ่าน <strong>shunt 0.1Ω</strong> — วัดกระแส high-side</li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
@@ -53,6 +68,22 @@ float power   = INA219_GetPower();         // mW
 <pre class="ascii-circuit">
 PC1─SDA  PC2─SCL  3.3V─VCC  GND─GND  A0-A3 ── signal inputs
 ADDR─GND = 0x48, ADDR─VCC = 0x49, ADDR─SDA = 0x4A, ADDR─SCL = 0x4B</pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>SDA (PC1):</strong> สายข้อมูล I2C</li>
+  <li><strong>SCL (PC2):</strong> สายนาฬิกา I2C</li>
+  <li><strong>VCC (3.3V):</strong> จ่ายไฟเลี้ยง ADS1115</li>
+  <li><strong>GND:</strong> กราวด์ร่วม</li>
+  <li><strong>A0–A3:</strong> ขา input สัญญาณอนาล็อก 4 ช่อง</li>
+  <li><strong>ADDR:</strong> เลือก address I2C 0x48–0x4B</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PC1</strong> ไป <strong>SDA</strong> และ <strong>PC2</strong> ไป <strong>SCL</strong> — I2C</li>
+  <li>ต่อ <strong>3.3V</strong> ไป <strong>VCC</strong> และ <strong>GND</strong> ไป <strong>GND</strong> — จ่ายไฟ</li>
+  <li>ต่อสัญญาณที่ต้องการวัดเข้า <strong>A0–A3</strong> — อ่านค่า 16-bit</li>
+  <li>ต่อ <strong>ADDR</strong> ลง GND/VCC/SDA/SCL เพื่อเลือก address</li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
@@ -89,6 +120,22 @@ float volt = ADS1115_ToVoltage(val0);   // convert to voltage
 <pre class="ascii-circuit">
 PC1─SDA  PC2─SCL  3.3V─VCC  GND─GND  VOUT ── scope/load
 (A0 pin — GND=0x60, VCC=0x61, SDA=0x62, SCL=0x63)</pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>SDA (PC1):</strong> สายข้อมูล I2C</li>
+  <li><strong>SCL (PC2):</strong> สายนาฬิกา I2C</li>
+  <li><strong>VCC (3.3V):</strong> จ่ายไฟเลี้ยง MCP4725</li>
+  <li><strong>GND:</strong> กราวด์ร่วม</li>
+  <li><strong>VOUT:</strong> ขา output แรงดันอนาล็อก 0–3.3V (12-bit)</li>
+  <li><strong>A0:</strong> เลือก address I2C 0x60–0x63</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PC1</strong> ไป <strong>SDA</strong> และ <strong>PC2</strong> ไป <strong>SCL</strong> — I2C</li>
+  <li>ต่อ <strong>3.3V</strong> ไป <strong>VCC</strong> และ <strong>GND</strong> ไป <strong>GND</strong> — จ่ายไฟ</li>
+  <li>ต่อ <strong>VOUT</strong> ไปออสซิลโลสโคปหรือ load — ได้แรงดัน 0–3.3V</li>
+  <li>ต่อ <strong>A0</strong> เลือก address ให้ตรง</li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
@@ -121,6 +168,22 @@ MCP4725_SetVoltage(2048, MCP4725_VREF_VDD); // 2048/4096 = 1.65V (3.3V VDD)
 PD5(TX)─RX(PZEM)  PD6(RX)─TX(PZEM)  5V─VCC  GND─GND
 CT clamp ⇛ live wire (แค่ 1 เส้น), voltage probe ⤏ socket L-N
 ⚡ 220VAC อันตราย! — ต่อเฉพาะเมื่อรู้วิธี</pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>TX (PD5):</strong> ส่งข้อมูล USART ไป RX ของ PZEM (คำสั่ง Modbus)</li>
+  <li><strong>RX (PD6):</strong> รับข้อมูล USART จาก TX ของ PZEM (ค่าที่วัดได้)</li>
+  <li><strong>VCC (5V):</strong> จ่ายไฟ 5V ให้ PZEM004T</li>
+  <li><strong>GND:</strong> กราวด์ร่วม</li>
+  <li><strong>CT Clamp:</strong> คล้องสายไฟเส้นเดียว (L) เพื่อวัดกระแส AC</li>
+  <li><strong>Voltage Probe:</strong> เสียบวัดแรงดันไฟบ้าน 220VAC</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PD5</strong> ไป <strong>RX ของ PZEM</strong> — ส่งคำสั่ง Modbus</li>
+  <li>ต่อ <strong>PD6</strong> ไป <strong>TX ของ PZEM</strong> — รับค่าที่วัดได้</li>
+  <li>ต่อ <strong>5V</strong> ไป <strong>VCC</strong> และ <strong>GND</strong> ไป <strong>GND</strong> — จ่ายไฟ</li>
+  <li>คล้อง <strong>CT clamp</strong> รอบสาย L เส้นเดียว — วัดกระแส</li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
@@ -157,6 +220,22 @@ float pf = PZEM004T_ReadPowerFactor();   // 0-1
 <pre class="ascii-circuit">
 PD5(TX)─RX(PZEM)  PD6(RX)─TX(PZEM)  5V─VCC  GND─GND
 (ต่อแบบเดียวกับ PZEM004T — ต่างที่ firmware protocol)</pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>TX (PD5):</strong> ส่งข้อมูล USART ไป RX ของ PZEMv3</li>
+  <li><strong>RX (PD6):</strong> รับข้อมูล USART จาก TX ของ PZEMv3</li>
+  <li><strong>VCC (5V):</strong> จ่ายไฟ 5V</li>
+  <li><strong>GND:</strong> กราวด์ร่วม</li>
+  <li><strong>CT Clamp:</strong> คล้องสาย L วัดกระแส AC</li>
+  <li><strong>Voltage Probe:</strong> เสียบวัดแรงดัน 220VAC</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PD5</strong> ไป <strong>RX ของ PZEMv3</strong> — ส่งคำสั่ง</li>
+  <li>ต่อ <strong>PD6</strong> ไป <strong>TX ของ PZEMv3</strong> — รับค่า</li>
+  <li>ต่อ <strong>5V</strong> ไป <strong>VCC</strong> และ <strong>GND</strong> ไป <strong>GND</strong> — จ่ายไฟ</li>
+  <li>คล้อง <strong>CT clamp</strong> รอบสาย L — วัดกระแส</li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
@@ -192,6 +271,17 @@ if(PZEM004Tv3_ReadAll(&data)) {
 <pre class="ascii-circuit">
 3.3V─VCC  GND─GND  PC4(ADC)─OUT
 (ใช้แม่เหล็กถาวร — ขั้วเหนือ/ใต้ให้ผลลัพธ์ตรงข้าม)</pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>OUT (PC4):</strong> ขา output อนาล็อก ต่อเข้า ADC ของ MCU</li>
+  <li><strong>VCC (3.3V):</strong> จ่ายไฟ 3.3V</li>
+  <li><strong>GND:</strong> กราวด์ร่วม</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>3.3V</strong> ไป <strong>VCC</strong> และ <strong>GND</strong> ไป <strong>GND</strong> — จ่ายไฟ</li>
+  <li>ต่อ <strong>PC4</strong> ไป <strong>OUT</strong> ของ OH49E — อ่านค่า ADC วัดสนามแม่เหล็ก</li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>

@@ -20,6 +20,19 @@
 <pre class="ascii-circuit">
 PC0─TRIG  PC1─ECHO  5V─VCC  GND─GND
 ⚠️ ECHO 5V → voltage divider 2.2kΩ+3.3kΩ ลดเหลือ ~3.3V</pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>TRIG (PC0):</strong> ขาสั่งส่งคลื่นอัลตราโซนิค (พัลส์ 10µs)</li>
+  <li><strong>ECHO (PC1):</strong> ขารับพัลส์สะท้อน วัดระยะทาง</li>
+  <li><strong>VCC (5V):</strong> จ่ายไฟ 5V</li>
+  <li><strong>GND:</strong> กราวด์ร่วม</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PC0</strong> ไป <strong>TRIG</strong> — สั่งส่งคลื่น</li>
+  <li>ต่อ <strong>PC1</strong> ไป <strong>ECHO</strong> ผ่าน voltage divider 2.2k+3.3k — ลด 5V เหลือ 3.3V</li>
+  <li>ต่อ <strong>5V</strong> ไป <strong>VCC</strong> และ <strong>GND</strong> ไป <strong>GND</strong></li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
@@ -48,6 +61,20 @@ if(dist > 0) { USART_PrintFloat(dist, 1); USART_Println(" cm"); }
 <pre class="ascii-circuit">
 PC1─SDA  PC2─SCL  3.3V─VCC  GND─GND  XSHUT─3.3V (หรือ GPIO สำหรับ multi-sensor)
 </pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>SDA (PC1):</strong> สายข้อมูล I2C</li>
+  <li><strong>SCL (PC2):</strong> สายนาฬิกา I2C</li>
+  <li><strong>VCC (3.3V):</strong> จ่ายไฟ 3.3V</li>
+  <li><strong>GND:</strong> กราวด์ร่วม</li>
+  <li><strong>XSHUT:</strong> ต่อ 3.3V เพื่อเปิดใช้งาน (ใช้ GPIO ปิดเพื่อเปลี่ยน address)</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PC1</strong> ไป <strong>SDA</strong> และ <strong>PC2</strong> ไป <strong>SCL</strong> — I2C</li>
+  <li>ต่อ <strong>3.3V</strong> ไป <strong>VCC</strong> และ <strong>GND</strong> ไป <strong>GND</strong></li>
+  <li>ต่อ <strong>XSHUT</strong> กับ 3.3V หรือ GPIO</li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
@@ -77,6 +104,20 @@ uint16_t mm = VL53L0X_ReadRangeMM();
 <pre class="ascii-circuit">
 PC1─SDA  PC2─SCL  3.3V─VCC  GND─GND  AD0─GND (=0x68, หรือ VCC =0x69)
 </pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>SDA (PC1):</strong> สายข้อมูล I2C</li>
+  <li><strong>SCL (PC2):</strong> สายนาฬิกา I2C</li>
+  <li><strong>VCC (3.3V):</strong> จ่ายไฟ 3.3V</li>
+  <li><strong>GND:</strong> กราวด์ร่วม</li>
+  <li><strong>AD0:</strong> เลือก address I2C 0x68 (ต่อ GND) หรือ 0x69 (ต่อ VCC)</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PC1</strong> ไป <strong>SDA</strong> และ <strong>PC2</strong> ไป <strong>SCL</strong> — I2C</li>
+  <li>ต่อ <strong>3.3V</strong> ไป <strong>VCC</strong> และ <strong>GND</strong> ไป <strong>GND</strong></li>
+  <li>ต่อ <strong>AD0</strong> ลง GND (0x68) หรือ VCC (0x69)</li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
@@ -110,6 +151,20 @@ float angle = 0.98f * (angle + gx*dt) + 0.02f * (atan2(ay, az)*57.3f);</code></p
 <pre class="ascii-circuit">
 PC1─SDA  PC2─SCL  3.3V─VCC  GND─GND  DIR─GND (clockwise, หรือ VCC กลับทิศ)
 </pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>SDA (PC1):</strong> สายข้อมูล I2C</li>
+  <li><strong>SCL (PC2):</strong> สายนาฬิกา I2C</li>
+  <li><strong>VCC (3.3V):</strong> จ่ายไฟ 3.3V</li>
+  <li><strong>GND:</strong> กราวด์ร่วม</li>
+  <li><strong>DIR:</strong> เลือกทิศทางการนับ (GND = ตามเข็ม)</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PC1</strong> ไป <strong>SDA</strong> และ <strong>PC2</strong> ไป <strong>SCL</strong> — I2C</li>
+  <li>ต่อ <strong>3.3V</strong> ไป <strong>VCC</strong> และ <strong>GND</strong> ไป <strong>GND</strong></li>
+  <li>ต่อ <strong>DIR</strong> ลง GND หรือ VCC เลือกทิศ</li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
@@ -141,6 +196,18 @@ float deg = AS5600_ReadAngleDegrees();    // 0.0-359.9
 <pre class="ascii-circuit">
 PC1─OUT  5V─VCC  GND─GND  (OUT 3.3V compatible — ต่อตรงได้)
 </pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>OUT (PC1):</strong> ขา output HIGH เมื่อ detect การเคลื่อนไหว</li>
+  <li><strong>VCC (5V):</strong> จ่ายไฟ 5V</li>
+  <li><strong>GND:</strong> กราวด์ร่วม</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PC1</strong> ไป <strong>OUT</strong> ของ PIR — อ่านสถานะ</li>
+  <li>ต่อ <strong>5V</strong> ไป <strong>VCC</strong> และ <strong>GND</strong> ไป <strong>GND</strong></li>
+  <li>ใช้ interrupt (RISING) ในโค้ดเพื่อประหยัดพลังงาน</li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
@@ -171,6 +238,18 @@ while(1) {
 <pre class="ascii-circuit">
 PC1─OUT  3.3-5V─VCC  GND─GND  (OUT 3.3V compatible)
 </pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>OUT (PC1):</strong> ขา output HIGH เมื่อ detect การเคลื่อนไหว</li>
+  <li><strong>VCC (3.3–5V):</strong> จ่ายไฟ 3.3V–5V</li>
+  <li><strong>GND:</strong> กราวด์ร่วม</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PC1</strong> ไป <strong>OUT</strong> ของ RCWL0516</li>
+  <li>ต่อ <strong>VCC</strong> กับไฟ 3.3V หรือ 5V</li>
+  <li>ต่อ <strong>GND</strong> ร่วม</li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>

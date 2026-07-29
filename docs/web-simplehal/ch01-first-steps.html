@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>บทที่ 1: ก้าวแรก — 3 สิ่งที่ต้องทำทุกโปรเจกต์ — SimpleHAL</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch00-install.html">บทก่อน</a>
+    <a href="ch02-gpio.html">บทถัดไป →</a>
+</nav>
+
+<h1>บทที่ 1: ก้าวแรก — 3 สิ่งที่ต้องทำทุกโปรเจกต์</h1>
+<span class="level level-beginner">เริ่มต้น</span>
+
+<div class="callout callout-note" style="margin-top:1rem">
+    <strong>📋 สิ่งที่ต้องมีก่อนเริ่ม:</strong> ยังไม่ได้ติดตั้งอะไรเลย? → <a href="ch00-install.html">ไปบทที่ 0 ก่อน</a>
+</div>
+
+<section>
+    <h2>3 สิ่งที่ต้องทำทุกโปรเจกต์</h2>
+
+    <div class="callout callout-note">
+        <strong>① SystemCoreClockUpdate() — บอก MCU ว่า clock เท่าไหร่</strong>
+        <p>CH32V003 รันที่ HSI 48MHz เป็นค่าเริ่มต้น ฟังก์ชันนี้จะอัปเดตตัวแปร <code>SystemCoreClock</code> ให้มีค่า 48000000 ซึ่งสำคัญมากสำหรับการคำนวณ delay, baud rate, และ PWM frequency หากลืมเรียก — ทุกอย่างที่เกี่ยวกับเวลาจะผิดเพี้ยน</p>
+    </div>
+
+    <div class="callout callout-good">
+        <strong>② Timer_Init() — เปิด SysTick สำหรับหน่วงเวลา</strong>
+        <p>SysTick เป็นตัวจับเวลาพื้นฐานที่สร้าง interrupt ทุก 1ms ใช้เป็นฐานให้กับฟังก์ชัน <code>Delay_Ms()</code>, <code>Delay_Us()</code>, และ <code>Get_CurrentMs()</code> หากลืมเรียก — Delay จะค้าง infinity loop</p>
+    </div>
+
+    <div class="callout callout-warn">
+        <strong>③ #define CH32V003_PACKAGE — เลือกแพ็กเกจของชิป</strong>
+        <p>CH32V003 มี 4 แพ็กเกจ (SOP-8, SOP-16, TSSOP-20, QFN-20) แต่ละแพ็กเกจมีจำนวนขาไม่เท่ากัน — ต้องกำหนดก่อน <code>#include "SimpleHAL.h"</code> เพื่อให้คอมไพเลอร์รู้ว่าขาไหนมี ขาไหนไม่มี และแจ้ง error หากใช้ขาที่ไม่มีในแพ็กเกจนั้น</p>
+    </div>
+</section>
+
+<section>
+    <h2>CH32V003_PACKAGE คืออะไร</h2>
+    <p>CH32V003 มี 4 แพ็กเกจให้เลือก ขึ้นกับรุ่นชิปที่คุณซื้อมา:</p>
+    <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_SOP8      // SOP-8  (J4M6)  — 6 GPIO
+#define CH32V003_PACKAGE  PACKAGE_SOP16     // SOP-16 (A4M6)  — 14 GPIO
+#define CH32V003_PACKAGE  PACKAGE_TSSOP20   // TSSOP-20 (F4P6) — 18 GPIO
+#define CH32V003_PACKAGE  PACKAGE_QFN20     // QFN-20 (F4U6)  — 18 GPIO</code></pre>
+
+    <table>
+        <tr><th>แพ็กเกจ</th><th>รุ่นชิป</th><th>จำนวนขา</th><th>GPIO</th><th>ขาที่ใช้ได้</th></tr>
+        <tr><td>SOP-8</td><td>CH32V003J4M6</td><td>8</td><td>6</td><td>PA1, PA2, PC1, PC2, PC4, PD6</td></tr>
+        <tr><td>SOP-16</td><td>CH32V003A4M6</td><td>16</td><td>14</td><td>PA1, PA2, PC0, PC1, PC2, PC3, PC4, PD0, PD1, PD2, PD3, PD4, PD5, PD6</td></tr>
+        <tr><td>TSSOP-20</td><td>CH32V003F4P6</td><td>20</td><td>18</td><td>PA1, PA2, PC0-PC4, PC7, PD0-PD7 (ครบทุกขา)</td></tr>
+        <tr><td>QFN-20</td><td>CH32V003F4U6</td><td>20</td><td>18</td><td>เหมือน TSSOP-20</td></tr>
+    </table>
+
+    <div class="callout callout-note">
+        <strong>💡 แนะนำ:</strong> หากไม่แน่ใจว่าชิปของคุณรุ่นอะไร — ดูตัวอักษรบนตัวชิป: J4M6 = SOP-8, A4M6 = SOP-16, F4P6 = TSSOP-20, F4U6 = QFN-20
+    </div>
+</section>
+
+<section>
+    <h2>3 วิธี Include SimpleHAL</h2>
+
+    <h3>วิธีที่ 1: All-in-one (แนะนำ)</h3>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"</code></pre>
+    <p>รวมทุกโมดูลไว้ในไฟล์เดียว — สะดวก ไม่ต้อง include แยก แต่ใช้ Flash มากกว่าเล็กน้อย (เนื่องจากรวมฟังก์ชันที่ไม่ได้ใช้)</p>
+
+    <h3>วิธีที่ 2: Specific Modules</h3>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL/SimpleGPIO.h"
+#include "SimpleHAL/SimpleADC.h"</code></pre>
+    <p>Include เฉพาะโมดูลที่ใช้ — ประหยัด Flash และ compile เร็ว เหมาะสำหรับโปรเจกต์ที่มีข้อจำกัดด้านหน่วยความจำ</p>
+
+    <h3>วิธีที่ 3: All Together</h3>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL/SimpleHAL.h"</code></pre>
+    <p>เหมือนวิธีที่ 1 แต่ใช้ path แบบมีโฟลเดอร์ — ใช้เมื่อ Library อยู่ใน <code>User/SimpleHAL/</code></p>
+</section>
+
+<section>
+    <h2>โครงสร้าง main() ที่ถูกต้อง</h2>
+    <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void)
+{
+    SystemCoreClockUpdate();  // ① ต้องเป็นบรรทัดแรก
+    Timer_Init();             // ② ต้องเป็นบรรทัดที่สอง
+
+    // ③ ตั้งค่า peripherals ที่นี่
+    pinMode(PC0, PIN_MODE_OUTPUT);
+
+    while (1) {
+        // loop หลัก
+        digitalWrite(PC0, HIGH);
+        Delay_Ms(500);
+        digitalWrite(PC0, LOW);
+        Delay_Ms(500);
+    }
+}</code></pre>
+
+    <div class="callout callout-warn">
+        <strong>⚠️ ลำดับสำคัญ:</strong> ① <code>SystemCoreClockUpdate()</code> ต้องมาก่อน ② <code>Timer_Init()</code> เสมอ — เพราะ Timer_Init ต้องใช้ค่า SystemCoreClock ที่อัปเดตแล้ว
+    </div>
+</section>
+
+<section>
+    <h2>Hello World ครบวงจร</h2>
+    <p>ตัวอย่างโค้ดที่สมบูรณ์ — LED กระพริบที่ PC0 พร้อมส่งข้อความผ่าน Serial:</p>
+    <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void)
+{
+    // ① อัปเดตความถี่ระบบ — ต้องมาก่อนเสมอ
+    SystemCoreClockUpdate();
+
+    // ② เริ่มต้น Systick — จำเป็นสำหรับ Delay และ Get_CurrentMs
+    Timer_Init();
+
+    // ③ ตั้งค่า peripherals
+    pinMode(PC0, PIN_MODE_OUTPUT);              // LED output
+    USART_SimpleInit(USART_BAUD_115200);        // Serial 115200 bps
+
+    uint32_t counter = 0;                       // ตัวนับรอบ
+
+    while (1)
+    {
+        digitalWrite(PC0, HIGH);                // ติด LED
+        Delay_Ms(500);                          // รอ 500ms
+        digitalWrite(PC0, LOW);                 // ดับ LED
+        Delay_Ms(500);                          // รอ 500ms
+
+        counter++;                              // เพิ่มตัวนับ
+        USART_Print("Counter: %lu\r\n", counter); // ส่งค่าผ่าน Serial
+    }
+}</code></pre>
+
+    <p><strong>ผลลัพธ์บน Serial Monitor (115200 bps):</strong></p>
+    <pre><code>Counter: 1
+Counter: 2
+Counter: 3
+...</code></pre>
+
+    <div class="callout callout-note">
+        <strong>💡 อธิบายทีละบรรทัด:</strong>
+        <ul>
+            <li><code>#define CH32V003_PACKAGE</code> — เลือกแพ็กเกจ TSSOP-20 (F4P6)</li>
+            <li><code>pinMode(PC0, PIN_MODE_OUTPUT)</code> — ตั้ง PC0 เป็น output push-pull</li>
+            <li><code>USART_SimpleInit()</code> — เปิด Serial ที่ baud rate 115200</li>
+            <li><code>digitalWrite()</code> — เขียน HIGH (3.3V) หรือ LOW (0V) ไปยังขา</li>
+            <li><code>Delay_Ms(500)</code> — หยุดรอ 500 มิลลิวินาที (ครึ่งวินาที)</li>
+            <li><code>USART_Print()</code> — ส่งข้อความพร้อมตัวแปรผ่าน Serial</li>
+        </ul>
+    </div>
+</section>
+
+<section>
+    <h2>Debug Print คืออะไร</h2>
+    <p><strong>Debug Print</strong> คือการส่งข้อความจาก MCU มาที่คอมพิวเตอร์ผ่าน Serial (USART) เพื่อดูว่าโปรแกรมทำงานอย่างไร — เป็นเครื่องมือดีบักที่สำคัญที่สุดสำหรับ embedded</p>
+
+    <p><strong>วิธีใช้:</strong></p>
+    <ol>
+        <li>เปิด Serial ด้วย <code>USART_SimpleInit(USART_BAUD_115200)</code></li>
+        <li>ส่งข้อความด้วย <code>USART_Print("รูปแบบ %d\r\n", ตัวแปร)</code></li>
+        <li>ดูผลใน Serial Monitor (Baud rate ต้องตรงกับที่ตั้งไว้)</li>
+    </ol>
+
+    <p>การต่อ USB-to-Serial:</p>
+    <pre class="ascii-circuit">
+    CH32V003                  USB-to-Serial (CH340)
+    ┌──────┐                  ┌──────────────┐
+    │ PD5  ├─────────────────┤ RX           │
+    │ PD6  ├─────────────────┤ TX           │
+    │ GND  ├─────────────────┤ GND          │
+    └──────┘                  └──────┬───────┘
+                                    USB → PC
+    </pre>
+
+    <table class="wiring-table">
+        <thead>
+            <tr><th>CH32V003</th><th>→</th><th>USB-to-Serial</th><th>หมายเหตุ</th></tr>
+        </thead>
+        <tbody>
+            <tr><td>PD5 (TX)</td><td>→</td><td>RX</td><td>MCU ส่ง → PC รับ</td></tr>
+            <tr><td>PD6 (RX)</td><td>→</td><td>TX</td><td>PC ส่ง → MCU รับ</td></tr>
+            <tr><td>GND</td><td>→</td><td>GND</td><td>GND ร่วม</td></tr>
+        </tbody>
+    </table>
+
+    <div class="callout callout-good">
+        <strong>✅ Tip:</strong> ใช้ <code>USART_Print()</code> ดีบักได้ดีกว่าไล่กดดูรีจิสเตอร์ — แค่พิมพ์ค่าตัวแปรที่สงสัยออกมาดู
+    </div>
+</section>
+
+<section>
+    <h2>ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>Baud rate ผิด</td><td>ลืม <code>SystemCoreClockUpdate()</code></td><td>เพิ่ม <code>SystemCoreClockUpdate()</code> บรรทัดแรกใน main()</td></tr>
+        <tr><td>Delay ไม่ทำงาน — โปรแกรมค้าง</td><td>ลืม <code>Timer_Init()</code></td><td>เพิ่ม <code>Timer_Init()</code> หลัง SystemCoreClockUpdate()</td></tr>
+        <tr><td>Compiler warning: CH32V003_PACKAGE</td><td>ลืม <code>#define CH32V003_PACKAGE</code></td><td>เพิ่ม define ก่อน include — ทุกโปรเจกต์ต้องมี</td></tr>
+        <tr><td>Used pin on SOP-8 but package = TSSOP20</td><td>เลือกแพ็กเกจไม่ตรงกับชิป</td><td>เช็ครุ่นชิป → เปลี่ยน PACKAGE ให้ตรง</td></tr>
+        <tr><td>Serial ไม่มีอะไรออก</td><td>Baud rate ไม่ตรง หรือต่อสายสลับ</td><td>เช็ค baud rate (default 115200) และต่อ TX→RX, RX→TX</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>ลองทำดู</h2>
+    <ol>
+        <li><strong>เปลี่ยน LED ไปใช้ pin อื่น</strong> — ลองเปลี่ยนจาก PC0 เป็น PA1 → ต่อวงจรใหม่ → Build → Flash → สังเกตผล</li>
+        <li><strong>เปลี่ยนความถี่กระพริบ</strong> — ลองเปลี่ยน <code>Delay_Ms(500)</code> เป็น <code>Delay_Ms(100)</code> และ <code>Delay_Ms(1000)</code> → สังเกตความเร็วที่เปลี่ยน</li>
+        <li><strong>เพิ่มปุ่มกดเปลี่ยนทิศทาง LED</strong> — ต่อปุ่มที่ PC1 → ใช้ <code>digitalRead()</code> อ่านค่าปุ่ม → เมื่อกดให้ LED กระพริบกลับด้าน (LOW→HIGH แทน HIGH→LOW)</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch00-install.html">บทก่อน</a>
+    <a href="ch02-gpio.html">บทถัดไป →</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

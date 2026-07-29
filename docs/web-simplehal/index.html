@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SimpleHAL — คู่มือ CH32V003 สำหรับผู้เริ่มต้น</title>
+<link rel="stylesheet" href="css/style.css">
+<style>.hero{text-align:center;padding:3rem 0}.hero h1{font-size:2.4em}.hero p{color:#64748b;font-size:1.1em;margin:1rem 0}.stats{display:flex;gap:1.5rem;justify-content:center;flex-wrap:wrap;margin:2rem 0}.stat{text-align:center;padding:1rem 1.5rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)}.stat-num{font-size:2em;font-weight:800;color:var(--accent)}.stat-label{font-size:.85em;color:#64748b}</style>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+
+<div class="hero">
+    <h1>SimpleHAL — เขียน CH32V003 แบบง่าย ๆ สไตล์ Arduino</h1>
+    <p>คู่มือฉบับสมบูรณ์สำหรับผู้เริ่มต้น — จากศูนย์จนสร้างโปรเจกต์จริงได้</p>
+    <div class="stats">
+        <div class="stat"><div class="stat-num">19</div><div class="stat-label">บทเรียน</div></div>
+        <div class="stat"><div class="stat-num">17</div><div class="stat-label">โมดูล</div></div>
+        <div class="stat"><div class="stat-num">100+</div><div class="stat-label">ตัวอย่างโค้ด</div></div>
+    </div>
+</div>
+
+<section>
+    <h2>CH32V003 คืออะไร?</h2>
+    <p><strong>CH32V003</strong> เป็นไมโครคอนโทรลเลอร์ตระกูล RISC-V 32-bit จากบริษัท WCH ประเทศจีน จุดเด่นคือราคาถูกมาก (ประมาณ <strong>15 บาท</strong>) แต่สเปกเหลือเฟือสำหรับงานทั่วไป — ซีพียู 48MHz, หน่วยความจำ Flash 16KB, RAM 2KB, และ GPIO 18 ขา</p>
+    <p>ด้วยจุดเด่นด้านราคาและความสามารถ CH32V003 จึงเหมาะกับทั้งผู้เริ่มต้นเรียนรู้ MCU และผู้เชี่ยวชาญที่ต้องการลดต้นทุนการผลิต</p>
+    <table>
+        <tr><th>คุณสมบัติ</th><th>รายละเอียด</th></tr>
+        <tr><td>สถาปัตยกรรม</td><td>RISC-V 32-bit (RV32EC)</td></tr>
+        <tr><td>ความเร็วซีพียู</td><td>สูงสุด 48MHz (HSI)</td></tr>
+        <tr><td>หน่วยความจำ Flash</td><td>16KB</td></tr>
+        <tr><td>หน่วยความจำ RAM</td><td>2KB</td></tr>
+        <tr><td>GPIO</td><td>สูงสุด 18 ขา (ขึ้นกับแพ็กเกจ)</td></tr>
+        <tr><td>ราคาโดยประมาณ</td><td>~15-35 บาท (ขึ้นกับแพ็กเกจ)</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>SimpleHAL คืออะไร?</h2>
+    <p><strong>SimpleHAL</strong> เป็นไลบรารีที่ห่อหุ้มฮาร์ดแวร์ระดับล่างของ CH32V003 ให้ใช้งานง่ายแบบ Arduino — เขียนโค้ดเพียงไม่กี่บรรทัดก็ควบคุมอุปกรณ์ต่อพ่วงได้ โดยไม่ต้องอ่านรีจิสเตอร์หลายร้อยหน้า</p>
+    <p>โมดูลที่มีใน SimpleHAL:</p>
+    <ul>
+        <li><strong>GPIO</strong> — Digital Input/Output, Interrupt, ปุ่มกด, LED, PulseIn</li>
+        <li><strong>ADC</strong> — อ่านค่า Analog, แรงดัน, แบตเตอรี่</li>
+        <li><strong>PWM</strong> — LED Fade, Servo, มอเตอร์, Frequency Control</li>
+        <li><strong>USART</strong> — Serial Communication, Debug Print, Command Line</li>
+        <li><strong>I2C</strong> — คุยกับ Sensor, EEPROM, OLED, Bus Scanner</li>
+        <li><strong>SPI</strong> — สื่อสารความเร็วสูง, Flash, MAX7219, Display</li>
+        <li><strong>DMA</strong> — Direct Memory Access, ADC+DMA, USART+DMA</li>
+        <li><strong>Flash</strong> — ข้อมูลถาวร, Config, CRC</li>
+        <li><strong>Watchdog</strong> — IWDG, WWDG, ป้องกันระบบค้าง</li>
+        <li><strong>1-Wire</strong> — DS18B20, อ่านอุณหภูมิ, Multi-device</li>
+        <li><strong>Power Management</strong> — Sleep, Standby, แบตเตอรี่</li>
+        <li><strong>OPAMP</strong> — Operational Amplifier ในตัวชิป</li>
+    </ul>
+</section>
+
+<section>
+    <h2>สิ่งที่ต้องมีก่อนเริ่ม</h2>
+    <table>
+        <tr><th>รายการ</th><th>จำนวน</th><th>ราคาประมาณ</th><th>หมายเหตุ</th></tr>
+        <tr><td>CH32V003 Dev Board</td><td>2-3 ชิ้น</td><td>~20-40 บาท/ชิ้น</td><td>แนะนำ TSSOP-20 (F4P6)</td></tr>
+        <tr><td>WCH-LinkE Programmer</td><td>1 ชิ้น</td><td>~150-250 บาท</td><td>ใช้แฟลชโปรแกรม</td></tr>
+        <tr><td>สาย USB</td><td>1 เส้น</td><td>~50 บาท</td><td>USB-C หรือ Micro USB</td></tr>
+        <tr><td>Breadboard</td><td>1 แผ่น</td><td>~30-60 บาท</td><td>400 holes ก็พอ</td></tr>
+        <tr><td>สายไฟ Jumper (ผู้-ผู้)</td><td>1 ชุด</td><td>~20-40 บาท</td><td></td></tr>
+        <tr><td>LED + R 220Ω</td><td>5-10 ชุด</td><td>~1-2 บาท/ชุด</td><td>ใช้ทดสอบเอาต์พุต</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>วิธีอ่าน</h2>
+    <p>เริ่มที่ <strong>ch00 → ch01 → ch02</strong> ตามลำดับ สำหรับผู้ที่เพิ่งเริ่มต้น</p>
+    <p>หากมีพื้นฐานแล้ว สามารถกระโดดไปยังโมดูลที่ต้องการได้เลย — แต่ละบทเรียนเป็นอิสระต่อกัน (ยกเว้นบท 0-1 ที่แนะนำให้อ่านก่อน)</p>
+</section>
+
+<h2>สารบัญ</h2>
+
+<ul id="toc">
+<li><a href="ch00-install.html">
+    <span class="ch-num">บทที่ 0</span><span class="ch-level level-beginner">เริ่มต้น</span>
+    <span class="ch-desc">ติดตั้งครั้งแรก — Toolchain, IDE, ต่อวงจร, Build &amp; Flash</span>
+</a></li>
+<li><a href="ch01-first-steps.html">
+    <span class="ch-num">บทที่ 1</span><span class="ch-level level-beginner">เริ่มต้น</span>
+    <span class="ch-desc">ก้าวแรก — 3 สิ่งที่ต้องทำทุกโปรเจกต์: SystemCoreClockUpdate, Timer_Init, CH32V003_PACKAGE</span>
+</a></li>
+<li><a href="ch02-gpio.html">
+    <span class="ch-num">บทที่ 2</span><span class="ch-level level-beginner">เริ่มต้น</span>
+    <span class="ch-desc">GPIO — Digital Input/Output, Interrupt, ปุ่มกด, LED, PulseIn</span>
+</a></li>
+<li><a href="ch03-delay.html">
+    <span class="ch-num">บทที่ 3</span><span class="ch-level level-beginner">เริ่มต้น</span>
+    <span class="ch-desc">Delay &amp; Timer — หน่วงเวลา, Non-blocking, millis/micros, Stopwatch</span>
+</a></li>
+<li><a href="ch04-usart.html">
+    <span class="ch-num">บทที่ 4</span><span class="ch-level level-beginner">เริ่มต้น</span>
+    <span class="ch-desc">USART — Serial Communication, Debug Print, Command Line</span>
+</a></li>
+<li><a href="ch05-i2c.html">
+    <span class="ch-num">บทที่ 5</span><span class="ch-level level-intermediate">กลาง</span>
+    <span class="ch-desc">I2C — คุยกับ Sensor, EEPROM, OLED, Bus Scanner</span>
+</a></li>
+<li><a href="ch06-i2c-soft.html">
+    <span class="ch-num">บทที่ 6</span><span class="ch-level level-intermediate">กลาง</span>
+    <span class="ch-desc">Software I2C — ใช้ขาไหนก็ได้, ดีบัก, I2C bus ที่ 2</span>
+</a></li>
+<li><a href="ch07-spi.html">
+    <span class="ch-num">บทที่ 7</span><span class="ch-level level-intermediate">กลาง</span>
+    <span class="ch-desc">SPI — สื่อสารความเร็วสูง, Flash, MAX7219, Display</span>
+</a></li>
+<li><a href="ch08-adc.html">
+    <span class="ch-num">บทที่ 8</span><span class="ch-level level-intermediate">กลาง</span>
+    <span class="ch-desc">ADC — อ่านค่า Analog, แรงดัน, แบตเตอรี่</span>
+</a></li>
+<li><a href="ch09-pwm.html">
+    <span class="ch-num">บทที่ 9</span><span class="ch-level level-intermediate">กลาง</span>
+    <span class="ch-desc">PWM — LED Fade, Servo, มอเตอร์, Frequency Control</span>
+</a></li>
+<li><a href="ch10-opamp.html">
+    <span class="ch-num">บทที่ 10</span><span class="ch-level level-advanced">สูง</span>
+    <span class="ch-desc">OPAMP — Operational Amplifier ในตัวชิป</span>
+</a></li>
+<li><a href="ch11-tim.html">
+    <span class="ch-num">บทที่ 11</span><span class="ch-level level-advanced">สูง</span>
+    <span class="ch-desc">Hardware Timer — Periodic Interrupt, Scheduler, Input Capture</span>
+</a></li>
+<li><a href="ch12-tim-ext.html">
+    <span class="ch-num">บทที่ 12</span><span class="ch-level level-advanced">สูง</span>
+    <span class="ch-desc">Stopwatch &amp; Countdown — จับเวลา, นับถอยหลัง, Lap Timer</span>
+</a></li>
+<li><a href="ch13-dma.html">
+    <span class="ch-num">บทที่ 13</span><span class="ch-level level-advanced">สูง</span>
+    <span class="ch-desc">DMA — Direct Memory Access, ADC+DMA, USART+DMA</span>
+</a></li>
+<li><a href="ch14-flash.html">
+    <span class="ch-num">บทที่ 14</span><span class="ch-level level-advanced">สูง</span>
+    <span class="ch-desc">Flash Storage — ข้อมูลถาวร, Config, CRC</span>
+</a></li>
+<li><a href="ch15-iwdg.html">
+    <span class="ch-num">บทที่ 15</span><span class="ch-level level-advanced">สูง</span>
+    <span class="ch-desc">IWDG — Independent Watchdog, ป้องกันระบบค้าง</span>
+</a></li>
+<li><a href="ch16-wwdg.html">
+    <span class="ch-num">บทที่ 16</span><span class="ch-level level-advanced">สูง</span>
+    <span class="ch-desc">WWDG — Window Watchdog, ตรวจจับ Timing Error</span>
+</a></li>
+<li><a href="ch17-1wire.html">
+    <span class="ch-num">บทที่ 17</span><span class="ch-level level-advanced">สูง</span>
+    <span class="ch-desc">1-Wire — DS18B20, อ่านอุณหภูมิ, Multi-device</span>
+</a></li>
+<li><a href="ch18-pwr.html">
+    <span class="ch-num">บทที่ 18</span><span class="ch-level level-advanced">สูง</span>
+    <span class="ch-desc">Power Management — Sleep, Standby, แบตเตอรี่</span>
+</a></li>
+<li><a href="ch19-arduino.html">
+    <span class="ch-num">บทที่ 19</span><span class="ch-level level-advanced">สูง</span>
+    <span class="ch-desc">Arduino API — millis/delay/random/dtostrf</span>
+</a></li>
+</ul>
+
+<section>
+    <h2>Quick Reference Card — Pinout</h2>
+    <h3>GPIOA</h3>
+    <table>
+        <tr><th>Pin</th><th>ชื่อ</th><th>ฟังก์ชันทางเลือก</th><th>หมายเหตุ</th></tr>
+        <tr><td>PA1</td><td>GPIOA Pin 1</td><td>TIM2_CH2, USART_RX (remap)</td><td>มีในทุกแพ็กเกจ</td></tr>
+        <tr><td>PA2</td><td>GPIOA Pin 2</td><td>TIM2_CH4, USART_TX (remap)</td><td>มีในทุกแพ็กเกจ</td></tr>
+    </table>
+
+    <h3>GPIOC</h3>
+    <table>
+        <tr><th>Pin</th><th>ชื่อ</th><th>ฟังก์ชันทางเลือก</th><th>หมายเหตุ</th></tr>
+        <tr><td>PC0</td><td>GPIOC Pin 0</td><td>—</td><td>ไม่มีใน SOP-8</td></tr>
+        <tr><td>PC1</td><td>GPIOC Pin 1</td><td>TIM1_CH1</td><td>มีในทุกแพ็กเกจ</td></tr>
+        <tr><td>PC2</td><td>GPIOC Pin 2</td><td>TIM1_CH2</td><td>มีในทุกแพ็กเกจ</td></tr>
+        <tr><td>PC3</td><td>GPIOC Pin 3</td><td>TIM1_CH3</td><td>—</td></tr>
+        <tr><td>PC4</td><td>GPIOC Pin 4</td><td>TIM1_CH4</td><td>มีใน SOP-8</td></tr>
+        <tr><td>PC7</td><td>GPIOC Pin 7</td><td>—</td><td>—</td></tr>
+    </table>
+
+    <h3>GPIOD</h3>
+    <table>
+        <tr><th>Pin</th><th>ชื่อ</th><th>ฟังก์ชันทางเลือก</th><th>หมายเหตุ</th></tr>
+        <tr><td>PD1</td><td>GPIOD Pin 1</td><td>SWIO</td><td>ใช้โปรแกรม — แฟลชแล้วใช้เป็น GPIO ได้</td></tr>
+        <tr><td>PD2</td><td>GPIOD Pin 2</td><td>—</td><td>—</td></tr>
+        <tr><td>PD3</td><td>GPIOD Pin 3</td><td>—</td><td>—</td></tr>
+        <tr><td>PD4</td><td>GPIOD Pin 4</td><td>—</td><td>—</td></tr>
+        <tr><td>PD5</td><td>GPIOD Pin 5</td><td>—</td><td>—</td></tr>
+        <tr><td>PD6</td><td>GPIOD Pin 6</td><td>—</td><td>มีใน SOP-8</td></tr>
+        <tr><td>PD7</td><td>GPIOD Pin 7</td><td>NRST</td><td>ใช้เป็น Reset pin ได้</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>Quick Reference Card — ADC Channels</h2>
+    <table>
+        <tr><th>Channel</th><th>Pin</th><th>หมายเหตุ</th></tr>
+        <tr><td>ADC_CH0</td><td>PA2</td><td></td></tr>
+        <tr><td>ADC_CH1</td><td>PA1</td><td></td></tr>
+        <tr><td>ADC_CH2</td><td>PD2</td><td>ไม่มีใน SOP-8</td></tr>
+        <tr><td>ADC_CH3</td><td>PC4</td><td></td></tr>
+        <tr><td>ADC_CH7</td><td>PD7</td><td></td></tr>
+        <tr><td>ADC_CH8</td><td>PD5</td><td></td></tr>
+        <tr><td>ADC_CH9</td><td>PD3</td><td></td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>Quick Reference Card — PWM Channels</h2>
+    <table>
+        <tr><th>Timer</th><th>Channel</th><th>Pin</th><th>หมายเหตุ</th></tr>
+        <tr><td>TIM1</td><td>CH1</td><td>PC1</td><td></td></tr>
+        <tr><td>TIM1</td><td>CH2</td><td>PC2</td><td></td></tr>
+        <tr><td>TIM1</td><td>CH3</td><td>PC3</td><td></td></tr>
+        <tr><td>TIM1</td><td>CH4</td><td>PC4</td><td></td></tr>
+        <tr><td>TIM2</td><td>CH2</td><td>PA1</td><td></td></tr>
+        <tr><td>TIM2</td><td>CH4</td><td>PA2</td><td></td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>Quick Reference Card — I2C / SPI / USART</h2>
+    <table>
+        <tr><th>อุปกรณ์ต่อพ่วง</th><th>Pin (Default)</th><th>Pin (Remap)</th><th>หมายเหตุ</th></tr>
+        <tr><td>I2C SCL</td><td>PC1</td><td>PD6</td><td></td></tr>
+        <tr><td>I2C SDA</td><td>PC2</td><td>PD5</td><td></td></tr>
+        <tr><td>SPI SCK</td><td>PC5</td><td>PD2</td><td></td></tr>
+        <tr><td>SPI MOSI</td><td>PC6</td><td>PD3</td><td></td></tr>
+        <tr><td>SPI MISO</td><td>PC7</td><td>PC0</td><td></td></tr>
+        <tr><td>SPI NSS</td><td>PA2</td><td>—</td><td></td></tr>
+        <tr><td>USART TX</td><td>PD5</td><td>PA2</td><td></td></tr>
+        <tr><td>USART RX</td><td>PD6</td><td>PA1</td><td></td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>Timer Resource Map</h2>
+    <table>
+        <tr><th>Hardware Resource</th><th>ใช้งานโดย SimpleHAL Module</th></tr>
+        <tr><td>SysTick</td><td>SimpleDelay (Delay_Ms, Get_CurrentMs)</td></tr>
+        <tr><td>TIM1</td><td>SimplePWM (PWM1) หรือ SimpleTIM (Hardware Timer 1)</td></tr>
+        <tr><td>TIM2</td><td>SimplePWM (PWM2) หรือ SimpleTIM (Hardware Timer 2) หรือ SimpleTIM_Ext (Stopwatch/Countdown)</td></tr>
+        <tr><td>IWDG</td><td>SimpleIWDG — ใช้ LSI (~40kHz) เป็นแหล่งสัญญาณนาฬิกา</td></tr>
+        <tr><td>WWDG</td><td>SimpleWWDG — ใช้ PCLK1 (48MHz) เป็นแหล่งสัญญาณนาฬิกา</td></tr>
+    </table>
+    <div class="callout callout-warn">
+        <strong>⚠️ ข้อควรระวัง:</strong> TIM1 และ TIM2 ถูกใช้ร่วมกันระหว่าง SimplePWM และ SimpleTIM — ไม่สามารถใช้ PWM และ Hardware Timer บนตัวจับเวลาเดียวกันได้พร้อมกัน
+    </div>
+</section>
+
+<section>
+    <h2>Package Compatibility</h2>
+    <table>
+        <tr><th>คุณสมบัติ</th><th>TSSOP-20 / QFN-20</th><th>SOP-16</th><th>SOP-8</th></tr>
+        <tr><td>จำนวนขา</td><td>20</td><td>16</td><td>8</td></tr>
+        <tr><td>GPIO</td><td>18</td><td>14</td><td>6</td></tr>
+        <tr><td>ADC</td><td>7 channels</td><td>5 channels</td><td>3 channels</td></tr>
+        <tr><td>PWM (TIM1)</td><td>4 channels (PC1-PC4)</td><td>4 channels</td><td>4 channels</td></tr>
+        <tr><td>PWM (TIM2)</td><td>2 channels (PA1, PA2)</td><td>2 channels</td><td>2 channels</td></tr>
+        <tr><td>USART</td><td>มี (PD5/PD6 หรือ Remap)</td><td>มี (Remap PA1/PA2)</td><td>Remap เท่านั้น</td></tr>
+        <tr><td>SPI</td><td>มี (PC5/PC6/PC7)</td><td>มี</td><td>ไม่มี (SCK ไม่มี)</td></tr>
+        <tr><td>I2C</td><td>มี (PC1/PC2 หรือ Remap)</td><td>มี</td><td>มี (Remap PD5/PD6)</td></tr>
+    </table>
+</section>
+
+<p style="text-align:center;margin:3rem 0;color:#94a3b8;font-size:0.85em">
+    SimpleHAL v2.0 — CH32V003 — MIT License
+</p>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:false,theme:'base'});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

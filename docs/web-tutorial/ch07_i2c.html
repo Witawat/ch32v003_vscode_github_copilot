@@ -68,6 +68,22 @@ flowchart TD
       </tbody>
     </table>
 
+    <h3>รู้จักขา</h3>
+    <ul>
+      <li><strong>PC1 (SDA):</strong> ขาข้อมูล I2C — ต่อกับ SDA ของเซ็นเซอร์</li>
+      <li><strong>PC2 (SCL):</strong> ขานาฬิกา I2C — ต่อกับ SCL ของเซ็นเซอร์</li>
+      <li><strong>R 4.7kΩ:</strong> ตัวต้านทาน Pull-up — ต่อจาก SDA และ SCL ไป 3.3V (จำเป็น!)</li>
+    </ul>
+
+    <h3>วิธีต่อทีละขั้น</h3>
+    <ol>
+      <li>ต่อ <strong>R 4.7kΩ</strong> จาก <strong>PC1 (SDA)</strong> ไป <strong>3.3V</strong> — pull-up สำหรับ SDA</li>
+      <li>ต่อ <strong>R 4.7kΩ</strong> อีกตัวจาก <strong>PC2 (SCL)</strong> ไป <strong>3.3V</strong> — pull-up สำหรับ SCL</li>
+      <li>ต่อ <strong>PC1 (SDA)</strong> ไป <strong>SDA ของเซ็นเซอร์ (BH1750/MPU6050)</strong></li>
+      <li>ต่อ <strong>PC2 (SCL)</strong> ไป <strong>SCL ของเซ็นเซอร์</strong></li>
+      <li>ต่อ <strong>GND</strong> ร่วมกันทุกตัว</li>
+    </ol>
+
     <p><strong>Pull-up 4.7kΩ จำเป็น!</strong> — I2C เป็น open-drain ต้องมี pull-up ถึงจะทำงาน — SOP-8 ใช้ PC1/PC2 หรือ PARTIAL_REMAP (PD1/PD2)<br>
     สามารถต่อหลายอุปกรณ์บนบัสเดียวกันได้ (แต่ละตัวมี address ไม่ซ้ำกัน)</p>
 </section>

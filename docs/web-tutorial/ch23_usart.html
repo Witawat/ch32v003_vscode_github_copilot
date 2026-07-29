@@ -58,6 +58,20 @@ flowchart LR
   </tbody>
 </table>
 
+<h4>รู้จักขา</h4>
+<ul>
+  <li><strong>PD5 (TX):</strong> ขาส่งข้อมูล USART — ต่อกับ RX ของ USB-Serial</li>
+  <li><strong>PD6 (RX):</strong> ขารับข้อมูล USART — ต่อกับ TX ของ USB-Serial</li>
+  <li><strong>GND:</strong> ต้องต่อร่วมกันเสมอเพื่อให้สัญญาณอ้างอิงระดับแรงดันตรงกัน</li>
+</ul>
+
+<h4>วิธีต่อทีละขั้น</h4>
+<ol>
+  <li>ต่อ <strong>PD5 (TX)</strong> ไป <strong>USB-Serial (RX)</strong> — ส่งข้อความจาก MCU ไป PC</li>
+  <li>ต่อ <strong>PD6 (RX)</strong> ไป <strong>USB-Serial (TX)</strong> — รับข้อมูลจาก PC (cross-connect)</li>
+  <li>ต่อ <strong>GND MCU</strong> ไป <strong>GND USB-Serial</strong> — ใช้วงจรร่วมกัน</li>
+</ol>
+
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">
 flowchart TD
@@ -128,6 +142,20 @@ int main(void)
     <tr><td>GND</td><td>↔</td><td>USB-Serial GND</td><td>GND</td><td>Common ground</td></tr>
   </tbody>
 </table>
+
+<h4>รู้จักขา</h4>
+<ul>
+  <li><strong>PD5 (TX):</strong> ขาส่งข้อมูล USART — ต่อกับ RX ของ USB-Serial</li>
+  <li><strong>PD6 (RX):</strong> ขารับข้อมูล USART — ต่อกับ TX ของ USB-Serial</li>
+  <li><strong>GND:</strong> ต้องต่อร่วมกันเสมอ</li>
+</ul>
+
+<h4>วิธีต่อทีละขั้น</h4>
+<ol>
+  <li>ต่อ <strong>PD5 (TX)</strong> ไป <strong>USB-Serial (RX)</strong> — ส่งเลขและข้อความไป PC</li>
+  <li>ต่อ <strong>PD6 (RX)</strong> ไป <strong>USB-Serial (TX)</strong> — cross-connect</li>
+  <li>ต่อ <strong>GND MCU</strong> ไป <strong>GND USB-Serial</strong></li>
+</ol>
 
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">
@@ -213,6 +241,23 @@ int main(void)
     <tr><td>LED</td><td>→</td><td>GND</td><td>แคโทด</td><td>—</td></tr>
   </tbody>
 </table>
+
+<h4>รู้จักขา</h4>
+<ul>
+  <li><strong>PD5 (TX):</strong> ขาส่งข้อมูล USART ไป PC</li>
+  <li><strong>PD6 (RX):</strong> ขารับคำสั่งจาก PC</li>
+  <li><strong>PC0:</strong> ขาออก ต่อ LED เปิด/ปิดตามคำสั่ง "LED=ON"/"LED=OFF"</li>
+  <li><strong>R 220Ω:</strong> ตัวต้านทานจำกัดกระแส LED</li>
+</ul>
+
+<h4>วิธีต่อทีละขั้น</h4>
+<ol>
+  <li>ต่อ <strong>PD5 (TX)</strong> ไป <strong>USB-Serial (RX)</strong> — ส่งข้อความยืนยัน</li>
+  <li>ต่อ <strong>PD6 (RX)</strong> ไป <strong>USB-Serial (TX)</strong> — รับคำสั่งจาก PC</li>
+  <li>ต่อ <strong>PC0</strong> → <strong>R 220Ω</strong> → <strong>LED แอโนด</strong> — ควบคุม LED ผ่าน serial</li>
+  <li>ต่อ <strong>LED แคโทด</strong> ไป <strong>GND</strong></li>
+  <li>ต่อ <strong>GND MCU</strong> ไป <strong>GND USB-Serial</strong></li>
+</ol>
 
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">

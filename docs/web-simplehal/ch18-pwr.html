@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>บทที่ 18: Power Management — Sleep, Standby, ประหยัดพลังงาน</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+</head>
+<body>
+
+<nav class="top-nav">
+    <a href="ch17-1wire.html">&larr; บทที่ 17: 1-Wire</a>
+    <a href="index.html">&#x1f3e0; สารบัญ</a>
+    <a href="ch19-arduino.html">บทที่ 19: Arduino API &rarr;</a>
+</nav>
+
+<h1>บทที่ 18: Power Management — Sleep, Standby, ประหยัดพลังงาน</h1>
+<span class="level level-advanced">ระดับสูง</span>
+
+<section>
+    <h2>สิ่งที่ต้องรู้ก่อน</h2>
+    <ul>
+        <li><a href="ch14-flash.html">บทที่ 14: Flash Storage</a> — บันทึกสถานะก่อนเข้า standby</li>
+        <li><a href="ch11-tim.html">บทที่ 11: TIM</a> — ใช้ timer เป็น wakeup source</li>
+    </ul>
+</section>
+
+<section>
+    <h2>อุปกรณ์ที่ต้องใช้</h2>
+    <ul>
+        <li>CH32V003 Dev Board</li>
+        <li>แบตเตอรี่ (ถ้าต้องการทดสอบแบบพกพา)</li>
+        <li>Multimeter (วัดกระแสเพื่อยืนยันผล)</li>
+    </ul>
+</section>
+
+<section>
+    <h2>ทำไมต้องใช้?</h2>
+    <p>อุปกรณ์ใช้แบตเตอรี่ต้องประหยัดไฟ — ยืดอายุจากชั่วโมงเป็นเดือน/ปี</p>
+</section>
+
+<section>
+    <h2>Flowchart การทำงาน</h2>
+    <div class="flowchart">
+        <pre class="mermaid">
+flowchart TD
+    A["Active ~5mA"] --> B{"มีงานทำ?"}
+    B -->|"มี"| A
+    B -->|"ไม่มี"| C{"นานแค่ไหน?"}
+    C -->|"สั้น (<30s)"| D["Sleep ~1mA"]
+    C -->|"นาน (>30s)"| E["Standby ~5µA"]
+    D --> F["Any interrupt → wake"]
+    E --> G["AWU/EXTI → reset"]
+    F --> A
+    G --> H["Boot + Restore"]
+    H --> A
+        </pre>
+    </div>
+</section>
+
+<section>
+    <h2>Power Modes เปรียบเทียบ</h2>
+    <table>
+        <tr><th>Mode</th><th>กระแส</th><th>CPU</th><th>RAM</th><th>การตื่น</th><th>ความเร็วตื่น</th></tr>
+        <tr><td>Normal (RUN)</td><td>5-10mA</td><td>ทำงาน</td><td>เก็บ</td><td>—</td><td>—</td></tr>
+        <tr><td>Sleep</td><td>1-2mA</td><td>หยุด</td><td>เก็บ</td><td>Interrupt ใด ๆ</td><td>ทันที</td></tr>
+        <tr><td>Standby</td><td>2-5µA</td><td>หยุด</td><td>หาย</td><td>AWU / EXTI → reset</td><td>boot ใหม่</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th></tr>
+        <tr><td><code>PWR_Sleep()</code></td><td>เข้า Sleep mode, ตื่นด้วย interrupt</td></tr>
+        <tr><td><code>PWR_EnterSleepMode(wfi_or_wfe)</code></td><td>เข้า Sleep ด้วย WFI/WFE</td></tr>
+        <tr><td><code>PWR_Standby(timeout_ms)</code></td><td>เข้า Standby ตื่นด้วย AWU ตามเวลา</td></tr>
+        <tr><td><code>PWR_StandbyUntilInterrupt()</code></td><td>เข้า Standby ตื่นด้วย EXTI เท่านั้น</td></tr>
+        <tr><td><code>PWR_EnterStandbyMode()</code></td><td>เข้า Standby โดยตรง (ไม่ตั้ง AWU)</td></tr>
+        <tr><td><code>PWR_WasStandbyWakeup()</code></td><td>ตรวจสอบว่าตื่นจาก Standby หรือไม่</td></tr>
+        <tr><td><code>PWR_ClearStandbyFlag()</code></td><td>ล้าง flag standby wakeup</td></tr>
+        <tr><td><code>PWR_ConfigureAWU(prescaler, window)</code></td><td>ตั้งค่า AWU (Auto Wake-Up)</td></tr>
+        <tr><td><code>PWR_GetAWUTimeout(prescaler, window)</code></td><td>คำนวณ timeout ของ AWU</td></tr>
+        <tr><td><code>PWR_EnablePVD(level)</code></td><td>เปิด PVD ตรวจจับแรงดันต่ำ</td></tr>
+        <tr><td><code>PWR_DisablePVD()</code></td><td>ปิด PVD</td></tr>
+        <tr><td><code>PWR_GetPVDStatus()</code></td><td>อ่านสถานะ PVD</td></tr>
+        <tr><td><code>PWR_EstimateStandbyCurrent()</code></td><td>ประมาณกระแส standby</td></tr>
+        <tr><td><code>PWR_CalculateBatteryLife(mAh, active%, mA, uA)</code></td><td>คำนวณอายุแบตเตอรี่</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>AWU Prescalers</h2>
+    <table>
+        <tr><th>Prescaler</th><th>Divider</th><th>Max Timeout (window=63)</th></tr>
+        <tr><td>/1</td><td>1</td><td>~80ms</td></tr>
+        <tr><td>/160</td><td>160</td><td>~2s</td></tr>
+        <tr><td>/1600</td><td>1600</td><td>~20s</td></tr>
+        <tr><td>/61440</td><td>61440</td><td>~5s+</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>PVD Levels (ตรวจจับแรงดันแบตต่ำ)</h2>
+    <table>
+        <tr><th>Level</th><th>แรงดัน</th><th>การใช้งาน</th></tr>
+        <tr><td>PVD_2_9V</td><td>2.9V</td><td>แบตใกล้หมด</td></tr>
+        <tr><td>PVD_3_3V</td><td>3.3V</td><td>แรงดันปกติ</td></tr>
+        <tr><td>PVD_3_7V</td><td>3.7V</td><td>Li-Po เต็ม</td></tr>
+        <tr><td>PVD_4_4V</td><td>4.4V</td><td>USB 5V</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>ขั้นตอนการใช้งาน (Step by Step)</h2>
+    <div class="step">
+        <h3>1. เลือกโหมดที่เหมาะสม</h3>
+        <p>Sleep: idle สั้น (&lt;30s), RAM ยังอยู่ — Standby: idle นาน (&gt;30s), ต้อง save state ลง Flash</p>
+    </div>
+    <div class="step">
+        <h3>2. ปิด peripheral ที่ไม่ใช้</h3>
+        <p>ปิด ADC, TIM, USART ที่ไม่จำเป็นก่อนเข้า sleep — ลดกระแสได้มาก</p>
+    </div>
+    <div class="step">
+        <h3>3. เรียก Sleep/Standby</h3>
+        <p><code>PWR_Sleep()</code> หรือ <code>PWR_Standby(timeout)</code></p>
+    </div>
+    <div class="step">
+        <h3>4. จัดการ wakeup</h3>
+        <p>Sleep — ต่อจากบรรทัดที่เรียกต่อได้เลย / Standby — เริ่ม main ใหม่เหมือนเปิดเครื่อง</p>
+    </div>
+</section>
+
+<section>
+    <h2>ระดับขั้นต้น: Sleep เมื่อ Idle</h2>
+    <pre><code class="language-c">#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(USART_115200);
+
+    // ตั้ง TIM1 interrupt ทุก 1 วินาทีเป็น wakeup source
+    TIM_SimpleInit(TIM1, 1000); // 1Hz
+
+    while (1) {
+        printf("Wake up!\r\n");
+
+        // Flush USART buffer ก่อน sleep
+        while (USART_GetFlagStatus(USART1, USART_FLAG_TC) == RESET);
+
+        PWR_Sleep(); // หลับรอ TIM1 interrupt
+        // ตื่นต่อจากตรงนี้
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>ระดับขั้นกลาง: Standby + AWU — Deep Sleep 10 วินาที</h2>
+    <div class="approach">
+        <strong>แนวคิด:</strong> ใช้ Flash บันทึก ADC counter ก่อนเข้า Standby — หลังตื่นอ่านค่ากลับมา — อ่าน ADC ใหม่ — สะสมต่อ
+    </div>
+    <pre><code class="language-c">#include "SimpleHAL.h"
+
+typedef struct {
+    uint32_t adc_samples;
+    uint32_t boot_count;
+} StateData;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    Flash_Init();
+    ADC_SimpleInit();
+
+    StateData state = {0};
+    if (Flash_LoadConfig(&state, sizeof(state))) {
+        printf("Standby wakeup #%lu\r\n", state.boot_count);
+    }
+
+    state.boot_count++;
+    state.adc_samples++;
+
+    uint16_t adc_val = ADC_Read();
+    printf("ADC: %d, Samples: %lu\r\n", adc_val, state.adc_samples);
+
+    // บันทึกก่อนเข้า Standby
+    Flash_SaveConfig(&state, sizeof(state));
+
+    // เข้า Standby 10 วินาที
+    printf("Entering standby for 10s...\r\n");
+    Delay_Ms(50); // รอให้ USART ส่งให้หมด
+    PWR_Standby(10000); // ตื่นด้วย AWU 10 วิ
+    // ไม่มาถึงบรรทัดนี้ — MCU reset แล้วเริ่ม main ใหม่
+}</code></pre>
+</section>
+
+<section>
+    <h2>ระดับขั้นสูง: Smart Sleep — เลือกโหมดตามระยะเวลา</h2>
+    <div class="approach">
+        <strong>แนวคิด:</strong> Idle สั้น (< 30s) → Sleep (ตื่นเร็ว) — Idle นาน (> 30s) → Standby (ประหยัดสุด) — Button EXTI wakeup
+    </div>
+    <pre><code class="language-c">#include "SimpleHAL.h"
+
+#define IDLE_THRESHOLD_MS 30000
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    Flash_Init();
+    ADC_SimpleInit();
+    GPIO_Init(GPIOB, GPIO_Pin_1, GPIO_Mode_IPU);
+
+    uint32_t idle_start = Get_CurrentMs();
+
+    while (1) {
+        // ทำงานปกติ — สั้นมาก
+        uint16_t adc = ADC_Read();
+        printf("ADC: %d\r\n", adc);
+
+        idle_start = Get_CurrentMs();
+
+        // Sleep 1 วินาที
+        TIM_SimpleInit(TIM1, 1000);
+        while (USART_GetFlagStatus(USART1, USART_FLAG_TC) == RESET);
+        PWR_Sleep();
+
+        // ตรวจสอบว่า idle นานเท่าไหร่
+        if (Get_CurrentMs() - idle_start > IDLE_THRESHOLD_MS) {
+            printf("Long idle → Standby\r\n");
+            Delay_Ms(50);
+            // Standby รอปุ่ม EXTI
+            PWR_StandbyUntilInterrupt();
+            // Reset → เริ่มใหม่
+        }
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>Battery Life Estimation</h2>
+    <pre><code class="language-c">#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(USART_115200);
+
+    // 1000mAh, 1% active, 5mA active, 5uA standby
+    float days = PWR_CalculateBatteryLife(1000, 1, 5, 5);
+    printf("Battery life: ~%.0f days\r\n", days);
+    // ~200 days
+
+    while (1);
+}</code></pre>
+</section>
+
+<section>
+    <h2>ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>อาการ</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>ตื่นจาก Standby แล้วค้าง</td><td>ไม่ได้ clear wakeup flag</td><td>เรียก PWR_ClearStandbyFlag()</td></tr>
+        <tr><td>RAM หายหลัง Standby</td><td>Standby ปิดหมด — RAM ไม่คงอยู่</td><td>Save state to Flash ก่อนเข้า Standby</td></tr>
+        <tr><td>Sleep ไม่ประหยัด</td><td>ADC/TIM ยังทำงานอยู่</td><td>ปิด peripheral ก่อนเรียก PWR_Sleep</td></tr>
+        <tr><td>AWU timeout ไม่แม่นยำ</td><td>LSI ±25% tolerance</td><td>เผื่อเวลา margin 30%</td></tr>
+        <tr><td>USART ไม่ออกก่อน sleep</td><td>Buffer ยังไม่ flush</td><td>รอ USART_FLAG_TC ก่อนเข้า sleep</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>คำถามที่พบบ่อย (FAQ)</h2>
+    <h3>Sleep vs Standby ต่างกันอย่างไร?</h3>
+    <p>Sleep — ตื่นเร็ว RAM ยังอยู่ (1-2mA) / Standby — ประหยัดสุดแต่ RAM หาย ต้อง boot ใหม่ (2-5µA)</p>
+    <h3>แบตเตอรี่ 1000mAh ใช้ได้นานแค่ไหน?</h3>
+    <p>Active 1% ของเวลา, Sleep ตลอด → ~200 วัน (คำนวณด้วย PWR_CalculateBatteryLife)</p>
+    <h3>WKUP pin (PA0) ใช้ใน CH32V003 ได้หรือไม่?</h3>
+    <p>CH32V003 ไม่มี WKUP pin โดยเฉพาะ — ใช้ EXTI แทนได้ สำหรับ wake from Standby</p>
+</section>
+
+<section>
+    <h2>ลองทำดู (แบบฝึกหัด)</h2>
+    <ol>
+        <li>Sleep 1s แล้วตื่นด้วย TIM1 interrupt → กระพริบ LED</li>
+        <li>Standby 10s ด้วย AWU — ตื่นอ่าน ADC ใหม่ทุกครั้ง</li>
+        <li>คำนวณอายุแบตเตอรี่ด้วย PWR_CalculateBatteryLife สำหรับอุปกรณ์ IoT</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="ch17-1wire.html">&larr; บทที่ 17: 1-Wire</a>
+    <a href="index.html">&#x1f3e0; สารบัญ</a>
+    <a href="ch19-arduino.html">บทที่ 19: Arduino API &rarr;</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:false,theme:'base'});mermaid.run();</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

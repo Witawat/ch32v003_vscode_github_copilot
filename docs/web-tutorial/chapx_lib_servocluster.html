@@ -70,6 +70,27 @@ flowchart TD
     <tr><td>PCA9685 CH0–CH15</td><td>→</td><td>Servo 1–16</td><td>Signal</td><td>PWM 50Hz ควบคุมมุม</td></tr>
   </tbody>
 </table>
+
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>SDA (PC1):</strong> สายข้อมูล I2C ควบคุม PCA9685</li>
+  <li><strong>SCL (PC2):</strong> สัญญาณนาฬิกา I2C</li>
+  <li><strong>VCC (3.3V):</strong> จ่ายไฟเลี้ยงวงจรลอจิกของ PCA9685</li>
+  <li><strong>GND:</strong> กราวด์ร่วมระหว่าง MCU, PCA9685 และแหล่งจ่าย 5V</li>
+  <li><strong>V+ (5V External):</strong> จ่ายไฟให้ servo ผ่าน PCA9685 ต้องใช้แหล่งจ่าย 5V แยก</li>
+  <li><strong>CH0–CH15:</strong> ขาสัญญาณ PWM ไปยัง servo แต่ละตัว</li>
+</ul>
+
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PC1</strong> ไป <strong>SDA ของ PCA9685</strong> — สายข้อมูล I2C</li>
+  <li>ต่อ <strong>PC2</strong> ไป <strong>SCL ของ PCA9685</strong> — สายนาฬิกา I2C</li>
+  <li>ต่อ <strong>3.3V</strong> ไป <strong>VCC ของ PCA9685</strong> — จ่ายไฟลอจิก</li>
+  <li>ต่อ <strong>GND</strong> ไป <strong>GND ของ PCA9685</strong> — กราวด์ร่วม</li>
+  <li>ต่อ <strong>แหล่งจ่าย 5V 3A</strong> ไป <strong>V+ ของ PCA9685</strong> — จ่ายไฟให้ servo</li>
+  <li>ต่อ <strong>CH0</strong> ไป <strong>Signal ของ Servo 1</strong>, CH1 ไป Servo 2 ไปเรื่อยๆ</li>
+</ol>
+
     <p>⚠️ PCA9685 ขับ servo ได้สูงสุด 16 ตัวผ่าน I²C — ต่อ V+ เข้ากับ External 5V (ต้องจ่ายกระแสได้ ≥3A สำหรับ 16 servo) — ใช้ Address 0x40 (default)</p>
 </section>
 

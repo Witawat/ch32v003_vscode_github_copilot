@@ -56,6 +56,21 @@ flowchart LR
   </tbody>
 </table>
 
+<h4>รู้จักขา</h4>
+<ul>
+  <li><strong>PC0:</strong> ขาออก ต่อ LED แสดงสถานะ — ติดเมื่อตื่น, ดับเมื่อหลับ</li>
+  <li><strong>PC1:</strong> ขาอินพุต (pull-up) — กดปุ่มเพื่อปลุก MCU จาก Sleep</li>
+  <li><strong>R 220Ω:</strong> จำกัดกระแส LED</li>
+  <li><strong>Push Button:</strong> ACTIVE_LOW — กด = LOW (FALLING edge ปลุก EXTI)</li>
+</ul>
+
+<h4>วิธีต่อทีละขั้น</h4>
+<ol>
+  <li>ต่อ <strong>PC0</strong> → <strong>R 220Ω</strong> → <strong>LED แอโนด</strong>, <strong>LED แคโทด</strong> → <strong>GND</strong></li>
+  <li>ต่อ <strong>PC1</strong> ไป <strong>Push Button</strong> ขา 1 — ขาปลุก</li>
+  <li>ต่อ <strong>Push Button</strong> ขา 2 ไป <strong>GND</strong> — กดปุ่ม = FALLING edge</li>
+</ol>
+
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">
 flowchart TD

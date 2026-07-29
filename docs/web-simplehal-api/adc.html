@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SimpleADC — อ่านค่า Analog | SimpleHAL API Reference</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+</head>
+<body>
+
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="spi.html">← SPI</a>
+    <a href="pwm.html">PWM →</a>
+</nav>
+
+<h1>SimpleADC <span class="level level-intermediate">ระดับกลาง</span></h1>
+<p>อ่านค่า Analog — ADC 10-bit พร้อมฟีเจอร์ลด Noise และชดเชยแรงดัน</p>
+
+<section>
+<h2>ภาพรวม</h2>
+<p>SimpleADC จัดการ ADC (Analog-to-Digital Converter) 10-bit ของ CH32V003 — ให้ค่า 0-1023, รองรับ 8 ช่องภายนอก + 2 ช่องภายใน, ทำงานแบบ Lazy Init (เริ่มต้นอัตโนมัติเมื่อเรียกใช้งานครั้งแรก)</p>
+<p>ช่องภายในประกอบด้วย VREFINT (แรงดันอ้างอิงภายใน ~1.2V) และ VCALINT — ใช้ประโยชน์ในการคำนวณ VDD จริงและชดเชยแรงดันเลี้ยง</p>
+</section>
+
+<section>
+<h2>ช่อง ADC</h2>
+<p>8 ช่องภายนอก + 2 ช่องภายใน:</p>
+
+<table class="wiring-table">
+<tr><th>Channel</th><th>Pin</th><th>หมายเหตุ</th></tr>
+<tr><td><code>ADC_CH_PA2</code> (CH0)</td><td>PA2</td><td>ใช้มากที่สุด — ขาเดี่ยวกับ SWCLK</td></tr>
+<tr><td><code>ADC_CH_PA1</code> (CH1)</td><td>PA1</td><td>—</td></tr>
+<tr><td><code>ADC_CH_PC4</code> (CH2)</td><td>PC4</td><td>ใช้ร่วมกับ NSS (SPI)</td></tr>
+<tr><td><code>ADC_CH_PD2</code> (CH3)</td><td>PD2</td><td>—</td></tr>
+<tr><td><code>ADC_CH_PD3</code> (CH4)</td><td>PD3</td><td>—</td></tr>
+<tr><td><code>ADC_CH_PD5</code> (CH5)</td><td>PD5</td><td>—</td></tr>
+<tr><td><code>ADC_CH_PD6</code> (CH6)</td><td>PD6</td><td>—</td></tr>
+<tr><td><code>ADC_CH_PD4</code> (CH7)</td><td>PD4</td><td>—</td></tr>
+<tr><td><code>ADC_CH_VREFINT</code> (CH8)</td><td>ภายใน</td><td>Vrefint ~1.2V — ใช้คำนวณ VDD</td></tr>
+<tr><td><code>ADC_CH_VCALINT</code> (CH9)</td><td>ภายใน</td><td>ช่องสอบเทียบภายใน</td></tr>
+</table>
+
+<h3>Channel Aliases</h3>
+<p>แนะนำให้ใช้ชื่อแบบ <code>ADC_CH_PA2</code> แทนเลข <code>ADC_CH_0</code> เพราะอ่านเข้าใจง่ายกว่าและป้องกันการจำผิด:</p>
+
+<div class="callout callout-warn">
+<strong>⚠️ Deprecated:</strong> <code>ADC_CH_A0</code> ถึง <code>ADC_CH_A7</code> ถูกยกเลิกแล้ว — ใช้ <code>ADC_CH_PA2</code>, <code>ADC_CH_PD2</code> ฯลฯ แทน
+</div>
+
+<table>
+<tr><th>Alias (แนะนำ)</th><th>Alias เก่า (Deprecated)</th></tr>
+<tr><td><code>ADC_CH_PA2</code> (CH0)</td><td><code>ADC_CH_A0</code></td></tr>
+<tr><td><code>ADC_CH_PA1</code> (CH1)</td><td><code>ADC_CH_A1</code></td></tr>
+<tr><td><code>ADC_CH_PC4</code> (CH2)</td><td><code>ADC_CH_A2</code></td></tr>
+<tr><td><code>ADC_CH_PD2</code> (CH3)</td><td><code>ADC_CH_A3</code></td></tr>
+<tr><td><code>ADC_CH_PD3</code> (CH4)</td><td><code>ADC_CH_A4</code></td></tr>
+<tr><td><code>ADC_CH_PD5</code> (CH5)</td><td><code>ADC_CH_A5</code></td></tr>
+<tr><td><code>ADC_CH_PD6</code> (CH6)</td><td><code>ADC_CH_A6</code></td></tr>
+<tr><td><code>ADC_CH_PD4</code> (CH7)</td><td><code>ADC_CH_A7</code></td></tr>
+</table>
+</section>
+
+<section>
+<h2>ตารางฟังก์ชัน</h2>
+
+<table>
+<tr><th>ฟังก์ชัน</th><th>รีเทิร์น</th><th>คำอธิบาย</th></tr>
+<tr>
+    <td><code>ADC_SimpleInit()</code></td>
+    <td>void</td>
+    <td>เปิดทุก channel — เรียกครั้งแรกพอ (Lazy Init)</td>
+</tr>
+<tr>
+    <td><code>ADC_SimpleInitChannels(channels, count)</code></td>
+    <td>void</td>
+    <td>เปิดเฉพาะ channel ที่ระบุ — ประหยัดพลังงานกว่า</td>
+</tr>
+<tr>
+    <td><code>ADC_EnableChannel(channel)</code></td>
+    <td>void</td>
+    <td>เปิด channel เพิ่มหลังจาก init แล้ว</td>
+</tr>
+<tr>
+    <td><code>ADC_Read(channel)</code></td>
+    <td>uint16_t</td>
+    <td>อ่านค่า ADC 0-1023</td>
+</tr>
+<tr>
+    <td><code>ADC_ReadMultiple(channels, values, count)</code></td>
+    <td>void</td>
+    <td>อ่านหลาย channel ในครั้งเดียว</td>
+</tr>
+<tr>
+    <td><code>ADC_ReadAverage(channel, samples)</code></td>
+    <td>uint16_t</td>
+    <td>อ่านค่าเฉลี่ยจาก N ตัวอย่าง — ลด noise</td>
+</tr>
+<tr>
+    <td><code>ADC_ToVoltage(adc_value, vref)</code></td>
+    <td>float</td>
+    <td>แปลงค่า ADC → แรงดัน (V)</td>
+</tr>
+<tr>
+    <td><code>ADC_ReadVoltage(channel, vref)</code></td>
+    <td>float</td>
+    <td>อ่าน + แปลงเป็นแรงดันทันที</td>
+</tr>
+<tr>
+    <td><code>ADC_ToPercent(adc_value)</code></td>
+    <td>float</td>
+    <td>แปลงค่า ADC → เปอร์เซ็นต์ (0.0 - 100.0)</td>
+</tr>
+<tr>
+    <td><code>ADC_ReadVrefInt()</code></td>
+    <td>uint16_t</td>
+    <td>อ่านค่า VREFINT (~1.2V) จาก channel ภายใน</td>
+</tr>
+<tr>
+    <td><code>ADC_GetVDD()</code></td>
+    <td>float</td>
+    <td>คำนวณ VDD จริงจาก VREFINT</td>
+</tr>
+<tr>
+    <td><code>ADC_ReadVoltageCompensated(channel)</code></td>
+    <td>float</td>
+    <td>อ่าน ADC แล้วชดเชย VDD ให้</td>
+</tr>
+<tr>
+    <td><code>ADC_GetBatteryPercent(vdd, v_min, v_max)</code></td>
+    <td>float</td>
+    <td>คำนวณเปอร์เซ็นต์แบตเตอรี่จาก VDD</td>
+</tr>
+</table>
+</section>
+
+<section>
+<h2>การชดเชย VDD (VDD Compensation)</h2>
+<p>ADC ของ CH32V003 ใช้ VDD เป็นแรงดันอ้างอิง — ถ้า VDD ไม่ใช่ 3.3V พอดี (เช่น ใช้แบตเตอรี่), ค่าที่อ่านได้จะคลาดเคลื่อน</p>
+<p>VREFINT (~1.2V) เป็นแรงดันอ้างอิงภายในที่คงที่ ไม่ขึ้นกับ VDD — ใช้เป็น "ไม้บรรทัด" เพื่อคำนวณว่า VDD จริงเป็นเท่าไหร่ แล้วปรับค่าอ่าน ADC ให้ถูกต้อง</p>
+
+<pre><code class="language-c">// วิธีที่ 1: อ่านแบบชดเชยอัตโนมัติ
+float voltage = ADC_ReadVoltageCompensated(ADC_CH_PA2);
+// ค่านี้ถูกปรับตาม VDD จริงแล้ว — แม่นยำทั้งที่ 3.3V, 2.8V, 4.2V
+
+// วิธีที่ 2: ทำเองทีละขั้น
+float vdd = ADC_GetVDD();                         // VDD จริง = ?
+float voltage = ADC_ReadVoltage(ADC_CH_PA2, vdd); // แปลงด้วย VDD จริง
+</code></pre>
+
+<div class="callout callout-note">
+<strong>หลักการ:</strong> <code>VDD_จริง = 1.2V × 4096 / ADC_ReadVrefInt()</code> — CH32V003 มี ADC 10-bit จึงใช้ 1024 แทน 4095 (สูตรภายในปรับค่าไว้แล้ว)
+</div>
+</section>
+
+<section>
+<h2>รูปแบบอ่านค่าแบตเตอรี่ (Battery Monitor)</h2>
+<p>ใช้ VREFINT คำนวณ VDD → แปลงเป็นเปอร์เซ็นต์แบตเตอรี่:</p>
+
+<pre><code class="language-c">void setup() {
+    ADC_SimpleInit();  // เปิดทุก channel (รวม VREFINT)
+}
+
+void loop() {
+    float vdd = ADC_GetVDD();                           // VDD จริง
+    float bat_pct = ADC_GetBatteryPercent(vdd, 3.0, 4.2); // % แบต (3.0V=0%, 4.2V=100%)
+
+    // แสดงผล
+    printf("VDD: %.2fV, Battery: %.1f%%\n", vdd, bat_pct);
+
+    Delay_Ms(1000);
+}
+</code></pre>
+
+<p>ตัวอย่างช่วงแบตเตอรี่ทั่วไป:</p>
+<table>
+<tr><th>Battery Type</th><th>v_min</th><th>v_max</th></tr>
+<tr><td>Li-Po / Li-Ion 1S</td><td>3.0V</td><td>4.2V</td></tr>
+<tr><td>LiFePO4 1S</td><td>2.5V</td><td>3.65V</td></tr>
+<tr><td>NiMH 3S</td><td>3.0V</td><td>4.5V</td></tr>
+<tr><td>Alkaline 2S</td><td>1.8V</td><td>3.2V</td></tr>
+</table>
+</section>
+
+<section>
+<h2>การลด Noise</h2>
+<p>สัญญาณ ADC มักมี noise โดยเฉพาะในสภาพแวดล้อมที่มีสัญญาณรบกวน — ใช้ <code>ADC_ReadAverage()</code> เพื่ออ่านหลายครั้งแล้วหาค่าเฉลี่ย:</p>
+
+<pre><code class="language-c">// อ่านครั้งเดียว — มีโอกาสได้ค่ากระโดดจาก noise
+uint16_t raw = ADC_Read(ADC_CH_PA2);
+
+// อ่านเฉลี่ย 10 ครั้ง — ค่าเสถียรกว่า เหมาะกับสัญญาณที่มี noise
+uint16_t smooth = ADC_ReadAverage(ADC_CH_PA2, 10);
+
+// อ่านเฉลี่ย 50 ครั้ง — เรียบมาก แต่ตอบสนองช้า
+uint16_t very_smooth = ADC_ReadAverage(ADC_CH_PA2, 50);
+</code></pre>
+
+<div class="callout callout-good">
+<strong>แนะนำ:</strong> สำหรับสัญญาณทั่วไป ใช้ 8-16 samples ก็เพียงพอ ยิ่งใช้มาก ค่าจะยิ่งเรียบแต่ตอบสนองช้าลง — หาจุดสมดุลตามความต้องการของโปรเจกต์
+</div>
+</section>
+
+<section>
+<h2>ข้อผิดพลาดที่พบบ่อย</h2>
+
+<ol>
+    <li>
+        <strong>อ่าน channel ที่ยังไม่ init</strong><br>
+        ต้องเรียก <code>ADC_SimpleInit()</code> หรือ <code>ADC_SimpleInitChannels()</code> ก่อน<br>
+        ถ้าใช้ <code>ADC_SimpleInitChannels()</code> อย่าลืมใส่ channel ที่ต้องการใน array
+    </li>
+    <li>
+        <strong>PD7 ไม่รองรับ ADC</strong><br>
+        แม้จะอยู่ใน Port D เหมือน PD2-PD6 แต่ PD7 <strong>ไม่มีฟังก์ชัน ADC</strong> — ต้องใช้ขาอื่น
+    </li>
+    <li>
+        <strong>ลืมเรียก ADC_SimpleInit</strong><br>
+        แม้จะเป็น Lazy Init แต่ <em>ต้อง</em> มีการเรียกอย่างน้อยครั้งหนึ่ง — ADC จะไม่ถูกเปิดเองลอย ๆ
+    </li>
+    <li>
+        <strong>VDD ไม่เสถียรแล้วไม่อ่าน VREFINT</strong><br>
+        ถ้าใช้แบตเตอรี่หรือแหล่งจ่ายที่ไม่ใช่ 3.3V คงที่ — ต้องใช้ <code>ADC_ReadVoltageCompensated()</code> หรือ <code>ADC_GetVDD()</code> เสมอ
+    </li>
+    <li>
+        <strong>ใช้ alias เก่า</strong><br>
+        <code>ADC_CH_A0</code> ถึง <code>ADC_CH_A7</code> — ใช้ alias ใหม่ <code>ADC_CH_PA2</code> ฯลฯ แทน
+    </li>
+</ol>
+</section>
+
+<section>
+<h2>ตัวอย่างโค้ด</h2>
+
+<h3>อ่านค่า Analog พื้นฐาน</h3>
+<pre><code class="language-c">#include "simplehal.h"
+
+void setup() {
+    ADC_SimpleInit();         // เปิด ADC — ทำครั้งเดียว
+}
+
+void loop() {
+    uint16_t val = ADC_Read(ADC_CH_PA2);
+    float voltage = ADC_ToVoltage(val, 3.3);
+    float percent = ADC_ToPercent(val);
+
+    printf("ADC: %d, V: %.2f, %%: %.1f\n", val, voltage, percent);
+    Delay_Ms(500);
+}
+</code></pre>
+
+<h3>อ่านหลาย Channel</h3>
+<pre><code class="language-c">void setup() {
+    // เปิดเฉพาะ channel ที่ใช้ — ประหยัดพลังงาน
+    uint8_t channels[] = {ADC_CH_PA2, ADC_CH_PA1, ADC_CH_PC4};
+    ADC_SimpleInitChannels(channels, 3);
+}
+
+void loop() {
+    uint8_t ch_list[] = {ADC_CH_PA2, ADC_CH_PA1, ADC_CH_PC4};
+    uint16_t values[3];
+
+    ADC_ReadMultiple(ch_list, values, 3);
+
+    printf("PA2: %d, PA1: %d, PC4: %d\n", values[0], values[1], values[2]);
+    Delay_Ms(500);
+}
+</code></pre>
+
+<h3>Battery Monitor</h3>
+<pre><code class="language-c">void setup() {
+    ADC_SimpleInit();  // ต้องเปิด VREFINT ด้วย
+}
+
+void loop() {
+    float vdd = ADC_GetVDD();
+    float bat_pct = ADC_GetBatteryPercent(vdd, 3.0, 4.2);
+
+    if (bat_pct < 10.0) {
+        // แบตเตอรี่ใกล้หมด — เตือน
+    }
+
+    printf("VDD: %.2fV | Battery: %.1f%%\n", vdd, bat_pct);
+    Delay_Ms(2000);
+}
+</code></pre>
+
+<h3>อ่านค่าแรงดันแบบชดเชย VDD</h3>
+<pre><code class="language-c">void setup() {
+    ADC_SimpleInit();
+}
+
+void loop() {
+    // ชดเชย VDD อัตโนมัติ — แม่นยำแม้ VDD เปลี่ยน
+    float voltage = ADC_ReadVoltageCompensated(ADC_CH_PA2);
+    printf("Voltage: %.3fV (VDD-compensated)\n", voltage);
+    Delay_Ms(500);
+}
+</code></pre>
+
+<h3>ลด Noise ด้วยค่าเฉลี่ย</h3>
+<pre><code class="language-c">void setup() {
+    ADC_SimpleInit();
+}
+
+void loop() {
+    // อ่านค่าเฉลี่ย 16 ตัวอย่าง — เสถียรสำหรับเซ็นเซอร์
+    uint16_t avg = ADC_ReadAverage(ADC_CH_PA2, 16);
+    float voltage = ADC_ToVoltage(avg, 3.3);
+
+    printf("Average: %d → %.3fV\n", avg, voltage);
+    Delay_Ms(100);
+}
+</code></pre>
+
+<h3>เปิด Channel เพิ่มภายหลัง</h3>
+<pre><code class="language-c">void setup() {
+    // เริ่มต้นด้วย PA2 เท่านั้น
+    uint8_t ch[] = {ADC_CH_PA2};
+    ADC_SimpleInitChannels(ch, 1);
+}
+
+void loop() {
+    uint16_t val1 = ADC_Read(ADC_CH_PA2);
+
+    // อยากอ่าน PC4 เพิ่มภายหลัง
+    ADC_EnableChannel(ADC_CH_PC4);
+    uint16_t val2 = ADC_Read(ADC_CH_PC4);
+
+    printf("PA2: %d, PC4: %d\n", val1, val2);
+    Delay_Ms(500);
+}
+</code></pre>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="spi.html">← SPI</a>
+    <a href="pwm.html">PWM →</a>
+</nav>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

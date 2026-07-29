@@ -20,6 +20,20 @@
 PCA9685 Board: PC1─SDA, PC2─SCL, 5V external─VCC(PCA9685+servos), GND common
 Servo SG90 x N: Signal→PCA9685 ch0-15, VCC→external 5V, GND→common
 </pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>SDA (PC1):</strong> สายข้อมูล I2C ไป PCA9685</li>
+  <li><strong>SCL (PC2):</strong> สายนาฬิกา I2C</li>
+  <li><strong>VCC (5V):</strong> จ่ายไฟให้ PCA9685 และ servo (ใช้แหล่งจ่ายแยก)</li>
+  <li><strong>GND:</strong> กราวด์ร่วม</li>
+  <li><strong>CH0–CH15:</strong> ขา PWM ไป servo แต่ละตัว</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PC1</strong> ไป <strong>SDA</strong> และ <strong>PC2</strong> ไป <strong>SCL</strong> — I2C</li>
+  <li>ต่อ <strong>5V</strong> ไป <strong>VCC</strong> และ <strong>GND</strong> ไป <strong>GND</strong></li>
+  <li>ต่อ <strong>CH0–CH15</strong> ไป Signal ของ servo แต่ละตัว</li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
@@ -74,6 +88,19 @@ int main(void) {
 PD2─Signal(ESC), Battery 7.4-14.8V─ESC power, Motor 3 wires─ESC output
 ⚠️ ห้ามต่อ MCU กับ ESC battery GND โดยตรง — ใช้ BEC 5V output หรือแยก regulator
 </pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>Signal (PD2):</strong> สัญญาณ PWM 50Hz ควบคุมความเร็ว (1ms = หยุด, 2ms = เต็ม)</li>
+  <li><strong>Battery (7.4–14.8V):</strong> จ่ายไฟให้ ESC จากแบต LiPo</li>
+  <li><strong>Motor 3 สาย:</strong> ต่อกับ BLDC motor 3 เฟส</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PD2</strong> ไป <strong>Signal ของ ESC</strong> — ส่ง PWM 50Hz</li>
+  <li>ต่อ <strong>แบตเตอรี่</strong> เข้า ESC power</li>
+  <li>ต่อ <strong>BLDC motor 3 สาย</strong> เข้า ESC output</li>
+  <li>⚠️ ใช้ BEC หรือ regulator จ่ายไฟ MCU แยกจาก ESC</li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
@@ -123,6 +150,24 @@ int main(void) {
 PD5(TX)─PDN_UART(TMC), PC0─ENABLE, PC1─DIR, PC2─STEP, 12-24V─VMOT, GND common
 MS1/MS2─GND (address 0)
 </pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>PDN_UART (PD5):</strong> สาย UART 1-wire ใช้ตั้งค่า driver</li>
+  <li><strong>ENABLE (PC0):</strong> เปิด/ปิด driver</li>
+  <li><strong>DIR (PC1):</strong> ทิศทางหมุน</li>
+  <li><strong>STEP (PC2):</strong> ขาส่งพัลส์ step</li>
+  <li><strong>VMOT (12–24V):</strong> จ่ายไฟให้มอเตอร์</li>
+  <li><strong>GND:</strong> กราวด์ร่วม</li>
+  <li><strong>MS1/MS2:</strong> ต่อ GND = address 0</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PD5</strong> ไป <strong>PDN_UART</strong> — สั่งงาน silent mode</li>
+  <li>ต่อ <strong>PC0, PC1, PC2</strong> ไป <strong>ENABLE, DIR, STEP</strong></li>
+  <li>ต่อ <strong>VMOT</strong> เข้ากับแหล่งจ่าย 12–24V</li>
+  <li>ต่อ <strong>GND</strong> ร่วม</li>
+  <li>ต่อ <strong>MS1/MS2</strong> ลง GND</li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
@@ -170,6 +215,23 @@ int main(void) {
 <pre class="ascii-circuit">
 PC4─CSN, PC5─SCK, PC6─MOSI, PC7─MISO, PC0─ENABLE, 24-48V─VMOT, GND common
 </pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>CSN (PC4):</strong> เลือกชิป SPI</li>
+  <li><strong>SCK (PC5):</strong> สัญญาณนาฬิกา SPI</li>
+  <li><strong>MOSI (PC6):</strong> ส่งข้อมูลไป TMC5160</li>
+  <li><strong>MISO (PC7):</strong> รับข้อมูลจาก TMC5160</li>
+  <li><strong>ENABLE (PC0):</strong> เปิด/ปิด driver</li>
+  <li><strong>VMOT (24–48V):</strong> จ่ายไฟให้มอเตอร์</li>
+  <li><strong>GND:</strong> กราวด์ร่วม</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PC4–PC7</strong> ไป <strong>CSN, SCK, MOSI, MISO</strong> — SPI</li>
+  <li>ต่อ <strong>PC0</strong> ไป <strong>ENABLE</strong></li>
+  <li>ต่อ <strong>VMOT</strong> เข้ากับแหล่งจ่าย 24–48V</li>
+  <li>ต่อ <strong>GND</strong> ร่วม</li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>

@@ -48,6 +48,18 @@ flowchart TD
         <tr><td>GND</td><td>→</td><td>MQ-xxx</td><td>GND</td><td>Ground ร่วม</td></tr>
       </tbody>
     </table>
+
+    <h3>รู้จักขา</h3>
+    <ul>
+      <li><strong>AOUT:</strong> แรงดัน analog แปรผันตามความเข้มข้นแก๊ส</li>
+      <li><strong>VCC:</strong> จ่ายไฟ 5V สำหรับ heater (~150mA)</li>
+      <li><strong>GND:</strong> Ground ร่วม</li>
+    </ul>
+    <h3>วิธีต่อทีละขั้น</h3>
+    <ol>
+      <li>ต่อ <strong>AOUT</strong> ไป <strong>PA1 (ADC)</strong> — อ่านค่าแก๊ส</li>
+      <li>ต่อ <strong>VCC</strong> ไป <strong>5V</strong> และ <strong>GND</strong> ไป <strong>GND</strong> — จ่ายไฟ heater</li>
+    </ol>
 </section>
 
 <section><h2>📚 หลักการทำงาน</h2>

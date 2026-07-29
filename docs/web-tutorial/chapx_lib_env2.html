@@ -20,6 +20,20 @@
 <pre class="ascii-circuit">
 3.3V─VCC  GND─GND  PC1─SDA  PC2─SCL  (ADDR─GND = 0x23, ADDR─VCC = 0x5C)
 </pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>SDA (PC1):</strong> สายข้อมูล I2C</li>
+  <li><strong>SCL (PC2):</strong> สายนาฬิกา I2C</li>
+  <li><strong>VCC (3.3V):</strong> จ่ายไฟ 3.3V</li>
+  <li><strong>GND:</strong> กราวด์ร่วม</li>
+  <li><strong>ADDR:</strong> เลือก address 0x23 (ต่อ GND) หรือ 0x5C (ต่อ VCC)</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PC1</strong> ไป <strong>SDA</strong> และ <strong>PC2</strong> ไป <strong>SCL</strong> — I2C</li>
+  <li>ต่อ <strong>3.3V</strong> ไป <strong>VCC</strong> และ <strong>GND</strong> ไป <strong>GND</strong> — จ่ายไฟ</li>
+  <li>ต่อ <strong>ADDR</strong> ลง GND (0x23) หรือ VCC (0x5C)</li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
@@ -52,6 +66,20 @@ USART_Print("Light: "); USART_PrintNum(lux); USART_Print(" lx");
 <pre class="ascii-circuit">
 3.3V─VCC  GND─GND  PC1─SDA  PC2─SCL  (LED pin — optional, built-in white LED)
 </pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>SDA (PC1):</strong> สายข้อมูล I2C</li>
+  <li><strong>SCL (PC2):</strong> สายนาฬิกา I2C</li>
+  <li><strong>VCC (3.3V):</strong> จ่ายไฟ 3.3V</li>
+  <li><strong>GND:</strong> กราวด์ร่วม</li>
+  <li><strong>LED:</strong> ควบคุมไฟ LED สีขาวในตัว (optional)</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PC1</strong> ไป <strong>SDA</strong> และ <strong>PC2</strong> ไป <strong>SCL</strong> — I2C</li>
+  <li>ต่อ <strong>3.3V</strong> ไป <strong>VCC</strong> และ <strong>GND</strong> ไป <strong>GND</strong> — จ่ายไฟ</li>
+  <li>ต่อ <strong>LED</strong> กับ GPIO ถ้าต้องการควบคุมไฟส่องสว่าง</li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
@@ -88,6 +116,18 @@ TCS34725_SetLED(1);  // 1=ON, 0=OFF
 <pre class="ascii-circuit">
 5V─VCC  GND─GND  PC4(AIN2)─AO  (R 10kΩ load — บนโมดูลมีแล้ว)
 </pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>AO (PC4):</strong> ขา output อนาล็อก ต่อเข้า ADC</li>
+  <li><strong>VCC (5V):</strong> จ่ายไฟ 5V (heater กินไฟ ~800mW)</li>
+  <li><strong>GND:</strong> กราวด์ร่วม</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PC4</strong> ไป <strong>AO</strong> ของ MQ sensor — อ่านค่าอนาล็อก</li>
+  <li>ต่อ <strong>5V</strong> ไป <strong>VCC</strong> และ <strong>GND</strong> ไป <strong>GND</strong> — จ่ายไฟ</li>
+  <li><strong>ต้อง preheat</strong> 24–48 ชม. ก่อน calibrate</li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
@@ -122,6 +162,19 @@ MQGas_SetType(MQ135);  // เปลี่ยนระหว่าง MQ2→MQ135
 <pre class="ascii-circuit">
 5V─VCC  GND─GND  PD5(TX)─RX(PMS)  PD6(RX)─TX(PMS)
 </pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>TX (PD5):</strong> ส่งข้อมูล USART ไป RX ของ PMS5003</li>
+  <li><strong>RX (PD6):</strong> รับข้อมูล USART จาก TX ของ PMS5003</li>
+  <li><strong>VCC (5V):</strong> จ่ายไฟ 5V</li>
+  <li><strong>GND:</strong> กราวด์ร่วม</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PD5</strong> ไป <strong>RX ของ PMS5003</strong> — ส่งคำสั่ง</li>
+  <li>ต่อ <strong>PD6</strong> ไป <strong>TX ของ PMS5003</strong> — รับข้อมูล PM</li>
+  <li>ต่อ <strong>5V</strong> ไป <strong>VCC</strong> และ <strong>GND</strong> ไป <strong>GND</strong> — จ่ายไฟ</li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
@@ -163,6 +216,18 @@ PMS5003_Read(&data);</code></pre>
 <pre class="ascii-circuit">
 3.3V─NTC─PC4(AIN2)─R10kΩ─GND  (voltage divider — วัดแรงดันคร่อม R_fixed)
 </pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>PC4 (ADC):</strong> วัดแรงดันตรงกลาง voltage divider</li>
+  <li><strong>3.3V:</strong> จ่ายไฟผ่าน NTC เข้าสู่วงจรแบ่งแรงดัน</li>
+  <li><strong>GND:</strong> ต่อผ่าน R 10kΩ</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>3.3V</strong> ไปขาหนึ่งของ NTC</li>
+  <li>ต่ออีกขาของ NTC ไป <strong>PC4</strong> และต่อ <strong>R 10kΩ</strong> จาก PC4 ไป <strong>GND</strong> — ได้ voltage divider</li>
+  <li>อ่านค่า ADC ที่ PC4 แล้วคำนวณอุณหภูมิด้วยสมการ Steinhart-Hart</li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
@@ -197,6 +262,17 @@ float avg = sum / 10.0f;</code></pre>
 <pre class="ascii-circuit">
 PC0─Buzzer(+)  GND─Buzzer(-)  (Active: transistor optional ถ้า curr > 20mA)
 </pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>Signal (PC0/PC4):</strong> ขาควบคุม buzzer Active = GPIO, Passive = PWM</li>
+  <li><strong>GND (-):</strong> กราวด์</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PC0</strong> ไป <strong>+ ของ Buzzer</strong> — ส่งสัญญาณ</li>
+  <li>ต่อ <strong>GND</strong> ไป <strong>- ของ Buzzer</strong> — กราวด์</li>
+  <li>ถ้าใช้ passive buzzer ต้องต่อกับขา PWM เช่น PC4</li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>

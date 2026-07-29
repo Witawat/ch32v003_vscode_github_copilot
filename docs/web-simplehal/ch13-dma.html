@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>บทที่ 13: DMA — Direct Memory Access — SimpleHAL</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+</head>
+<body>
+
+<nav class="top-nav">
+    <a href="ch12-tim-ext.html">← บทที่ 12: Stopwatch & Countdown</a>
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch14-flash.html">บทที่ 14: Flash →</a>
+</nav>
+
+<h1>บทที่ 13: DMA — Direct Memory Access</h1>
+<span class="level level-advanced">ขั้นสูง</span>
+
+<section class="flowchart">
+    <h2>🧭 แผนภาพการทำงาน</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["DMA_SimpleInit()"] --> B{"Transfer type?"}
+    B -->|"M2M"| C["MemCopy / MemSet"]
+    B -->|"ADC"| D["DMA_analogReadStart()"]
+    B -->|"USART"| E["DMA_USART_Transmit()"]
+    B -->|"SPI"| F["DMA_SPI_TransferBuffer()"]
+    B -->|"TIM PWM"| G["DMA_TIM_UpdatePWM()"]
+    C --> H["CPU ทำงานอื่นได้"]
+    D --> H
+    E --> H
+    F --> H
+    G --> H
+    </pre>
+</section>
+
+<section>
+    <h2>📋 สิ่งที่ต้องรู้ก่อน</h2>
+    <p>DMA ทำงานร่วมกับอุปกรณ์ต่อพ่วงต่าง ๆ — คุณควรเข้าใจพื้นฐานของแต่ละโมดูลก่อน:</p>
+    <ul>
+        <li><a href="ch08-adc.html">บทที่ 8: ADC</a></li>
+        <li><a href="ch04-usart.html">บทที่ 4: USART</a></li>
+        <li><a href="ch07-spi.html">บทที่ 7: SPI</a></li>
+        <li><a href="ch05-i2c.html">บทที่ 5: I2C</a></li>
+        <li><a href="ch11-tim.html">บทที่ 11: Hardware Timer</a></li>
+    </ul>
+</section>
+
+<section>
+    <h2>📦 อุปกรณ์ที่ต้องใช้</h2>
+    <p>CH32V003 — ไม่ต้องใช้ฮาร์ดแวร์เพิ่มเติมสำหรับ Mem-to-Mem demo</p>
+</section>
+
+<section>
+    <h2>🤔 ทำไมต้องใช้?</h2>
+    <p>DMA (Direct Memory Access) ถ่ายโอนข้อมูลระหว่าง memory และอุปกรณ์ต่อพ่วงโดย <strong>ไม่ใช้ CPU</strong> — เหมาะสำหรับงานที่ต้องการ throughput สูง:</p>
+    <ul>
+        <li><strong>ADC ต่อเนื่อง</strong> — อ่านค่าด้วยความถี่สูงแบบ circular buffer โดย CPU ไม่ต้องคอย polling</li>
+        <li><strong>USART ส่งข้อมูลยาว</strong> — ส่ง buffer ขนาดใหญ่โดยไม่ต้องรอทีละไบต์</li>
+        <li><strong>SPI display buffer</strong> — ส่ง framebuffer ไปจอโดย CPU ว่างทำงานอื่น</li>
+        <li><strong>Waveform Generator</strong> — ใช้ DMA เขียน sine table ไปยัง TIM CCR สร้าง sine wave บน PWM</li>
+    </ul>
+</section>
+
+<section>
+    <h2>📚 DMA Channel Map</h2>
+    <p>CH32V003 มี 7 DMA channels — แต่ละ channel ผูกกับอุปกรณ์ต่อพ่วงเฉพาะ:</p>
+    <table>
+        <thead><tr><th>Channel</th><th>อุปกรณ์ต่อพ่วง</th><th>ใช้สำหรับ</th></tr></thead>
+        <tbody>
+            <tr><td>CH1</td><td>ADC1</td><td>ADC continuous conversion</td></tr>
+            <tr><td>CH2</td><td>SPI1_RX / USART1_TX</td><td>SPI รับข้อมูล / USART ส่งข้อมูล</td></tr>
+            <tr><td>CH3</td><td>SPI1_TX / USART1_RX</td><td>SPI ส่งข้อมูล / USART รับข้อมูล</td></tr>
+            <tr><td>CH4</td><td>I2C1_TX / TIM1_CH4</td><td>I2C ส่ง / TIM1 channel 4</td></tr>
+            <tr><td>CH5</td><td>I2C1_RX / TIM1_Update</td><td>I2C รับ / TIM1 update event</td></tr>
+            <tr><td>CH6</td><td>USART1_RX / TIM1_CH3</td><td>USART รับ / TIM1 channel 3</td></tr>
+            <tr><td>CH7</td><td>USART1_TX / TIM2_CH2</td><td>USART ส่ง / TIM2 channel 2</td></tr>
+        </tbody>
+    </table>
+
+    <div class="callout callout-warn">
+        <strong>Channel Conflict:</strong> SPI1_RX กับ USART1_TX ใช้ CH2 ร่วมกัน — ถ้าใช้ SPI และ USART พร้อมกัน ต้องวางแผนให้ดี
+    </div>
+</section>
+
+<section>
+    <h2>📋 API Reference — Core</h2>
+    <table>
+        <thead><tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr></thead>
+        <tbody>
+            <tr><td><code>DMA_SimpleInit(ch)</code></td><td>เริ่มต้น DMA channel</td><td><code>DMA_SimpleInit(DMA_CH1);</code></td></tr>
+            <tr><td><code>DMA_Start(ch)</code></td><td>เริ่ม transfer</td><td><code>DMA_Start(DMA_CH1);</code></td></tr>
+            <tr><td><code>DMA_Stop(ch)</code></td><td>หยุด transfer</td><td><code>DMA_Stop(DMA_CH1);</code></td></tr>
+            <tr><td><code>DMA_GetStatus(ch)</code></td><td>อ่านสถานะ channel</td><td><code>uint8_t s = DMA_GetStatus(DMA_CH1);</code></td></tr>
+            <tr><td><code>DMA_WaitComplete(ch, timeout)</code></td><td>รอจน transfer เสร็จ (blocking)</td><td><code>DMA_WaitComplete(DMA_CH1, 1000);</code></td></tr>
+            <tr><td><code>DMA_Reset(ch)</code></td><td>รีเซ็ต channel</td><td><code>DMA_Reset(DMA_CH1);</code></td></tr>
+            <tr><td><code>DMA_GetRemainingCount(ch)</code></td><td>จำนวนข้อมูลที่ยังเหลือ</td><td><code>uint16_t r = DMA_GetRemainingCount(DMA_CH1);</code></td></tr>
+            <tr><td><code>DMA_EnableInterrupt(ch)</code></td><td>เปิด DMA interrupt</td><td><code>DMA_EnableInterrupt(DMA_CH1);</code></td></tr>
+        </tbody>
+    </table>
+
+    <h3>Callbacks</h3>
+    <table>
+        <thead><tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th></tr></thead>
+        <tbody>
+            <tr><td><code>DMA_SetTransferCompleteCallback(ch, cb)</code></td><td>callback เมื่อ transfer เสร็จทั้งหมด</td></tr>
+            <tr><td><code>DMA_SetErrorCallback(ch, cb)</code></td><td>callback เมื่อเกิด error</td></tr>
+            <tr><td><code>DMA_SetHalfTransferCallback(ch, cb)</code></td><td>callback เมื่อ transfer ครึ่งทาง</td></tr>
+        </tbody>
+    </table>
+
+    <h3>M2M (Memory-to-Memory)</h3>
+    <table>
+        <thead><tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th></tr></thead>
+        <tbody>
+            <tr><td><code>DMA_MemCopy(dst, src, size)</code></td><td>ก็อปปี้ memory แบบ blocking</td></tr>
+            <tr><td><code>DMA_MemCopyAsync(dst, src, size, cb)</code></td><td>ก็อปปี้ memory แบบ async + callback</td></tr>
+            <tr><td><code>DMA_MemSet(dst, val, size)</code></td><td>เติมค่าใน memory (เหมือน memset)</td></tr>
+        </tbody>
+    </table>
+
+    <h3>ADC DMA</h3>
+    <table>
+        <thead><tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr></thead>
+        <tbody>
+            <tr><td><code>DMA_ADC_Init(buf, size)</code></td><td>เริ่ม ADC + DMA (single channel)</td><td><code>DMA_ADC_Init(buf, 100);</code></td></tr>
+            <tr><td><code>DMA_ADC_InitMultiChannel(buf, size, channels, num)</code></td><td>ADC + DMA หลาย channel</td><td><code>DMA_ADC_InitMultiChannel(buf, 100, chs, 3);</code></td></tr>
+            <tr><td><code>DMA_analogReadStart(sampleRate)</code></td><td>เริ่ม ADC ต่อเนื่อง (circular)</td><td><code>DMA_analogReadStart(10000); // 10kHz</code></td></tr>
+            <tr><td><code>DMA_analogReadAverage(channel)</code></td><td>อ่านค่าเฉลี่ยจาก buffer</td><td><code>uint16_t avg = DMA_analogReadAverage(0);</code></td></tr>
+            <tr><td><code>DMA_analogReadStop()</code></td><td>หยุด ADC DMA</td><td><code>DMA_analogReadStop();</code></td></tr>
+        </tbody>
+    </table>
+
+    <h3>USART DMA</h3>
+    <table>
+        <thead><tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th></tr></thead>
+        <tbody>
+            <tr><td><code>DMA_USART_InitTx(buf, size)</code></td><td>เริ่ม USART TX DMA</td></tr>
+            <tr><td><code>DMA_USART_InitRx(buf, size)</code></td><td>เริ่ม USART RX DMA</td></tr>
+            <tr><td><code>DMA_USART_Transmit(data, size)</code></td><td>ส่งข้อมูลผ่าน DMA</td></tr>
+            <tr><td><code>DMA_USART_Send(str)</code></td><td>ส่ง string ผ่าน DMA (สะดวก)</td></tr>
+            <tr><td><code>DMA_USART_GetReceivedCount()</code></td><td>จำนวนไบต์ที่รับได้</td></tr>
+        </tbody>
+    </table>
+
+    <h3>SPI / I2C / TIM DMA</h3>
+    <table>
+        <thead><tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th></tr></thead>
+        <tbody>
+            <tr><td><code>DMA_SPI_Init(buf, size)</code></td><td>เริ่ม SPI DMA</td></tr>
+            <tr><td><code>DMA_SPI_TransferBuffer(tx, rx, size)</code></td><td>SPI รับ-ส่งผ่าน DMA</td></tr>
+            <tr><td><code>DMA_I2C_InitTx(buf, size)</code></td><td>เริ่ม I2C TX DMA</td></tr>
+            <tr><td><code>DMA_I2C_InitRx(buf, size)</code></td><td>เริ่ม I2C RX DMA</td></tr>
+            <tr><td><code>DMA_I2C_Transfer(addr, tx, txSize, rx, rxSize)</code></td><td>I2C transfer ผ่าน DMA</td></tr>
+            <tr><td><code>DMA_TIM_InitCapture(buf, size, channel)</code></td><td>TIM input capture ผ่าน DMA</td></tr>
+            <tr><td><code>DMA_TIM_UpdatePWM(data, size, channel)</code></td><td>อัปเดต PWM duty ผ่าน DMA</td></tr>
+            <tr><td><code>DMA_TIM_GetCCRAddress(timer, channel)</code></td><td>หา address ของ CCR register</td></tr>
+        </tbody>
+    </table>
+</section>
+
+<section>
+    <h2>💻 เขียน Code ทีละขั้น</h2>
+
+    <div class="step">
+        <h3>ขั้นที่ 1: Include + ตั้งค่าระบบ</h3>
+        <pre><code class="language-c">#include "simplehal.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(USART_115200);</code></pre>
+        <p class="explain">🔍 ระบบพื้นฐาน — USART สำหรับแสดงผลการวัดประสิทธิภาพ</p>
+    </div>
+
+    <div class="step">
+        <h3>ขั้นที่ 2: DMA MemCopy (M2M)</h3>
+        <pre><code class="language-c">    uint8_t src[256], dst[256];
+
+    // เติม src ด้วยข้อมูลทดสอบ
+    for (int i = 0; i &lt; 256; i++)
+        src[i] = i;
+
+    // ก็อปปี้ผ่าน DMA — CPU ไม่ต้องทำอะไร
+    DMA_MemCopy(dst, src, 256);</code></pre>
+        <p class="explain">🔍 <code>DMA_MemCopy</code> เป็นแบบ blocking — จะ return เมื่อ transfer เสร็จ เร็วกว่าการใช้ CPU copy ทีละไบต์สำหรับ buffer ใหญ่</p>
+    </div>
+
+    <div class="step">
+        <h3>ขั้นที่ 3: ADC DMA Circular Buffer</h3>
+        <pre><code class="language-c">    #define BUF_SIZE 100
+    uint16_t adc_buf[BUF_SIZE];
+
+    // เริ่ม ADC DMA แบบ circular
+    DMA_ADC_Init(adc_buf, BUF_SIZE);
+    DMA_analogReadStart(10000);  // sample @ 10kHz
+
+    while (1) {
+        // อ่านค่าเฉลี่ยจาก buffer — ไม่ต้อง polling ADC
+        uint16_t avg = DMA_analogReadAverage(0);
+        printf("ADC Avg: %u\r\n", avg);
+        Delay_Ms(500);
+    }</code></pre>
+        <p class="explain">🔍 Circular mode — buffer จะถูกเติมวนไปเรื่อย ๆ โดยอัตโนมัติ <code>DMA_analogReadAverage</code> คำนวณค่าเฉลี่ยจากข้อมูลใน buffer ล่าสุด</p>
+    </div>
+
+    <div class="step">
+        <h3>ขั้นที่ 4: USART DMA Send</h3>
+        <pre><code class="language-c">    char msg[] = "Hello from DMA!\r\n";
+
+    DMA_USART_InitTx((uint8_t*)msg, sizeof(msg));
+    DMA_USART_Send(msg);  // ส่งทั้ง string ผ่าน DMA
+
+    // CPU ทำอย่างอื่นได้ทันที — ไม่ต้องรอส่งจบ</code></pre>
+        <p class="explain">🔍 ต่างจาก <code>printf</code> ที่ CPU ต้องป้อนข้อมูลให้ USART ทีละไบต์ — DMA จัดการให้หมด</p>
+    </div>
+</section>
+
+<section>
+    <h2>🟢 ตัวอย่างขั้นต้น</h2>
+    <p>Fast MemCopy — ใช้ DMA ก็อปปี้ 128 bytes วัดประสิทธิภาพ</p>
+    <pre><code class="language-c">#include "simplehal.h"
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(USART_115200);
+
+    uint8_t src[128], dst[128];
+    memset(dst, 0, 128);
+
+    // เติมข้อมูลทดสอบ
+    for (int i = 0; i &lt; 128; i++)
+        src[i] = i;
+
+    uint32_t t0 = Get_CurrentMs();
+    DMA_MemCopy(dst, src, 128);
+    uint32_t t1 = Get_CurrentMs();
+
+    printf("DMA copy 128 bytes: %lu ms\r\n", t1 - t0);
+
+    // ตรวจสอบผลลัพธ์
+    uint8_t ok = 1;
+    for (int i = 0; i &lt; 128; i++) {
+        if (dst[i] != src[i]) { ok = 0; break; }
+    }
+    printf("Verify: %s\r\n", ok ? "PASS" : "FAIL");
+
+    while (1);
+}</code></pre>
+</section>
+
+<section>
+    <h2>🟡 ตัวอย่างขั้นกลาง</h2>
+    <div class="approach">
+        <strong>แนวคิด:</strong> ADC Continuous Circular Buffer — อ่าน 100 samples ต่อเนื่อง พร้อมคำนวณค่าเฉลี่ย
+    </div>
+    <pre><code class="language-c">#include "simplehal.h"
+#include &lt;stdio.h&gt;
+
+#define ADC_BUF_SIZE 100
+
+uint16_t adc_buffer[ADC_BUF_SIZE];
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(USART_115200);
+    ADC_SimpleInit();
+
+    DMA_ADC_Init(adc_buffer, ADC_BUF_SIZE);
+    DMA_analogReadStart(5000);  // 5kHz sampling
+
+    while (1) {
+        // Circular DMA จะเติม buffer วนไปเรื่อย ๆ
+        uint16_t avg = DMA_analogReadAverage(0);
+
+        // แสดงค่า raw ทั้งหมด
+        uint16_t min = 4095, max = 0;
+        for (int i = 0; i &lt; ADC_BUF_SIZE; i++) {
+            if (adc_buffer[i] &lt; min) min = adc_buffer[i];
+            if (adc_buffer[i] &gt; max) max = adc_buffer[i];
+        }
+
+        printf("ADC: avg=%u min=%u max=%u\r\n", avg, min, max);
+        Delay_Ms(200);
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>🔴 ตัวอย่างขั้นสูง</h2>
+    <div class="approach">
+        <strong>แนวคิด:</strong> DMA PWM Sine Wave Generator — เขียน sine table ไปยัง TIM1 CCR ด้วย DMA ที่ update rate สร้าง sine wave บน PWM output
+    </div>
+    <pre><code class="language-c">#include "simplehal.h"
+#include &lt;math.h&gt;
+
+#define SINE_SAMPLES 64
+
+// คำนวณ sine table ตอน compile-time (ใช้ math.h, เรียกครั้งเดียว)
+uint16_t sine_table[SINE_SAMPLES];
+
+void generateSineTable(void) {
+    for (int i = 0; i &lt; SINE_SAMPLES; i++) {
+        float rad = 2.0f * 3.14159f * i / SINE_SAMPLES;
+        // sine value 0..1 → map to 0..999 (PWM duty 0-100%)
+        sine_table[i] = (uint16_t)((sin(rad) + 1.0f) / 2.0f * 999);
+    }
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    generateSineTable();
+
+    // ตั้งค่า PWM บน TIM1 CH1 (PA1) @ 1kHz
+    PWM_SimpleInit(TIM_1, TIM_CH1, 1000, 500); // 50% duty เริ่มต้น
+
+    // ใช้ DMA อัปเดต CCR ตาม sine table
+    // TIM update event → DMA เขียน sine_table → CCR → sine wave บน PWM output
+    DMA_TIM_InitCapture(sine_table, SINE_SAMPLES, TIM_CH1);
+    DMA_Start(DMA_CH5);  // TIM1_Update → CH5
+
+    while (1) {
+        // CPU ว่างทำอย่างอื่น — DMA จัดการ waveform เอง
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <thead><tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr></thead>
+        <tbody>
+            <tr>
+                <td>Channel conflict</td>
+                <td>2 peripherals ต้องการใช้ DMA channel เดียวกัน (เช่น SPI RX + USART TX = CH2)</td>
+                <td>วางแผน channel ล่วงหน้า — หรือใช้ interrupt แทน DMA สำหรับ peripheral ใด peripheral หนึ่ง</td>
+            </tr>
+            <tr>
+                <td>ข้อมูลเสียหาย</td>
+                <td>buffer ถูกเขียนทับก่อนที่ CPU จะอ่าน — circular mode วนกลับมาแล้ว</td>
+                <td>ใช้ half-transfer callback — อ่านครึ่งแรกขณะ DMA เขียนครึ่งหลัง (double buffering)</td>
+            </tr>
+            <tr>
+                <td>Circular mode ไม่หยุด</td>
+                <td>ตั้ง mode เป็น circular ต้องการ one-shot</td>
+                <td>ใช้ <code>DMA_MODE_NORMAL</code> สำหรับ one-shot transfer</td>
+            </tr>
+            <tr>
+                <td>Callback context ผิด</td>
+                <td>เรียก <code>Delay_Ms()</code> หรือ <code>printf()</code> ใน DMA callback → ทำงานใน ISR context</td>
+                <td>DMA callback ทำงานใน ISR — ต้องสั้น รวดเร็ว ห้ามเรียก blocking functions — ใช้ flag ให้ main loop จัดการ</td>
+            </tr>
+            <tr>
+                <td>Mem-to-Mem Circular ไม่ทำงาน</td>
+                <td>CH32V003 DMA hardware ไม่รองรับ circular mode สำหรับ memory-to-memory</td>
+                <td>ใช้ peripheral-to-memory หรือ memory-to-peripheral แทน — M2M ใช้เฉพาะ normal mode</td>
+            </tr>
+        </tbody>
+    </table>
+</section>
+
+<section>
+    <h2>💡 FAQ</h2>
+    <p><strong>Q: DMA vs CPU copy — ตัวไหนเร็วกว่า?</strong><br>
+    A: DMA <strong>เหนือกว่า</strong> เมื่อ buffer ใหญ่ (มากกว่า 64 bytes) หรือเมื่อต้องการให้ CPU ว่างทำงานอื่น — สำหรับ buffer เล็ก CPU อาจเร็วกว่าเพราะไม่มี overhead ในการตั้งค่า DMA</p>
+
+    <p><strong>Q: Circular mode คืออะไร?</strong><br>
+    A: Circular mode ทำให้ DMA วนกลับไปเขียนที่ต้น buffer เมื่อถึงจุดสิ้นสุด — เหมาะกับ ADC ต่อเนื่องที่ต้องการ ring buffer ของค่าล่าสุด</p>
+
+    <p><strong>Q: ใช้ DMA พร้อมกันหลาย channels ได้ไหม?</strong><br>
+    A: ได้ — แต่ละ channel เป็นอิสระ แต่ priority ถูกกำหนดโดยหมายเลข channel (CH1 สูงสุด) — ระวัง channel conflict</p>
+
+    <p><strong>Q: DMA transfer size สูงสุดเท่าไร?</strong><br>
+    A: Counter register เป็น 16-bit — สูงสุด 65,535 transfers ต่อครั้ง</p>
+</section>
+
+<section>
+    <h2>✏️ ลองทำดู <a href="ch13_answers.html" class="ans-link">[เฉลย]</a></h2>
+    <ol>
+        <li><strong>DMA copy 256 bytes วัดเวลา</strong> — ใช้ <code>DMA_MemCopyAsync</code> แบบ async + callback — วัดเวลาเทียบกับ <code>memcpy</code> แบบ CPU</li>
+        <li><strong>ADC DMA circular buffer</strong> — ตั้งค่า sampling 10kHz, buffer 100 samples, แสดงค่าเฉลี่ยทุก 1 วินาที</li>
+        <li><strong>USART DMA ส่ง string</strong> — ส่งข้อความยาว 500 bytes ผ่าน <code>DMA_USART_Send</code> — ให้ CPU แสดง LED กระพริบพร้อมกันเพื่อพิสูจน์ว่าไม่ติดขัด</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch12-tim-ext.html">บทที่ 12: Stopwatch & Countdown</a>
+    <a href="ch14-flash.html">บทที่ 14: Flash →</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

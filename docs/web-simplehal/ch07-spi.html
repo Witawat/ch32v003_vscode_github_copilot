@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>บทที่ 7: SPI — สื่อสารความเร็วสูง</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+</head>
+<body>
+
+<nav class="top-nav">
+    <a href="ch06-i2c-soft.html">&larr; บทที่ 6: Software I2C</a>
+    <a href="index.html">&#x1f3e0; สารบัญ</a>
+    <a href="ch08-adc.html">บทที่ 8: ADC &rarr;</a>
+</nav>
+
+<h1>บทที่ 7: SPI — สื่อสารความเร็วสูง</h1>
+<span class="level level-intermediate">ระดับกลาง</span>
+
+<section>
+    <h2>สิ่งที่ต้องรู้ก่อน</h2>
+    <ul>
+        <li><a href="ch02-gpio.html">บทที่ 2: GPIO</a> (การควบคุม CS pin)</li>
+    </ul>
+</section>
+
+<section>
+    <h2>อุปกรณ์ที่ต้องใช้</h2>
+    <ul>
+        <li>CH32V003 Dev Board (แนะนำ SOP-16 / TSSOP-20 — SOP-8 ไม่มี HW SPI)</li>
+        <li>SPI device (W25Q flash, MAX7219, ฯลฯ)</li>
+    </ul>
+</section>
+
+<section>
+    <h2>ทำไมต้องใช้?</h2>
+    <p>สื่อสารเร็วกว่า I2C มาก — Flash memory, จอ TFT/OLED, SD card, เซนเซอร์ความเร็วสูง</p>
+</section>
+
+<section>
+    <h2>Flowchart การทำงาน</h2>
+    <div class="flowchart">
+        <pre class="mermaid">
+flowchart TD
+    A["SPI_SimpleInit()"] --> B["digitalWrite(CS, LOW)"]
+    B --> C["SPI_Transfer() ส่ง+รับ"]
+    C --> D["digitalWrite(CS, HIGH)"]
+    D --> E["ข้อมูลครบ"]
+        </pre>
+    </div>
+</section>
+
+<section>
+    <h2>การตั้งค่า Pin</h2>
+    <table>
+        <tr><th>ชื่อ Config</th><th>SCK</th><th>MISO</th><th>MOSI</th><th>NSS</th></tr>
+        <tr><td>SPI_PINS_DEFAULT</td><td>PC5</td><td>PC7</td><td>PC6</td><td>PC4</td></tr>
+        <tr><td>SPI_PINS_REMAP</td><td>PD1</td><td>PD2</td><td>PD3</td><td>PD0</td></tr>
+    </table>
+    <div class="callout callout-warn">
+        <strong>สำคัญ:</strong> SOP-8 ไม่มี hardware SPI — ใช้ <code>shiftOut()</code> / <code>shiftIn()</code> แทน
+    </div>
+</section>
+
+<section>
+    <h2>SPI Mode &amp; ความเร็ว</h2>
+    <h3>Modes (CPOL/CPHA)</h3>
+    <table>
+        <tr><th>Mode</th><th>CPOL</th><th>CPHA</th></tr>
+        <tr><td>Mode 0</td><td>0</td><td>0</td></tr>
+        <tr><td>Mode 1</td><td>0</td><td>1</td></tr>
+        <tr><td>Mode 2</td><td>1</td><td>0</td></tr>
+        <tr><td>Mode 3</td><td>1</td><td>1</td></tr>
+    </table>
+    <h3>ความเร็ว</h3>
+    <p>125kHz ถึง 12MHz (enum) — หมายเหตุ: ความเร็วจริงที่ PCLK 48MHz = 2&times; ชื่อ enum เช่น SPI_CLOCK_DIV_4 = ~12MHz</p>
+</section>
+
+<section>
+    <h2>API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th></tr>
+        <tr><td><code>SPI_SimpleInit()</code></td><td>เริ่มต้น SPI hardware</td></tr>
+        <tr><td><code>SPI_Transfer()</code></td><td>ส่งและรับ 1 ไบต์</td></tr>
+        <tr><td><code>SPI_TransferBuffer()</code></td><td>ส่งและรับ buffer</td></tr>
+        <tr><td><code>SPI_Write()</code></td><td>เขียนข้อมูล</td></tr>
+        <tr><td><code>SPI_Read()</code></td><td>อ่านข้อมูล</td></tr>
+        <tr><td><code>SPI_SetCS()</code></td><td>ควบคุม CS pin</td></tr>
+        <tr><td><code>SPI_SetCSPin()</code></td><td>กำหนด CS pin</td></tr>
+        <tr><td><code>SPI_SetSpeed()</code></td><td>เปลี่ยนความเร็ว</td></tr>
+        <tr><td><code>SPI_SetBitOrder()</code></td><td>กำหนดลำดับบิต (MSB/LSB first)</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>ระดับขั้นต้น: MAX7219 7-Segment Driver</h2>
+    <div class="approach">
+        <strong>แนวคิด:</strong> เขียน register + data พร้อม toggle CS ทุกครั้ง
+    </div>
+    <pre><code class="language-c">#include "SimpleHAL.h"
+
+#define MAX7219_CS PC0
+
+void max7219_write(uint8_t reg, uint8_t data) {
+    digitalWrite(MAX7219_CS, LOW);
+    SPI_Transfer(reg);
+    SPI_Transfer(data);
+    digitalWrite(MAX7219_CS, HIGH);
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    SPI_SimpleInit(SPI_CLOCK_DIV_16, SPI_PINS_DEFAULT);
+    SPI_SetCSPin(MAX7219_CS);
+
+    // Initialize MAX7219
+    max7219_write(0x09, 0x00); // No decode
+    max7219_write(0x0A, 0x01); // Intensity
+    max7219_write(0x0B, 0x07); // Scan limit (8 digits)
+    max7219_write(0x0C, 0x01); // Shutdown off
+
+    // Display "8" on digit 0
+    max7219_write(0x01, 0x08);
+
+    while (1);
+}</code></pre>
+</section>
+
+<section>
+    <h2>ระดับขั้นกลาง: W25Q Flash Memory</h2>
+    <div class="approach">
+        <strong>แนวคิด:</strong> อ่าน JEDEC ID, เขียน enable, อ่านข้อมูลที่ address
+    </div>
+    <pre><code class="language-c">#include "SimpleHAL.h"
+
+#define W25Q_CS PC0
+
+void w25q_cs_low(void)  { digitalWrite(W25Q_CS, LOW); }
+void w25q_cs_high(void) { digitalWrite(W25Q_CS, HIGH); }
+
+uint32_t w25q_read_jedec(void) {
+    w25q_cs_low();
+    SPI_Transfer(0x9F); // JEDEC ID command
+    uint32_t id = (SPI_Transfer(0xFF) << 16) | (SPI_Transfer(0xFF) << 8) | SPI_Transfer(0xFF);
+    w25q_cs_high();
+    return id;
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(USART_115200);
+    SPI_SimpleInit(SPI_CLOCK_DIV_4, SPI_PINS_DEFAULT);
+    SPI_SetCSPin(W25Q_CS);
+    digitalWrite(W25Q_CS, HIGH);
+
+    uint32_t jedec = w25q_read_jedec();
+    printf("JEDEC ID: 0x%06lX\r\n", jedec);
+
+    while (1);
+}</code></pre>
+</section>
+
+<section>
+    <h2>ระดับขั้นสูง: SPI + DMA สำหรับ Bulk Display Buffer</h2>
+    <div class="approach">
+        <strong>แนวคิด:</strong> ใช้ DMA ส่ง buffer ขนาดใหญ่ไปยัง display — ลด CPU overhead ได้อย่างมาก (~60fps)
+    </div>
+    <pre><code class="language-c">#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    SPI_SimpleInit(SPI_CLOCK_DIV_2, SPI_PINS_DEFAULT);
+
+    // ดูบทที่ 13 DMA สำหรับรายละเอียดการใช้งาน SPI + DMA
+    // SPI_DMA_Init() + SPI_DMA_Send(buffer, size)
+    // ทำให้ส่งข้อมูล display buffer ได้โดย CPU แทบไม่ได้ใช้
+
+    while (1);
+}</code></pre>
+</section>
+
+<section>
+    <h2>ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>อาการ</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>ข้อมูลผิดเพี้ยน</td><td>Mode ไม่ตรงกับ datasheet</td><td>เช็ค CPOL/CPHA ใน datasheet อุปกรณ์</td></tr>
+        <tr><td>Device ไม่ตอบสนอง</td><td>ลืมดึง CS LOW</td><td>ต้อง digitalWrite(CS, LOW) ก่อนทุกครั้ง</td></tr>
+        <tr><td>สัญญาณเสีย</td><td>สายยาวเกินไป หรือ breadboard</td><td>ใช้สายสั้น, ลดความเร็ว SPI</td></tr>
+        <tr><td>MISO อ่านค่าสุ่ม</td><td>ไม่มี pull-up</td><td>ถ้า MISO เป็น open-drain ต้อง pull-up</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>คำถามที่พบบ่อย (FAQ)</h2>
+    <h3>SPI vs I2C ต่างกันอย่างไร?</h3>
+    <p>SPI เร็วกว่า ใช้ 4 สาย (ไม่มี address) — I2C 2 สาย ใช้ address เลือก device</p>
+    <h3>SOP-8 ใช้ SPI ได้ไหม?</h3>
+    <p>ไม่มี hardware SPI — ใช้ <code>shiftOut()</code> / <code>shiftIn()</code> แบบ bit-bang แทน</p>
+</section>
+
+<section>
+    <h2>ลองทำดู (แบบฝึกหัด)</h2>
+    <ol>
+        <li>อ่าน JEDEC ID จาก W25Q flash memory</li>
+        <li>ส่งข้อมูลไปแสดงผลบน MAX7219 8-digit 7-segment</li>
+        <li>ทดสอบ SPI loopback (ต่อ MOSI เข้า MISO)</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="ch06-i2c-soft.html">&larr; บทที่ 6: Software I2C</a>
+    <a href="index.html">&#x1f3e0; สารบัญ</a>
+    <a href="ch08-adc.html">บทที่ 8: ADC &rarr;</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:false,theme:'base'});mermaid.run();</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

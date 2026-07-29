@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>เฉลย บทที่ 12 — SimpleHAL</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+<style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:0.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:0.9em}</style>
+</head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch12-tim-ext.html">กลับบทที่ 12</a>
+</nav>
+<h1>📝 เฉลย — บทที่ 12: Stopwatch &amp; Countdown — จับเวลา นับถอยหลัง</h1>
+
+<div class="answer">
+  <h2>ข้อ 1: Countdown 5 นาทีพร้อมไฟเตือน</h2>
+  <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+#define COUNTDOWN_SEC  300  // 5 minutes
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    pinMode(PC0, PIN_MODE_OUTPUT);
+
+    Countdown_InitFromSeconds(COUNTDOWN_SEC);
+    Countdown_Start();
+
+    USART_Print("Countdown 5 min started!\r\n");
+
+    uint8_t alarmed = 0;
+    while (1) {
+        if (Countdown_IsFinished() && !alarmed) {
+            alarmed = 1;
+            USART_Print("TIME'S UP!\r\n");
+            // LED กระพริบ 5 ครั้ง
+            for (int i = 0; i < 5; i++) {
+                digitalWrite(PC0, HIGH); Delay_Ms(200);
+                digitalWrite(PC0, LOW);  Delay_Ms(200);
+            }
+            // รีเซ็ตและเริ่มใหม่
+            Countdown_InitFromSeconds(COUNTDOWN_SEC);
+            Countdown_Start();
+            alarmed = 0;
+        }
+
+        char buf[12];
+        Countdown_GetTimeString(buf, TIME_FORMAT_MMSS, TIME_DISPLAY_NORMALIZED);
+        USART_Print("Remaining: "); USART_Print(buf); USART_Print("   \r");
+        Delay_Ms(500);
+    }
+}</code></pre>
+  <div class="approach"><strong>🧠 แนวคิด:</strong> Countdown_InitFromSeconds(300) เริ่มที่นับถอยหลัง 300 วินาที — poll IsFinished() ทุก 500ms — เมื่อหมดเวลา: กระพริบ LED 5 ครั้ง + print "TIME'S UP!" — alarmed flag ป้องกันเตือนซ้ำ — รีเซ็ตด้วย InitFromSeconds + Start ใหม่ — TIME_FORMAT_MMSS แสดงผลแบบ นาที:วินาที</div>
+</div>
+
+<div class="answer">
+  <h2>ข้อ 2: Stopwatch ปุ่มเริ่ม/หยุด/รีเซ็ต</h2>
+  <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+#define BTN_START PC1
+#define BTN_RESET PC2
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+
+    pinMode(BTN_START, PIN_MODE_INPUT_PULLUP);
+    pinMode(BTN_RESET, PIN_MODE_INPUT_PULLUP);
+
+    Stopwatch_Init();
+    uint8_t running = 0, last_start = HIGH, last_reset = HIGH;
+
+    while (1) {
+        uint8_t b1 = digitalRead(BTN_START);
+        uint8_t b2 = digitalRead(BTN_RESET);
+
+        // ปุ่ม Start/Stop (toggle)
+        if (b1 == LOW && last_start == HIGH) {
+            if (running) {
+                Stopwatch_Stop();
+                running = 0;
+            } else {
+                Stopwatch_Start();
+                running = 1;
+            }
+            Delay_Ms(50);
+        }
+
+        // ปุ่ม Reset
+        if (b2 == LOW && last_reset == HIGH) {
+            Stopwatch_Reset();
+            if (!running) {
+                Stopwatch_Start();
+                running = 1;
+            }
+            Delay_Ms(50);
+        }
+
+        last_start = b1; last_reset = b2;
+
+        char buf[12];
+        Stopwatch_GetTimeString(buf, TIME_FORMAT_MMSS, TIME_DISPLAY_NORMALIZED);
+        USART_Print(buf);
+        USART_Print(running ? " [RUN]\r" : " [STOP]\r");
+        Delay_Ms(100);
+    }
+}</code></pre>
+  <div class="approach"><strong>🧠 แนวคิด:</strong> 2 ปุ่มแบบ edge detection (current==LOW, last==HIGH) + debounce 50ms — ปุ่ม 1: toggle Start/Stop — ปุ่ม 2: Reset แล้ว auto-start — Stopwatch_GetTimeString MM:SS แสดงเวลา — running flag บอกสถานะ — แสดงผล USART อัปเดตทุก 100ms</div>
+</div>
+
+<div class="answer">
+  <h2>ข้อ 3: Pomodoro Timer (25min focus + 5min break)</h2>
+  <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+#define FOCUS_SEC   (25 * 60)   // 25 minutes
+#define BREAK_SEC   (5  * 60)   // 5 minutes
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    pinMode(PC0, PIN_MODE_OUTPUT);  // Buzzer/LED
+
+    uint8_t is_focus = 1;
+    Countdown_InitFromSeconds(FOCUS_SEC);
+    Countdown_Start();
+
+    while (1) {
+        if (Countdown_IsFinished()) {
+            // เตือนด้วย buzzer สั้น
+            for (int i = 0; i < 3; i++) {
+                digitalWrite(PC0, HIGH); Delay_Ms(150);
+                digitalWrite(PC0, LOW);  Delay_Ms(150);
+            }
+
+            is_focus = !is_focus;
+            uint32_t next_sec = is_focus ? FOCUS_SEC : BREAK_SEC;
+
+            USART_Print(is_focus ? ">> FOCUS " : ">> BREAK ");
+            USART_PrintNum((int32_t)(next_sec / 60));
+            USART_Print(" min\r\n");
+
+            Countdown_InitFromSeconds(next_sec);
+            Countdown_Start();
+        }
+
+        char buf[12];
+        Countdown_GetTimeString(buf, TIME_FORMAT_MMSS, TIME_DISPLAY_NORMALIZED);
+        USART_Print(is_focus ? "[FOCUS] " : "[BREAK] ");
+        USART_Print(buf); USART_Print("   \r");
+        Delay_Ms(500);
+    }
+}</code></pre>
+  <div class="approach"><strong>🧠 แนวคิด:</strong> 2 phase: FOCUS 25 นาที → BREAK 5 นาที สลับกันด้วย is_focus flag — IsFinished → buzzer 3 ครั้ง → toggle is_focus → Countdown_InitFromSeconds ระยะถัดไป — แสดงผล prefix [FOCUS]/[BREAK] + MM:SS — วนไปเรื่อย ๆ automático — ไม่มีปุ่ม pause (minimal implementation)</div>
+</div>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch12-tim-ext.html">กลับบทที่ 12</a>
+</nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

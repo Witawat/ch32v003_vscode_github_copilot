@@ -63,6 +63,22 @@
   </tbody>
 </table>
 
+<h4>รู้จักขา</h4>
+<ul>
+  <li><strong>PC0:</strong> ขาออก ต่อ LED ผ่าน R 220Ω สั่งให้กระพริบด้วย non-blocking timer</li>
+  <li><strong>PC1:</strong> ขาอินพุต (pull-up) อ่านปุ่มกดเพื่อ Start/Stop timer</li>
+  <li><strong>R 220Ω:</strong> ตัวต้านทานจำกัดกระแส LED</li>
+  <li><strong>Push Button:</strong> ปุ่มกด ACTIVE_LOW — กด=LOW, ปล่อย=HIGH</li>
+</ul>
+
+<h4>วิธีต่อทีละขั้น</h4>
+<ol>
+  <li>ต่อ <strong>PC0</strong> ไป <strong>R 220Ω</strong> → <strong>LED แอโนด</strong> — สัญญาณควบคุม LED กระพริบ</li>
+  <li>ต่อ <strong>LED แคโทด</strong> ไป <strong>GND</strong> — ครบวงจร</li>
+  <li>ต่อ <strong>PC1</strong> ไป <strong>Push Button</strong> ขา 1 — อ่านค่าปุ่มกด</li>
+  <li>ต่อ <strong>Push Button</strong> ขา 2 ไป <strong>GND</strong> — กดปุ่ม PC1 ต่อลง GND</li>
+</ol>
+
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">
 flowchart TD
@@ -198,6 +214,20 @@ int main(void)
   </tbody>
 </table>
 
+<h4>รู้จักขา</h4>
+<ul>
+  <li><strong>PC0:</strong> ขาออก ต่อ LED ผ่าน R 220Ω สาธิต Delay_Ms แบบ blocking</li>
+  <li><strong>R 220Ω:</strong> ตัวต้านทานจำกัดกระแส ป้องกัน LED และ pin เสียหาย</li>
+  <li><strong>LED (Red):</strong> ไฟ LED สีแดง แอโนด→R→PC0, แคโทด→GND</li>
+</ul>
+
+<h4>วิธีต่อทีละขั้น</h4>
+<ol>
+  <li>ต่อ <strong>PC0</strong> ไป <strong>R 220Ω</strong> — ส่งสัญญาณ ON/OFF ให้ LED</li>
+  <li>ต่อ <strong>R 220Ω</strong> อีกด้านไป <strong>LED แอโนด</strong> (ขายาว) — จำกัดกระแส</li>
+  <li>ต่อ <strong>LED แคโทด</strong> (ขาสั้น) ไป <strong>GND</strong> — ครบวงจร</li>
+</ol>
+
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">
 flowchart TD
@@ -313,6 +343,23 @@ int main(void)
     <tr><td>LED (Yellow)</td><td>→</td><td>GND</td><td>แคโทด</td><td>—</td></tr>
   </tbody>
 </table>
+
+<h4>รู้จักขา</h4>
+<ul>
+  <li><strong>PD5 (TX):</strong> ขาส่งข้อมูล USART ไป PC (115200 baud)</li>
+  <li><strong>PD6 (RX):</strong> ขารับข้อมูล USART จาก PC</li>
+  <li><strong>PC0:</strong> ขาออก ต่อ LED ใช้แสดงสถานะเมื่อรายงานเวลาทุก 1 วินาที</li>
+  <li><strong>R 220Ω:</strong> ตัวต้านทานจำกัดกระแส LED</li>
+</ul>
+
+<h4>วิธีต่อทีละขั้น</h4>
+<ol>
+  <li>ต่อ <strong>PD5 (TX)</strong> ไป <strong>USB-Serial (RX)</strong> — ส่งข้อมูลจาก MCU ไป PC</li>
+  <li>ต่อ <strong>PD6 (RX)</strong> ไป <strong>USB-Serial (TX)</strong> — รับข้อมูลจาก PC</li>
+  <li>ต่อ <strong>GND MCU</strong> ไป <strong>GND USB-Serial</strong> — ใช้วงจรร่วมกัน</li>
+  <li>ต่อ <strong>PC0</strong> ไป <strong>R 220Ω</strong> → <strong>LED แอโนด</strong> — ไฟแสดงสถานะ</li>
+  <li>ต่อ <strong>LED แคโทด</strong> ไป <strong>GND</strong></li>
+</ol>
 
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">
@@ -463,6 +510,22 @@ int main(void)
     <tr><td>Push Button</td><td>→</td><td>GND</td><td>ขา 2</td><td>—</td></tr>
   </tbody>
 </table>
+
+<h4>รู้จักขา</h4>
+<ul>
+  <li><strong>PC0:</strong> ขาออก ต่อ LED ใช้硬件 timer interrupt (TIM2) สลับสถานะ</li>
+  <li><strong>PC1:</strong> ขาอินพุต (pull-up) กดปุ่มเพื่อ Start/Stop timer</li>
+  <li><strong>R 220Ω:</strong> ตัวต้านทานจำกัดกระแส LED</li>
+  <li><strong>Push Button:</strong> ปุ่มกด ACTIVE_LOW — กด=LOW, ปล่อย=HIGH</li>
+</ul>
+
+<h4>วิธีต่อทีละขั้น</h4>
+<ol>
+  <li>ต่อ <strong>PC0</strong> ไป <strong>R 220Ω</strong> → <strong>LED แอโนด</strong> — ไฟกระพริบโดย ISR</li>
+  <li>ต่อ <strong>LED แคโทด</strong> ไป <strong>GND</strong></li>
+  <li>ต่อ <strong>PC1</strong> ไป <strong>Push Button</strong> ขา 1 — กด Start/Stop timer</li>
+  <li>ต่อ <strong>Push Button</strong> ขา 2 ไป <strong>GND</strong></li>
+</ol>
 
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">
@@ -617,6 +680,23 @@ int main(void)
   </tbody>
 </table>
 
+<h4>รู้จักขา</h4>
+<ul>
+  <li><strong>PC0:</strong> ขาออก ต่อ LED ใช้สลับสถานะทุกครั้งที่ counter wrap</li>
+  <li><strong>PD5 (TX):</strong> ขาส่ง USART แสดงค่า Counter, Period, PSC</li>
+  <li><strong>PD6 (RX):</strong> ขารับ USART</li>
+  <li><strong>R 220Ω:</strong> ตัวต้านทานจำกัดกระแส LED</li>
+</ul>
+
+<h4>วิธีต่อทีละขั้น</h4>
+<ol>
+  <li>ต่อ <strong>PC0</strong> ไป <strong>R 220Ω</strong> → <strong>LED แอโนด</strong> — ไฟกระพริบเมื่อ counter wrap</li>
+  <li>ต่อ <strong>LED แคโทด</strong> ไป <strong>GND</strong></li>
+  <li>ต่อ <strong>PD5 (TX)</strong> ไป <strong>USB-Serial (RX)</strong> — แสดงค่าผ่าน serial</li>
+  <li>ต่อ <strong>PD6 (RX)</strong> ไป <strong>USB-Serial (TX)</strong></li>
+  <li>ต่อ <strong>GND MCU</strong> ไป <strong>GND USB-Serial</strong></li>
+</ol>
+
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">
 flowchart TD
@@ -767,6 +847,25 @@ int main(void)
     <tr><td>GND</td><td>↔</td><td>USB-Serial GND</td><td>GND</td><td>Common ground</td></tr>
   </tbody>
 </table>
+
+<h4>รู้จักขา</h4>
+<ul>
+  <li><strong>PC0 (Button 1):</strong> ขาอินพุต (pull-up) สำหรับ Start/Stop จับเวลา</li>
+  <li><strong>PC1 (Button 2):</strong> ขาอินพุต (pull-up) สำหรับรีเซ็ตเวลา</li>
+  <li><strong>PD5 (TX):</strong> ขาส่ง USART แสดงเวลาปัจจุบัน</li>
+  <li><strong>PD6 (RX):</strong> ขารับ USART</li>
+</ul>
+
+<h4>วิธีต่อทีละขั้น</h4>
+<ol>
+  <li>ต่อ <strong>PC0</strong> ไป <strong>Push Button 1</strong> ขา 1 — กด Start/Stop</li>
+  <li>ต่อ <strong>Push Button 1</strong> ขา 2 ไป <strong>GND</strong></li>
+  <li>ต่อ <strong>PC1</strong> ไป <strong>Push Button 2</strong> ขา 1 — กดรีเซ็ต</li>
+  <li>ต่อ <strong>Push Button 2</strong> ขา 2 ไป <strong>GND</strong></li>
+  <li>ต่อ <strong>PD5 (TX)</strong> ไป <strong>USB-Serial (RX)</strong></li>
+  <li>ต่อ <strong>PD6 (RX)</strong> ไป <strong>USB-Serial (TX)</strong></li>
+  <li>ต่อ <strong>GND MCU</strong> ไป <strong>GND USB-Serial</strong></li>
+</ol>
 
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">
@@ -935,6 +1034,25 @@ int main(void)
     <tr><td>GND</td><td>↔</td><td>USB-Serial GND</td><td>GND</td><td>Common ground</td></tr>
   </tbody>
 </table>
+
+<h4>รู้จักขา</h4>
+<ul>
+  <li><strong>PC0:</strong> ขาออก ต่อ LED สำหรับแจ้งเตือนเมื่อนับถอยหลังหมด</li>
+  <li><strong>PC1:</strong> ขาอินพุต (pull-up) กดปุ่มเพื่อ Start/Pause นับถอยหลัง</li>
+  <li><strong>PD5 (TX):</strong> ขาส่ง USART แสดงเวลาที่เหลือ</li>
+  <li><strong>PD6 (RX):</strong> ขารับ USART</li>
+  <li><strong>R 220Ω:</strong> ตัวต้านทานจำกัดกระแส LED</li>
+</ul>
+
+<h4>วิธีต่อทีละขั้น</h4>
+<ol>
+  <li>ต่อ <strong>PC0</strong> ไป <strong>R 220Ω</strong> → <strong>LED แอโนด</strong> — ไฟแจ้งเตือนหมดเวลา</li>
+  <li>ต่อ <strong>LED แคโทด</strong> ไป <strong>GND</strong></li>
+  <li>ต่อ <strong>PC1</strong> ไป <strong>Push Button</strong> ขา 1 — กด Start/Pause</li>
+  <li>ต่อ <strong>Push Button</strong> ขา 2 ไป <strong>GND</strong></li>
+  <li>ต่อ <strong>PD5 (TX)</strong> → <strong>USB-Serial (RX)</strong>, <strong>PD6 (RX)</strong> → <strong>USB-Serial (TX)</strong></li>
+  <li>ต่อ <strong>GND MCU</strong> ไป <strong>GND USB-Serial</strong></li>
+</ol>
 
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">
@@ -1106,6 +1224,24 @@ int main(void)
     <tr><td>GND</td><td>↔</td><td>USB-Serial GND</td><td>GND</td><td>Common ground</td></tr>
   </tbody>
 </table>
+
+<h4>รู้จักขา</h4>
+<ul>
+  <li><strong>PD2 (PWM1_CH1):</strong> ขาออก PWM ต่อ LED ใช้ hardware TIM1 Fade</li>
+  <li><strong>PC0:</strong> ขาออก ต่อ LED ใช้ SysTick timer สลับสถานะ</li>
+  <li><strong>PD5 (TX):</strong> ขาส่ง USART แสดงสถานะ PWM และ timer</li>
+  <li><strong>PD6 (RX):</strong> ขารับ USART</li>
+  <li><strong>R 220Ω (×2):</strong> ตัวต้านทานจำกัดกระแส LED ทั้งสองดวง</li>
+</ul>
+
+<h4>วิธีต่อทีละขั้น</h4>
+<ol>
+  <li>ต่อ <strong>PD2</strong> ไป <strong>R 220Ω</strong> → <strong>LED1 แอโนด</strong> — PWM fade (TIM1)</li>
+  <li>ต่อ <strong>LED1 แคโทด</strong> ไป <strong>GND</strong></li>
+  <li>ต่อ <strong>PC0</strong> ไป <strong>R 220Ω</strong> → <strong>LED2 แอโนด</strong> — toggle (SysTick)</li>
+  <li>ต่อ <strong>LED2 แคโทด</strong> ไป <strong>GND</strong></li>
+  <li>ต่อสาย USART: <strong>PD5 → USB RX</strong>, <strong>PD6 → USB TX</strong>, GND รวม</li>
+</ol>
 
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">

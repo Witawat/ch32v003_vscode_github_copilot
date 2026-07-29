@@ -20,6 +20,20 @@
 <pre class="ascii-circuit">
 PC1─SDA  PC2─SCL  3.3V─VCC  GND─GND  A0─GND  A1─GND  A2─GND
 A0/A1/A2 = GND → I2C addr 0x50 (ต่อ VCC/VCC/VCC = 0x57)</pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>SDA (PC1):</strong> สายข้อมูล I2C</li>
+  <li><strong>SCL (PC2):</strong> สายนาฬิกา I2C</li>
+  <li><strong>VCC (3.3V):</strong> จ่ายไฟ 3.3V</li>
+  <li><strong>GND:</strong> กราวด์ร่วม</li>
+  <li><strong>A0/A1/A2:</strong> เลือก address I2C 0x50–0x57</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PC1</strong> ไป <strong>SDA</strong> และ <strong>PC2</strong> ไป <strong>SCL</strong> — I2C</li>
+  <li>ต่อ <strong>3.3V</strong> ไป <strong>VCC</strong> และ <strong>GND</strong> ไป <strong>GND</strong></li>
+  <li>ต่อ <strong>A0/A1/A2</strong> ลง GND หรือ VCC เพื่อเลือก address</li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
@@ -52,6 +66,23 @@ AT24Cxx_ReadPage(0x50, 0, buffer, 32);</code></pre>
 <pre class="ascii-circuit">
 PC4─CS  PC5─SCK  PC6─MOSI  PC7─MISO  3.3V─VCC  GND─GND
 /WP pin → 3.3V (disable write protect)  /HOLD pin → 3.3V</pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>CS (PC4):</strong> เลือกชิป SPI</li>
+  <li><strong>SCK (PC5):</strong> สัญญาณนาฬิกา SPI</li>
+  <li><strong>MOSI (PC6):</strong> ส่งข้อมูลไป W25Qxx</li>
+  <li><strong>MISO (PC7):</strong> รับข้อมูลจาก W25Qxx</li>
+  <li><strong>VCC (3.3V):</strong> จ่ายไฟ 3.3V</li>
+  <li><strong>GND:</strong> กราวด์ร่วม</li>
+  <li><strong>/WP:</strong> ต่อ 3.3V เพื่อปลดล็อคเขียน</li>
+  <li><strong>/HOLD:</strong> ต่อ 3.3V</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PC4–PC7</strong> ไป <strong>CS, SCK, MOSI, MISO</strong> — SPI</li>
+  <li>ต่อ <strong>3.3V</strong> ไป <strong>VCC</strong>, <strong>/WP</strong>, <strong>/HOLD</strong></li>
+  <li>ต่อ <strong>GND</strong> ร่วม</li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
@@ -90,6 +121,22 @@ buf[15] = 0; USART_Println(buf);</code></pre>
 <pre class="ascii-circuit">
 PC1─SDA  PC2─SCL  3.3V─VCC  GND─GND  CR2032─battery holder
 SQW pin → PC0 (optional, 1Hz square wave output)</pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>SDA (PC1):</strong> สายข้อมูล I2C</li>
+  <li><strong>SCL (PC2):</strong> สายนาฬิกา I2C</li>
+  <li><strong>VCC (3.3V):</strong> จ่ายไฟ 3.3V</li>
+  <li><strong>GND:</strong> กราวด์ร่วม</li>
+  <li><strong>BAT (CR2032):</strong> แบตสำรองเมื่อไฟดับ</li>
+  <li><strong>SQW (PC0):</strong> สัญญาณ 1Hz แจ้งเตือนเวลา (optional)</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PC1</strong> ไป <strong>SDA</strong> และ <strong>PC2</strong> ไป <strong>SCL</strong> — I2C</li>
+  <li>ต่อ <strong>3.3V</strong> ไป <strong>VCC</strong> และ <strong>GND</strong> ไป <strong>GND</strong></li>
+  <li>ใส่ <strong>CR2032</strong> ในช่องแบตสำรอง</li>
+  <li>ต่อ <strong>SQW</strong> กับ PC0 (optional)</li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
@@ -129,6 +176,22 @@ float t = DS3231_GetTemperature();</code></pre>
 <pre class="ascii-circuit">
 PC4─SDA(CS)  PC5─SCK  PC6─MOSI  PC7─MISO  PC3─RST  3.3V─VCC  GND─GND
 ⚠️ 3.3V ONLY — 5V kills chip (เหมือน nRF24L01)</pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>SDA/CS (PC4):</strong> เลือกชิป SPI</li>
+  <li><strong>SCK (PC5):</strong> สัญญาณนาฬิกา SPI</li>
+  <li><strong>MOSI (PC6):</strong> ส่งข้อมูลไป RC522</li>
+  <li><strong>MISO (PC7):</strong> รับข้อมูลจาก RC522</li>
+  <li><strong>RST (PC3):</strong> ขารีเซ็ต</li>
+  <li><strong>VCC (3.3V):</strong> จ่ายไฟ 3.3V ONLY</li>
+  <li><strong>GND:</strong> กราวด์ร่วม</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PC4–PC7</strong> ไป <strong>SDA, SCK, MOSI, MISO</strong> — SPI</li>
+  <li>ต่อ <strong>PC3</strong> ไป <strong>RST</strong></li>
+  <li>ต่อ <strong>3.3V ONLY</strong> ไป <strong>VCC</strong> และ <strong>GND</strong> ไป <strong>GND</strong></li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
@@ -172,6 +235,21 @@ RC522_Halt();</code></pre>
 PC1─SDA  PC2─SCL  GND─GND common
 5V external─VCC(power)  3.3V─VCC(logic)  OE─GND (enable, LOW=on)
 ⚠️ ต่อ power/logic VCC แยก — power ใช้ external 5V, logic ใช้ 3.3V จาก CH32V003</pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>SDA (PC1):</strong> สายข้อมูล I2C</li>
+  <li><strong>SCL (PC2):</strong> สายนาฬิกา I2C</li>
+  <li><strong>VCC Logic (3.3V):</strong> จ่ายไฟวงจรลอจิก</li>
+  <li><strong>VCC Power (5V):</strong> จ่ายไฟให้ servo/LED ผ่าน PCA9685</li>
+  <li><strong>GND:</strong> กราวด์ร่วม</li>
+  <li><strong>OE:</strong> ต่อ GND = เปิด output</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PC1</strong> ไป <strong>SDA</strong> และ <strong>PC2</strong> ไป <strong>SCL</strong> — I2C</li>
+  <li>ต่อ <strong>3.3V</strong> ไป <strong>VCC logic</strong> และ <strong>5V</strong> ไป <strong>VCC power</strong></li>
+  <li>ต่อ <strong>OE</strong> ลง <strong>GND</strong></li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
@@ -206,6 +284,23 @@ uint16_t pwm = (uint16_t)((angle/180.0f)*(max-min) + min);
 <pre class="ascii-circuit">
 PC1─SDA  PC2─SCL  3.3V─VCC  GND─GND  A0─GND  A1─GND  A2─GND (=addr 0x20)
 INT─PC0 (optional — interrupt when any input changes)</pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>SDA (PC1):</strong> สายข้อมูล I2C</li>
+  <li><strong>SCL (PC2):</strong> สายนาฬิกา I2C</li>
+  <li><strong>VCC (3.3V):</strong> จ่ายไฟ</li>
+  <li><strong>GND:</strong> กราวด์ร่วม</li>
+  <li><strong>A0/A1/A2:</strong> เลือก address I2C 0x20–0x27</li>
+  <li><strong>INT (PC0):</strong> interrupt เมื่อ input เปลี่ยน (optional)</li>
+  <li><strong>P0–P7:</strong> ขา I/O 8 บิต</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PC1</strong> ไป <strong>SDA</strong> และ <strong>PC2</strong> ไป <strong>SCL</strong> — I2C</li>
+  <li>ต่อ <strong>3.3V</strong> ไป <strong>VCC</strong> และ <strong>GND</strong> ไป <strong>GND</strong></li>
+  <li>ต่อ <strong>A0/A1/A2</strong> เลือก address</li>
+  <li>ต่อ <strong>INT</strong> กับ PC0 ถ้าต้องการ interrupt</li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
@@ -240,6 +335,17 @@ PCF8574_EnableInterrupt(0x20, PC0, my_callback);</code></pre>
 <pre class="ascii-circuit">
 ต่ออุปกรณ์ I2C ตามปกติ → ใช้ I2CScan หา address ก่อนใช้งาน
 PC1─SDA  PC2─SCL — scanner จะ scan 1-127 แล้วพิมพ์ address ที่พบทาง USART</pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>SDA (PC1):</strong> สายข้อมูล I2C ที่ต้องการสแกน</li>
+  <li><strong>SCL (PC2):</strong> สายนาฬิกา I2C</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PC1</strong> ไป <strong>SDA</strong> ของอุปกรณ์ I2C ทั้งหมด</li>
+  <li>ต่อ <strong>PC2</strong> ไป <strong>SCL</strong> ของอุปกรณ์ I2C ทั้งหมด</li>
+  <li>รันโค้ด I2CScan อ่าน address ทาง USART</li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>

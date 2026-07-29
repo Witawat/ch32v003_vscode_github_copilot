@@ -55,6 +55,19 @@ flowchart TD
       </tbody>
     </table>
     <p>สายสัญญาณเส้นเดียว (Single-wire bidirectional) — ใช้ GPIO แบบ bit-bang ห้ามลืม pull-up 4.7kΩ ถ้าไม่มี pull-up จะอ่านไม่ขึ้น</p>
+    <h3>รู้จักขา</h3>
+    <ul>
+      <li><strong>VCC:</strong> จ่ายไฟ 3.3V — ห้ามใช้ 5V</li>
+      <li><strong>DATA:</strong> ขาข้อมูล 1-Wire ต่อกับ PC4</li>
+      <li><strong>GND:</strong> ต่อกราวด์ร่วมกับ MCU</li>
+    </ul>
+    <h3>วิธีต่อทีละขั้น</h3>
+    <ol>
+      <li>ต่อ <strong>PC4</strong> ไป <strong>DATA ของ DHT</strong> — ใช้สายสัญญาณเส้นเดียว</li>
+      <li>ต่อ <strong>3.3V</strong> ไป <strong>VCC ของ DHT</strong> — จ่ายไฟให้เซนเซอร์</li>
+      <li>ต่อ <strong>GND</strong> ไป <strong>GND ของ DHT</strong> — กราวด์ร่วม</li>
+      <li>ต่อ <strong>R 4.7kΩ</strong> ระหว่าง <strong>DATA กับ 3.3V</strong> — ดึงสัญญาณให้เป็น HIGH (โมดูลสำเร็จรูปมีให้แล้ว)</li>
+    </ol>
 </section>
 
 <section>

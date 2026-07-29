@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>บทที่ 6: Software I2C — I2C บนขาใดก็ได้</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+</head>
+<body>
+
+<nav class="top-nav">
+    <a href="ch05-i2c.html">&larr; บทที่ 5: I2C</a>
+    <a href="index.html">&#x1f3e0; สารบัญ</a>
+    <a href="ch07-spi.html">บทที่ 7: SPI &rarr;</a>
+</nav>
+
+<h1>บทที่ 6: Software I2C — I2C บนขาใดก็ได้</h1>
+<span class="level level-intermediate">ระดับกลาง</span>
+
+<section>
+    <h2>สิ่งที่ต้องรู้ก่อน</h2>
+    <ul>
+        <li><a href="ch05-i2c.html">บทที่ 5: Hardware I2C</a></li>
+        <li><a href="ch02-gpio.html">บทที่ 2: GPIO</a></li>
+    </ul>
+</section>
+
+<section>
+    <h2>อุปกรณ์ที่ต้องใช้</h2>
+    <ul>
+        <li>CH32V003 Dev Board</li>
+        <li>ตัวต้านทาน 4.7k&Omega; &times; 2 (pull-up)</li>
+        <li>อุปกรณ์ I2C ใด ๆ</li>
+    </ul>
+</section>
+
+<section>
+    <h2>ทำไมต้องใช้?</h2>
+    <p>ต้องการ I2C bus ที่ 2 (CH32V003 มี hardware I2C แค่ 1 ตัว), ดีบักกับ Logic Analyzer, เลือกใช้ pin ไหนก็ได้</p>
+</section>
+
+<section>
+    <h2>Flowchart การทำงาน</h2>
+    <div class="flowchart">
+        <pre class="mermaid">
+flowchart TD
+    A["I2C_Soft_Init()"] --> B{"ใช้แบบไหน?"}
+    B -->|"High-level"| C["I2C_Soft_Write / Read"]
+    B -->|"Low-level"| D["Start/Stop/WriteByte/ReadByte"]
+    C --> E["ง่าย ครอบคลุมการใช้งานทั่วไป"]
+    D --> F["ควบคุมละเอียด custom protocol"]
+        </pre>
+    </div>
+</section>
+
+<section>
+    <h2>API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th></tr>
+        <tr><td><code>I2C_Soft_Init()</code></td><td>เริ่มต้น Software I2C</td></tr>
+        <tr><td><code>I2C_Soft_Write()</code></td><td>เขียนข้อมูล (high-level)</td></tr>
+        <tr><td><code>I2C_Soft_Read()</code></td><td>อ่านข้อมูล (high-level)</td></tr>
+        <tr><td><code>I2C_Soft_Start()</code></td><td>ส่ง Start condition</td></tr>
+        <tr><td><code>I2C_Soft_Stop()</code></td><td>ส่ง Stop condition</td></tr>
+        <tr><td><code>I2C_Soft_WriteByte()</code></td><td>เขียน 1 ไบต์ (low-level)</td></tr>
+        <tr><td><code>I2C_Soft_ReadByte()</code></td><td>อ่าน 1 ไบต์ (low-level)</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>เปรียบเทียบ Hardware I2C vs Software I2C</h2>
+    <table>
+        <tr><th>คุณสมบัติ</th><th>SimpleI2C (HW)</th><th>SimpleI2C_Soft (SW)</th></tr>
+        <tr><td>ความเร็ว</td><td>สูงสุด 400kHz</td><td>ช้ากว่า ~10-50x</td></tr>
+        <tr><td>ขาที่ใช้ได้</td><td>เฉพาะขาที่มี hardware</td><td>ขาใด ๆ ก็ได้</td></tr>
+        <tr><td>จำนวน bus</td><td>1 bus</td><td>กี่ bus ก็ได้ (ตามจำนวนขา)</td></tr>
+        <tr><td>การใช้ peripheral</td><td>ใช้ I2C hardware</td><td>ไม่ใช้ peripheral</td></tr>
+        <tr><td>Ignore ACK</td><td>ไม่รองรับ</td><td>รองรับ (ignore_ack)</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>ระดับขั้นต้น: I2C Bus ที่ 2</h2>
+    <div class="approach">
+        <strong>แนวคิด:</strong> HW I2C คุยกับเซนเซอร์หลัก + SW I2C คุยกับอุปกรณ์เสริม
+    </div>
+    <pre><code class="language-c">#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(USART_115200);
+
+    // Bus 1: Hardware I2C (sensor หลัก)
+    I2C_SimpleInit(I2C_100KHZ, I2C_PINS_DEFAULT);
+
+    // Bus 2: Software I2C (อุปกรณ์เสริม) — ใช้ PA1=SDA, PA2=SCL
+    I2C_Soft_Init(PA1, PA2);
+
+    printf("Dual I2C bus ready\r\n");
+    while (1) {
+        // อ่านจาก bus 1 (HW)
+        uint8_t val1 = I2C_ReadReg(0x50, 0x00);
+
+        // อ่านจาก bus 2 (SW)
+        uint8_t val2;
+        I2C_Soft_Read(0x50, 0x00, &val2, 1);
+
+        Delay_Ms(500);
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>ระดับขั้นกลาง: ดีบักด้วย Logic Analyzer</h2>
+    <div class="approach">
+        <strong>แนวคิด:</strong> ใช้ <code>ignore_ack=1</code> เพื่อส่งข้อมูลแม้ไม่มี device — เหมาะกับการตรวจสอบสัญญาณ
+    </div>
+    <pre><code class="language-c">#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(USART_115200);
+
+    // Software I2C บนขาใดก็ได้ — debug mode ignore_ack
+    I2C_Soft_Init(PD2, PD3);
+
+    printf("Sending test data (ignore ack)...\r\n");
+    while (1) {
+        // ส่งข้อมูลโดยไม่สนใจว่า device ตอบ ACK หรือไม่
+        uint8_t test_data[] = {0x00, 0x42};
+        I2C_Soft_Write(0x50, test_data, 2, 1); // ignore_ack=1
+        Delay_Ms(1000);
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>ระดับขั้นสูง: Custom SHT31 Read ด้วย Low-level API</h2>
+    <div class="approach">
+        <strong>แนวคิด:</strong> ใช้ Start, Stop, WriteByte, ReadByte ควบคุมทุกขั้นตอนเอง — รองรับ protocol ที่ซับซ้อน
+    </div>
+    <pre><code class="language-c">#include "SimpleHAL.h"
+
+#define SHT31_ADDR 0x44
+
+typedef struct {
+    uint8_t SCL;
+    uint8_t SDA;
+} I2C_Soft_Handle;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(USART_115200);
+
+    I2C_Soft_Init(PC6, PC7);
+
+    while (1) {
+        // Start &rarr; Write address &rarr; Stop &rarr; Delay &rarr; Start &rarr; Read data &rarr; Stop
+        I2C_Soft_Start();
+        I2C_Soft_WriteByte(SHT31_ADDR << 1);    // Write mode
+        I2C_Soft_WriteByte(0x2C);               // Command MSB
+        I2C_Soft_WriteByte(0x06);               // Command LSB
+        I2C_Soft_Stop();
+
+        Delay_Ms(15); // รอการวัด
+
+        I2C_Soft_Start();
+        I2C_Soft_WriteByte((SHT31_ADDR << 1) | 1); // Read mode
+        uint8_t data[6];
+        for (int i = 0; i < 5; i++) {
+            data[i] = I2C_Soft_ReadByte(); // ACK
+        }
+        data[5] = I2C_Soft_ReadByte(); // NAK (ไบต์สุดท้าย)
+        I2C_Soft_Stop();
+
+        uint16_t temp_raw = (data[0] << 8) | data[1];
+        float temp = -45.0f + 175.0f * (temp_raw / 65535.0f);
+        printf("Temp = %.1f C\r\n", temp);
+        Delay_Ms(2000);
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>อาการ</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>ช้ากว่า HW มาก</td><td>Bit-bang ใช้ CPU ทุกบิต</td><td>Bit-bang ช้ากว่า hardware 10-50x ตามปกติ</td></tr>
+        <tr><td>ห้ามใช้ pin เดียวกับ HW I2C</td><td>Hardware แย่งควบคุม pin</td><td>เลือกขาว่างที่ไม่มีฟังก์ชันพิเศษ</td></tr>
+        <tr><td>ignore_ack=1 ไม่รับข้อมูล</td><td>ใช้สำหรับ debug เท่านั้น</td><td>ignore_ack=1 ไม่รับประกันความถูกต้องของข้อมูล</td></tr>
+        <tr><td>Bus stuck</td><td>Software ไม่มี timeout hardware</td><td>ใช้ timeout protection (v2.1+ มีในตัว)</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>คำถามที่พบบ่อย (FAQ)</h2>
+    <h3>เมื่อไหร่ควรใช้ Software I2C?</h3>
+    <p>เมื่อต้องการ I2C bus ที่ 2, ใช้กับ Logic Analyzer เพื่อดีบัก, หรือต้องการอิสระในการเลือก pin</p>
+</section>
+
+<section>
+    <h2>ลองทำดู (แบบฝึกหัด)</h2>
+    <ol>
+        <li>สร้าง I2C bus ที่ 2 สำหรับต่อจอ OLED</li>
+        <li>ใช้ Logic Analyzer ดูสัญญาณ I2C ที่สร้างจาก software</li>
+        <li>Implement custom read protocol ด้วย low-level API</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="ch05-i2c.html">&larr; บทที่ 5: I2C</a>
+    <a href="index.html">&#x1f3e0; สารบัญ</a>
+    <a href="ch07-spi.html">บทที่ 7: SPI &rarr;</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:false,theme:'base'});mermaid.run();</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

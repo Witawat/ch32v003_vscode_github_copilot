@@ -56,6 +56,20 @@ flowchart LR
   </tbody>
 </table>
 
+<h4>รู้จักขา</h4>
+<ul>
+  <li><strong>PD5 (OPAMP1_IN):</strong> ขาเข้าสัญญาณอนาล็อกของ OPAMP (non-inverting)</li>
+  <li><strong>OPAMP1_OUT:</strong> ขาออกของ OPAMP — ต่อกับ ADC ภายในช่อง 7 อัตโนมัติ</li>
+  <li><strong>PA1 (ADC_IN):</strong> ขาอ่านค่า ADC ที่รับสัญญาณจาก OPAMP ภายใน MCU</li>
+</ul>
+
+<h4>วิธีต่อทีละขั้น</h4>
+<ol>
+  <li>ต่อ <strong>PD5 (OPAMP1_IN)</strong> ไป <strong>สัญญาณอนาล็อก</strong> — ป้อนสัญญาณเข้า OPAMP</li>
+  <li>ภายใน MCU <strong>OPAMP1_OUT</strong> ต่อกับ <strong>ADC_IN (PA1)</strong> อัตโนมัติ — ไม่ต้องใช้สาย</li>
+  <li>ต่อ <strong>GND</strong> ของสัญญาณเข้ากับ <strong>GND MCU</strong></li>
+</ol>
+
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">
 flowchart TD
@@ -141,6 +155,21 @@ int main(void)
     <tr><td>OPAMP1_OUT</td><td>→</td><td>R2=10kΩ → PA1 (ADC_IN)</td><td>—</td><td>Divider ขาบน, gain=2</td></tr>
   </tbody>
 </table>
+
+<h4>รู้จักขา</h4>
+<ul>
+  <li><strong>PD5 (OPAMP1_IN):</strong> ขาเข้าสัญญาณอนาล็อก (non-inverting)</li>
+  <li><strong>OPAMP1_OUT:</strong> ขาออก OPAMP ต่อ R1=10kΩ→GND และ R2=10kΩ→PA1</li>
+  <li><strong>PA1 (ADC_IN):</strong> อ่านค่าแรงดัน output จาก OPAMP</li>
+  <li><strong>R1=10kΩ, R2=10kΩ:</strong> ตัวต้านทานกำหนดอัตราขยาย gain = 1 + R2/R1 = 2</li>
+</ul>
+
+<h4>วิธีต่อทีละขั้น</h4>
+<ol>
+  <li>ต่อ <strong>PD5 (OPAMP1_IN)</strong> ไป <strong>สัญญาณอนาล็อก</strong> — ป้อนสัญญาณเข้า</li>
+  <li>ต่อ <strong>OPAMP1_OUT</strong> ไป <strong>R1=10kΩ</strong> → <strong>GND</strong> — ขาล่างวงจรขยาย</li>
+  <li>ต่อ <strong>OPAMP1_OUT</strong> ไป <strong>R2=10kΩ</strong> → <strong>PA1 (ADC_IN)</strong> — ส่ง output ให้ ADC</li>
+</ol>
 
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">
@@ -435,21 +464,25 @@ int main(void) {
 
 <h3>🔌 วงจร — ต่อยังไง</h3>
 
-<p><strong>รู้จักขาเซนเซอร์:</strong></p>
+<h4>รู้จักขา</h4>
 <ul>
+  <li><strong>PD5 (OPAMP_IN+):</strong> ขาเข้าสัญญาณ OPAMP ต่อจาก PIR ผ่าน C 1µF</li>
+  <li><strong>PA5 (OP_OUT):</strong> ขาออก OPAMP ต่อ Rf=1MΩ ไป PA6 และต่อ ADC ภายใน</li>
+  <li><strong>PA6 (OP_IN-):</strong> ขาเข้าลบ OPAMP ต่อ Rf=1MΩ ไป PA5 และ Rg=10kΩ ไป GND</li>
   <li><strong>RE200B:</strong> 2 ขา — ขา 1 = Drain (GND), ขา 2 = Source (สัญญาณออก)</li>
   <li><strong>D202S:</strong> 3 ขา — ขา 1 = Drain (GND), ขา 2 = Source (สัญญาณออก), ขา 3 = Ground (ต่อ GND)</li>
+  <li><strong>C 1µF:</strong> ตัวเก็บประจุ AC coupling — กรอง DC offset ทิ้ง</li>
 </ul>
 
-<p><strong>คำอธิบายทีละขั้น:</strong></p>
+<h4>วิธีต่อทีละขั้น</h4>
 <ol>
-  <li>ต่อ <strong>ขา 1 (Drain)</strong> ของ PIR ไป <strong>GND</strong></li>
-  <li>ต่อ <strong>ขา 2 (Source)</strong> ของ PIR ผ่าน <strong>R 10kΩ</strong> ไปไฟ <strong>1.65V</strong> (ไฟกึ่งกลางระหว่าง 3.3V กับ GND)</li>
-  <li>ต่อจากขา 2 (Source) ผ่าน <strong>C 1µF</strong> (ตัวเก็บประจุ) ไป <strong>PD5 (OPAMP_IN+)</strong> — C นี้กั้นไฟกระแสตรงไม่ให้เข้า OPAMP</li>
-  <li>ต่อ <strong>R 1MΩ</strong> จาก PD5 ลง GND — ดึงแรงดันให้กลับมาที่ 0V ตอนไม่มีสัญญาณ</li>
-  <li>ต่อ <strong>Rf=1MΩ</strong> ระหว่าง <strong>PA5(OP_OUT)</strong> กับ <strong>PA6(OP_IN-)</strong> — เส้นป้อนกลับ</li>
-  <li>ต่อ <strong>Rg=10kΩ</strong> จาก <strong>PA6(OP_IN-)</strong> ลง GND</li>
-  <li>ถ้าใช้ <strong>D202S</strong> ให้ต่อขา 3 (Ground) ไป <strong>GND</strong> ด้วย — ลดสัญญาณรบกวน</li>
+  <li>ต่อ <strong>PIR ขา 1 (Drain)</strong> ไป <strong>GND</strong></li>
+  <li>ต่อ <strong>PIR ขา 2 (Source)</strong> ผ่าน <strong>R 10kΩ</strong> ไป <strong>1.65V</strong> — จ่ายไฟเลี้ยง PIR</li>
+  <li>ต่อ <strong>PIR ขา 2 (Source)</strong> ผ่าน <strong>C 1µF</strong> ไป <strong>PD5 (OPAMP_IN+)</strong> — ส่งสัญญาณ AC เข้า OPAMP</li>
+  <li>ต่อ <strong>PD5</strong> ไป <strong>R 1MΩ</strong> → <strong>GND</strong> — ดึงแรงดันกลับ GND ตอนไม่มีสัญญาณ</li>
+  <li>ต่อ <strong>PA5 (OP_OUT)</strong> ไป <strong>Rf=1MΩ</strong> → <strong>PA6 (OP_IN-)</strong> — ป้อนกลับ</li>
+  <li>ต่อ <strong>PA6 (OP_IN-)</strong> ไป <strong>Rg=10kΩ</strong> → <strong>GND</strong> — กำหนดอัตราขยาย</li>
+  <li>ถ้าใช้ <strong>D202S</strong> ต่อขา 3 ไป <strong>GND</strong> — ลดสัญญาณรบกวน</li>
   <li>สร้างไฟ <strong>1.65V</strong> จาก R divider: 3.3V → R 10kΩ → จุด 1.65V → R 10kΩ → GND</li>
 </ol>
 

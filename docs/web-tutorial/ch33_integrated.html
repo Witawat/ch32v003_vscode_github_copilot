@@ -66,6 +66,26 @@ flowchart LR
   </tbody>
 </table>
 
+<h4>รู้จักขา</h4>
+<ul>
+  <li><strong>PC1 (SCL):</strong> ขานาฬิกา I2C ต่อกับ BMP280 (SCL)</li>
+  <li><strong>PC2 (SDA):</strong> ขาข้อมูล I2C ต่อกับ BMP280 (SDA)</li>
+  <li><strong>PD5:</strong> ขาข้อมูล 1-Wire ต่อกับ DS18B20 (DQ) + R 4.7kΩ pull-up</li>
+  <li><strong>BMP280 (VDD):</strong> ต่อ 3.3V, GND</li>
+  <li><strong>DS18B20 (VDD):</strong> ต่อ 3.3V, (GND) ต่อ GND</li>
+</ul>
+
+<h4>วิธีต่อทีละขั้น</h4>
+<ol>
+  <li>ต่อ <strong>PC1 (SCL)</strong> ไป <strong>BMP280 (SCL)</strong> — สัญญาณนาฬิกา I2C</li>
+  <li>ต่อ <strong>PC2 (SDA)</strong> ไป <strong>BMP280 (SDA)</strong> — สัญญาณข้อมูล I2C</li>
+  <li>ต่อ <strong>BMP280 (VDD)</strong> ไป <strong>3.3V</strong>, (GND) ไป <strong>GND</strong></li>
+  <li>ต่อ <strong>PD5</strong> ไป <strong>R 4.7kΩ</strong> → <strong>3.3V</strong> — pull-up 1-Wire</li>
+  <li>ต่อ <strong>PD5</strong> ไป <strong>DS18B20 ขา 2 (DQ)</strong> — สายข้อมูล</li>
+  <li>ต่อ <strong>DS18B20 ขา 3 (VDD)</strong> ไป <strong>3.3V</strong>, ขา 1 (GND) ไป <strong>GND</strong></li>
+  <li>ต่อ <strong>GND</strong> ของอุปกรณ์ทั้งหมดรวมกัน</li>
+</ol>
+
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">
 flowchart TD
@@ -158,6 +178,22 @@ int main(void)
     <tr><td>GND</td><td>↔</td><td>USB-Serial GND</td><td>GND</td><td>Common ground</td></tr>
   </tbody>
 </table>
+
+<h4>รู้จักขา</h4>
+<ul>
+  <li><strong>PA2 (PWM):</strong> ขาออก PWM 1kHz ควบคุมความสว่าง LED ผ่าน R 220Ω</li>
+  <li><strong>PD5 (TX):</strong> ขาส่ง USART แสดงค่า duty ปัจจุบัน</li>
+  <li><strong>PD6 (RX):</strong> ขารับ USART รับคำสั่งตัวเลข 0-100</li>
+  <li><strong>R 220Ω:</strong> ตัวต้านทานจำกัดกระแส LED</li>
+</ul>
+
+<h4>วิธีต่อทีละขั้น</h4>
+<ol>
+  <li>ต่อ <strong>PA2</strong> → <strong>R 220Ω</strong> → <strong>LED แอโนด</strong>, LED แคโทด → <strong>GND</strong></li>
+  <li>ต่อ <strong>PD5 (TX)</strong> ไป <strong>USB-Serial (RX)</strong> — ส่งข้อมูล</li>
+  <li>ต่อ <strong>PD6 (RX)</strong> ไป <strong>USB-Serial (TX)</strong> — รับคำสั่ง</li>
+  <li>ต่อ <strong>GND MCU</strong> ไป <strong>GND USB-Serial</strong></li>
+</ol>
 
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">

@@ -20,6 +20,18 @@
 <pre class="ascii-circuit">
 PC4(ADC)─AO  3.3V─VCC  GND─GND  (DO optional — digital threshold)
 ⚠️ ใช้ transistor switch VCC — เปิดเฉพาะตอนวัด ลด corrosion</pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>AO (PC4):</strong> ขา output อนาล็อก ต่อ ADC</li>
+  <li><strong>VCC (3.3V):</strong> จ่ายไฟ (ควรใช้ transistor switch ปิดเมื่อไม่วัด)</li>
+  <li><strong>GND:</strong> กราวด์ร่วม</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PC4</strong> ไป <strong>AO</strong> — อ่านค่าความชื้น</li>
+  <li>ต่อ <strong>VCC</strong> ผ่าน transistor switch — เปิดเฉพาะตอนวัดลด corrosion</li>
+  <li>ต่อ <strong>GND</strong> ไป <strong>GND</strong></li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
@@ -49,6 +61,19 @@ float percent = SoilMoisture_ReadPercent(); // 0-100%
 <pre class="ascii-circuit">
 PC4(ADC)─AO  PC1─DO  3.3V─VCC  GND─GND
 (IR photodiode — จับ IR จากเปลวไฟ 760-1100nm)</pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>AO (PC4):</strong> ขา output อนาล็อก ต่อ ADC</li>
+  <li><strong>DO (PC1):</strong> ขา digital บอกสถานะ (Active LOW = เจอเปลวไฟ)</li>
+  <li><strong>VCC (3.3V):</strong> จ่ายไฟ</li>
+  <li><strong>GND:</strong> กราวด์ร่วม</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PC4</strong> ไป <strong>AO</strong> — อ่านค่าความเข้มเปลวไฟ</li>
+  <li>ต่อ <strong>PC1</strong> ไป <strong>DO</strong> — อ่านสถานะดิจิตอล</li>
+  <li>ต่อ <strong>3.3V</strong> ไป <strong>VCC</strong> และ <strong>GND</strong> ไป <strong>GND</strong></li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
@@ -78,6 +103,19 @@ uint8_t flame = FlameSensor_ReadDigital(PC1); // 0 = flame detected
 <pre class="ascii-circuit">
 PC4(ADC)─AO  PC1─DO  3.3V─VCC  GND─GND
 (electret mic + LM393 op-amp comparator)</pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>AO (PC4):</strong> ขา output อนาล็อก ความดังของเสียง</li>
+  <li><strong>DO (PC1):</strong> ขา digital (Active LOW = เสียงดังเกิน threshold)</li>
+  <li><strong>VCC (3.3V):</strong> จ่ายไฟ</li>
+  <li><strong>GND:</strong> กราวด์ร่วม</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PC4</strong> ไป <strong>AO</strong> — อ่านระดับเสียง</li>
+  <li>ต่อ <strong>PC1</strong> ไป <strong>DO</strong> — อ่านสถานะ threshold</li>
+  <li>ต่อ <strong>3.3V</strong> ไป <strong>VCC</strong> และ <strong>GND</strong> ไป <strong>GND</strong></li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
@@ -109,6 +147,20 @@ if(claps == 2) { USART_Println("Double clap!"); claps=0; }</code></pre>
 <pre class="ascii-circuit">
 PC4(ADC)─AO  PC1─DO  3.3V─VCC  GND─GND
 ⚠️ corrosion! — ใช้ transistor switch VCC, nickel/gold-plated probe ทนกว่า</pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>AO (PC4):</strong> ขา analog ความเข้มของฝน (ยิ่งเปียกยิ่งค่าต่ำ)</li>
+  <li><strong>DO (PC1):</strong> ขา digital (Active LOW = เจอฝน)</li>
+  <li><strong>VCC (3.3V):</strong> จ่ายไฟ (ควรใช้ transistor switch)</li>
+  <li><strong>GND:</strong> กราวด์ร่วม</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PC4</strong> ไป <strong>AO</strong> — อ่านค่า</li>
+  <li>ต่อ <strong>PC1</strong> ไป <strong>DO</strong> — อ่านสถานะ</li>
+  <li>ต่อ <strong>VCC</strong> ผ่าน transistor switch — เปิดเฉพาะตอนวัด</li>
+  <li>ต่อ <strong>GND</strong> ร่วม</li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
@@ -139,6 +191,18 @@ uint8_t rain = RainSensor_ReadDigital(PC1);  // 0 = rain detected</code></pre>
 PC1─Signal (pulse)  5V─VCC  GND─GND  (inline pipe)
 ⚠️ 5V signal → voltage divider 2.2k+3.3k for CH32V003
 YF-S201 = 450 pulses/L, YF-S402 = 98 pulses/L</pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>Signal (PC1):</strong> ขา output พัลส์ วัดอัตราการไหล</li>
+  <li><strong>VCC (5V):</strong> จ่ายไฟ 5V</li>
+  <li><strong>GND:</strong> กราวด์ร่วม</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PC1</strong> ไป <strong>Signal</strong> ของ Water Flow (ผ่าน voltage divider 2.2k+3.3k)</li>
+  <li>ต่อ <strong>5V</strong> ไป <strong>VCC</strong> และ <strong>GND</strong> ไป <strong>GND</strong></li>
+  <li>ต่อเซนเซอร์เข้ากับท่อน้ำ inline</li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
@@ -175,6 +239,22 @@ while(1) {
 PC0─SCK  PC1─DOUT  3.3V─VCC  GND─GND
 Load Cell bridge: E+ = red, E- = black, A+ = green, A- = white
 ⚠️ Keep wires short, twisted pair — 24-bit noise-sensitive</pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>SCK (PC0):</strong> ขา clock ส่งพัลส์อ่านข้อมูล</li>
+  <li><strong>DOUT (PC1):</strong> ขา data บอกว่าพร้อมอ่าน / ส่งค่า 24-bit</li>
+  <li><strong>VCC (3.3V):</strong> จ่ายไฟ</li>
+  <li><strong>GND:</strong> กราวด์ร่วม</li>
+  <li><strong>E+/E-:</strong> จ่ายไฟ bridge ของ load cell (แดง/ดำ)</li>
+  <li><strong>A+/A-:</strong> รับสัญญาณ differential จาก load cell (เขียว/ขาว)</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PC0</strong> ไป <strong>SCK</strong> และ <strong>PC1</strong> ไป <strong>DOUT</strong></li>
+  <li>ต่อ <strong>3.3V</strong> ไป <strong>VCC</strong> และ <strong>GND</strong> ไป <strong>GND</strong></li>
+  <li>ต่อ <strong>E+ (แดง)</strong> และ <strong>E- (ดำ)</strong> จ่ายไฟให้ load cell</li>
+  <li>ต่อ <strong>A+ (เขียว)</strong> และ <strong>A- (ขาว)</strong> อ่านค่าน้ำหนัก</li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>

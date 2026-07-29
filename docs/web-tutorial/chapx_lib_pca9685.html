@@ -54,7 +54,29 @@ flowchart TD
     <tr><td>3.3V</td><td>→</td><td>VCC</td><td>-</td><td>ไฟเลี้ยง logic 3.3V; I2C addr 0x40–0x7F (A0–A5)</td></tr>
     <tr><td>GND</td><td>→</td><td>GND</td><td>-</td><td>กราวด์ร่วม (logic + motor)</td></tr>
   </tbody>
-</table>
+     </table>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>VCC:</strong> ไฟเลี้ยง logic 3.3V</li>
+  <li><strong>GND:</strong> กราวด์ร่วม (logic + มอเตอร์)</li>
+  <li><strong>SDA (PC1):</strong> สายข้อมูล I2C</li>
+  <li><strong>SCL (PC2):</strong> สายนาฬิกา I2C</li>
+  <li><strong>V+:</strong> ไฟเลี้ยงมอเตอร์ 5-6V ( terminal block)</li>
+  <li><strong>PWM0–PWM15:</strong> ขาเอาต์พุต PWM 16 ช่อง</li>
+  <li><strong>pull-up 4.7kΩ:</strong> ต่อระหว่าง SDA→3.3V และ SCL→3.3V (โมดูลส่วนมากมีในตัว)</li>
+</ul>
+
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>VCC</strong> ของ PCA9685 ไป <strong>3.3V</strong> (ไฟเลี้ยง logic)</li>
+  <li>ต่อ <strong>GND</strong> ของ PCA9685 ไป <strong>GND</strong></li>
+  <li>ต่อ <strong>SDA</strong> ของ PCA9685 ไป <strong>PC1 (ขา 13)</strong> ของ CH32V003</li>
+  <li>ต่อ <strong>SCL</strong> ของ PCA9685 ไป <strong>PC2 (ขา 14)</strong> ของ CH32V003</li>
+  <li>ต่อ <strong>V+</strong> (terminal block) ไป <strong>5-6V</strong> สำหรับจ่ายไฟให้ servo/มอเตอร์</li>
+  <li>ต่อ servo/motor ที่ขา <strong>PWM0–PWM15</strong> ตามต้องการ — GND ของ servo ต่อรวมกับ GND</li>
+  <li>ตรวจสอบว่าโมดูลมี R pull-up 4.7kΩ ในตัวหรือไม่ — ถ้าไม่มี ต่อ R เพิ่มจาก SDA→3.3V และ SCL→3.3V</li>
+</ol>
+
 </section>
 
 <section><h2>📚 หลักการทำงาน</h2>

@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>โมดูล 8: SimplePWM — SimpleHAL API Reference</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="tim.html">โมดูลถัดไป →</a>
+</nav>
+
+<h1>โมดูล 8: SimplePWM — ควบคุมความสว่าง/ความเร็ว</h1>
+<span class="level level-intermediate">ระดับกลาง</span>
+
+<section>
+    <h2>ภาพรวม</h2>
+    <p>SimplePWM ควบคุมความสว่าง LED และความเร็วมอเตอร์ผ่าน 8 ช่องสัญญาณ PWM โดยใช้ TIM1 (4 ช่อง) และ TIM2 (4 ช่อง) พร้อมระบบ Timer Ownership Guard ป้องกันการใช้งานทับซ้อนกับ SimpleTIM</p>
+    <ul>
+        <li>เริ่มต้นอัตโนมัติที่ 1kHz เมื่อใช้ <code>PWM_Write()</code> หรือ <code>analogWrite()</code></li>
+        <li>ตั้ง Duty Cycle ได้ทั้งแบบเปอร์เซ็นต์ (0-100%) และแบบ raw (0-period)</li>
+        <li>เปลี่ยนความถี่ได้ตั้งแต่ Hz ต่ำ ๆ (servo 50Hz) จนถึงหลาย kHz</li>
+        <li>ปรับ Remap ขาเอาต์พุตได้สำหรับแพ็กเกจที่มีข้อจำกัดเรื่องขา</li>
+    </ul>
+</section>
+
+<section>
+    <h2>ตารางช่องสัญญาณ PWM</h2>
+    <table class="wiring-table">
+        <tr><th>PWM Channel</th><th>Timer</th><th>ขา</th><th>SOP-8</th></tr>
+        <tr><td><code>PWM1_CH1</code></td><td>TIM1</td><td>PD2</td><td>❌</td></tr>
+        <tr><td><code>PWM1_CH2</code></td><td>TIM1</td><td>PA1</td><td>✅</td></tr>
+        <tr><td><code>PWM1_CH3</code></td><td>TIM1</td><td>PC3</td><td>❌</td></tr>
+        <tr><td><code>PWM1_CH4</code></td><td>TIM1</td><td>PC4</td><td>✅</td></tr>
+        <tr><td><code>PWM2_CH1</code></td><td>TIM2</td><td>PD4</td><td>❌</td></tr>
+        <tr><td><code>PWM2_CH2</code></td><td>TIM2</td><td>PD3</td><td>❌</td></tr>
+        <tr><td><code>PWM2_CH3</code></td><td>TIM2</td><td>PC0</td><td>❌</td></tr>
+        <tr><td><code>PWM2_CH4</code></td><td>TIM2</td><td>PD7</td><td>❌</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>Timer Ownership Guard</h2>
+    <p>CH32V003 มี TIM1 และ TIM2 เพียง 2 ตัว — Timer Owner Guard ป้องกันไม่ให้สองโมดูลแย่ง timer ตัวเดียวกัน</p>
+    <table>
+        <tr><th>Owner State</th><th>ความหมาย</th></tr>
+        <tr><td><code>TIM_OWNER_NONE</code></td><td>ยังไม่ถูกใช้</td></tr>
+        <tr><td><code>TIM_OWNER_PWM</code></td><td>ถูกใช้โดย SimplePWM</td></tr>
+        <tr><td><code>TIM_OWNER_TIMER</code></td><td>ถูกใช้โดย SimpleTIM</td></tr>
+        <tr><td><code>TIM_OWNER_TIMEXT</code></td><td>ถูกใช้โดย SimpleTIM_Ext</td></tr>
+    </table>
+
+    <div class="callout callout-err">
+        <strong>สำคัญ:</strong> ถ้า TIM1 หรือ TIM2 ถูกใช้โดย SimpleTIM หรือ PWM อื่นอยู่แล้ว — Guard จะป้องกันไม่ให้เขียนทับ ฟังก์ชันจะ return ทันทีโดยไม่เปลี่ยนค่า register ใด ๆ
+    </div>
+</section>
+
+<section>
+    <h2>ข้อจำกัด SOP-8</h2>
+    <p>แพ็กเกจ SOP-8 มีเพียง 6 ขาที่ใช้งานได้ — ใช้มาโคร <code>IS_PWM_VALID_PACKAGE(channel)</code> ตรวจสอบว่าช่อง PWM นั้นใช้ได้กับแพ็กเกจปัจจุบันหรือไม่</p>
+    <table>
+        <tr><th>PWM ช่อง</th><th>ขา</th><th>สถานะ SOP-8</th></tr>
+        <tr><td>PWM1_CH2</td><td>PA1</td><td>✅ ใช้ได้</td></tr>
+        <tr><td>PWM1_CH4</td><td>PC4</td><td>✅ ใช้ได้</td></tr>
+        <tr><td>อื่น ๆ</td><td>-</td><td>❌ ไม่มีใน SOP-8</td></tr>
+    </table>
+
+    <div class="callout callout-warn">
+        <strong>SOP-8:</strong> ใช้ได้แค่ <code>PWM1_CH2</code> (PA1) และ <code>PWM1_CH4</code> (PC4) — ช่องอื่นจะถูก <code>IS_PWM_VALID_PACKAGE</code> ปฏิเสธ
+    </div>
+</section>
+
+<section>
+    <h2>Remap</h2>
+    <table>
+        <tr><th>Remap</th><th>คำอธิบาย</th></tr>
+        <tr><td><code>PWM_REMAP_NONE</code></td><td>ค่าเริ่มต้น — ใช้ขาตามตาราง PWM ด้านบน</td></tr>
+        <tr><td><code>PWM_REMAP_PARTIAL1</code></td><td>ย้ายบางช่อง — ตรวจสอบ datasheet ก่อนใช้</td></tr>
+        <tr><td><code>PWM_REMAP_PARTIAL2</code></td><td>ย้ายบางช่อง — ตรวจสอบ datasheet ก่อนใช้</td></tr>
+    </table>
+
+    <div class="callout callout-warn">
+        <strong>ทดลอง:</strong> <code>PWM_REMAP_PARTIAL1</code> และ <code>PWM_REMAP_PARTIAL2</code> เป็นการ remap แบบทดลอง — ตรวจสอบ datasheet ก่อนใช้งาน <br><br>
+        <strong>ถูกลบ:</strong> <code>PWM_REMAP_FULL</code> ถูกลบออกแล้ว — ใช้ <code>PWM_InitRemap()</code> หรือ <code>PWM_SetRemap()</code> แทน
+    </div>
+</section>
+
+<section>
+    <h2>ตารางฟังก์ชัน</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คืนค่า</th><th>คำอธิบาย</th></tr>
+        <tr><td><code>PWM_Init(channel, freq_hz)</code></td><td>void</td><td>เริ่ม PWM ที่ความถี่ที่กำหนด — duty=0%, ต้องเรียก <code>PWM_Start()</code> ต่อ</td></tr>
+        <tr><td><code>PWM_InitRemap(channel, freq_hz, remap)</code></td><td>void</td><td>เริ่ม PWM พร้อมกำหนด remap</td></tr>
+        <tr><td><code>PWM_Start(channel)</code></td><td>void</td><td>เริ่มเอาต์พุต PWM</td></tr>
+        <tr><td><code>PWM_Stop(channel)</code></td><td>void</td><td>หยุดเอาต์พุต — ขาเป็น LOW</td></tr>
+        <tr><td><code>PWM_SetDutyCycle(channel, percent)</code></td><td>void</td><td>ตั้ง Duty Cycle 0-100%</td></tr>
+        <tr><td><code>PWM_SetDutyCycleRaw(channel, raw)</code></td><td>void</td><td>ตั้ง Duty Cycle แบบ raw (0 ถึง period)</td></tr>
+        <tr><td><code>PWM_SetFrequency(channel, freq_hz)</code></td><td>void</td><td>เปลี่ยนความถี่ — รีเซ็ต duty=0, เปลี่ยนทุกช่องบน timer เดียวกัน</td></tr>
+        <tr><td><code>PWM_Write(channel, value)</code></td><td>void</td><td>Arduino-style 0-255 — auto-init 1kHz ถ้ายังไม่ init</td></tr>
+        <tr><td><code>PWM_SetRemap(channel, remap)</code></td><td>void</td><td>ตั้ง remap ล่วงหน้าก่อนเริ่ม PWM</td></tr>
+        <tr><td><code>PWM_GetPeriod(channel)</code></td><td>uint16_t</td><td>อ่านค่า period ปัจจุบัน</td></tr>
+        <tr><td><code>PWM_GetDutyCycle(channel)</code></td><td>uint8_t</td><td>อ่าน Duty Cycle เป็น %</td></tr>
+        <tr><td><code>PWM_GetDutyCycleRaw(channel)</code></td><td>uint16_t</td><td>อ่าน Duty Cycle แบบ raw</td></tr>
+        <tr><td><code>PWM_AdvancedInit(ch, prescaler, period, duty)</code></td><td>void</td><td>ตั้งค่า PWM เองทั้งหมด (ผู้เชี่ยวชาญ)</td></tr>
+        <tr><td><code>PWM_SetPolarity(channel, inverted)</code></td><td>void</td><td>กลับขั้ว — <code>1</code> = inverted, <code>0</code> = ปกติ</td></tr>
+        <tr><td><code>PWM_PERCENT_TO_RAW(percent, period)</code></td><td>uint16_t</td><td>มาโคร — แปลง % เป็น raw</td></tr>
+        <tr><td><code>PWM_RAW_TO_PERCENT(raw, period)</code></td><td>uint8_t</td><td>มาโคร — แปลง raw เป็น %</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>analogWrite() — เริ่มต้นอัตโนมัติ</h2>
+    <p><code>PWM_Write()</code> และ <code>analogWrite()</code> ทำงานเหมือน Arduino — ถ้าช่อง PWM ยังไม่ได้ init จะ init อัตโนมัติที่ 1kHz</p>
+    <pre><code class="language-c">// ไม่ต้องเรียก PWM_Init — auto-init 1kHz
+analogWrite(PWM1_CH1, 128);   // duty ~50%
+analogWrite(PWM1_CH2, 64);    // duty ~25%</code></pre>
+
+    <div class="callout callout-note">
+        <strong>การ auto-init:</strong> ตรวจสอบ Timer Ownership Guard ก่อน — ถ้า timer ถูกใช้โดย SimpleTIM แล้วจะ return ทันที
+    </div>
+</section>
+
+<section>
+    <h2>การเปลี่ยนความถี่</h2>
+    <p><code>PWM_SetFrequency()</code> เปลี่ยนความถี่ของ timer ทั้งตัว — <strong>ทุกช่อง</strong>บน timer เดียวกันจะเปลี่ยนความถี่พร้อมกัน และ duty cycle จะถูกรีเซ็ตเป็น 0</p>
+    <pre><code class="language-c">PWM_Init(PWM1_CH1, 1000);  // 1kHz
+PWM_SetDutyCycle(PWM1_CH1, 50);
+PWM_SetDutyCycle(PWM1_CH2, 25);
+
+// เปลี่ยนความถี่ — PWM1_CH1 และ PWM1_CH2 เปลี่ยนเป็น 50Hz ทั้งคู่
+// duty ทั้งสองช่องถูกรีเซ็ตเป็น 0
+PWM_SetFrequency(PWM1_CH1, 50);</code></pre>
+</section>
+
+<section>
+    <h2>ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>อาการ</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>PWM ไม่มีเอาต์พุต</td><td>ลืมเรียก <code>PWM_Start()</code></td><td>เรียก <code>PWM_Start(channel)</code> หลัง <code>PWM_Init()</code></td></tr>
+        <tr><td>PWM_Init ไม่ทำงาน</td><td>TIM1/TIM2 ถูกใช้แล้ว</td><td>Timer Ownership Guard return ทันที — ตรวจสอบว่า timer ถูกใช้ที่อื่นหรือไม่</td></tr>
+        <tr><td>บางช่องใช้ไม่ได้ใน SOP-8</td><td>ขาไม่มีใน SOP-8</td><td>ใช้เฉพาะ PWM1_CH2 (PA1) และ PWM1_CH4 (PC4)</td></tr>
+        <tr><td>เปลี่ยนความถี่แล้ว duty หาย</td><td>ความถี่รีเซ็ต duty เป็น 0</td><td>เรียก <code>PWM_SetDutyCycle()</code> ใหม่หลังเปลี่ยนความถี่</td></tr>
+        <tr><td>PWM_REMAP_FULL ไม่มี</td><td>ถูกลบแล้ว</td><td>ใช้ <code>PWM_InitRemap()</code> หรือ <code>PWM_SetRemap()</code></td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>ตัวอย่างโค้ด</h2>
+
+    <h3>LED Fade</h3>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    PWM_Init(PWM1_CH1, 1000);
+    PWM_Start(PWM1_CH1);
+
+    int duty = 0;
+    int dir = 1;
+
+    while(1)
+    {
+        PWM_SetDutyCycle(PWM1_CH1, duty);
+
+        duty += dir;
+        if (duty >= 100 || duty <= 0) dir = -dir;
+
+        Delay_Ms(10);
+    }
+}</code></pre>
+
+    <h3>Servo Control (50Hz)</h3>
+    <pre><code class="language-c">PWM_Init(PWM1_CH2, 50);   // 50Hz สำหรับ servo
+PWM_Start(PWM1_CH2);
+
+// SG90: 500-2400us pulse = 2.5-12% ที่ 50Hz
+PWM_SetDutyCycle(PWM1_CH2, 7.5);  // center
+Delay_Ms(1000);
+PWM_SetDutyCycle(PWM1_CH2, 2.5);  // 0°
+Delay_Ms(1000);
+PWM_SetDutyCycle(PWM1_CH2, 12.5); // 180°</code></pre>
+
+    <h3>เปลี่ยนความถี่ขณะทำงาน</h3>
+    <pre><code class="language-c">PWM_Init(PWM1_CH1, 1000);
+PWM_SetDutyCycle(PWM1_CH1, 50);
+PWM_Start(PWM1_CH1);
+
+Delay_Ms(2000);
+
+// เปลี่ยนเป็น 100Hz — duty รีเซ็ต
+PWM_SetFrequency(PWM1_CH1, 100);
+PWM_SetDutyCycle(PWM1_CH1, 30);</code></pre>
+
+    <h3>analogWrite Style</h3>
+    <pre><code class="language-c">// Arduino-style — auto-init 1kHz
+analogWrite(PWM1_CH1, 255);  // 100%
+analogWrite(PWM1_CH1, 128);  // ~50%
+analogWrite(PWM1_CH1, 0);    // 0%</code></pre>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="tim.html">โมดูลถัดไป →</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:false,theme:'base'});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

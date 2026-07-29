@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SimpleWWDG — Window Watchdog | SimpleHAL API Reference</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+</head>
+<body>
+
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="iwdg.html">← SimpleIWDG</a>
+</nav>
+
+<h1>SimpleWWDG — Window Watchdog</h1>
+<span class="level level-advanced">ระดับสูง</span>
+
+<div class="callout callout-note">
+    <strong>ไลบรารี:</strong> <code>SimpleHAL.h</code> — ใช้ <strong>ไม่ต้อง include ไฟล์ย่อยเอง</strong> ทุกฟังก์ชัน WWDG รวมอยู่ใน SimpleHAL.h แล้ว
+</div>
+
+<section>
+<h2>ภาพรวม</h2>
+<p><strong>Window Watchdog (WWDG)</strong> ใช้ PCLK1 เป็นแหล่งนาฬิกา ต่างจาก IWDG ที่ใช้ LSI 40kHz — WWDG มี <strong>window protection</strong> ที่ป้องกันการ refresh เร็วเกินไป นั่นคือต้อง refresh ในช่วงเวลาที่กำหนดเท่านั้น</p>
+<ul>
+    <li><strong>7-bit counter</strong> — 0x40 ถึง 0x7F (64-127)</li>
+    <li><strong>Window</strong> — 0x40 ถึง 0x7F — ต้อง refresh เมื่อ counter อยู่ในช่วง <code>window < counter < 0x40</code></li>
+    <li><strong>4 prescalers</strong> — 1, 2, 4, 8</li>
+    <li><strong>Early wakeup interrupt</strong> — เมื่อ counter = 0x40 ก่อนรีเซ็ตที่ 0x3F</li>
+</ul>
+
+<div class="callout callout-warn">
+    <strong>Auto-clamp:</strong> ถ้า window > counter เริ่มต้น library จะ clamp window ให้เท่ากับ counter โดยอัตโนมัติ — ป้องกันการรีเซ็ตวนซ้ำถาวร
+</div>
+</section>
+
+<section>
+<h2>แนวคิด Window Protection</h2>
+<p>WWDG แตกต่างจาก IWDG ตรงที่มี "หน้าต่าง" (window) — ต้อง refresh ภายในหน้าต่างเท่านั้น:</p>
+<ul>
+    <li><strong>Refresh เร็วเกินไป</strong> (counter > window) → <strong>รีเซ็ต</strong> — จับการทำงานผิดปกติที่ loop เร็วเกิน</li>
+    <li><strong>Refresh ช้าเกินไป</strong> (counter < 0x40 → 0x3F) → <strong>รีเซ็ต</strong> — จับกรณีโค้ดค้าง</li>
+    <li><strong>Refresh ถูกเวลา</strong> (0x40 <= counter <= window) → <strong>ปกติ</strong></li>
+</ul>
+
+<pre class="ascii-circuit">
+    counter: 0x7F ──────► window ──────► 0x40 ───► 0x3F
+                  ^^^^^^^^^^^^^^^^^^^^^^^^        ^^^^^^
+                  REFRESH เร็วเกิน → RESET        RESET (T6 bit)
+</pre>
+</section>
+
+<section>
+<h2>Prescaler และ Timing</h2>
+<p>PCLK1 = SystemCoreClock/2 (ปกติ 48MHz ถ้า HCLK=96MHz)</p>
+<table>
+<thead><tr><th>Prescaler</th><th>Divider</th><th>tick @ 48MHz</th><th>Timeout range (min-max)</th></tr></thead>
+<tbody>
+<tr><td><code>WWDG_PRESCALER_1</code></td><td>1</td><td>20.83 ns</td><td>1.33 µs - 2.67 ms</td></tr>
+<tr><td><code>WWDG_PRESCALER_2</code></td><td>2</td><td>41.67 ns</td><td>2.67 µs - 5.33 ms</td></tr>
+<tr><td><code>WWDG_PRESCALER_4</code></td><td>4</td><td>83.33 ns</td><td>5.33 µs - 10.67 ms</td></tr>
+<tr><td><code>WWDG_PRESCALER_8</code></td><td>8</td><td>166.67 ns</td><td>10.67 µs - 21.33 ms</td></tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>ตารางอ้างอิงฟังก์ชัน</h2>
+<table>
+<thead>
+<tr><th>ฟังก์ชัน</th><th>พารามิเตอร์</th><th>คืนค่า</th><th>คำอธิบาย</th></tr>
+</thead>
+<tbody>
+<tr>
+    <td><code>WWDG_SimpleInit(counter, window)</code></td>
+    <td><code>counter</code>: uint8_t (0x40-0x7F)<br><code>window</code>: uint8_t (0x40-0x7F)</td>
+    <td><code>void</code></td>
+    <td>เริ่ม WWDG ด้วย prescaler=8 (ค่าเริ่มต้น)</td>
+</tr>
+<tr>
+    <td><code>WWDG_Refresh(counter)</code></td>
+    <td><code>counter</code>: uint8_t (0x40-0x7F)</td>
+    <td><code>void</code></td>
+    <td>ต้อง refresh counter ในช่วง window — เร็วหรือช้าเกิน = รีเซ็ต</td>
+</tr>
+<tr>
+    <td><code>WWDG_Init(counter, window, prescaler)</code></td>
+    <td><code>counter</code>: uint8_t<br><code>window</code>: uint8_t<br><code>prescaler</code>: WWDG_PRESCALER_*</td>
+    <td><code>void</code></td>
+    <td>ตั้งค่า WWDG เต็มรูปแบบ</td>
+</tr>
+<tr>
+    <td><code>WWDG_InitWithInterrupt(counter, window, prescaler)</code></td>
+    <td>เหมือน WWDG_Init</td>
+    <td><code>void</code></td>
+    <td>เริ่ม WWDG + เปิด early wakeup interrupt (EWI) เมื่อ counter=0x40</td>
+</tr>
+<tr>
+    <td><code>WWDG_SetCallback(callback)</code></td>
+    <td><code>callback</code>: void (*)(void)</td>
+    <td><code>void</code></td>
+    <td>ตั้ง callback เมื่อ counter=0x40 (เตือนก่อนรีเซ็ต)</td>
+</tr>
+<tr>
+    <td><code>WWDG_CalcTimeout(prescaler, counter)</code></td>
+    <td><code>prescaler</code>: WWDG_PRESCALER_*<br><code>counter</code>: uint8_t</td>
+    <td><code>uint32_t</code> (µs)</td>
+    <td>คำนวณ timeout จริง หน่วย µs</td>
+</tr>
+<tr>
+    <td><code>WWDG_GetInterruptFlag()</code></td>
+    <td>—</td>
+    <td><code>uint8_t</code> (1/0)</td>
+    <td>ตรวจสอบ early wakeup interrupt flag</td>
+</tr>
+<tr>
+    <td><code>WWDG_ClearInterruptFlag()</code></td>
+    <td>—</td>
+    <td><code>void</code></td>
+    <td>เคลียร์ early wakeup interrupt flag</td>
+</tr>
+<tr>
+    <td><code>WWDG_Disable()</code></td>
+    <td>—</td>
+    <td><code>void</code></td>
+    <td>⚠️ รีเซ็ต configuration registers เท่านั้น — <strong>WDGA bit หยุดไม่ได้!</strong></td>
+</tr>
+</tbody>
+</table>
+
+<div class="callout callout-err">
+    <strong>CRITICAL:</strong> เมื่อ WDGA bit ถูกเซ็ตแล้ว <strong>ไม่สามารถหยุด WWDG ได้</strong> ด้วยซอฟต์แวร์ — <code>WWDG_Disable()</code> แค่เคลียร์ config register ไม่ได้หยุด watchdog จริง
+</div>
+</section>
+
+<section>
+<h2>ตัวอย่างโค้ด</h2>
+
+<h3>Basic WWDG — counter 100, window 80</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    pinMode(PC0, PIN_MODE_OUTPUT);
+
+    // counter=100 (0x64), window=80 (0x50)
+    // ต้อง refresh เมื่อ counter อยู่ในช่วง 0x40-0x50
+    WWDG_SimpleInit(100, 80);
+
+    while (1) {
+        digitalToggle(PC0);
+        Delay_Ms(5);       // ทำงาน
+        WWDG_Refresh(100); // refresh — ต้องไม่เร็วหรือช้าเกิน
+    }
+}</code></pre>
+
+<h3>WWDG พร้อม Early Warning Interrupt</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+volatile uint8_t wwdg_warning = 0;
+
+void OnWWDG_Warning(void) {
+    wwdg_warning = 1;  // counter = 0x40 → ทำ save ข้อมูลก่อนรีเซ็ต
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    pinMode(PC0, PIN_MODE_OUTPUT);
+
+    WWDG_SetCallback(OnWWDG_Warning);
+    WWDG_InitWithInterrupt(127, 100, WWDG_PRESCALER_8);
+
+    while (1) {
+        digitalToggle(PC0);
+        Delay_Ms(5);
+
+        if (wwdg_warning) {
+            wwdg_warning = 0;
+            // บันทึกข้อมูลสำคัญก่อนระบบรีเซ็ต
+        }
+
+        WWDG_Refresh(127);
+    }
+}</code></pre>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="opamp.html">SimpleOPAMP →</a>
+</nav>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

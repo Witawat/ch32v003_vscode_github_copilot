@@ -75,6 +75,22 @@ flowchart TD
       </tbody>
     </table>
 
+    <h3>รู้จักขา</h3>
+    <ul>
+      <li><strong>VDD:</strong> ขาไฟเลี้ยง — ต่อจาก CR2032 ผ่าน LDO 3.3V</li>
+      <li><strong>PC0:</strong> ขาเอาต์พุต — ต่อ LED บอกสถานะตื่น</li>
+      <li><strong>PA1:</strong> ขาอินพุต — ต่อปุ่มกด → GND (Wake from Sleep)</li>
+      <li><strong>PD5:</strong> ขาอ่าน Sensor ภายนอก</li>
+    </ul>
+
+    <h3>วิธีต่อทีละขั้น</h3>
+    <ol>
+      <li>ต่อ <strong>CR2032</strong> ไป <strong>LDO 3.3V</strong> แล้วต่อไป <strong>VDD</strong> — จ่ายไฟให้ MCU</li>
+      <li>ต่อ <strong>PC0</strong> ไป <strong>R 220Ω → LED → GND</strong> — LED กระพริบเมื่อตื่น</li>
+      <li>ต่อ <strong>PA1</strong> ไป <strong>ปุ่มกด → GND</strong> — กดปุ่มปลุกจาก Sleep</li>
+      <li>ต่อ <strong>PD5</strong> ไป <strong>Sensor ภายนอก</strong> — อ่านค่าสเตตัส</li>
+    </ol>
+
     <p><strong>สำคัญ:</strong> Standby mode รีเซ็ต MCU! — ตัวแปร RAM หายหมด — ต้องเก็บข้อมูลสำคัญใน Flash/BKP register ก่อนเข้า Standby</p>
 </section>
 

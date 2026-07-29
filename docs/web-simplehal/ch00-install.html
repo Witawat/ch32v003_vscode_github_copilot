@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>บทที่ 0: ติดตั้งครั้งแรก — เตรียมความพร้อม — SimpleHAL</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <span style="visibility:hidden">บทก่อน</span>
+    <a href="ch01-first-steps.html">บทถัดไป →</a>
+</nav>
+
+<h1>บทที่ 0: ติดตั้งครั้งแรก — เตรียมความพร้อม</h1>
+<span class="level level-beginner">เริ่มต้น</span>
+
+<section>
+    <h2>สิ่งที่ต้องเตรียม</h2>
+    <table>
+        <tr><th>รายการ</th><th>จำนวน</th><th>ราคาประมาณ</th><th>หมายเหตุ</th></tr>
+        <tr><td>CH32V003 Dev Board</td><td>2-3 ชิ้น</td><td>~20-40 บาท/ชิ้น</td><td>แนะนำ TSSOP-20 (F4P6)</td></tr>
+        <tr><td>WCH-LinkE Programmer</td><td>1 ชิ้น</td><td>~150-250 บาท</td><td>ใช้แฟลชโปรแกรมลง MCU</td></tr>
+        <tr><td>สาย USB</td><td>1 เส้น</td><td>~50 บาท</td><td>USB-C หรือ Micro USB</td></tr>
+        <tr><td>Breadboard</td><td>1 แผ่น</td><td>~30-60 บาท</td><td>400 holes ก็พอ</td></tr>
+        <tr><td>LED + R 220Ω</td><td>5-10 ชุด</td><td>~1-2 บาท/ชุด</td><td>สีแดง เหลือง เขียว</td></tr>
+        <tr><td>สายไฟ Jumper (ผู้-ผู้)</td><td>1 ชุด</td><td>~20-40 บาท</td><td></td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>ขั้นที่ 1: ติดตั้ง MounRiver Studio</h2>
+    <p>MounRiver Studio 2 (MRS2) เป็น IDE ฟรีสำหรับ RISC-V MCU จาก WCH — เราใช้ MRS2 เพื่อ toolchain และไดรเวอร์ OpenOCD สำหรับแฟลชโปรแกรม</p>
+    <ol>
+        <li>ไปที่ <a href="http://www.mounriver.com/" target="_blank">http://www.mounriver.com/</a> → ดาวน์โหลด MounRiver Studio 2</li>
+        <li>ติดตั้งที่ <code>C:\MounRiver\MounRiver_Studio2\</code> (path default — <strong>แนะนำให้ใช้ path นี้</strong>)</li>
+        <li>หลังติดตั้งเสร็จ <strong>ยังไม่ต้องเปิด MRS2</strong> — เราใช้แค่ toolchain ที่มาพร้อมมัน</li>
+    </ol>
+    <div class="callout callout-warn">
+        <strong>⚠️ สำคัญ:</strong> ต้องติดตั้งที่ <code>C:\MounRiver\</code> — build script อ้างอิง path นี้ หากติดตั้งที่อื่นต้องแก้ <code>scripts\build.bat</code>
+    </div>
+</section>
+
+<section>
+    <h2>ขั้นที่ 2: ติดตั้ง WCH-Link Driver</h2>
+    <p>WCH-LinkE ต้องการไดรเวอร์ WinUSB บน Windows — โดยปกติ Windows จะติดตั้งให้เองเมื่อเสียบครั้งแรก</p>
+    <p>หากไม่ติด ให้ลงไดรเวอร์จาก:</p>
+    <pre><code>C:\MounRiver\MounRiver_Studio2\resources\app\resources\win32\components\WCH\Drivers\</code></pre>
+    <p><strong>วิธีตรวจสอบ:</strong> เปิด Device Manager (กด <code>Win + X</code> → Device Manager) → มองหา <strong>"WCH-Link"</strong> หรือ <strong>"WCH-LinkE"</strong> ในหมวด Universal Serial Bus devices</p>
+    <div class="callout callout-note">
+        <strong>💡 หมายเหตุ:</strong> บางครั้ง Windows อาจแสดงเป็น "Unknown device" — ให้คลิกขวา → Update driver → Browse → เลือกโฟลเดอร์ Drivers ด้านบน
+    </div>
+</section>
+
+<section>
+    <h2>ขั้นที่ 3: ต่อวงจร</h2>
+    <p>การเชื่อมต่อระหว่าง WCH-LinkE และ CH32V003 ใช้เพียง 3 เส้น:</p>
+    <pre class="ascii-circuit">
+    WCH-LinkE                   CH32V003
+    ┌───────────┐              ┌──────────┐
+    │  3.3V  ├────────────────┤ VDD (5)  │
+    │   GND   ├────────────────┤ GND (4)  │
+    │  SWDIO  ├────────────────┤ PD1 (7)  │
+    └───────────┘              └──────────┘
+
+    ไฟเลี้ยง: WCH-LinkE จ่าย 3.3V ให้ CH32V003 ได้โดยตรง
+    </pre>
+
+    <table class="wiring-table">
+        <thead>
+            <tr><th>WCH-LinkE</th><th>→</th><th>CH32V003</th><th>ขา</th><th>หมายเหตุ</th></tr>
+        </thead>
+        <tbody>
+            <tr><td>3.3V</td><td>→</td><td>VDD</td><td>Pin 5</td><td>WCH-Link จ่ายไฟให้ MCU</td></tr>
+            <tr><td>GND</td><td>→</td><td>GND</td><td>Pin 4</td><td>GND ร่วม</td></tr>
+            <tr><td>SWDIO</td><td>↔</td><td>PD1</td><td>Pin 7</td><td>สายข้อมูลแฟลช (SWD)</td></tr>
+        </tbody>
+    </table>
+
+    <div class="callout callout-warn">
+        <strong>⚠️ คำเตือน:</strong>
+        <ul>
+            <li>CH32V003 ใช้ไฟ 3.3V — <strong>ห้าม</strong> ต่อ 5V เข้า VDD โดยตรง</li>
+            <li>ต่อ GND ให้แน่น — วงจรไม่ครบ = ไม่ทำงาน</li>
+        </ul>
+    </div>
+</section>
+
+<section>
+    <h2>ขั้นที่ 4: สร้างโปรเจกต์แรก</h2>
+    <p>ใน MounRiver Studio:</p>
+    <ol>
+        <li>File → New → MounRiver Project</li>
+        <li>เลือก <strong>CH32V003F4P6</strong> จากรายการชิป</li>
+        <li>ตั้งชื่อโปรเจกต์ (เช่น <code>my_first_project</code>)</li>
+        <li>คลิก <strong>Finish</strong></li>
+    </ol>
+    <p><strong>ไฟล์ที่ถูกสร้าง:</strong></p>
+    <ul>
+        <li><code>User/main.c</code> — ไฟล์หลักที่เราเขียนโค้ด</li>
+        <li><code>Peripheral/</code> — Standard Peripheral Library จาก WCH</li>
+        <li><code>Core/</code> — RISC-V Core (startup, vector table)</li>
+        <li><code>Ld/</code> — Linker script</li>
+    </ul>
+    <div class="callout callout-note">
+        <strong>💡 SimpleHAL:</strong> ให้คัดลอกโฟลเดอร์ <code>User/SimpleHAL/</code> จากโปรเจกต์ SimpleHAL มาไว้ใน <code>User/</code> ของโปรเจกต์นี้
+    </div>
+</section>
+
+<section>
+    <h2>ขั้นที่ 5: Build</h2>
+    <p>คัดลอกโค้ดต่อไปนี้ลงใน <code>main.c</code>:</p>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+    pinMode(PC0, PIN_MODE_OUTPUT);
+
+    while (1)
+    {
+        digitalWrite(PC0, HIGH);
+        Delay_Ms(500);
+        digitalWrite(PC0, LOW);
+        Delay_Ms(500);
+    }
+}</code></pre>
+    <p>คลิกปุ่ม Build (รูปค้อน) — ต้องผ่านด้วย <strong>0 errors</strong></p>
+    <p>หาก Build ผ่าน จะเห็นข้อความ:</p>
+    <pre><code>Build Successful — Flash: ~3500 / 16384 bytes (21%)</code></pre>
+</section>
+
+<section>
+    <h2>ขั้นที่ 6: Flash</h2>
+    <ol>
+        <li>ต่อ WCH-LinkE เข้ากับ CH32V003 ตามวงจรในขั้นที่ 3</li>
+        <li>เสียบ WCH-LinkE เข้า USB คอมพิวเตอร์</li>
+        <li>คลิกปุ่ม <strong>Download</strong> (รูปลูกศรลง) ใน MounRiver Studio</li>
+        <li>รอข้อความ "Download OK" → MCU จะรีเซ็ตอัตโนมัติ</li>
+    </ol>
+    <p><strong>LED ที่ PC0 กระพริบ = สำเร็จ!</strong></p>
+</section>
+
+<section>
+    <h2>ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>WCH-Link ไม่เจอ</td><td>ไดรเวอร์ไม่ได้ติดตั้ง</td><td>เช็คไดรเวอร์ใน Device Manager ติดตั้งจากโฟลเดอร์ Drivers ของ MRS2</td></tr>
+        <tr><td>Flash ไม่ผ่าน</td><td>สาย SWDIO/SWCLK ต่อผิด</td><td>เช็คสาย — SWDIO ต้องต่อกับ PD1 (Pin 7), GND ต้องต่อร่วม</td></tr>
+        <tr><td>LED ไม่ติด</td><td>ขั้ว LED กลับด้าน หรือลืม R</td><td>เช็คขั้ว LED: ขายาว (Anode) → R → PC0, ขาสั้น (Cathode) → GND</td></tr>
+        <tr><td>Compiler not found</td><td>MounRiver Studio ไม่ได้ติดตั้ง</td><td>ติดตั้ง MRS2 ที่ path default หรือแก้ TOOLCHAIN_BASE ใน build script</td></tr>
+        <tr><td>MCU ร้อนผิดปกติ</td><td>ต่อไฟ 5V เข้า VDD</td><td>ถอดไฟทันที — CH32V003 ใช้ 3.3V เท่านั้น</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>ตารางสรุป Checklist</h2>
+    <table>
+        <tr><th>ข้อ</th><th>รายการ</th><th>สถานะ</th></tr>
+        <tr><td>1</td><td>MounRiver Studio ติดตั้งแล้ว</td><td>☐</td></tr>
+        <tr><td>2</td><td>WCH-Link driver พร้อม</td><td>☐</td></tr>
+        <tr><td>3</td><td>ต่อวงจรถูกต้อง</td><td>☐</td></tr>
+        <tr><td>4</td><td>Build ผ่าน</td><td>☐</td></tr>
+        <tr><td>5</td><td>Flash สำเร็จ</td><td>☐</td></tr>
+        <tr><td>6</td><td>LED กระพริบ</td><td>☐</td></tr>
+    </table>
+    <p>ถ้า ✅ ครบ 6 ข้อ — <strong>พร้อมไปบทที่ 1 แล้ว!</strong></p>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <span style="visibility:hidden">บทก่อน</span>
+    <a href="ch01-first-steps.html">บทถัดไป →</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

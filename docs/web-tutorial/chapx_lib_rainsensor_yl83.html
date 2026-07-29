@@ -34,7 +34,21 @@ flowchart TD
         <tr><td>GND</td><td>→</td><td>YL-83</td><td>GND</td><td>Ground ร่วม</td></tr>
       </tbody>
     </table>
-    <p>YL-83 ใช้แผ่น PCB แบบ interleaved traces — เมื่อมีหยดน้ำตกลงบนแผ่น → ความต้านทานลดลง → ADC สูงขึ้น — มี LM393 Comparator สำหรับ Digital Output</p></section>
+    <p>YL-83 ใช้แผ่น PCB แบบ interleaved traces — เมื่อมีหยดน้ำตกลงบนแผ่น → ความต้านทานลดลง → ADC สูงขึ้น — มี LM393 Comparator สำหรับ Digital Output</p>
+    <h3>รู้จักขา</h3>
+    <ul>
+      <li><strong>VCC:</strong> จ่ายไฟ 3.3V (library จัดการเปิด/ปิดอัตโนมัติ)</li>
+      <li><strong>A0 (Analog Out):</strong> แรงดันแปรผันตามปริมาณน้ำ</li>
+      <li><strong>D0 (Digital Out):</strong> HIGH เมื่อตรวจจับน้ำ (ปรับ threshold ด้วย Pot)</li>
+      <li><strong>GND:</strong> Ground ร่วม</li>
+    </ul>
+    <h3>วิธีต่อทีละขั้น</h3>
+    <ol>
+      <li>ต่อ <strong>VCC</strong> ไป <strong>3.3V</strong> และ <strong>GND</strong> ไป <strong>GND</strong> — จ่ายไฟ</li>
+      <li>ต่อ <strong>A0</strong> ไป <strong>PC4 (ADC)</strong> — อ่านความชื้นแบบ analog</li>
+      <li>ต่อ <strong>D0</strong> ไป <strong>PC1 (GPIO)</strong> — ตรวจจับน้ำแบบดิจิตอล</li>
+    </ol>
+</section>
 <section><h2>📚 หลักการทำงาน</h2><p><strong>YL-83 Rain Sensor</strong> วัดความชื้นบนแผ่นเซนเซอร์ — แผ่นเป็นลายทองแดงสลับฟันปลา — เมื่อน้ำเชื่อมรอยต่อ ความต้านทานลด → ADC สูง — แห้ง = ความต้านทานสูง → ADC ต่ำ</p><p><strong>Corrosion Warning:</strong> แผ่นเซนเซอร์เป็นทองแดง — ถ้าเปิดไฟเลี้ยงตลอดเวลา จะเกิด electrolysis กัดกร่อนเร็ว — ตัว library จัดการ VCC control ให้อัตโนมัติ (เปิดเฉพาะตอนวัด)</p><p><strong>การติดตั้ง:</strong> วางแผ่นราบ แต่เอียงเล็กน้อย (~15°) ให้น้ำไหลออก ไม่ขัง — หลีกเลี่ยงแดดจัดเพราะทำให้แห้งเร็ว</p></section>
 <section><h2>💻 เขียน Code ทีละขั้น</h2>
 <div class="step"><h3>ขั้นที่ 1: Init RainSensor</h3><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20

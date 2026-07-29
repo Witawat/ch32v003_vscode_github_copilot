@@ -47,6 +47,19 @@ flowchart TD
         <tr><td>GND</td><td>↔</td><td>Device</td><td>GND</td><td>กราวด์ร่วม</td></tr>
       </tbody>
     </table>
+    <h3>รู้จักขา</h3>
+    <ul>
+      <li><strong>TX:</strong> ส่งข้อมูลจาก MCU ไปอุปกรณ์ — ใช้ขา PC0 (GPIO ธรรมดา)</li>
+      <li><strong>RX:</strong> รับข้อมูลจากอุปกรณ์เข้า MCU — ใช้ขา PC1 (GPIO ธรรมดา)</li>
+      <li><strong>GND:</strong> กราวด์ร่วม</li>
+    </ul>
+    <h3>วิธีต่อทีละขั้น</h3>
+    <ol>
+      <li>ต่อ <strong>TX (PC0)</strong> ของ MCU ไป <strong>RX</strong> ของอุปกรณ์</li>
+      <li>ต่อ <strong>RX (PC1)</strong> ของ MCU ไป <strong>TX</strong> ของอุปกรณ์</li>
+      <li>ต่อ <strong>GND</strong> MCU ไป <strong>GND</strong> ของอุปกรณ์</li>
+    </ol>
+    <p>หมายเหตุ: SoftUART ไม่มีขา VCC — จ่ายไฟแยกให้อุปกรณ์ตาม spec ของมัน</p>
 </section>
 
 <section><h2>📚 หลักการทำงาน</h2>

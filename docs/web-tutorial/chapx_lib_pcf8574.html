@@ -52,7 +52,27 @@ flowchart TD
     <tr><td>3.3V</td><td>→</td><td>VCC</td><td>-</td><td>ไฟเลี้ยง 3.3V; I2C addr 0x20–0x27 (A0–A2)</td></tr>
     <tr><td>GND</td><td>→</td><td>GND</td><td>-</td><td>กราวด์ร่วม</td></tr>
   </tbody>
-</table>
+ </table>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>VCC:</strong> ไฟเลี้ยง 3.3V</li>
+  <li><strong>GND:</strong> กราวด์</li>
+  <li><strong>SDA (PC1):</strong> สายข้อมูล I2C</li>
+  <li><strong>SCL (PC2):</strong> สายนาฬิกา I2C</li>
+  <li><strong>P0–P7:</strong> ขา I/O แบบ quasi-bidirectional 8 ขา</li>
+  <li><strong>pull-up 4.7kΩ:</strong> ต่อระหว่าง SDA→3.3V และ SCL→3.3V (โมดูลส่วนมากมีในตัว)</li>
+</ul>
+
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>VCC</strong> ของ PCF8574 ไป <strong>3.3V</strong></li>
+  <li>ต่อ <strong>GND</strong> ของ PCF8574 ไป <strong>GND</strong></li>
+  <li>ต่อ <strong>SDA</strong> ของ PCF8574 ไป <strong>PC1 (ขา 13)</strong> ของ CH32V003</li>
+  <li>ต่อ <strong>SCL</strong> ของ PCF8574 ไป <strong>PC2 (ขา 14)</strong> ของ CH32V003</li>
+  <li>ต่ออุปกรณ์ (LED, ปุ่ม, relay) ที่ขา <strong>P0–P7</strong> — I2C address 0x20–0x27 (A0–A2)</li>
+  <li>ตรวจสอบว่าโมดูลมี R pull-up 4.7kΩ ในตัวหรือไม่ — ถ้าไม่มี ต่อ R เพิ่มจาก SDA→3.3V และ SCL→3.3V</li>
+</ol>
+
 </section>
 
 <section><h2>📚 หลักการทำงาน</h2>

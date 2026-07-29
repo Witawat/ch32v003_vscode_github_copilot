@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>เฉลย บทที่ 11 — SimpleHAL</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+<style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:0.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:0.9em}</style>
+</head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch11-tim.html">กลับบทที่ 11</a>
+</nav>
+<h1>📝 เฉลย — บทที่ 11: Hardware Timer — Periodic Interrupt</h1>
+
+<div class="answer">
+  <h2>ข้อ 1: LED blink 5Hz ด้วย timer</h2>
+  <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+void toggle_led(void) {
+    digitalToggle(PC0);
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    pinMode(PC0, PIN_MODE_OUTPUT);
+
+    TIM_SimpleInit(TIM_2, 10);  // 10Hz interrupt
+    TIM_AttachInterrupt(TIM_2, toggle_led);
+    TIM_Start(TIM_2);
+
+    while (1) {
+        // main loop ว่าง
+    }
+}</code></pre>
+  <div class="approach"><strong>🧠 แนวคิด:</strong> ตั้ง TIM_2 ที่ 10Hz → ทุก 100ms เรียก toggle_led → LED toggle 10 ครั้ง/วินาที = กระพริบ 5Hz (5 on-off cycles/s) — callback ทำงานใน ISR context ต้องสั้น — ใช้ digitalToggle ซึ่งเร็วพอ — main loop ว่าง ทำอย่างอื่นได้</div>
+</div>
+
+<div class="answer">
+  <h2>ข้อ 2: 2-task scheduler (ADC 50ms + Print 2s)</h2>
+  <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+volatile uint32_t ticks = 0;
+
+void tick_isr(void) {
+    ticks++;
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    ADC_SimpleInit();
+
+    TIM_SimpleInit(TIM_1, 1000);  // 1kHz = 1ms tick
+    TIM_AttachInterrupt(TIM_1, tick_isr);
+    TIM_Start(TIM_1);
+
+    uint32_t last_adc  = 0;
+    uint32_t last_prn  = 0;
+
+    while (1) {
+        uint32_t now = ticks;
+
+        // Task A: ADC ทุก 50ms
+        if (now - last_adc >= 50) {
+            last_adc = now;
+            uint16_t raw = ADC_Read(ADC_CH_PD2);
+            USART_Print("ADC="); USART_PrintNum(raw); USART_Print("\r\n");
+        }
+
+        // Task B: Print uptime ทุก 2s
+        if (now - last_prn >= 2000) {
+            last_prn = now;
+            USART_Print("Uptime: ");
+            USART_PrintNum((int32_t)(now / 1000));
+            USART_Print(" s\r\n");
+        }
+    }
+}</code></pre>
+  <div class="approach"><strong>🧠 แนวคิด:</strong> TIM_SimpleInit 1kHz → volatile ticks++ 1ms resolution — main loop อ่าน ticks (copy local ป้องกันเปลี่ยนแปลงกลางทาง) — ใช้ subtraction pattern <code>now - last >= interval</code> (safe overflow) — Task A: อ่าน ADC ทุก 50 ticks — Task B: print uptime ทุก 2000 ticks — รองรับเพิ่ม task ได้ไม่จำกัด</div>
+</div>
+
+<div class="answer">
+  <h2>ข้อ 3: วัดระยะเวลากดปุ่ม (µs)</h2>
+  <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+volatile uint32_t pulse_start = 0;
+volatile uint32_t pulse_width = 0;
+volatile uint8_t  measuring    = 0;
+
+void pin_isr(void) {
+    if (digitalRead(PC1) == HIGH) {
+        pulse_start = Simple_TIM_GetCounter(TIM_2);
+    } else {
+        if (pulse_start > 0) {
+            pulse_width = Simple_TIM_GetCounter(TIM_2) - pulse_start;
+        }
+    }
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+
+    pinMode(PC1, PIN_MODE_INPUT_PULLUP);
+    attachInterrupt(PC1, pin_isr, CHANGE);
+
+    // TIM2 free-running @100kHz (10µs resolution)
+    TIM_AdvancedInit(TIM_2, 479, 0xFFFF, TIM_MODE_UP);
+    TIM_Start(TIM_2);
+
+    while (1) {
+        if (pulse_width > 0) {
+            uint32_t us = pulse_width * 10;  // 1 tick = 10µs
+            USART_Print("Pulse: ");
+            USART_PrintNum((int32_t)us);
+            USART_Print(" us\r\n");
+            pulse_width = 0;
+        }
+        Delay_Ms(10);
+    }
+}</code></pre>
+  <div class="approach"><strong>🧠 แนวคิด:</strong> TIM_AdvancedInit ตั้ง prescaler=479 → 48MHz/480 = 100kHz (1 tick = 10µs) — attachInterrupt CHANGE จับทั้ง FALLING/RISING — RISING edge: เก็บ counter start — FALLING edge: คำนวณ delta × 10 = µs — volatile แชร์ระหว่าง ISR/main — แสดงผลใน main loop ป้องกัน USART_Print ใน ISR — ถ้าต้องการความละเอียด 1µs ใช้ prescaler=47 (1MHz)</div>
+</div>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch11-tim.html">กลับบทที่ 11</a>
+</nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

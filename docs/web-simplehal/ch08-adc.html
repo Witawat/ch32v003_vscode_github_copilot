@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>บทที่ 8: ADC — อ่านค่า Analog</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+</head>
+<body>
+
+<nav class="top-nav">
+    <a href="ch07-spi.html">&larr; บทที่ 7: SPI</a>
+    <a href="index.html">&#x1f3e0; สารบัญ</a>
+    <a href="ch09-pwm.html">บทที่ 9: PWM &rarr;</a>
+</nav>
+
+<h1>บทที่ 8: ADC — อ่านค่า Analog</h1>
+<span class="level level-intermediate">ระดับกลาง</span>
+
+<section>
+    <h2>สิ่งที่ต้องรู้ก่อน</h2>
+    <ul>
+        <li><a href="ch02-gpio.html">บทที่ 2: GPIO</a></li>
+        <li><a href="ch03-delay.html">บทที่ 3: Delay</a></li>
+    </ul>
+</section>
+
+<section>
+    <h2>อุปกรณ์ที่ต้องใช้</h2>
+    <ul>
+        <li>CH32V003 Dev Board</li>
+        <li>Potentiometer 10k&Omega;</li>
+        <li>LDR (Light Dependent Resistor)</li>
+        <li>LM35 (อุปกรณ์เสริม)</li>
+        <li>แบตเตอรี่</li>
+    </ul>
+</section>
+
+<section>
+    <h2>ทำไมต้องใช้?</h2>
+    <p>อ่านค่าจากโลกจริง — แรงดัน, อุณหภูมิ, แสง, ตำแหน่ง, แบตเตอรี่</p>
+</section>
+
+<section>
+    <h2>Flowchart การทำงาน</h2>
+    <div class="flowchart">
+        <pre class="mermaid">
+flowchart TD
+    A["ADC_SimpleInit()"] --> B{"อ่านอะไร?"}
+    B -->|"ช่องเดียว"| C["ADC_Read(ch)"]
+    B -->|"หลายช่อง"| D["ADC_ReadMultiple()"]
+    B -->|"ลด noise"| E["ADC_ReadAverage()"]
+    C --> F["แปลงเป็นแรงดัน/เปอร์เซ็นต์"]
+    D --> F
+    E --> F
+    F --> G["ใช้งาน"]
+        </pre>
+    </div>
+</section>
+
+<section>
+    <h2>ADC Channel Table</h2>
+    <table>
+        <tr><th>Channel</th><th>Pin</th><th>หมายเหตุ</th></tr>
+        <tr><td>0</td><td>PA2</td><td></td></tr>
+        <tr><td>1</td><td>PA1</td><td></td></tr>
+        <tr><td>2</td><td>PC4</td><td></td></tr>
+        <tr><td>3</td><td>PD2</td><td></td></tr>
+        <tr><td>4</td><td>PD3</td><td></td></tr>
+        <tr><td>5</td><td>PD5</td><td></td></tr>
+        <tr><td>6</td><td>PD6</td><td></td></tr>
+        <tr><td>7</td><td>PD4</td><td></td></tr>
+    </table>
+    <p><strong>Internal channels:</strong> <code>Vrefint</code> (~1.2V), <code>Vcalint</code></p>
+    <div class="callout callout-note">
+        <strong>แพ็กเกจ:</strong> SOP-8 = 4 channels, SOP-16 = ทุก channel ยกเว้น PA1, TSSOP-20 = ครบ 8 channels
+    </div>
+</section>
+
+<section>
+    <h2>API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th></tr>
+        <tr><td><code>ADC_SimpleInit()</code></td><td>เริ่มต้น ADC</td></tr>
+        <tr><td><code>ADC_SimpleInitChannels()</code></td><td>เริ่มต้น ADC แบบหลาย channel</td></tr>
+        <tr><td><code>ADC_EnableChannel()</code></td><td>เปิดใช้งาน channel เพิ่ม</td></tr>
+        <tr><td><code>ADC_Read()</code></td><td>อ่านค่า raw 0-1023</td></tr>
+        <tr><td><code>ADC_ReadMultiple()</code></td><td>อ่านหลาย channel</td></tr>
+        <tr><td><code>ADC_ReadVoltage()</code></td><td>อ่านเป็นแรงดัน (V)</td></tr>
+        <tr><td><code>ADC_ToVoltage()</code></td><td>แปลง raw &rarr; แรงดัน</td></tr>
+        <tr><td><code>ADC_ReadAverage()</code></td><td>อ่านเฉลี่ย (ลด noise)</td></tr>
+        <tr><td><code>ADC_ToPercent()</code></td><td>แปลง raw &rarr; เปอร์เซ็นต์</td></tr>
+        <tr><td><code>ADC_ReadVrefInt()</code></td><td>อ่าน internal Vref (~1.2V)</td></tr>
+        <tr><td><code>ADC_GetVDD()</code></td><td>คำนวณแรงดัน VDD จริง</td></tr>
+        <tr><td><code>ADC_ReadVoltageCompensated()</code></td><td>อ่านแรงดันแบบชดเชย VDD</td></tr>
+        <tr><td><code>ADC_GetBatteryPercent()</code></td><td>คำนวณเปอร์เซ็นต์แบตเตอรี่</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>ตารางแรงดันแบตเตอรี่</h2>
+    <table>
+        <tr><th>ประเภทแบตเตอรี่</th><th>แรงดันเต็ม</th><th>แรงดันหมด</th></tr>
+        <tr><td>Li-ion (1S)</td><td>4.2V</td><td>3.0V</td></tr>
+        <tr><td>Alkaline 2&times;AA</td><td>3.2V</td><td>2.0V</td></tr>
+        <tr><td>CR2032</td><td>3.0V</td><td>2.0V</td></tr>
+        <tr><td>NiMH 2&times;AA</td><td>2.8V</td><td>2.0V</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>ระดับขั้นต้น: อ่าน Potentiometer</h2>
+    <pre><code class="language-c">#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(USART_115200);
+    ADC_SimpleInit(ADC_CH0); // PA2
+
+    while (1) {
+        uint16_t raw = ADC_Read(0);              // 0-1023
+        float voltage = ADC_ToVoltage(raw);      // 0-3.3V
+        printf("Raw=%d Voltage=%.2fV\r\n", raw, voltage);
+        Delay_Ms(500);
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>ระดับขั้นกลาง: ตรวจสอบแบตเตอรี่</h2>
+    <pre><code class="language-c">#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(USART_115200);
+
+    while (1) {
+        float vdd = ADC_GetVDD();
+        uint8_t pct = ADC_GetBatteryPercent(LIION_42V);
+
+        printf("VDD=%.3fV Battery=%d%%\r\n", vdd, pct);
+        Delay_Ms(2000);
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>ระดับขั้นสูง: Multi-Channel Scan พร้อม VDD Compensation</h2>
+    <pre><code class="language-c">#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(USART_115200);
+
+    uint8_t channels[] = {ADC_CH0, ADC_CH3, ADC_CH7};
+    ADC_SimpleInitChannels(channels, 3);
+
+    while (1) {
+        uint16_t results[3];
+        ADC_ReadMultiple(channels, results, 3);
+
+        for (int i = 0; i < 3; i++) {
+            float v = ADC_ReadVoltageCompensated(channels[i]);
+            printf("CH%d=%.3fV ", channels[i], v);
+        }
+        printf("\r\n");
+        Delay_Ms(500);
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>อาการ</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>ค่าแกว่ง / มี noise</td><td>สัญญาณรบกวน</td><td>ใช้ <code>ADC_ReadAverage()</code> แทน</td></tr>
+        <tr><td>ค่าเพี้ยนตอน VDD ตก</td><td>VDD เป็น reference</td><td>ใช้ <code>ADC_ReadVoltageCompensated()</code></td></tr>
+        <tr><td>ไม่มี FPU</td><td>CH32V003 ไม่มี hardware float</td><td>หลีกเลี่ยง float ถ้าทำได้ ใช้ int แทน</td></tr>
+        <tr><td>อ่าน internal channel ไม่ได้</td><td>ยังไม่ได้ init</td><td>v2.1+ มี lazy-init — เรียกแล้วใช้งานได้เลย</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>คำถามที่พบบ่อย (FAQ)</h2>
+    <h3>ADC 10-bit ได้ความละเอียดเท่าไร?</h3>
+    <p>0-1023 = 1024 steps — ที่ 3.3V ประมาณ 3.2mV ต่อขั้น</p>
+    <h3>ทำไมอ่านค่าผิด?</h3>
+    <p>อาจยังไม่ได้เรียก <code>ADC_SimpleInit()</code> — ต้องเรียกก่อนอ่านทุกครั้ง</p>
+    <h3>analogReadMilliVolts?</h3>
+    <p>เป็น macro ที่เรียก <code>ADC_ReadVoltage()</code> และคูณ 1000 — อ่านค่าเป็น mV ทันที</p>
+</section>
+
+<section>
+    <h2>ลองทำดู (แบบฝึกหัด)</h2>
+    <ol>
+        <li>อ่าน potentiometer แสดงผลเป็นเปอร์เซ็นต์ 0-100%</li>
+        <li>วัดแรงดันแบตเตอรี่และแสดง % คงเหลือ</li>
+        <li>วัดอุณหภูมิด้วย LM35 (10mV/&deg;C)</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="ch07-spi.html">&larr; บทที่ 7: SPI</a>
+    <a href="index.html">&#x1f3e0; สารบัญ</a>
+    <a href="ch09-pwm.html">บทที่ 9: PWM &rarr;</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:false,theme:'base'});mermaid.run();</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

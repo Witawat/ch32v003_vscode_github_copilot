@@ -77,6 +77,24 @@ flowchart TD
       </tbody>
     </table>
 
+    <h3>รู้จักขา</h3>
+    <ul>
+      <li><strong>PC4 (NSS):</strong> ขาเลือกอุปกรณ์ (Chip Select) — LOW = เลือก</li>
+      <li><strong>PC5 (SCK):</strong> ขานาฬิกา SPI</li>
+      <li><strong>PC6 (MOSI):</strong> ขาส่งข้อมูล — Master Out Slave In</li>
+      <li><strong>PC7 (MISO):</strong> ขารับข้อมูล — Master In Slave Out</li>
+    </ul>
+
+    <h3>วิธีต่อทีละขั้น</h3>
+    <ol>
+      <li>ต่อ <strong>PC4 (CS)</strong> ไป <strong>CS ของ MAX7219</strong> และ <strong>/CS ของ W25Qxx</strong> — ใช้คนละ pin ถ้ามีหลายอุปกรณ์</li>
+      <li>ต่อ <strong>PC5 (SCK)</strong> ไป <strong>CLK ของ MAX7219</strong> และ <strong>CLK ของ W25Qxx</strong></li>
+      <li>ต่อ <strong>PC6 (MOSI)</strong> ไป <strong>DIN ของ MAX7219</strong> และ <strong>DI ของ W25Qxx</strong></li>
+      <li>ต่อ <strong>PC7 (MISO)</strong> ไป <strong>DO ของ W25Qxx</strong> — MAX7219 ไม่ใช้ MISO</li>
+      <li>ต่อ <strong>3.3V</strong> ไป <strong>/WP, /HOLD, VCC ของ W25Qxx</strong></li>
+      <li>ต่อ <strong>GND</strong> ร่วมกันทุกตัว</li>
+    </ol>
+
     <p><strong>SOP-8/SOP-16 ไม่มี Hardware SPI!</strong> — ต้องใช้ <code>shiftOut()</code> / <code>shiftIn()</code> แบบ software แทน</p>
 </section>
 

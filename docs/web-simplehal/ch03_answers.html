@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>เฉลย — บทที่ 3: Delay &#38; Timer — ควบคุมเวลา</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+<style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:0.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:0.9em}</style>
+</head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">&#8592; สารบัญ</a>
+    <a href="ch03-delay.html">กลับบทที่ 3</a>
+</nav>
+<h1>&#128221; เฉลย — บทที่ 3: Delay &#38; Timer — ควบคุมเวลา</h1>
+
+<div class="answer">
+  <h2>ข้อ 1: LED 3 ดวงกระพริบ 3 ความเร็วด้วย Timer_t</h2>
+  <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    pinMode(PC0, PIN_MODE_OUTPUT);
+    pinMode(PC1, PIN_MODE_OUTPUT);
+    pinMode(PC2, PIN_MODE_OUTPUT);
+
+    Timer_t t1, t2, t3;
+    Start_Timer(&amp;t1, 100, 1);   // 100ms = 5Hz
+    Start_Timer(&amp;t2, 500, 1);   // 500ms = 1Hz
+    Start_Timer(&amp;t3, 1000, 1);  // 1000ms = 0.5Hz
+
+    while (1) {
+        if (Is_Timer_Expired(&amp;t1)) digitalToggle(PC0);
+        if (Is_Timer_Expired(&amp;t2)) digitalToggle(PC1);
+        if (Is_Timer_Expired(&amp;t3)) digitalToggle(PC2);
+    }
+}</code></pre>
+  <div class="approach"><strong>&#129504; แนวคิด:</strong> <code>Timer_t</code> 3 ตัว independent กัน — <code>repeat=1</code> ให้วนซ้ำอัตโนมัติ — <code>Is_Timer_Expired</code> เช็คทีละตัว — Non-blocking: main loop ไม่หยุดรอ LED ทั้ง 3 ดวงทำงานพร้อมกันด้วยความถี่ต่างกัน</div>
+</div>
+
+<div class="answer">
+  <h2>ข้อ 2: นับเวลากดปุ่มค้าง</h2>
+  <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+volatile uint32_t press_start = 0;
+volatile uint32_t press_duration = 0;
+volatile uint8_t  press_done = 0;
+
+void btn_isr(void) {
+    if (digitalRead(PC1) == LOW) {
+        press_start = Get_CurrentMs();  // กด &#8594; เริ่มจับ
+    } else {
+        press_duration = Get_CurrentMs() - press_start;  // ปล่อย
+        press_done = 1;
+    }
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    pinMode(PC1, PIN_MODE_INPUT_PULLUP);
+    attachInterrupt(PC1, btn_isr, CHANGE);
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+
+    while (1) {
+        if (press_done) {
+            press_done = 0;
+            USART_Print("Hold: ");
+            USART_PrintNum((int32_t)press_duration);
+            USART_Print(" ms\r\n");
+        }
+        Delay_Ms(10);
+    }
+}</code></pre>
+  <div class="approach"><strong>&#129504; แนวคิด:</strong> <code>attachInterrupt</code> ใช้ <code>CHANGE</code> mode &#8594; จับทั้ง FALLING (กด) และ RISING (ปล่อย) — ISR อ่านสถานะ pin ทันที: LOW=เริ่มจับเวลา, HIGH=คำนวณ elapsed โดยใช้ <code>Get_CurrentMs</code> — กดค้างนาน = ตัวเลขมาก — <code>volatile</code> flag ให้ main loop แสดงผล</div>
+</div>
+
+<div class="answer">
+  <h2>ข้อ 3: Fade LED ด้วย non-blocking timer</h2>
+  <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    pinMode(PC0, PIN_MODE_OUTPUT);
+    PWM_Init(PWM2_CH3, 1000);  // ใช้ PWM จริงง่ายกว่า software
+
+    Timer_t fade_timer;
+    Start_Timer(&amp;fade_timer, 2, 1);  // 2ms tick
+    int8_t brightness = 0, dir = 1;
+
+    while (1) {
+        if (Is_Timer_Expired(&amp;fade_timer)) {
+            brightness += dir;
+            if (brightness &gt;= 100) dir = -1;
+            if (brightness &lt;= 0)   dir = 1;
+            PWM_SetDutyCycle(PWM2_CH3, brightness);
+        }
+        // main loop ว่างทำงานอื่นได้
+    }
+}</code></pre>
+  <div class="approach"><strong>&#129504; แนวคิด:</strong> ใช้ <code>Timer_t</code> 2ms เป็น tick — counter <code>brightness</code> เพิ่ม/ลดทีละ 1 ด้วย <code>dir</code> flag — เมื่อถึง 100 หรือ 0 กลับทิศ — <code>PWM_SetDutyCycle</code> อัปเดตสว่าง/มืดในแต่ละ tick — Non-blocking: ใช้ PWM จริงบน PC0 (<code>PWM2_CH3</code>) ไม่ต้อง software PWM — main loop ว่างทำงานอื่น</div>
+</div>
+
+<nav class="bottom-nav">
+    <a href="index.html">&#8592; สารบัญ</a>
+    <a href="ch03-delay.html">กลับบทที่ 3</a>
+</nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

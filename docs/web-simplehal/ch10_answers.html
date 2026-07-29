@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>เฉลย บทที่ 10 — SimpleHAL</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+<style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:0.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:0.9em}</style>
+</head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch10-opamp.html">กลับบทที่ 10</a>
+</nav>
+<h1>📝 เฉลย — บทที่ 10: OPAMP — Operational Amplifier ในตัว</h1>
+
+<div class="answer">
+  <h2>ข้อ 1: Buffer สัญญาณเซนเซอร์ pH</h2>
+  <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    ADC_SimpleInit();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+
+    OPAMP_SimpleInit(OPAMP_MODE_VOLTAGE_FOLLOWER);
+    OPAMP_Enable();
+
+    while (1) {
+        uint16_t raw = ADC_Read(ADC_CH_PA2);
+        uint16_t mv  = (uint16_t)(((uint32_t)raw * 3300) / 1023);
+
+        USART_Print("Sensor=");
+        USART_PrintNum(mv);
+        USART_Print(" mV\r\n");
+        Delay_Ms(500);
+    }
+}</code></pre>
+  <div class="approach"><strong>🧠 แนวคิด:</strong> OPAMP_MODE_VOLTAGE_FOLLOWER = unity gain buffer — output ติดตาม input 1:1 — ข้อดีคือ input impedance สูงมาก (ไม่ดึงกระแสจากเซนเซอร์) output impedance ต่ำ (ขับ ADC ได้ดี) — อ่าน output ผ่าน ADC_CH_PA2 (CHP0) — แสดงเป็นมิลลิโวลต์</div>
+</div>
+
+<div class="answer">
+  <h2>ข้อ 2: Comparator ตรวจจับ threshold</h2>
+  <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    ADC_SimpleInit();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    pinMode(PC0, PIN_MODE_OUTPUT);
+
+    OPAMP_SimpleInit(OPAMP_MODE_COMPARATOR);
+    OPAMP_Enable();
+
+    while (1) {
+        uint16_t v_sensor = ADC_Read(ADC_CH_PA2);  // positive input
+        uint16_t v_thresh = ADC_Read(ADC_CH_PA1);  // negative input
+
+        if (v_sensor > v_thresh) {
+            digitalWrite(PC0, HIGH);
+            USART_Print("ABOVE threshold\r\n");
+        } else {
+            digitalWrite(PC0, LOW);
+            USART_Print("BELOW threshold\r\n");
+        }
+        Delay_Ms(100);
+    }
+}</code></pre>
+  <div class="approach"><strong>🧠 แนวคิด:</strong> CHP0(PA2) = สัญญาณเซนเซอร์, CHN0(PA1) = potentiometer ตั้ง threshold — OPAMP comparator เปรียบเทียบ V+ กับ V- — V+ > V- = HIGH output — อ่าน ADC ทั้งสองขาเพื่อยืนยันค่า — LED PC0 แสดงผล — ปรับ threshold ด้วยมือบิด pot</div>
+</div>
+
+<div class="answer">
+  <h2>ข้อ 3: Amplifier gain tests (Non-Inverting, 3 ค่า R)</h2>
+  <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+// ต่อวงจร: R1 จาก PA1 → GND, R2 จาก Output → PA1
+// Gain = 1 + R2/R1
+
+void test_gain(uint32_t r1_ohm, uint32_t r2_ohm) {
+    OPAMP_ConfigNonInverting(OPAMP_CHP0, OPAMP_CHN0);
+    OPAMP_Enable();
+
+    float expected = 1.0f + (float)r2_ohm / (float)r1_ohm;
+
+    uint16_t raw_in  = ADC_Read(ADC_CH_PA2);
+    uint16_t raw_out = ADC_Read(ADC_CH_PA2);  // อ่านหลัง OPA
+    float vin  = (float)raw_in  * 3.3f / 1023.0f;
+    float vout = (float)raw_out * 3.3f / 1023.0f;
+    float measured = vout / vin;
+
+    USART_Print("R1="); USART_PrintNum((int32_t)r1_ohm);
+    USART_Print(" R2="); USART_PrintNum((int32_t)r2_ohm);
+    USART_Print(" Gain(expected)=");
+    USART_PrintNum((int32_t)(expected * 100));
+    USART_Print(" Gain(measured)=");
+    USART_PrintNum((int32_t)(measured * 100));
+    USART_Print("\r\n");
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    ADC_SimpleInit();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+
+    // ทดสอบ 3 ชุด R
+    test_gain(10000, 10000);   // Gain = 2.0
+    test_gain(10000, 22000);   // Gain = 3.2
+    test_gain(10000, 47000);   // Gain = 5.7
+
+    while (1);
+}</code></pre>
+  <div class="approach"><strong>🧠 แนวคิด:</strong> OPAMP_ConfigNonInverting ตั้ง non-inverting amp — Gain = 1 + R2/R1 — ต่อ R1 จาก CHN0(PA1) → GND, R2 จาก output → PA1 — อ่าน V_in ก่อน OPA, V_out หลัง OPA — คำนวณ gain จริง = Vout/Vin — แสดงทั้ง expected และ measured เพื่อเปรียบเทียบ — ใช้ float เฉพาะตอน init เท่านั้น (ไม่ใช้ใน loop)</div>
+</div>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch10-opamp.html">กลับบทที่ 10</a>
+</nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

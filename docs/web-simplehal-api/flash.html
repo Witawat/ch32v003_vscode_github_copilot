@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SimpleFlash — SimpleHAL API Reference</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+</head>
+<body>
+
+<nav class="top-nav">
+    <a href="index.html">&larr; สารบัญ</a>
+    <a href="iwdg.html">SimpleIWDG &rarr;</a>
+</nav>
+
+<h1>SimpleFlash — เก็บข้อมูลถาวร <span class="level level-advanced">สูง</span></h1>
+
+<section>
+<h2>ภาพรวม</h2>
+<p>SimpleFlash ใช้ <strong>2 หน้าสุดท้ายของ Flash</strong> (page 254 และ 255) รวม <strong>128 bytes</strong> สำหรับเก็บข้อมูลถาวร (non-volatile) โดยใช้ hardware Flash controller ของ CH32V003 รองรับการอ่าน/เขียน byte/half-word/word, เขียน string และ struct, บันทึก config พร้อม <strong>CRC16</strong> ป้องกันข้อมูลเสีย และ auto-erase ในตัว</p>
+
+<table>
+<thead><tr><th>คุณสมบัติ</th><th>รายละเอียด</th></tr></thead>
+<tbody>
+<tr><td>พื้นที่</td><td>2 หน้า (page 254 + 255) = 128 bytes</td></tr>
+<tr><td>Page size</td><td>64 bytes ต่อหน้า</td></tr>
+<tr><td>Address</td><td><code>0x0803F80</code> — <code>0x0803FFF</code></td></tr>
+<tr><td>Integrity</td><td>CRC16 checksum</td></tr>
+<tr><td>Write endurance</td><td>~10,000 — 80,000 รอบ</td></tr>
+<tr><td>Header</td><td><code>#include "simple_flash.h"</code></td></tr>
+</tbody>
+</table>
+
+<div class="callout callout-err">
+<strong>สำคัญ:</strong> Flash write endurance จำกัดที่ ~10k-80k cycles ต่อหน้า — เขียนบ่อยเกินไปจะทำให้ flash เสื่อมสภาพ หลีกเลี่ยงการเขียนใน loop และใช้ <code>Flash_SaveConfig</code> เฉพาะเมื่อค่าเปลี่ยนแปลงจริง
+</div>
+</section>
+
+<section>
+<h2>Address Layout</h2>
+<p>พื้นที่เก็บข้อมูลอยู่ใน 2 หน้าสุดท้ายของ Flash — รวม 128 bytes:</p>
+
+<table>
+<thead><tr><th>Page</th><th>Address Range</th><th>Size</th><th>แนะนำให้ใช้สำหรับ</th></tr></thead>
+<tbody>
+<tr><td>254 (config)</td><td><code>0x0803F80</code> — <code>0x0803FBF</code></td><td>64 bytes</td><td>Config struct + CRC16</td></tr>
+<tr><td>255 (data)</td><td><code>0x0803FC0</code> — <code>0x0803FFF</code></td><td>64 bytes</td><td>ข้อมูลทั่วไป (string, counter, etc.)</td></tr>
+</tbody>
+</table>
+
+<div class="callout callout-warn">
+<strong>ข้อควรระวัง:</strong> ห้ามใช้พื้นที่เกิน 128 bytes เด็ดขาด — จะไปทับพื้นที่โปรแกรม อาจทำให้ MCU ทำงานผิดพลาด Linker script ต้องกันพื้นที่นี้ไว้ด้วย
+</div>
+</section>
+
+<section>
+<h2>Status Codes</h2>
+<p>ฟังก์ชันส่วนใหญ่คืนค่า <code>FlashStatus</code> — ตรวจสอบค่าที่คืนเสมอ:</p>
+
+<table>
+<thead><tr><th>Status</th><th>ความหมาย</th></tr></thead>
+<tbody>
+<tr><td><code>FLASH_OK</code></td><td>สำเร็จ</td></tr>
+<tr><td><code>FLASH_ERROR</code></td><td>ข้อผิดพลาดทั่วไป</td></tr>
+<tr><td><code>FLASH_ERROR_BUSY</code></td><td>Flash กำลังทำงาน — ต้องรอ</td></tr>
+<tr><td><code>FLASH_ERROR_TIMEOUT</code></td><td>timeout — ใช้เวลานานเกิน</td></tr>
+<tr><td><code>FLASH_ERROR_WRITE</code></td><td>เขียนข้อมูลล้มเหลว</td></tr>
+<tr><td><code>FLASH_ERROR_ERASE</code></td><td>ลบหน้า Flash ล้มเหลว</td></tr>
+<tr><td><code>FLASH_ERROR_VERIFY</code></td><td>ข้อมูลที่เขียนไม่ตรงกับที่อ่าน — verify fail</td></tr>
+<tr><td><code>FLASH_ERROR_ALIGN</code></td><td>Address ไม่ตรง alignment (ต้อง half-word / word align)</td></tr>
+<tr><td><code>FLASH_ERROR_RANGE</code></td><td>Address อยู่นอกช่วง (<code>0x0803F80</code> — <code>0x0803FFF</code>)</td></tr>
+<tr><td><code>FLASH_ERROR_CRC</code></td><td>CRC16 ไม่ตรง — ข้อมูลเสียหาย</td></tr>
+<tr><td><code>FLASH_ERROR_INVALID</code></td><td>ข้อมูลไม่ถูกต้อง (ไม่เคยเขียน หรือ corrupt)</td></tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>ตารางฟังก์ชัน</h2>
+<table>
+<thead><tr><th>ฟังก์ชัน</th><th>คืนค่า</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>Flash_Init()</code></td><td>FlashStatus</td><td>เริ่มระบบ Flash — ต้องเรียกก่อนใช้งาน</td></tr>
+<tr><td><code>Flash_EraseAll()</code></td><td>FlashStatus</td><td>ลบทั้ง 2 หน้า (config + data)</td></tr>
+<tr><td><code>Flash_ErasePage(page_num)</code></td><td>FlashStatus</td><td>ลบเฉพาะหน้าที่ระบุ (254 หรือ 255)</td></tr>
+<tr><td><code>Flash_ReadByte(addr)</code></td><td>uint8_t</td><td>อ่าน 1 byte</td></tr>
+<tr><td><code>Flash_ReadHalfWord(addr)</code></td><td>uint16_t</td><td>อ่าน 1 half-word (2 bytes — address ต้อง align 2)</td></tr>
+<tr><td><code>Flash_ReadWord(addr)</code></td><td>uint32_t</td><td>อ่าน 1 word (4 bytes — address ต้อง align 4)</td></tr>
+<tr><td><code>Flash_WriteByte(addr, data)</code></td><td>FlashStatus</td><td>เขียน 1 byte — <strong>ต้อง erase ก่อน</strong></td></tr>
+<tr><td><code>Flash_WriteHalfWord(addr, data)</code></td><td>FlashStatus</td><td>เขียน 1 half-word — <strong>ต้อง erase ก่อน</strong></td></tr>
+<tr><td><code>Flash_WriteWord(addr, data)</code></td><td>FlashStatus</td><td>เขียน 1 word — <strong>ต้อง erase ก่อน</strong></td></tr>
+<tr><td><code>Flash_WriteByteWithErase(addr, data)</code></td><td>FlashStatus</td><td>เขียน 1 byte พร้อม auto-erase (ช้า ใช้ 64B RAM)</td></tr>
+<tr><td><code>Flash_WriteHalfWordWithErase(addr, data)</code></td><td>FlashStatus</td><td>เขียน half-word พร้อม auto-erase</td></tr>
+<tr><td><code>Flash_WriteWordWithErase(addr, data)</code></td><td>FlashStatus</td><td>เขียน word พร้อม auto-erase</td></tr>
+<tr><td><code>Flash_ReadString(addr, buf, max)</code></td><td>uint16_t</td><td>อ่าน string — คืนจำนวน byte ที่อ่านได้</td></tr>
+<tr><td><code>Flash_WriteString(addr, str)</code></td><td>FlashStatus</td><td>เขียน string (null-terminated) — auto-erase</td></tr>
+<tr><td><code>Flash_ReadStruct(addr, ptr, size)</code></td><td>FlashStatus</td><td>อ่าน struct จาก Flash เข้า RAM</td></tr>
+<tr><td><code>Flash_WriteStruct(addr, ptr, size)</code></td><td>FlashStatus</td><td>เขียน struct — auto-erase</td></tr>
+<tr><td><code>Flash_SaveConfig(ptr, size)</code></td><td>FlashStatus</td><td>บันทึก config struct ลง page 254 + CRC16</td></tr>
+<tr><td><code>Flash_LoadConfig(ptr, size)</code></td><td>bool</td><td>โหลด config + ตรวจสอบ CRC — false = CRC fail</td></tr>
+<tr><td><code>Flash_IsConfigValid()</code></td><td>bool</td><td>ตรวจสอบว่า CRC ปัจจุบันถูกต้องหรือไม่</td></tr>
+<tr><td><code>Flash_CalculateCRC16(data, len)</code></td><td>uint16_t</td><td>คำนวณ CRC16 ของข้อมูล (ใช้ภายใน)</td></tr>
+<tr><td><code>Flash_IsAddressValid(addr)</code></td><td>bool</td><td>ตรวจสอบว่า address อยู่ในช่วงที่อนุญาต</td></tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>Simplified Macros</h2>
+<p>มาโครช่วยลดความยุ่งยาก — ไม่ต้องระบุ address และ type ด้วยตัวเอง:</p>
+
+<table>
+<thead><tr><th>Macro</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr></thead>
+<tbody>
+<tr><td><code>FLASH_SAVE_CONFIG(type)</code></td><td>บันทึก config struct — คำนวณ CRC อัตโนมัติ</td><td><code>FLASH_SAVE_CONFIG(my_config);</code></td></tr>
+<tr><td><code>FLASH_LOAD_CONFIG(type)</code></td><td>โหลด config struct — ตรวจ CRC</td><td><code>if (FLASH_LOAD_CONFIG(my_config)) { ... }</code></td></tr>
+<tr><td><code>FLASH_WRITE_AUTO(addr, value)</code></td><td>เขียน data type ใด ๆ — auto-erase + type inference</td><td><code>FLASH_WRITE_AUTO(addr, 0x5A);</code></td></tr>
+<tr><td><code>FLASH_READ(addr, type)</code></td><td>อ่าน data type ใด ๆ ตามที่ระบุ</td><td><code>uint32_t v = FLASH_READ(addr, uint32_t);</code></td></tr>
+</tbody>
+</table>
+
+<div class="callout callout-note">
+<strong>จุดสำคัญ:</strong> <code>FLASH_WRITE_AUTO</code> ใช้ auto-erase ภายใน — ใช้ RAM buffer 64 bytes ทำให้ช้ากว่าการ erase + write แยก แต่สะดวกกว่าสำหรับเขียนค่าเดี่ยว
+</div>
+</section>
+
+<section>
+<h2>Config Struct Pattern</h2>
+<p>struct ที่ใช้กับ <code>Flash_SaveConfig</code> / <code>Flash_LoadConfig</code> ต้องมี <code>uint16_t crc</code> เป็น <strong>field สุดท้ายเสมอ</strong> — ไลบรารีจะคำนวณ CRC ของทุก field ยกเว้น field crc เอง:</p>
+
+<pre><code class="language-c">typedef struct {
+    uint32_t magic;        // ตรวจสอบว่า config เคยถูกเขียนไหม
+    uint8_t  version;      // กัน struct version mismatch
+    uint8_t  brightness;   // ข้อมูล config
+    uint16_t threshold;
+    uint32_t counter;
+    uint16_t crc;          // ต้องเป็น field สุดท้ายเสมอ
+} MyConfig;
+</code></pre>
+
+<div class="callout callout-err">
+<strong>ห้ามลืม:</strong> field <code>uint16_t crc</code> ต้องเป็น field สุดท้ายของ struct — ถ้าไม่อยู่สุดท้าย CRC จะคำนวณผิดและโหลดไม่สำเร็จ
+</div>
+</section>
+
+<section>
+<h2>CRC16 Workflow</h2>
+
+<div class="step">
+<h3>บันทึก (Save)</h3>
+<p><code>Flash_SaveConfig()</code> → คำนวณ CRC16 ของ struct (ยกเว้น crc field เอง) → เขียน CRC ลงใน field สุดท้าย → erase หน้า 254 → write struct ทั้งอันลง Flash</p>
+</div>
+
+<div class="step">
+<h3>โหลด (Load)</h3>
+<p><code>Flash_LoadConfig()</code> → อ่าน struct จาก Flash → คำนวณ CRC16 ใหม่จากข้อมูลที่อ่าน → เปรียบเทียบกับค่า crc ใน Flash → ถ้าตรงกัน = OK → ถ้าไม่ตรง = CRC fail (ข้อมูลเสียหาย)</p>
+</div>
+
+<div class="callout callout-good">
+<strong>ข้อดีของ CRC:</strong> ป้องกันการอ่านข้อมูลเสียหายที่เกิดจาก Flash wear, power loss ระหว่างเขียน, หรือการใช้งานครั้งแรก (Flash ใหม่ = <code>0xFF</code> = CRC ไม่ตรง = ใช้ default แทน)
+</div>
+
+<div class="callout callout-warn">
+<strong>Auto-Erase ใช้ 64B RAM:</strong> <code>Flash_Write*WithErase</code> และ <code>Flash_WriteStruct</code> ต้องใช้ buffer 64 bytes ใน RAM สำหรับพักข้อมูลระหว่างการเขียน — ระวัง RAM ไม่พอในโปรเจกต์ที่ใช้ RAM มาก
+</div>
+</section>
+
+<section>
+<h2>ข้อผิดพลาดที่พบบ่อย</h2>
+
+<div class="callout callout-err">
+<strong>เขียนโดยไม่ erase</strong> — Flash hardware ต้อง erase ทั้งหน้า (64B) ก่อนเขียน
+<p>ใช้ <code>Flash_ErasePage()</code> ก่อน หรือใช้ฟังก์ชัน <code>...WithErase()</code> ซึ่งจัดการให้อัตโนมัติ</p>
+</div>
+
+<div class="callout callout-err">
+<strong>ลืม <code>uint16_t crc</code> ใน struct</strong> — <code>Flash_SaveConfig</code>/<code>Flash_LoadConfig</code> ต้องการ crc field เสมอ
+<p>ถ้าไม่มี crc field โค้ดจะคอมไพล์ผ่านแต่ CRC จะคำนวณผิด — ทำให้ <code>Flash_LoadConfig</code> คืน false ทุกครั้ง</p>
+</div>
+
+<div class="callout callout-err">
+<strong>เขียนบ่อยเกินไป</strong> — Flash write endurance จำกัด
+<p>อย่าเรียก <code>Flash_SaveConfig</code> ใน main loop โดยตรง — ใช้วิธีตรวจสอบก่อนว่า data เปลี่ยนจริงหรือไม่ แล้วค่อยเขียน</p>
+</div>
+
+<div class="callout callout-err">
+<strong>ใช้พื้นที่เกิน 128 bytes</strong> — ไปทับ code space
+<p>โครงสร้างข้อมูลทั้งหมดที่เก็บใน Flash ต้องห้ามเกิน 128 bytes (2 หน้า) รวม CRC — ถ้าเกินจะไปทับพื้นที่โปรแกรม ทำให้ MCU ทำงานผิดพลาดหรือ brick</p>
+</div>
+
+<div class="callout callout-warn">
+<strong>Linker script ทับพื้นที่</strong> — ต้องกันพื้นที่ <code>0x0803F80</code> — <code>0x0803FFF</code> ไว้ใน linker script
+<p>ถ้า linker script ไม่กันพื้นที่ไว้ คอมไพเลอร์อาจวางโค้ดโปรแกรมทับพื้นที่ Flash storage — ทำให้ข้อมูลหายหรือโปรแกรมพัง</p>
+</div>
+</section>
+
+<section>
+<h2>ตัวอย่างโค้ด</h2>
+
+<h3>Save & Load Config</h3>
+<pre><code class="language-c">#include "simplehal.h"
+
+typedef struct {
+    uint32_t magic;
+    uint8_t  version;
+    uint8_t  brightness;
+    uint16_t threshold;
+    uint16_t crc;          // ต้องเป็น field สุดท้าย
+} MyConfig;
+
+MyConfig config;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    Flash_Init();
+
+    // ลองโหลด config
+    if (!Flash_LoadConfig(&config, sizeof(config))) {
+        // ไม่มี config — ใช้ค่า default
+        config.magic = 0xDEADBEEF;
+        config.version = 1;
+        config.brightness = 80;
+        config.threshold = 500;
+        Flash_SaveConfig(&config, sizeof(config));
+    }
+
+    while (1) {
+        // ใช้ config...
+        if (user_changed_setting()) {
+            config.brightness = new_value;
+            Flash_SaveConfig(&config, sizeof(config));
+        }
+    }
+}
+</code></pre>
+
+<h3>Write String to Flash</h3>
+<pre><code class="language-c">#include "simplehal.h"
+
+#define STR_ADDR  0x0803FC0  // page 255 start
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    Flash_Init();
+
+    Flash_WriteString(STR_ADDR, "CH32V003 Flash OK!");
+
+    char buf[32];
+    uint16_t len = Flash_ReadString(STR_ADDR, buf, sizeof(buf));
+    USART_Print("Read: "); USART_Print(buf); USART_Print("\r\n");
+    // Output: "Read: CH32V003 Flash OK!"
+
+    while (1) { }
+}
+</code></pre>
+
+<h3>Auto-Erase Word — เขียนค่าเดี่ยว</h3>
+<pre><code class="language-c">#include "simplehal.h"
+
+#define DATA_ADDR  0x0803FC4
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    Flash_Init();
+
+    // เขียนครั้งแรก
+    Flash_WriteWordWithErase(DATA_ADDR, 100);
+
+    // อัปเดตค่า — auto-erase จัดการให้
+    Flash_WriteWordWithErase(DATA_ADDR, 200);
+
+    uint32_t val = Flash_ReadWord(DATA_ADDR);
+    // val == 200
+
+    while (1) { }
+}
+</code></pre>
+
+<h3>Factory Reset — ลบ Config</h3>
+<pre><code class="language-c">#include "simplehal.h"
+
+void factory_reset(void) {
+    Flash_EraseAll();
+    // ทั้ง config (page 254) และ data (page 255) = 0xFF ทั้งหมด
+    // Flash_LoadConfig จะคืน false ในครั้งถัดไป — ใช้ default ได้
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    Flash_Init();
+
+    if (button_held_for_10sec()) {
+        factory_reset();
+        USART_Print("Factory reset complete\r\n");
+    }
+
+    while (1) { }
+}
+</code></pre>
+
+<h3>ใช้ Simplified Macros</h3>
+<pre><code class="language-c">#include "simplehal.h"
+
+typedef struct {
+    uint32_t magic;
+    uint8_t  version;
+    uint16_t threshold;
+    uint16_t crc;
+} MyConfig;
+
+MyConfig config;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    Flash_Init();
+
+    if (!FLASH_LOAD_CONFIG(config)) {
+        config.magic = 0xBEEF0001;
+        config.version = 1;
+        config.threshold = 750;
+        FLASH_SAVE_CONFIG(config);
+    }
+
+    uint32_t read_back = FLASH_READ(0x0803FC0, uint32_t);
+    FLASH_WRITE_AUTO(0x0803FC4, 0x5AA55AA5);
+
+    while (1) { }
+}
+</code></pre>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">&larr; สารบัญ</a>
+    <a href="iwdg.html">SimpleIWDG &rarr;</a>
+</nav>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

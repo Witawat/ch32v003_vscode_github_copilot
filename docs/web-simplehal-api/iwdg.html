@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SimpleIWDG — Independent Watchdog | SimpleHAL API Reference</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+</head>
+<body>
+
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+</nav>
+
+<h1>SimpleIWDG — Independent Watchdog</h1>
+<span class="level level-advanced">ระดับสูง</span>
+
+<div class="callout callout-note">
+    <strong>ไลบรารี:</strong> <code>SimpleHAL.h</code> — ใช้ <strong>ไม่ต้อง include ไฟล์ย่อยเอง</strong> ทุกฟังก์ชัน IWDG รวมอยู่ใน SimpleHAL.h แล้ว
+</div>
+
+<section>
+<h2>ภาพรวม</h2>
+<p><strong>Independent Watchdog (IWDG)</strong> เป็น hardware watchdog ที่ใช้แหล่งจ่ายสัญญาณนาฬิกา LSI 40kHz ซึ่งแยกอิสระจากระบบนาฬิกาหลัก (HSE/HSI/PLL) — แม้ระบบนาฬิกาหลักจะล่ม IWDG ก็ยังทำงานต่อไป</p>
+<ul>
+    <li><strong>LSI 40kHz</strong> — แหล่งนาฬิกาอิสระ ไม่พึ่ง system clock</li>
+    <li><strong>12-bit reload counter</strong> — ค่า reload 0x000-0xFFF (0-4095)</li>
+    <li><strong>7 prescalers</strong> — 4, 8, 16, 32, 64, 128, 256</li>
+    <li><strong>Timeout</strong> — ตั้งแต่ 0.1ms ถึง 26.2s (LSI 40kHz; จริงอาจถึง 32.7s ถ้า LSI 30kHz)</li>
+</ul>
+
+<div class="callout callout-warn">
+    <strong>LSI tolerance ±25%:</strong> เวลา timeout จริงอาจคลาดเคลื่อน ±25% จากค่าที่คำนวณ — ตรวจสอบ Datasheet และเผื่อ margin ไว้เสมอ
+</div>
+</section>
+
+<section>
+<h2>ตาราง Prescaler และ Timeout</h2>
+<p>LSI = 40kHz → <code>tick = 1/(40000/prescaler)</code></p>
+<table>
+<thead><tr><th>Prescaler</th><th>Divider</th><th>Min Timeout (reload=0)</th><th>Max Timeout (reload=4095)</th></tr></thead>
+<tbody>
+<tr><td><code>IWDG_PRESCALER_4</code></td><td>4</td><td>0.1 ms</td><td>409.6 ms</td></tr>
+<tr><td><code>IWDG_PRESCALER_8</code></td><td>8</td><td>0.2 ms</td><td>819.2 ms</td></tr>
+<tr><td><code>IWDG_PRESCALER_16</code></td><td>16</td><td>0.4 ms</td><td>1.64 s</td></tr>
+<tr><td><code>IWDG_PRESCALER_32</code></td><td>32</td><td>0.8 ms</td><td>3.28 s</td></tr>
+<tr><td><code>IWDG_PRESCALER_64</code></td><td>64</td><td>1.6 ms</td><td>6.55 s</td></tr>
+<tr><td><code>IWDG_PRESCALER_128</code></td><td>128</td><td>3.2 ms</td><td>13.1 s</td></tr>
+<tr><td><code>IWDG_PRESCALER_256</code></td><td>256</td><td>6.4 ms</td><td>26.2 s</td></tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>ตารางอ้างอิงฟังก์ชัน</h2>
+<table>
+<thead>
+<tr><th>ฟังก์ชัน</th><th>พารามิเตอร์</th><th>คืนค่า</th><th>คำอธิบาย</th></tr>
+</thead>
+<tbody>
+<tr>
+    <td><code>IWDG_SimpleInit(timeout_ms)</code></td>
+    <td><code>timeout_ms</code>: uint32_t (1-32767)</td>
+    <td><code>void</code></td>
+    <td>ตั้ง timeout (ms) — เลือก prescaler ที่เหมาะสมให้อัตโนมัติ</td>
+</tr>
+<tr>
+    <td><code>IWDG_Feed()</code></td>
+    <td>—</td>
+    <td><code>void</code></td>
+    <td>รีเซ็ต counter — หมาต้องให้อาหารก่อนหมดเวลา ไม่งั้นระบบรีเซ็ต</td>
+</tr>
+<tr>
+    <td><code>IWDG_Init(prescaler, reload)</code></td>
+    <td><code>prescaler</code>: IWDG_PRESCALER_*<br><code>reload</code>: uint16_t (0-4095)</td>
+    <td><code>void</code></td>
+    <td>ตั้งค่า prescaler และ reload ด้วยตนเอง (อิสระเต็มที่)</td>
+</tr>
+<tr>
+    <td><code>IWDG_IsBusy()</code></td>
+    <td>—</td>
+    <td><code>uint8_t</code></td>
+    <td>กำลังอัปเดต register? (1=กำลังอัปเดต, 0=พร้อม)</td>
+</tr>
+<tr>
+    <td><code>IWDG_GetTimeout(prescaler, reload)</code></td>
+    <td><code>prescaler</code>: IWDG_PRESCALER_*<br><code>reload</code>: uint16_t</td>
+    <td><code>uint32_t</code> (ms)</td>
+    <td>คำนวณ timeout จริงจาก prescaler + reload</td>
+</tr>
+<tr>
+    <td><code>IWDG_WasResetCause()</code></td>
+    <td>—</td>
+    <td><code>uint8_t</code> (1/0)</td>
+    <td>รีเซ็ตล่าสุดเกิดจาก IWDG หรือไม่?</td>
+</tr>
+<tr>
+    <td><code>IWDG_ClearResetFlag()</code></td>
+    <td>—</td>
+    <td><code>void</code></td>
+    <td>⚠️ เคลียร์<strong>ทุก</strong> reset flag (ไม่ใช่แค่ IWDG)</td>
+</tr>
+</tbody>
+</table>
+
+<div class="callout callout-good">
+    <strong>คำแนะนำ:</strong> ใช้ <code>IWDG_SimpleInit()</code> สำหรับกรณีทั่วไป — library จะเลือก prescaler ที่ใกล้เคียง timeout ที่ต้องการที่สุดให้อัตโนมัติ
+</div>
+</section>
+
+<section>
+<h2>Helper Macros</h2>
+<table>
+<thead><tr><th>Macro</th><th>พารามิเตอร์</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr>
+    <td><code>IWDG_TIMEOUT_MS(prescaler, reload)</code></td>
+    <td><code>prescaler</code>: IWDG_PRESCALER_*<br><code>reload</code>: uint16_t</td>
+    <td>คำนวณ timeout เป็น ms (LSI=40kHz)</td>
+</tr>
+<tr>
+    <td><code>IWDG_CALC_RELOAD(timeout_ms, prescaler)</code></td>
+    <td><code>timeout_ms</code>: uint32_t<br><code>prescaler</code>: IWDG_PRESCALER_*</td>
+    <td>คำนวณ reload value จาก timeout ที่ต้องการ</td>
+</tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>การทำงานร่วมกับ yield()</h2>
+<p>SimpleHAL มีระบบ <code>yield()</code> สำหรับให้อาหาร watchdog อัตโนมัติ — เรียก <code>arduino_SetIWDGActive()</code> แล้ว yield() จะ feed IWDG ให้ทุกครั้ง</p>
+<pre><code class="language-c">IWDG_SimpleInit(1000);   // timeout 1 วินาที
+arduino_SetIWDGActive(); // เปิด auto-feed ผ่าน yield()
+
+while (1) {
+    // ทำงานอื่น...
+    Delay_Ms(100);
+    // yield() ถูกเรียกใน Delay_Ms → feed IWDG อัตโนมัติ
+}</code></pre>
+
+<div class="callout callout-warn">
+    <strong>ข้อควรระวัง:</strong> yield() จะ feed เฉพาะตอนที่ถูกเรียก — ถ้าโค้ดติด loop ที่ไม่มี yield() หรือ Delay นานกว่า timeout → IWDG จะรีเซ็ตอยู่ดี
+</div>
+</section>
+
+<section>
+<h2>คำเตือน</h2>
+<div class="callout callout-err">
+    <strong>เมื่อเริ่มแล้วหยุดไม่ได้:</strong> IWDG เมื่อเริ่มทำงานแล้ว <strong>ไม่สามารถหยุดได้</strong> ด้วยซอฟต์แวร์ — เป็นข้อจำกัดระดับ hardware การรีเซ็ตหรือ power cycle เท่านั้นที่หยุด IWDG ได้
+</div>
+
+<div class="callout callout-warn">
+    <strong>IWDG_ClearResetFlag()</strong> เคลียร์ทุก reset flag (power-on, external reset, IWDG, WWDG, software, low-power) — ไม่ใช่แค่ IWDG
+</div>
+</section>
+
+<section>
+<h2>ตัวอย่างโค้ด</h2>
+
+<h3>Basic Watchdog — timeout 2 วินาที</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    IWDG_SimpleInit(2000);  // ถ้าไม่ feed ภายใน 2 วินาที → รีเซ็ต
+
+    pinMode(PC0, PIN_MODE_OUTPUT);
+
+    while (1) {
+        digitalToggle(PC0);   // กระพริบ LED
+        Delay_Ms(500);        // yield() → feed IWDG อัตโนมัติ
+    }
+}</code></pre>
+
+<h3>ตรวจจับสาเหตุการรีเซ็ต</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    if (IWDG_WasResetCause()) {
+        // รีเซ็ตล่าสุดเกิดจาก watchdog → ระบบค้างก่อนหน้า
+        IWDG_ClearResetFlag();
+        // แจ้งเตือน, บันทึก log, หรือกู้คืนสถานะ
+    }
+
+    IWDG_SimpleInit(1000);
+
+    while (1) {
+        // ทำงานปกติ
+        IWDG_Feed();  // ให้อาหารเอง ไม่พึ่ง yield()
+        Delay_Ms(100);
+    }
+}</code></pre>
+
+<h3>ตั้งค่าด้วยตนเอง — timeout 500ms</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    IWDG_Init(IWDG_PRESCALER_64, 312);  // ~500ms
+    // หรือคำนวณด้วย macro:
+    // uint16_t reload = IWDG_CALC_RELOAD(500, IWDG_PRESCALER_64);
+
+    while (1) {
+        // ทำงาน...
+        IWDG_Feed();
+    }
+}</code></pre>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="wwdg.html">SimpleWWDG →</a>
+</nav>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

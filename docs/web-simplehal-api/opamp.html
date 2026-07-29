@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SimpleOPAMP — Operational Amplifier | SimpleHAL API Reference</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+</head>
+<body>
+
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+</nav>
+
+<h1>SimpleOPAMP — Operational Amplifier</h1>
+<span class="level level-expert">ระดับผู้เชี่ยวชาญ</span>
+
+<div class="callout callout-note">
+    <strong>ไลบรารี:</strong> <code>SimpleHAL.h</code> — ใช้ <strong>ไม่ต้อง include ไฟล์ย่อยเอง</strong> ทุกฟังก์ชัน OPAMP รวมอยู่ใน SimpleHAL.h แล้ว
+</div>
+
+<section>
+<h2>ภาพรวม</h2>
+<p>CH32V003 มี <strong>Operational Amplifier (OPAMP)</strong> ภายใน 1 ตัว — ใช้ขยายสัญญาณอนาล็อก เปรียบเทียบแรงดัน โดยไม่ต้องใช้ IC ภายนอก</p>
+<ul>
+    <li><strong>4 โหมดการทำงาน:</strong> Voltage Follower, Non-Inverting, Inverting, Comparator</li>
+    <li><strong>2 input channels:</strong> CHP0/CHP1 (ขาบวก), CHN0/CHN1 (ขาลบ)</li>
+    <li><strong>Output:</strong> อ่านผ่าน ADC หรือใช้เป็น digital output (comparator mode)</li>
+</ul>
+
+<div class="callout callout-warn">
+    <strong>ต้องใช้ตัวต้านทานภายนอก:</strong> โหมด Non-Inverting และ Inverting <strong>ต้องต่อ R ภายนอก</strong> เพื่อกำหนด gain — OPAMP ภายในไม่มี R feedback ในตัว
+</div>
+</section>
+
+<section>
+<h2>โหมดการทำงาน</h2>
+
+<table>
+<thead><tr><th>โหมด</th><th>Gain</th><th>สูตร</th><th>ใช้เมื่อ</th></tr></thead>
+<tbody>
+<tr>
+    <td><code>OPAMP_VOLTAGE_FOLLOWER</code></td>
+    <td>1</td>
+    <td>Vout = Vin</td>
+    <td>Buffer สัญญาณ, impedance matching</td>
+</tr>
+<tr>
+    <td><code>OPAMP_NON_INVERTING</code></td>
+    <td>>1</td>
+    <td>Vout = Vin * (1 + R1/R2)</td>
+    <td>ขยายสัญญาณเฟสไม่กลับ</td>
+</tr>
+<tr>
+    <td><code>OPAMP_INVERTING</code></td>
+    <td><0</td>
+    <td>Vout = -Vin * (R2/R1)</td>
+    <td>ขยายสัญญาณกลับเฟส</td>
+</tr>
+<tr>
+    <td><code>OPAMP_COMPARATOR</code></td>
+    <td>∞ (digital)</td>
+    <td>Vout = HIGH if Vin+ > Vin-</td>
+    <td>เปรียบเทียบแรงดันสองสัญญาณ</td>
+</tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>วงจรแต่ละโหมด</h2>
+
+<h3>Voltage Follower (gain = 1)</h3>
+<pre class="ascii-circuit">
+    Vin ──────┬──► CHPx (OPAMP +)
+              │
+              └────────┐
+                   ┌───┴───┐
+                   │ OPAMP │────► Vout → ADC
+                   └───┬───┘
+                       │
+                       └──► CHNx (OPAMP -) [ต่อตรงกับ output]
+</pre>
+<p>ใช้ buffer สัญญาณ — input impedance สูง output impedance ต่ำ</p>
+
+<h3>Non-Inverting (gain > 1)</h3>
+<pre class="ascii-circuit">
+    Vin ────────────► CHPx (OPAMP +)
+
+                    R1
+              ┌───[====]───┐
+              │            │
+              │   ┌───┴───┐│
+              └───┤ OPAMP ├┴───► Vout
+                  └───┬───┘
+                      │
+              ┌───[====]───┤ GND
+              │    R2      │
+              └──► CHNx ◄──┘
+</pre>
+<p>Gain = 1 + R1/R2 — output ไม่กลับเฟส</p>
+
+<h3>Inverting (gain < 0)</h3>
+<pre class="ascii-circuit">
+    Vin ──[ R1 ]──┬──► CHNx (OPAMP -)
+                  │
+              ┌───┴───┐
+              │       │
+    GND ──────┤ OPAMP ├───► Vout
+              │       │
+              └───┬───┘
+                  │
+                  └──[ R2 ]──┘ (feedback)
+</pre>
+<p>Gain = -(R2/R1) — output กลับเฟส</p>
+
+<h3>Comparator</h3>
+<pre class="ascii-circuit">
+    Vin+ ─────► CHPx (OPAMP +)
+                          ┌───┐
+    Vin- ─────► CHNx ─────┤   ├──► Vout (digital HIGH/LOW)
+                          └───┘
+</pre>
+<p>Vin+ > Vin- → HIGH, Vin+ < Vin- → LOW — ไม่ต้องใช้ R ภายนอก</p>
+</section>
+
+<section>
+<h2>ตารางอ้างอิงฟังก์ชัน</h2>
+<table>
+<thead>
+<tr><th>ฟังก์ชัน</th><th>พารามิเตอร์</th><th>คืนค่า</th><th>คำอธิบาย</th></tr>
+</thead>
+<tbody>
+<tr>
+    <td><code>OPAMP_SimpleInit(mode)</code></td>
+    <td><code>mode</code>: OPAMP_VOLTAGE_FOLLOWER / OPAMP_COMPARATOR</td>
+    <td><code>void</code></td>
+    <td>เริ่ม OPAMP แบบง่าย — ใช้ channel 0 ทั้งคู่</td>
+</tr>
+<tr>
+    <td><code>OPAMP_Enable()</code></td>
+    <td>—</td>
+    <td><code>void</code></td>
+    <td>เปิด OPAMP</td>
+</tr>
+<tr>
+    <td><code>OPAMP_Disable()</code></td>
+    <td>—</td>
+    <td><code>void</code></td>
+    <td>ปิด OPAMP (ประหยัดพลังงาน)</td>
+</tr>
+<tr>
+    <td><code>OPAMP_SetMode(mode)</code></td>
+    <td><code>mode</code>: OPAMP_*</td>
+    <td><code>void</code></td>
+    <td>เปลี่ยนโหมดขณะทำงาน</td>
+</tr>
+<tr>
+    <td><code>OPAMP_Init(pos_ch, neg_ch)</code></td>
+    <td><code>pos_ch</code>: OPAMP_CHP0/OPAMP_CHP1<br><code>neg_ch</code>: OPAMP_CHN0/OPAMP_CHN1</td>
+    <td><code>void</code></td>
+    <td>เริ่ม OPAMP + เลือก channel เอง</td>
+</tr>
+<tr>
+    <td><code>OPAMP_ConfigVoltageFollower(pos)</code></td>
+    <td><code>pos</code>: OPAMP_CHP0/OPAMP_CHP1</td>
+    <td><code>void</code></td>
+    <td>ตั้งโหมด voltage follower</td>
+</tr>
+<tr>
+    <td><code>OPAMP_ConfigNonInverting(pos, neg)</code></td>
+    <td><code>pos</code>: OPAMP_CHP*<br><code>neg</code>: OPAMP_CHN*</td>
+    <td><code>void</code></td>
+    <td>ตั้งโหมด non-inverting</td>
+</tr>
+<tr>
+    <td><code>OPAMP_ConfigInverting(pos, neg)</code></td>
+    <td><code>pos</code>: OPAMP_CHP*<br><code>neg</code>: OPAMP_CHN*</td>
+    <td><code>void</code></td>
+    <td>ตั้งโหมด inverting</td>
+</tr>
+<tr>
+    <td><code>OPAMP_ConfigComparator(pos, neg)</code></td>
+    <td><code>pos</code>: OPAMP_CHP*<br><code>neg</code>: OPAMP_CHN*</td>
+    <td><code>void</code></td>
+    <td>ตั้งโหมด comparator</td>
+</tr>
+<tr>
+    <td><code>OPAMP_SetChannels(pos, neg)</code></td>
+    <td><code>pos</code>: OPAMP_CHP*<br><code>neg</code>: OPAMP_CHN*</td>
+    <td><code>void</code></td>
+    <td>เปลี่ยน channel โดยไม่เปลี่ยนโหมด</td>
+</tr>
+<tr>
+    <td><code>OPAMP_CalculateGainNonInv(r1, r2)</code></td>
+    <td><code>r1</code>, <code>r2</code>: R ภายนอก (ohm)</td>
+    <td><code>float</code></td>
+    <td>คำนวณ gain = 1 + R1/R2</td>
+</tr>
+<tr>
+    <td><code>OPAMP_CalculateGainInv(r1, r2)</code></td>
+    <td><code>r1</code>, <code>r2</code>: R ภายนอก (ohm)</td>
+    <td><code>float</code></td>
+    <td>คำนวณ gain = -(R2/R1)</td>
+</tr>
+<tr>
+    <td><code>OPAMP_CalculateR2NonInv(r1, gain)</code></td>
+    <td><code>r1</code>: ohm, <code>gain</code>: >1</td>
+    <td><code>uint32_t</code></td>
+    <td>คำนวณ R2 จาก R1 และ gain ที่ต้องการ</td>
+</tr>
+<tr>
+    <td><code>OPAMP_CalculateR2Inv(r1, gain)</code></td>
+    <td><code>r1</code>: ohm, <code>gain</code>: magnitude</td>
+    <td><code>uint32_t</code></td>
+    <td>คำนวณ R2 จาก R1 และ gain magnitude</td>
+</tr>
+<tr>
+    <td><code>OPAMP_IsEnabled()</code></td>
+    <td>—</td>
+    <td><code>uint8_t</code> (1/0)</td>
+    <td>ตรวจสอบ OPAMP เปิดอยู่หรือไม่</td>
+</tr>
+<tr>
+    <td><code>OPAMP_GetConfig()</code></td>
+    <td>—</td>
+    <td><code>uint32_t</code></td>
+    <td>อ่านค่า configuration register ปัจจุบัน</td>
+</tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>การอ่าน Output ผ่าน ADC</h2>
+<p>OPAMP output ต่อเข้ากับ ADC channel ภายใน — อ่านค่าด้วย <code>analogRead()</code> หรือ <code>ADC_Read()</code></p>
+<pre><code class="language-c">OPAMP_ConfigVoltageFollower(OPAMP_CHP0);
+OPAMP_Enable();
+
+uint16_t output = analogRead(ADC_OPAMP);  // อ่าน output OPAMP</code></pre>
+</section>
+
+<section>
+<h2>ตัวอย่างโค้ด</h2>
+
+<h3>Voltage Follower — Buffer สัญญาณ</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    // Buffer สัญญาณจาก CHP0 — output = input
+    OPAMP_ConfigVoltageFollower(OPAMP_CHP0);
+    OPAMP_Enable();
+
+    while (1) {
+        uint16_t val = analogRead(ADC_OPAMP);
+        Delay_Ms(100);
+    }
+}</code></pre>
+
+<h3>Non-Inverting — ขยาย x2</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    // R1 = 10kΩ, R2 = 10kΩ → gain = 1 + 10k/10k = 2
+    OPAMP_ConfigNonInverting(OPAMP_CHP0, OPAMP_CHN0);
+    OPAMP_Enable();
+    // ต่อ R1=10k ระหว่าง output กับ CHN0
+    // ต่อ R2=10k ระหว่าง CHN0 กับ GND
+
+    float gain = OPAMP_CalculateGainNonInv(10000, 10000); // 2.0
+    (void)gain;
+
+    while (1) {
+        uint16_t val = analogRead(ADC_OPAMP);
+        Delay_Ms(100);
+    }
+}</code></pre>
+
+<h3>Comparator — ตรวจจับแรงดันเกิน threshold</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    pinMode(PC0, PIN_MODE_OUTPUT);
+
+    // CHP0 = สัญญาณที่ต้องการวัด, CHN0 = แรงดันอ้างอิง
+    OPAMP_ConfigComparator(OPAMP_CHP0, OPAMP_CHN0);
+    OPAMP_Enable();
+
+    while (1) {
+        // อ่าน output digital (HIGH = CHP0 > CHN0)
+        uint16_t result = analogRead(ADC_OPAMP);
+        if (result > 512) {
+            digitalWrite(PC0, HIGH);  // เกิน threshold
+        } else {
+            digitalWrite(PC0, LOW);
+        }
+        Delay_Ms(10);
+    }
+}</code></pre>
+</section>
+
+<section>
+<h2>Channel Map</h2>
+<table>
+<thead><tr><th>Channel</th><th>ชื่อ</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>OPAMP_CHP0</code></td><td>Positive Input 0</td><td>ขาบวก channel 0</td></tr>
+<tr><td><code>OPAMP_CHP1</code></td><td>Positive Input 1</td><td>ขาบวก channel 1</td></tr>
+<tr><td><code>OPAMP_CHN0</code></td><td>Negative Input 0</td><td>ขาลบ channel 0</td></tr>
+<tr><td><code>OPAMP_CHN1</code></td><td>Negative Input 1</td><td>ขาลบ channel 1</td></tr>
+</tbody>
+</table>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="pwr.html">SimplePWR →</a>
+</nav>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

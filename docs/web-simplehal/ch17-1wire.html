@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>บทที่ 17: 1-Wire — DS18B20 และอุปกรณ์ One-Wire</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+</head>
+<body>
+
+<nav class="top-nav">
+    <a href="ch16-wwdg.html">&larr; บทที่ 16: WWDG</a>
+    <a href="index.html">&#x1f3e0; สารบัญ</a>
+    <a href="ch18-pwr.html">บทที่ 18: Power Management &rarr;</a>
+</nav>
+
+<h1>บทที่ 17: 1-Wire — DS18B20 และอุปกรณ์ One-Wire</h1>
+<span class="level level-advanced">ระดับสูง</span>
+
+<section>
+    <h2>สิ่งที่ต้องรู้ก่อน</h2>
+    <ul>
+        <li><a href="ch03-delay.html">บทที่ 3: Delay</a> (timing-critical! ต้องแม่นยำ microsecond)</li>
+        <li><a href="ch01-first-steps.html">บทที่ 1: USART</a> (แสดงผลอุณหภูมิ)</li>
+    </ul>
+</section>
+
+<section>
+    <h2>อุปกรณ์ที่ต้องใช้</h2>
+    <ul>
+        <li>CH32V003 Dev Board</li>
+        <li>DS18B20 เซนเซอร์อุณหภูมิ</li>
+        <li>ตัวต้านทาน 4.7k&Omega; pull-up</li>
+        <li>Breadboard + สายไฟ</li>
+    </ul>
+</section>
+
+<section>
+    <h2>ทำไมต้องใช้?</h2>
+    <p>DS18B20 เป็นเซนเซอร์อุณหภูมิยอดนิยม — ใช้สายเดียวต่อได้หลายตัว, กันน้ำ, แม่นยำ ±0.5&deg;C</p>
+</section>
+
+<section>
+    <h2>Flowchart การทำงาน</h2>
+    <div class="flowchart">
+        <pre class="mermaid">
+flowchart TD
+    A["OneWire_Init(pin)"] --> B["OneWire_Reset()"]
+    B --> C{"มี device?"}
+    C -->|"ไม่มี"| D["แสดง error"]
+    C -->|"มี"| E["SkipROM / MatchROM"]
+    E --> F["ส่งคำสั่ง Convert T (0x44)"]
+    F --> G["รอ 750ms"]
+    G --> H["อ่าน Scratchpad (0xBE)"]
+    H --> I["ตรวจ CRC"]
+    I --> J{"CRC OK?"}
+    J -->|"OK"| K["แปลง raw → °C"]
+    J -->|"Error"| L["อ่านใหม่"]
+        </pre>
+    </div>
+</section>
+
+<section>
+    <h2>การต่อวงจร</h2>
+    <table class="wiring-table">
+        <tr><th>CH32V003</th><th>การเชื่อมต่อ</th><th>DS18B20</th></tr>
+        <tr><td>GPIO (เช่น PA1)</td><td>→ data</td><td>DQ (ขากลาง)</td></tr>
+        <tr><td>VDD (3.3V)</td><td>→ power</td><td>VDD</td></tr>
+        <tr><td>GND</td><td>→ ground</td><td>GND</td></tr>
+        <tr><td>VDD</td><td>→ 4.7k&Omega; →</td><td>DQ</td></tr>
+    </table>
+    <div class="callout callout-warn">
+        <strong>สำคัญ:</strong> ตัวต้านทาน pull-up 4.7k&Omega; ระหว่าง DQ กับ VDD <strong>จำเป็น</strong> — ถ้าไม่มี bus จะไม่ทำงาน
+    </div>
+</section>
+
+<section>
+    <h2>Timing Constraints</h2>
+    <table>
+        <tr><th>Operation</th><th>Timing</th><th>หมายเหตุ</th></tr>
+        <tr><td>Reset pulse</td><td>480µs</td><td>Disable interrupts ~790µs</td></tr>
+        <tr><td>Write 0</td><td>60µs</td><td>Pull low</td></tr>
+        <tr><td>Write 1</td><td>10µs</td><td>Short low pulse</td></tr>
+        <tr><td>Read sample</td><td>~12µs</td><td>After falling edge</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th></tr>
+        <tr><td><code>OneWire_Init(pin)</code></td><td>เริ่มต้น 1-Wire bus บน pin ที่กำหนด</td></tr>
+        <tr><td><code>OneWire_Reset()</code></td><td>ส่ง reset pulse ตรวจ presence</td></tr>
+        <tr><td><code>OneWire_WriteByte(data)</code></td><td>เขียน 1 ไบต์ไปยัง bus</td></tr>
+        <tr><td><code>OneWire_ReadByte()</code></td><td>อ่าน 1 ไบต์จาก bus</td></tr>
+        <tr><td><code>OneWire_SkipROM()</code></td><td>SkipROM — ส่งคำสั่งถึงทุก device</td></tr>
+        <tr><td><code>OneWire_ReadROM()</code></td><td>อ่าน 64-bit ROM address</td></tr>
+        <tr><td><code>OneWire_MatchROM(addr)</code></td><td>เลือก device ตาม ROM address</td></tr>
+        <tr><td><code>OneWire_Select(addr)</code></td><td>เลือก device (Reset + MatchROM)</td></tr>
+        <tr><td><code>OneWire_ResetSearch()</code></td><td>เริ่มค้นหา device ทั้งหมดบน bus</td></tr>
+        <tr><td><code>OneWire_Search(addr)</code></td><td>ค้นหา device ถัดไป (คืน 1 เมื่อพบ)</td></tr>
+        <tr><td><code>OneWire_AlarmSearch(addr)</code></td><td>ค้นหา device ที่มี alarm ตั้งไว้</td></tr>
+        <tr><td><code>OneWire_GetAddress(idx)</code></td><td>ดึง ROM address ของ device ลำดับที่ idx</td></tr>
+        <tr><td><code>OneWire_WriteBit(bit)</code></td><td>เขียน 1 bit</td></tr>
+        <tr><td><code>OneWire_ReadBit()</code></td><td>อ่าน 1 bit</td></tr>
+        <tr><td><code>OneWire_WriteBytes(data, len)</code></td><td>เขียนหลายไบต์</td></tr>
+        <tr><td><code>OneWire_ReadBytes(buf, len)</code></td><td>อ่านหลายไบต์</td></tr>
+        <tr><td><code>OneWire_CRC8(data, len)</code></td><td>คำนวณ CRC8</td></tr>
+        <tr><td><code>OneWire_VerifyCRC(data, len)</code></td><td>ตรวจสอบ CRC8 ของข้อมูล</td></tr>
+        <tr><td><code>OneWire_Depower()</code></td><td>ปล่อย bus (parasite power mode)</td></tr>
+        <tr><td><code>OneWire_GetBusByPin(pin)</code></td><td>ดึง bus struct จาก pin</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>ขั้นตอนอ่าน DS18B20 (Step by Step)</h2>
+    <div class="step">
+        <h3>1. Reset + Presence Check</h3>
+        <p><code>OneWire_Reset()</code> — ตรวจสอบว่ามี device ต่ออยู่หรือไม่</p>
+    </div>
+    <div class="step">
+        <h3>2. SkipROM / MatchROM</h3>
+        <p><code>OneWire_SkipROM()</code> (อุปกรณ์ตัวเดียว) หรือ <code>OneWire_MatchROM(addr)</code> (หลายตัว)</p>
+    </div>
+    <div class="step">
+        <h3>3. Convert T (0x44)</h3>
+        <p><code>OneWire_WriteByte(0x44)</code> — สั่งให้เซนเซอร์วัดอุณหภูมิ</p>
+    </div>
+    <div class="step">
+        <h3>4. รอ 750ms</h3>
+        <p><code>Delay_Ms(750)</code> — เวลาที่เซนเซอร์ใช้ในการแปลงค่า</p>
+    </div>
+    <div class="step">
+        <h3>5. Read Scratchpad (0xBE)</h3>
+        <p>อ่าน 9 ไบต์ — ไบต์ 0-1 = raw temperature</p>
+    </div>
+    <div class="step">
+        <h3>6. CRC Verify</h3>
+        <p><code>OneWire_VerifyCRC(buf, 9)</code> — ตรวจสอบความถูกต้อง</p>
+    </div>
+    <div class="step">
+        <h3>7. แปลงค่า</h3>
+        <p><code>temp = (int16_t)(raw[1] &lt;&lt; 8 | raw[0]) / 16.0f</code></p>
+    </div>
+</section>
+
+<section>
+    <h2>ระดับขั้นต้น: Single DS18B20 อ่านอุณหภูมิ</h2>
+    <pre><code class="language-c">#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(USART_115200);
+
+    OneWire_Init(GPIOA, GPIO_Pin_1);
+
+    while (1) {
+        if (!OneWire_Reset()) {
+            printf("No DS18B20 found!\r\n");
+            Delay_Ms(1000);
+            continue;
+        }
+
+        OneWire_SkipROM();
+        OneWire_WriteByte(0x44); // Convert T
+        Delay_Ms(750);
+
+        if (!OneWire_Reset()) {
+            printf("Device lost!\r\n");
+            continue;
+        }
+
+        OneWire_SkipROM();
+        OneWire_WriteByte(0xBE); // Read Scratchpad
+
+        uint8_t raw[9];
+        for (uint8_t i = 0; i < 9; i++) {
+            raw[i] = OneWire_ReadByte();
+        }
+
+        if (!OneWire_VerifyCRC(raw, 9)) {
+            printf("CRC error, retrying...\r\n");
+            continue;
+        }
+
+        int16_t temp_raw = (raw[1] << 8) | raw[0];
+        float temp_c = temp_raw / 16.0f;
+        printf("Temperature: %.2f °C\r\n", temp_c);
+        Delay_Ms(1000);
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>ระดับขั้นกลาง: Multi-device Scan — ค้นหา ROM ทุกตัว</h2>
+    <div class="approach">
+        <strong>แนวคิด:</strong> ใช้ OneWire_Search ค้นหา ROM address ของทุก device บน bus แล้วอ่านแต่ละตัวด้วย MatchROM
+    </div>
+    <pre><code class="language-c">#include "SimpleHAL.h"
+
+#define MAX_DEVICES 4
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(USART_115200);
+    OneWire_Init(GPIOA, GPIO_Pin_1);
+
+    uint8_t roms[MAX_DEVICES][8];
+    uint8_t count = 0;
+
+    OneWire_ResetSearch();
+    while (count < MAX_DEVICES && OneWire_Search(roms[count])) {
+        printf("Device %d: ", count + 1);
+        for (uint8_t i = 0; i < 8; i++) {
+            printf("%02X", roms[count][i]);
+        }
+        printf("\r\n");
+        count++;
+    }
+    printf("Found %d device(s)\r\n", count);
+
+    while (1) {
+        for (uint8_t i = 0; i < count; i++) {
+            OneWire_Select(roms[i]);
+            OneWire_WriteByte(0x44); // Convert T
+
+            Delay_Ms(750);
+
+            OneWire_Select(roms[i]);
+            OneWire_WriteByte(0xBE);
+
+            uint8_t raw[9];
+            for (uint8_t j = 0; j < 9; j++) {
+                raw[j] = OneWire_ReadByte();
+            }
+
+            if (OneWire_VerifyCRC(raw, 9)) {
+                int16_t t = (raw[1] << 8) | raw[0];
+                printf("Sensor %d: %.2f °C\r\n", i + 1, t / 16.0f);
+            }
+        }
+        Delay_Ms(2000);
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>ระดับขั้นสูง: Simultaneous Conversion — ประหยัดเวลารอ</h2>
+    <div class="approach">
+        <strong>แนวคิด:</strong> ใช้ SkipROM + Convert T broadcast สั่งให้ทุกเซนเซอร์วัดพร้อมกัน — รอแค่ครั้งเดียว — แล้วอ่านแต่ละตัว — ประหยัดเวลา N&times;750ms
+    </div>
+    <pre><code class="language-c">#include "SimpleHAL.h"
+
+#define MAX_DEVICES 4
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(USART_115200);
+    OneWire_Init(GPIOA, GPIO_Pin_1);
+
+    uint8_t roms[MAX_DEVICES][8];
+    uint8_t count = 0;
+
+    OneWire_ResetSearch();
+    while (count < MAX_DEVICES && OneWire_Search(roms[count])) count++;
+
+    printf("Found %d devices\r\n", count);
+
+    while (1) {
+        // Broadcast Convert T to ALL devices
+        OneWire_Reset();
+        OneWire_SkipROM();
+        OneWire_WriteByte(0x44);
+
+        // รอครั้งเดียว! (แทน N×750ms)
+        Delay_Ms(750);
+
+        // อ่านแต่ละตัว
+        for (uint8_t i = 0; i < count; i++) {
+            OneWire_Select(roms[i]);
+            OneWire_WriteByte(0xBE);
+
+            uint8_t raw[9];
+            for (uint8_t j = 0; j < 9; j++) {
+                raw[j] = OneWire_ReadByte();
+            }
+
+            if (OneWire_VerifyCRC(raw, 9)) {
+                int16_t t = (raw[1] << 8) | raw[0];
+                printf("S%d: %.2f°C  ", i + 1, t / 16.0f);
+            }
+        }
+        printf("\r\n");
+        Delay_Ms(2000);
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>อาการ</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>Reset ไม่พบ device</td><td>ไม่มี pull-up resistor</td><td>ต่อ 4.7k&Omega; ระหว่าง DQ กับ VDD</td></tr>
+        <tr><td>CRC error บ่อย</td><td>สายยาวเกินไป / noise</td><td>ใช้สายสั้น, ลด noise, ใช้ shielded cable</td></tr>
+        <tr><td>อ่านได้ตัวเดียว</td><td>ใช้ SkipROM (ส่งถึงทุกตัว)</td><td>ใช้ MatchROM สำหรับ multi-device</td></tr>
+        <tr><td>อุณหภูมิผิด</td><td>Resolution default 9-bit</td><td>เปลี่ยน resolution เป็น 12-bit</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>คำถามที่พบบ่อย (FAQ)</h2>
+    <h3>ต่อ DS18B20 แบบ Parasite Power ได้ไหม?</h3>
+    <p>ได้ — ใช้แค่ 2 สาย (DQ + GND, VDD ต่อ GND) — แต่ต้องใช้ strong pull-up ระหว่าง conversion</p>
+    <h3>ต่อ DS18B20 ได้กี่ตัวบน bus เดียว?</h3>
+    <p>หลายสิบตัวบน bus เดียว (มี unique 64-bit ROM address) — ทุกตัวใช้ data line ร่วมกัน</p>
+    <h3>สายยาวสุดเท่าไหร่?</h3>
+    <p>~100 เมตร ด้วย 2.2k&Omega; pull-up — สายยาวมากกว่าใช้ shielded cable</p>
+</section>
+
+<section>
+    <h2>ลองทำดู (แบบฝึกหัด)</h2>
+    <ol>
+        <li>อ่านอุณหภูมิจาก DS18B20 ตัวเดียว — แสดงผลผ่าน USART</li>
+        <li>ต่อ DS18B20 2 ตัวบน bus เดียว — อ่านอุณหภูมิแยกแต่ละตัว</li>
+        <li>ใช้ Simultaneous Conversion — วัดอุณหภูมิ 3 ตัวพร้อมกัน</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="ch16-wwdg.html">&larr; บทที่ 16: WWDG</a>
+    <a href="index.html">&#x1f3e0; สารบัญ</a>
+    <a href="ch18-pwr.html">บทที่ 18: Power Management &rarr;</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:false,theme:'base'});mermaid.run();</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

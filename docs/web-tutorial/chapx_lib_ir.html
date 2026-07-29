@@ -49,7 +49,20 @@ flowchart TD
         <tr><td>GND</td><td>→</td><td>VS1838B</td><td>GND</td><td></td></tr>
       </tbody>
     </table>
-    <p>VS1838B: OUT=LOW เมื่อเจอ IR, Carrier: 38kHz</p></section>
+    <p>VS1838B: OUT=LOW เมื่อเจอ IR, Carrier: 38kHz</p>
+    <h3>รู้จักขา</h3>
+    <ul>
+      <li><strong>OUT:</strong> ขาสัญญาณ ต่อกับ PC3 (อินพุต) — LOW เมื่อเจอ IR 38kHz</li>
+      <li><strong>VCC:</strong> ไฟเลี้ยง 3.3V</li>
+      <li><strong>GND:</strong> ต่อกราวด์ร่วมกับ MCU</li>
+    </ul>
+    <h3>วิธีต่อทีละขั้น</h3>
+    <ol>
+      <li>ต่อ <strong>PC3</strong> ไป <strong>OUT ของ VS1838B</strong> — รับสัญญาณ IR</li>
+      <li>ต่อ <strong>3.3V</strong> ไป <strong>VCC ของ VS1838B</strong> — จ่ายไฟ</li>
+      <li>ต่อ <strong>GND</strong> ไป <strong>GND ของ VS1838B</strong> — กราวด์ร่วม</li>
+    </ol>
+</section>
 
 <section><h2>📚 หลักการทำงาน</h2>
 <p><strong>NEC Protocol</strong> เป็นโปรโตคอล IR remote control — IR_ReceiverInit() ตั้งขารับ, IR_Process() ประมวลผล, IR_GetCode() คืนค่า 32-bit code</p></section>

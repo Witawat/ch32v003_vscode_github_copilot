@@ -56,6 +56,21 @@ flowchart LR
   </tbody>
 </table>
 
+<h4>รู้จักขา</h4>
+<ul>
+  <li><strong>PD2 (PWM1_CH1):</strong> ขาออก PWM สัญญาณความถี่ 1kHz ปรับความสว่าง LED</li>
+  <li><strong>R 220Ω:</strong> ตัวต้านทานจำกัดกระแส ต่อระหว่าง PD2 กับ LED</li>
+  <li><strong>LED แอโนด:</strong> ขาบวก (+) ขายาว รับสัญญาณ PWM จาก R 220Ω</li>
+  <li><strong>LED แคโทด:</strong> ขาลบ (-) ขาสั้น ต่อลง GND</li>
+</ul>
+
+<h4>วิธีต่อทีละขั้น</h4>
+<ol>
+  <li>ต่อ <strong>PD2 (PWM1_CH1)</strong> ไป <strong>R 220Ω</strong> ขา 1 — ส่งสัญญาณ PWM</li>
+  <li>ต่อ <strong>R 220Ω</strong> ขา 2 ไป <strong>LED แอโนด</strong> (ขายาว) — จำกัดกระแส</li>
+  <li>ต่อ <strong>LED แคโทด</strong> (ขาสั้น) ไป <strong>GND</strong> — ครบวงจร</li>
+</ol>
+
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">
 flowchart TD
@@ -140,6 +155,22 @@ int main(void)
   </tbody>
 </table>
 
+<h4>รู้จักขา</h4>
+<ul>
+  <li><strong>PD2 (PWM1_CH1):</strong> ขาส่งสัญญาณ PWM 50Hz ไปยัง Servo สายส้ม (Signal)</li>
+  <li><strong>Servo SG90 (VCC):</strong> สายแดง ต่อกับ +5V ภายนอก — ห้ามใช้ 3.3V จาก MCU</li>
+  <li><strong>Servo SG90 (GND):</strong> สายน้ำตาล ต่อ GND ร่วมกับ MCU</li>
+  <li><strong>แหล่งจ่าย 5V:</strong> แยกต่างหาก — Servo กินกระแส ~250mA</li>
+</ul>
+
+<h4>วิธีต่อทีละขั้น</h4>
+<ol>
+  <li>ต่อ <strong>PD2</strong> ไป <strong>Servo สายส้ม (Signal)</strong> — ส่ง PWM 50Hz ควบคุมมุม</li>
+  <li>ต่อ <strong>Servo สายแดง (VCC)</strong> ไป <strong>+5V ภายนอก</strong> — จ่ายไฟเลี้ยง Servo</li>
+  <li>ต่อ <strong>Servo สายน้ำตาล (GND)</strong> ไป <strong>GND MCU</strong> — ใช้วงจรร่วมกัน</li>
+  <li>ต่อ <strong>GND แหล่งจ่าย 5V</strong> ไป <strong>GND MCU</strong> — common ground</li>
+</ol>
+
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">
 flowchart TD
@@ -222,6 +253,21 @@ int main(void)
     <tr><td>LED2</td><td>→</td><td>GND</td><td>แคโทด</td><td>—</td></tr>
   </tbody>
 </table>
+
+<h4>รู้จักขา</h4>
+<ul>
+  <li><strong>PD2 (PWM1_CH1):</strong> TIM1 ความถี่ 50Hz — fade LED1</li>
+  <li><strong>PA1 (PWM1_CH2):</strong> TIM1 เดียวกัน 50Hz — ควบคุม Servo</li>
+  <li><strong>PC0 (PWM2_CH3):</strong> TIM2 แยกอิสระ 1kHz — blink LED2</li>
+  <li><strong>R 220Ω (×2):</strong> จำกัดกระแส LED1 และ LED2</li>
+</ul>
+
+<h4>วิธีต่อทีละขั้น</h4>
+<ol>
+  <li>ต่อ <strong>PD2</strong> → <strong>R 220Ω</strong> → <strong>LED1 แอโนด</strong>, LED1 แคโทด → GND — fade</li>
+  <li>ต่อ <strong>PA1</strong> → <strong>Servo สายส้ม (Signal)</strong>, VCC→5V, GND รวม — ควบคุมมุม</li>
+  <li>ต่อ <strong>PC0</strong> → <strong>R 220Ω</strong> → <strong>LED2 แอโนด</strong>, LED2 แคโทด → GND — blink</li>
+</ol>
 
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">
@@ -394,6 +440,23 @@ int main(void)
     <tr><td>2N2222 (Emitter)</td><td>→</td><td>GND</td><td>E</td><td>—</td></tr>
   </tbody>
 </table>
+
+<h4>รู้จักขา</h4>
+<ul>
+  <li><strong>PD2 (PWM1_CH1):</strong> ขาออก PWM 500Hz-4kHz duty 50% ไปขับ 2N2222</li>
+  <li><strong>R 1kΩ:</strong> ตัวต้านทานจำกัดกระแสที่ Base ของทรานซิสเตอร์</li>
+  <li><strong>2N2222 (BJT):</strong> ทรานซิสเตอร์ NPN สำหรับขับ Buzzer ที่กินกระแสเกิน 8mA</li>
+  <li><strong>Piezo Buzzer:</strong> Passive buzzer (ไม่มี oscillator) — ต้องใช้ PWM สร้างเสียง</li>
+</ul>
+
+<h4>วิธีต่อทีละขั้น</h4>
+<ol>
+  <li>ต่อ <strong>PD2</strong> ไป <strong>R 1kΩ</strong> → <strong>2N2222 Base (B)</strong> — สัญญาณ PWM ขับ transistor</li>
+  <li>ต่อ <strong>2N2222 Collector (C)</strong> ไป <strong>Piezo Buzzer (-)</strong></li>
+  <li>ต่อ <strong>Piezo Buzzer (+)</strong> ไป <strong>VCC 5V</strong> — จ่ายไฟให้ buzzer</li>
+  <li>ต่อ <strong>2N2222 Emitter (E)</strong> ไป <strong>GND</strong> — ครบวงจร</li>
+  <li>ต่อ <strong>GND แหล่งจ่าย 5V</strong> ร่วมกับ <strong>GND MCU</strong></li>
+</ol>
 
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">
@@ -636,6 +699,24 @@ int main(void) {
     <tr><td>GND</td><td>↔</td><td>USB-Serial GND</td><td>GND</td><td>Common ground</td></tr>
   </tbody>
 </table>
+
+<h4>รู้จักขา</h4>
+<ul>
+  <li><strong>PD2 (ADC_IN2):</strong> ขาอ่านค่า analog จาก Potentiometer (wiper)</li>
+  <li><strong>PC0 (PWM2_CH3):</strong> ขาออก PWM ควบคุมความสว่าง LED ตามค่า ADC</li>
+  <li><strong>Potentiometer:</strong> ตัวต้านทานปรับค่าได้ 3 ขา — VCC, GND, wiper ต่อ PD2</li>
+  <li><strong>R 220Ω:</strong> จำกัดกระแส LED ที่ PC0</li>
+  <li><strong>PD5/PD6:</strong> USART แสดงค่า ADC และ Duty</li>
+</ul>
+
+<h4>วิธีต่อทีละขั้น</h4>
+<ol>
+  <li>ต่อ <strong>Potentiometer ขาบน</strong> ไป <strong>VCC (3.3V)</strong></li>
+  <li>ต่อ <strong>Potentiometer ขาล่าง</strong> ไป <strong>GND</strong></li>
+  <li>ต่อ <strong>Potentiometer ขากลาง (wiper)</strong> ไป <strong>PD2 (ADC_IN2)</strong> — อ่านค่า 0-3.3V</li>
+  <li>ต่อ <strong>PC0</strong> → <strong>R 220Ω</strong> → <strong>LED แอโนด</strong>, LED แคโทด → GND — PWM output</li>
+  <li>ต่อสาย USART: PD5 → USB RX, PD6 → USB TX, GND รวม</li>
+</ol>
 
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">

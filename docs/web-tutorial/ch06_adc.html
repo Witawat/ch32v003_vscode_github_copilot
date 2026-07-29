@@ -65,6 +65,19 @@ flowchart TD
       </tbody>
     </table>
 
+    <h3>รู้จักขา</h3>
+    <ul>
+      <li><strong>PD2 (ADC_CH3):</strong> ขาอ่านอนาล็อก — ต่อ Potentiometer หรือ Voltage Divider</li>
+      <li><strong>PD3 (ADC_CH4):</strong> ขาอ่านอนาล็อก — ต่อ NTC Thermistor</li>
+    </ul>
+
+    <h3>วิธีต่อทีละขั้น</h3>
+    <ol>
+      <li>ต่อ <strong>Potentiometer 10kΩ</strong> — ขาบน → 3.3V, ขาล่าง → GND, ขากลาง (wiper) → PD2</li>
+      <li>ต่อ <strong>NTC 10kΩ + R 10kΩ</strong> เป็น Voltage Divider — 3.3V → NTC → PD3 → R → GND</li>
+      <li>ต่อ <strong>Battery Monitor</strong> — แบต +4.2V → R 10kΩ → PD2 → R 10kΩ → GND (หารแรงดัน 2:1)</li>
+    </ol>
+
     <p><strong>Voltage Divider แบตเตอรี่:</strong> R บน 10k + R ล่าง 10k = ratio 2:1 — 4.2V input → 2.1V ที่ ADC pin (ปลอดภัยสำหรับ 3.3V MCU)</p>
 </section>
 

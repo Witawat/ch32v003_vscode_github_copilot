@@ -42,7 +42,24 @@ flowchart TD
         <tr><td>GND</td><td>→</td><td>Rotary Encoder</td><td>GND</td><td></td></tr>
       </tbody>
     </table>
-    <p>Rotary Encoder มาตรฐานมี 3 ขา (CLK, DT, SW) — CLK/DT สร้างสัญญาณ quadrature — SW เป็นปุ่มในตัว</p></section>
+    <p>Rotary Encoder มาตรฐานมี 3 ขา (CLK, DT, SW) — CLK/DT สร้างสัญญาณ quadrature — SW เป็นปุ่มในตัว</p>
+    <h3>รู้จักขา</h3>
+    <ul>
+      <li><strong>CLK (A):</strong> สัญญาณ quadrature ต่อกับ PC0</li>
+      <li><strong>DT (B):</strong> สัญญาณ quadrature (เฟสห่าง 90°) ต่อกับ PC1</li>
+      <li><strong>SW:</strong> ปุ่มกดในตัว ต่อกับ PC2</li>
+      <li><strong>VCC:</strong> ไฟเลี้ยง 3.3V</li>
+      <li><strong>GND:</strong> ต่อกราวด์ร่วมกับ MCU</li>
+    </ul>
+    <h3>วิธีต่อทีละขั้น</h3>
+    <ol>
+      <li>ต่อ <strong>PC0</strong> ไป <strong>CLK</strong> — รับสัญญาณ quadrature ช่อง A</li>
+      <li>ต่อ <strong>PC1</strong> ไป <strong>DT</strong> — รับสัญญาณ quadrature ช่อง B</li>
+      <li>ต่อ <strong>PC2</strong> ไป <strong>SW</strong> — อ่านปุ่มกดในตัว (ใช้ internal pull-up)</li>
+      <li>ต่อ <strong>3.3V</strong> ไป <strong>VCC</strong> — จ่ายไฟ</li>
+      <li>ต่อ <strong>GND</strong> ไป <strong>GND</strong> — กราวด์ร่วม</li>
+    </ol>
+</section>
 
 <section><h2>📚 หลักการทำงาน</h2>
 <p><strong>Quadrature Decoding:</strong> CLK และ DT มีเฟสห่างกัน 90° — เมื่อหมุนตามเข็ม (CW) CLK จะนำ DT — เมื่อหมุนทวนเข็ม (CCW) DT จะนำ CLK — ตรวจจับ edge การเปลี่ยนแปลงเพื่อนับ step</p>

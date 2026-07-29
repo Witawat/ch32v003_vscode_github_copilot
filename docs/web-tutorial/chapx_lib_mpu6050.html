@@ -52,7 +52,30 @@ flowchart TD
         <tr><td>GND</td><td>→</td><td>GND</td><td>-</td><td>กราวด์ร่วม; AD0→GND=0x68, AD0→VCC=0x69</td></tr>
         <tr><td>PC3</td><td>←</td><td>INT</td><td>-</td><td>optional — data ready interrupt</td></tr>
       </tbody>
-    </table>
+     </table>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>VCC:</strong> ไฟเลี้ยง 3.3V</li>
+  <li><strong>GND:</strong> กราวด์</li>
+  <li><strong>SDA (PC1):</strong> สายข้อมูล I2C</li>
+  <li><strong>SCL (PC2):</strong> สายนาฬิกา I2C</li>
+  <li><strong>AD0:</strong> เลือก I2C address — GND=0x68, VCC=0x69</li>
+  <li><strong>INT (PC3):</strong> ขา interrupt แจ้ง data ready (optional)</li>
+  <li><strong>XDA/XCL:</strong> สาย I2C สำหรับต่อเซนเซอร์ภายนอก (pass-through, ไม่ต้องใช้ถ้ามีแค่ MPU6050)</li>
+  <li><strong>pull-up 4.7kΩ:</strong> ต่อระหว่าง SDA→3.3V และ SCL→3.3V (โมดูลส่วนมากมีในตัว)</li>
+</ul>
+
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>VCC</strong> ของ MPU6050 ไป <strong>3.3V</strong></li>
+  <li>ต่อ <strong>GND</strong> ของ MPU6050 ไป <strong>GND</strong></li>
+  <li>ต่อ <strong>SDA</strong> ของ MPU6050 ไป <strong>PC1 (ขา 13)</strong> ของ CH32V003</li>
+  <li>ต่อ <strong>SCL</strong> ของ MPU6050 ไป <strong>PC2 (ขา 14)</strong> ของ CH32V003</li>
+  <li>ต่อ <strong>AD0</strong> ไป <strong>GND</strong> เพื่อใช้ address 0x68 (หรือ VCC=0x69)</li>
+  <li>(optional) ต่อ <strong>INT</strong> ไป <strong>PC3</strong> เพื่อรับสัญญาณ data ready interrupt</li>
+  <li>ตรวจสอบว่าโมดูลมี R pull-up 4.7kΩ ในตัวหรือไม่ — ถ้าไม่มี ต่อ R เพิ่มจาก SDA→3.3V และ SCL→3.3V</li>
+</ol>
+
     <p>PC1─SDA, PC2─SCL — AD0=GND → addr 0x68 — INT (PC3) optional สำหรับ interrupt แจ้ง data ready — ใช้ 3.3V</p>
 </section>
 

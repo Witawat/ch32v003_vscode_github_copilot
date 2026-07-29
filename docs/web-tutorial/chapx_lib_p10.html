@@ -57,6 +57,31 @@ flowchart TD
     <tr><td>GND</td><td>↔</td><td>P10 LED Panel</td><td>GND</td><td>กราวด์ร่วม</td></tr>
   </tbody>
 </table>
+
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>A (PC0):</strong> เลือกแถวบน P10 บิต 0</li>
+  <li><strong>B (PC1):</strong> เลือกแถวบน P10 บิต 1</li>
+  <li><strong>CLK (PC2):</strong> สัญญาณนาฬิกาเลื่อนข้อมูลเข้าชิฟต์รีจิสเตอร์</li>
+  <li><strong>SCLK (PC3):</strong> สัญญาณล็อคข้อมูลออกสู่ขาแสดงผล</li>
+  <li><strong>R1 (PC4):</strong> ข้อมูลสีแดงของ LED แต่ละดวง</li>
+  <li><strong>OE (PC5):</strong> สั่งให้ LED สว่าง (Active LOW = สว่าง)</li>
+  <li><strong>VCC (5V):</strong> จ่ายไฟ 5V กระแส 2A+ แยกจาก MCU</li>
+  <li><strong>GND:</strong> กราวด์ร่วม P10 กับ MCU</li>
+</ul>
+
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PC0</strong> ไป <strong>A ของ P10</strong> — เลือกแถวที่ 1</li>
+  <li>ต่อ <strong>PC1</strong> ไป <strong>B ของ P10</strong> — เลือกแถวที่ 2</li>
+  <li>ต่อ <strong>PC2</strong> ไป <strong>CLK ของ P10</strong> — ป้อนนาฬิกาชิฟต์รีจิสเตอร์</li>
+  <li>ต่อ <strong>PC3</strong> ไป <strong>SCLK ของ P10</strong> — ล็อคข้อมูลออกจอ</li>
+  <li>ต่อ <strong>PC4</strong> ไป <strong>R1 ของ P10</strong> — ส่งข้อมูลสีแดง</li>
+  <li>ต่อ <strong>PC5</strong> ไป <strong>OE ของ P10</strong> — เปิดให้ LED ติด</li>
+  <li>ต่อ <strong>แหล่งจ่าย 5V 2A+</strong> ไป <strong>VCC ของ P10</strong> — จ่ายไฟแยกจาก MCU</li>
+  <li>ต่อ <strong>GND</strong> จากแหล่งจ่ายและ MCU ไป <strong>GND ของ P10</strong> — กราวด์ร่วม</li>
+</ol>
+
     <p>P10 ต้องใช้ external 5V 2A+ จ่ายไฟ — CH32V003 ใช้ 3.3V logic — ใช้ config struct กำหนดขา</p>
 </section>
 <section>

@@ -256,6 +256,21 @@ RAM:    420  / 2048  bytes  (20%)  [Free: 1628  bytes]</code></pre>
       </tbody>
     </table>
 
+    <h3>รู้จักขา</h3>
+    <ul>
+      <li><strong>PC0 (Pin 12):</strong> ขาสัญญาณออก — ควบคุม LED (HIGH = ติด, LOW = ดับ)</li>
+      <li><strong>VDD (Pin 5):</strong> ขาไฟเลี้ยง 3.3V — ต่อกับแหล่งจ่ายไฟ</li>
+      <li><strong>GND (Pin 4):</strong> ขากราวด์ — ต่อร่วมกับ GND ของแหล่งจ่าย</li>
+    </ul>
+
+    <h3>วิธีต่อทีละขั้น</h3>
+    <ol>
+      <li>ต่อ <strong>R 220Ω</strong> ระหว่าง <strong>PC0 (Pin 12)</strong> กับ <strong>LED ขาบวก (Anode)</strong> — จำกัดกระแสไม่ให้ LED ไหม้</li>
+      <li>ต่อ <strong>LED ขาลบ (Cathode)</strong> ไป <strong>GND</strong> — ครบวงจรให้ LED ทำงาน</li>
+      <li>ต่อ <strong>VDD (Pin 5)</strong> ไป <strong>3.3V</strong> — จ่ายไฟให้ MCU</li>
+      <li>ต่อ <strong>GND (Pin 4)</strong> ไป <strong>GND</strong> — กราวด์ร่วม</li>
+    </ol>
+
     <h3>การต่อ WCH-Link สำหรับแฟลช</h3>
     <pre class="ascii-circuit">
     WCH-Link                    CH32V003
@@ -280,6 +295,20 @@ RAM:    420  / 2048  bytes  (20%)  [Free: 1628  bytes]</code></pre>
         <tr><td>SWIO</td><td>↔</td><td>PD1</td><td>Pin 7</td><td>SWD data สำหรับแฟลช</td></tr>
       </tbody>
     </table>
+
+    <h3>รู้จักขา</h3>
+    <ul>
+      <li><strong>3.3V (WCH-Link):</strong> จ่ายไฟ 3.3V ให้ MCU — ไม่ต้องใช้ไฟเลี้ยงแยก</li>
+      <li><strong>GND (WCH-Link):</strong> กราวด์ร่วมระหว่าง WCH-Link กับ MCU</li>
+      <li><strong>SWIO (WCH-Link):</strong> สายข้อมูลสำหรับแฟลชโปรแกรม — ต่อกับ PD1 (Pin 7)</li>
+    </ul>
+
+    <h3>วิธีต่อทีละขั้น</h3>
+    <ol>
+      <li>ต่อ <strong>3.3V (WCH-Link)</strong> ไป <strong>VDD (Pin 5)</strong> — WCH-Link จ่ายไฟให้ MCU</li>
+      <li>ต่อ <strong>GND (WCH-Link)</strong> ไป <strong>GND (Pin 4)</strong> — กราวด์ร่วมกัน</li>
+      <li>ต่อ <strong>SWIO (WCH-Link)</strong> ไป <strong>PD1 (Pin 7)</strong> — สายข้อมูลสำหรับอัปโหลด</li>
+    </ol>
 
     <div class="callout callout-warn">
         <strong>⚠️ คำเตือน:</strong>

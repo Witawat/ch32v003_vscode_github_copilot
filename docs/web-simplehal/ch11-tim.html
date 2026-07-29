@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>บทที่ 11: Hardware Timer — Periodic Interrupt — SimpleHAL</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+</head>
+<body>
+
+<nav class="top-nav">
+    <a href="ch10-opamp.html">← บทที่ 10: OPAMP</a>
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch12-tim-ext.html">บทที่ 12: Stopwatch & Countdown →</a>
+</nav>
+
+<h1>บทที่ 11: Hardware Timer — Periodic Interrupt</h1>
+<span class="level level-advanced">ขั้นสูง</span>
+
+<section class="flowchart">
+    <h2>🧭 แผนภาพการทำงาน</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["TIM_SimpleInit()"] --> B["TIM_AttachInterrupt()"]
+    B --> C["TIM_Start()"]
+    C --> D["Callback ทำงานอัตโนมัติ"]
+    D --> E{"ทำอะไร?"}
+    E -->|"Toggle"| F["LED กระพริบ"]
+    E -->|"Scheduler"| G["Multi-rate tasks"]
+    E -->|"Capture"| H["วัด Pulse Width"]
+    </pre>
+</section>
+
+<section>
+    <h2>📋 สิ่งที่ต้องรู้ก่อน</h2>
+    <ul>
+        <li><a href="ch03-delay.html">บทที่ 3: Delay</a> — เข้าใจความแตกต่างระหว่าง blocking (Delay) กับ non-blocking (Timer interrupt)</li>
+    </ul>
+</section>
+
+<section>
+    <h2>📦 อุปกรณ์ที่ต้องใช้</h2>
+    <ul>
+        <li>CH32V003 Dev Board</li>
+        <li>LED + ตัวต้านทาน 220Ω</li>
+    </ul>
+</section>
+
+<section>
+    <h2>🤔 ทำไมต้องใช้?</h2>
+    <p>Hardware Timer ให้คุณทำงานตามจังหวะที่แม่นยำระดับ hardware — ไม่ต้องใช้ <code>Delay_Ms()</code> แบบ blocking ที่หยุดโปรแกรมทั้งหมด ใช้สร้าง <strong>scheduler</strong>, <strong>multi-rate tasks</strong>, <strong>PWM alternative timing</strong>, หรือ <strong>input capture</strong> สำหรับวัดความถี่สัญญาณ</p>
+</section>
+
+<section>
+    <h2>📚 Timer Instances</h2>
+    <table>
+        <thead><tr><th>Timer</th><th>ประเภท</th><th>Channel</th><th>หมายเหตุ</th></tr></thead>
+        <tbody>
+            <tr><td>TIM_1</td><td>Advanced</td><td>4 channels</td><td>รองรับ PWM, complementary output</td></tr>
+            <tr><td>TIM_2</td><td>General</td><td>2 channels</td><td>ใช้เป็น Timer หรือ PWM ได้</td></tr>
+        </tbody>
+    </table>
+</section>
+
+<section>
+    <h2>🔒 Timer Resource Guard</h2>
+    <p>SimpleHAL มีระบบป้องกันการแย่งใช้ Timer ตัวเดียวกัน — ตรวจสอบผ่าน global variable:</p>
+    <table>
+        <thead><tr><th>ค่า</th><th>ความหมาย</th></tr></thead>
+        <tbody>
+            <tr><td><code>TIM_OWNER_NONE</code></td><td>Timer ยังไม่มีใครใช้</td></tr>
+            <tr><td><code>TIM_OWNER_PWM</code></td><td>Timer ถูกใช้โดย PWM module</td></tr>
+            <tr><td><code>TIM_OWNER_TIMER</code></td><td>Timer ถูกใช้โดย SimpleTIM (บทนี้)</td></tr>
+            <tr><td><code>TIM_OWNER_TIMEXT</code></td><td>Timer ถูกใช้โดย Stopwatch/Countdown (<a href="ch12-tim-ext.html">บทที่ 12</a>)</td></tr>
+        </tbody>
+    </table>
+    <div class="callout callout-warn">
+        <strong>สำคัญ:</strong> ถ้า PWM ใช้ TIM_1 อยู่แล้ว จะเรียก <code>TIM_SimpleInit(TIM_1)</code> ไม่ได้ — ต้องใช้ TIM_2 หรือแก้ไขการตั้งค่า PWM
+    </div>
+</section>
+
+<section>
+    <h2>📋 API Reference</h2>
+    <table>
+        <thead><tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr></thead>
+        <tbody>
+            <tr><td><code>TIM_SimpleInit(timer)</code></td><td>เริ่มต้น timer สำหรับ periodic interrupt</td><td><code>TIM_SimpleInit(TIM_2);</code></td></tr>
+            <tr><td><code>TIM_Start(timer)</code></td><td>เริ่มนับ timer</td><td><code>TIM_Start(TIM_2);</code></td></tr>
+            <tr><td><code>TIM_Stop(timer)</code></td><td>หยุดนับ timer</td><td><code>TIM_Stop(TIM_2);</code></td></tr>
+            <tr><td><code>TIM_SetFrequency(timer, freq)</code></td><td>ตั้งความถี่ interrupt (Hz)</td><td><code>TIM_SetFrequency(TIM_2, 1000); // 1kHz</code></td></tr>
+            <tr><td><code>TIM_AttachInterrupt(timer, callback)</code></td><td>ผูก callback function กับ timer interrupt</td><td><code>TIM_AttachInterrupt(TIM_2, onTick);</code></td></tr>
+            <tr><td><code>TIM_DetachInterrupt(timer)</code></td><td>ยกเลิก callback</td><td><code>TIM_DetachInterrupt(TIM_2);</code></td></tr>
+            <tr><td><code>Simple_TIM_GetCounter(timer)</code></td><td>อ่านค่า counter ปัจจุบัน</td><td><code>uint32_t cnt = Simple_TIM_GetCounter(TIM_2);</code></td></tr>
+            <tr><td><code>Simple_TIM_SetCounter(timer, val)</code></td><td>ตั้งค่า counter ใหม่</td><td><code>Simple_TIM_SetCounter(TIM_2, 0);</code></td></tr>
+            <tr><td><code>TIM_GetPeriod(timer)</code></td><td>อ่านค่า period (auto-reload)</td><td><code>uint32_t per = TIM_GetPeriod(TIM_2);</code></td></tr>
+            <tr><td><code>TIM_SetMode(timer, mode)</code></td><td>เปลี่ยนโหมด timer</td><td><code>TIM_SetMode(TIM_2, TIM_MODE_UP);</code></td></tr>
+            <tr><td><code>TIM_AdvancedInit(timer, config)</code></td><td>ตั้งค่า timer แบบละเอียด</td><td><code>TIM_AdvancedInit(TIM_1, &cfg);</code></td></tr>
+            <tr><td><code>TIM_SetPrescaler(timer, psc)</code></td><td>ตั้งค่า prescaler</td><td><code>TIM_SetPrescaler(TIM_2, 4800);</code></td></tr>
+            <tr><td><code>TIM_GenerateUpdate(timer)</code></td><td>สร้าง update event ด้วย software</td><td><code>TIM_GenerateUpdate(TIM_2);</code></td></tr>
+        </tbody>
+    </table>
+
+    <div class="callout callout-note">
+        <strong>สูตรความถี่:</strong><br>
+        <code>Freq = 48MHz / (prescaler + 1) / (period + 1)</code><br>
+        ตัวอย่าง: 1kHz = 48,000,000 / (4800) / (10) ⇒ prescaler=4799, period=9
+    </div>
+</section>
+
+<section>
+    <h2>💻 เขียน Code ทีละขั้น</h2>
+
+    <div class="step">
+        <h3>ขั้นที่ 1: Include + ประกาศ Callback</h3>
+        <pre><code class="language-c">#include "simplehal.h"
+
+volatile uint32_t tick_count = 0;
+
+void onTimerTick(void) {
+    tick_count++;  // ทำงานใน ISR — ต้องสั้นและเร็ว
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();</code></pre>
+        <p class="explain">🔍 <code>volatile</code> สำคัญ — ตัวแปรที่แก้ไขใน ISR ต้องประกาศเป็น volatile เสมอ เพื่อป้องกัน compiler optimize ทิ้ง</p>
+    </div>
+
+    <div class="step">
+        <h3>ขั้นที่ 2: ตั้งค่า Timer + ผูก Callback</h3>
+        <pre><code class="language-c">    TIM_SimpleInit(TIM_2);
+    TIM_SetFrequency(TIM_2, 1000);        // 1kHz = 1000 interrupts/วินาที
+    TIM_AttachInterrupt(TIM_2, onTimerTick);
+    TIM_Start(TIM_2);</code></pre>
+        <p class="explain">🔍 <code>TIM_SetFrequency</code> จะคำนวณ prescaler และ period ให้อัตโนมัติจาก clock 48MHz</p>
+    </div>
+
+    <div class="step">
+        <h3>ขั้นที่ 3: Main Loop — ทำงานพร้อมจังหวะ Timer</h3>
+        <pre><code class="language-c">    pinMode(PA1, PIN_MODE_OUTPUT);
+
+    while (1) {
+        // LED toggle ทุก 500ms (tick_count ถูกเพิ่มใน ISR)
+        if (tick_count >= 500) {
+            tick_count = 0;
+            digitalToggle(PA1);
+        }
+        // CPU ว่างทำงานอย่างอื่นได้ตลอดเวลา
+    }</code></pre>
+        <p class="explain">🔍 main loop ไม่เคยถูกบล็อก — ตรวจสอบ flag/tick แทนการใช้ Delay แตกต่างจาก <code>Delay_Ms(500)</code> แบบ blocking อย่างสิ้นเชิง</p>
+    </div>
+</section>
+
+<section>
+    <h2>🟢 ตัวอย่างขั้นต้น</h2>
+    <p>LED กระพริบด้วย Timer Interrupt — ตั้ง Timer 2Hz → toggle ทุก interrupt = LED กระพริบ 1Hz</p>
+    <pre><code class="language-c">#include "simplehal.h"
+
+void onTimerTick(void) {
+    digitalToggle(PA1);  // toggle โดยตรงใน ISR — ทำงานเร็วมาก
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    pinMode(PA1, PIN_MODE_OUTPUT);
+
+    TIM_SimpleInit(TIM_2);
+    TIM_SetFrequency(TIM_2, 2);  // 2Hz = toggle LED 1Hz
+    TIM_AttachInterrupt(TIM_2, onTimerTick);
+    TIM_Start(TIM_2);
+
+    while (1) {
+        // CPU idle — ทำอะไรก็ได้
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>🟡 ตัวอย่างขั้นกลาง</h2>
+    <div class="approach">
+        <strong>แนวคิด:</strong> Simple Scheduler — 1kHz tick → ทุก 100ms อ่าน ADC, ทุก 1s heartbeat LED
+    </div>
+    <pre><code class="language-c">#include "simplehal.h"
+
+volatile uint32_t ticks = 0;
+
+void tick_isr(void) {
+    ticks++;
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(USART_115200);
+    ADC_SimpleInit();
+
+    pinMode(PA1, PIN_MODE_OUTPUT);
+
+    TIM_SimpleInit(TIM_2);
+    TIM_SetFrequency(TIM_2, 1000);  // 1kHz base tick
+    TIM_AttachInterrupt(TIM_2, tick_isr);
+    TIM_Start(TIM_2);
+
+    uint32_t last_adc = 0, last_hb = 0;
+
+    while (1) {
+        uint32_t now = ticks;
+
+        // Task 1: อ่าน ADC ทุก 100ms
+        if (now - last_adc >= 100) {
+            last_adc = now;
+            uint16_t val = ADC_Read(PA2);
+            printf("ADC: %u\r\n", val);
+        }
+
+        // Task 2: Heartbeat LED ทุก 1000ms
+        if (now - last_hb >= 1000) {
+            last_hb = now;
+            digitalToggle(PA1);
+        }
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>🔴 ตัวอย่างขั้นสูง</h2>
+    <div class="approach">
+        <strong>แนวคิด:</strong> Input Capture — วัด pulse width ด้วย TIM2 free-running @1MHz + GPIO interrupt
+    </div>
+    <pre><code class="language-c">#include "simplehal.h"
+
+volatile uint32_t pulse_start = 0;
+volatile uint32_t pulse_width = 0;
+
+void onRisingEdge(void) {
+    pulse_start = Simple_TIM_GetCounter(TIM_2);  // จับเวลา start
+}
+
+void onFallingEdge(void) {
+    uint32_t now = Simple_TIM_GetCounter(TIM_2);
+    pulse_width = now - pulse_start;  // คำนวณความกว้างพัลส์
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(USART_115200);
+
+    // TIM2 free-running @ 1MHz (1 tick = 1μs)
+    TIM_SimpleInit(TIM_2);
+    TIM_SetFrequency(TIM_2, 1000000);
+    TIM_Start(TIM_2);
+
+    // ตั้ง PC1 เป็น input + attach interrupt
+    pinMode(PC1, PIN_MODE_INPUT_PULLUP);
+    attachInterrupt(PC1, onRisingEdge, RISING);
+    // เปลี่ยน edge ใน callback — หรือใช้ทั้งสองขา
+
+    while (1) {
+        if (pulse_width > 0) {
+            printf("Pulse width: %lu us\r\n", pulse_width);
+            pulse_width = 0;
+        }
+        Delay_Ms(500);
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <thead><tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr></thead>
+        <tbody>
+            <tr>
+                <td>PWM กับ Timer ชนกัน</td>
+                <td>ใช้ TIM_1 ทั้ง PWM และ Timer interrupt พร้อมกัน</td>
+                <td>ใช้คนละ timer — PWM ใช้ TIM_1, Timer ใช้ TIM_2</td>
+            </tr>
+            <tr>
+                <td>Callback ทำงานนานเกินไป</td>
+                <td>วนลูป หรือ print ใน ISR — ทำให้ ISR ใช้เวลานาน ระบบสะดุด</td>
+                <td>ISR ควรสั้นที่สุด — ใช้ flag ให้ main loop จัดการ</td>
+            </tr>
+            <tr>
+                <td>ตั้งความถี่ต่ำมาก ๆ ไม่ได้</td>
+                <td>Prescaler มีค่า max 65535 — ความถี่ต่ำสุด = 48M/65536/65536 ≈ 0.011Hz</td>
+                <td>ใช้ software counter ใน ISR แทน — นับ tick จนครบแล้วค่อยทำงาน</td>
+            </tr>
+            <tr>
+                <td>tick overflow หลังทำงานนาน</td>
+                <td>uint32_t ms จะ overflow ที่ ~49.7 วัน</td>
+                <td>ใช้ subtraction ในการเปรียบเทียบเวลา: <code>if (now - last >= interval)</code> — overflow-safe</td>
+            </tr>
+        </tbody>
+    </table>
+</section>
+
+<section>
+    <h2>💡 FAQ</h2>
+    <p><strong>Q: SimpleTIM ต่างจาก SimpleDelay อย่างไร?</strong><br>
+    A: <strong>SimpleTIM</strong> ใช้ hardware timer interrupt — โปรแกรมไม่หยุด, <strong>SimpleDelay</strong> ใช้ SysTick busy-wait — โปรแกรมหยุดรอ การเลือกใช้ขึ้นกับงาน: ถ้าต้องการ non-blocking ใช้ SimpleTIM</p>
+
+    <p><strong>Q: TIM_1 กับ TIM_2 ต่างกันอย่างไร?</strong><br>
+    A: ทั้งคู่ใช้ API เดียวกัน — ต่างกันที่ hardware: TIM_1 เป็น Advanced timer (4 channels, complementary output), TIM_2 เป็น General purpose (2 channels) — สำหรับ periodic interrupt ใช้ตัวไหนก็ได้</p>
+
+    <p><strong>Q: เปลี่ยนความถี่ Timer ระหว่างรันได้ไหม?</strong><br>
+    A: ได้ — เรียก <code>TIM_Stop()</code> → <code>TIM_SetFrequency()</code> → <code>TIM_Start()</code> ใหม่</p>
+</section>
+
+<section>
+    <h2>✏️ ลองทำดู <a href="ch11_answers.html" class="ans-link">[เฉลย]</a></h2>
+    <ol>
+        <li><strong>LED blink 5Hz ด้วย timer</strong> — ตั้ง TIM_2 ที่ 10Hz, toggle LED ใน ISR ทุกครั้ง → LED กระพริบ 5Hz</li>
+        <li><strong>2-task scheduler</strong> — Task A อ่าน ADC ทุก 50ms, Task B print uptime ทุก 2s — ใช้ ticks counter จาก 1kHz timer</li>
+        <li><strong>วัดระยะเวลากดปุ่ม</strong> — TIM2 free-running @ 100kHz, GPIO interrupt จับ rising/falling edge → วัด duration เป็น μs</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch10-opamp.html">บทที่ 10: OPAMP</a>
+    <a href="ch12-tim-ext.html">บทที่ 12: Stopwatch & Countdown →</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

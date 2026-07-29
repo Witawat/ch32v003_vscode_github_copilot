@@ -60,6 +60,17 @@ flowchart TD
       </tbody>
     </table>
     <p>Active Buzzer: ต่อ GPIO ขาไหนก็ได้ — Passive Buzzer: ต้องต่อกับขา PWM (PC4=TIM1_CH4 หรือ PC3=TIM1_CH3)</p>
+    <h3>รู้จักขา</h3>
+    <ul>
+      <li><strong>Buzzer (+):</strong> ขาบวก ต่อกับสัญญาณ (Active→PC0 GPIO, Passive→PC4 PWM)</li>
+      <li><strong>Buzzer (−):</strong> ขาลบ ต่อ GND</li>
+    </ul>
+    <h3>วิธีต่อทีละขั้น</h3>
+    <ol>
+      <li>ต่อ <strong>PC0</strong> ไป <strong>ขา (+) ของ Active Buzzer</strong> — สั่งเปิด/ปิดเสียง</li>
+      <li>ต่อ <strong>GND</strong> ไป <strong>ขา (−) ของ Buzzer</strong> — กราวด์ร่วม</li>
+      <li><strong>ถ้าบัซเซอร์กินไฟเกิน 8mA:</strong> ต่อ NPN transistor (BC547) — PC0→R 1kΩ→Base, Collector→Buzzer(−), Emitter→GND</li>
+    </ol>
 </section>
 
 <section>

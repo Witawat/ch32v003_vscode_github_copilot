@@ -45,7 +45,24 @@ flowchart TD
         <tr><td>White</td><td>→</td><td>HX711</td><td>A−</td><td>Signal− (Channel A)</td></tr>
       </tbody>
     </table>
-    <p>HX711 เป็น ADC 24-bit สำหรับ Load Cell โดยเฉพาะ — ใช้สาย 2 เส้น (DT/SCK) สื่อสารแบบ Bit-Bang — Gain 128 (Ch A) หรือ 64 (Ch B)</p></section>
+    <p>HX711 เป็น ADC 24-bit สำหรับ Load Cell โดยเฉพาะ — ใช้สาย 2 เส้น (DT/SCK) สื่อสารแบบ Bit-Bang — Gain 128 (Ch A) หรือ 64 (Ch B)</p>
+    <h3>รู้จักขา</h3>
+    <ul>
+      <li><strong>DT (Data):</strong> ขาสื่อสารข้อมูลแบบ bit-bang (อ่าน/เขียน)</li>
+      <li><strong>SCK (Clock):</strong> ขารับพัลส์นาฬิกา</li>
+      <li><strong>VCC:</strong> จ่ายไฟ 3.3V</li>
+      <li><strong>GND:</strong> Ground ร่วม</li>
+      <li><strong>E+/E− (Load Cell):</strong> จ่ายไฟ excite ให้ bridge — ต่อสายแดง/ดำ</li>
+      <li><strong>A+/A− (Load Cell):</strong> สัญญาณ differential จาก bridge — ต่อสายเขียว/ขาว</li>
+    </ul>
+    <h3>วิธีต่อทีละขั้น</h3>
+    <ol>
+      <li>ต่อ <strong>DT</strong> ไป <strong>PC1 (GPIO)</strong> และ <strong>SCK</strong> ไป <strong>PC0 (GPIO)</strong> — สื่อสารข้อมูล</li>
+      <li>ต่อ <strong>VCC</strong> ไป <strong>3.3V</strong> และ <strong>GND</strong> ไป <strong>GND</strong> — จ่ายไฟ</li>
+      <li>ต่อ <strong>E+</strong> (สายแดง) และ <strong>E−</strong> (สายดำ) จาก Load Cell — จ่าย excite</li>
+      <li>ต่อ <strong>A+</strong> (สายเขียว) และ <strong>A−</strong> (สายขาว) จาก Load Cell — อ่านสัญญาณ</li>
+    </ol>
+</section>
 <section><h2>📚 หลักการทำงาน</h2><p><strong>HX711</strong> เป็น Precision 24-bit Analog-to-Digital Converter ออกแบบมาสำหรับ Load Cell (Wheatstone Bridge) — มี PGA (Programmable Gain Amplifier) ในตัว — Gain 128 สำหรับ Channel A</p><p><strong>Load Cell</strong> เป็น Wheatstone Bridge — เมื่อมีแรงกด → ความต้านทานเปลี่ยน → แรงดัน differential เปลี่ยน (mV level) — HX711 ขยายและแปลงเป็น digital 24-bit</p><p><strong>Tare (Zeroing):</strong> น้ำหนักเปล่า (ภาชนะ/ถาด) จะให้ค่า raw offset — Tare = เก็บ offset ไว้ → Weight = (Raw - Offset) / Calibration_Factor</p><p><strong>Calibration:</strong> ใช้ตุ้มน้ำหนักที่ทราบค่า (เช่น 100g) → Cal_Factor = (Raw_with_weight - Raw_empty) / Known_Weight</p></section>
 <section><h2>💻 เขียน Code ทีละขั้น</h2>
 <div class="step"><h3>ขั้นที่ 1: Init HX711 + Set Gain</h3><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20

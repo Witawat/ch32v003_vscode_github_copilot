@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>บทที่ 5: I2C — สื่อสารกับ Sensor และ EEPROM</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+</head>
+<body>
+
+<nav class="top-nav">
+    <a href="ch04-usart.html">&larr; บทที่ 4: USART</a>
+    <a href="index.html">&#x1f3e0; สารบัญ</a>
+    <a href="ch06-i2c-soft.html">บทที่ 6: Software I2C &rarr;</a>
+</nav>
+
+<h1>บทที่ 5: I2C — สื่อสารกับ Sensor และ EEPROM</h1>
+<span class="level level-intermediate">ระดับกลาง</span>
+
+<section>
+    <h2>สิ่งที่ต้องรู้ก่อน</h2>
+    <ul>
+        <li><a href="ch04-usart.html">บทที่ 4: USART</a> (debug print)</li>
+        <li><a href="ch02-gpio.html">บทที่ 2: GPIO</a></li>
+    </ul>
+</section>
+
+<section>
+    <h2>อุปกรณ์ที่ต้องใช้</h2>
+    <ul>
+        <li>CH32V003 Dev Board</li>
+        <li>ตัวต้านทาน 4.7k&Omega; &times; 2 (pull-up)</li>
+        <li>เซนเซอร์ I2C ใด ๆ (MPU6050, BH1750, OLED)</li>
+    </ul>
+</section>
+
+<section>
+    <h2>ทำไมต้องใช้?</h2>
+    <p>เซนเซอร์ส่วนใหญ่ใช้ I2C — อ่านอุณหภูมิ ความเร่ง แสง จอ OLED — ใช้แค่ 2 สายเท่านั้น</p>
+</section>
+
+<section>
+    <h2>Flowchart การทำงาน</h2>
+    <div class="flowchart">
+        <pre class="mermaid">
+flowchart TD
+    A["I2C_SimpleInit()"] --> B["มีอุปกรณ์ไหม?"]
+    B -->|"สแกน"| C["I2C_Scan()"]
+    B -->|"เช็ค"| D["I2C_IsDeviceReady()"]
+    C --> E["อ่าน/เขียน Register"]
+    D --> E
+    E --> F["I2C_ReadReg / I2C_WriteReg"]
+    F --> G["ข้อมูลพร้อมใช้งาน"]
+        </pre>
+    </div>
+</section>
+
+<section>
+    <h2>การตั้งค่า Pin</h2>
+    <table>
+        <tr><th>ชื่อ Config</th><th>SCL</th><th>SDA</th></tr>
+        <tr><td>I2C_PINS_DEFAULT</td><td>PC2</td><td>PC1</td></tr>
+        <tr><td>I2C_PINS_REMAP</td><td>PD0</td><td>PD1</td></tr>
+        <tr><td>I2C_PINS_PARTIAL_REMAP</td><td>PD0</td><td>PD1</td></tr>
+    </table>
+    <div class="callout callout-warn">
+        <strong>สำคัญ:</strong> SOP-8 ใช้ได้เฉพาะ DEFAULT เท่านั้น ต้องต่อตัวต้านทาน pull-up 4.7k&Omega; ภายนอก
+    </div>
+</section>
+
+<section>
+    <h2>API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th></tr>
+        <tr><td><code>I2C_SimpleInit()</code></td><td>เริ่มต้น I2C hardware</td></tr>
+        <tr><td><code>I2C_Write()</code></td><td>เขียนข้อมูลไปยัง device</td></tr>
+        <tr><td><code>I2C_Read()</code></td><td>อ่านข้อมูลจาก device</td></tr>
+        <tr><td><code>I2C_WriteReg()</code></td><td>เขียนค่า register</td></tr>
+        <tr><td><code>I2C_ReadReg()</code></td><td>อ่านค่า register</td></tr>
+        <tr><td><code>I2C_TryReadReg()</code></td><td>ลองอ่าน register (มี error handling)</td></tr>
+        <tr><td><code>I2C_WriteRegMulti()</code></td><td>เขียนหลาย register ต่อเนื่อง</td></tr>
+        <tr><td><code>I2C_ReadRegMulti()</code></td><td>อ่านหลาย register ต่อเนื่อง</td></tr>
+        <tr><td><code>I2C_Scan()</code></td><td>สแกนหา device บน bus</td></tr>
+        <tr><td><code>I2C_IsDeviceReady()</code></td><td>ตรวจสอบว่า device พร้อมหรือไม่</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>Status Codes</h2>
+    <table>
+        <tr><th>รหัส</th><th>ความหมาย</th></tr>
+        <tr><td><code>I2C_OK</code></td><td>สำเร็จ</td></tr>
+        <tr><td><code>I2C_ERROR_TIMEOUT</code></td><td>การสื่อสารใช้เวลานานเกิน</td></tr>
+        <tr><td><code>I2C_ERROR_NACK</code></td><td>Device ไม่ตอบรับ (NACK)</td></tr>
+        <tr><td><code>I2C_ERROR_BUS_BUSY</code></td><td>Bus ติดค้าง ถูกจองอยู่</td></tr>
+        <tr><td><code>I2C_ERROR_PARAM</code></td><td>พารามิเตอร์ไม่ถูกต้อง</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>ขั้นตอนการใช้งาน (Step by Step)</h2>
+    <div class="step">
+        <h3>1. เริ่มต้น I2C</h3>
+        <p><code>I2C_SimpleInit(I2C_100KHZ, I2C_PINS_DEFAULT)</code> — อย่าลืมต่อ pull-up resistors</p>
+    </div>
+    <div class="step">
+        <h3>2. สแกน Bus</h3>
+        <p><code>I2C_Scan()</code> — หา address ของอุปกรณ์ที่ต่ออยู่</p>
+    </div>
+    <div class="step">
+        <h3>3. อ่าน Register</h3>
+        <p><code>I2C_ReadReg(addr, reg)</code> — อ่านค่าจาก register ที่ต้องการ</p>
+    </div>
+    <div class="step">
+        <h3>4. เขียน Register</h3>
+        <p><code>I2C_WriteReg(addr, reg, data)</code> — เขียนค่าลง register</p>
+    </div>
+    <div class="step">
+        <h3>5. Multi-byte</h3>
+        <p><code>I2C_ReadRegMulti()</code> / <code>I2C_WriteRegMulti()</code> — อ่าน/เขียนหลายไบต์ต่อเนื่อง</p>
+    </div>
+</section>
+
+<section>
+    <h2>ระดับขั้นต้น: Read/Write AT24C32 EEPROM</h2>
+    <pre><code class="language-c">#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(USART_115200);
+    I2C_SimpleInit(I2C_100KHZ, I2C_PINS_DEFAULT);
+
+    uint8_t write_data = 0x42;
+    I2C_WriteReg(0x50, 0x00, write_data);
+
+    Delay_Ms(5);
+
+    uint8_t read_data = I2C_ReadReg(0x50, 0x00);
+    printf("EEPROM[0x00] = 0x%02X\r\n", read_data);
+
+    while (1);
+}</code></pre>
+</section>
+
+<section>
+    <h2>ระดับขั้นกลาง: อ่าน MPU6050 Accelerometer</h2>
+    <div class="approach">
+        <strong>แนวคิด:</strong> ปลุก MPU6050 จาก sleep mode แล้วอ่านค่า accelerometer X/Y/Z (6 ไบต์)
+    </div>
+    <pre><code class="language-c">#include "SimpleHAL.h"
+
+#define MPU6050_ADDR 0x68
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(USART_115200);
+    I2C_SimpleInit(I2C_100KHZ, I2C_PINS_DEFAULT);
+
+    // ปลุก MPU6050 จาก sleep
+    I2C_WriteReg(MPU6050_ADDR, 0x6B, 0x00);
+    Delay_Ms(10);
+
+    int16_t accel[3];
+    while (1) {
+        uint8_t raw[6];
+        I2C_ReadRegMulti(MPU6050_ADDR, 0x3B, raw, 6);
+
+        accel[0] = (raw[0] << 8) | raw[1]; // X
+        accel[1] = (raw[2] << 8) | raw[3]; // Y
+        accel[2] = (raw[4] << 8) | raw[5]; // Z
+
+        printf("X=%d Y=%d Z=%d\r\n", accel[0], accel[1], accel[2]);
+        Delay_Ms(500);
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>ระดับขั้นสูง: Multi-device I2C พร้อม Error Recovery</h2>
+    <div class="approach">
+        <strong>แนวคิด:</strong> สแกน bus ก่อนใช้งาน, ใช้ <code>I2C_TryReadReg()</code> ป้องกัน NACK, retry เมื่อ fail
+    </div>
+    <pre><code class="language-c">#include "SimpleHAL.h"
+
+void safe_read(uint8_t addr, uint8_t reg, uint8_t retries) {
+    uint8_t data;
+    for (uint8_t i = 0; i < retries; i++) {
+        if (I2C_TryReadReg(addr, reg, &data)) {
+            printf("Addr 0x%02X Reg 0x%02X = 0x%02X\r\n", addr, reg, data);
+            return;
+        }
+        printf("Retry %d...\r\n", i + 1);
+        Delay_Ms(10);
+    }
+    printf("Failed after %d retries\r\n", retries);
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(USART_115200);
+    I2C_SimpleInit(I2C_100KHZ, I2C_PINS_DEFAULT);
+
+    printf("--- I2C Bus Scan ---\r\n");
+    for (uint8_t addr = 1; addr < 127; addr++) {
+        if (I2C_IsDeviceReady(addr)) {
+            printf("Found device at 0x%02X\r\n", addr);
+        }
+    }
+
+    safe_read(0x68, 0x75, 3); // MPU6050 WHO_AM_I
+    while (1);
+}</code></pre>
+</section>
+
+<section>
+    <h2>ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>อาการ</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>NACK ตลอดเวลา</td><td>Address ผิด หรือไม่มี pull-up</td><td>เช็ค address ด้วย I2C_Scan, ต่อ 4.7k&Omega; pull-up</td></tr>
+        <tr><td>Bus stuck</td><td>SCL ค้างต่ำ</td><td>Clock 9 ครั้งเพื่อ release bus</td></tr>
+        <tr><td>400kHz เพี้ยน</td><td>สายยาวเกินไป</td><td>ลดความเร็วลง หรือใช้สายสั้น</td></tr>
+        <tr><td>I2C_ReadReg คืน 0xFF</td><td>Device ไม่ตอบสนอง</td><td>ใช้ I2C_TryReadReg แทน</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>คำถามที่พบบ่อย (FAQ)</h2>
+    <h3>7-bit vs 8-bit address ต่างกันอย่างไร?</h3>
+    <p>SimpleHAL ใช้ 7-bit address — ระบบจะเลื่อนบิตให้เอง ไม่ต้องเลื่อนซ้ายเอง</p>
+    <h3>Pull-up จำเป็นไหม?</h3>
+    <p><strong>จำเป็น!</strong> ถ้าไม่มี pull-up resistor bus จะไม่ทำงานเลย เพราะ CH32V003 ไม่มี internal pull-up ที่แรงพอ</p>
+    <h3>Hardware I2C vs Software I2C ใช้อะไรดี?</h3>
+    <p>Hardware I2C (บทนี้) เร็วกว่า ไม่กิน CPU — Software I2C ดูที่ <a href="ch06-i2c-soft.html">บทที่ 6</a></p>
+</section>
+
+<section>
+    <h2>ลองทำดู (แบบฝึกหัด)</h2>
+    <ol>
+        <li>สแกน I2C bus หา device ทั้งหมดที่ต่ออยู่</li>
+        <li>อ่านค่าแสงจากเซนเซอร์ BH1750</li>
+        <li>แสดงข้อความ "Hello" บนจอ OLED ผ่าน I2C</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="ch04-usart.html">&larr; บทที่ 4: USART</a>
+    <a href="index.html">&#x1f3e0; สารบัญ</a>
+    <a href="ch06-i2c-soft.html">บทที่ 6: Software I2C &rarr;</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:false,theme:'base'});mermaid.run();</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

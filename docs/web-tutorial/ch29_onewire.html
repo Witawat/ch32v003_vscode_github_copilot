@@ -54,6 +54,23 @@ flowchart LR
   </tbody>
 </table>
 
+<h4>รู้จักขา</h4>
+<ul>
+  <li><strong>PC0:</strong> ขาข้อมูล 1-Wire (DQ) — ใช้ open-drain ร่วมกับ R pull-up 4.7kΩ</li>
+  <li><strong>R 4.7kΩ:</strong> ตัวต้านทาน pull-up — จำเป็นสำหรับ 1-Wire ถ้าไม่มีจะสื่อสารไม่ได้</li>
+  <li><strong>DS18B20 (DQ — ขา 2):</strong> ขาข้อมูล ต่อกับ PC0</li>
+  <li><strong>DS18B20 (VDD — ขา 3):</strong> ขาไฟเลี้ยง 3.3V</li>
+  <li><strong>DS18B20 (GND — ขา 1):</strong> ขาลบ ต่อ GND</li>
+</ul>
+
+<h4>วิธีต่อทีละขั้น</h4>
+<ol>
+  <li>ต่อ <strong>PC0</strong> ไป <strong>R 4.7kΩ</strong> → <strong>3.3V</strong> — pull-up สายข้อมูล</li>
+  <li>ต่อ <strong>PC0</strong> ไป <strong>DS18B20 ขา 2 (DQ)</strong> — สายข้อมูล 1-Wire</li>
+  <li>ต่อ <strong>DS18B20 ขา 3 (VDD)</strong> ไป <strong>3.3V</strong> — จ่ายไฟ</li>
+  <li>ต่อ <strong>DS18B20 ขา 1 (GND)</strong> ไป <strong>GND</strong></li>
+</ol>
+
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">
 flowchart TD

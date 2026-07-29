@@ -33,6 +33,28 @@ flowchart TD
     <tr><td>GND</td><td>→</td><td>GND</td><td>-</td><td>กราวด์ร่วม; A0→GND=0x60, A0→VDD=0x61</td></tr>
   </tbody>
 </table>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>VDD:</strong> ไฟเลี้ยง 3.3V</li>
+  <li><strong>GND:</strong> กราวด์</li>
+  <li><strong>SDA (PC1):</strong> สายข้อมูล I2C</li>
+  <li><strong>SCL (PC2):</strong> สายนาฬิกา I2C</li>
+  <li><strong>A0:</strong> เลือก I2C address — GND=0x60, VDD=0x61</li>
+  <li><strong>Vout:</strong> ขาเอาต์พุต 0–3.3V</li>
+  <li><strong>pull-up 4.7kΩ:</strong> ต่อระหว่าง SDA→3.3V และ SCL→3.3V (โมดูลส่วนมากมีในตัว)</li>
+</ul>
+
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>VDD</strong> ของ MCP4725 ไป <strong>3.3V</strong></li>
+  <li>ต่อ <strong>GND</strong> ของ MCP4725 ไป <strong>GND</strong></li>
+  <li>ต่อ <strong>SDA</strong> ของ MCP4725 ไป <strong>PC1 (ขา 13)</strong> ของ CH32V003</li>
+  <li>ต่อ <strong>SCL</strong> ของ MCP4725 ไป <strong>PC2 (ขา 14)</strong> ของ CH32V003</li>
+  <li>ต่อ <strong>A0</strong> ไป <strong>GND</strong> เพื่อใช้ address 0x60 (หรือ VDD=0x61)</li>
+  <li>ต่อ <strong>Vout</strong> ไปยังอุปกรณ์ที่ต้องการรับสัญญาณ analog (เช่น oscilloscope, op-amp)</li>
+  <li>ตรวจสอบว่าโมดูลมี R pull-up 4.7kΩ ในตัวหรือไม่ — ถ้าไม่มี ต่อ R เพิ่มจาก SDA→3.3V และ SCL→3.3V</li>
+</ol>
+
 <p>ต่อ I2C ปกติ — A0 pin เลือก address (GND=0x60, VDD=0x61) — Output ต่อตรงเข้า Oscilloscope</p></section>
 <section><h2>📚 หลักการทำงาน</h2><p><strong>MCP4725</strong> เป็น DAC 12-bit สื่อสารผ่าน I2C — รับค่า 0-4095 แปลงเป็นแรงดัน 0V ถึง VDD (3.3V) — ความละเอียด 3.3V/4096 ≈ 0.8mV ต่อ step</p><p><strong>MCP4725_SetVoltage(&dac, volt, vref)</strong> ตั้งแรงดันโดยตรง — vref เป็น MCP4725_VREF_VDD หรือค่าแรงดันอ้างอิงภายนอก</p></section>
 <section><h2>💻 เขียน Code ทีละขั้น</h2>

@@ -61,6 +61,26 @@ flowchart LR
   </tbody>
 </table>
 
+<h4>รู้จักขา</h4>
+<ul>
+  <li><strong>PC4 (CS):</strong> ขา Chip Select — ดึง LOW เพื่อเลือกอุปกรณ์ SPI</li>
+  <li><strong>PC5 (SCK):</strong> ขาสัญญาณนาฬิกา SPI — สร้าง pulse ให้ device</li>
+  <li><strong>PC6 (MOSI):</strong> ขาส่งข้อมูลจาก MCU ไป device</li>
+  <li><strong>PC7 (MISO):</strong> ขารับข้อมูลจาก device มา MCU</li>
+  <li><strong>W25Qxx (/WP, /HOLD):</strong> ต่อ 3.3V เพื่อปิด write protect และ hold</li>
+</ul>
+
+<h4>วิธีต่อทีละขั้น</h4>
+<ol>
+  <li>ต่อ <strong>PC4 (CS)</strong> ไป <strong>W25Qxx (CS)</strong> — เลือกชิป</li>
+  <li>ต่อ <strong>PC5 (SCK)</strong> ไป <strong>W25Qxx (SCK)</strong> — สัญญาณนาฬิกา</li>
+  <li>ต่อ <strong>PC6 (MOSI)</strong> ไป <strong>W25Qxx (MOSI)</strong> — ส่งข้อมูล</li>
+  <li>ต่อ <strong>PC7 (MISO)</strong> ไป <strong>W25Qxx (MISO)</strong> — รับข้อมูล</li>
+  <li>ต่อ <strong>W25Qxx (/WP)</strong> และ <strong>(/HOLD)</strong> ไป <strong>3.3V</strong></li>
+  <li>ต่อ <strong>W25Qxx (VCC)</strong> ไป <strong>3.3V</strong>, (GND) ไป <strong>GND</strong></li>
+  <li>สำหรับ Loopback: ต่อ <strong>PC6 (MOSI)</strong> กับ <strong>PC7 (MISO)</strong> ด้วย jumper</li>
+</ol>
+
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">
 flowchart TD
@@ -161,6 +181,25 @@ int main(void)
     <tr><td>GND</td><td>↔</td><td>W25Qxx (GND)</td><td>GND</td><td>Common ground</td></tr>
   </tbody>
 </table>
+
+<h4>รู้จักขา</h4>
+<ul>
+  <li><strong>PC4 (CS):</strong> ขาเลือก W25Qxx — ดึง LOW ก่อนสื่อสารทุกครั้ง</li>
+  <li><strong>PC5 (SCK):</strong> ขานาฬิกา SPI</li>
+  <li><strong>PC6 (MOSI):</strong> ขาส่งคำสั่งและข้อมูลไป W25Qxx</li>
+  <li><strong>PC7 (MISO):</strong> ขารับข้อมูลจาก W25Qxx</li>
+  <li><strong>W25Qxx (/WP, /HOLD):</strong> ต่อ 3.3V เสมอ — ถ้าลอยจะทำให้อ่านค่าเพี้ยน</li>
+</ul>
+
+<h4>วิธีต่อทีละขั้น</h4>
+<ol>
+  <li>ต่อ <strong>PC4 (CS)</strong> → <strong>W25Qxx (CS)</strong></li>
+  <li>ต่อ <strong>PC5 (SCK)</strong> → <strong>W25Qxx (SCK)</strong></li>
+  <li>ต่อ <strong>PC6 (MOSI)</strong> → <strong>W25Qxx (MOSI)</strong></li>
+  <li>ต่อ <strong>PC7 (MISO)</strong> → <strong>W25Qxx (MISO)</strong></li>
+  <li>ต่อ <strong>W25Qxx (/WP)</strong> และ <strong>(/HOLD)</strong> ไป <strong>3.3V</strong></li>
+  <li>ต่อ <strong>W25Qxx (VCC)</strong> ไป <strong>3.3V</strong>, (GND) ไป <strong>GND</strong></li>
+</ol>
 
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">

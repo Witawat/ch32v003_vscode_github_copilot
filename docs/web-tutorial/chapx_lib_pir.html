@@ -58,6 +58,19 @@ flowchart TD
       </tbody>
     </table>
     <p>PC0─OUT (INPUT_PULLUP หรือ INPUT) — ใช้ไฟ 3.3V หรือ 5V — มีปุ่มปรับ Sensitivity (ระยะ) และ Delay Time (นานในการค้าง HIGH หลังตรวจจับ)</p>
+    <h3>รู้จักขา</h3>
+    <ul>
+      <li><strong>OUT:</strong> ขาสัญญาณ ต่อกับ PC0 — HIGH เมื่อเจอ motion, LOW เมื่อไม่มี</li>
+      <li><strong>VCC:</strong> ไฟเลี้ยง 3.3V หรือ 5V (เลือกตาม jumper)</li>
+      <li><strong>GND:</strong> ต่อกราวด์ร่วมกับ MCU</li>
+    </ul>
+    <h3>วิธีต่อทีละขั้น</h3>
+    <ol>
+      <li>ต่อ <strong>PC0</strong> ไป <strong>OUT ของ PIR</strong> — อ่านสถานะ motion</li>
+      <li>ต่อ <strong>3.3V หรือ 5V</strong> ไป <strong>VCC</strong> — ดู jumper เลือกไฟให้ตรง</li>
+      <li>ต่อ <strong>GND</strong> ไป <strong>GND</strong> — กราวด์ร่วม</li>
+      <li><strong>ปรับ pot:</strong> Sensitivity (ระยะตรวจจับ 3–7m) และ Delay Time (เวลาค้างสัญญาณ 5–300s)</li>
+    </ol>
 </section>
 
 <section>

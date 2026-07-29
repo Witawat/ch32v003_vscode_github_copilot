@@ -48,7 +48,26 @@ flowchart TD
         <tr><td>5V</td><td>→</td><td>VCC</td><td>-</td><td>ไฟเลี้ยง 5V — backpack มี regulator ในตัว</td></tr>
         <tr><td>GND</td><td>→</td><td>GND</td><td>-</td><td>กราวด์ร่วม</td></tr>
       </tbody>
-    </table>
+     </table>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>VCC:</strong> ไฟเลี้ยง <strong>5V</strong> (ต่างจากโมดูล I2C ทั่วไปที่ใช้ 3.3V)</li>
+  <li><strong>GND:</strong> กราวด์</li>
+  <li><strong>SDA (PC1):</strong> สายข้อมูล I2C</li>
+  <li><strong>SCL (PC2):</strong> สายนาฬิกา I2C</li>
+  <li><strong>pull-up 4.7kΩ:</strong> I2C backpack มี pull-up ในตัวแล้ว</li>
+</ul>
+
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>VCC</strong> ของ LCD1602 ไป <strong>5V</strong> (⚠ ห้ามใช้ 3.3V — backpack ต้องใช้ 5V)</li>
+  <li>ต่อ <strong>GND</strong> ของ LCD1602 ไป <strong>GND</strong></li>
+  <li>ต่อ <strong>SDA</strong> ของ LCD1602 ไป <strong>PC1 (ขา 13)</strong> ของ CH32V003</li>
+  <li>ต่อ <strong>SCL</strong> ของ LCD1602 ไป <strong>PC2 (ขา 14)</strong> ของ CH32V003</li>
+  <li>ตรวจสอบ address: <strong>0x27</strong> (ส่วนมาก) หรือ <strong>0x3F</strong> — ใช้ I2C_Scan() หาก่อน</li>
+  <li>I2C backpack มี R pull-up ในตัวแล้ว — ไม่ต้องต่อเพิ่ม</li>
+</ol>
+
     <p>LCD1602 ใช้ PCF8574 I2C backpack — address 0x27 หรือ 0x3F ขึ้นอยู่กับรุ่น — ใช้ 5V จ่ายไฟ (backpack มี regulator ในตัว)</p>
 </section>
 <section>

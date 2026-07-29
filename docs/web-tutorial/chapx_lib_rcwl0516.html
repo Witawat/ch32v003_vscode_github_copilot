@@ -57,6 +57,18 @@ flowchart TD
       </tbody>
     </table>
     <p>PC0─OUT (INPUT) — ไม่ต้องใช้ Fresnel lens — สามารถทะลุผ่านวัสดุบางได้ (ไม้, แผ่นยิปซัม, กระจก) — ใช้ไฟ 5V (มี LDO ในตัว)</p>
+    <h3>รู้จักขา</h3>
+    <ul>
+      <li><strong>OUT:</strong> ขาสัญญาณ ต่อกับ PC0 — HIGH เมื่อเจอ motion</li>
+      <li><strong>VCC:</strong> ไฟเลี้ยง 3.3V–5V (มี LDO ในตัว)</li>
+      <li><strong>GND:</strong> ต่อกราวด์ร่วมกับ MCU</li>
+    </ul>
+    <h3>วิธีต่อทีละขั้น</h3>
+    <ol>
+      <li>ต่อ <strong>PC0</strong> ไป <strong>OUT ของ RCWL-0516</strong> — อ่านสถานะ motion</li>
+      <li>ต่อ <strong>3.3V หรือ 5V</strong> ไป <strong>VCC</strong> — รองรับตั้งแต่ 3.3V–5V</li>
+      <li>ต่อ <strong>GND</strong> ไป <strong>GND</strong> — กราวด์ร่วม</li>
+    </ol>
 </section>
 
 <section>

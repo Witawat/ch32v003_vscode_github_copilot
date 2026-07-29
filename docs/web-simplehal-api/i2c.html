@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SimpleI2C + Soft — SimpleHAL API Reference</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+</head>
+<body>
+
+<nav class="top-nav">
+    <a href="index.html">&larr; สารบัญ</a>
+    <a href="spi.html">SimpleSPI &rarr;</a>
+</nav>
+
+<h1>SimpleI2C + SimpleI2C_Soft <span class="level level-intermediate">กลาง</span></h1>
+
+<section>
+<h2>สองโมดูล</h2>
+<p>SimpleHAL มี I2C ให้เลือก 2 โหมด:</p>
+<table>
+<thead><tr><th>โมดูล</th><th>Header</th><th>หลักการ</th></tr></thead>
+<tbody>
+<tr><td><strong>SimpleI2C</strong></td><td><code>#include "simple_i2c.h"</code></td><td>Hardware I2C (built-in peripheral)</td></tr>
+<tr><td><strong>SimpleI2C_Soft</strong></td><td><code>#include "simple_i2c_soft.h"</code></td><td>Software I2C (bit-bang บน GPIO)</td></tr>
+</tbody>
+</table>
+</section>
+
+<!-- ====== Hardware I2C ====== -->
+<h2>SimpleI2C — Hardware I2C</h2>
+
+<section>
+<h2>คุณสมบัติ</h2>
+<table>
+<thead><tr><th>คุณสมบัติ</th><th>รายละเอียด</th></tr></thead>
+<tbody>
+<tr><td>ความเร็ว</td><td>100kHz (Standard), 400kHz (Fast)</td></tr>
+<tr><td>Pin config</td><td>3 แบบ (DEFAULT, PARTIAL_REMAP, REMAP)</td></tr>
+<tr><td>Pull-up</td><td><strong>ต้องต่อ external 4.7k&Omega;</strong> ที่ SDA และ SCL</td></tr>
+<tr><td>Address</td><td>7-bit (shifted left, min: 0x02, max: 0xFE)</td></tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>Pin Configuration</h2>
+<table>
+<thead><tr><th>Config</th><th>SCL</th><th>SDA</th><th>ข้อจำกัด</th></tr></thead>
+<tbody>
+<tr><td><code>DEFAULT</code></td><td>PC2</td><td>PC1</td><td></td></tr>
+<tr><td><code>PARTIAL_REMAP</code></td><td>PD2</td><td>PD1</td><td></td></tr>
+<tr><td><code>REMAP</code></td><td>PD0</td><td>PD1</td><td>เฉพาะ TSSOP20 / QFN20</td></tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>Error Codes</h2>
+<table>
+<thead><tr><th>ค่า</th><th>ความหมาย</th></tr></thead>
+<tbody>
+<tr><td><code>I2C_OK</code></td><td>สำเร็จ</td></tr>
+<tr><td><code>ERROR_TIMEOUT</code></td><td>bus ติด (SCL ค้าง LOW)</td></tr>
+<tr><td><code>ERROR_NACK</code></td><td>อุปกรณ์ไม่ตอบ ACK</td></tr>
+<tr><td><code>ERROR_BUS_BUSY</code></td><td>bus ไม่ว่าง</td></tr>
+<tr><td><code>ERROR_PARAM</code></td><td>พารามิเตอร์ไม่ถูกต้อง</td></tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>ตารางฟังก์ชัน — Hardware I2C</h2>
+<table>
+<thead><tr><th>ฟังก์ชัน</th><th>คืนค่า</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>I2C_SimpleInit(speed, pin_config)</code></td><td>void</td><td>เริ่ม I2C</td></tr>
+<tr><td><code>I2C_Write(addr, data, len)</code></td><td>I2C_Status</td><td>เขียนข้อมูล</td></tr>
+<tr><td><code>I2C_Read(addr, data, len)</code></td><td>I2C_Status</td><td>อ่านข้อมูล</td></tr>
+<tr><td><code>I2C_WriteReg(addr, reg, data)</code></td><td>I2C_Status</td><td>เขียน register</td></tr>
+<tr><td><code>I2C_ReadReg(addr, reg)</code></td><td>uint8_t</td><td>อ่าน register — <strong>0xFF ambiguous!</strong></td></tr>
+<tr><td><code>I2C_TryReadReg(addr, reg, &amp;data)</code></td><td>I2C_Status</td><td>อ่าน register แยก error ได้ — <strong>แนะนำ</strong></td></tr>
+<tr><td><code>I2C_WriteRegMulti(addr, reg, data, len)</code></td><td>I2C_Status</td><td>เขียนหลาย byte ไป register</td></tr>
+<tr><td><code>I2C_ReadRegMulti(addr, reg, data, len)</code></td><td>I2C_Status</td><td>อ่านหลาย byte จาก register</td></tr>
+<tr><td><code>I2C_Scan(devices, max)</code></td><td>uint8_t</td><td>สแกน bus — คืนจำนวน device ที่พบ</td></tr>
+<tr><td><code>I2C_IsDeviceReady(addr)</code></td><td>uint8_t</td><td>ตรวจสอบ device — 1=พร้อม</td></tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>CRITICAL: I2C_ReadReg</h2>
+<div class="callout callout-err">
+<strong>I2C_ReadReg</strong> คืนค่า <code>uint8_t</code> — หากเกิด error จะคืนค่า <strong>0xFF</strong> เหมือนกับอ่านได้ 0xFF จริง คุณจึง<strong>ไม่สามารถแยกแยะ</strong>ระหว่าง error กับข้อมูลที่ถูกต้องได้
+</div>
+<p>ใช้ <strong>I2C_TryReadReg</strong> แทน:</p>
+<pre><code class="language-c">// แบบเก่า — ตรวจ error ไม่ได้
+uint8_t val = I2C_ReadReg(0x50, 0x00);
+if (val == 0xFF) {
+    // เป็น error หรือข้อมูลจริง? ไม่รู้!
+}
+
+// แบบใหม่ — แยก error ได้ชัดเจน
+uint8_t val;
+if (I2C_TryReadReg(0x50, 0x00, &val) == I2C_OK) {
+    USART_Print("Read OK: ");
+    USART_PrintHex(val, 1);
+} else {
+    USART_Print("Read failed!\r\n");
+}
+</code></pre>
+</section>
+
+<!-- ====== Software I2C ====== -->
+<h2>SimpleI2C_Soft — Software I2C (Bit-Bang)</h2>
+
+<section>
+<h2>คุณสมบัติ</h2>
+<table>
+<thead><tr><th>คุณสมบัติ</th><th>รายละเอียด</th></tr></thead>
+<tbody>
+<tr><td>หลักการ</td><td>Bit-bang — ควบคุม GPIO ด้วย software timing</td></tr>
+<tr><td>ขา</td><td><strong>เลือก GPIO ใดก็ได้</strong> (ไม่ผูกกับ hardware pin)</td></tr>
+<tr><td>ความเร็ว</td><td>100kHz, 400kHz</td></tr>
+<tr><td>Pull-up</td><td>ต้องต่อ external 4.7k&Omega;</td></tr>
+<tr><td>Header</td><td><code>#include "simple_i2c_soft.h"</code></td></tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>ตารางฟังก์ชัน — Software I2C</h2>
+<table>
+<thead><tr><th>ฟังก์ชัน</th><th>คืนค่า</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>I2C_Soft_Init(scl, sda, speed)</code></td><td>void</td><td>เริ่ม Soft I2C — กำหนดขา SCL, SDA, ความเร็ว</td></tr>
+<tr><td><code>I2C_Soft_Write(addr, data, len, ignore_ack)</code></td><td>I2C_Soft_Status</td><td>เขียนข้อมูล — <code>ignore_ack=1</code> สำหรับ logic analyzer</td></tr>
+<tr><td><code>I2C_Soft_Read(addr, data, len)</code></td><td>I2C_Soft_Status</td><td>อ่านข้อมูล</td></tr>
+<tr><td colspan="3"><em>Low-Level (สำหรับ advanced use)</em></td></tr>
+<tr><td><code>I2C_Soft_Start()</code></td><td>void</td><td>ส่ง start condition</td></tr>
+<tr><td><code>I2C_Soft_Stop()</code></td><td>void</td><td>ส่ง stop condition</td></tr>
+<tr><td><code>I2C_Soft_WriteByte(byte)</code></td><td>uint8_t</td><td>ส่ง 1 byte — คืน ACK bit</td></tr>
+<tr><td><code>I2C_Soft_ReadByte(ack)</code></td><td>uint8_t</td><td>อ่าน 1 byte — <code>ack=0</code> ส่ง NACK (stop อ่าน)</td></tr>
+</tbody>
+</table>
+
+<p><code>ignore_ack</code> ใน <code>I2C_Soft_Write</code> — เมื่อตั้งเป็น <code>1</code> ฟังก์ชันจะ<strong>ไม่รอ ACK</strong> จากอุปกรณ์ ใช้ประโยชน์กับ logic analyzer หรืออุปกรณ์ที่ไม่ตอบ ACK ตามปกติ</p>
+</section>
+
+<section>
+<h2>Use Case: SOP-8</h2>
+<p>CH32V003 แพ็กเกจ SOP-8 <strong>ไม่มีขา PC1/PC2</strong> (I2C hardware pins ไม่ถูก bond ออกมา) จึงใช้ hardware I2C ไม่ได้ — ต้องใช้ <strong>SimpleI2C_Soft</strong> เลือกขา GPIO ที่มีอยู่แทน (เช่น PD3, PD4)</p>
+<pre><code class="language-c">#include "simplehal.h"
+#include "simple_i2c_soft.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Delay_Init();
+
+    // SOP-8: ใช้ PD3=SDA, PD4=SCL
+    I2C_Soft_Init(PD4, PD3, I2C_SPEED_100K);
+
+    // สแกนหา device
+    uint8_t addrs[16];
+    uint8_t count = I2C_Scan_Soft(addrs, 16);
+    // ... ใช้งานต่อไป ...
+}
+</code></pre>
+</section>
+
+<section>
+<h2>เปรียบเทียบ Hardware vs Software I2C</h2>
+<table>
+<thead><tr><th>คุณสมบัติ</th><th>Hardware (SimpleI2C)</th><th>Software (SimpleI2C_Soft)</th></tr></thead>
+<tbody>
+<tr><td>CPU usage</td><td>ต่ำ (ISR จัดการ)</td><td>สูง (bit-bang กิน CPU 100% ระหว่างส่ง)</td></tr>
+<tr><td>ขา</td><td>จำกัดตาม pin remap</td><td>GPIO ใดก็ได้</td></tr>
+<tr><td>SOP-8</td><td>ใช้ไม่ได้ (PC1/PC2 ไม่มี)</td><td>ใช้ได้</td></tr>
+<tr><td>ความเร็วสูงสุด</td><td>400kHz</td><td>400kHz</td></tr>
+<tr><td>Multi-master</td><td>รองรับ</td><td>ไม่รองรับ</td></tr>
+<tr><td>Clock stretching</td><td>รองรับ</td><td>ไม่รองรับ</td></tr>
+<tr><td>Pull-up</td><td>ต้องต่อ</td><td>ต้องต่อ</td></tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>Hardware Requirement</h2>
+<div class="callout callout-warn">
+<strong>ต้องต่อ pull-up resistor 4.7k&Omega; ที่ SDA และ SCL</strong> — CH32V003 ไม่มี internal pull-up บน I2C pins หากไม่ต่อ bus จะทำงานไม่ได้
+</div>
+</section>
+
+<section>
+<h2>ข้อผิดพลาดที่พบบ่อย</h2>
+
+<div class="callout callout-err">
+<strong>ลืมต่อ pull-up resistor</strong> — SDA/SCL จะลอย (floating) ไม่สามารถสื่อสารได้
+<p>ต่อ 4.7k&Omega; จาก SDA → VDD และ SCL → VDD</p>
+</div>
+
+<div class="callout callout-err">
+<strong>REMAP บน SOP8</strong> — PD0/PD1 ไม่ถูก bond ออกมาบนแพ็กเกจ SOP8 → <code>#error</code> ตอนคอมไพล์
+<p>ใช้ SimpleI2C_Soft แทน</p>
+</div>
+
+<div class="callout callout-err">
+<strong>I2C_ReadReg ambiguity</strong> — ค่า <code>0xFF</code> เป็นได้ทั้ง error และข้อมูลจริง
+<p>ใช้ <code>I2C_TryReadReg</code> แทน</p>
+</div>
+
+<div class="callout callout-err">
+<strong>SOP-8 I2C pins ไม่ถูก bond</strong> — PC1, PC2 ไม่มีอยู่จริงบน SOP-8
+<p>ต้องใช้ SimpleI2C_Soft เท่านั้น</p>
+</div>
+</section>
+
+<section>
+<h2>ตัวอย่างโค้ด</h2>
+
+<h3>EEPROM Write/Read (AT24C02)</h3>
+<pre><code class="language-c">#include "simplehal.h"
+#include "simple_i2c.h"
+
+#define EEPROM_ADDR 0xA0
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Delay_Init();
+    I2C_SimpleInit(I2C_SPEED_100K, I2C_PIN_DEFAULT);
+
+    // เขียน 3 byte ไป address 0x00
+    uint8_t wdata[] = {0x42, 0x43, 0x44};
+    I2C_WriteRegMulti(EEPROM_ADDR, 0x00, wdata, 3);
+
+    Delay_Ms(10);  // รอ EEPROM write cycle
+
+    // อ่าน 3 byte จาก address 0x00
+    uint8_t rdata[3];
+    if (I2C_ReadRegMulti(EEPROM_ADDR, 0x00, rdata, 3) == I2C_OK) {
+        USART_Print("EEPROM: ");
+        for (int i = 0; i < 3; i++) {
+            USART_PrintHex(rdata[i], 1);
+            USART_WriteByte(' ');
+        }
+    }
+    while (1);
+}
+</code></pre>
+
+<h3>I2C Scanner</h3>
+<pre><code class="language-c">#include "simplehal.h"
+#include "simple_i2c.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    USART_SimpleInit(USART_BAUD_115200, USART_PIN_DEFAULT);
+    I2C_SimpleInit(I2C_SPEED_100K, I2C_PIN_DEFAULT);
+
+    USART_Print("I2C Scanner\r\n");
+
+    uint8_t devices[16];
+    uint8_t count = I2C_Scan(devices, 16);
+
+    USART_Print("Found: ");
+    USART_PrintNum(count);
+    USART_Print(" device(s)\r\n");
+
+    for (uint8_t i = 0; i < count; i++) {
+        USART_Print("  0x");
+        USART_PrintHex(devices[i], 1);
+        USART_Print("\r\n");
+    }
+
+    while (1);
+}
+</code></pre>
+
+<h3>BH1750 Read (Light Sensor)</h3>
+<pre><code class="language-c">#include "simplehal.h"
+#include "simple_i2c.h"
+
+#define BH1750_ADDR 0x46
+
+void bh1750_read(uint16_t *lux) {
+    // สั่งวัดแบบต่อเนื่อง high-res
+    uint8_t cmd = 0x10;
+    I2C_Write(BH1750_ADDR, &cmd, 1);
+    Delay_Ms(180);
+
+    uint8_t buf[2];
+    if (I2C_Read(BH1750_ADDR, buf, 2) == I2C_OK) {
+        *lux = ((uint16_t)buf[0] << 8) | buf[1];
+        *lux = *lux / 1.2;  // แปลงเป็น lux
+    } else {
+        *lux = 0xFFFF;
+    }
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    USART_SimpleInit(USART_BAUD_115200, USART_PIN_DEFAULT);
+    I2C_SimpleInit(I2C_SPEED_100K, I2C_PIN_DEFAULT);
+
+    while (1) {
+        uint16_t lux;
+        bh1750_read(&lux);
+        USART_Print("Light: ");
+        USART_PrintNum(lux);
+        USART_Print(" lux\r\n");
+        Delay_Ms(1000);
+    }
+}
+</code></pre>
+
+<h3>Soft I2C บน SOP-8 (SSD1306 OLED)</h3>
+<pre><code class="language-c">#include "simplehal.h"
+#include "simple_i2c_soft.h"
+
+#define OLED_ADDR 0x78
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Delay_Init();
+    USART_SimpleInit(USART_BAUD_115200, USART_PIN_DEFAULT);
+
+    // SOP-8: ใช้ PD3=SDA, PD4=SCL
+    I2C_Soft_Init(PD4, PD3, I2C_SPEED_400K);
+
+    // init OLED...
+    uint8_t init_cmds[] = {0x00, 0xAE, 0xD5, 0x80, 0xA8, 0x1F, 0xAF};
+    I2C_Soft_Write(OLED_ADDR, init_cmds, sizeof(init_cmds), 0);
+
+    USART_Print("OLED ready (Soft I2C)\r\n");
+
+    while (1);
+}
+</code></pre>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">&larr; สารบัญ</a>
+    <a href="spi.html">SimpleSPI &rarr;</a>
+</nav>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

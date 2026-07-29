@@ -55,6 +55,20 @@ flowchart TD
       </tbody>
     </table>
     <p>PC0─TRIG (output), PC1─ECHO (input) — ใช้ไฟ 5V แต่ TRIG รับ 3.3V logic ได้, ECHO output เป็น 5V → ใช้ voltage divider 2 ตัว (1k+2k) ลดเหลือ ~3.3V</p>
+    <h3>รู้จักขา</h3>
+    <ul>
+      <li><strong>VCC:</strong> ไฟเลี้ยง 5V (ใช้แหล่งจ่ายภายนอก)</li>
+      <li><strong>TRIG:</strong> ขาสั่งส่งคลื่นอัลตราโซนิค ต่อกับ PC0</li>
+      <li><strong>ECHO:</strong> ขารับสัญญาณสะท้อน ต่อกับ PC1 ผ่าน voltage divider</li>
+      <li><strong>GND:</strong> ต่อกราวด์ร่วมกับ MCU</li>
+    </ul>
+    <h3>วิธีต่อทีละขั้น</h3>
+    <ol>
+      <li>ต่อ <strong>PC0</strong> ไป <strong>TRIG ของ HC-SR04</strong> — ส่งพัลส์ 10µs HIGH</li>
+      <li>ต่อ <strong>PC1</strong> ผ่าน voltage divider (1kΩ + 2kΩ) ไป <strong>ECHO</strong> — ลด 5V→3.3V ป้องกัน MCU เสียหาย</li>
+      <li>ต่อ <strong>5V</strong> ไป <strong>VCC ของ HC-SR04</strong> — ต้องใช้ไฟ 5V ไม่ใช่ 3.3V</li>
+      <li>ต่อ <strong>GND</strong> ไป <strong>GND ของ HC-SR04</strong> — กราวด์ร่วม</li>
+    </ol>
 </section>
 
 <section>

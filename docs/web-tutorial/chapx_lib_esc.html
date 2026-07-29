@@ -65,6 +65,21 @@ flowchart TD
       </tbody>
     </table>
     <p><strong>⚠️ อันตราย!</strong> BLDC Motor หมุนเร็วหลายพัน RPM — <strong>ต้องถอด Propeller ออกทุกครั้ง</strong> ขณะเขียนโค้ดและทดสอบ — ใช้ 12V LiPo หรือ DC Power Supply — ต่อ GND ร่วมกันระหว่าง MCU, ESC, และ Battery</p>
+
+    <h3>รู้จักขา</h3>
+    <ul>
+      <li><strong>Signal (ขาว/เหลือง):</strong> ขารับสัญญาณ PWM 50Hz (1–2ms pulse)</li>
+      <li><strong>VCC:</strong> จ่ายไฟจากแบตเตอรี่ LiPo (11.1V)</li>
+      <li><strong>GND:</strong> Ground ร่วมกับ MCU และแบตเตอรี่</li>
+      <li><strong>A/B/C:</strong> ขาต่อมอเตอร์ BLDC 3 สาย</li>
+    </ul>
+    <h3>วิธีต่อทีละขั้น</h3>
+    <ol>
+      <li>ต่อ <strong>Signal</strong> ของ ESC ไป <strong>GPIO PWM (PD2)</strong> — ส่งพัลส์ 1–2ms</li>
+      <li>ต่อ <strong>GND</strong> ของ ESC กับ <strong>GND</strong> MCU และแบตเตอรี่ — Ground ร่วม</li>
+      <li>ต่อ <strong>VCC</strong> ของ ESC กับ <strong>LiPo 3S (11.1V)</strong> — จ่ายไฟหลัก</li>
+      <li>ต่อ <strong>มอเตอร์ BLDC</strong> เข้ากับ <strong>ขา A/B/C</strong> — 3 สายลำดับใดก็ได้</li>
+    </ol>
 </section>
 
 <section>

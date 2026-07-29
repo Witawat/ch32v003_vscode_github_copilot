@@ -56,7 +56,25 @@ flowchart TD
         <tr><td>3.3V</td><td>→</td><td>SCL</td><td>-</td><td>ผ่าน R 4.7kΩ pull-up ไป 3.3V</td></tr>
         <tr><td>GND</td><td>→</td><td>GND</td><td>-</td><td>กราวด์ร่วม</td></tr>
       </tbody>
-    </table>
+     </table>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>VCC:</strong> ไฟเลี้ยง 3.3V</li>
+  <li><strong>GND:</strong> กราวด์</li>
+  <li><strong>SDA (PC1):</strong> สายข้อมูล I2C</li>
+  <li><strong>SCL (PC2):</strong> สายนาฬิกา I2C</li>
+  <li><strong>pull-up 4.7kΩ:</strong> ต่อระหว่าง SDA→3.3V และ SCL→3.3V (จำเป็นสำหรับ I2C)</li>
+</ul>
+
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อสาย <strong>SDA</strong> (PC1) และ <strong>SCL</strong> (PC2) ของ MCU ไปยังอุปกรณ์ I2C ที่ต้องการตรวจสอบ</li>
+  <li>ต่อ <strong>VCC</strong> ของอุปกรณ์ I2C ไป <strong>3.3V</strong></li>
+  <li>ต่อ <strong>GND</strong> ของอุปกรณ์ I2C ไป <strong>GND</strong> รวมกับ MCU</li>
+  <li>ต่อ R <strong>pull-up 4.7kΩ</strong> จาก SDA→3.3V และ SCL→3.3V — ถ้าอุปกรณ์ไม่มีในตัว</li>
+  <li>เสียบสาย USB และรันโค้ด — I2C Scanner จะหา address อุปกรณ์ให้อัตโนมัติ</li>
+</ol>
+
 </section>
 
 <section>

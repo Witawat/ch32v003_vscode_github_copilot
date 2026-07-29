@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SimpleHAL API Reference — CH32V003</title>
+<link rel="stylesheet" href="css/style.css">
+<style>.hero{text-align:center;padding:3rem 0}.hero h1{font-size:2.4em}.hero p{color:#64748b;font-size:1.1em;margin:1rem 0}.stats{display:flex;gap:1.5rem;justify-content:center;flex-wrap:wrap;margin:2rem 0}.stat{text-align:center;padding:1rem 1.5rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)}.stat-num{font-size:2em;font-weight:800;color:var(--accent)}.stat-label{font-size:.85em;color:#64748b}</style>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+
+<div class="hero">
+    <h1>SimpleHAL API Reference</h1>
+    <p>เอกสารอ้างอิง API สำหรับ CH32V003 — ครบทุกโมดูล ทุกฟังก์ชัน<br>ใช้งานง่าย อ่านเข้าใจ ด้วยภาษาไทย</p>
+    <div class="stats">
+        <div class="stat"><div class="stat-num">18</div><div class="stat-label">โมดูล</div></div>
+        <div class="stat"><div class="stat-num">150+</div><div class="stat-label">ฟังก์ชัน</div></div>
+        <div class="stat"><div class="stat-num">ไทย</div><div class="stat-label">ภาษาไทย</div></div>
+    </div>
+</div>
+
+<h2>สารบัญโมดูล</h2>
+
+<ul id="toc">
+
+<li style="border-top:2px solid var(--border);margin-top:1rem;padding-top:1rem"><span style="color:#166534;font-weight:700">เริ่มต้น</span></li>
+<li><a href="quickstart.html">
+    <span class="ch-num">0</span><span class="ch-level level-beginner">เริ่มต้น</span>
+    <span class="ch-desc">เริ่มต้นใช้งาน SimpleHAL — 3 ขั้นตอนบังคับ, แพ็กเกจ, Timer Resource Map, ตัวอย่างขั้นต่ำ</span>
+</a></li>
+<li><a href="gpio.html">
+    <span class="ch-num">1</span><span class="ch-level level-beginner">เริ่มต้น</span>
+    <span class="ch-desc">GPIO — pinMode, digitalWrite, digitalRead, Interrupt, PulseIn</span>
+</a></li>
+<li><a href="delay.html">
+    <span class="ch-num">2</span><span class="ch-level level-beginner">เริ่มต้น</span>
+    <span class="ch-desc">Delay & Timer — Delay_Ms, Delay_Us, Get_CurrentMs, Non-Blocking Timer</span>
+</a></li>
+<li><a href="arduino.html">
+    <span class="ch-num">3</span><span class="ch-level level-beginner">เริ่มต้น</span>
+    <span class="ch-desc">Arduino API — millis, delay, random, yield, Serial Compatibility</span>
+</a></li>
+
+<li style="border-top:2px solid var(--border);margin-top:1rem;padding-top:1rem"><span style="color:#92400e;font-weight:700">กลาง</span></li>
+<li><a href="usart.html">
+    <span class="ch-num">4</span><span class="ch-level level-intermediate">กลาง</span>
+    <span class="ch-desc">USART — USART_Printf_Init, USART_SendByte, USART_ReceiveByte, Remap</span>
+</a></li>
+<li><a href="i2c.html">
+    <span class="ch-num">5</span><span class="ch-level level-intermediate">กลาง</span>
+    <span class="ch-desc">I2C — I2C_Init, I2C_Write, I2C_Read, Bus Scan, Remap</span>
+</a></li>
+<li><a href="spi.html">
+    <span class="ch-num">6</span><span class="ch-level level-intermediate">กลาง</span>
+    <span class="ch-desc">SPI — SPI_Init, SPI_Transfer, SPI_WriteByte, SPI_ReadByte, Remap</span>
+</a></li>
+<li><a href="adc.html">
+    <span class="ch-num">7</span><span class="ch-level level-intermediate">กลาง</span>
+    <span class="ch-desc">ADC — ADC_Init, ADC_Read, Multi-Channel, VrefInt, Battery Monitor</span>
+</a></li>
+<li><a href="pwm.html">
+    <span class="ch-num">8</span><span class="ch-level level-intermediate">กลาง</span>
+    <span class="ch-desc">PWM — PWM_Init, PWM_SetDuty, PWM_SetFrequency, Servo, Auto-Start</span>
+</a></li>
+<li><a href="tim.html">
+    <span class="ch-num">9</span><span class="ch-level level-intermediate">กลาง</span>
+    <span class="ch-desc">TIM — Timer_Init, TIM_ClearITPendingBit, Timer Interrupt, Stopwatch</span>
+</a></li>
+
+<li style="border-top:2px solid var(--border);margin-top:1rem;padding-top:1rem"><span style="color:#991b1b;font-weight:700">สูง</span></li>
+<li><a href="dma.html">
+    <span class="ch-num">10</span><span class="ch-level level-advanced">สูง</span>
+    <span class="ch-desc">DMA — DMA_Init, DMA_Start, DMA_Callback, ADC+DMA, USART+DMA</span>
+</a></li>
+<li><a href="flash.html">
+    <span class="ch-num">11</span><span class="ch-level level-advanced">สูง</span>
+    <span class="ch-desc">Flash — Flash_ErasePage, Flash_WriteWord, Flash_ReadData, CRC Config</span>
+</a></li>
+<li><a href="iwdg.html">
+    <span class="ch-num">12</span><span class="ch-level level-advanced">สูง</span>
+    <span class="ch-desc">IWDG — IWDG_Init, IWDG_ReloadCounter, Independent Watchdog</span>
+</a></li>
+<li><a href="wwdg.html">
+    <span class="ch-num">13</span><span class="ch-level level-advanced">สูง</span>
+    <span class="ch-desc">WWDG — WWDG_Init, WWDG_SetCounter, WWDG_IRQHandler, Window Watchdog</span>
+</a></li>
+<li><a href="pwr.html">
+    <span class="ch-num">14</span><span class="ch-level level-advanced">สูง</span>
+    <span class="ch-desc">Power — PWR_EnterSleepMode, PWR_EnterStandbyMode, AWU, PVD</span>
+</a></li>
+
+<li style="border-top:2px solid var(--border);margin-top:1rem;padding-top:1rem"><span style="color:#3730a3;font-weight:700">ผู้เชี่ยวชาญ</span></li>
+<li><a href="opamp.html">
+    <span class="ch-num">15</span><span class="ch-level level-expert">ผู้เชี่ยวชาญ</span>
+    <span class="ch-desc">OPAMP — OPAMP_Init, Follower, Non-Inverting, Inverting, Comparator</span>
+</a></li>
+<li><a href="onewire.html">
+    <span class="ch-num">16</span><span class="ch-level level-expert">ผู้เชี่ยวชาญ</span>
+    <span class="ch-desc">1-Wire — OneWire_Init, OneWire_Reset, OneWire_ReadByte, DS18B20</span>
+</a></li>
+
+</ul>
+
+<div class="callout callout-note" style="margin-top:2rem">
+    <strong>วิธีอ่าน:</strong> เริ่มที่ <a href="quickstart.html">โมดูล 0 — เริ่มต้นใช้งาน</a> เพื่อทำความเข้าใจ 3 ขั้นตอนบังคับ → ดูโมดูลที่ต้องการใช้ตามลำดับระดับ
+</div>
+
+<p style="text-align:center;margin:3rem 0;color:#94a3b8;font-size:0.85em">
+    SimpleHAL v2.0 — CH32V003 — MIT License
+</p>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:false,theme:'base'});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

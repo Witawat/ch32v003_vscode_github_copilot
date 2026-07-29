@@ -76,6 +76,27 @@ flowchart TD
       </tbody>
     </table>
     <p>L298N เป็น Dual H-Bridge — ขับมอเตอร์ DC ได้ 2 ตัว (Motor A, Motor B) หรือ Stepper 1 ตัว — รับแรงดัน VMS 5V–35V, กระแส 2A ต่อช่อง — ใช้ PWM ที่ ENA/ENB ปรับความเร็ว — ต่อ GND ของ MCU, L298N logic, และ Motor Supply รวมกัน</p>
+
+    <h3>รู้จักขา</h3>
+    <ul>
+      <li><strong>IN1/IN2:</strong> ควบคุมทิศทาง Motor A (HIGH/LOW)</li>
+      <li><strong>IN3/IN4:</strong> ควบคุมทิศทาง Motor B</li>
+      <li><strong>ENA:</strong> PWM ปรับความเร็ว Motor A</li>
+      <li><strong>ENB:</strong> PWM ปรับความเร็ว Motor B</li>
+      <li><strong>OUT1/OUT2:</strong> ขาต่อ Motor A</li>
+      <li><strong>OUT3/OUT4:</strong> ขาต่อ Motor B</li>
+      <li><strong>VMS:</strong> จ่ายไฟให้มอเตอร์ 5–35V</li>
+      <li><strong>VCC/VSS:</strong> จ่ายไฟ logic 5V</li>
+      <li><strong>GND:</strong> Ground ร่วม</li>
+    </ul>
+    <h3>วิธีต่อทีละขั้น</h3>
+    <ol>
+      <li>ต่อ <strong>IN1-IN4</strong> ไป <strong>GPIO (PC0-PC3)</strong> — ควบคุมทิศทาง</li>
+      <li>ต่อ <strong>ENA/ENB</strong> ไป <strong>GPIO พร้อม PWM (PD2/PD3)</strong> — ปรับความเร็ว</li>
+      <li>ต่อ <strong>VMS</strong> กับ <strong>แหล่งจ่าย 5–35V</strong> — จ่ายไฟมอเตอร์</li>
+      <li>ต่อ <strong>VCC/VSS</strong> ไป <strong>5V</strong> และ <strong>GND</strong> ไป <strong>GND</strong> — จ่ายไฟ logic</li>
+      <li>ต่อ <strong>มอเตอร์ DC</strong> เข้ากับ <strong>OUT1/OUT2</strong> (Motor A) และ <strong>OUT3/OUT4</strong> (Motor B)</li>
+    </ol>
 </section>
 
 <section>

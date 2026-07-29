@@ -55,6 +55,20 @@ flowchart TD
       </tbody>
     </table>
     <p>WS2815 ใช้ไฟ 12V — มีขา BI (Backup Input) สำหรับ break-point continue — ถ้า LED ดวงใดเสีย สัญญาณจะข้ามไปดวงถัดไป — ต้องใช้ Level Shifter 3.3V → 5V สำหรับ data</p>
+    <h3>รู้จักขา</h3>
+    <ul>
+      <li><strong>VCC:</strong> ไฟเลี้ยง 12V (⚠️ ใช้ 5V ไม่ได้)</li>
+      <li><strong>DIN:</strong> ขาข้อมูล ต่อกับ PC0 ผ่าน level shifter 3.3V→5V</li>
+      <li><strong>GND:</strong> ต่อกราวด์ร่วมกับ MCU</li>
+      <li><strong>BI:</strong> Backup Input ต่อ GND เมื่อไม่ใช้ (อย่าปล่อยลอย)</li>
+    </ul>
+    <h3>วิธีต่อทีละขั้น</h3>
+    <ol>
+      <li>ต่อ <strong>PC0</strong> ผ่าน <strong>Level Shifter 3.3V→5V</strong> ไป <strong>DIN</strong> — จำเป็น!</li>
+      <li>ต่อ <strong>12V ภายนอก</strong> ไป <strong>VCC</strong> — ⚠️ ต้อง 12V เท่านั้น ห้ามใช้ 5V</li>
+      <li>ต่อ <strong>GND</strong> MCU และไฟแยก ไป <strong>GND</strong> — กราวด์ร่วม</li>
+      <li>ต่อ <strong>BI</strong> ไป <strong>GND</strong> — ถ้าไม่ใช้ Break-Point อย่าปล่อยลอย</li>
+    </ol>
 </section>
 <section>
     <h2>📚 หลักการทำงาน</h2>

@@ -20,6 +20,18 @@
 <pre class="ascii-circuit">
 PD2─Signal(orange)  5V external─VCC(servo,red)  GND─GND(common,brown)  ⚡ ห้ามจ่าย servo จาก WCH-Link!
 </pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>Signal (PD2):</strong> สัญญาณ PWM 50Hz ควบคุมมุม servo</li>
+  <li><strong>VCC (Red):</strong> จ่ายไฟ 5V จากแหล่งจ่ายแยก (ห้ามใช้ WCH-Link)</li>
+  <li><strong>GND (Brown):</strong> กราวด์ร่วม MCU กับ servo</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PD2</strong> ไป <strong>Signal (Orange)</strong> ของ servo — PWM 50Hz</li>
+  <li>ต่อ <strong>แหล่งจ่าย 5V</strong> ไป <strong>VCC (Red)</strong> — จ่ายไฟแยก</li>
+  <li>ต่อ <strong>GND</strong> ของ MCU และแหล่งจ่ายไป <strong>GND (Brown)</strong> — กราวด์ร่วม</li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
@@ -83,6 +95,18 @@ ServoTester_Sweep(0, 180, 1);      // 1°/step — สังเกตว่า s
 PC0─IN1(blue)  PC1─IN2(pink)  PC2─IN3(yellow)  PC3─IN4(orange)  5V external─VCC(ULN2003+)  GND─GND(ULN2003-)
 
 28BYJ-48 specs: 5V, 0.3 kg·cm torque, 1:64 gear ratio, 5-wire unipolar</pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>IN1–IN4 (PC0–PC3):</strong> ขาสั่งคอยล์ 4 ชุดของ stepper ผ่าน ULN2003</li>
+  <li><strong>VCC (5V):</strong> จ่ายไฟ 5V แยกให้ ULN2003+stepper</li>
+  <li><strong>GND:</strong> กราวด์ร่วม</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PC0</strong> ไป <strong>IN1 (Blue)</strong>, PC1→IN2, PC2→IN3, PC3→IN4</li>
+  <li>ต่อ <strong>5V</strong> ไป <strong>VCC ของ ULN2003</strong> — จ่ายไฟมอเตอร์</li>
+  <li>ต่อ <strong>GND</strong> ร่วม MCU กับ ULN2003</li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
@@ -144,6 +168,23 @@ Motor B: PC2─IN3  PC3─IN4  PC5(PWM)─ENB (optional)
 
 ⚠️ ถ้าใช้ไฟ motor >12V → ถอด jumper 5V regulator ออก!
 ⚠️ 5V terminal ใช้จ่าย CH32V003 ได้ (ถ้า motor ≤12V, regulator in use)</pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>IN1/IN2 (PC0/PC1):</strong> ควบคุมทิศทางมอเตอร์ A</li>
+  <li><strong>ENA (PC4):</strong> PWM ความเร็วมอเตอร์ A</li>
+  <li><strong>IN3/IN4 (PC2/PC3):</strong> ควบคุมทิศทางมอเตอร์ B</li>
+  <li><strong>ENB (PC5):</strong> PWM ความเร็วมอเตอร์ B</li>
+  <li><strong>VCC Motor (5–12V):</strong> จ่ายไฟให้มอเตอร์</li>
+  <li><strong>5V Logic:</strong> จ่ายไฟให้วงจรลอจิก L298N</li>
+  <li><strong>GND:</strong> กราวด์ร่วมทั้งหมด</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PC0, PC1</strong> ไป <strong>IN1, IN2</strong> และ <strong>PC4</strong> ไป <strong>ENA</strong> — มอเตอร์ A</li>
+  <li>ต่อ <strong>PC2, PC3</strong> ไป <strong>IN3, IN4</strong> และ <strong>PC5</strong> ไป <strong>ENB</strong> — มอเตอร์ B</li>
+  <li>ต่อ <strong>แหล่งจ่าย 5–12V</strong> เข้าขา motor VCC</li>
+  <li>ต่อ <strong>5V</strong> เข้าขา logic และ <strong>GND</strong> ร่วม</li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
@@ -208,6 +249,24 @@ PC0─DIR    PC1─STEP   PC2─ENABLE(opt,LOW=on)   PC3─M0   PC4─M1   PC5�
 12-24V external─VMOT  GND─GND(common)  Motor: A1/A2(1 coil)  B1/B2(1 coil)
 
 ⚠️ ต้องตั้ง current limit pot ก่อนใช้! — หมุน Vref ให้ถูกต้อง ก่อนต่อ motor</pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>DIR (PC0):</strong> ทิศทางหมุน CW/CCW</li>
+  <li><strong>STEP (PC1):</strong> ขาส่งพัลส์ step (ขอบขาขึ้น = 1 step)</li>
+  <li><strong>ENABLE (PC2):</strong> เปิด/ปิด driver (LOW = เปิด)</li>
+  <li><strong>M0/M1/M2 (PC3–PC5):</strong> เลือก microstep (1/1 ถึง 1/32)</li>
+  <li><strong>VMOT (12–24V):</strong> จ่ายไฟให้ stepper motor</li>
+  <li><strong>GND:</strong> กราวด์ร่วม</li>
+  <li><strong>A1/A2, B1/B2:</strong> ต่อกับคอยล์ 2 ชุดของ stepper</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PC0–PC5</strong> ไป <strong>DIR, STEP, ENABLE, M0, M1, M2</strong> ตามลำดับ</li>
+  <li>ต่อ <strong>VMOT</strong> เข้ากับแหล่งจ่าย 12–24V</li>
+  <li>ต่อ <strong>A1/A2</strong> กับคอยล์ชุด A และ <strong>B1/B2</strong> กับคอยล์ชุด B</li>
+  <li>ต่อ <strong>GND</strong> ร่วม</li>
+  <li><strong>⚠️ ตั้ง current limit ก่อน!</strong> วัด Vref ปรับ pot</li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
@@ -272,6 +331,21 @@ COM─common  NO─normally open  NC─normally closed  → load
 
 Module ภายใน: optocoupler + transistor + flyback diode + relay coil
 Typical relay: SRD-05VDC (5V coil, 10A/250VAC or 10A/30VDC)</pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>IN (PC0):</strong> ขาสั่งเปิด/ปิดรีเลย์ (HIGH/LOW)</li>
+  <li><strong>VCC (5V):</strong> จ่ายไฟ 5V ให้คอยล์รีเลย์</li>
+  <li><strong>GND:</strong> กราวด์ร่วม</li>
+  <li><strong>COM:</strong> ขากลางของหน้าสัมผัส</li>
+  <li><strong>NO:</strong> ปกติเปิด — ต่อเมื่อรีเลย์ ON</li>
+  <li><strong>NC:</strong> ปกติปิด — ต่อเมื่อรีเลย์ OFF</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PC0</strong> ไป <strong>IN</strong> ของรีเลย์ — สั่งเปิด/ปิด</li>
+  <li>ต่อ <strong>5V</strong> ไป <strong>VCC</strong> และ <strong>GND</strong> ไป <strong>GND</strong></li>
+  <li>ต่อ <strong>COM</strong> และ <strong>NO (หรือ NC)</strong> เข้า load ที่ต้องการควบคุม</li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>

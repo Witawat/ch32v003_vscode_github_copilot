@@ -20,6 +20,18 @@
 <pre class="ascii-circuit">
 3.3V─VCC  GND─GND  PC0─DATA  (R 4.7kΩ pull-up DATA↔3.3V)
 </pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>DATA (PC0):</strong> สายข้อมูล ต้องมี resistor pull-up 4.7kΩ ต่อกับ 3.3V</li>
+  <li><strong>VCC (3.3V):</strong> จ่ายไฟ 3.3V</li>
+  <li><strong>GND:</strong> กราวด์ร่วม</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PC0</strong> ไป <strong>DATA</strong> ของ DHT — สายข้อมูล</li>
+  <li>ต่อ <strong>3.3V</strong> ไป <strong>VCC</strong> และ <strong>GND</strong> ไป <strong>GND</strong> — จ่ายไฟ</li>
+  <li>ต่อ <strong>resistor 4.7kΩ</strong> ระหว่าง DATA กับ 3.3V — pull-up ให้สัญญาณเสถียร</li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
@@ -48,6 +60,18 @@ if(DHT_Read(&t, &h) == DHT_OK) {
 <pre class="ascii-circuit">
 3.3V─VCC  GND─GND  PC0─DQ  (R 4.7kΩ pull-up DQ↔3.3V)
 </pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>DQ (PC0/PD2):</strong> สายข้อมูล 1-Wire ต้องมี pull-up 4.7kΩ ต่อ 3.3V</li>
+  <li><strong>VCC (3.3V):</strong> จ่ายไฟ 3.3V (หรือใช้ parasite power ผ่าน DQ)</li>
+  <li><strong>GND:</strong> กราวด์ร่วม</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PC0</strong> ไป <strong>DQ</strong> ของ DS18B20 — สายข้อมูล 1-Wire</li>
+  <li>ต่อ <strong>3.3V</strong> ไป <strong>VCC</strong> และ <strong>GND</strong> ไป <strong>GND</strong> — จ่ายไฟ</li>
+  <li>ต่อ <strong>resistor 4.7kΩ</strong> ระหว่าง DQ กับ 3.3V — pull-up</li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
@@ -86,6 +110,20 @@ for(uint8_t i = 0; i < 3; i++) {
 <pre class="ascii-circuit">
 3.3V─VCC  GND─GND  PC1─SDA  PC2─SCL  (SDO─GND = 0x76, SDO─VCC = 0x77)
 </pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>SDA (PC1):</strong> สายข้อมูล I2C</li>
+  <li><strong>SCL (PC2):</strong> สายนาฬิกา I2C</li>
+  <li><strong>VCC (3.3V):</strong> จ่ายไฟ 3.3V</li>
+  <li><strong>GND:</strong> กราวด์ร่วม</li>
+  <li><strong>SDO:</strong> เลือก address I2C 0x76 (ต่อ GND) หรือ 0x77 (ต่อ VCC)</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PC1</strong> ไป <strong>SDA</strong> และ <strong>PC2</strong> ไป <strong>SCL</strong> — I2C</li>
+  <li>ต่อ <strong>3.3V</strong> ไป <strong>VCC</strong> และ <strong>GND</strong> ไป <strong>GND</strong> — จ่ายไฟ</li>
+  <li>ต่อ <strong>SDO</strong> ลง GND (0x76) หรือ VCC (0x77) — เลือก address</li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
@@ -118,6 +156,18 @@ float alt = BMP280_ReadAltitude(1013.25f);  // ความสูงจากร
 <pre class="ascii-circuit">
 3.3V─VCC  GND─GND  PC1─SDA  PC2─SCL
 </pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>SDA (PC1):</strong> สายข้อมูล I2C</li>
+  <li><strong>SCL (PC2):</strong> สายนาฬิกา I2C</li>
+  <li><strong>VCC (3.3V):</strong> จ่ายไฟ 3.3V</li>
+  <li><strong>GND:</strong> กราวด์ร่วม</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PC1</strong> ไป <strong>SDA</strong> และ <strong>PC2</strong> ไป <strong>SCL</strong> — I2C</li>
+  <li>ต่อ <strong>3.3V</strong> ไป <strong>VCC</strong> และ <strong>GND</strong> ไป <strong>GND</strong> — จ่ายไฟ</li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
@@ -147,6 +197,20 @@ float h = AHT10_ReadHumidity();</code></pre>
 <pre class="ascii-circuit">
 3.3V─VCC  GND─GND  PC1─SDA  PC2─SCL  (ADDR─GND = 0x44, ADDR─VCC = 0x45)
 </pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>SDA (PC1):</strong> สายข้อมูล I2C</li>
+  <li><strong>SCL (PC2):</strong> สายนาฬิกา I2C</li>
+  <li><strong>VCC (3.3V):</strong> จ่ายไฟ 3.3V</li>
+  <li><strong>GND:</strong> กราวด์ร่วม</li>
+  <li><strong>ADDR:</strong> เลือก address 0x44 (ต่อ GND) หรือ 0x45 (ต่อ VCC)</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PC1</strong> ไป <strong>SDA</strong> และ <strong>PC2</strong> ไป <strong>SCL</strong> — I2C</li>
+  <li>ต่อ <strong>3.3V</strong> ไป <strong>VCC</strong> และ <strong>GND</strong> ไป <strong>GND</strong> — จ่ายไฟ</li>
+  <li>ต่อ <strong>ADDR</strong> ลง GND (0x44) หรือ VCC (0x45)</li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
@@ -187,6 +251,21 @@ while(1) {
 <pre class="ascii-circuit">
 3.3V─VCC  GND─GND  PC4─CS  PC5─SCK  PC7─MISO  (Thermocouple → K-type)
 </pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>CS (PC4):</strong> เลือกชิป SPI</li>
+  <li><strong>SCK (PC5):</strong> สัญญาณนาฬิกา SPI</li>
+  <li><strong>MISO (PC7):</strong> รับข้อมูลจาก MAX31855 ทาง SPI</li>
+  <li><strong>VCC (3.3V):</strong> จ่ายไฟ 3.3V</li>
+  <li><strong>GND:</strong> กราวด์ร่วม</li>
+  <li><strong>T+/T-:</strong> ต่อกับ thermocouple K-type</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PC4</strong> ไป <strong>CS</strong>, <strong>PC5</strong> ไป <strong>SCK</strong>, <strong>PC7</strong> ไป <strong>MISO</strong> — SPI</li>
+  <li>ต่อ <strong>3.3V</strong> ไป <strong>VCC</strong> และ <strong>GND</strong> ไป <strong>GND</strong> — จ่ายไฟ</li>
+  <li>ต่อ <strong>Thermocouple K-type</strong> เข้าขา T+ และ T-</li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>

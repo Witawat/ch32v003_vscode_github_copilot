@@ -54,6 +54,29 @@ flowchart TD
     <tr><td>PC6</td><td>←</td><td>Push Button</td><td>BACK → GND</td><td>Active LOW, internal pull-up</td></tr>
   </tbody>
 </table>
+
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>SDA (PC1):</strong> สายข้อมูล I2C ส่งคำสั่งไปแสดงผลบน LCD</li>
+  <li><strong>SCL (PC2):</strong> สัญญาณนาฬิกา I2C ควบคุมจังหวะส่งข้อมูล</li>
+  <li><strong>VCC (5V):</strong> จ่ายไฟ 5V ให้ LCD ทำงาน</li>
+  <li><strong>GND:</strong> กราวด์ร่วม MCU กับ LCD</li>
+  <li><strong>PC3 (UP):</strong> ปุ่มเลื่อนขึ้น กดแล้วต่อ GND</li>
+  <li><strong>PC4 (DOWN):</strong> ปุ่มเลื่อนลง</li>
+  <li><strong>PC5 (ENTER):</strong> ปุ่มยืนยันเข้าเมนู</li>
+  <li><strong>PC6 (BACK):</strong> ปุ่มกลับเมนูก่อนหน้า</li>
+</ul>
+
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PC1</strong> ไป <strong>SDA ของ LCD</strong> — สายข้อมูล I2C</li>
+  <li>ต่อ <strong>PC2</strong> ไป <strong>SCL ของ LCD</strong> — สายนาฬิกา I2C</li>
+  <li>ต่อ <strong>5V</strong> ไป <strong>VCC ของ LCD</strong> — จ่ายไฟให้ LCD</li>
+  <li>ต่อ <strong>GND</strong> ไป <strong>GND ของ LCD</strong> — กราวด์ร่วม</li>
+  <li>ต่อ <strong>PC3</strong> ไปขาหนึ่งของปุ่ม UP อีกขาไป <strong>GND</strong> — กดแล้วกราวด์</li>
+  <li>ต่อ <strong>PC4, PC5, PC6</strong> แบบเดียวกันกับปุ่ม DOWN, ENTER, BACK</li>
+</ol>
+
 <p>LCD 16×2 ตัวอักษรผ่าน I2C (ลด pin usage) — 4 ปุ่มสำหรับนำทางเมนู — ทุกปุ่มใช้ internal pull-up (ACTIVE_LOW) — ต้อง init Button_Instance ก่อน LCDMenu_Init</p></section>
 
 <section><h2>📚 หลักการทำงาน</h2>

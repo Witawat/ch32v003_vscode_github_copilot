@@ -53,6 +53,22 @@ flowchart LR
   </tbody>
 </table>
 
+<h4>รู้จักขา</h4>
+<ul>
+  <li><strong>PA1 (ADC_IN1):</strong> ขาอ่านค่า analog 0-3.3V แปลงเป็น 0-4095 (12-bit)</li>
+  <li><strong>Potentiometer (wiper):</strong> ขากลางของตัวต้านทานปรับค่าได้ ต่อกับ PA1</li>
+  <li><strong>Potentiometer ขาบน:</strong> ต่อ VCC 3.3V</li>
+  <li><strong>Potentiometer ขาล่าง:</strong> ต่อ GND</li>
+</ul>
+
+<h4>วิธีต่อทีละขั้น</h4>
+<ol>
+  <li>ต่อ <strong>Potentiometer ขาบน</strong> ไป <strong>VCC (3.3V)</strong> — จ่ายแรงดันสูงสุด</li>
+  <li>ต่อ <strong>Potentiometer ขาล่าง</strong> ไป <strong>GND</strong></li>
+  <li>ต่อ <strong>Potentiometer ขากลาง (wiper)</strong> ไป <strong>PA1 (ADC_IN1)</strong> — อ่านค่าแรงดัน</li>
+  <li>ต่อ <strong>GND ของสัญญาณ</strong> ร่วมกับ <strong>GND MCU</strong></li>
+</ol>
+
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">
 flowchart TD
@@ -135,6 +151,22 @@ int main(void)
   </tbody>
 </table>
 
+<h4>รู้จักขา</h4>
+<ul>
+  <li><strong>PA1 (ADC_IN1):</strong> ช่อง ADC 1 — ต่อ Potentiometer 1 (10kΩ)</li>
+  <li><strong>PC4 (ADC_IN4):</strong> ช่อง ADC 4 — ต่อ Potentiometer 2 (10kΩ)</li>
+  <li><strong>PD6 (ADC_IN6):</strong> ช่อง ADC 6 — ต่อ LDR + R 10kΩ แบบ voltage divider</li>
+  <li><strong>LDR:</strong> ตัวต้านทานเปลี่ยนค่าตามแสง — ยิ่งแสงมากยิ่งต้านทานน้อย</li>
+</ul>
+
+<h4>วิธีต่อทีละขั้น</h4>
+<ol>
+  <li>ต่อ <strong>Pot 1 ขาบน</strong> → VCC, <strong>ขาล่าง</strong> → GND, <strong>wiper</strong> → PA1</li>
+  <li>ต่อ <strong>Pot 2 ขาบน</strong> → VCC, <strong>ขาล่าง</strong> → GND, <strong>wiper</strong> → PC4</li>
+  <li>ต่อ <strong>LDR</strong> ด้านหนึ่งไป <strong>3.3V</strong></li>
+  <li>ต่อ <strong>LDR</strong> อีกด้านไป <strong>PD6</strong> และ <strong>R 10kΩ</strong> → <strong>GND</strong> (pull-down)</li>
+</ol>
+
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">
 flowchart TD
@@ -214,6 +246,22 @@ int main(void) {
     <tr><td>Li-Po (-)</td><td>↔</td><td>GND</td><td>—</td><td>Common ground</td></tr>
   </tbody>
 </table>
+
+<h4>รู้จักขา</h4>
+<ul>
+  <li><strong>PC4 (ADC_IN4):</strong> ขาอ่านค่าแรงดันจาก voltage divider (แบต Li-Po)</li>
+  <li><strong>R 2kΩ:</strong> ตัวต้านทานขาบนของ voltage divider — ต่อจาก Li-Po(+) ไป PC4</li>
+  <li><strong>R 1kΩ:</strong> ตัวต้านทานขาล่าง — ต่อจาก PC4 ไป GND</li>
+  <li><strong>อัตราส่วน divider:</strong> Vout = Vin × 1k/(2k+1k) = Vin/3 — ลด 4.2V → 1.4V</li>
+</ul>
+
+<h4>วิธีต่อทีละขั้น</h4>
+<ol>
+  <li>ต่อ <strong>Li-Po (+)</strong> ไป <strong>R 2kΩ</strong> — ขาความต้านทานสูง</li>
+  <li>ต่อ <strong>R 2kΩ</strong> อีกด้านไป <strong>PC4 (ADC_IN4)</strong> — จุดแบ่งแรงดัน</li>
+  <li>ต่อ <strong>PC4</strong> ไป <strong>R 1kΩ</strong> → <strong>GND</strong> — ขาล่างของ divider</li>
+  <li>ต่อ <strong>Li-Po (-)</strong> ไป <strong>GND MCU</strong> — ใช้วงจรร่วมกัน</li>
+</ol>
 
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">

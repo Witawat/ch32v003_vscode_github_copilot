@@ -57,6 +57,22 @@ flowchart TD
         <tr><td>PC6</td><td>→</td><td>MAX7219</td><td>DIN (MOSI)</td><td>SPI Data In</td></tr>
       </tbody>
     </table>
+    <h3>รู้จักขา</h3>
+    <ul>
+      <li><strong>VCC:</strong> ไฟเลี้ยง 5V (มอดูลละ ~330mA)</li>
+      <li><strong>GND:</strong> กราวด์</li>
+      <li><strong>CS:</strong> เลือกชิป (Chip Select) — ต่อขา PC4</li>
+      <li><strong>SCK (CLK):</strong> สัญญาณนาฬิกา SPI — ต่อขา PC5</li>
+      <li><strong>DIN (MOSI):</strong> ข้อมูลจาก MCU เข้า MAX7219 — ต่อขา PC6</li>
+    </ul>
+    <h3>วิธีต่อทีละขั้น</h3>
+    <ol>
+      <li>ต่อ <strong>VCC</strong> MAX7219 ไป <strong>5V</strong> ของ MCU</li>
+      <li>ต่อ <strong>GND</strong> MAX7219 ไป <strong>GND</strong> ของ MCU</li>
+      <li>ต่อ <strong>CS</strong> MAX7219 ไปขา <strong>PC4</strong> ของ MCU</li>
+      <li>ต่อ <strong>SCK (CLK)</strong> MAX7219 ไปขา <strong>PC5</strong> ของ MCU</li>
+      <li>ต่อ <strong>DIN (MOSI)</strong> MAX7219 ไปขา <strong>PC6</strong> ของ MCU</li>
+    </ol>
     <p>MAX7219 สื่อสารผ่าน SPI — ใช้ 5V จ่ายไฟมอดูลละ ~330mA (8×8 LEDs on) — ต่อพ่วงหลายโมดูลได้โดย DOUT → DIN</p>
 </section>
 <section>

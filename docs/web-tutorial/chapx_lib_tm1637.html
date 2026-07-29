@@ -49,7 +49,22 @@ flowchart TD
         <tr><td>GND</td><td>→</td><td>TM1637</td><td>GND</td><td></td></tr>
       </tbody>
     </table>
-    <p>TM1637 ใช้โปรโตคอล 2 เส้นแบบ proprietary — ไม่ใช่ I2C</p></section>
+    <p>TM1637 ใช้โปรโตคอล 2 เส้นแบบ proprietary — ไม่ใช่ I2C</p>
+    <h3>รู้จักขา</h3>
+    <ul>
+      <li><strong>VCC:</strong> ไฟเลี้ยง 3.3V</li>
+      <li><strong>GND:</strong> ต่อกราวด์ร่วมกับ MCU</li>
+      <li><strong>CLK:</strong> ขาสัญญาณนาฬิกา ต่อกับ PC0</li>
+      <li><strong>DIO:</strong> ขาข้อมูล 2 ทิศทาง ต่อกับ PC1</li>
+    </ul>
+    <h3>วิธีต่อทีละขั้น</h3>
+    <ol>
+      <li>ต่อ <strong>PC0</strong> ไป <strong>CLK</strong> — สัญญาณนาฬิกา</li>
+      <li>ต่อ <strong>PC1</strong> ไป <strong>DIO</strong> — ส่ง/รับข้อมูล</li>
+      <li>ต่อ <strong>3.3V</strong> ไป <strong>VCC</strong> — จ่ายไฟ</li>
+      <li>ต่อ <strong>GND</strong> ไป <strong>GND</strong> — กราวด์ร่วม</li>
+    </ol>
+</section>
 <section><h2>📚 หลักการทำงาน</h2>
 <p><strong>TM1637</strong> ใช้โปรโตคอล 2 เส้นแบบ proprietary — ไม่ใช่ I2C — TM1637_Init() รับ CLK, DIO, และจำนวนหลัก — ไม่มี instance (global functions)</p></section>
 <section><h2>💻 เขียน Code ทีละขั้น</h2>

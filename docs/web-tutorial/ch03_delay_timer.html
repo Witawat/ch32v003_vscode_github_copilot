@@ -55,6 +55,20 @@ flowchart TD
       </tbody>
     </table>
 
+    <h3>รู้จักขา</h3>
+    <ul>
+      <li><strong>PC0:</strong> ขาเอาต์พุต — ต่อ LED1 + R 220Ω → GND (Non-Blocking)</li>
+      <li><strong>PC1:</strong> ขาเอาต์พุต — ต่อ LED2 + R 220Ω → GND (Blocking)</li>
+    </ul>
+
+    <h3>วิธีต่อทีละขั้น</h3>
+    <ol>
+      <li>ต่อ <strong>R 220Ω</strong> ระหว่าง <strong>PC0</strong> กับ <strong>LED1 ขาบวก</strong></li>
+      <li>ต่อ <strong>LED1 ขาลบ</strong> ไป <strong>GND</strong></li>
+      <li>ต่อ <strong>R 220Ω</strong> อีกตัวระหว่าง <strong>PC1</strong> กับ <strong>LED2 ขาบวก</strong></li>
+      <li>ต่อ <strong>LED2 ขาลบ</strong> ไป <strong>GND</strong> — วงจรเหมือนกันทั้ง 2 ดวง</li>
+    </ol>
+
     <p>วงจรเดียวกับบทก่อน — LED 2 ดวงแสดงความแตกต่างระหว่าง Blocking vs Non-Blocking</p>
 </section>
 

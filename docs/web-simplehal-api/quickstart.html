@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>โมดูล 0: เริ่มต้นใช้งาน SimpleHAL — SimpleHAL API Reference</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="gpio.html">โมดูลถัดไป →</a>
+</nav>
+
+<h1>โมดูล 0: เริ่มต้นใช้งาน SimpleHAL</h1>
+<span class="level level-beginner">ระดับเริ่มต้น</span>
+
+<div class="callout callout-note" style="margin-top:1rem">
+    <strong>สิ่งที่ต้องรู้:</strong> ทุกโปรเจกต์ CH32V003 ต้องมี 3 ขั้นตอนบังคับก่อนเรียกใช้ API ใด ๆ — อ่านให้ครบก่อนเขียนโค้ด
+</div>
+
+<section>
+    <h2>ภาพรวม</h2>
+    <p>ก่อนเรียกใช้ฟังก์ชันใด ๆ ใน SimpleHAL ทุกโปรเจกต์ต้องมี 3 สิ่งนี้เสมอ:</p>
+    <ol>
+        <li><strong>#define CH32V003_PACKAGE</strong> — เลือกแพ็กเกจให้ตรงกับชิปที่ใช้งาน</li>
+        <li><strong>SystemCoreClockUpdate()</strong> — ต้องเป็นบรรทัดแรกใน <code>main()</code></li>
+        <li><strong>Timer_Init()</strong> — ต้องเรียกหลัง <code>SystemCoreClockUpdate()</code></li>
+    </ol>
+    <p>ถ้าขาดข้อใดข้อหนึ่ง โค้ดอาจคอมไพล์ผ่านแต่ไม่ทำงาน หรือทำงานผิดพลาด</p>
+    <div class="flowchart">
+        <pre class="mermaid">
+flowchart TD
+    A["#define CH32V003_PACKAGE"] --> B["SystemCoreClockUpdate()"]
+    B --> C["Timer_Init()"]
+    C --> D["เรียกใช้ API อื่น ๆ ได้"]
+        </pre>
+    </div>
+</section>
+
+<section>
+    <h2>ขั้นที่ 1: เลือกแพ็กเกจ</h2>
+    <p>กำหนด <code>#define CH32V003_PACKAGE</code> <strong>ก่อน</strong> <code>#include "SimpleHAL.h"</code> เพื่อให้ไลบรารีรู้ว่าชิปมีกี่ขาและขาไหนใช้ได้บ้าง</p>
+
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"</code></pre>
+
+    <h3>แพ็กเกจที่รองรับ</h3>
+    <table>
+        <tr><th>แพ็กเกจ</th><th>ขาที่ใช้ได้</th><th>ชิป</th></tr>
+        <tr><td><code>PACKAGE_SOP8</code></td><td>6 pins</td><td>CH32V003J4M6</td></tr>
+        <tr><td><code>PACKAGE_SOP16</code></td><td>14+ pins</td><td>CH32V003F4P6</td></tr>
+        <tr><td><code>PACKAGE_TSSOP20</code></td><td>18 pins</td><td>CH32V003F4U6</td></tr>
+        <tr><td><code>PACKAGE_QFN20</code></td><td>18 pins</td><td>CH32V003F4K6</td></tr>
+    </table>
+
+    <div class="callout callout-warn">
+        <strong>ถ้าลืม:</strong> <code>SimpleHAL.h</code> จะ default เป็น TSSOP20 และแสดงคำเตือนตอนคอมไพล์ — แต่โค้ดอาจทำงานผิดถ้าชิปจริงเป็น SOP8
+    </div>
+</section>
+
+<section>
+    <h2>ขั้นที่ 2: SystemCoreClockUpdate()</h2>
+    <p>ต้องเป็นบรรทัดแรกใน <code>main()</code> — อัปเดตตัวแปร <code>SystemCoreClock</code> ให้ถูกต้องตามความถี่จริงของ HSI (48MHz default)</p>
+
+    <pre><code class="language-c">int main(void)
+{
+    SystemCoreClockUpdate();  // ต้องเป็นบรรทัดแรก
+    // ...
+}</code></pre>
+
+    <p>ฟังก์ชันนี้เป็นส่วนหนึ่งของ CMSIS — ถูกใช้ภายในโดย <code>Delay_Ms()</code>, <code>Delay_Us()</code>, <code>USART_Printf_Init()</code> และโมดูลอื่น ๆ อีกมาก</p>
+
+    <div class="callout callout-warn">
+        <strong>ถ้าลืม:</strong> <code>Delay_Ms()</code> จะหน่วงเวลาไม่ถูกต้อง (อาจช้าหรือเร็วผิด), <code>USART_Printf_Init()</code> จะคำนวณ baud rate ผิด — ทำให้สื่อสาร Serial ไม่ได้
+    </div>
+</section>
+
+<section>
+    <h2>ขั้นที่ 3: Timer_Init()</h2>
+    <p>ต้องเรียกหลัง <code>SystemCoreClockUpdate()</code> — ตั้งค่า SysTick ให้ทำงานที่ 1ms resolution</p>
+
+    <pre><code class="language-c">int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();  // ต้องเรียกก่อนใช้ Delay
+    // ...
+}</code></pre>
+
+    <p><code>Timer_Init()</code> จำเป็นสำหรับฟังก์ชันที่ต้องใช้เวลาอ้างอิง: <code>Delay_Ms()</code>, <code>Get_CurrentMs()</code>, Non-Blocking Timer</p>
+
+    <div class="callout callout-warn">
+        <strong>ถ้าลืม:</strong> <code>Delay_Ms()</code> และ <code>Get_CurrentMs()</code> จะไม่ทำงาน — โปรแกรมอาจค้างใน infinite loop ถ้าใช้ Delay แบบรอ SysTick
+    </div>
+</section>
+
+<section>
+    <h2>Timer Resource Map</h2>
+    <p>CH32V003 มี 2 Timer ทั้งหมด — <code>Timer_Init()</code> ใช้ SysTick (ไม่นับรวม):</p>
+
+    <table>
+        <tr><th>Timer</th><th>ใช้โดย</th><th>ข้อจำกัด</th></tr>
+        <tr><td><strong>SysTick</strong></td><td><code>Timer_Init()</code> → <code>Delay_Ms()</code>, <code>Get_CurrentMs()</code></td><td>ใช้ได้เฉพาะ 1ms resolution, ไม่สามารถใช้ร่วมกับฟังก์ชันอื่น</td></tr>
+        <tr><td><strong>TIM1</strong> (16-bit Advanced)</td><td>PWM, Timer Interrupt</td><td>ใช้กับ PWM หรือ TIM ได้ แต่ต้องเลือกอย่างใดอย่างหนึ่ง — ใช้ Timer Resource Guard ป้องกัน</td></tr>
+        <tr><td><strong>TIM2</strong> (16-bit General)</td><td>PWM, Timer Interrupt, External Clock</td><td>ใช้กับ PWM หรือ TIM หรือ Ext Clock ได้ แต่ต้องเลือกอย่างใดอย่างหนึ่ง</td></tr>
+    </table>
+
+    <div class="callout callout-warn">
+        <strong>ข้อควรระวัง:</strong> TIM1 และ TIM2 ใช้ร่วมกันไม่ได้หากใช้ทั้ง PWM และ TIM พร้อมกัน — ใช้ฟังก์ชัน Timer Resource Guard เพื่อตรวจสอบก่อน
+    </div>
+</section>
+
+<section>
+    <h2>ตัวอย่างขั้นต่ำ — Hello World</h2>
+    <p>โค้ดสมบูรณ์ที่รวม LED กระพริบ + USART Debug Print:</p>
+
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    // LED
+    pinMode(PC0, PIN_MODE_OUTPUT);
+
+    // USART Debug
+    USART_Printf_Init(USART1, BAUD_115200);
+    printf("\r\nSimpleHAL Ready\r\n");
+
+    while(1)
+    {
+        digitalWrite(PC0, HIGH);
+        Delay_Ms(500);
+        digitalWrite(PC0, LOW);
+        Delay_Ms(500);
+        printf("Tick\r\n");
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>วิธีการ Include</h2>
+    <p>SimpleHAL รองรับการ include 2 แบบ:</p>
+
+    <h3>แบบที่ 1: Single Include (แนะนำ)</h3>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"   // รวมทุกโมดูล — ง่ายสุด</code></pre>
+    <p>ข้อดี: สะดวก ไม่ต้อง include หลายไฟล์ — เหมาะสำหรับโปรเจกต์ทั่วไป</p>
+
+    <h3>แบบที่ 2: Selective Include</h3>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "hal_delay.h"    // เฉพาะ Delay
+#include "hal_gpio.h"     // เฉพาะ GPIO</code></pre>
+    <p>ข้อดี: ลดขนาดโค้ดและเวลา compile — เหมาะสำหรับโปรเจกต์ที่ต้องการควบคุม unit ทุกตัว</p>
+
+    <div class="callout callout-good">
+        <strong>แนะนำ:</strong> ใช้ Single Include (<code>SimpleHAL.h</code>) ในช่วงพัฒนา — เปลี่ยนเป็น Selective Include เมื่อโปรเจกต์เสร็จและต้องการ optimize ขนาด binary
+    </div>
+</section>
+
+<section>
+    <h2>เช็กลิสต์ก่อนเขียนโค้ด</h2>
+    <ol>
+        <li>เลือกแพ็กเกจถูกต้องหรือไม่ (<code>SOP8</code> / <code>SOP16</code> / <code>TSSOP20</code> / <code>QFN20</code>)</li>
+        <li><code>SystemCoreClockUpdate()</code> อยู่บรรทัดแรกใน <code>main()</code></li>
+        <li><code>Timer_Init()</code> อยู่หลัง <code>SystemCoreClockUpdate()</code> ก่อนใช้ <code>Delay_Ms()</code></li>
+        <li>ตรวจสอบว่า pin ที่ใช้มีอยู่ในแพ็กเกจที่เลือก</li>
+        <li>กรณีใช้ SOP8: ระวัง <code>PC0</code> ไม่มี — ใช้ <code>PA1</code>, <code>PC1</code>, <code>PC2</code>, <code>PC4</code>, <code>PD6</code> แทน</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="gpio.html">โมดูลถัดไป →</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

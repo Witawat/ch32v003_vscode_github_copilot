@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>เฉลย — บทที่ 2: GPIO — Digital Input/Output</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+<style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:0.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:0.9em}.ascii-circuit{font-family:'Courier New',monospace;background:#1e293b;color:#e2e8f0;padding:1.2rem;border-radius:var(--radius);overflow-x:auto;line-height:1.4;white-space:pre;font-size:0.85em}</style>
+</head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">&#8592; สารบัญ</a>
+    <a href="ch02-gpio.html">กลับบทที่ 2</a>
+</nav>
+<h1>&#128221; เฉลย — บทที่ 2: GPIO — Digital Input/Output</h1>
+
+<div class="answer">
+  <h2>ข้อ 1: LED 3 ดวงวิ่ง Knight Rider (PC0&#8594;PC1&#8594;PC2&#8594;PC1&#8594;PC0)</h2>
+  <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    uint8_t leds[] = {PC0, PC1, PC2};
+    pinModeMultiple(leds, PIN_MODE_OUTPUT);
+
+    int idx = 0, dir = 1;
+
+    while (1) {
+        digitalWrite(PC0, LOW);
+        digitalWrite(PC1, LOW);
+        digitalWrite(PC2, LOW);
+        digitalWrite(leds[idx], HIGH);
+
+        Delay_Ms(150);
+
+        idx += dir;
+        if (idx &gt;= 3) { idx = 1; dir = -1; }
+        if (idx &lt; 0)  { idx = 1; dir =  1; }
+    }
+}</code></pre>
+  <div class="approach"><strong>&#129504; แนวคิด:</strong> <code>pinModeMultiple</code> ตั้ง LED 3 ดวงเป็น output พร้อมกัน — <code>array leds[]</code> เก็บ pin — วน <code>idx</code> ไปข้างหน้า 0&#8594;1&#8594;2 แล้วกลับทิศ 2&#8594;1&#8594;0 ด้วย <code>dir</code> flag — ก่อนเปลี่ยนดวงต้องดับทุกดวงด้วย <code>digitalWrite(LOW)</code> ก่อน แล้วติดเฉพาะดวงปัจจุบัน — <code>Delay_Ms(150)</code> ควบคุมความเร็ว</div>
+</div>
+
+<div class="answer">
+  <h2>ข้อ 2: ปุ่มกด 2 ปุ่มเปลี่ยนความเร็วกระพริบ</h2>
+  <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+volatile int speed_ms = 500;
+volatile uint8_t btn_flag = 0;
+
+void btn_up_isr(void) {
+    if (speed_ms &gt; 50) speed_ms -= 50;
+}
+void btn_down_isr(void) {
+    if (speed_ms &lt; 2000) speed_ms += 50;
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    pinMode(PC0, PIN_MODE_OUTPUT);
+    pinMode(PC1, PIN_MODE_INPUT_PULLUP);
+    pinMode(PC2, PIN_MODE_INPUT_PULLUP);
+    attachInterrupt(PC1, btn_up_isr, FALLING);
+    attachInterrupt(PC2, btn_down_isr, FALLING);
+
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+
+    while (1) {
+        digitalToggle(PC0);
+        USART_Print("Speed=");
+        USART_PrintNum(speed_ms);
+        USART_Print("ms\r\n");
+        Delay_Ms(speed_ms);
+    }
+}</code></pre>
+  <div class="approach"><strong>&#129504; แนวคิด:</strong> ใช้ <code>volatile int speed_ms</code> แชร์ระหว่าง ISR และ main — <code>btn_up_isr</code> ลดค่า &#8594; เร็วขึ้น (delay สั้นลง), <code>btn_down_isr</code> เพิ่มค่า &#8594; ช้าลง — clamp ไม่ให้ต่ำกว่า 50ms หรือเกิน 2000ms — ใช้ <code>attachInterrupt</code> 2 ตัวแยกกันสำหรับ 2 ปุ่ม</div>
+</div>
+
+<div class="answer">
+  <h2>ข้อ 3: ใช้ pulseIn วัด double-click</h2>
+  <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+volatile uint32_t last_press_ms = 0;
+volatile uint8_t  click_count = 0;
+
+void btn_isr(void) {
+    uint32_t now = Get_CurrentMs();
+    if (now - last_press_ms &lt; 400) {
+        click_count++;  // double-click!
+    } else {
+        click_count = 1;  // single click ใหม่
+    }
+    last_press_ms = now;
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    pinMode(PC0, PIN_MODE_OUTPUT);
+    pinMode(PC1, PIN_MODE_INPUT_PULLUP);
+    attachInterrupt(PC1, btn_isr, FALLING);
+
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+
+    while (1) {
+        if (click_count == 2) {
+            click_count = 0;
+            USART_Print("DOUBLE CLICK!\r\n");
+            for (int i = 0; i &lt; 5; i++) {
+                digitalToggle(PC0);
+                Delay_Ms(80);
+            }
+        }
+        Delay_Ms(10);
+    }
+}</code></pre>
+  <div class="approach"><strong>&#129504; แนวคิด:</strong> ISR จับเวลาจาก <code>Get_CurrentMs</code> — ถ้าห่าง &lt; 400ms = double-click — ถ้าห่าง &gt; 400ms = single click ใหม่ — main loop เช็ค <code>click_count == 2</code> &#8594; กระพริบ LED เร็ว 5 ครั้งยืนยัน — ใช้ <code>volatile</code> กับตัวแปรที่แชร์ระหว่าง ISR/main</div>
+</div>
+
+<div class="answer">
+  <h2>&#128268; วงจรประกอบ — Knight Rider 3 LED + 2 ปุ่ม</h2>
+  <pre class="ascii-circuit">
+        CH32V003
+        &#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;
+        &#9472;          &#9472;
+   PC0 &#9472;&#9472;&#9472;&#9472;&#9472; R220&#937; &#9472;&#9472;&#9472;&#9472;&#9472;&#9654; LED1 &#9472;&#9472;&#9472;&#9472;&#9472;&#9472; GND
+   PC1 &#9472;&#9472;&#9472;&#9472;&#9472; R220&#937; &#9472;&#9472;&#9472;&#9472;&#9472;&#9654; LED2 &#9472;&#9472;&#9472;&#9472;&#9472;&#9472; GND
+   PC2 &#9472;&#9472;&#9472;&#9472;&#9472; R220&#937; &#9472;&#9472;&#9472;&#9472;&#9472;&#9654; LED3 &#9472;&#9472;&#9472;&#9472;&#9472;&#9472; GND
+        &#9472;                       &#9472;
+   PC3 &#9472;&#9472;&#9472;&#9472;&#9472; ปุ่มเร่ง &#9472;&#9472;&#9472;&#9472;&#9472; GND
+   PC4 &#9472;&#9472;&#9472;&#9472;&#9472; ปุ่มลด  &#9472;&#9472;&#9472;&#9472;&#9472; GND
+        &#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;&#9472;</pre>
+  <div class="approach"><strong>&#128161; ทำไมต้อง R 220&#937;:</strong> LED ใช้กระแส ~10mA — ถ้าไม่มี R จะดึงกระแสเกินชิปพัง = <code>(3.3V - 2V) / 220&#937; &#8776; 6mA</code> — ใช้ internal pull-up (~40k&#937;) สำหรับปุ่มกด ไม่ต้องต่อ R pull-up ภายนอก</div>
+</div>
+
+<nav class="bottom-nav">
+    <a href="index.html">&#8592; สารบัญ</a>
+    <a href="ch02-gpio.html">กลับบทที่ 2</a>
+</nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

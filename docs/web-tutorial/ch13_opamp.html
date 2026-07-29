@@ -75,6 +75,21 @@ flowchart TD
       </tbody>
     </table>
 
+    <h3>รู้จักขา</h3>
+    <ul>
+      <li><strong>PA4 (OP_IN+):</strong> ขาเข้าบวกของ OPAMP — รับสัญญาณจากเซ็นเซอร์</li>
+      <li><strong>PA5 (OP_OUT):</strong> ขาออกของ OPAMP — ต่อภายในกับ ADC ไม่ต้องต่อสาย</li>
+      <li><strong>PA6 (OP_IN-):</strong> ขาเข้าลบของ OPAMP — ใช้กับโหมด PGA หรือ Inverting</li>
+    </ul>
+
+    <h3>วิธีต่อทีละขั้น</h3>
+    <ol>
+      <li>ต่อ <strong>สัญญาณเซ็นเซอร์</strong> ไป <strong>PA4 (OP_IN+)</strong> — สัญญาณเข้า OPAMP</li>
+      <li><strong>PA5 (OP_OUT)</strong> ต่อกับ <strong>ADC ภายใน</strong> อยู่แล้ว — ไม่ต้องต่อสายเพิ่ม</li>
+      <li>(ถ้าใช้ PGA) ต่อ <strong>PA6 (OP_IN-)</strong> กับ <strong>R ภายนอก</strong> ตามสูตรขยาย — ไม่ต้องต่อถ้าใช้ Follower</li>
+      <li>เรียก <strong>OPAMP_Enable()</strong> ในโค้ดก่อนอ่าน ADC</li>
+    </ol>
+
     <p><strong>CH32V003 OPAMP pins:</strong> PA4 = OP_IN+, PA5 = OP_OUT, PA6 = OP_IN- — เช็ค datasheet ว่ารุ่นที่ใช้มี OPAMP หรือไม่</p>
 </section>
 

@@ -36,7 +36,21 @@ flowchart TD
         <tr><td>PC1 (GPIO)</td><td>←</td><td>KY-026</td><td>D0</td><td>Digital Output — ตรวจจับไฟ</td></tr>
       </tbody>
     </table>
-    <p>KY-026 ใช้ IR Photodiode ตรวจจับเปลวไฟในช่วงความยาวคลื่น 760-1100nm — มี LM393 Comparator สำหรับ Digital Output — Pot ปรับ sensitivity — มุมตรวจจับ ~60° ระยะไกลสุด ~1m สำหรับไฟแช็ก</p></section>
+     <p>KY-026 ใช้ IR Photodiode ตรวจจับเปลวไฟในช่วงความยาวคลื่น 760-1100nm — มี LM393 Comparator สำหรับ Digital Output — Pot ปรับ sensitivity — มุมตรวจจับ ~60° ระยะไกลสุด ~1m สำหรับไฟแช็ก</p>
+     <h3>รู้จักขา</h3>
+     <ul>
+       <li><strong>VCC:</strong> จ่ายไฟ 3.3V</li>
+       <li><strong>GND:</strong> Ground ร่วม</li>
+       <li><strong>A0 (Analog Out):</strong> แรงดันแปรผันตามความเข้ม IR</li>
+       <li><strong>D0 (Digital Out):</strong> HIGH เมื่อ IR เกิน threshold (ปรับด้วย Pot)</li>
+     </ul>
+     <h3>วิธีต่อทีละขั้น</h3>
+     <ol>
+       <li>ต่อ <strong>VCC</strong> ของ KY-026 ไป <strong>3.3V</strong> และ <strong>GND</strong> ไป <strong>GND</strong> — จ่ายไฟ</li>
+       <li>ต่อ <strong>A0</strong> ไป <strong>PC4 (ADC)</strong> — อ่านความเข้ม IR</li>
+       <li>ต่อ <strong>D0</strong> ไป <strong>PC1 (GPIO)</strong> — ตรวจจับเปลวไฟแบบดิจิตอล</li>
+     </ol>
+</section>
 <section><h2>📚 หลักการทำงาน</h2><p><strong>KY-026 Flame Sensor</strong> ใช้ Infrared Photodiode ตรวจจับรังสี IR จากเปลวไฟ — เปลวไฟปล่อย IR ในช่วง 760-1100nm — เซนเซอร์กรองแสง visible ออก — เมื่อมีเปลวไฟ ADC จะสูงขึ้น (แสง IR มากขึ้น)</p><p><strong>2 Outputs:</strong> Analog (A0) — ใช้ ADC อ่านความเข้ม IR (0-3.3V) — Digital (D0) — LM393 Comparator เทียบกับ threshold ที่ปรับด้วย Pot — D0 = HIGH เมื่อ IR เกิน threshold — ใช้ขัดจังหวะ MCU ได้</p><p><strong>Digital vs Analog:</strong> Digital ใช้ตรวจจับเร็ว (GPIO interrupt) — Analog ใช้บอกระยะทาง/ความแรงของไฟ — การใช้ทั้งคู่ช่วยลด False Positive (แสงแดด vs เปลวไฟจริง)</p><p><strong>ข้อควรระวัง:</strong> แสงแดดมี IR สูง อาจ trigger false positive — หลีกเลี่ยงการติดตั้งที่โดนแดดตรง — ใช้ Analog threshold หลายระดับเพื่อยืนยัน</p></section>
 <section><h2>💻 เขียน Code ทีละขั้น</h2>
 <div class="step"><h3>ขั้นที่ 1: Init FlameSensor</h3><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20

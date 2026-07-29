@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>เฉลย บทที่ 13 — SimpleHAL</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+<style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:0.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:0.9em}</style>
+</head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch13-dma.html">กลับบทที่ 13</a>
+</nav>
+<h1>📝 เฉลย — บทที่ 13: DMA — Direct Memory Access</h1>
+
+<div class="answer">
+  <h2>ข้อ 1: DMA copy 256 bytes วัดเวลา เทียบ CPU</h2>
+  <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include &lt;string.h&gt;
+
+#define BUF_SIZE 256
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+
+    uint8_t src[BUF_SIZE], dst1[BUF_SIZE], dst2[BUF_SIZE];
+    for (int i = 0; i &lt; BUF_SIZE; i++) src[i] = (uint8_t)i;
+
+    // CPU copy
+    uint32_t t0 = Get_CurrentUs();
+    for (int i = 0; i &lt; BUF_SIZE; i++) dst1[i] = src[i];
+    uint32_t cpu_time = Get_CurrentUs() - t0;
+
+    // DMA copy
+    uint32_t t1 = Get_CurrentUs();
+    DMA_MemCopy(dst2, src, BUF_SIZE);
+    uint32_t dma_time = Get_CurrentUs() - t1;
+
+    USART_Print("CPU copy: "); USART_PrintNum((int32_t)cpu_time);
+    USART_Print(" us\r\n");
+    USART_Print("DMA copy: "); USART_PrintNum((int32_t)dma_time);
+    USART_Print(" us\r\n");
+
+    // Verify
+    uint8_t ok = (memcmp(dst1, dst2, BUF_SIZE) == 0);
+    USART_Print(ok ? "Data OK!\r\n" : "Data MISMATCH!\r\n");
+
+    while (1);
+}</code></pre>
+  <div class="approach"><strong>🧠 แนวคิด:</strong> จับเวลา Get_CurrentUs ก่อนและหลังแต่ละวิธี — CPU copy: for loop ธรรมดา — DMA copy: DMA_MemCopy แบบ blocking — เปรียบเทียบเวลา µs — DMA เร็วกว่าที่ buffer ใหญ่ (&gt;64 bytes) และ CPU ว่างทำงานอื่นได้ (แต่แบบ blocking CPU รอ) — memcmp ตรวจสอบข้อมูลถูกต้อง</div>
+</div>
+
+<div class="answer">
+  <h2>ข้อ 2: ADC DMA circular buffer 10kHz</h2>
+  <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+#define BUF_SIZE 100
+
+uint16_t adc_buf[BUF_SIZE];
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    ADC_SimpleInit();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+
+    // เริ่ม ADC DMA circular (circular=1)
+    DMA_analogReadStart(PD2, adc_buf, BUF_SIZE, 1);
+
+    Timer_t report_timer;
+    Start_Timer(&report_timer, 1000, 1);  // ทุก 1 วินาที
+
+    USART_Print("ADC DMA started\r\n");
+
+    while (1) {
+        if (Is_Timer_Expired(&report_timer)) {
+            // คำนวณค่าเฉลี่ย
+            uint32_t sum = 0;
+            for (int i = 0; i &lt; BUF_SIZE; i++) {
+                sum += adc_buf[i];
+            }
+            uint16_t avg = (uint16_t)(sum / BUF_SIZE);
+            uint16_t latest = adc_buf[BUF_SIZE - 1];
+
+            USART_Print("Avg="); USART_PrintNum(avg);
+            USART_Print(" Latest="); USART_PrintNum(latest);
+            USART_Print(" mV=");
+            USART_PrintNum((int32_t)(((uint32_t)avg * 3300) / 1023));
+            USART_Print("\r\n");
+        }
+    }
+}</code></pre>
+  <div class="approach"><strong>🧠 แนวคิด:</strong> DMA_analogReadStart circular mode → DMA เขียนค่า ADC ลง buffer เรื่อย ๆ แบบ ring buffer — buffer 100 samples อัปเดตตลอด — main loop: Timer_t 1 วินาที เช็ค → คำนวณค่าเฉลี่ยจาก 100 samples → แสดง avg + latest + mV — CPU ว่าง ไม่ต้อง poll ADC ทีละครั้ง — ideal for data logger</div>
+</div>
+
+<div class="answer">
+  <h2>ข้อ 3: USART DMA ส่ง 500 bytes + LED กระพริบพร้อมกัน</h2>
+  <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+#define MSG_SIZE 500
+
+volatile uint8_t dma_busy = 0;
+
+void dma_done_callback(DMA_Channel ch) {
+    dma_busy = 0;
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    pinMode(PC0, PIN_MODE_OUTPUT);
+
+    // เตรียมข้อความ 500 bytes
+    uint8_t msg[MSG_SIZE];
+    for (int i = 0; i &lt; MSG_SIZE; i++) msg[i] = 'A' + (i % 26);
+
+    // ตั้ง DMA callback
+    DMA_SetTransferCompleteCallback(DMA_CH2, dma_done_callback);
+
+    while (1) {
+        dma_busy = 1;
+        DMA_USART_Transmit(DMA_CH2, msg, MSG_SIZE);  // non-blocking send
+
+        // CPU แสดง LED กระพริบ — พิสูจน์ว่าไม่ติดขัด!
+        while (dma_busy) {
+            digitalWrite(PC0, HIGH); Delay_Ms(50);
+            digitalWrite(PC0, LOW);  Delay_Ms(50);
+        }
+
+        USART_Print("\r\n--- Done ---\r\n");
+        Delay_Ms(2000);
+    }
+}</code></pre>
+  <div class="approach"><strong>🧠 แนวคิด:</strong> DMA_USART_Transmit non-blocking → ส่ง 500 bytes โดย DMA ทำงานเบื้องหลัง — dma_busy flag เซ็ตก่อนส่ง, เคลียร์ตอน callback — while(dma_busy): LED toggle ทุก 50ms — พิสูจน์ว่า CPU ไม่หยุดรอ USART — DMA transfer complete → callback → main loop แสดง "Done" — นี่คือข้อได้เปรียบของ DMA: CPU อิสระระหว่างถ่ายโอนข้อมูล</div>
+</div>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch13-dma.html">กลับบทที่ 13</a>
+</nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

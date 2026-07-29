@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>บทที่ 3: Delay & Timer — ควบคุมเวลา — SimpleHAL</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+</head>
+<body>
+
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch02-gpio.html">บทก่อน</a>
+    <a href="ch04-usart.html">บทถัดไป →</a>
+</nav>
+
+<h1>บทที่ 3: Delay & Timer — ควบคุมเวลา</h1>
+<span class="level level-beginner">เริ่มต้น</span>
+
+<section class="flowchart">
+    <h2>🧭 แผนภาพการทำงาน</h2>
+    <pre class="mermaid">
+flowchart TD
+    A{"ต้องการอะไร?"} -->|"หยุดรอ"| B["Delay_Ms() / Delay_Us()"]
+    A -->|"ไม่หยุดรอ"| C["Timer_t + non-blocking"]
+    A -->|"อ่านเวลา"| D["Get_CurrentMs / Get_CurrentUs"]
+    B --> E["โปรแกรมหยุดระหว่างรอ"]
+    C --> F["โปรแกรมทำงานอย่างอื่นได้"]
+    D --> G["ใช้กับ timeout, profiling"]
+    </pre>
+</section>
+
+<section>
+    <h2>📋 สิ่งที่ต้องรู้ก่อน</h2>
+    <p>บทนี้ต่อจาก <a href="ch02-gpio.html">บทที่ 2: GPIO</a> — คุณควรใช้งาน GPIO พื้นฐานได้แล้ว และต้องเข้าใจว่า <code>SystemCoreClockUpdate()</code> กับ <code>Timer_Init()</code> เป็น 2 บรรทัดแรกที่ต้องเรียกใน <code>main()</code> เสมอ</p>
+</section>
+
+<section>
+    <h2>📦 อุปกรณ์ที่ต้องใช้</h2>
+    <table>
+        <thead><tr><th>อุปกรณ์</th><th>จำนวน</th><th>หมายเหตุ</th></tr></thead>
+        <tbody>
+            <tr><td>บอร์ด CH32V003</td><td>1</td><td>แพ็คเกจใดก็ได้</td></tr>
+            <tr><td>LED 5mm</td><td>2–3</td><td>ใช้ทดสอบความถี่กระพริบ</td></tr>
+            <tr><td>ตัวต้านทาน 220Ω</td><td>3</td><td></td></tr>
+            <tr><td>USB-to-Serial Adapter</td><td>1</td><td>ใช้ debug แสดงค่าเวลา (optional)</td></tr>
+        </tbody>
+    </table>
+</section>
+
+<section>
+    <h2>🤔 ทำไมต้องใช้?</h2>
+    <p>ทุกโปรเจกต์ต้องใช้เวลา ไม่ว่าจะเป็นการกระพริบไฟทุก 500ms, การหน่วงเวลาก่อนอ่านเซนเซอร์, การจับ timeout รอการตอบกลับจากอุปกรณ์ภายนอก, หรือการวัดความเร็วว่าโค้ดส่วนไหนใช้เวลานานแค่ไหน (profiling)</p>
+    <p>SimpleHAL แบ่งการทำงานด้านเวลาออกเป็น 2 กลุ่มใหญ่: <strong>Blocking Delay</strong> (โปรแกรมหยุดรอ) และ <strong>Non-Blocking Timer</strong> (โปรแกรมทำงานต่อได้ระหว่างรอ)</p>
+</section>
+
+<section>
+    <h2>📚 ภาพรวมและหลักการทำงาน</h2>
+    <p>SimpleHAL ใช้ <strong>SysTick Timer</strong> ซึ่งเป็น hardware timer 24-bit ภายใน Cortex-M0 core มาเป็นฐานเวลาสำหรับระบบ delay ทั้งหมด:</p>
+    <ul>
+        <li><code>Timer_Init()</code> ตั้งค่า SysTick ให้สร้าง interrupt ทุก 1 มิลลิวินาที</li>
+        <li>ภายใน interrupt handler จะเพิ่มตัวนับ global <code>current_ms</code> ขึ้นทีละ 1</li>
+        <li><code>Delay_Ms(n)</code> อ่านค่า <code>current_ms</code> แล้ววนลูปจนผ่านไป n มิลลิวินาที</li>
+        <li><code>Get_CurrentMs()</code> อ่านค่า <code>current_ms</code> ณ ขณะนั้น — ใช้สร้าง non-blocking timer ได้</li>
+    </ul>
+    <p>สำหรับระดับ microseconds: <code>Get_CurrentUs()</code> อ่านค่า SysTick counter register โดยตรงแล้วคำนวณกลับเป็นไมโครวินาที ให้ความละเอียด ~20μs ที่ 48MHz</p>
+    <table>
+        <thead><tr><th>ประเภท</th><th>ละเอียดสุด</th><th>โปรแกรมหยุด?</th><th>Overflow</th><th>ใช้เมื่อ</th></tr></thead>
+        <tbody>
+            <tr><td>Delay_Ms</td><td>~1 ms</td><td>ใช่ (blocking)</td><td>—</td><td>หน่วงเวลาง่าย ๆ ในโปรแกรมสั้น</td></tr>
+            <tr><td>Delay_Us</td><td>~20 μs</td><td>ใช่ (blocking)</td><td>—</td><td>หน่วงสั้นมาก เช่น bit-banging</td></tr>
+            <tr><td>Get_CurrentMs</td><td>1 ms</td><td>ไม่</td><td>~49 วัน</td><td>Timer_t, debounce, timeout</td></tr>
+            <tr><td>Get_CurrentUs</td><td>~20 μs</td><td>ไม่</td><td>~71 นาที</td><td>วัดความกว้างพัลส์, profiling</td></tr>
+        </tbody>
+    </table>
+</section>
+
+<section>
+    <h2>📋 API Reference</h2>
+    <table>
+        <thead><tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr></thead>
+        <tbody>
+            <tr><td><code>Timer_Init()</code></td><td>เริ่มต้น SysTick Timer (ต้องเรียกก่อนฟังก์ชันอื่น)</td><td><code>Timer_Init();</code></td></tr>
+            <tr><td><code>Delay_Ms(n)</code></td><td>หน่วงเวลา n มิลลิวินาที (blocking)</td><td><code>Delay_Ms(500);</code></td></tr>
+            <tr><td><code>Delay_Us(n)</code></td><td>หน่วงเวลา n ไมโครวินาที (blocking, ใช้ busy-wait)</td><td><code>Delay_Us(100);</code></td></tr>
+            <tr><td><code>Get_CurrentMs()</code></td><td>อ่านค่า millisecond counter ตั้งแต่ระบบเริ่ม — ใช้สร้าง non-blocking timer</td><td><code>uint32_t t = Get_CurrentMs();</code></td></tr>
+            <tr><td><code>Get_CurrentUs()</code></td><td>อ่านค่า microsecond counter (รวมจาก SysTick counter + count register)</td><td><code>uint32_t t = Get_CurrentUs();</code></td></tr>
+            <tr><td><code>Get_TickMicros()</code></td><td>คืนค่าจำนวน microseconds ต่อ SysTick — ปกติ 1000</td><td><code>uint32_t t = Get_TickMicros();</code></td></tr>
+            <tr><td><code>Start_Timer(timer, ms)</code></td><td>เริ่มจับเวลา Timer_t เป็นเวลา ms มิลลิวินาที</td><td><code>Start_Timer(&myTimer, 1000);</code></td></tr>
+            <tr><td><code>Is_Timer_Expired(timer)</code></td><td>ตรวจสอบว่า Timer_t ครบเวลาหรือยัง (คืน 1 = ครบ, 0 = ยัง)</td><td><code>if (Is_Timer_Expired(&myTimer)) { ... }</code></td></tr>
+            <tr><td><code>Reset_Timer(timer)</code></td><td>รีเซ็ต Timer_t ให้เริ่มนับใหม่ (ใช้กับ Start_Timer)</td><td><code>Reset_Timer(&myTimer);</code></td></tr>
+            <tr><td><code>Stop_Timer(timer)</code></td><td>หยุด Timer_t (ทำให้ Is_Timer_Expired คืน 1 ทันที)</td><td><code>Stop_Timer(&myTimer);</code></td></tr>
+        </tbody>
+    </table>
+</section>
+
+<section>
+    <h2>💻 เขียน Code ทีละขั้น</h2>
+
+    <div class="step">
+        <h3>ขั้นที่ 1: SystemCoreClockUpdate + Timer_Init (ต้องเป็น 2 บรรทัดแรกเสมอ)</h3>
+        <pre><code class="language-c">#include "simplehal.h"
+
+int main(void) {
+    SystemCoreClockUpdate();  // ← ต้องเรียกก่อน!
+    Timer_Init();              // ← ต้องเรียกเป็นที่สอง!
+
+    // ... โค้ดอื่น ๆ ต่อจากนี้ ...
+    while (1) { }
+}</code></pre>
+        <p class="explain">🔍 <code>SystemCoreClockUpdate()</code> อัปเดตตัวแปร <code>SystemCoreClock</code> ให้มีค่าความถี่ที่แท้จริง (48MHz) — ถ้าลืมเรียก SysTick จะนับผิด <code>Timer_Init()</code> ใช้ค่า <code>SystemCoreClock</code> ตั้งค่า SysTick reload ให้เกิด interrupt ทุก 1ms พอดี</p>
+    </div>
+
+    <div class="step">
+        <h3>ขั้นที่ 2: Blocking Delay — ง่าย สั้น แต่โปรแกรมหยุดระหว่างรอ</h3>
+        <pre><code class="language-c">#include "simplehal.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    pinMode(PA1, PIN_MODE_OUTPUT);
+
+    while (1) {
+        digitalToggle(PA1);   // toggle LED
+        Delay_Ms(500);         // รอ 500 ms — โปรแกรมหยุดตรงนี้
+        // อะไรที่อยู่หลัง Delay_Ms จะไม่ทำงานจนกว่าครบเวลา
+    }
+}</code></pre>
+        <p class="explain">🔍 <code>Delay_Ms()</code> และ <code>Delay_Us()</code> เหมาะกับโปรแกรมง่าย ๆ ที่มีงานแค่ 1–2 อย่าง แต่ถ้าต้องทำงานหลายอย่างพร้อมกัน (multitasking) ควรใช้ non-blocking แทน</p>
+    </div>
+
+    <div class="step">
+        <h3>ขั้นที่ 3: Non-Blocking Timer — โปรแกรมทำงานต่อได้ระหว่างรอ</h3>
+        <pre><code class="language-c">#include "simplehal.h"
+
+Timer_t ledTimer;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    pinMode(PA1, PIN_MODE_OUTPUT);
+    Start_Timer(&ledTimer, 500);  // เริ่มจับเวลา 500 ms
+
+    while (1) {
+        if (Is_Timer_Expired(&ledTimer)) {
+            digitalToggle(PA1);       // toggle LED
+            Start_Timer(&ledTimer, 500);  // รีเซ็ต timer ใหม่
+        }
+
+        // โค้ดอื่น ๆ ทำงานได้ตลอดโดยไม่ต้องรอ!
+        // เช่น อ่านเซนเซอร์, รับ Serial, ประมวลผล...
+    }
+}</code></pre>
+        <p class="explain">🔍 <code>Is_Timer_Expired()</code> ตรวจสอบแค่ชั่วขณะแล้วคืนค่าทันที — loop ยังคงวิ่งต่อไป ไม่มีจุดหยุดรอ หลังทำงานเสร็จต้องเรียก <code>Start_Timer()</code> อีกครั้งเพื่อเริ่มรอบใหม่</p>
+    </div>
+
+    <div class="step">
+        <h3>ขั้นที่ 4: อ่านเวลาปัจจุบัน — ใช้กับ timeout, profiling, debounce</h3>
+        <pre><code class="language-c">#include "simplehal.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    uint32_t start_ms = Get_CurrentMs();
+
+    // ทำงานบางอย่าง...
+    for (volatile int i = 0; i < 100000; i++);
+
+    uint32_t elapsed_ms = Get_CurrentMs() - start_ms;
+
+    // elapsed_ms คือเวลาที่ใช้ไป (ms)
+    // ถ้าใช้ USART จะส่งค่าไปดูได้:
+    // USART_PrintNum(elapsed_ms);
+
+    while (1) { }
+}</code></pre>
+        <p class="explain">🔍 <code>Get_CurrentMs()</code> ช่วยให้เขียน timeout pattern ได้ — เช่น "ถ้าผ่านไป 5 วินาทีแล้วยังไม่ได้คำตอบ ให้เลิกรอ" หรือใช้วัดว่าโค้ดส่วนไหนช้า (profiling)</p>
+    </div>
+</section>
+
+<section>
+    <h2>🟢 ตัวอย่างขั้นต้น</h2>
+    <p>LED กระพริบด้วย blocking delay — เข้าใจง่ายที่สุด</p>
+    <pre><code class="language-c">#include "simplehal.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    pinMode(PA1, PIN_MODE_OUTPUT);
+
+    while (1) {
+        digitalWrite(PA1, HIGH);
+        Delay_Ms(100);
+        digitalWrite(PA1, LOW);
+        Delay_Ms(900);
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>🟡 ตัวอย่างขั้นกลาง</h2>
+    <p>Non-Blocking Multi-Task — LED กระพริบ 3 ความเร็ว + heartbeat + อ่านเซนเซอร์ ทั้งหมดทำงานพร้อมกันโดยไม่หยุดรอ</p>
+    <pre><code class="language-c">#include "simplehal.h"
+
+Timer_t led1Timer;
+Timer_t led2Timer;
+Timer_t heartbeatTimer;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    pinMode(PA1, PIN_MODE_OUTPUT);  // LED1: กระพริบเร็ว 200ms
+    pinMode(PA2, PIN_MODE_OUTPUT);  // LED2: กระพริบช้า 1s
+    pinMode(PC0, PIN_MODE_OUTPUT);  // heartbeat: 50ms on, 2s off
+
+    Start_Timer(&led1Timer, 200);
+    Start_Timer(&led2Timer, 1000);
+    Start_Timer(&heartbeatTimer, 50);
+
+    while (1) {
+        if (Is_Timer_Expired(&led1Timer)) {
+            digitalToggle(PA1);
+            Start_Timer(&led1Timer, 200);
+        }
+
+        if (Is_Timer_Expired(&led2Timer)) {
+            digitalToggle(PA2);
+            Start_Timer(&led2Timer, 1000);
+        }
+
+        if (Is_Timer_Expired(&heartbeatTimer)) {
+            digitalToggle(PC0);
+            if (digitalRead(PC0) == HIGH) {
+                Start_Timer(&heartbeatTimer, 50);    // ON 50ms
+            } else {
+                Start_Timer(&heartbeatTimer, 2000);  // OFF 2s
+            }
+        }
+
+        // ตรงนี้ว่าง — ทำงานเพิ่มได้อีก!
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>🔴 ตัวอย่างขั้นสูง</h2>
+    <p>Timeout pattern + การวัดความกว้างพัลส์ + profiling — ใช้ <code>Get_CurrentMs()</code> และ <code>Get_CurrentUs()</code> ในสถานการณ์จริง</p>
+    <pre><code class="language-c">#include "simplehal.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    pinMode(PC1, PIN_MODE_INPUT_PULLUP);
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+
+    USART_Print("=== Pulse Width Measurement ===\r\n");
+
+    while (1) {
+        // === Timeout Pattern ===
+        // รอให้ pin เป็น LOW (กดปุ่ม) แต่ไม่รอเกิน 5 วินาที
+        uint32_t timeout_start = Get_CurrentMs();
+        while (digitalRead(PC1) == HIGH) {
+            if (Get_CurrentMs() - timeout_start > 5000) {
+                USART_Print("Timeout: no button press in 5s\r\n");
+                break;
+            }
+        }
+
+        // === Pulse Width Measurement ===
+        // รอให้ pin กลับ HIGH แล้ววัดว่าอยู่ LOW นานแค่ไหน
+        if (digitalRead(PC1) == LOW) {
+            uint32_t pulse_start = Get_CurrentUs();
+            while (digitalRead(PC1) == LOW);  // รอปล่อย
+            uint32_t pulse_width = Get_CurrentUs() - pulse_start;
+
+            USART_Print("Pulse width: ");
+            USART_PrintNum(pulse_width);
+            USART_Print(" us\r\n");
+        }
+
+        // === Profiling ===
+        uint32_t t1 = Get_CurrentUs();
+        // โค้ดที่ต้องการวัดความเร็ว...
+        for (volatile int i = 0; i < 1000; i++) { __NOP(); }
+        uint32_t t2 = Get_CurrentUs();
+
+        USART_Print("Elapsed: ");
+        USART_PrintNum(t2 - t1);
+        USART_Print(" us\r\n");
+
+        Delay_Ms(500);
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <thead><tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr></thead>
+        <tbody>
+            <tr>
+                <td><code>Delay_Ms()</code> ไม่ทำงานเลย</td>
+                <td>ลืมเรียก <code>Timer_Init()</code> — SysTick ยังไม่ได้เริ่มทำงาน</td>
+                <td>เพิ่ม <code>Timer_Init();</code> บรรทัดที่ 2 ใน main()</td>
+            </tr>
+            <tr>
+                <td><code>Get_CurrentUs()</code> คืนค่า 0 เสมอ</td>
+                <td>ยังไม่ได้ init SysTick หรือเรียก <code>Get_CurrentUs</code> ก่อน <code>Timer_Init</code></td>
+                <td>ย้าย <code>Timer_Init()</code> ไว้บนสุด ตามด้วยฟังก์ชันอื่น</td>
+            </tr>
+            <tr>
+                <td><code>Timer_t</code> ทำงานผิด — หมดเวลาตลอดหรือไม่หมดเลย</td>
+                <td>ประกาศ <code>Timer_t</code> เป็น local variable ในฟังก์ชัน — ค่าไม่ persist</td>
+                <td>ประกาศเป็น global หรือ static</td>
+            </tr>
+            <tr>
+                <td>ห้ามใช้ delay ใน ISR</td>
+                <td>ISR ต้องทำงานให้เสร็จเร็วที่สุด — delay จะ block ทั้งระบบ</td>
+                <td>ใช้ flag แทน — ให้ main loop เช็ค flag แล้วค่อย delay</td>
+            </tr>
+        </tbody>
+    </table>
+</section>
+
+<section>
+    <h2>💡 เกร็ดความรู้ / FAQ</h2>
+    <p><strong>Q: Blocking vs Non-Blocking — ควรใช้อะไรเมื่อไร?</strong><br>
+    A: <strong>Blocking</strong> (Delay_Ms/Delay_Us) — ใช้กับโปรแกรมสั้นที่มีงานเดียว เช่น กระพริบไฟ, สร้างสัญญาณ clock <strong>Non-Blocking</strong> (Timer_t) — ใช้เมื่อต้องการทำหลายอย่างพร้อมกัน เช่น อ่านปุ่ม + กระพริบ LED + ส่ง Serial พร้อมกัน</p>
+
+    <p><strong>Q: <code>Timer_t</code> ใช้ได้สูงสุดกี่ตัว?</strong><br>
+    A: ไม่จำกัด — <code>Timer_t</code> เป็นแค่ struct (ขนาด ~12 bytes) ประกาศเท่าไรก็ได้ ใช้แค่ RAM ไม่ใช้ hardware timer เพิ่ม</p>
+
+    <p><strong>Q: <code>Get_CurrentMs()</code> ใช้ไปนาน ๆ จะ overflow ไหม?</strong><br>
+    A: ตัวแปรเป็น <code>uint32_t</code> — จะ overflow ทุก ~49.7 วัน แล้วกลับไปเริ่มที่ 0 ใหม่ การคำนวณผลต่างของเวลา (<code>now - last</code>) ยังถูกต้องอยู่เพราะใช้ unsigned arithmetic แบบ wrap-around</p>
+
+    <p><strong>Q: <code>Get_CurrentUs()</code> กับ <code>Get_CurrentMs()</code> ต่างกันยังไง?</strong><br>
+    A: <code>Get_CurrentMs()</code> ละเอียด 1ms อ่านจากตัวแปร global — เร็วและเหมาะกับงานทั่วไป <code>Get_CurrentUs()</code> ละเอียด ~20μs อ่านจาก hardware counter โดยตรง — ช้ากว่าเล็กน้อย แต่ละเอียดกว่า ใช้กับงานที่ต้องการความแม่นยำสูง</p>
+</section>
+
+<section>
+    <h2>✏️ ลองทำดู <a href="ch03_answers.html" class="ans-link">[เฉลย]</a></h2>
+    <ol>
+        <li><strong>LED กระพริบ 3 ความเร็วด้วย Timer_t</strong> — ใช้ Timer_t 3 ตัว แยกกัน ทำให้ LED 3 ดวงกระพริบที่ 100ms, 500ms, และ 1 วินาที โดยไม่มี blocking</li>
+        <li><strong>นับเวลากดปุ่มค้าง</strong> — ใช้ <code>Get_CurrentMs()</code> จับเวลาว่าผู้ใช้กดปุ่มค้างนานกี่มิลลิวินาที แล้วแสดงผลทาง USART (ถ้ามี) หรือเปลี่ยนความถี่กระพริบ LED ตามระยะเวลากด</li>
+        <li><strong>สร้าง Fade LED ด้วย non-blocking timer</strong> — ใช้ Timer_t + software PWM (เปลี่ยน duty cycle ทีละนิดทุก 2ms) ทำให้ LED ค่อย ๆ สว่างขึ้นและค่อย ๆ ดับลง โดยที่ main loop ยังว่างทำงานอื่นได้</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch02-gpio.html">บทก่อน</a>
+    <a href="ch04-usart.html">บทถัดไป →</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

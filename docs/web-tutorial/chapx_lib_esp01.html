@@ -62,6 +62,24 @@ flowchart TD
         <tr><td>GND</td><td>↔</td><td>ESP-01</td><td>GND</td><td>กราวด์ร่วม</td></tr>
       </tbody>
     </table>
+    <h3>รู้จักขา</h3>
+    <ul>
+      <li><strong>VCC:</strong> ไฟเลี้ยง 3.3V เท่านั้น (ต้องใช้ regulator ≥500mA)</li>
+      <li><strong>GND:</strong> กราวด์</li>
+      <li><strong>RX:</strong> รับข้อมูลจาก MCU — ต่อขา PD5 (TX) ของ MCU</li>
+      <li><strong>TX:</strong> ส่งข้อมูลไป MCU — ต่อขา PD6 (RX) ของ MCU</li>
+      <li><strong>RST:</strong> รีเซ็ต (ไม่ต้องต่อก็ได้) — ต่อขา PC0</li>
+      <li><strong>CH_PD/EN:</strong> เปิดใช้งาน — ต่อขา PC1 และต้องต่อ HIGH ตลอด</li>
+    </ul>
+    <h3>วิธีต่อทีละขั้น</h3>
+    <ol>
+      <li>ต่อ <strong>VCC</strong> ESP-01 ไป <strong>3.3V</strong> จาก external regulator (≥500mA)</li>
+      <li>ต่อ <strong>GND</strong> ESP-01 ไป <strong>GND</strong> ของ MCU</li>
+      <li>ต่อ <strong>RX</strong> ESP-01 ไปขา <strong>PD5 (TX)</strong> ของ MCU</li>
+      <li>ต่อ <strong>TX</strong> ESP-01 ไปขา <strong>PD6 (RX)</strong> ของ MCU</li>
+      <li>ต่อ <strong>CH_PD/EN</strong> ESP-01 ไปขา <strong>PC1</strong> และ set HIGH</li>
+      <li>(ไม่บังคับ) ต่อ <strong>RST</strong> ESP-01 ไปขา <strong>PC0</strong></li>
+    </ol>
     <p>⚠️ ESP8266 กินกระแสสูงสุด ~300mA ตอนส่ง WiFi — ต้องใช้ external 3.3V regulator อย่างน้อย 500mA (AMS1117-3.3 หรือดีกว่า), CH_PD ต้องต่อ HIGH ตลอดเวลา, GPIO0 ต่อ GND = Flash mode (ตอนโปรแกรม ESP), GPIO0 ลอย = Normal mode</p>
 </section>
 

@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SimplePWR — จัดการพลังงาน | SimpleHAL API Reference</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+</head>
+<body>
+
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+</nav>
+
+<h1>SimplePWR — จัดการพลังงาน</h1>
+<span class="level level-advanced">ระดับสูง</span>
+
+<div class="callout callout-note">
+    <strong>ไลบรารี:</strong> <code>SimpleHAL.h</code> — ใช้ <strong>ไม่ต้อง include ไฟล์ย่อยเอง</strong> ทุกฟังก์ชัน PWR รวมอยู่ใน SimpleHAL.h แล้ว
+</div>
+
+<section>
+<h2>ภาพรวม</h2>
+<p>SimplePWR จัดการโหมดพลังงานต่ำของ CH32V003 — ลดการใช้ไฟลงจาก ~3-5mA (active) เหลือระดับ µA เมื่อไม่ต้องทำงานต่อเนื่อง</p>
+
+<table>
+<thead><tr><th>โหมด</th><th>การทำงาน</th><th>กระแสไฟ</th><th>RAM</th><th>Wakeup</th></tr></thead>
+<tbody>
+<tr>
+    <td><strong>Sleep</strong></td>
+    <td>CPU หยุด, peripherals ทำงานต่อ</td>
+    <td>~1-2 mA</td>
+    <td>คงอยู่</td>
+    <td>Interrupt / Event ใด ๆ</td>
+</tr>
+<tr>
+    <td><strong>Standby</strong></td>
+    <td>ทั้งหมดหยุด — 1.8V domain ปิด</td>
+    <td>~2-5 µA</td>
+    <td><strong>สูญหาย</strong></td>
+    <td>AWU, EXTI, Wakeup Pin</td>
+</tr>
+</tbody>
+</table>
+
+<div class="callout callout-warn">
+    <strong>Standby พัง RAM:</strong> ข้อมูลใน RAM <strong>สูญหายทั้งหมด</strong> — <code>main()</code> จะเริ่มใหม่ตั้งแต่ต้นหลังจาก wakeup เหมือนเพิ่งเปิดไฟ
+</div>
+</section>
+
+<section>
+<h2>AWU — Auto Wake-Up</h2>
+<p>AWU (Auto Wake-Up) ใช้ LSI 128kHz จับเวลาในโหมด Standby — ปลุก MCU อัตโนมัติหลังจากหมดเวลา</p>
+
+<table>
+<thead><tr><th>Prescaler</th><th>Divider</th><th>Min Timeout</th><th>Max Timeout (window=0x3F)</th></tr></thead>
+<tbody>
+<tr><td><code>AWU_PRESCALER_1024</code></td><td>2^10</td><td>8 ms</td><td>~0.5 s</td></tr>
+<tr><td><code>AWU_PRESCALER_2048</code></td><td>2^11</td><td>16 ms</td><td>~1.0 s</td></tr>
+<tr><td><code>AWU_PRESCALER_4096</code></td><td>2^12</td><td>32 ms</td><td>~2.0 s</td></tr>
+<tr><td><code>AWU_PRESCALER_8192</code></td><td>2^13</td><td>64 ms</td><td>~4.1 s</td></tr>
+<tr><td><code>AWU_PRESCALER_16384</code></td><td>2^14</td><td>128 ms</td><td>~8.2 s</td></tr>
+<tr><td><code>AWU_PRESCALER_32768</code></td><td>2^15</td><td>256 ms</td><td>~16.4 s</td></tr>
+<tr><td><code>AWU_PRESCALER_65536</code></td><td>2^16</td><td>512 ms</td><td>~32.8 s</td></tr>
+<tr><td><code>AWU_PRESCALER_131072</code></td><td>2^17</td><td>1.0 s</td><td>~65.5 s</td></tr>
+<tr><td><code>AWU_PRESCALER_262144</code></td><td>2^18</td><td>2.0 s</td><td>~131 s</td></tr>
+<tr><td><code>AWU_PRESCALER_524288</code></td><td>2^19</td><td>4.1 s</td><td>~262 s</td></tr>
+<tr><td><code>AWU_PRESCALER_1048576</code></td><td>2^20</td><td>8.2 s</td><td>~524 s</td></tr>
+<tr><td><code>AWU_PRESCALER_2097152</code></td><td>2^21</td><td>16.4 s</td><td>~1049 s</td></tr>
+<tr><td><code>AWU_PRESCALER_4194304</code></td><td>2^22</td><td>32.8 s</td><td>~2097 s</td></tr>
+<tr><td><code>AWU_PRESCALER_8388608</code></td><td>2^23</td><td>65.5 s</td><td>~4194 s</td></tr>
+<tr><td><code>AWU_PRESCALER_16777216</code></td><td>2^24</td><td>131 s</td><td>~8389 s</td></tr>
+</tbody>
+</table>
+
+<div class="callout callout-note">
+    <strong>Timeout = (prescaler * (window + 1)) / 128000</strong> — window 0x00-0x3F, LSI = 128kHz
+</div>
+</section>
+
+<section>
+<h2>PVD — Programmable Voltage Detector</h2>
+<p>PVD ตรวจสอบแรงดัน VDD — เมื่อต่ำกว่า threshold จะเกิด interrupt หรือรีเซ็ต</p>
+
+<table>
+<thead><tr><th>Level</th><th>Threshold</th><th>ใช้เมื่อ</th></tr></thead>
+<tbody>
+<tr><td><code>PVD_LEVEL_0</code></td><td>2.9V</td><td>ตรวจจับแบตเตอรี่ใกล้หมด</td></tr>
+<tr><td><code>PVD_LEVEL_1</code></td><td>3.1V</td><td>แรงดันเริ่มลด</td></tr>
+<tr><td><code>PVD_LEVEL_2</code></td><td>3.3V</td><td>มาตรฐาน 3.3V</td></tr>
+<tr><td><code>PVD_LEVEL_3</code></td><td>3.5V</td><td>สำรอง</td></tr>
+<tr><td><code>PVD_LEVEL_4</code></td><td>3.7V</td><td>สำรอง</td></tr>
+<tr><td><code>PVD_LEVEL_5</code></td><td>3.9V</td><td>สำรอง</td></tr>
+<tr><td><code>PVD_LEVEL_6</code></td><td>4.1V</td><td>สำรอง</td></tr>
+<tr><td><code>PVD_LEVEL_7</code></td><td>4.4V</td><td>แรงดันสูงเกิน</td></tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>ตารางอ้างอิงฟังก์ชัน</h2>
+<table>
+<thead>
+<tr><th>ฟังก์ชัน</th><th>พารามิเตอร์</th><th>คืนค่า</th><th>คำอธิบาย</th></tr>
+</thead>
+<tbody>
+<tr>
+    <td><code>PWR_Sleep()</code></td>
+    <td>—</td>
+    <td><code>void</code></td>
+    <td>เข้า sleep — wake เมื่อมี interrupt ใด ๆ</td>
+</tr>
+<tr>
+    <td><code>PWR_Standby(timeout_ms)</code></td>
+    <td><code>timeout_ms</code>: uint32_t</td>
+    <td><code>void</code></td>
+    <td>เข้า standby + AWU auto wake — RAM lost, main() restarts</td>
+</tr>
+<tr>
+    <td><code>PWR_StandbyUntilInterrupt()</code></td>
+    <td>—</td>
+    <td><code>void</code></td>
+    <td>เข้า standby — รอจนกว่า EXTI จะปลุก</td>
+</tr>
+<tr>
+    <td><code>PWR_EnterSleepMode(entry)</code></td>
+    <td><code>entry</code>: WFI/WFE</td>
+    <td><code>void</code></td>
+    <td>เข้า sleep mode ด้วย WFI หรือ WFE</td>
+</tr>
+<tr>
+    <td><code>PWR_EnterStandbyMode(entry)</code></td>
+    <td><code>entry</code>: WFI/WFE</td>
+    <td><code>void</code></td>
+    <td>เข้า standby mode ด้วย WFI หรือ WFE</td>
+</tr>
+<tr>
+    <td><code>PWR_ConfigureAWU(prescaler, window)</code></td>
+    <td><code>prescaler</code>: AWU_PRESCALER_*<br><code>window</code>: uint8_t (0-0x3F)</td>
+    <td><code>void</code></td>
+    <td>ตั้งค่า AWU timer</td>
+</tr>
+<tr>
+    <td><code>PWR_EnablePVD(level)</code></td>
+    <td><code>level</code>: PVD_LEVEL_*</td>
+    <td><code>void</code></td>
+    <td>เปิด PVD + ตั้ง threshold</td>
+</tr>
+<tr>
+    <td><code>PWR_DisablePVD()</code></td>
+    <td>—</td>
+    <td><code>void</code></td>
+    <td>ปิด PVD</td>
+</tr>
+<tr>
+    <td><code>PWR_GetPVDStatus(level)</code></td>
+    <td><code>level</code>: PVD_LEVEL_*</td>
+    <td><code>uint8_t</code> (1/0)</td>
+    <td>ตรวจสอบ VDD ต่ำกว่า level หรือไม่</td>
+</tr>
+<tr>
+    <td><code>PWR_WasStandbyWakeup()</code></td>
+    <td>—</td>
+    <td><code>uint8_t</code> (1/0)</td>
+    <td>รอบนี้ wakeup จาก standby หรือไม่?</td>
+</tr>
+<tr>
+    <td><code>PWR_ClearStandbyFlag()</code></td>
+    <td>—</td>
+    <td><code>void</code></td>
+    <td>เคลียร์ standby wakeup flag</td>
+</tr>
+<tr>
+    <td><code>PWR_EnableWakeupPin()</code></td>
+    <td>—</td>
+    <td><code>void</code></td>
+    <td>เปิด PA0 เป็น wakeup pin — ⚠️ PA0 ไม่มีในทุกแพ็กเกจ!</td>
+</tr>
+<tr>
+    <td><code>PWR_DisableWakeupPin()</code></td>
+    <td>—</td>
+    <td><code>void</code></td>
+    <td>ปิด PA0 wakeup</td>
+</tr>
+<tr>
+    <td><code>PWR_EstimateStandbyCurrent(pvd, awu)</code></td>
+    <td><code>pvd</code>: PVD on? (1/0)<br><code>awu</code>: AWU on? (1/0)</td>
+    <td><code>uint32_t</code> (µA)</td>
+    <td>ประมาณกระแส standby</td>
+</tr>
+<tr>
+    <td><code>PWR_CalculateBatteryLife(mah, active%, mA, uA)</code></td>
+    <td><code>mah</code>: ความจุแบต (mAh)<br><code>active%</code>: % เวลาทำงาน<br><code>mA</code>: กระแสตอน active<br><code>uA</code>: กระแสตอน sleep</td>
+    <td><code>uint32_t</code> (hours)</td>
+    <td>คำนวณอายุแบตเตอรี่เป็นชั่วโมง</td>
+</tr>
+</tbody>
+</table>
+
+<div class="callout callout-warn">
+    <strong>⚠️ PA0:</strong> PA0 <strong>ไม่ bonded</strong> ในแพ็กเกจ CH32V003 ใด ๆ — <code>PWR_EnableWakeupPin()</code> ใช้ไม่ได้จริง
+</div>
+</section>
+
+<section>
+<h2>ตารางอ้างอิงการใช้พลังงาน</h2>
+<table>
+<thead><tr><th>โหมด</th><th>กระแส</th><th>เงื่อนไข</th></tr></thead>
+<tbody>
+<tr><td>Active (HCLK=48MHz)</td><td>~3-5 mA</td><td>ทุก peripheral เปิด</td></tr>
+<tr><td>Sleep</td><td>~1-2 mA</td><td>CPU หยุด peripherals ทำงาน</td></tr>
+<tr><td>Standby (AWU on)</td><td>~3-5 µA</td><td>LSI 128kHz ทำงาน</td></tr>
+<tr><td>Standby (AWU off)</td><td>~2 µA</td><td>รอ EXTI เท่านั้น</td></tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>ตัวอย่างโค้ด</h2>
+
+<h3>Sleep + Interrupt Wake</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+volatile uint8_t wakeup_flag = 0;
+
+void OnWakeup() {
+    wakeup_flag = 1;
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    pinMode(PC0, PIN_MODE_OUTPUT);
+    pinMode(PC1, PIN_MODE_INPUT_PULLUP);
+    attachInterrupt(PC1, OnWakeup, FALLING);
+
+    while (1) {
+        digitalWrite(PC0, HIGH);
+        Delay_Ms(100);
+        digitalWrite(PC0, LOW);
+
+        PWR_Sleep();  // CPU หยุด — PC0 คง LOW, peripherals ทำงานต่อ
+
+        if (wakeup_flag) {
+            wakeup_flag = 0;
+            // ถูกปลุกจากปุ่ม PC1
+        }
+    }
+}</code></pre>
+
+<h3>Standby + AWU 5 วินาที</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    pinMode(PC0, PIN_MODE_OUTPUT);
+
+    if (PWR_WasStandbyWakeup()) {
+        PWR_ClearStandbyFlag();
+        // กลับมาจาก standby — กระพริบ LED ยืนยัน
+        for (int i = 0; i < 3; i++) {
+            digitalWrite(PC0, HIGH);
+            Delay_Ms(100);
+            digitalWrite(PC0, LOW);
+            Delay_Ms(100);
+        }
+    }
+
+    // ทำงาน...
+    digitalWrite(PC0, HIGH);
+    Delay_Ms(500);
+    digitalWrite(PC0, LOW);
+
+    PWR_Standby(5000);  // standby 5 วินาที → wake → main() เริ่มใหม่
+}
+</pre>
+
+<h3>PVD — ตรวจจับแบตเตอรี่ต่ำ</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    pinMode(PC0, PIN_MODE_OUTPUT);
+
+    PWR_EnablePVD(PVD_LEVEL_0);  // threshold 2.9V
+
+    while (1) {
+        if (PWR_GetPVDStatus(PVD_LEVEL_0)) {
+            // แรงดันต่ำกว่า 2.9V → กระพริบ LED เตือน
+            digitalToggle(PC0);
+            Delay_Ms(200);
+        } else {
+            digitalWrite(PC0, LOW);
+            Delay_Ms(1000);
+        }
+    }
+}</code></pre>
+
+<h3>คำนวณอายุแบตเตอรี่</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    // แบต 200mAh, active 5% ของเวลา, ใช้ 3mA ตอน active, 3µA ตอน standby
+    uint32_t hours = PWR_CalculateBatteryLife(200, 5, 3, 3);
+    // hours ≈ 555 ชั่วโมง (~23 วัน)
+
+    while (1) {
+        // active — ทำงาน
+        Delay_Ms(500);
+
+        // standby — ประหยัดไฟ 95% ของเวลา
+        PWR_Standby(9500);  // standby ~9.5s
+    }
+}</code></pre>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="onewire.html">Simple1Wire →</a>
+</nav>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

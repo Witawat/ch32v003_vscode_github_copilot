@@ -53,6 +53,24 @@ flowchart TD
         <tr><td>GND</td><td>↔</td><td>W25Qxx</td><td>GND</td><td>กราวด์ร่วม</td></tr>
       </tbody>
     </table>
+    <h3>รู้จักขา</h3>
+    <ul>
+      <li><strong>VCC:</strong> ไฟเลี้ยง 3.3V</li>
+      <li><strong>GND:</strong> กราวด์</li>
+      <li><strong>CLK:</strong> สัญญาณนาฬิกา SPI — ต่อขา PC5</li>
+      <li><strong>DO (IO1):</strong> ข้อมูลจาก Flash ส่งเข้า MCU — ต่อขา PC6</li>
+      <li><strong>DI (IO0):</strong> ข้อมูลจาก MCU เข้า Flash — ต่อขา PC7</li>
+      <li><strong>CS:</strong> เลือกชิป (Chip Select) — ต่อขา PC4</li>
+    </ul>
+    <h3>วิธีต่อทีละขั้น</h3>
+    <ol>
+      <li>ต่อ <strong>VCC</strong> W25Qxx ไป <strong>3.3V</strong> ของ MCU</li>
+      <li>ต่อ <strong>GND</strong> W25Qxx ไป <strong>GND</strong> ของ MCU</li>
+      <li>ต่อ <strong>CLK</strong> W25Qxx ไปขา <strong>PC5</strong> ของ MCU</li>
+      <li>ต่อ <strong>DO (IO1)</strong> W25Qxx ไปขา <strong>PC6</strong> ของ MCU</li>
+      <li>ต่อ <strong>DI (IO0)</strong> W25Qxx ไปขา <strong>PC7</strong> ของ MCU</li>
+      <li>ต่อ <strong>CS</strong> W25Qxx ไปขา <strong>PC4</strong> ของ MCU</li>
+    </ol>
 </section>
 
 <section><h2>📚 หลักการทำงาน</h2>

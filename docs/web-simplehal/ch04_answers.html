@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>เฉลย — บทที่ 4: USART — สื่อสารผ่าน Serial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+<style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:0.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:0.9em}</style>
+</head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">&#8592; สารบัญ</a>
+    <a href="ch04-usart.html">กลับบทที่ 4</a>
+</nav>
+<h1>&#128221; เฉลย — บทที่ 4: USART — สื่อสารผ่าน Serial</h1>
+
+<div class="answer">
+  <h2>ข้อ 1: Echo Server — ส่งกลับทุกตัวอักษร</h2>
+  <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    USART_Print("Echo Server Ready\r\n");
+
+    while (1) {
+        if (USART_Available()) {
+            uint8_t ch = USART_Read();
+            USART_WriteByte(ch);  // ส่งกลับอักษรเดิม
+            if (ch == '\r') {
+                USART_WriteByte('\n');  // เพิ่ม newline หลัง CR
+            }
+        }
+    }
+}</code></pre>
+  <div class="approach"><strong>&#129504; แนวคิด:</strong> <code>USART_Available</code> เช็คว่ามีข้อมูล &#8594; <code>USART_Read</code> รับ 1 byte &#8594; <code>USART_WriteByte</code> ส่งกลับ byte เดิมทันที — ตรวจเฉพาะ <code>\r</code> (<code>\n</code> จะตามมาแล้วในบาง terminal) — ง่ายสุด: echo ทุกตัวอักษรโดยไม่ต้อง buffer</div>
+</div>
+
+<div class="answer">
+  <h2>ข้อ 2: LED PWM ควบคุมด้วยคำสั่ง Serial "LED=50"</h2>
+  <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include &lt;stdlib.h&gt;
+
+#define CMD_BUF_SIZE 16
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    PWM_Init(PWM2_CH3, 1000);  // PC0, 1kHz
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    USART_Print("Commands: LED=0 ถึง LED=100\r\n");
+
+    char cmd[CMD_BUF_SIZE];
+    uint8_t idx = 0;
+
+    while (1) {
+        if (USART_Available()) {
+            char c = (char)USART_Read();
+            if (c == '\r' || c == '\n') {
+                if (idx &gt; 0) {
+                    cmd[idx] = '\0';
+                    if (cmd[0]=='L' &amp;&amp; cmd[1]=='E' &amp;&amp; cmd[2]=='D' &amp;&amp; cmd[3]=='=') {
+                        int val = atoi(&amp;cmd[4]);
+                        if (val &lt; 0) val = 0;
+                        if (val &gt; 100) val = 100;
+                        PWM_SetDutyCycle(PWM2_CH3, (uint8_t)val);
+                        USART_Print("LED=");
+                        USART_PrintNum(val);
+                        USART_Print("%\r\n");
+                    } else {
+                        USART_Print("Unknown\r\n");
+                    }
+                    idx = 0;
+                }
+            } else if (idx &lt; CMD_BUF_SIZE - 1) {
+                cmd[idx++] = c;
+            }
+        }
+    }
+}</code></pre>
+  <div class="approach"><strong>&#129504; แนวคิด:</strong> สะสม char ใน buffer จนเจอ <code>\r</code> หรือ <code>\n</code> &#8594; เซ็ค 4 ตัวแรกเป็น <code>"LED="</code> &#8594; <code>atoi(&amp;cmd[4])</code> แปลงตัวเลขหลัง <code>'='</code> &#8594; clamp 0-100 &#8594; <code>PWM_SetDutyCycle</code> — รวม <code>&lt;stdlib.h&gt;</code> เพื่อใช้ <code>atoi</code> — <code>cmd_buf + idx</code> = simple string builder</div>
+</div>
+
+<div class="answer">
+  <h2>ข้อ 3: อ่าน ADC ส่งทาง Serial ทุก 100ms</h2>
+  <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    ADC_SimpleInit();
+
+    Timer_t adc_timer;
+    Start_Timer(&amp;adc_timer, 100, 1);  // 100ms
+
+    USART_Print(" ADC  |  RAW  |  mV\r\n");
+    USART_Print("------|-------|------\r\n");
+
+    uint16_t sample = 0;
+    while (1) {
+        if (Is_Timer_Expired(&amp;adc_timer)) {
+            uint16_t raw = ADC_Read(ADC_CH_PD2);
+            uint16_t mv  = (uint16_t)(((uint32_t)raw * 3300) / 1023);
+
+            USART_Print("  PD2  | ");
+            USART_PrintNum(raw);
+            USART_Print(" | ");
+            USART_PrintNum(mv);
+            USART_Print("\r\n");
+
+            sample++;
+        }
+    }
+}</code></pre>
+  <div class="approach"><strong>&#129504; แนวคิด:</strong> <code>Timer_t</code> 100ms non-blocking &#8594; แต่ละ tick อ่าน <code>ADC_Read(PD2)</code> + คำนวณ <code>mV = raw &#215; 3300 / 1023</code> &#8594; <code>USART_PrintNum</code> แสดงผล — พิมพ์ header ตารางก่อนเข้า loop — ใช้ <code>uint32_t</code> คูณก่อนหารป้องกัน overflow — <code>sample</code> counter (ไว้สำหรับ debug) — main loop ไม่อั้น CPU ว่างทำงานอื่น</div>
+</div>
+
+<nav class="bottom-nav">
+    <a href="index.html">&#8592; สารบัญ</a>
+    <a href="ch04-usart.html">กลับบทที่ 4</a>
+</nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

@@ -38,7 +38,19 @@ flowchart TD
         <tr><td>GND</td><td>→</td><td>ปุ่มกด</td><td>ขา 2</td><td>ผ่านตัวปุ่ม</td></tr>
       </tbody>
     </table>
-    <p>ขา PC1 ต่อกับปุ่มกดที่ต่อลง GND — เมื่อกดจะอ่านค่าเป็น 0 (BUTTON_ACTIVE_LOW) ใช้ตัวต้านทาน pull-up ภายใน MCU ไม่ต้องต่อ R ภายนอก</p></section>
+    <p>ขา PC1 ต่อกับปุ่มกดที่ต่อลง GND — เมื่อกดจะอ่านค่าเป็น 0 (BUTTON_ACTIVE_LOW) ใช้ตัวต้านทาน pull-up ภายใน MCU ไม่ต้องต่อ R ภายนอก</p>
+    <h3>รู้จักขา</h3>
+    <ul>
+      <li><strong>ขา 1 ของปุ่ม:</strong> ต่อกับ PC1 (อินพุตพร้อม pull-up ในตัว)</li>
+      <li><strong>ขา 2 ของปุ่ม:</strong> ต่อกับ GND</li>
+    </ul>
+    <h3>วิธีต่อทีละขั้น</h3>
+    <ol>
+      <li>ต่อ <strong>PC1</strong> ไป <strong>ขา 1 ของปุ่ม</strong> — ขาสัญญาณ</li>
+      <li>ต่อ <strong>ขา 2 ของปุ่ม</strong> ไป <strong>GND</strong> — เมื่อกดจะดึง PC1 ลง LOW</li>
+      <li>ใช้ <strong>internal pull-up</strong> — ไม่ต้องต่อ R ภายนอก (MCU ตั้งค่าภายใน)</li>
+    </ol>
+</section>
 
 <section><h2>📚 หลักการทำงาน</h2>
 <p><strong>Debounce:</strong> หน้าสัมผัสทางกลของปุ่มกดจะกระเด้ง (bounce) ประมาณ 5-20ms เมื่อกดหรือปล่อย — ตั้งค่าด้วย <code>Button_SetDebounce(&btn, 50)</code></p>

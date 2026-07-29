@@ -20,6 +20,18 @@
 <pre class="ascii-circuit">
 3.3V─VCC  GND─GND  PC1─SDA  PC2─SCL   (I2C addr=0x3C)
 </pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>SDA (PC1):</strong> สายข้อมูล I2C ไป OLED</li>
+  <li><strong>SCL (PC2):</strong> สายนาฬิกา I2C</li>
+  <li><strong>VCC (3.3V):</strong> จ่ายไฟ 3.3V</li>
+  <li><strong>GND:</strong> กราวด์ร่วม</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PC1</strong> ไป <strong>SDA</strong> และ <strong>PC2</strong> ไป <strong>SCL</strong> — I2C</li>
+  <li>ต่อ <strong>3.3V</strong> ไป <strong>VCC</strong> และ <strong>GND</strong> ไป <strong>GND</strong></li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
@@ -66,6 +78,19 @@ LCD_SetCursor(&lcd, 1, 0); LCD_Print(&lcd, "Line 2");
 <pre class="ascii-circuit">
 PC4─CS  PC5─SCK  PC6─DIN  5V─VCC  GND─GND  (chain ได้หลาย module)
 </pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>CS (PC4):</strong> เลือกชิป SPI</li>
+  <li><strong>SCK (PC5):</strong> สัญญาณนาฬิกา SPI</li>
+  <li><strong>DIN (PC6):</strong> ส่งข้อมูลไป MAX7219 (MOSI)</li>
+  <li><strong>VCC (5V):</strong> จ่ายไฟ 5V</li>
+  <li><strong>GND:</strong> กราวด์ร่วม</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PC4</strong> ไป <strong>CS</strong>, <strong>PC5</strong> ไป <strong>SCK</strong>, <strong>PC6</strong> ไป <strong>DIN</strong></li>
+  <li>ต่อ <strong>5V</strong> ไป <strong>VCC</strong> และ <strong>GND</strong> ไป <strong>GND</strong></li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
@@ -108,6 +133,17 @@ TM1650_DisplayTime(8, 30);  // "08:30"</code></pre>
 <pre class="ascii-circuit">
 PC0─DATA  5V─VCC  GND─GND  (ห้าม 3.3V! WS2812B ต้อง 5V logic → level shifter)
 </pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>DATA (PC0):</strong> สายข้อมูล RGB ต้องใช้ level shifter 3.3V→5V</li>
+  <li><strong>VCC (5V):</strong> จ่ายไฟ 5V</li>
+  <li><strong>GND:</strong> กราวด์ร่วม</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PC0</strong> ผ่าน level shifter ไป <strong>DATA</strong> ของ NeoPixel</li>
+  <li>ต่อ <strong>5V</strong> ไป <strong>VCC</strong> และ <strong>GND</strong> ไป <strong>GND</strong></li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
@@ -150,6 +186,22 @@ WS2815Matrix_Init(PC0, MATRIX_8x8);
 <pre class="ascii-circuit">
 PC0─A  PC1─B  PC2─CLK  PC3─SCLK  PC4─R1  PC5─OE  5V─VCC
 </pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>A (PC0):</strong> เลือกแถวที่ 1</li>
+  <li><strong>B (PC1):</strong> เลือกแถวที่ 2</li>
+  <li><strong>CLK (PC2):</strong> นาฬิกาชิฟต์รีจิสเตอร์</li>
+  <li><strong>SCLK (PC3):</strong> ล็อคข้อมูลออกจอ</li>
+  <li><strong>R1 (PC4):</strong> ข้อมูลสีแดง</li>
+  <li><strong>OE (PC5):</strong> เปิด LED (LOW = สว่าง)</li>
+  <li><strong>VCC (5V):</strong> จ่ายไฟ 5V</li>
+  <li><strong>GND:</strong> กราวด์ร่วม</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PC0–PC5</strong> ไป <strong>A, B, CLK, SCLK, R1, OE</strong> ตามลำดับ</li>
+  <li>ต่อ <strong>5V</strong> ไป <strong>VCC</strong> และ <strong>GND</strong> ไป <strong>GND</strong></li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
@@ -177,6 +229,19 @@ P10_SetCursor(0, 8); P10_Print("32x16");
 <pre class="ascii-circuit">
 PD5(TX)─RX(TJC)  PD6(RX)─TX(TJC)  5V─VCC  GND─GND
 </pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>TX (PD5):</strong> ส่งข้อมูล USART ไป RX ของ TJC</li>
+  <li><strong>RX (PD6):</strong> รับข้อมูล USART จาก TX ของ TJC</li>
+  <li><strong>VCC (5V):</strong> จ่ายไฟ 5V</li>
+  <li><strong>GND:</strong> กราวด์ร่วม</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PD5</strong> ไป <strong>RX ของ TJC</strong> — ส่งคำสั่ง</li>
+  <li>ต่อ <strong>PD6</strong> ไป <strong>TX ของ TJC</strong> — รับข้อมูลสัมผัส</li>
+  <li>ต่อ <strong>5V</strong> ไป <strong>VCC</strong> และ <strong>GND</strong> ไป <strong>GND</strong></li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
@@ -207,6 +272,20 @@ TJC_ProcessResponse(&hmi);  // ★ ต้องเรียกบ่อย — p
 <pre class="ascii-circuit">
 PC0─DATA  PC1─CLK  PC2─LATCH  3.3V─VCC  GND─GND
 </pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>DATA (PC0):</strong> ข้อมูลอนุกรมเข้า 74HC595</li>
+  <li><strong>CLK (PC1):</strong> นาฬิกาชิฟต์ข้อมูล</li>
+  <li><strong>LATCH (PC2):</strong> ล็อคข้อมูลออกขา Q0–Q7</li>
+  <li><strong>VCC (3.3V):</strong> จ่ายไฟ</li>
+  <li><strong>GND:</strong> กราวด์ร่วม</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PC0</strong> ไป <strong>DATA</strong>, <strong>PC1</strong> ไป <strong>CLK</strong>, <strong>PC2</strong> ไป <strong>LATCH</strong></li>
+  <li>ต่อ <strong>3.3V</strong> ไป <strong>VCC</strong> และ <strong>GND</strong> ไป <strong>GND</strong></li>
+  <li>ต่อ <strong>Q0–Q7</strong> เข้า load ที่ต้องการ (LED, relay ฯลฯ)</li>
+</ol>
 <table class="wiring-table">
   <thead>
     <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>

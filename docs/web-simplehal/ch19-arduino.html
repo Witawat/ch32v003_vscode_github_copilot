@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>บทที่ 19: Arduino API — เขียนโค้ดสไตล์ Arduino บน CH32V003</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+</head>
+<body>
+
+<nav class="top-nav">
+    <a href="ch18-pwr.html">&larr; บทที่ 18: Power Management</a>
+    <a href="index.html">&#x1f3e0; สารบัญ</a>
+    <a href="index.html">หน้าหลัก &rarr;</a>
+</nav>
+
+<h1>บทที่ 19: Arduino API — เขียนโค้ดสไตล์ Arduino บน CH32V003</h1>
+<span class="level level-advanced">ระดับสูง</span>
+
+<section>
+    <h2>สิ่งที่ต้องรู้ก่อน</h2>
+    <ul>
+        <li><a href="ch02-gpio.html">บทที่ 2: GPIO</a></li>
+        <li><a href="ch03-delay.html">บทที่ 3: Delay</a></li>
+        <li><a href="ch01-first-steps.html">บทที่ 1: ขั้นตอนแรก</a></li>
+        <li>หรือเคยเขียน Arduino มาก่อนก็ได้</li>
+    </ul>
+</section>
+
+<section>
+    <h2>อุปกรณ์ที่ต้องใช้</h2>
+    <ul>
+        <li>CH32V003 Dev Board</li>
+        <li>LED + ตัวต้านทาน</li>
+        <li>Arduino-compatible sensor (optional)</li>
+    </ul>
+</section>
+
+<section>
+    <h2>ทำไมต้องใช้?</h2>
+    <p>ถ้าเคยเขียน Arduino → ใช้ฟังก์ชันชื่อเดิมได้เลย — <code>millis()</code>, <code>delay()</code>, <code>random()</code>, <code>dtostrf()</code> — ไม่ต้องจำชื่อใหม่</p>
+</section>
+
+<section>
+    <h2>Flowchart การทำงาน</h2>
+    <div class="flowchart">
+        <pre class="mermaid">
+flowchart TD
+    A["Arduino API บน CH32V003"] --> B{"ต้องการอะไร?"}
+    B -->|"เวลา"| C["millis() / micros() / delay()"]
+    B -->|"สุ่มเลข"| D["randomSeed() + random()"]
+    B -->|"Interrupt"| E["interrupts() / noInterrupts()"]
+    B -->|"Float print"| F["dtostrf()"]
+    B -->|"Background"| G["yield()"]
+    C --> H["เหมือน Arduino เลย"]
+    D --> H
+    E --> H
+    F --> H
+    G --> I["feed IWDG อัตโนมัติ"]
+        </pre>
+    </div>
+</section>
+
+<section>
+    <h2>Arduino Time Aliases</h2>
+    <table>
+        <tr><th>Arduino Function</th><th>SimpleHAL Function</th><th>คำอธิบาย</th></tr>
+        <tr><td><code>millis()</code></td><td><code>Get_CurrentMs()</code></td><td>เวลาตั้งแต่ boot (ms)</td></tr>
+        <tr><td><code>micros()</code></td><td><code>Get_CurrentUs()</code></td><td>เวลาตั้งแต่ boot (µs)</td></tr>
+        <tr><td><code>delay(ms)</code></td><td><code>Delay_Ms(ms)</code></td><td>หน่วงเวลา (ms)</td></tr>
+        <tr><td><code>delayMicroseconds(us)</code></td><td><code>Delay_Us(us)</code></td><td>หน่วงเวลา (µs)</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>Interrupt Aliases</h2>
+    <table>
+        <tr><th>Arduino Macro</th><th>SimpleHAL Equivalent</th></tr>
+        <tr><td><code>interrupts()</code></td><td><code>__enable_irq()</code></td></tr>
+        <tr><td><code>noInterrupts()</code></td><td><code>__disable_irq()</code></td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th></tr>
+        <tr><td><code>randomSeed(seed)</code></td><td>ตั้งค่า seed สำหรับ random number generator</td></tr>
+        <tr><td><code>_randomMax(max)</code></td><td>สุ่มเลข 0 ถึง max-1</td></tr>
+        <tr><td><code>_randomRange(min, max)</code></td><td>สุ่มเลขในช่วง min ถึง max-1</td></tr>
+        <tr><td><code>random(min, max)</code></td><td>Macro สุ่มเลข (ต้องเปิด ENABLE_ARDUINO_RANDOM_MACRO)</td></tr>
+        <tr><td><code>yield()</code></td><td>Feed IWDG อัตโนมัติใน main loop (ถ้าเปิด IWDG ไว้)</td></tr>
+        <tr><td><code>dtostrf(value, width, precision, buffer)</code></td><td>แปลง float → string โดยไม่ใช้ sprintf</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>USART Print Extensions (Optional)</h2>
+    <div class="callout callout-note">
+        <strong>ต้องเปิดใช้งานด้วย define:</strong> <code>#define USART_PRINT_EXTENSIONS</code>
+    </div>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th></tr>
+        <tr><td><code>USART_Println(str)</code></td><td>พิมพ์ string + ขึ้นบรรทัดใหม่</td></tr>
+        <tr><td><code>USART_PrintlnNum(num)</code></td><td>พิมพ์เลข + ขึ้นบรรทัดใหม่</td></tr>
+        <tr><td><code>USART_PrintlnHex(num)</code></td><td>พิมพ์เลขฐาน 16 + ขึ้นบรรทัดใหม่</td></tr>
+        <tr><td><code>USART_PrintFloat(num)</code></td><td>พิมพ์ float</td></tr>
+        <tr><td><code>USART_PrintlnFloat(num)</code></td><td>พิมพ์ float + ขึ้นบรรทัดใหม่</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>ขั้นตอนการใช้งาน (Step by Step)</h2>
+    <div class="step">
+        <h3>1. Include SimpleHAL.h</h3>
+        <p><code>#include "SimpleHAL.h"</code> — ฟังก์ชัน Arduino-style มีให้พร้อมใช้เลย</p>
+    </div>
+    <div class="step">
+        <h3>2. เรียก millis() / delay() ได้ทันที</h3>
+        <p>หลังจาก Timer_Init() — millis() และ delay() ใช้ได้ทันที</p>
+    </div>
+    <div class="step">
+        <h3>3. randomSeed ก่อนใช้ random</h3>
+        <p><code>randomSeed(ADC_Read())</code> — ใช้ค่า noise จาก ADC เป็น seed</p>
+    </div>
+    <div class="step">
+        <h3>4. dtostrf — บัฟเฟอร์ต้องใหญ่พอ</h3>
+        <p class="explain">บัฟเฟอร์ต้องมีขนาด width + 2 ไบต์ (เผื่อ null terminator และเครื่องหมาย)</p>
+    </div>
+</section>
+
+<section>
+    <h2>ระดับขั้นต้น: Blink Non-blocking ด้วย millis()</h2>
+    <pre><code class="language-c">#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    GPIO_Init(GPIOC, GPIO_Pin_0, GPIO_Mode_Out_PP);
+
+    uint32_t last_toggle = millis();
+    uint8_t led_state = 0;
+
+    while (1) {
+        if (millis() - last_toggle >= 500) {
+            last_toggle = millis();
+            led_state = !led_state;
+            if (led_state) {
+                GPIO_WriteBit(GPIOC, GPIO_Pin_0, 1);
+            } else {
+                GPIO_WriteBit(GPIOC, GPIO_Pin_0, 0);
+            }
+        }
+
+        // ยังทำงานอื่นต่อได้ ไม่ block เหมือน delay()
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>ระดับขั้นกลาง: Random LED Dice</h2>
+    <div class="approach">
+        <strong>แนวคิด:</strong> ใช้ randomSeed จาก ADC noise → สุ่มเลข 1-6 (เหมือนลูกเต๋า) → กระพริบ LED ตามจำนวนที่สุ่มได้
+    </div>
+    <pre><code class="language-c">#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(USART_115200);
+    GPIO_Init(GPIOC, GPIO_Pin_0, GPIO_Mode_Out_PP);
+
+    randomSeed(ADC_Read()); // seed จาก ADC noise
+
+    while (1) {
+        uint8_t dice = _randomRange(1, 7); // 1-6
+        printf("Dice: %d\r\n", dice);
+
+        // กระพริบ LED ตามแต้ม
+        for (uint8_t i = 0; i < dice; i++) {
+            GPIO_WriteBit(GPIOC, GPIO_Pin_0, 1);
+            delay(200);
+            GPIO_WriteBit(GPIOC, GPIO_Pin_0, 0);
+            delay(200);
+        }
+
+        delay(2000); // รอ 2 วิ ก่อนทอยใหม่
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>ระดับขั้นสูง: yield() + IWDG — Cooperative Multitasking</h2>
+    <div class="approach">
+        <strong>แนวคิด:</strong> ใช้ yield() ใน main loop เพื่อ feed IWDG อัตโนมัติ — ไม่ต้องเรียก IWDG_Feed เอง — เหมาะกับ multi-tasking
+    </div>
+    <pre><code class="language-c">#include "SimpleHAL.h"
+
+void task_blink_led(void) {
+    static uint32_t last = 0;
+    if (millis() - last >= 500) {
+        last = millis();
+        GPIO_WriteBit(GPIOC, GPIO_Pin_0,
+            (GPIO_ReadOutputDataBit(GPIOC, GPIO_Pin_0)) ? 0 : 1);
+    }
+}
+
+void task_print_ms(void) {
+    static uint32_t last = 0;
+    if (millis() - last >= 2000) {
+        last = millis();
+        printf("Uptime: %lu ms\r\n", millis());
+    }
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(USART_115200);
+    GPIO_Init(GPIOC, GPIO_Pin_0, GPIO_Mode_Out_PP);
+
+    IWDG_SimpleInit(2000); // เปิด watchdog
+
+    while (1) {
+        task_blink_led();
+        task_print_ms();
+
+        yield(); // เรียกทุก loop = auto-feed IWDG
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>ข้อควรระวังสำคัญ</h2>
+    <ul>
+        <li><code>_randomMax</code> / <code>_randomRange</code> — ใช้ชื่อนี้เพราะ <code>random</code> ชนกับ stdlib.h</li>
+        <li>ต้องเรียก <code>randomSeed()</code> ก่อนใช้ random</li>
+        <li><code>dtostrf</code> — บัฟเฟอร์ต้องใหญ่กว่า width อย่างน้อย 2 bytes</li>
+        <li><code>delay()</code> ใน ISR = ห้ามเด็ดขาด</li>
+    </ul>
+</section>
+
+<section>
+    <h2>ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>อาการ</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td><code>random()</code> ชนกับ stdlib.h</td><td>Macro conflict</td><td>ใช้ <code>_randomMax()</code> หรือ <code>#define ENABLE_ARDUINO_RANDOM_MACRO</code></td></tr>
+        <tr><td><code>yield()</code> ไม่ feed IWDG</td><td>ยังไม่ได้เริ่ม IWDG</td><td>เรียก <code>IWDG_SimpleInit()</code> ก่อน loop</td></tr>
+        <tr><td><code>dtostrf</code> output เพี้ยน</td><td>Buffer เล็กเกินไป</td><td>เพิ่ม buffer เป็น width + 2</td></tr>
+        <tr><td><code>delay()</code> ใน ISR → ค้าง</td><td>ISR block main loop</td><td>ห้ามใช้ delay ใน ISR — ใช้ flag แทน</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>คำถามที่พบบ่อย (FAQ)</h2>
+    <h3>ทำไมต้องมี SimpleArduino?</h3>
+    <p>เพื่อให้คนที่ย้ายจาก Arduino มา CH32V003 เริ่มต้นได้ง่าย — ใช้ชื่อฟังก์ชันเดิม ไม่ต้องเรียนรู้ใหม่ทั้งหมด</p>
+    <h3>ต่างจาก Arduino จริงอย่างไร?</h3>
+    <p>API ชื่อเหมือนกัน — แต่ hardware ข้างล่างเป็น CH32V003 เต็ม ๆ — ประสิทธิภาพดีกว่า เร็วกว่า ถูกกว่า</p>
+    <h3>ฟังก์ชันไหนใช้แทนกันได้บ้าง?</h3>
+    <p><code>millis</code>, <code>delay</code>, <code>random</code>, <code>dtostrf</code> — ครอบคลุมฟังก์ชันพื้นฐานที่ใช้บ่อยที่สุด</p>
+</section>
+
+<section>
+    <h2>ลองทำดู (แบบฝึกหัด)</h2>
+    <ol>
+        <li>Blink non-blocking ด้วย millis() — LED กระพริบทุก 500ms โดยไม่ใช้ delay</li>
+        <li>Random dice — กดปุ่มเพื่อทอยลูกเต๋า 1-6</li>
+        <li>พิมพ์แรงดัน float ด้วย dtostrf — อ่าน ADC แปลงเป็นแรงดัน แล้วแสดงผล</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="ch18-pwr.html">&larr; บทที่ 18: Power Management</a>
+    <a href="index.html">&#x1f3e0; สารบัญ</a>
+    <a href="index.html">หน้าหลัก &rarr;</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:false,theme:'base'});mermaid.run();</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

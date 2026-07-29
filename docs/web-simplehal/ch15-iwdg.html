@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>บทที่ 15: IWDG — Independent Watchdog ป้องกันระบบค้าง</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+</head>
+<body>
+
+<nav class="top-nav">
+    <a href="ch14-flash.html">&larr; บทที่ 14: Flash Storage</a>
+    <a href="index.html">&#x1f3e0; สารบัญ</a>
+    <a href="ch16-wwdg.html">บทที่ 16: WWDG &rarr;</a>
+</nav>
+
+<h1>บทที่ 15: IWDG — Independent Watchdog ป้องกันระบบค้าง</h1>
+<span class="level level-advanced">ระดับสูง</span>
+
+<section>
+    <h2>สิ่งที่ต้องรู้ก่อน</h2>
+    <ul>
+        <li><a href="ch01-first-steps.html">บทที่ 1: ขั้นตอนแรก</a> (basic setup)</li>
+    </ul>
+</section>
+
+<section>
+    <h2>อุปกรณ์ที่ต้องใช้</h2>
+    <ul>
+        <li>CH32V003 Dev Board (ไม่ต้องใช้อุปกรณ์เสริมภายนอก)</li>
+    </ul>
+</section>
+
+<section>
+    <h2>ทำไมต้องใช้?</h2>
+    <p>ถ้าโปรแกรมค้าง (deadlock, infinite loop) — IWDG จะรีเซ็ต MCU ให้เองอัตโนมัติ = อุปกรณ์ไม่ค้างตลอดไป</p>
+</section>
+
+<section>
+    <h2>Flowchart การทำงาน</h2>
+    <div class="flowchart">
+        <pre class="mermaid">
+flowchart TD
+    A["IWDG_SimpleInit(timeout)"] --> B["while(1)"]
+    B --> C["ทำงานปกติ..."]
+    C --> D["IWDG_Feed() ← ต่ออายุ"]
+    D --> B
+    B -->|"ถ้าโปรแกรมค้าง!"| E["ไม่ Feed"]
+    E --> F["⏰ หมดเวลา → RESET!"]
+    F --> A
+        </pre>
+    </div>
+</section>
+
+<section>
+    <h2>คุณสมบัติสำคัญ</h2>
+    <ul>
+        <li><strong>Clock source:</strong> LSI ~40kHz — เป็นอิสระจาก CPU clock (ทำงานแม้ CPU ค้าง)</li>
+        <li><strong>ความแม่นยำ:</strong> ±25% (LSI oscillator)</li>
+        <li><strong>Timeout:</strong> 1ms – 32.7 วินาที</li>
+        <li><strong>เริ่มแล้วหยุดไม่ได้</strong> — เมื่อเปิด IWDG จะหยุดด้วยซอฟต์แวร์ไม่ได้ (hardware safety)</li>
+    </ul>
+    <div class="callout callout-warn">
+        <strong>สำคัญ:</strong> เมื่อเริ่ม IWDG จะหยุดไม่ได้อีกเลยจนกว่า MCU จะถูกรีเซ็ต — ทดสอบโค้ดให้ดีก่อน enable
+    </div>
+</section>
+
+<section>
+    <h2>Prescaler &amp; Timeout</h2>
+    <table>
+        <tr><th>Prescaler</th><th>Divider</th><th>Timeout Range</th></tr>
+        <tr><td>/4</td><td>4</td><td>~0.1ms – 25.6ms</td></tr>
+        <tr><td>/8</td><td>8</td><td>~0.2ms – 51.2ms</td></tr>
+        <tr><td>/16</td><td>16</td><td>~0.4ms – 102.4ms</td></tr>
+        <tr><td>/32</td><td>32</td><td>~0.8ms – 204.8ms</td></tr>
+        <tr><td>/64</td><td>64</td><td>~1.6ms – 409.6ms</td></tr>
+        <tr><td>/128</td><td>128</td><td>~3.2ms – 819.2ms</td></tr>
+        <tr><td>/256</td><td>256</td><td>~6.4ms – 1638ms</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>API Reference</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th></tr>
+        <tr><td><code>IWDG_SimpleInit(timeout_ms)</code></td><td>เริ่มต้น IWDG แบบง่าย ระบุ timeout เป็น ms</td></tr>
+        <tr><td><code>IWDG_Feed()</code></td><td>ต่ออายุ watchdog (reset counter)</td></tr>
+        <tr><td><code>IWDG_IsBusy()</code></td><td>ตรวจสอบว่า IWDG กำลังเริ่มต้นอยู่หรือไม่</td></tr>
+        <tr><td><code>IWDG_Init(prescaler, reload)</code></td><td>เริ่มต้น IWDG แบบกำหนดค่าเอง</td></tr>
+        <tr><td><code>IWDG_GetTimeout()</code></td><td>อ่านค่า timeout ปัจจุบัน (ms)</td></tr>
+        <tr><td><code>IWDG_WasResetCause()</code></td><td>ตรวจสอบว่ารีเซ็ตล่าสุดเกิดจาก IWDG หรือไม่</td></tr>
+        <tr><td><code>IWDG_ClearResetFlag()</code></td><td>ล้าง flag รีเซ็ตจาก IWDG</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>Helper Macros</h2>
+    <table>
+        <tr><th>Macro</th><th>คำอธิบาย</th></tr>
+        <tr><td><code>IWDG_TIMEOUT_MS(prescaler, reload)</code></td><td>คำนวณ timeout เป็น ms จาก prescaler + reload</td></tr>
+        <tr><td><code>IWDG_CALC_RELOAD(prescaler, ms)</code></td><td>คำนวณค่า reload จาก prescaler + เวลาที่ต้องการ</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>ขั้นตอนการใช้งาน (Step by Step)</h2>
+    <div class="step">
+        <h3>1. เลือก Timeout</h3>
+        <p>คำนวณเวลาที่เหมาะสม — ควรนานกว่า loop หลัก 2-3 เท่า</p>
+    </div>
+    <div class="step">
+        <h3>2. เริ่มต้น IWDG</h3>
+        <p><code>IWDG_SimpleInit(2000)</code> — timeout 2 วินาที</p>
+    </div>
+    <div class="step">
+        <h3>3. Feed ใน Main Loop</h3>
+        <p><code>IWDG_Feed()</code> — เรียกเป็นระยะใน while(1) ก่อนหมด timeout</p>
+    </div>
+    <div class="step">
+        <h3>4. ห้าม Feed ใน ISR</h3>
+        <p class="explain">ถึงโปรแกรมจะค้าง ISR ก็ยังทำงานได้ — ควร feed ใน main loop เท่านั้น</p>
+    </div>
+</section>
+
+<section>
+    <h2>ระดับขั้นต้น: Basic Watchdog — 2 วินาที</h2>
+    <pre><code class="language-c">#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(USART_115200);
+
+    IWDG_SimpleInit(2000); // timeout 2 วินาที
+
+    printf("Watchdog started\r\n");
+    uint32_t last_feed = Get_CurrentMs();
+
+    while (1) {
+        // ทำงานปกติทุก 1 วินาที
+        if (Get_CurrentMs() - last_feed >= 1000) {
+            last_feed = Get_CurrentMs();
+            IWDG_Feed();
+            printf("Feed ok\r\n");
+        }
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>ระดับขั้นกลาง: Watchdog กับ Task ที่อาจค้าง</h2>
+    <div class="approach">
+        <strong>แนวคิด:</strong> ใช้ receive_data_timeout pattern — ถ้ารับข้อมูลนานเกิน watchdog จะรีเซ็ตให้เอง
+    </div>
+    <pre><code class="language-c">#include "SimpleHAL.h"
+
+void risky_receive_task(void) {
+    // งานที่อาจค้าง เช่น รอข้อมูลจาก sensor
+    uint32_t start = Get_CurrentMs();
+    while (1) {
+        if (USART_Available() > 0) {
+            uint8_t ch = USART_ReadChar();
+            printf("Received: %c\r\n", ch);
+            return; // สำเร็จ
+        }
+        if (Get_CurrentMs() - start > 5000) {
+            printf("Timeout!\r\n");
+            return; // ออกเองก่อน watchdog reset
+        }
+    }
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(USART_115200);
+    IWDG_SimpleInit(3000);
+
+    while (1) {
+        IWDG_Feed();
+        risky_receive_task();
+        Delay_Ms(100);
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>ระดับขั้นสูง: ตรวจจับสาเหตุ Reset</h2>
+    <div class="approach">
+        <strong>แนวคิด:</strong> หลังรีเซ็ต — ตรวจสอบว่าเกิดจาก IWDG, PIN reset, POR, หรือ Software reset — บันทึก log ก่อนเริ่มระบบใหม่
+    </div>
+    <pre><code class="language-c">#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(USART_115200);
+
+    printf("--- Boot ---\r\n");
+
+    if (IWDG_WasResetCause()) {
+        printf("Reset cause: IWDG (Watchdog timeout!)\r\n");
+        printf("ระบบอาจค้างก่อนหน้านี้ กรุณาตรวจสอบ\r\n");
+        IWDG_ClearResetFlag();
+    }
+
+    // เริ่ม IWDG ใหม่
+    IWDG_SimpleInit(2000);
+
+    while (1) {
+        IWDG_Feed();
+        Delay_Ms(1000);
+        printf("Running...\r\n");
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>เปรียบเทียบ: IWDG vs WWDG</h2>
+    <table>
+        <tr><th>คุณสมบัติ</th><th>IWDG</th><th>WWDG</th></tr>
+        <tr><td>Clock source</td><td>LSI ~40kHz (อิสระ)</td><td>PCLK1 (ขึ้นกับ CPU)</td></tr>
+        <tr><td>ความแม่นยำ</td><td>±25%</td><td>แม่นยำกว่า (CPU clock)</td></tr>
+        <tr><td>Window constraint</td><td>ไม่มี</td><td>มี (ต้อง feed ในช่วงเวลาที่กำหนด)</td></tr>
+        <tr><td>Timeout range</td><td>1ms – 32.7s</td><td>~0.1ms – 50ms</td></tr>
+        <tr><td>กรณีใช้งาน</td><td>ป้องกัน hang ทั่วไป</td><td>ตรวจจับ timing error</td></tr>
+        <tr><td>Early warning interrupt</td><td>ไม่มี</td><td>มี (ก่อน reset)</td></tr>
+        <tr><td>ปิดด้วยซอฟต์แวร์</td><td>ไม่ได้</td><td>ไม่ได้ (เมื่อ WDGA=1)</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>อาการ</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td>Reset ตลอดเวลา</td><td>Task ช้าเกินหรือลืม feed</td><td>ขยาย timeout หรือลดงานใน loop</td></tr>
+        <tr><td>Timeout ไม่แม่นยำ</td><td>LSI ±25% tolerance</td><td>เผื่อ margin อย่างน้อย 30%</td></tr>
+        <tr><td>Feed ใน ISR</td><td>โปรแกรมค้างแต่ ISR ยัง feed ได้</td><td>ควร feed ใน main loop เท่านั้น</td></tr>
+        <tr><td>เริ่มแล้วหยุดไม่ได้</td><td>Hardware limitation</td><td>ทดสอบโค้ดให้ดีก่อน enable</td></tr>
+    </table>
+</section>
+
+<section>
+    <h2>คำถามที่พบบ่อย (FAQ)</h2>
+    <h3>IWDG vs WWDG ใช้อะไรดี?</h3>
+    <p>IWDG ป้องกัน hang (โปรแกรมค้าง) — WWDG ป้องกัน timing error (ทำงานเร็วหรือช้าเกินไป) — ดูเพิ่มที่ <a href="ch16-wwdg.html">บทที่ 16</a></p>
+    <h3>ทำไมไม่ใช้ delay แทน?</h3>
+    <p>delay ไม่ช่วยถ้าโปรแกรมค้างใน infinite loop — watchdog เป็นอิสระจาก CPU ทำงานเองได้</p>
+    <h3>Arduino มี IWDG ไหม?</h3>
+    <p>Arduino UNO (ATmega328P) มี built-in watchdog — แต่ต้องเปิดใช้งานเอง ไม่มีให้โดย default</p>
+</section>
+
+<section>
+    <h2>ลองทำดู (แบบฝึกหัด)</h2>
+    <ol>
+        <li>เปิด IWDG timeout 5 วินาที — feed ทุก 2 วินาที</li>
+        <li>จงใจสร้าง infinite loop ในโค้ด → สังเกต MCU reset เองอัตโนมัติ</li>
+        <li>ตรวจจับสาเหตุ reset ด้วย IWDG_WasResetCause() — แสดงข้อความก่อนเริ่มระบบใหม่</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="ch14-flash.html">&larr; บทที่ 14: Flash Storage</a>
+    <a href="index.html">&#x1f3e0; สารบัญ</a>
+    <a href="ch16-wwdg.html">บทที่ 16: WWDG &rarr;</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:false,theme:'base'});mermaid.run();</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

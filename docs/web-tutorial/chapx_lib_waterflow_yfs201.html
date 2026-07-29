@@ -34,7 +34,19 @@ flowchart TD
         <tr><td>PC0 (GPIO)</td><td>←</td><td>YF-S201</td><td>Signal (Yellow)</td><td>Pulse output (EXTI interrupt)</td></tr>
       </tbody>
     </table>
-    <p>YF-S201 ใช้ Hall Effect Sensor + Magnet ในกังหัน — เมื่อน้ำไหล กังหันหมุน → Hall Sensor สร้างพัลส์ — K-factor = 450 pulse/Liter — ต่อตรง GPIO ใช้ Interrupt นับ</p></section>
+    <p>YF-S201 ใช้ Hall Effect Sensor + Magnet ในกังหัน — เมื่อน้ำไหล กังหันหมุน → Hall Sensor สร้างพัลส์ — K-factor = 450 pulse/Liter — ต่อตรง GPIO ใช้ Interrupt นับ</p>
+    <h3>รู้จักขา</h3>
+    <ul>
+      <li><strong>VCC (Red):</strong> จ่ายไฟ 3.3V</li>
+      <li><strong>GND (Black):</strong> Ground ร่วม</li>
+      <li><strong>Signal (Yellow):</strong> พัลส์ output — ใช้ EXTI interrupt นับความถี่</li>
+    </ul>
+    <h3>วิธีต่อทีละขั้น</h3>
+    <ol>
+      <li>ต่อ <strong>VCC (สายแดง)</strong> ไป <strong>3.3V</strong> และ <strong>GND (สายดำ)</strong> ไป <strong>GND</strong> — จ่ายไฟ</li>
+      <li>ต่อ <strong>Signal (สายเหลือง)</strong> ไป <strong>PC0 (GPIO)</strong> — นับพัลส์ด้วย interrupt</li>
+    </ol>
+</section>
 <section><h2>📚 หลักการทำงาน</h2><p><strong>YF-S201 Water Flow Sensor</strong> ใช้กังหันที่มีแม่เหล็กติดอยู่ — เมื่อน้ำไหลผ่าน กังหันหมุน — Hall Effect Sensor ตรวจจับแม่เหล็ก → สร้างพัลส์สัญญาณ — ความถี่ของพัลส์แปรผันตามอัตราการไหล</p><p><strong>K-Factor (Pulses/Liter):</strong> แต่ละรุ่นมีค่า K-factor ต่างกัน — YF-S201 = 450 pulse/L, YF-S401 = 5880 pulse/L — Flow Rate (L/min) = (pulse_count / K_factor) × 60</p><p><strong>Interrupt-Based Counting:</strong> Library จัดการ EXTI Interrupt ให้อัตโนมัติ — ไม่ต้องเขียน ISR เอง — <code>WaterFlow_GetFlowRate()</code> และ <code>WaterFlow_GetTotalVolume()</code> อ่านค่าได้ทันที</p></section>
 <section><h2>💻 เขียน Code ทีละขั้น</h2>
 <div class="step"><h3>ขั้นที่ 1: Init WaterFlow</h3><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20

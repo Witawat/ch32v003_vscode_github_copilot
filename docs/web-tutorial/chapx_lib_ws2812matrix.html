@@ -51,6 +51,18 @@ flowchart TD
       </tbody>
     </table>
     <p>WS2812B 8×8 Matrix มี LED 64 ดวงเรียงแบบ Serpentine (S-curve) — ใช้ protocol เดียวกับ NeoPixel — ต้องต่อ 5V แยก ≥ 2A — Level Shifter จำเป็น</p>
+    <h3>รู้จักขา</h3>
+    <ul>
+      <li><strong>VCC:</strong> ไฟเลี้ยง 5V อย่างน้อย 2A (64 LEDs × 60mA peak)</li>
+      <li><strong>DIN:</strong> ขาข้อมูลเข้า ต่อกับ PC0 ผ่าน level shifter</li>
+      <li><strong>GND:</strong> ต่อกราวด์ร่วมกับ MCU</li>
+    </ul>
+    <h3>วิธีต่อทีละขั้น</h3>
+    <ol>
+      <li>ต่อ <strong>PC0</strong> ผ่าน <strong>Level Shifter 3.3V→5V</strong> ไป <strong>DIN</strong> — จำเป็น! WS2812B ใช้ 5V logic</li>
+      <li>ต่อ <strong>5V ภายนอก (≥2A)</strong> ไป <strong>VCC</strong> — อย่าใช้ไฟจาก MCU</li>
+      <li>ต่อ <strong>GND</strong> MCU และไฟแยก ไป <strong>GND</strong> — กราวด์ร่วม</li>
+    </ol>
 </section>
 <section>
     <h2>📚 หลักการทำงาน</h2>

@@ -57,6 +57,21 @@ flowchart LR
   </tbody>
 </table>
 
+<h4>รู้จักขา</h4>
+<ul>
+  <li><strong>PC0:</strong> ขาสัญญาณขาออก ต่อกับ LED ผ่าน R 220Ω</li>
+  <li><strong>R 220Ω:</strong> ตัวต้านทานจำกัดกระแส ป้องกัน LED และ MCU เสียหาย</li>
+  <li><strong>LED (แอโนด):</strong> ขาบวก (+) ขายาว ต่อกับ R 220Ω</li>
+  <li><strong>LED (แคโทด):</strong> ขาลบ (-) ขาสั้น ต่อกับ GND</li>
+</ul>
+
+<h4>วิธีต่อทีละขั้น</h4>
+<ol>
+  <li>ต่อ <strong>PC0</strong> ไป <strong>R 220Ω</strong> ขา 1 — ส่งสัญญาณ PWM/ดิจิทัลไปยัง LED</li>
+  <li>ต่อ <strong>R 220Ω</strong> ขา 2 ไป <strong>LED แอโนด</strong> (ขายาว) — จำกัดกระแสไม่ให้เกิน 8mA</li>
+  <li>ต่อ <strong>LED แคโทด</strong> (ขาสั้น) ไป <strong>GND</strong> — ครบวงจร</li>
+</ol>
+
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">
 flowchart TD
@@ -133,6 +148,23 @@ int main(void)
     <tr><td>GND</td><td>↔</td><td>USB-Serial GND</td><td>GND</td><td>Common ground</td></tr>
   </tbody>
 </table>
+
+<h4>รู้จักขา</h4>
+<ul>
+  <li><strong>PC1:</strong> ขาอินพุตสำหรับอ่านปุ่มกด มี pull-up ~40kΩ ภายใน</li>
+  <li><strong>PD5 (TX):</strong> ขาส่งข้อมูล USART ต่อกับ USB-Serial (RX)</li>
+  <li><strong>PD6 (RX):</strong> ขารับข้อมูล USART ต่อกับ USB-Serial (TX)</li>
+  <li><strong>Push Button:</strong> ปุ่มกดแบบ ACTIVE_LOW — กด = LOW, ปล่อย = HIGH</li>
+</ul>
+
+<h4>วิธีต่อทีละขั้น</h4>
+<ol>
+  <li>ต่อ <strong>PC1</strong> ไป <strong>Push Button</strong> ขา 1 — อ่านค่าปุ่มกด (pull-up ภายใน)</li>
+  <li>ต่อ <strong>Push Button</strong> ขา 2 ไป <strong>GND</strong> — กดปุ่มเมื่อใด PC1 ต่อลง GND</li>
+  <li>ต่อ <strong>PD5 (TX)</strong> ไป <strong>USB-Serial (RX)</strong> — ส่งข้อมูลจาก MCU ไป PC</li>
+  <li>ต่อ <strong>PD6 (RX)</strong> ไป <strong>USB-Serial (TX)</strong> — รับข้อมูลจาก PC มา MCU</li>
+  <li>ต่อ <strong>GND MCU</strong> ไป <strong>GND USB-Serial</strong> — ใช้วงจรร่วมกัน</li>
+</ol>
 
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">
@@ -288,6 +320,23 @@ int main(void) {
   </tbody>
 </table>
 
+<h4>รู้จักขา</h4>
+<ul>
+  <li><strong>PC0-PC3:</strong> ขาออก 4 ขา ควบคุม LED 4 ดวง พร้อมกันหรือทีละดวง</li>
+  <li><strong>R 220Ω (×4):</strong> ตัวต้านทานจำกัดกระแสประจำ LED แต่ละดวง</li>
+  <li><strong>LED1-LED4:</strong> ไฟแสดงผล 4 ดวง ต่อแอโนด→R→MCU, แคโทด→GND</li>
+</ul>
+
+<h4>วิธีต่อทีละขั้น</h4>
+<ol>
+  <li>ต่อ <strong>PC0</strong> ไป <strong>R 220Ω</strong> → <strong>LED1 แอโนด</strong> — LED ดวงที่ 1</li>
+  <li>ต่อ <strong>LED1 แคโทด</strong> ไป <strong>GND</strong> — ครบวงจร</li>
+  <li>ต่อ <strong>PC1</strong> ไป <strong>R 220Ω</strong> → <strong>LED2 แอโนด</strong> — LED ดวงที่ 2</li>
+  <li>ต่อ <strong>LED2 แคโทด</strong> ไป <strong>GND</strong></li>
+  <li>ต่อ <strong>PC2</strong> → <strong>R 220Ω</strong> → <strong>LED3 แอโนด</strong> → GND — LED ดวงที่ 3</li>
+  <li>ต่อ <strong>PC3</strong> → <strong>R 220Ω</strong> → <strong>LED4 แอโนด</strong> → GND — LED ดวงที่ 4</li>
+</ol>
+
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">
 flowchart TD
@@ -368,6 +417,24 @@ portWrite(GPIOC, 0b10101010);  // PC7=HIGH, PC6=LOW, PC5=HIGH, ...
     <tr><td>74HC595 (GND)</td><td>→</td><td>GND</td><td>8</td><td>—</td></tr>
   </tbody>
 </table>
+
+<h4>รู้จักขา</h4>
+<ul>
+  <li><strong>PC0 (DATA):</strong> ขาส่งข้อมูลแบบอนุกรมไปยัง 74HC595 (DS, ขา 14)</li>
+  <li><strong>PC1 (CLK):</strong> ขาส่งสัญญาณนาฬิกาให้ shift register (SH_CP, ขา 11)</li>
+  <li><strong>PC2 (LATCH):</strong> ขาบอกให้ 74HC595 แสดงผลข้อมูลที่รับมา (ST_CP, ขา 12)</li>
+  <li><strong>74HC595 (Q0-Q7):</strong> ขาออก 8 ขา ต่อกับ LED 8 ดวงผ่าน R 220Ω</li>
+</ul>
+
+<h4>วิธีต่อทีละขั้น</h4>
+<ol>
+  <li>ต่อ <strong>PC0</strong> ไป <strong>74HC595 ขา 14 (DS)</strong> — สายข้อมูลอนุกรม</li>
+  <li>ต่อ <strong>PC1</strong> ไป <strong>74HC595 ขา 11 (SH_CP)</strong> — สัญญาณนาฬิกา shift</li>
+  <li>ต่อ <strong>PC2</strong> ไป <strong>74HC595 ขา 12 (ST_CP)</strong> — สัญญาณล็อคข้อมูล</li>
+  <li>ต่อ <strong>74HC595 ขา 16 (VCC)</strong> ไป <strong>3.3V</strong> — จ่ายไฟ</li>
+  <li>ต่อ <strong>74HC595 ขา 8 (GND)</strong> ไป <strong>GND</strong></li>
+  <li>ต่อ <strong>74HC595 Q0-Q7</strong> ไป <strong>R 220Ω</strong> → <strong>LED 8 ดวง</strong> → <strong>GND</strong></li>
+</ol>
 
 <h3>🧭 ผังการทำงาน</h3>
 <pre class="mermaid">

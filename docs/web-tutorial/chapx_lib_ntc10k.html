@@ -54,6 +54,20 @@ flowchart TD
       </tbody>
     </table>
     <p>PC4─ADC — วงจรแบ่งแรงดัน: R_fixed 10kΩ + NTC 10kΩ — NTC ลดความต้านทานเมื่อร้อนขึ้น → Vout ลดลง</p>
+
+    <h3>รู้จักขา</h3>
+    <ul>
+      <li><strong>Vout (PC4−ADC):</strong> จุดกึ่งกลาง voltage divider — แรงดันเปลี่ยนตามอุณหภูมิ</li>
+      <li><strong>R_fixed 10kΩ:</strong> ตัวต้านทานคงที่ต่อจาก 3.3V ไปยัง Vout</li>
+      <li><strong>NTC 10kΩ:</strong> Thermistor — ความต้านทานลดลงเมื่อร้อนขึ้น</li>
+      <li><strong>GND:</strong> Ground ร่วม</li>
+    </ul>
+    <h3>วิธีต่อทีละขั้น</h3>
+    <ol>
+      <li>ต่อ <strong>3.3V</strong> ผ่าน <strong>R_fixed 10kΩ</strong> ไปยัง <strong>PC4 (ADC)</strong> — จ่ายไฟให้วงจร</li>
+      <li>ต่อ <strong>NTC</strong> ระหว่าง <strong>PC4</strong> กับ <strong>GND</strong> — ครบวงจร voltage divider</li>
+      <li>PC4 อ่านแรงดัน Vout = 3.3V × R_NTC / (R_fixed + R_NTC) — แปลงเป็นอุณหภูมิ</li>
+    </ol>
 </section>
 
 <section>

@@ -54,6 +54,23 @@ flowchart TD
       </tbody>
     </table>
     <p>74HC595 ใช้ 3 ขา (DATA, CLK, LATCH) — 8 outputs ต่อ chip — ต่อพ่วงหลายตัวได้ — output กระแส ~6mA ต่อขา — ใช้ external 5V ได้ (CH32V003 3.3V logic ใช้ได้กับ 74HC595 5V)</p>
+    <h3>รู้จักขา</h3>
+    <ul>
+      <li><strong>VCC (16):</strong> ไฟเลี้ยง 3.3V หรือ 5V</li>
+      <li><strong>GND (8):</strong> ต่อกราวด์ร่วมกับ MCU</li>
+      <li><strong>DATA (14):</strong> ขาข้อมูล serial ต่อกับ PC0</li>
+      <li><strong>CLK (11):</strong> ขาสัญญาณนาฬิกา shift ต่อกับ PC1</li>
+      <li><strong>LATCH (12):</strong> ขาล็อค output ต่อกับ PC2</li>
+      <li><strong>Q0–Q7 (15,1–7):</strong> ขา output 8 ขา ต่อ LED+220Ω→GND</li>
+    </ul>
+    <h3>วิธีต่อทีละขั้น</h3>
+    <ol>
+      <li>ต่อ <strong>PC0</strong> ไป <strong>DATA (14)</strong> — ส่งข้อมูล serial</li>
+      <li>ต่อ <strong>PC1</strong> ไป <strong>CLK (11)</strong> — สัญญาณนาฬิกา shift</li>
+      <li>ต่อ <strong>PC2</strong> ไป <strong>LATCH (12)</strong> — ล็อคค่าไป output</li>
+      <li>ต่อ <strong>3.3V</strong> ไป <strong>VCC (16)</strong> และ <strong>GND</strong> ไป <strong>GND (8)</strong></li>
+      <li>ต่อ <strong>Q0–Q7</strong> ผ่าน R 220Ω ไป <strong>LED → GND</strong> — 8 output ควบคุมอุปกรณ์</li>
+    </ol>
 </section>
 <section>
     <h2>📚 หลักการทำงาน</h2>

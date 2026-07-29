@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>บทที่ 4: USART — สื่อสารผ่าน Serial — SimpleHAL</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+</head>
+<body>
+
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch03-delay.html">บทก่อน</a>
+    <a href="ch05-i2c.html">บทถัดไป →</a>
+</nav>
+
+<h1>บทที่ 4: USART — สื่อสารผ่าน Serial</h1>
+<span class="level level-beginner">เริ่มต้น</span>
+
+<section class="flowchart">
+    <h2>🧭 แผนภาพการทำงาน</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["USART_SimpleInit()"] --> B{"จะทำอะไร?"}
+    B -->|"ส่งข้อความ"| C["USART_Print()"]
+    B -->|"ส่งตัวเลข"| D["USART_PrintNum()"]
+    B -->|"รับข้อมูล"| E["USART_Available()"]
+    E --> F["USART_Read()"]
+    C --> G["แสดงผลบน Serial Monitor"]
+    D --> G
+    F --> G
+    </pre>
+</section>
+
+<section>
+    <h2>📋 สิ่งที่ต้องรู้ก่อน</h2>
+    <p>บทนี้ต่อจาก <a href="ch03-delay.html">บทที่ 3: Delay & Timer</a> และ <a href="ch02-gpio.html">บทที่ 2: GPIO</a> — คุณควรคุ้นเคยกับการตั้งค่าระบบพื้นฐาน และเข้าใจการทำงานของ GPIO แล้ว</p>
+</section>
+
+<section>
+    <h2>📦 อุปกรณ์ที่ต้องใช้</h2>
+    <table>
+        <thead><tr><th>อุปกรณ์</th><th>จำนวน</th><th>หมายเหตุ</th></tr></thead>
+        <tbody>
+            <tr><td>บอร์ด CH32V003</td><td>1</td><td>TSSOP-20 แนะนำ (มี pin มากกว่า)</td></tr>
+            <tr><td>USB-to-Serial Adapter</td><td>1</td><td>เช่น CP2102, CH340, FT232 — ใช้แรงดัน 3.3V</td></tr>
+            <tr><td>สายจัมเปอร์</td><td>3</td><td>TX, RX, GND</td></tr>
+            <tr><td>LED + R 220Ω</td><td>1</td><td>สำหรับทดสอบรับคำสั่ง</td></tr>
+        </tbody>
+    </table>
+    <p><em>หรือใช้ WCH-LinkE ในตัว — รองรับ UART ผ่านพอร์ต debug เดียวกัน (ใช้ remap)</em></p>
+</section>
+
+<section>
+    <h2>🤔 ทำไมต้องใช้?</h2>
+    <p>USART (Universal Synchronous/Asynchronous Receiver-Transmitter) คือช่องทางสื่อสารที่สำคัญที่สุดสำหรับการ debug — แทนที่จะเดาว่า MCU กำลังทำอะไร คุณส่งข้อความออกมาดูบน Serial Monitor ได้เลย นอกจากนี้ยังใช้รับคำสั่งจากคอมพิวเตอร์ ส่งข้อมูลเซนเซอร์ขึ้นกราฟแบบ real-time หรือคุยกับอุปกรณ์อื่น ๆ เช่น Bluetooth, WiFi module, GPS</p>
+</section>
+
+<section>
+    <h2>📚 ภาพรวมและหลักการทำงาน</h2>
+    <p>CH32V003 มี USART 1 ช่อง (USART1) รองรับ baud rate ตั้งแต่ 9600 ถึง 460800 การสื่อสารเป็นแบบ <strong>asynchronous serial</strong> — ใช้ 2 สาย: TX (ส่งข้อมูลออก) และ RX (รับข้อมูลเข้า) ไม่ต้องมี clock</p>
+    <p>SimpleUSART จัดการให้:</p>
+    <ul>
+        <li><strong>TX</strong> — ใช้ blocking send (วนรอจนกว่า transmit register ว่าง) ง่ายและไม่เปลือง RAM</li>
+        <li><strong>RX</strong> — ใช้ interrupt-driven ring buffer (ข้อมูลไม่หายแม้ CPU ยุ่งอยู่) ขนาดปริยาย 64 bytes</li>
+    </ul>
+</section>
+
+<section>
+    <h2>🔌 Pinout และวงจร</h2>
+    <table>
+        <thead><tr><th>Pin Configuration</th><th>TX Pin</th><th>RX Pin</th><th>หมายเหตุ</th></tr></thead>
+        <tbody>
+            <tr><td><code>USART_PINS_DEFAULT</code></td><td>PD5</td><td>PD6</td><td>ค่าปริยาย — ใช้บ่อยที่สุด</td></tr>
+            <tr><td><code>USART_PINS_REMAP1</code></td><td>PD0</td><td>PD1</td><td>PD0/PD1 มีเฉพาะ TSSOP-20/QFN20</td></tr>
+            <tr><td><code>USART_PINS_REMAP2</code></td><td>PD6</td><td>PD5</td><td>สลับ TX/RX กับ default</td></tr>
+        </tbody>
+    </table>
+    <pre class="ascii-circuit">
+    CH32V003                    USB-to-Serial Adapter
+┌──────────────┐         ┌──────────────────────────┐
+│      PD5(TX) ├─────────┤ RX                        │
+│      PD6(RX) ├─────────┤ TX                        │
+│          GND ├─────────┤ GND                       │
+└──────────────┘         └───────────┬───USB───┐     │
+                                     └───USB───┘     │
+                                        │            │
+                                    ┌───┴───┐        │
+                                    │  PC   │        │
+                                    └───────┘        │
+    </pre>
+    <table>
+        <thead><tr><th>Baud Rate</th><th>ค่าคงที่ใน SimpleHAL</th><th>เหมาะกับ</th></tr></thead>
+        <tbody>
+            <tr><td>9600</td><td><code>BAUD_9600</code></td><td>สื่อสารระยะไกล, สายยาว</td></tr>
+            <tr><td>19200</td><td><code>BAUD_19200</code></td><td></td></tr>
+            <tr><td>38400</td><td><code>BAUD_38400</code></td><td></td></tr>
+            <tr><td>57600</td><td><code>BAUD_57600</code></td><td></td></tr>
+            <tr><td>115200</td><td><code>BAUD_115200</code></td><td>ใช้งานทั่วไป (นิยมที่สุด)</td></tr>
+            <tr><td>230400</td><td><code>BAUD_230400</code></td><td></td></tr>
+            <tr><td>460800</td><td><code>BAUD_460800</code></td><td>ส่งข้อมูลเร็ว (สายต้องสั้น)</td></tr>
+        </tbody>
+    </table>
+</section>
+
+<section>
+    <h2>📋 API Reference</h2>
+    <table>
+        <thead><tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr></thead>
+        <tbody>
+            <tr><td><code>USART_SimpleInit(baud, pins)</code></td><td>เริ่มต้น USART ด้วย baud rate และ pin config</td><td><code>USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);</code></td></tr>
+            <tr><td><code>USART_Print(str)</code></td><td>ส่งสตริง (null-terminated) ออกทาง TX</td><td><code>USART_Print("Hello\r\n");</code></td></tr>
+            <tr><td><code>USART_WriteByte(byte)</code></td><td>ส่ง 1 ไบต์ออกทาง TX (binary data)</td><td><code>USART_WriteByte(0xAA);</code></td></tr>
+            <tr><td><code>USART_PrintNum(num)</code></td><td>ส่งตัวเลขแบบ decimal (int32_t) ออกทาง TX</td><td><code>USART_PrintNum(12345);</code></td></tr>
+            <tr><td><code>USART_PrintHex(num, digits)</code></td><td>ส่งตัวเลขแบบ hex (0x...) ออกทาง TX</td><td><code>USART_PrintHex(0xAB, 2);</code></td></tr>
+            <tr><td><code>USART_Available()</code></td><td>ตรวจสอบว่ามีข้อมูลรออ่านใน RX buffer หรือไม่ — คืนจำนวน byte</td><td><code>if (USART_Available()) { ... }</code></td></tr>
+            <tr><td><code>USART_Read()</code></td><td>อ่าน 1 ไบต์จาก RX buffer — ต้องมั่นใจว่ามีข้อมูลก่อน (เช็ค Available ก่อน)</td><td><code>uint8_t c = USART_Read();</code></td></tr>
+            <tr><td><code>USART_ReadBytes(buf, len)</code></td><td>อ่านหลายไบต์จาก RX buffer เข้า array</td><td><code>USART_ReadBytes(buf, 10);</code></td></tr>
+            <tr><td><code>USART_Flush()</code></td><td>ล้าง RX buffer ทิ้งทั้งหมด (เริ่มรับใหม่)</td><td><code>USART_Flush();</code></td></tr>
+            <tr><td><code>USART_RxByteHook(byte)</code></td><td>ฟังก์ชัน callback — ถูกเรียกทุกครั้งที่มี byte เข้ามาจาก interrupt (ให้ผู้ใช้ override)</td><td><code>void USART_RxByteHook(uint8_t b) { ... }</code></td></tr>
+        </tbody>
+    </table>
+</section>
+
+<section>
+    <h2>💻 เขียน Code ทีละขั้น</h2>
+
+    <div class="step">
+        <h3>ขั้นที่ 1: ตั้งค่าระบบ + Init USART</h3>
+        <pre><code class="language-c">#include "simplehal.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    // เริ่มต้น USART: baud 115200, ใช้ pin PD5(TX) + PD6(RX)
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+
+    USART_Print("CH32V003 USART Ready!\r\n");
+
+    while (1) { }
+}</code></pre>
+        <p class="explain">🔍 <code>USART_SimpleInit()</code> ทำทุกอย่าง: เปิด clock ให้ USART1, ตั้งค่า baud rate, เปิด RX interrupt, ตั้งค่า pin TX/RX — เรียกครั้งเดียวจบ</p>
+    </div>
+
+    <div class="step">
+        <h3>ขั้นที่ 2: ส่งข้อมูล — Print, PrintNum, PrintHex</h3>
+        <pre><code class="language-c">    USART_Print("=== Demo Send ===\r\n");
+
+    USART_Print("Counter: ");
+    uint32_t counter = 0;
+    USART_PrintNum(counter);
+    USART_Print("\r\n");
+
+    USART_Print("Reg value: ");
+    USART_PrintHex(0x5A, 2);
+    USART_Print("\r\n");</code></pre>
+        <p class="explain">🔍 <code>USART_Print()</code> รับเฉพาะ string เท่านั้น — ต้องการส่งตัวเลขต้องใช้ <code>USART_PrintNum()</code> หรือ <code>USART_PrintHex()</code> ต่อท้ายด้วย <code>"\r\n"</code> เพื่อขึ้นบรรทัดใหม่ (CR+LF)</p>
+    </div>
+
+    <div class="step">
+        <h3>ขั้นที่ 3: รับข้อมูล — Available + Read</h3>
+        <pre><code class="language-c">    while (1) {
+        if (USART_Available()) {          // มีข้อมูลรอ?
+            uint8_t ch = USART_Read();    // อ่าน 1 ตัวอักษร
+            USART_WriteByte(ch);           // echo กลับไป
+        }
+    }</code></pre>
+        <p class="explain">🔍 ต้องเช็ค <code>USART_Available()</code> ก่อนเสมอ — ถ้าอ่านโดยไม่มีข้อมูล <code>USART_Read()</code> อาจคืนค่า 0 หรือค้าง (ขึ้นกับการ implement)</p>
+    </div>
+
+    <div class="step">
+        <h3>ขั้นที่ 4: Command Parser — แยกคำสั่งจาก Serial</h3>
+        <pre><code class="language-c">char cmd_buffer[32];
+uint8_t cmd_idx = 0;
+
+while (1) {
+    while (USART_Available()) {
+        char ch = USART_Read();
+
+        if (ch == '\r' || ch == '\n') {     // กด Enter = ส่งคำสั่ง
+            cmd_buffer[cmd_idx] = '\0';     // null-terminate
+            ProcessCommand(cmd_buffer);      // แยกวิเคราะห์คำสั่ง
+            cmd_idx = 0;
+        } else if (cmd_idx < 31) {
+            cmd_buffer[cmd_idx++] = ch;     // เก็บตัวอักษร
+        }
+    }
+
+    // งานอื่น ๆ ใน main loop...
+}
+
+void ProcessCommand(char* cmd) {
+    if (strcmp(cmd, "LED ON") == 0) {
+        digitalWrite(PA1, HIGH);
+        USART_Print("LED ON\r\n");
+    } else if (strcmp(cmd, "LED OFF") == 0) {
+        digitalWrite(PA1, LOW);
+        USART_Print("LED OFF\r\n");
+    } else {
+        USART_Print("Unknown command: ");
+        USART_Print(cmd);
+        USART_Print("\r\n");
+    }
+}</code></pre>
+        <p class="explain">🔍 สร้าง buffer เก็บตัวอักษรที่พิมพ์เข้ามา — เมื่อเจอ Enter (CR/LF) ให้นำ buffer ไป parse หาคำสั่งที่รู้จัก ใช้วิธีนี้สร้าง command-line interface บน Serial Monitor ได้</p>
+    </div>
+</section>
+
+<section>
+    <h2>🟢 ตัวอย่างขั้นต้น</h2>
+    <p>Debug Print — นับเลขทุก 1 วินาทีและพิมพ์ค่า counter</p>
+    <pre><code class="language-c">#include "simplehal.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    USART_Print("=== Counter Demo ===\r\n");
+
+    uint32_t counter = 0;
+
+    while (1) {
+        USART_Print("Count: ");
+        USART_PrintNum(counter);
+        USART_Print("\r\n");
+        counter++;
+        Delay_Ms(1000);
+    }
+}</code></pre>
+    <p>เปิด Serial Monitor (MounRiver Studio built-in, PuTTY หรือ SerialPlot) ตั้ง baud rate 115200 — จะเห็นตัวเลขวิ่งขึ้นทุกวินาที</p>
+</section>
+
+<section>
+    <h2>🟡 ตัวอย่างขั้นกลาง</h2>
+    <p>Command Line Receiver — รับคำสั่ง "LON" / "LOFF" จาก Serial Monitor มาควบคุม LED</p>
+    <pre><code class="language-c">#include "simplehal.h"
+#include &lt;string.h&gt;
+
+char rx_buffer[32];
+uint8_t rx_idx = 0;
+
+void ProcessCmd(char* cmd) {
+    if (strcmp(cmd, "LON") == 0) {
+        digitalWrite(PA1, HIGH);
+        USART_Print("LED is ON\r\n");
+    } else if (strcmp(cmd, "LOFF") == 0) {
+        digitalWrite(PA1, LOW);
+        USART_Print("LED is OFF\r\n");
+    } else if (strcmp(cmd, "HELP") == 0) {
+        USART_Print("Commands: LON, LOFF, HELP\r\n");
+    } else {
+        USART_Print("Unknown: ");
+        USART_Print(cmd);
+        USART_Print("\r\n");
+    }
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    pinMode(PA1, PIN_MODE_OUTPUT);
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+
+    USART_Print("CH32V003 Command Line Ready\r\n");
+    USART_Print("Type HELP for commands\r\n");
+    USART_Print("> ");
+
+    while (1) {
+        while (USART_Available()) {
+            char ch = USART_Read();
+            if (ch == '\r' || ch == '\n') {
+                if (rx_idx > 0) {
+                    rx_buffer[rx_idx] = '\0';
+                    ProcessCmd(rx_buffer);
+                    rx_idx = 0;
+                    USART_Print("> ");
+                }
+            } else if (rx_idx < 31) {
+                rx_buffer[rx_idx++] = ch;
+                USART_WriteByte(ch);  // echo
+            }
+        }
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>🔴 ตัวอย่างขั้นสูง</h2>
+    <p>Binary Protocol with Checksum — ส่ง/รับข้อมูลเป็นเฟรมที่มี header 0xAA 0x55 + length + payload + XOR checksum เหมาะกับระบบที่ต้องการความน่าเชื่อถือสูง (หุ่นยนต์, โดรน)</p>
+    <pre><code class="language-c">#include "simplehal.h"
+
+#define FRAME_HEADER1  0xAA
+#define FRAME_HEADER2  0x55
+
+typedef struct {
+    uint8_t header1;
+    uint8_t header2;
+    uint8_t length;
+    uint8_t command;
+    uint8_t data[16];
+    uint8_t checksum;
+} Frame_t;
+
+uint8_t CalcXOR(uint8_t* buf, uint8_t len) {
+    uint8_t xor_result = 0;
+    for (uint8_t i = 0; i < len; i++) {
+        xor_result ^= buf[i];
+    }
+    return xor_result;
+}
+
+void SendFrame(Frame_t* frame) {
+    frame->header1 = FRAME_HEADER1;
+    frame->header2 = FRAME_HEADER2;
+
+    uint8_t* p = (uint8_t*)frame;
+    frame->checksum = CalcXOR(p, frame->length + 3);
+
+    for (uint8_t i = 0; i < frame->length + 4; i++) {
+        USART_WriteByte(p[i]);
+    }
+}
+
+uint8_t ReceiveFrame(Frame_t* frame) {
+    static uint8_t sync = 0;
+
+    while (USART_Available()) {
+        uint8_t b = USART_Read();
+
+        if (!sync) {
+            if (b == FRAME_HEADER1) sync = 1;
+            continue;
+        }
+        if (sync == 1) {
+            if (b == FRAME_HEADER2) sync = 2;
+            else sync = 0;
+            continue;
+        }
+
+        // Got header — read rest of frame
+        frame->header1 = FRAME_HEADER1;
+        frame->header2 = FRAME_HEADER2;
+        frame->length = b;
+
+        uint8_t remain = frame->length;
+        uint8_t* p = &frame->command;
+        for (uint8_t i = 0; i < remain; i++) {
+            while (!USART_Available());       // wait for next byte
+            p[i] = USART_Read();
+        }
+
+        while (!USART_Available());
+        frame->checksum = USART_Read();
+
+        // Verify checksum
+        uint8_t* raw = (uint8_t*)frame;
+        uint8_t calc = CalcXOR(raw, frame->length + 3);
+        sync = 0;
+
+        if (calc == frame->checksum) return 1;  // OK
+        return 0;                                // checksum error
+    }
+    return 0xFF;  // no complete frame yet
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    pinMode(PA1, PIN_MODE_OUTPUT);
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+
+    USART_Print("Binary Protocol Ready\r\n");
+
+    Frame_t txFrame;
+    txFrame.length = 1;
+    txFrame.command = 0x01;       // LED command
+
+    while (1) {
+        txFrame.data[0] = 1;     // LED ON
+        SendFrame(&txFrame);
+        Delay_Ms(1000);
+
+        txFrame.data[0] = 0;     // LED OFF
+        SendFrame(&txFrame);
+        Delay_Ms(1000);
+    }
+}</code></pre>
+</section>
+
+<section>
+    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <thead><tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr></thead>
+        <tbody>
+            <tr>
+                <td>Serial Monitor แสดงตัวอักษรแปลก / baud rate ผิด</td>
+                <td>ลืมเรียก <code>SystemCoreClockUpdate()</code> — USART baud rate generator ใช้ค่า clock ผิด</td>
+                <td>วาง <code>SystemCoreClockUpdate()</code> เป็นบรรทัดแรกสุดใน main() เสมอ</td>
+            </tr>
+            <tr>
+                <td><code>USART_Read()</code> คืนค่า 0 ตลอด</td>
+                <td>เรียก <code>USART_Read()</code> โดยไม่เช็ค <code>USART_Available()</code> ก่อน — ไม่มีข้อมูลให้อ่าน</td>
+                <td>เช็คด้วย <code>if (USART_Available())</code> ก่อนเรียก <code>USART_Read()</code></td>
+            </tr>
+            <tr>
+                <td>ข้อมูลหายเมื่อรับเร็วเกิน</td>
+                <td>RX ring buffer เต็ม — ขนาดปริยาย 64 bytes อาจไม่พอ</td>
+                <td>เพิ่ม <code>USART_RX_BUFFER_SIZE</code> ใน simplehal_config.h (เช่น 256) หรืออ่านข้อมูลบ่อยขึ้น</td>
+            </tr>
+            <tr>
+                <td>CH32V003 มี USART ช่องเดียว — ต้องการใช้หลายอุปกรณ์</td>
+                <td>USART1 ใช้ได้ครั้งละ 1 ชุดของ pin — แต่ remap ช่วยเลือกชุด pin ได้</td>
+                <td>ใช้ remap หรือใช้ SoftwareSerial (bit-banging) สำหรับอุปกรณ์ที่ไม่ต้องการความเร็ว</td>
+            </tr>
+        </tbody>
+    </table>
+</section>
+
+<section>
+    <h2>💡 เกร็ดความรู้ / FAQ</h2>
+    <p><strong>Q: ใช้โปรแกรมอะไรเป็น Serial Monitor?</strong><br>
+    A: <strong>MounRiver Studio</strong> มี Serial Monitor ในตัว (Window → Show View → Terminal) หรือใช้ <strong>PuTTY</strong> (ฟรี), <strong>Arduino IDE Serial Monitor</strong>, <strong>SerialPlot</strong> (พล็อตกราฟ real-time) — ตั้ง baud rate ให้ตรงกับในโค้ด 115200 8N1</p>
+
+    <p><strong>Q: RX ring buffer คืออะไร?</strong><br>
+    A: เมื่อมีข้อมูลเข้ามาทาง RX interrupt จะถูกเก็บลง buffer วงกลม (ring/circular buffer) โดยอัตโนมัติ — โปรแกรมหลักสามารถอ่านเมื่อไรก็ได้ ข้อมูลไม่หายระหว่างที่ CPU ยุ่งอยู่ ขนาดปริยาย 64 bytes ถ้าอ่านออกไม่ทัน buffer ล้น ข้อมูลเก่าจะถูกเขียนทับ</p>
+
+    <p><strong>Q: ทำไมต้องลงท้าย string ด้วย <code>\r\n</code>?</strong><br>
+    A: <code>\r</code> (carriage return) เลื่อน cursor ไปต้นบรรทัด <code>\n</code> (line feed) เลื่อน cursor ลงบรรทัดใหม่ — Terminal ส่วนใหญ่ต้องการทั้งคู่เพื่อแสดงผลถูกต้อง ถ้าใช้แค่ <code>\n</code> ข้อความจะไม่ขึ้นบรรทัดใหม่</p>
+
+    <p><strong>Q: USART_RxByteHook ใช้ยังไง?</strong><br>
+    A: ฟังก์ชัน <code>USART_RxByteHook(uint8_t byte)</code> เป็น weak function — คุณ override ได้โดยเขียนฟังก์ชันชื่อเดียวกันในโค้ดของคุณ มันจะถูกเรียกทุกครั้งที่มี byte ใหม่เข้ามาจาก interrupt ใช้สำหรับ: dump hex แบบ real-time, ตรวจจับ byte พิเศษ, หรือสร้าง protocol parser แบบ state machine</p>
+</section>
+
+<section>
+    <h2>✏️ ลองทำดู <a href="ch04_answers.html" class="ans-link">[เฉลย]</a></h2>
+    <ol>
+        <li><strong>Echo Server</strong> — ส่งกลับทุกตัวอักษรที่รับเข้ามา (ตัวใหญ่ ตัวเล็ก ตัวเลข) — ห้ามใช้ USART_Print ทั้งสตริง ต้องใช้ USART_WriteByte ทีละตัว</li>
+        <li><strong>LED PWM ควบคุมด้วย Serial</strong> — รับคำสั่ง <code>LED=50</code> ผ่าน Serial Monitor เพื่อตั้งความสว่าง LED (0–100%) ด้วย software PWM โดยใช้ <code>atoi()</code> แปลงข้อความเป็นตัวเลข</li>
+        <li><strong>อ่าน ADC ส่งทาง Serial ทุก 100ms</strong> — ใช้ ADC อ่านค่าแรงดัน (เช่นจาก potentiometer) แล้วส่งค่า raw + voltage ผ่าน USART ทุก 100ms ด้วย non-blocking timer แสดงผลเป็นตารางตัวเลข</li>
+    </ol>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch03-delay.html">บทก่อน</a>
+    <a href="ch05-i2c.html">บทถัดไป →</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

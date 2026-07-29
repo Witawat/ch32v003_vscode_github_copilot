@@ -55,6 +55,20 @@ flowchart TD
       </tbody>
     </table>
 
+    <h3>รู้จักขา</h3>
+    <ul>
+      <li><strong>PC0:</strong> ขาเอาต์พุต — ต่อ LED + R 220Ω → GND (Active-HIGH)</li>
+      <li><strong>PC1:</strong> ขาอินพุต — ต่อปุ่มกด → GND (Active-LOW) พร้อม Pull-up</li>
+    </ul>
+
+    <h3>วิธีต่อทีละขั้น</h3>
+    <ol>
+      <li>ต่อ <strong>R 220Ω</strong> ระหว่าง <strong>PC0</strong> กับ <strong>LED ขาบวก</strong> — LED output</li>
+      <li>ต่อ <strong>LED ขาลบ</strong> ไป <strong>GND</strong> — ครบวงจร LED</li>
+      <li>ต่อ <strong>R 10kΩ</strong> จาก <strong>PC1</strong> ไป <strong>3.3V</strong> — pull-up ภายนอก (หรือใช้ internal pull-up ก็ได้)</li>
+      <li>ต่อ <strong>ปุ่มกด</strong> ระหว่าง <strong>PC1</strong> กับ <strong>GND</strong> — กด = LOW</li>
+    </ol>
+
     <p>ต่อ LED + R 220Ω แบบ Active-HIGH (HIGH = ติด, LOW = ดับ)<br>
     ต่อปุ่มกด + R 10kΩ Pull-up ภายนอก หรือใช้ <code>PIN_MODE_INPUT_PULLUP</code></p>
     <p><strong>CH32V003 Pins:</strong> GPIOA (PA1-PA2), GPIOC (PC0-PC7), GPIOD (PD2-PD7) — PD0/PD1 มีเฉพาะ TSSOP-20/QFN-20</p>

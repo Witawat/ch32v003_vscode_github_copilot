@@ -52,6 +52,20 @@ flowchart TD
         <tr><td>GND</td><td>↔</td><td>NEO-6M</td><td>GND</td><td>กราวด์ร่วม</td></tr>
       </tbody>
     </table>
+    <h3>รู้จักขา</h3>
+    <ul>
+      <li><strong>VCC:</strong> ไฟเลี้ยง 3.3V</li>
+      <li><strong>GND:</strong> กราวด์</li>
+      <li><strong>RX:</strong> รับข้อมูลจาก MCU — ต่อขา PD5 (TX) ของ MCU</li>
+      <li><strong>TX:</strong> ส่งข้อมูลไป MCU — ต่อขา PD6 (RX) ของ MCU</li>
+    </ul>
+    <h3>วิธีต่อทีละขั้น</h3>
+    <ol>
+      <li>ต่อ <strong>VCC</strong> NEO-6M ไป <strong>3.3V</strong> ของ MCU</li>
+      <li>ต่อ <strong>GND</strong> NEO-6M ไป <strong>GND</strong> ของ MCU</li>
+      <li>ต่อ <strong>RX</strong> NEO-6M ไปขา <strong>PD5 (TX)</strong> ของ MCU</li>
+      <li>ต่อ <strong>TX</strong> NEO-6M ไปขา <strong>PD6 (RX)</strong> ของ MCU</li>
+    </ol>
 </section>
 
 <section><h2>📚 หลักการทำงาน</h2>
