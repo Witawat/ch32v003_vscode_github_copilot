@@ -28,9 +28,6 @@ SoftUART_Status SoftUART_Init(SoftUART_Instance* uart, uint8_t tx_pin, uint8_t r
     uart->rx_pin  = rx_pin;
     uart->baud    = baud;
     uart->bit_time_us = 1000000 / baud;
-    uart->rx_head = 0;
-    uart->rx_tail = 0;
-    uart->rx_count = 0;
 
     pinMode(tx_pin, PIN_MODE_OUTPUT);
     pinMode(rx_pin, PIN_MODE_INPUT_PULLUP);
@@ -71,14 +68,6 @@ void SoftUART_WriteByte(SoftUART_Instance* uart, uint8_t data) {
 SoftUART_Status SoftUART_ReadByte(SoftUART_Instance* uart, uint8_t* data, uint32_t timeout_ms) {
     if (uart == NULL || !uart->initialized || data == NULL) return SOFTUART_ERROR;
 
-    /* Check buffer first */
-    if (uart->rx_count > 0) {
-        *data = uart->rx_buffer[uart->rx_tail];
-        uart->rx_tail = (uart->rx_tail + 1) % SOFTUART_RX_BUF_SIZE;
-        uart->rx_count--;
-        return SOFTUART_OK;
-    }
-
     /* Polling read: wait for start bit (falling edge) */
     uint32_t start = Get_CurrentMs();
 
@@ -105,15 +94,15 @@ SoftUART_Status SoftUART_ReadByte(SoftUART_Instance* uart, uint8_t* data, uint32
 }
 
 uint16_t SoftUART_Available(SoftUART_Instance* uart) {
+    /* Best-effort check: ไม่มี background receiver จึงบอกจำนวนไบต์จริงไม่ได้
+     * คืน 1 ถ้าเห็น start bit (line ต่ำ) กำลังมา, 0 ถ้า idle (line สูง) */
     if (uart == NULL || !uart->initialized) return 0;
-    return uart->rx_count;
+    return (digitalRead(uart->rx_pin) == LOW) ? 1 : 0;
 }
 
 SoftUART_Status SoftUART_Flush(SoftUART_Instance* uart) {
+    /* ไม่มี RX buffer ให้ล้าง (polling-only design) — เก็บฟังก์ชันไว้เพื่อ API compatibility */
     if (uart == NULL) return SOFTUART_ERROR;
-    uart->rx_head = 0;
-    uart->rx_tail = 0;
-    uart->rx_count = 0;
     return SOFTUART_OK;
 }
 

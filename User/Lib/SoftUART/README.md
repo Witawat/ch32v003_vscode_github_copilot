@@ -22,8 +22,7 @@ CH32V003 มี USART ฮาร์ดแวร์เพียง 1 ตัว Sof
 ## คุณสมบัติ
 
 - ✅ TX: bit-bang ด้วย Delay_Us (blocking)
-- ✅ RX: polling mode พร้อม timeout
-- ✅ Internal RX buffer (64 bytes)
+- ✅ RX: polling mode พร้อม timeout (ไม่มี interrupt-driven RX buffer)
 - ✅ รองรับ baud rate 9600 - 115200
 - ✅ ใช้ GPIO pin ใดก็ได้
 
@@ -82,8 +81,8 @@ int main(void) {
 - `SoftUART_SetBaud(uart, baud)` : เปลี่ยน baud rate
 - `SoftUART_WriteByte(uart, data)` : ส่ง 1 byte
 - `SoftUART_ReadByte(uart, *data, timeout_ms)` : อ่าน 1 byte (มี timeout)
-- `SoftUART_Available(uart)` : จำนวน byte ใน RX buffer
-- `SoftUART_Flush(uart)` : ล้าง RX buffer
+- `SoftUART_Available(uart)` : best-effort เช็คว่ามี start bit กำลังมาไหม (ไม่ใช่จำนวน byte จริง)
+- `SoftUART_Flush(uart)` : no-op เก็บไว้เพื่อ API compatibility (ไม่มี RX buffer ให้ล้าง)
 - `SoftUART_Write(uart, data, len)` : ส่งข้อมูลหลาย byte
 - `SoftUART_WriteString(uart, str)` : ส่ง string
 - `SoftUART_Printf(uart, format, ...)` : ส่งแบบ formatted print
@@ -96,7 +95,7 @@ int main(void) {
 |----------|-----------|
 | **Baud ≤ 38400** | Baud สูงกว่า timing error สะสม ~8% ต่อ 10 bits |
 | **Baud=0 guard** | Return error — ป้องกัน DIV/0 |
-| **RX buffer** | Ring buffer ไม่รับข้อมูลแบบ async — ใช้ `SoftUART_ReadByte` พร้อม timeout |
+| **RX buffer** | ไม่มี — เป็น polling-only ไม่รับข้อมูลแบบ async ใช้ `SoftUART_ReadByte` พร้อม timeout |
 | **`Timer_Init()`** | ต้องเรียก `Timer_Init()` หลัง `SystemCoreClockUpdate()` |
 
 ดูข้อจำกัดทั้งหมด: [`LIMITATIONS.md`](../LIMITATIONS.md)

@@ -13,55 +13,57 @@
 /**
  * @brief เขียนข้อมูลไปยัง PCF8574 I/O Expander
  */
-static void LCD_ExpanderWrite(LCD1602_Handle* lcd, uint8_t data) {
+static I2C_Status LCD_ExpanderWrite(LCD1602_Handle* lcd, uint8_t data) {
     uint8_t write_data = data | lcd->backlight;
-    I2C_Write(lcd->i2c_addr, &write_data, 1);
+    return I2C_Write(lcd->i2c_addr, &write_data, 1);
 }
 
 /**
  * @brief สร้าง Enable pulse
  */
-static void LCD_PulseEnable(LCD1602_Handle* lcd, uint8_t data) {
-    LCD_ExpanderWrite(lcd, data | LCD_EN);   // EN high
+static I2C_Status LCD_PulseEnable(LCD1602_Handle* lcd, uint8_t data) {
+    I2C_Status status = LCD_ExpanderWrite(lcd, data | LCD_EN);   // EN high
     Delay_Us(1);                              // Enable pulse must be >450ns
-    LCD_ExpanderWrite(lcd, data & ~LCD_EN);  // EN low
+    I2C_Status status2 = LCD_ExpanderWrite(lcd, data & ~LCD_EN);  // EN low
     Delay_Us(50);                             // Commands need >37us to settle
+    return (status != I2C_OK) ? status : status2;
 }
 
 /**
  * @brief เขียน 4-bit data ไปยัง LCD
  */
-static void LCD_WriteNibble(LCD1602_Handle* lcd, uint8_t nibble) {
+static I2C_Status LCD_WriteNibble(LCD1602_Handle* lcd, uint8_t nibble) {
     uint8_t data = (nibble << 4);
-    LCD_PulseEnable(lcd, data);
+    return LCD_PulseEnable(lcd, data);
 }
 
 /**
  * @brief เขียน 8-bit data ไปยัง LCD (แบบ 4-bit mode)
  */
-static void LCD_WriteByte(LCD1602_Handle* lcd, uint8_t value, uint8_t mode) {
+static I2C_Status LCD_WriteByte(LCD1602_Handle* lcd, uint8_t value, uint8_t mode) {
     uint8_t high_nibble = value & 0xF0;
     uint8_t low_nibble = (value << 4) & 0xF0;
-    
+
     // เขียน high nibble
-    LCD_PulseEnable(lcd, high_nibble | mode);
-    
+    I2C_Status status = LCD_PulseEnable(lcd, high_nibble | mode);
+
     // เขียน low nibble
-    LCD_PulseEnable(lcd, low_nibble | mode);
+    I2C_Status status2 = LCD_PulseEnable(lcd, low_nibble | mode);
+    return (status != I2C_OK) ? status : status2;
 }
 
 /**
  * @brief ส่งคำสั่งไปยัง LCD
  */
-static void LCD_SendCommand(LCD1602_Handle* lcd, uint8_t cmd) {
-    LCD_WriteByte(lcd, cmd, 0);  // RS = 0 สำหรับ command
+static I2C_Status LCD_SendCommand(LCD1602_Handle* lcd, uint8_t cmd) {
+    return LCD_WriteByte(lcd, cmd, 0);  // RS = 0 สำหรับ command
 }
 
 /**
  * @brief ส่งข้อมูลไปยัง LCD
  */
-static void LCD_SendData(LCD1602_Handle* lcd, uint8_t data) {
-    LCD_WriteByte(lcd, data, LCD_RS);  // RS = 1 สำหรับ data
+static I2C_Status LCD_SendData(LCD1602_Handle* lcd, uint8_t data) {
+    return LCD_WriteByte(lcd, data, LCD_RS);  // RS = 1 สำหรับ data
 }
 
 /* ========== Core Functions ========== */
@@ -91,27 +93,30 @@ void LCD_Init(LCD1602_Handle* lcd, uint8_t i2c_addr, LCD_Size size) {
     
     // ตั้งค่า LCD เป็น 4-bit mode
     // ต้องส่งคำสั่งพิเศษ 3 ครั้งเพื่อ reset LCD
-    LCD_WriteNibble(lcd, 0x03);
+    I2C_Status status = LCD_WriteNibble(lcd, 0x03);
     Delay_Ms(5);
-    
-    LCD_WriteNibble(lcd, 0x03);
+
+    if (LCD_WriteNibble(lcd, 0x03) != I2C_OK) status = I2C_ERROR_NACK;
     Delay_Ms(5);
-    
-    LCD_WriteNibble(lcd, 0x03);
+
+    if (LCD_WriteNibble(lcd, 0x03) != I2C_OK) status = I2C_ERROR_NACK;
     Delay_Us(150);
-    
+
     // ตั้งเป็น 4-bit mode
-    LCD_WriteNibble(lcd, 0x02);
+    if (LCD_WriteNibble(lcd, 0x02) != I2C_OK) status = I2C_ERROR_NACK;
     Delay_Us(150);
-    
+
     // ตั้งค่า function set
     lcd->display_function = LCD_4BITMODE | LCD_2LINE | LCD_5x8DOTS;
-    LCD_SendCommand(lcd, LCD_FUNCTIONSET | lcd->display_function);
-    
+    if (LCD_SendCommand(lcd, LCD_FUNCTIONSET | lcd->display_function) != I2C_OK) status = I2C_ERROR_NACK;
+
     // ตั้งค่า display control
     lcd->display_control = LCD_DISPLAYON | LCD_CURSOROFF | LCD_BLINKOFF;
-    LCD_SendCommand(lcd, LCD_DISPLAYCONTROL | lcd->display_control);
-    
+    if (LCD_SendCommand(lcd, LCD_DISPLAYCONTROL | lcd->display_control) != I2C_OK) status = I2C_ERROR_NACK;
+
+    /* ถ้า PCF8574 ไม่ตอบสนอง (I2C write ล้มเหลว) อย่าตั้ง initialized = 1 */
+    if (status != I2C_OK) return;
+
     lcd->initialized = 1;
 
     // ล้างหน้าจอ

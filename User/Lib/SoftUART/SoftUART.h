@@ -10,8 +10,9 @@
  *
  * **คุณสมบัติ:**
  * - TX: bit-bang ด้วย Delay_Us (blocking)
- * - RX: polling mode (blocking พร้อม timeout)
- * - RX buffer ในตัว (64 bytes)
+ * - RX: polling mode เท่านั้น (blocking พร้อม timeout) — ไม่มี interrupt-driven RX buffer
+ * - SoftUART_Available() เป็นการเช็คแบบ best-effort (ดูว่า start bit กำลังมาหรือไม่)
+ *   ไม่ใช่จำนวนไบต์ที่พร้อมอ่านจริง เพราะไม่มี background receiver
  * - รองรับ baud rate 9600 - 115200
  * - ใช้ GPIO pin ใดก็ได้
  *
@@ -32,13 +33,12 @@
  * #include "SoftUART.h"
  *
  * SoftUART_Instance uart;
- * uint8_t rx_buf[64];
  *
  * void main(void) {
  *     SystemCoreClockUpdate();
  *     Timer_Init();
  *
- *     SoftUART_Init(&uart, PA2, PA1, 9600, rx_buf, sizeof(rx_buf));
+ *     SoftUART_Init(&uart, PA2, PA1, 9600);
  *
  *     SoftUART_Printf(&uart, "Hello from SoftUART!\r\n");
  *
@@ -66,12 +66,6 @@ extern "C" {
 #include <stdbool.h>
 #include <stdarg.h>
 
-/* ========== Configuration ========== */
-
-#ifndef SOFTUART_RX_BUF_SIZE
-#define SOFTUART_RX_BUF_SIZE  64
-#endif
-
 /* ========== Status ========== */
 
 typedef enum {
@@ -88,10 +82,6 @@ typedef struct {
     uint8_t  rx_pin;
     uint32_t bit_time_us;
     uint32_t baud;
-    uint8_t  rx_buffer[SOFTUART_RX_BUF_SIZE];
-    uint16_t rx_head;
-    uint16_t rx_tail;
-    uint16_t rx_count;
     uint8_t  initialized;
 } SoftUART_Instance;
 
