@@ -69,7 +69,7 @@
 <h2>ตารางอ้างอิงฟังก์ชัน</h2>
 <table>
 <thead>
-<tr><th>ฟังก์ชัน</th><th>พารามิเตอร์</th><th>คืนค่า</th><th>คำอธิบาย</th></tr>
+<tr><th>ฟังก์ชัน</th><th>พารามิเตอร์</th><th>คืนค่า</th><th>คำอธิบาย</th><th>ใช้ร่วมกับ</th></tr>
 </thead>
 <tbody>
 <tr>
@@ -77,60 +77,88 @@
     <td><code>counter</code>: uint8_t (0x40-0x7F)<br><code>window</code>: uint8_t (0x40-0x7F)</td>
     <td><code>void</code></td>
     <td>เริ่ม WWDG ด้วย prescaler=8 (ค่าเริ่มต้น)</td>
+    <td><strong>1 ใน 3 ทาง init ที่ใช้แทนกัน</strong> (SimpleInit / Init / InitWithInterrupt) — เลือกทางเดียว ห้ามเรียกซ้อนกัน; ตามด้วย <code>WWDG_Refresh(counter)</code> ในลูปเสมอ</td>
 </tr>
 <tr>
     <td><code>WWDG_Refresh(counter)</code></td>
     <td><code>counter</code>: uint8_t (0x40-0x7F)</td>
     <td><code>void</code></td>
     <td>ต้อง refresh counter ในช่วง window — เร็วหรือช้าเกิน = รีเซ็ต</td>
+    <td>ต้องเรียกหลังหนึ่งใน <code>WWDG_SimpleInit()</code>/<code>WWDG_Init()</code>/<code>WWDG_InitWithInterrupt()</code> — ค่า <code>counter</code> ที่ส่งควรตรงกับค่าที่ใช้ตอน init เสมอ</td>
 </tr>
 <tr>
     <td><code>WWDG_Init(counter, window, prescaler)</code></td>
     <td><code>counter</code>: uint8_t<br><code>window</code>: uint8_t<br><code>prescaler</code>: WWDG_PRESCALER_*</td>
     <td><code>void</code></td>
     <td>ตั้งค่า WWDG เต็มรูปแบบ</td>
+    <td><strong>ใช้แทน <code>WWDG_SimpleInit()</code></strong> เมื่อต้องกำหนด prescaler เอง — ค่า <code>counter</code>/<code>window</code> ควรมาจาก <code>WWDG_CalcTimeout()</code> (คำนวณย้อนกลับ) เพื่อให้ได้ timeout ที่ต้องการ</td>
 </tr>
 <tr>
     <td><code>WWDG_InitWithInterrupt(counter, window, prescaler)</code></td>
     <td>เหมือน WWDG_Init</td>
     <td><code>void</code></td>
     <td>เริ่ม WWDG + เปิด early wakeup interrupt (EWI) เมื่อ counter=0x40</td>
+    <td><strong>ใช้แทน <code>WWDG_Init()</code></strong> (ไม่ใช่เรียกคู่กัน) เมื่อต้องการ early-warning callback — <strong>ต้องเรียก <code>WWDG_SetCallback()</code> ก่อน</strong> ฟังก์ชันนี้เสมอ มิฉะนั้น interrupt แรกจะไม่มี callback ให้เรียก</td>
 </tr>
 <tr>
     <td><code>WWDG_SetCallback(callback)</code></td>
     <td><code>callback</code>: void (*)(void)</td>
     <td><code>void</code></td>
     <td>ตั้ง callback เมื่อ counter=0x40 (เตือนก่อนรีเซ็ต)</td>
+    <td><strong>ต้องเรียกก่อน <code>WWDG_InitWithInterrupt()</code></strong> — ใช้ไม่ได้ผลถ้าใช้คู่กับ <code>WWDG_SimpleInit()</code>/<code>WWDG_Init()</code> เพราะสองทางนั้นไม่เปิด interrupt</td>
 </tr>
 <tr>
     <td><code>WWDG_CalcTimeout(prescaler, counter)</code></td>
     <td><code>prescaler</code>: WWDG_PRESCALER_*<br><code>counter</code>: uint8_t</td>
     <td><code>uint32_t</code> (µs)</td>
     <td>คำนวณ timeout จริง หน่วย µs</td>
+    <td>ใช้<strong>ก่อน</strong>เรียก <code>WWDG_Init()</code>/<code>InitWithInterrupt()</code> เพื่อตรวจว่าค่า <code>counter</code>/<code>prescaler</code> ที่เลือกให้ timeout ตรงตามต้องการหรือไม่ (ดูตาราง Timeout range ด้านบน)</td>
 </tr>
 <tr>
     <td><code>WWDG_GetInterruptFlag()</code></td>
     <td>—</td>
     <td><code>uint8_t</code> (1/0)</td>
     <td>ตรวจสอบ early wakeup interrupt flag</td>
+    <td>ใช้ได้เฉพาะเมื่อ init ด้วย <code>WWDG_InitWithInterrupt()</code> — เรียกคู่กับ <code>WWDG_ClearInterruptFlag()</code> เพื่อเคลียร์หลังตรวจ</td>
 </tr>
 <tr>
     <td><code>WWDG_ClearInterruptFlag()</code></td>
     <td>—</td>
     <td><code>void</code></td>
     <td>เคลียร์ early wakeup interrupt flag</td>
+    <td>เรียกหลัง <code>WWDG_GetInterruptFlag()</code> คืน 1 หรือในตัว callback ที่ตั้งด้วย <code>WWDG_SetCallback()</code></td>
 </tr>
 <tr>
     <td><code>WWDG_Disable()</code></td>
     <td>—</td>
     <td><code>void</code></td>
     <td>⚠️ รีเซ็ต configuration registers เท่านั้น — <strong>WDGA bit หยุดไม่ได้!</strong></td>
+    <td>เรียกได้ทุกเมื่อหลัง init แต่ <strong>ไม่ได้ทำให้ <code>WWDG_Refresh()</code> เลิกจำเป็น</strong> — ยังต้อง refresh ต่อไปเหมือนเดิม (ดู CRITICAL ด้านล่าง)</td>
 </tr>
 </tbody>
 </table>
 
 <div class="callout callout-err">
     <strong>CRITICAL:</strong> เมื่อ WDGA bit ถูกเซ็ตแล้ว <strong>ไม่สามารถหยุด WWDG ได้</strong> ด้วยซอฟต์แวร์ — <code>WWDG_Disable()</code> แค่เคลียร์ config register ไม่ได้หยุด watchdog จริง
+</div>
+</section>
+
+<section>
+<h2>ลำดับการเรียกใช้ฟังก์ชัน (Call Sequence)</h2>
+<div class="flowchart">
+    <pre class="mermaid">
+flowchart TD
+    A["เลือก 1 ใน 3 ทาง init"] -->|"ง่ายสุด"| B["WWDG_SimpleInit(counter, window)"]
+    A -->|"กำหนด prescaler เอง"| C["WWDG_Init(counter, window, prescaler)"]
+    A -->|"ต้องการเตือนก่อนรีเซ็ต"| D["WWDG_SetCallback(cb)<br>★ ต้องมาก่อน"]
+    D --> E["WWDG_InitWithInterrupt(counter, window, prescaler)"]
+    B --> F["loop: WWDG_Refresh(counter)<br>ทุกครั้งภายในหน้าต่างเวลา"]
+    C --> F
+    E --> F
+    </pre>
+</div>
+<div class="callout callout-warn">
+    <strong>สามทาง init ใช้แทนกัน ไม่ใช่ใช้ร่วมกัน:</strong> เลือก <code>WWDG_SimpleInit()</code> หรือ <code>WWDG_Init()</code> หรือ <code>WWDG_SetCallback()</code>+<code>WWDG_InitWithInterrupt()</code> อย่างใดอย่างหนึ่งเท่านั้น — ทุกทางยังต้องเรียก <code>WWDG_Refresh()</code> ใน loop ต่อไปเหมือนกันหมด
 </div>
 </section>
 
@@ -196,6 +224,8 @@ int main(void) {
     <a href="opamp.html">SimpleOPAMP →</a>
 </nav>
 
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <script>hljs.highlightAll();</script>
 </body>

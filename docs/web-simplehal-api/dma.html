@@ -27,7 +27,7 @@
 <tr><td>Mode</td><td>Normal + Circular</td></tr>
 <tr><td>Data size</td><td>8-bit / 16-bit / 32-bit</td></tr>
 <tr><td>Peripheral integration</td><td>ADC, USART, SPI, I2C, TIM1, TIM2</td></tr>
-<tr><td>Header</td><td><code>#include "simple_dma.h"</code></td></tr>
+<tr><td>Header</td><td><code>#include "SimpleDMA.h"</code></td></tr>
 </tbody>
 </table>
 </section>
@@ -78,16 +78,16 @@
 <section>
 <h2>ตารางฟังก์ชัน — Basic</h2>
 <table>
-<thead><tr><th>ฟังก์ชัน</th><th>คืนค่า</th><th>คำอธิบาย</th></tr></thead>
+<thead><tr><th>ฟังก์ชัน</th><th>คืนค่า</th><th>คำอธิบาย</th><th>ใช้ร่วมกับ</th></tr></thead>
 <tbody>
-<tr><td><code>DMA_SimpleInit(config)</code></td><td>void</td><td>เริ่มต้น DMA ตาม config struct</td></tr>
-<tr><td><code>DMA_Start(channel)</code></td><td>void</td><td>เริ่มการถ่ายโอน</td></tr>
-<tr><td><code>DMA_Stop(channel)</code></td><td>void</td><td>หยุดการถ่ายโอน</td></tr>
-<tr><td><code>DMA_GetStatus(channel)</code></td><td>DMA_Status</td><td>ตรวจสอบสถานะ (IDLE / BUSY / COMPLETE / ERROR)</td></tr>
-<tr><td><code>DMA_WaitComplete(channel, timeout_ms)</code></td><td>uint8_t</td><td>รอจนถ่ายโอนเสร็จ — 1=สำเร็จ 0=timeout</td></tr>
-<tr><td><code>DMA_Reset(channel)</code></td><td>void</td><td>รีเซ็ต channel (soft reset)</td></tr>
-<tr><td><code>DMA_GetRemainingCount(channel)</code></td><td>uint16_t</td><td>จำนวน data unit ที่ยังเหลืออยู่</td></tr>
-<tr><td><code>DMA_EnableInterrupt(channel, enable)</code></td><td>void</td><td>เปิด/ปิด interrupt สำหรับ channel นั้น</td></tr>
+<tr><td><code>DMA_SimpleInit(config)</code></td><td>void</td><td>เริ่มต้น DMA ตาม config struct</td><td><strong>ต้องเรียกหลัง peripheral (ADC/USART/SPI/I2C/TIM) ถูก init/enable แล้วเท่านั้น</strong> — ถ้าจะใช้ callback ให้เรียก <code>DMA_SetXxxCallback()</code> <strong>ก่อน</strong> <code>DMA_Start()</code> เพื่อไม่พลาดรอบแรก</td></tr>
+<tr><td><code>DMA_Start(channel)</code></td><td>void</td><td>เริ่มการถ่ายโอน</td><td>เรียกหลัง <code>DMA_SimpleInit()</code> และหลังตั้ง callback (ถ้าใช้) แล้ว</td></tr>
+<tr><td><code>DMA_Stop(channel)</code></td><td>void</td><td>หยุดการถ่ายโอน</td><td><strong>จำเป็นสำหรับ circular mode</strong> เพราะ DMA จะวนต่อไปเรื่อยๆ ไม่หยุดเอง — เรียก <code>DMA_Start()</code> ซ้ำเพื่อเริ่มใหม่</td></tr>
+<tr><td><code>DMA_GetStatus(channel)</code></td><td>DMA_Status</td><td>ตรวจสอบสถานะ (IDLE / BUSY / COMPLETE / ERROR)</td><td>ใช้ poll แทน callback เมื่อไม่ต้องการ interrupt — เรียกหลัง <code>DMA_Start()</code></td></tr>
+<tr><td><code>DMA_WaitComplete(channel, timeout_ms)</code></td><td>uint8_t</td><td>รอจนถ่ายโอนเสร็จ — 1=สำเร็จ 0=timeout</td><td>ใช้แทนการ poll <code>DMA_GetStatus()</code> เอง — เป็นฟังก์ชันที่ <code>DMA_MemCopy()</code>/<code>DMA_MemSet()</code> เรียกใช้ภายในเพื่อทำ blocking</td></tr>
+<tr><td><code>DMA_Reset(channel)</code></td><td>void</td><td>รีเซ็ต channel (soft reset)</td><td>เรียกก่อน <code>DMA_SimpleInit()</code> ใหม่ เมื่อต้องการเปลี่ยน config ของ channel เดิมทั้งหมด</td></tr>
+<tr><td><code>DMA_GetRemainingCount(channel)</code></td><td>uint16_t</td><td>จำนวน data unit ที่ยังเหลืออยู่</td><td>ใช้ตรวจความคืบหน้าระหว่าง <code>DMA_Start()</code> กับ callback/<code>DMA_GetStatus()</code> คืน COMPLETE</td></tr>
+<tr><td><code>DMA_EnableInterrupt(channel, enable)</code></td><td>void</td><td>เปิด/ปิด interrupt สำหรับ channel นั้น</td><td>ต้องเปิด (enable=1) ก่อน callback (<code>DMA_SetXxxCallback()</code>) จะถูกเรียกได้จริง — ฟังก์ชัน DMA_SetXxxCallback ส่วนใหญ่เปิดให้อัตโนมัติแล้ว เรียกเองเฉพาะกรณีปิดไปก่อนหน้า</td></tr>
 </tbody>
 </table>
 </section>
@@ -97,16 +97,26 @@
 <p>ฟังก์ชัน callback ถูกเรียกจากภายใน ISR — ควรทำให้สั้นที่สุด:</p>
 
 <table>
-<thead><tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th></tr></thead>
+<thead><tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ใช้ร่วมกับ</th></tr></thead>
 <tbody>
-<tr><td><code>DMA_SetTransferCompleteCallback(ch, callback)</code></td><td>เรียกเมื่อถ่ายโอนครบทุก unit</td></tr>
-<tr><td><code>DMA_SetErrorCallback(ch, callback)</code></td><td>เรียกเมื่อเกิด DMA error</td></tr>
-<tr><td><code>DMA_SetHalfTransferCallback(ch, callback)</code></td><td>เรียกเมื่อถ่ายโอนได้ครึ่งทาง — เหมาะกับ ping-pong buffer</td></tr>
+<tr><td><code>DMA_SetTransferCompleteCallback(ch, callback)</code></td><td>เรียกเมื่อถ่ายโอนครบทุก unit</td><td><strong>ต้องเรียกก่อน <code>DMA_Start()</code>/<code>DMA_MemCopyAsync()</code></strong> เสมอ — ตั้งหลังเริ่มโอนแล้วอาจพลาด callback ของรอบแรกถ้าโอนเสร็จเร็ว</td></tr>
+<tr><td><code>DMA_SetErrorCallback(ch, callback)</code></td><td>เรียกเมื่อเกิด DMA error</td><td>ตั้งก่อน <code>DMA_Start()</code> เช่นเดียวกัน — ใช้คู่กับ <code>DMA_GetStatus()</code> เพื่อ debug เมื่อ error เกิดขึ้น</td></tr>
+<tr><td><code>DMA_SetHalfTransferCallback(ch, callback)</code></td><td>เรียกเมื่อถ่ายโอนได้ครึ่งทาง — เหมาะกับ ping-pong buffer</td><td>ตั้งก่อน <code>DMA_Start()</code> — ใช้คู่กับ circular mode (<code>mode = DMA_MODE_CIRCULAR</code>) เพื่อประมวลผลครึ่ง buffer ที่โอนเสร็จแล้วขณะอีกครึ่งกำลังโอนอยู่</td></tr>
 </tbody>
 </table>
 
 <div class="callout callout-good">
 <strong>Ping-Pong Buffer:</strong> ใช้ <code>DMA_SetHalfTransferCallback</code> เพื่อประมวลผลครึ่งแรกของ buffer ขณะที่ DMA ยังคงเติมครึ่งหลังต่อ — เพิ่ม throughput ได้โดยที่ไม่ต้องหยุด DMA
+</div>
+
+<div class="flowchart">
+    <pre class="mermaid">
+flowchart LR
+    A["1. Init peripheral<br>(ADC/USART/SPI/I2C/TIM)"] --> B["2. DMA_SetXxxCallback()<br>★ ก่อน Start เสมอ (ถ้าใช้)"]
+    B --> C["3. DMA_SimpleInit(config)<br>หรือ DMA_Xxx_Init() เฉพาะ peripheral"]
+    C --> D["4. DMA_Start(channel)"]
+    D --> E["5. DMA_GetStatus() / callback<br>ตรวจว่าเสร็จหรือ error"]
+    </pre>
 </div>
 </section>
 
@@ -161,7 +171,7 @@
 <table>
 <thead><tr><th>ฟังก์ชัน</th><th>คืนค่า</th><th>คำอธิบาย</th></tr></thead>
 <tbody>
-<tr><td><code>DMA_SPI_Init(ch, direction)</code></td><td>void</td><td>เริ่ม DMA สำหรับ SPI (TX หรือ RX)</td></tr>
+<tr><td><code>DMA_SPI_Init(tx_channel, rx_channel)</code></td><td>void</td><td>เริ่ม DMA สำหรับ SPI (TX และ RX)</td></tr>
 <tr><td><code>DMA_SPI_TransferBuffer(ch, tx_buf, rx_buf, len)</code></td><td>void</td><td>เริ่มถ่ายโอน buffer ทั้ง send และ receive</td></tr>
 </tbody>
 </table>
@@ -174,7 +184,7 @@
 <tbody>
 <tr><td><code>DMA_I2C_InitTx(ch)</code></td><td>void</td><td>เริ่ม DMA สำหรับ I2C TX</td></tr>
 <tr><td><code>DMA_I2C_InitRx(ch)</code></td><td>void</td><td>เริ่ม DMA สำหรับ I2C RX</td></tr>
-<tr><td><code>DMA_I2C_Transfer(ch, data, len, blocking)</code></td><td>void</td><td>เริ่มถ่ายโอนข้อมูลผ่าน I2C</td></tr>
+<tr><td><code>DMA_I2C_Transfer(tx_channel, rx_channel, tx_data, rx_data, length)</code></td><td>void</td><td>เริ่มถ่ายโอนข้อมูลผ่าน I2C</td></tr>
 </tbody>
 </table>
 </section>
@@ -185,10 +195,13 @@
 <thead><tr><th>ฟังก์ชัน</th><th>คืนค่า</th><th>คำอธิบาย</th></tr></thead>
 <tbody>
 <tr><td><code>DMA_TIM_InitCapture(ch, tim, buffer, size)</code></td><td>void</td><td>เริ่ม DMA input capture สำหรับ PWM measurement</td></tr>
-<tr><td><code>DMA_TIM_UpdatePWM(ch, tim, buffer, size)</code></td><td>void</td><td>DMA update PWM duty cycle — waveform generator</td></tr>
+<tr><td><code>DMA_TIM_UpdatePWM(ch, tim, ccr_addr, buffer, size, circular)</code></td><td>void</td><td>DMA update PWM duty cycle — waveform generator</td></tr>
 <tr><td><code>DMA_TIM_GetCCRAddress(tim, ccr_ch)</code></td><td>uint32_t</td><td>คืน address ของ CCR register — ใช้เป็น periph_addr</td></tr>
 </tbody>
 </table>
+<div class="callout callout-note">
+    <strong>ต้องเรียกก่อนสร้าง <code>DMA_Config_t</code>:</strong> ผลลัพธ์จาก <code>DMA_TIM_GetCCRAddress()</code> ต้องนำไปใส่ในฟิลด์ <code>periph_addr</code> ของ struct <code>DMA_Config_t</code> ก่อนเรียก <code>DMA_SimpleInit()</code> — ดูตัวอย่าง "PWM Waveform Generator" ด้านล่างที่ต่อสองฟังก์ชันนี้เข้าด้วยกัน
+</div>
 
 <div class="callout callout-good">
 <strong>Waveform Generator:</strong> ใช้ <code>DMA_TIM_UpdatePWM</code> + circular mode สร้าง waveform แบบซับซ้อนได้ โดย DMA จะส่งค่าถัดไปจากตาราง (LUT) เข้า CCR register โดยอัตโนมัติ โดย CPU ไม่ต้องเข้าไปยุ่ง
@@ -222,7 +235,7 @@
 <h2>ตัวอย่างโค้ด</h2>
 
 <h3>Memory Copy — Blocking</h3>
-<pre><code class="language-c">#include "simplehal.h"
+<pre><code class="language-c">#include "SimpleHAL.h"
 
 uint8_t src[64] = {0xAA, 0xBB, 0xCC, /* ... */};
 uint8_t dst[64];
@@ -239,7 +252,7 @@ int main(void) {
 </code></pre>
 
 <h3>Memory Copy — Async with Callback</h3>
-<pre><code class="language-c">#include "simplehal.h"
+<pre><code class="language-c">#include "SimpleHAL.h"
 
 uint8_t src[256], dst[256];
 volatile uint8_t done = 0;
@@ -263,7 +276,7 @@ int main(void) {
 </code></pre>
 
 <h3>ADC Circular DMA — อ่านต่อเนื่อง</h3>
-<pre><code class="language-c">#include "simplehal.h"
+<pre><code class="language-c">#include "SimpleHAL.h"
 
 #define ADC_BUF_SIZE  64
 uint16_t adc_buffer[ADC_BUF_SIZE];
@@ -284,7 +297,7 @@ int main(void) {
 </code></pre>
 
 <h3>USART DMA TX — ส่งข้อมูลโดยไม่ block CPU</h3>
-<pre><code class="language-c">#include "simplehal.h"
+<pre><code class="language-c">#include "SimpleHAL.h"
 
 uint8_t tx_data[] = "Hello via DMA!\r\n";
 
@@ -307,7 +320,7 @@ int main(void) {
 </code></pre>
 
 <h3>PWM Waveform Generator — DMA Update Duty</h3>
-<pre><code class="language-c">#include "simplehal.h"
+<pre><code class="language-c">#include "SimpleHAL.h"
 
 // Look-Up Table สำหรับ sine wave (32 steps)
 uint16_t sine_lut[32] = {
@@ -329,11 +342,11 @@ int main(void) {
         .periph_addr = ccr_addr,
         .mem_addr = (uint32_t)sine_lut,
         .buffer_size = 32,
-        .mode = CIRCULAR,
-        .direction = M2P,
+        .mode = DMA_MODE_CIRCULAR,
+        .direction = DMA_DIR_MEM_TO_PERIPH,
         // ...
     };
-    DMA_SimpleInit(dma_cfg);
+    DMA_SimpleInit(&dma_cfg);
     DMA_Start(DMA_CH1);
 
     while (1) { }  // PWM output follows sine LUT automatically
@@ -346,6 +359,8 @@ int main(void) {
     <a href="flash.html">SimpleFlash &rarr;</a>
 </nav>
 
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <script>hljs.highlightAll();</script>
 </body>

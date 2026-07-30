@@ -93,53 +93,66 @@ SOP-8 และ SOP-16 <strong>ไม่มี SPI Hardware</strong> — โค�
 <h2>ตารางฟังก์ชัน</h2>
 
 <table>
-<tr><th>ฟังก์ชัน</th><th>รีเทิร์น</th><th>คำอธิบาย</th></tr>
+<tr><th>ฟังก์ชัน</th><th>รีเทิร์น</th><th>คำอธิบาย</th><th>ใช้ร่วมกับ</th></tr>
 <tr>
     <td><code>SPI_SimpleInit(mode, speed, pin_config)</code></td>
     <td>void</td>
     <td>เริ่มต้น SPI — กำหนดโหมด, ความเร็ว, และขา</td>
+    <td><strong>ต้องเรียกก่อนฟังก์ชัน SPI_* อื่นทุกตัว</strong> รวมถึง <code>SPI_SetCS()</code></td>
 </tr>
 <tr>
     <td><code>SPI_Transfer(data)</code></td>
     <td>uint8_t</td>
     <td>ส่ง 1 byte พร้อมรับกลับ 1 byte</td>
+    <td><strong>ต้องอยู่ระหว่าง <code>SPI_SetCS(0)</code> กับ <code>SPI_SetCS(1)</code></strong> เสมอ — ฮาร์ดแวร์ไม่จัดการ CS ให้ (ดูหัวข้อ "การควบคุม CS" ด้านล่าง)</td>
 </tr>
 <tr>
     <td><code>SPI_TransferBuffer(tx, rx, len)</code></td>
     <td>void</td>
     <td>ส่ง buffer พร้อมรับกลับ buffer</td>
+    <td>ทางลัดแทนเรียก <code>SPI_Transfer()</code> วนหลายครั้ง — ต้องอยู่ระหว่าง <code>SPI_SetCS(0)</code>/<code>SPI_SetCS(1)</code> เช่นเดียวกัน</td>
 </tr>
 <tr>
     <td><code>SPI_Write(data, len)</code></td>
     <td>void</td>
     <td>ส่งอย่างเดียว (ไม่สนใจข้อมูลรับ)</td>
+    <td>ใช้แทน <code>SPI_TransferBuffer()</code> เมื่อไม่สนใจข้อมูลรับกลับ — ยังต้องคุม CS เองเหมือนกัน</td>
 </tr>
 <tr>
     <td><code>SPI_Read(data, len, dummy_byte)</code></td>
     <td>void</td>
     <td>รับอย่างเดียว — ส่ง dummy_byte เพื่อสร้างนาฬิกา</td>
+    <td>ใช้แทน <code>SPI_TransferBuffer()</code> เมื่อไม่มีข้อมูลจะส่งจริง — ยังต้องคุม CS เองเหมือนกัน</td>
 </tr>
 <tr>
     <td><code>SPI_SetCS(state)</code></td>
     <td>void</td>
     <td>ควบคุม CS pin — <code>0</code> = LOW (active/เลือก), <code>1</code> = HIGH (ปล่อย)</td>
+    <td><strong>ต้องเรียก <code>0</code> ก่อน และ <code>1</code> หลัง</strong> ทุกครั้งที่เรียก Transfer/Write/Read — ถ้าใช้หลายอุปกรณ์ ให้เรียก <code>SPI_SetCSPin()</code> เลือกขาก่อน แล้วค่อย <code>SPI_SetCS(0)</code></td>
 </tr>
 <tr>
     <td><code>SPI_SetCSPin(port, pin)</code></td>
     <td>void</td>
     <td>เปลี่ยน CS pin ไปขาอื่น — สำหรับหลายอุปกรณ์</td>
+    <td><strong>ต้องเรียกก่อน <code>SPI_SetCS(0)</code></strong> ของรอบ transaction นั้น — สลับไปมาได้ระหว่างอุปกรณ์ตราบใดที่ SCK/MOSI/MISO ใช้ร่วมกัน (ดูตัวอย่าง "หลายอุปกรณ์" ด้านล่าง)</td>
 </tr>
 <tr>
     <td><code>SPI_SetBitOrder(order)</code></td>
     <td>void</td>
     <td>เปลี่ยนลำดับบิต — <code>MSB_FIRST</code> หรือ <code>LSB_FIRST</code></td>
+    <td>เรียกได้ทุกเมื่อหลัง <code>SPI_SimpleInit()</code> — เปลี่ยนกลับเป็น <code>MSB_FIRST</code> เองหลังใช้เสร็จถ้าอุปกรณ์อื่นบน bus ต้องการค่าเริ่มต้น (ไม่มีการจำแยกต่ออุปกรณ์)</td>
 </tr>
 <tr>
     <td><code>SPI_SetSpeed(speed)</code></td>
     <td>void</td>
     <td>เปลี่ยนความเร็วตอนรันไทม์</td>
+    <td>เรียกได้ทุกเมื่อหลัง <code>SPI_SimpleInit()</code> — ควรเปลี่ยนตอน CS ยังเป็น HIGH (ไม่อยู่กลาง transaction) เพื่อความปลอดภัย</td>
 </tr>
 </table>
+
+<div class="callout callout-warn">
+    <strong>รูปแบบมาตรฐานที่ต้องจำ:</strong> <code>SPI_SimpleInit()</code> (ครั้งเดียว) → [<code>SPI_SetCSPin()</code> ถ้ามีหลายอุปกรณ์] → <code>SPI_SetCS(0)</code> → <code>SPI_Transfer()</code>/<code>TransferBuffer()</code>/<code>Write()</code>/<code>Read()</code> → <code>SPI_SetCS(1)</code> — วนซ้ำขั้นตอนหลัง SimpleInit สำหรับทุก transaction
+</div>
 </section>
 
 <section>
@@ -186,7 +199,7 @@ SPI_SetBitOrder(MSB_FIRST);  // กลับเป็น MSB first
 <h2>ตัวอย่างโค้ด</h2>
 
 <h3>Transfer พื้นฐาน</h3>
-<pre><code class="language-c">#include "simplehal.h"
+<pre><code class="language-c">#include "SimpleHAL.h"
 
 void setup() {
     SPI_SimpleInit(0, SPI_1MHZ, SPI_PINS_DEFAULT);

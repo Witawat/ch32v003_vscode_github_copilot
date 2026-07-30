@@ -27,7 +27,7 @@
 <tr><td>Address</td><td><code>0x0803F80</code> — <code>0x0803FFF</code></td></tr>
 <tr><td>Integrity</td><td>CRC16 checksum</td></tr>
 <tr><td>Write endurance</td><td>~10,000 — 80,000 รอบ</td></tr>
-<tr><td>Header</td><td><code>#include "simple_flash.h"</code></td></tr>
+<tr><td>Header</td><td><code>#include "SimpleFlash.h"</code></td></tr>
 </tbody>
 </table>
 
@@ -78,29 +78,29 @@
 <section>
 <h2>ตารางฟังก์ชัน</h2>
 <table>
-<thead><tr><th>ฟังก์ชัน</th><th>คืนค่า</th><th>คำอธิบาย</th></tr></thead>
+<thead><tr><th>ฟังก์ชัน</th><th>คืนค่า</th><th>คำอธิบาย</th><th>ใช้ร่วมกับ</th></tr></thead>
 <tbody>
-<tr><td><code>Flash_Init()</code></td><td>FlashStatus</td><td>เริ่มระบบ Flash — ต้องเรียกก่อนใช้งาน</td></tr>
-<tr><td><code>Flash_EraseAll()</code></td><td>FlashStatus</td><td>ลบทั้ง 2 หน้า (config + data)</td></tr>
-<tr><td><code>Flash_ErasePage(page_num)</code></td><td>FlashStatus</td><td>ลบเฉพาะหน้าที่ระบุ (254 หรือ 255)</td></tr>
-<tr><td><code>Flash_ReadByte(addr)</code></td><td>uint8_t</td><td>อ่าน 1 byte</td></tr>
-<tr><td><code>Flash_ReadHalfWord(addr)</code></td><td>uint16_t</td><td>อ่าน 1 half-word (2 bytes — address ต้อง align 2)</td></tr>
-<tr><td><code>Flash_ReadWord(addr)</code></td><td>uint32_t</td><td>อ่าน 1 word (4 bytes — address ต้อง align 4)</td></tr>
-<tr><td><code>Flash_WriteByte(addr, data)</code></td><td>FlashStatus</td><td>เขียน 1 byte — <strong>ต้อง erase ก่อน</strong></td></tr>
-<tr><td><code>Flash_WriteHalfWord(addr, data)</code></td><td>FlashStatus</td><td>เขียน 1 half-word — <strong>ต้อง erase ก่อน</strong></td></tr>
-<tr><td><code>Flash_WriteWord(addr, data)</code></td><td>FlashStatus</td><td>เขียน 1 word — <strong>ต้อง erase ก่อน</strong></td></tr>
-<tr><td><code>Flash_WriteByteWithErase(addr, data)</code></td><td>FlashStatus</td><td>เขียน 1 byte พร้อม auto-erase (ช้า ใช้ 64B RAM)</td></tr>
-<tr><td><code>Flash_WriteHalfWordWithErase(addr, data)</code></td><td>FlashStatus</td><td>เขียน half-word พร้อม auto-erase</td></tr>
-<tr><td><code>Flash_WriteWordWithErase(addr, data)</code></td><td>FlashStatus</td><td>เขียน word พร้อม auto-erase</td></tr>
-<tr><td><code>Flash_ReadString(addr, buf, max)</code></td><td>uint16_t</td><td>อ่าน string — คืนจำนวน byte ที่อ่านได้</td></tr>
-<tr><td><code>Flash_WriteString(addr, str)</code></td><td>FlashStatus</td><td>เขียน string (null-terminated) — auto-erase</td></tr>
-<tr><td><code>Flash_ReadStruct(addr, ptr, size)</code></td><td>FlashStatus</td><td>อ่าน struct จาก Flash เข้า RAM</td></tr>
-<tr><td><code>Flash_WriteStruct(addr, ptr, size)</code></td><td>FlashStatus</td><td>เขียน struct — auto-erase</td></tr>
-<tr><td><code>Flash_SaveConfig(ptr, size)</code></td><td>FlashStatus</td><td>บันทึก config struct ลง page 254 + CRC16</td></tr>
-<tr><td><code>Flash_LoadConfig(ptr, size)</code></td><td>bool</td><td>โหลด config + ตรวจสอบ CRC — false = CRC fail</td></tr>
-<tr><td><code>Flash_IsConfigValid()</code></td><td>bool</td><td>ตรวจสอบว่า CRC ปัจจุบันถูกต้องหรือไม่</td></tr>
-<tr><td><code>Flash_CalculateCRC16(data, len)</code></td><td>uint16_t</td><td>คำนวณ CRC16 ของข้อมูล (ใช้ภายใน)</td></tr>
-<tr><td><code>Flash_IsAddressValid(addr)</code></td><td>bool</td><td>ตรวจสอบว่า address อยู่ในช่วงที่อนุญาต</td></tr>
+<tr><td><code>Flash_Init()</code></td><td>FlashStatus</td><td>เริ่มระบบ Flash — ต้องเรียกก่อนใช้งาน</td><td><strong>ต้องเรียกก่อนฟังก์ชัน Flash_* อื่นทุกตัว</strong></td></tr>
+<tr><td><code>Flash_EraseAll()</code></td><td>FlashStatus</td><td>ลบทั้ง 2 หน้า (config + data)</td><td>ใช้แทน <code>Flash_ErasePage()</code> เมื่อจะล้างทั้ง config+data พร้อมกัน (เช่น factory reset) — หลังเรียก <code>Flash_LoadConfig()</code> จะคืน false ทุกครั้ง</td></tr>
+<tr><td><code>Flash_ErasePage(page_num)</code></td><td>FlashStatus</td><td>ลบเฉพาะหน้าที่ระบุ (254 หรือ 255)</td><td><strong>ต้องเรียกก่อน</strong> <code>Flash_WriteByte/HalfWord/Word()</code> เสมอ (ฟังก์ชันกลุ่มนี้ไม่ auto-erase) — ใช้แทนได้ด้วย <code>...WithErase()</code> ที่ erase ให้อัตโนมัติ</td></tr>
+<tr><td><code>Flash_ReadByte(addr)</code></td><td>uint8_t</td><td>อ่าน 1 byte</td><td>เรียกได้ทุกเมื่อหลัง <code>Flash_Init()</code> — ควรเช็ค <code>Flash_IsAddressValid(addr)</code> ก่อนถ้า address มาจากตัวแปร (ไม่ใช่ constant ที่มั่นใจแล้ว)</td></tr>
+<tr><td><code>Flash_ReadHalfWord(addr)</code></td><td>uint16_t</td><td>อ่าน 1 half-word (2 bytes — address ต้อง align 2)</td><td>เช่นเดียวกับ ReadByte — address ต้องมาจาก <code>Flash_WriteHalfWord()</code>/<code>WithErase()</code> ก่อนหน้าเพื่อให้ได้ค่าที่มีความหมาย</td></tr>
+<tr><td><code>Flash_ReadWord(addr)</code></td><td>uint32_t</td><td>อ่าน 1 word (4 bytes — address ต้อง align 4)</td><td>เช่นเดียวกับด้านบน — คู่กับ <code>Flash_WriteWord()</code>/<code>WithErase()</code></td></tr>
+<tr><td><code>Flash_WriteByte(addr, data)</code></td><td>FlashStatus</td><td>เขียน 1 byte — <strong>ต้อง erase ก่อน</strong></td><td><strong>ต้องเรียก <code>Flash_ErasePage()</code> ก่อนเสมอ</strong> — ใช้ <code>Flash_WriteByteWithErase()</code> แทนถ้าไม่อยาก erase เอง</td></tr>
+<tr><td><code>Flash_WriteHalfWord(addr, data)</code></td><td>FlashStatus</td><td>เขียน 1 half-word — <strong>ต้อง erase ก่อน</strong></td><td>เช่นเดียวกับ WriteByte — ใช้ <code>Flash_WriteHalfWordWithErase()</code> เป็นทางลัด</td></tr>
+<tr><td><code>Flash_WriteWord(addr, data)</code></td><td>FlashStatus</td><td>เขียน 1 word — <strong>ต้อง erase ก่อน</strong></td><td>เช่นเดียวกับ WriteByte — ใช้ <code>Flash_WriteWordWithErase()</code> เป็นทางลัด</td></tr>
+<tr><td><code>Flash_WriteByteWithErase(addr, data)</code></td><td>FlashStatus</td><td>เขียน 1 byte พร้อม auto-erase (ช้า ใช้ 64B RAM)</td><td><strong>ใช้แทน <code>Flash_ErasePage()</code>+<code>Flash_WriteByte()</code></strong> สองขั้นตอนรวมเป็นครั้งเดียว — ไม่ต้องเรียก ErasePage เองอีก</td></tr>
+<tr><td><code>Flash_WriteHalfWordWithErase(addr, data)</code></td><td>FlashStatus</td><td>เขียน half-word พร้อม auto-erase</td><td>เช่นเดียวกับด้านบน สำหรับ half-word</td></tr>
+<tr><td><code>Flash_WriteWordWithErase(addr, data)</code></td><td>FlashStatus</td><td>เขียน word พร้อม auto-erase</td><td>เช่นเดียวกับด้านบน สำหรับ word</td></tr>
+<tr><td><code>Flash_ReadString(addr, buf, max)</code></td><td>uint16_t</td><td>อ่าน string — คืนจำนวน byte ที่อ่านได้</td><td>คู่กับ <code>Flash_WriteString()</code> ที่เขียนไว้ก่อนหน้า — <code>buf</code> ต้องจองขนาดอย่างน้อย <code>max</code> ก่อนเรียก</td></tr>
+<tr><td><code>Flash_WriteString(addr, str)</code></td><td>FlashStatus</td><td>เขียน string (null-terminated) — auto-erase</td><td>auto-erase ในตัวเหมือน <code>...WithErase()</code> — ไม่ต้องเรียก ErasePage เอง</td></tr>
+<tr><td><code>Flash_ReadStruct(addr, ptr, size)</code></td><td>FlashStatus</td><td>อ่าน struct จาก Flash เข้า RAM</td><td>คู่กับ <code>Flash_WriteStruct()</code> — ใช้เมื่อไม่ต้องการ CRC (ถ้าต้องการ CRC ใช้ <code>Flash_SaveConfig</code>/<code>LoadConfig</code> แทน)</td></tr>
+<tr><td><code>Flash_WriteStruct(addr, ptr, size)</code></td><td>FlashStatus</td><td>เขียน struct — auto-erase</td><td>auto-erase ในตัว — ต่างจาก <code>Flash_SaveConfig()</code> ตรงที่ไม่คำนวณ/ตรวจ CRC ให้</td></tr>
+<tr><td><code>Flash_SaveConfig(ptr, size)</code></td><td>FlashStatus</td><td>บันทึก config struct ลง page 254 + CRC16</td><td>struct ที่ส่งเข้าต้องมี field <code>uint16_t crc</code> เป็นตัวสุดท้ายเสมอ (ดู Config Struct Pattern) — <strong>เรียก <code>Flash_CalculateCRC16()</code> ให้เองภายใน</strong> ไม่ต้องเรียกเอง</td></tr>
+<tr><td><code>Flash_LoadConfig(ptr, size)</code></td><td>bool</td><td>โหลด config + ตรวจสอบ CRC — false = CRC fail</td><td>คู่กับ <code>Flash_SaveConfig()</code> ที่เขียนไว้ก่อนหน้า — คืน false ทั้งตอน CRC ไม่ตรงและตอนยังไม่เคยเขียน (Flash ว่าง = 0xFF)</td></tr>
+<tr><td><code>Flash_IsConfigValid()</code></td><td>bool</td><td>ตรวจสอบว่า CRC ปัจจุบันถูกต้องหรือไม่</td><td>ใช้เช็คก่อนเรียก <code>Flash_LoadConfig()</code> เต็มรูปแบบ เมื่อแค่ต้องการรู้ผล valid/invalid โดยไม่ต้องคัดลอกข้อมูลออกมา</td></tr>
+<tr><td><code>Flash_CalculateCRC16(data, len)</code></td><td>uint16_t</td><td>คำนวณ CRC16 ของข้อมูล (ใช้ภายใน)</td><td><strong>ถูกเรียกใช้ภายใน <code>Flash_SaveConfig()</code>/<code>Flash_LoadConfig()</code> โดยอัตโนมัติแล้ว</strong> — เรียกเองเฉพาะเมื่อต้องการคำนวณ CRC ของข้อมูลนอกเหนือจาก config struct pattern</td></tr>
+<tr><td><code>Flash_IsAddressValid(addr)</code></td><td>bool</td><td>ตรวจสอบว่า address อยู่ในช่วงที่อนุญาต</td><td><strong>ควรเรียกก่อน</strong> Read/Write ใดๆ ที่ใช้ address จากตัวแปร/คำนวณเอง (ไม่ใช่ constant ที่รู้อยู่แล้วว่าอยู่ในช่วง) เพื่อกัน <code>FLASH_ERROR_RANGE</code></td></tr>
 </tbody>
 </table>
 </section>
@@ -198,7 +198,7 @@
 <h2>ตัวอย่างโค้ด</h2>
 
 <h3>Save & Load Config</h3>
-<pre><code class="language-c">#include "simplehal.h"
+<pre><code class="language-c">#include "SimpleHAL.h"
 
 typedef struct {
     uint32_t magic;
@@ -236,7 +236,7 @@ int main(void) {
 </code></pre>
 
 <h3>Write String to Flash</h3>
-<pre><code class="language-c">#include "simplehal.h"
+<pre><code class="language-c">#include "SimpleHAL.h"
 
 #define STR_ADDR  0x0803FC0  // page 255 start
 
@@ -257,7 +257,7 @@ int main(void) {
 </code></pre>
 
 <h3>Auto-Erase Word — เขียนค่าเดี่ยว</h3>
-<pre><code class="language-c">#include "simplehal.h"
+<pre><code class="language-c">#include "SimpleHAL.h"
 
 #define DATA_ADDR  0x0803FC4
 
@@ -280,7 +280,7 @@ int main(void) {
 </code></pre>
 
 <h3>Factory Reset — ลบ Config</h3>
-<pre><code class="language-c">#include "simplehal.h"
+<pre><code class="language-c">#include "SimpleHAL.h"
 
 void factory_reset(void) {
     Flash_EraseAll();
@@ -303,7 +303,7 @@ int main(void) {
 </code></pre>
 
 <h3>ใช้ Simplified Macros</h3>
-<pre><code class="language-c">#include "simplehal.h"
+<pre><code class="language-c">#include "SimpleHAL.h"
 
 typedef struct {
     uint32_t magic;

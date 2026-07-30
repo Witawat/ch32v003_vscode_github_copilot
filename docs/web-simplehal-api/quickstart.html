@@ -151,8 +151,8 @@ int main(void)
 
     <h3>แบบที่ 2: Selective Include</h3>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
-#include "hal_delay.h"    // เฉพาะ Delay
-#include "hal_gpio.h"     // เฉพาะ GPIO</code></pre>
+#include "SimpleDelay.h"  // เฉพาะ Delay
+#include "SimpleGPIO.h"   // เฉพาะ GPIO</code></pre>
     <p>ข้อดี: ลดขนาดโค้ดและเวลา compile — เหมาะสำหรับโปรเจกต์ที่ต้องการควบคุม unit ทุกตัว</p>
 
     <div class="callout callout-good">

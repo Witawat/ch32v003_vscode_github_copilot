@@ -53,7 +53,7 @@
 <h2>ตารางอ้างอิงฟังก์ชัน</h2>
 <table>
 <thead>
-<tr><th>ฟังก์ชัน</th><th>พารามิเตอร์</th><th>คืนค่า</th><th>คำอธิบาย</th></tr>
+<tr><th>ฟังก์ชัน</th><th>พารามิเตอร์</th><th>คืนค่า</th><th>คำอธิบาย</th><th>ใช้ร่วมกับ</th></tr>
 </thead>
 <tbody>
 <tr>
@@ -61,42 +61,49 @@
     <td><code>pin</code>: GPIO pin</td>
     <td><code>uint8_t</code></td>
     <td>แปลง pin เป็น EXTI line number — ใช้กับ attachInterrupt</td>
+    <td>ผลลัพธ์ส่งต่อให้ฟังก์ชัน interrupt แบบ Arduino ที่ต้องการ EXTI line โดยตรง — ถ้าใช้ <code>attachInterrupt(pin, cb, mode)</code> ของ SimpleGPIO ปกติไม่จำเป็นต้องเรียกฟังก์ชันนี้เอง</td>
 </tr>
 <tr>
     <td><code>randomSeed(seed)</code></td>
     <td><code>seed</code>: uint32_t</td>
     <td><code>void</code></td>
     <td>ตั้ง seed สำหรับ PRNG</td>
+    <td><strong>ควรเรียกก่อน <code>_randomMax()</code>/<code>_randomRange()</code></strong> ครั้งแรกเสมอ — ถ้าไม่เรียก ค่าสุ่มจะซ้ำรูปแบบเดิมทุกครั้งที่เปิดเครื่อง (มักใช้ <code>analogRead()</code> จาก pin ที่ไม่ต่ออะไรเป็น seed เพื่อสุ่มจาก noise)</td>
 </tr>
 <tr>
     <td><code>_randomMax(max)</code></td>
     <td><code>max</code>: long</td>
     <td><code>long</code></td>
     <td>สุ่ม [0, max-1] — ⚠️ ไม่ใช่ <code>random()</code> เพราะชื่อชนกับ stdlib</td>
+    <td>เรียกได้หลัง <code>randomSeed()</code> — หรือใช้ <code>#define ENABLE_ARDUINO_RANDOM_MACRO</code> ก่อน include เพื่อเรียกเป็น <code>random(max)</code> แทน</td>
 </tr>
 <tr>
     <td><code>_randomRange(min, max)</code></td>
     <td><code>min</code>: long<br><code>max</code>: long</td>
     <td><code>long</code></td>
     <td>สุ่ม [min, max-1]</td>
+    <td>เช่นเดียวกับ <code>_randomMax()</code> — ควรเรียก <code>randomSeed()</code> ก่อนใช้งานจริงครั้งแรก</td>
 </tr>
 <tr>
     <td><code>yield()</code></td>
     <td>—</td>
     <td><code>void</code></td>
     <td>Cooperative multitasking — feed IWDG ถ้า active</td>
+    <td>ถูกเรียกอัตโนมัติภายใน <code>delay()</code>/<code>Delay_Ms()</code> — ถ้าต้องการทำงานพิเศษระหว่างรอ ให้ประกาศฟังก์ชัน <code>void yield(void)</code> ของตัวเอง (override) ไม่ต้องเรียกตรงๆ</td>
 </tr>
 <tr>
     <td><code>arduino_SetIWDGActive()</code></td>
     <td>—</td>
     <td><code>void</code></td>
     <td>เปิด auto-feed IWDG ผ่าน yield() — ถูกเรียกโดย SimpleIWDG</td>
+    <td><strong>ถูกเรียกอัตโนมัติจาก <code>IWDG_SimpleInit()</code></strong> อยู่แล้ว — ไม่ต้องเรียกเองในโค้ดผู้ใช้ทั่วไป</td>
 </tr>
 <tr>
     <td><code>dtostrf(val, width, precision, buf)</code></td>
     <td><code>val</code>: double<br><code>width</code>: int<br><code>precision</code>: int<br><code>buf</code>: char*</td>
     <td><code>char*</code></td>
     <td>แปลง float → string (ไม่ต้องใช้ FPU)</td>
+    <td><code>buf</code> ต้องจองไว้ล่วงหน้าอย่างน้อย <code>width+2</code> byte ก่อนเรียก — ผลลัพธ์มักส่งต่อให้ <code>USART_Println(buf)</code>/<code>USART_Print(buf)</code> พิมพ์ออก</td>
 </tr>
 </tbody>
 </table>

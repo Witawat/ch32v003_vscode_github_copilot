@@ -65,73 +65,90 @@
 <h2>ตารางฟังก์ชัน</h2>
 
 <table>
-<tr><th>ฟังก์ชัน</th><th>รีเทิร์น</th><th>คำอธิบาย</th></tr>
+<tr><th>ฟังก์ชัน</th><th>รีเทิร์น</th><th>คำอธิบาย</th><th>ใช้ร่วมกับ</th></tr>
 <tr>
     <td><code>ADC_SimpleInit()</code></td>
     <td>void</td>
     <td>เปิดทุก channel — เรียกครั้งแรกพอ (Lazy Init)</td>
+    <td><strong>ต้องเรียกก่อน <code>ADC_Read()</code>/<code>ADC_EnableChannel()</code></strong> — ใช้แทน <code>ADC_SimpleInitChannels()</code> เมื่อจะใช้หลาย channel รวมถึง VREFINT (จำเป็นสำหรับ <code>ADC_GetVDD()</code>)</td>
 </tr>
 <tr>
     <td><code>ADC_SimpleInitChannels(channels, count)</code></td>
     <td>void</td>
     <td>เปิดเฉพาะ channel ที่ระบุ — ประหยัดพลังงานกว่า</td>
+    <td>ใช้แทน <code>ADC_SimpleInit()</code> — ถ้าจะใช้ <code>ADC_GetVDD()</code>/<code>ADC_ReadVoltageCompensated()</code> ภายหลัง ต้องใส่ <code>ADC_CH_VREFINT</code> ใน array ด้วย ไม่งั้นค่า VDD จะผิด</td>
 </tr>
 <tr>
     <td><code>ADC_EnableChannel(channel)</code></td>
     <td>void</td>
     <td>เปิด channel เพิ่มหลังจาก init แล้ว</td>
+    <td><strong>ต้องเรียกหลัง <code>ADC_SimpleInit()</code>/<code>ADC_SimpleInitChannels()</code> เท่านั้น</strong> — ใช้ตอนต้องการเพิ่ม channel ทีหลังโดยไม่อยาก re-init ทั้งหมด (ดูตัวอย่าง "เปิด Channel เพิ่มภายหลัง" ด้านล่าง)</td>
 </tr>
 <tr>
     <td><code>ADC_Read(channel)</code></td>
     <td>uint16_t</td>
     <td>อ่านค่า ADC 0-1023</td>
+    <td>channel ต้องถูกเปิดด้วย SimpleInit/SimpleInitChannels/EnableChannel มาก่อน — ผลลัพธ์ดิบส่งต่อให้ <code>ADC_ToVoltage()</code>/<code>ADC_ToPercent()</code> แปลงหน่วยต่อได้</td>
 </tr>
 <tr>
     <td><code>ADC_ReadMultiple(channels, values, count)</code></td>
     <td>void</td>
     <td>อ่านหลาย channel ในครั้งเดียว</td>
+    <td>ทางลัดแทนเรียก <code>ADC_Read()</code> วนหลายครั้ง — channel ทั้งหมดใน array ต้องเปิดไว้ก่อนแล้วเช่นกัน</td>
 </tr>
 <tr>
     <td><code>ADC_ReadAverage(channel, samples)</code></td>
     <td>uint16_t</td>
     <td>อ่านค่าเฉลี่ยจาก N ตัวอย่าง — ลด noise</td>
+    <td>ใช้แทน <code>ADC_Read()</code> ตัวเดียวเมื่อสัญญาณมี noise — ผลลัพธ์ยังเป็นค่าดิบ ส่งต่อ <code>ADC_ToVoltage()</code>/<code>ADC_ToPercent()</code> ได้เหมือนกัน</td>
 </tr>
 <tr>
     <td><code>ADC_ToVoltage(adc_value, vref)</code></td>
     <td>float</td>
     <td>แปลงค่า ADC → แรงดัน (V)</td>
+    <td><strong>ต้องเรียกหลัง <code>ADC_Read()</code>/<code>ADC_ReadAverage()</code></strong> เสมอ (เป็น pure calculator ไม่อ่านฮาร์ดแวร์เอง) — ถ้า VDD ไม่นิ่งที่ 3.3V ใช้ <code>ADC_ReadVoltageCompensated()</code> แทนทั้งคู่</td>
 </tr>
 <tr>
     <td><code>ADC_ReadVoltage(channel, vref)</code></td>
     <td>float</td>
     <td>อ่าน + แปลงเป็นแรงดันทันที</td>
+    <td>ทางลัดรวม <code>ADC_Read()</code>+<code>ADC_ToVoltage()</code> ในฟังก์ชันเดียว — <code>vref</code> มักมาจาก <code>ADC_GetVDD()</code> เมื่อต้องการชดเชย</td>
 </tr>
 <tr>
     <td><code>ADC_ToPercent(adc_value)</code></td>
     <td>float</td>
     <td>แปลงค่า ADC → เปอร์เซ็นต์ (0.0 - 100.0)</td>
+    <td>เช่นเดียวกับ <code>ADC_ToVoltage()</code> — ต้องมีค่าจาก <code>ADC_Read()</code>/<code>ADC_ReadAverage()</code> ก่อนเสมอ</td>
 </tr>
 <tr>
     <td><code>ADC_ReadVrefInt()</code></td>
     <td>uint16_t</td>
     <td>อ่านค่า VREFINT (~1.2V) จาก channel ภายใน</td>
+    <td>ต้องเปิด channel <code>ADC_CH_VREFINT</code> ไว้ก่อน (SimpleInit เปิดให้อัตโนมัติ) — ใช้เป็น input ให้ <code>ADC_GetVDD()</code> คำนวณต่อ (ปกติไม่ต้องเรียกเอง เพราะ GetVDD เรียกให้แล้วภายใน)</td>
 </tr>
 <tr>
     <td><code>ADC_GetVDD()</code></td>
     <td>float</td>
     <td>คำนวณ VDD จริงจาก VREFINT</td>
+    <td>ต้องมี channel VREFINT เปิดอยู่ (มาจาก <code>ADC_SimpleInit()</code> หรือใส่ <code>ADC_CH_VREFINT</code> ใน <code>ADC_SimpleInitChannels()</code>) — ผลลัพธ์ส่งต่อให้ <code>ADC_ReadVoltage()</code>/<code>ADC_GetBatteryPercent()</code> ใช้เป็น <code>vdd</code>/<code>vref</code></td>
 </tr>
 <tr>
     <td><code>ADC_ReadVoltageCompensated(channel)</code></td>
     <td>float</td>
     <td>อ่าน ADC แล้วชดเชย VDD ให้</td>
+    <td><strong>ทางลัดรวม <code>ADC_Read()</code>+<code>ADC_GetVDD()</code>+<code>ADC_ToVoltage()</code> ในตัวเดียว</strong> — ใช้แทนการเรียกทั้งสามฟังก์ชันแยกกัน ต้องมี VREFINT channel เปิดอยู่เช่นกัน</td>
 </tr>
 <tr>
     <td><code>ADC_GetBatteryPercent(vdd, v_min, v_max)</code></td>
     <td>float</td>
     <td>คำนวณเปอร์เซ็นต์แบตเตอรี่จาก VDD</td>
+    <td><code>vdd</code> ต้องมาจาก <code>ADC_GetVDD()</code> ก่อนเสมอ — เป็น pure calculator ไม่อ่านฮาร์ดแวร์เอง</td>
 </tr>
 </table>
+
+<div class="callout callout-warn">
+    <strong>ลำดับที่พลาดบ่อย:</strong> <code>ADC_ToVoltage()</code>/<code>ADC_ToPercent()</code>/<code>ADC_GetBatteryPercent()</code> เป็นฟังก์ชันคำนวณล้วนๆ (ไม่แตะฮาร์ดแวร์) — ต้องมีค่าจาก <code>ADC_Read()</code>/<code>ADC_ReadAverage()</code>/<code>ADC_GetVDD()</code> ป้อนเข้าไปก่อนเสมอ ไม่ใช่เรียกลอยๆ
+</div>
 </section>
 
 <section>
@@ -233,7 +250,7 @@ uint16_t very_smooth = ADC_ReadAverage(ADC_CH_PA2, 50);
 <h2>ตัวอย่างโค้ด</h2>
 
 <h3>อ่านค่า Analog พื้นฐาน</h3>
-<pre><code class="language-c">#include "simplehal.h"
+<pre><code class="language-c">#include "SimpleHAL.h"
 
 void setup() {
     ADC_SimpleInit();         // เปิด ADC — ทำครั้งเดียว

@@ -101,7 +101,7 @@
 <h2>ตารางอ้างอิงฟังก์ชัน</h2>
 <table>
 <thead>
-<tr><th>ฟังก์ชัน</th><th>พารามิเตอร์</th><th>คืนค่า</th><th>คำอธิบาย</th></tr>
+<tr><th>ฟังก์ชัน</th><th>พารามิเตอร์</th><th>คืนค่า</th><th>คำอธิบาย</th><th>ใช้ร่วมกับ</th></tr>
 </thead>
 <tbody>
 <tr>
@@ -109,96 +109,134 @@
     <td>—</td>
     <td><code>void</code></td>
     <td>เข้า sleep — wake เมื่อมี interrupt ใด ๆ</td>
+    <td>ต้องตั้ง interrupt ไว้ก่อน (เช่น <code>attachInterrupt()</code>) ไม่งั้นไม่มีอะไรมาปลุก — ทางลัดของ <code>PWR_EnterSleepMode(WFI)</code></td>
 </tr>
 <tr>
     <td><code>PWR_Standby(timeout_ms)</code></td>
     <td><code>timeout_ms</code>: uint32_t</td>
     <td><code>void</code></td>
     <td>เข้า standby + AWU auto wake — RAM lost, main() restarts</td>
+    <td><strong>ตั้งค่า AWU ให้อัตโนมัติภายในจาก <code>timeout_ms</code></strong> — <strong>ไม่ต้องเรียก <code>PWR_ConfigureAWU()</code> เอง</strong> (ทางลัดครบวงจร); หลัง wakeup ให้เรียก <code>PWR_WasStandbyWakeup()</code> ที่ต้น <code>main()</code> เพื่อรู้ว่าตื่นจาก standby</td>
 </tr>
 <tr>
     <td><code>PWR_StandbyUntilInterrupt()</code></td>
     <td>—</td>
     <td><code>void</code></td>
     <td>เข้า standby — รอจนกว่า EXTI จะปลุก</td>
+    <td>ใช้แทน <code>PWR_Standby(timeout_ms)</code> เมื่อต้องการปลุกด้วยขา EXTI แทนเวลา — ไม่ต้องตั้ง AWU เลย</td>
 </tr>
 <tr>
     <td><code>PWR_EnterSleepMode(entry)</code></td>
     <td><code>entry</code>: WFI/WFE</td>
     <td><code>void</code></td>
     <td>เข้า sleep mode ด้วย WFI หรือ WFE</td>
+    <td>เวอร์ชันกำหนด entry เองของ <code>PWR_Sleep()</code> — ใช้แทนกัน ไม่ใช้คู่กัน</td>
 </tr>
 <tr>
     <td><code>PWR_EnterStandbyMode(entry)</code></td>
     <td><code>entry</code>: WFI/WFE</td>
     <td><code>void</code></td>
     <td>เข้า standby mode ด้วย WFI หรือ WFE</td>
+    <td><strong>ต่างจาก <code>PWR_Standby()</code> ตรงที่ไม่ตั้งค่า AWU ให้เอง</strong> — ต้องเรียก <code>PWR_ConfigureAWU()</code> เองก่อนถ้าต้องการปลุกด้วยเวลา (ใช้เมื่อต้องคุม prescaler/window เอง)</td>
 </tr>
 <tr>
     <td><code>PWR_ConfigureAWU(prescaler, window)</code></td>
     <td><code>prescaler</code>: AWU_PRESCALER_*<br><code>window</code>: uint8_t (0-0x3F)</td>
     <td><code>void</code></td>
     <td>ตั้งค่า AWU timer</td>
+    <td><strong>ไม่จำเป็นถ้าใช้ <code>PWR_Standby(timeout_ms)</code></strong> (ตั้งให้อัตโนมัติแล้ว) — เรียกเองเฉพาะเมื่อใช้คู่กับ <code>PWR_EnterStandbyMode()</code> ที่ต้องการคุม prescaler ละเอียดกว่า</td>
 </tr>
 <tr>
     <td><code>PWR_EnablePVD(level)</code></td>
     <td><code>level</code>: PVD_LEVEL_*</td>
     <td><code>void</code></td>
     <td>เปิด PVD + ตั้ง threshold</td>
+    <td><strong>ต้องเรียกก่อน <code>PWR_GetPVDStatus()</code></strong> มิฉะนั้นค่าที่อ่านได้ไม่มีความหมาย (PVD ยังไม่เปิด)</td>
 </tr>
 <tr>
     <td><code>PWR_DisablePVD()</code></td>
     <td>—</td>
     <td><code>void</code></td>
     <td>ปิด PVD</td>
+    <td>เรียก <code>PWR_EnablePVD()</code> ใหม่เพื่อกลับมาใช้งานอีกครั้ง</td>
 </tr>
 <tr>
     <td><code>PWR_GetPVDStatus(level)</code></td>
     <td><code>level</code>: PVD_LEVEL_*</td>
     <td><code>uint8_t</code> (1/0)</td>
     <td>ตรวจสอบ VDD ต่ำกว่า level หรือไม่</td>
+    <td>ต้องเรียกหลัง <code>PWR_EnablePVD()</code> เท่านั้น — เรียกวนใน main loop เพื่อ poll สถานะแรงดัน</td>
 </tr>
 <tr>
     <td><code>PWR_WasStandbyWakeup()</code></td>
     <td>—</td>
     <td><code>uint8_t</code> (1/0)</td>
     <td>รอบนี้ wakeup จาก standby หรือไม่?</td>
+    <td><strong>เรียกที่ต้น <code>main()</code></strong> ก่อนโค้ดอื่น (เพราะ standby ทำให้ RAM/main() เริ่มใหม่) — ถ้า true ให้ตามด้วย <code>PWR_ClearStandbyFlag()</code> ทันที</td>
 </tr>
 <tr>
     <td><code>PWR_ClearStandbyFlag()</code></td>
     <td>—</td>
     <td><code>void</code></td>
     <td>เคลียร์ standby wakeup flag</td>
+    <td><strong>ต้องเรียกหลัง <code>PWR_WasStandbyWakeup()</code></strong> คืน true — ถ้าไม่เคลียร์ flag จะค้างเป็น true ไปเรื่อยๆ ในรอบถัดไป (แม้ไม่ได้มาจาก standby จริง)</td>
 </tr>
 <tr>
     <td><code>PWR_EnableWakeupPin()</code></td>
     <td>—</td>
     <td><code>void</code></td>
     <td>เปิด PA0 เป็น wakeup pin — ⚠️ PA0 ไม่มีในทุกแพ็กเกจ!</td>
+    <td>ดูคำเตือนด้านล่าง — ใช้งานไม่ได้จริงบน CH32V003 ทุกแพ็กเกจ ใช้ EXTI ธรรมดา (<code>attachInterrupt</code>) คู่กับ <code>PWR_StandbyUntilInterrupt()</code> แทน</td>
 </tr>
 <tr>
     <td><code>PWR_DisableWakeupPin()</code></td>
     <td>—</td>
     <td><code>void</code></td>
     <td>ปิด PA0 wakeup</td>
+    <td>คู่กับ <code>PWR_EnableWakeupPin()</code> — มีข้อจำกัดเดียวกัน</td>
 </tr>
 <tr>
     <td><code>PWR_EstimateStandbyCurrent(pvd, awu)</code></td>
     <td><code>pvd</code>: PVD on? (1/0)<br><code>awu</code>: AWU on? (1/0)</td>
     <td><code>uint32_t</code> (µA)</td>
     <td>ประมาณกระแส standby</td>
+    <td>ใช้ผลลัพธ์เป็น input ให้ <code>PWR_CalculateBatteryLife()</code> (พารามิเตอร์ <code>uA</code>) เพื่อประเมินอายุแบตต่อ</td>
 </tr>
 <tr>
     <td><code>PWR_CalculateBatteryLife(mah, active%, mA, uA)</code></td>
     <td><code>mah</code>: ความจุแบต (mAh)<br><code>active%</code>: % เวลาทำงาน<br><code>mA</code>: กระแสตอน active<br><code>uA</code>: กระแสตอน sleep</td>
     <td><code>uint32_t</code> (hours)</td>
     <td>คำนวณอายุแบตเตอรี่เป็นชั่วโมง</td>
+    <td>เป็น calculator ล้วนๆ ไม่ผูกกับฮาร์ดแวร์จริง — ใช้ตอนออกแบบระบบก่อนเลือกโหมดพลังงาน; <code>uA</code> ควรมาจาก <code>PWR_EstimateStandbyCurrent()</code></td>
 </tr>
 </tbody>
 </table>
 
 <div class="callout callout-warn">
     <strong>⚠️ PA0:</strong> PA0 <strong>ไม่ bonded</strong> ในแพ็กเกจ CH32V003 ใด ๆ — <code>PWR_EnableWakeupPin()</code> ใช้ไม่ได้จริง
+</div>
+</section>
+
+<section>
+<h2>ลำดับการเรียกใช้ฟังก์ชัน (Call Sequence)</h2>
+<div class="flowchart">
+    <pre class="mermaid">
+flowchart TD
+    A["ต้น main()"] --> B{"PWR_WasStandbyWakeup()"}
+    B -->|"true"| C["PWR_ClearStandbyFlag()<br>★ ต้องเคลียร์ทันที"]
+    B -->|"false"| D["ทำงานปกติ"]
+    C --> D
+    D --> E{"เลือกโหมดประหยัดไฟ"}
+    E -->|"ปลุกด้วยเวลา ง่าย"| F["PWR_Standby(timeout_ms)<br>ตั้ง AWU ให้อัตโนมัติ"]
+    E -->|"ปลุกด้วยเวลา คุม prescaler เอง"| G["PWR_ConfigureAWU(psc,win)<br>→ PWR_EnterStandbyMode(entry)"]
+    E -->|"ปลุกด้วย pin/interrupt"| H["PWR_StandbyUntilInterrupt()"]
+    F --> A
+    G --> A
+    H --> A
+    </pre>
+</div>
+<div class="callout callout-warn">
+    <strong>Standby ทำให้ main() เริ่มใหม่เสมอ:</strong> เพราะ RAM หายหมด โค้ดหลัง <code>PWR_Standby()</code>/<code>PWR_EnterStandbyMode()</code> จะไม่ถูกรันต่อ — ต้องเช็ค <code>PWR_WasStandbyWakeup()</code> ที่ <strong>ต้น</strong> <code>main()</code> เพื่อแยกว่ารอบนี้เป็นการเปิดเครื่องใหม่หรือตื่นจาก standby
 </div>
 </section>
 
@@ -331,6 +369,8 @@ int main(void) {
     <a href="onewire.html">Simple1Wire →</a>
 </nav>
 
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <script>hljs.highlightAll();</script>
 </body>

@@ -55,7 +55,7 @@
 <h2>ตารางอ้างอิงฟังก์ชัน</h2>
 <table>
 <thead>
-<tr><th>ฟังก์ชัน</th><th>พารามิเตอร์</th><th>คืนค่า</th><th>คำอธิบาย</th></tr>
+<tr><th>ฟังก์ชัน</th><th>พารามิเตอร์</th><th>คืนค่า</th><th>คำอธิบาย</th><th>ใช้ร่วมกับ</th></tr>
 </thead>
 <tbody>
 <tr>
@@ -63,42 +63,49 @@
     <td><code>timeout_ms</code>: uint32_t (1-32767)</td>
     <td><code>void</code></td>
     <td>ตั้ง timeout (ms) — เลือก prescaler ที่เหมาะสมให้อัตโนมัติ</td>
+    <td><strong>1 ใน 2 ทาง init ที่ใช้แทนกัน</strong> (SimpleInit ง่าย / Init คุมเอง) — เลือกทางเดียว; ตามด้วย <code>IWDG_Feed()</code> ใน loop หรือ <code>arduino_SetIWDGActive()</code>+yield() เสมอ</td>
 </tr>
 <tr>
     <td><code>IWDG_Feed()</code></td>
     <td>—</td>
     <td><code>void</code></td>
     <td>รีเซ็ต counter — หมาต้องให้อาหารก่อนหมดเวลา ไม่งั้นระบบรีเซ็ต</td>
+    <td>ต้องเรียกหลังหนึ่งใน <code>IWDG_SimpleInit()</code>/<code>IWDG_Init()</code> — เรียกถี่กว่า timeout ที่ตั้งไว้เสมอ; ไม่ต้องเรียกเองถ้าใช้ <code>arduino_SetIWDGActive()</code>+yield() แทน</td>
 </tr>
 <tr>
     <td><code>IWDG_Init(prescaler, reload)</code></td>
     <td><code>prescaler</code>: IWDG_PRESCALER_*<br><code>reload</code>: uint16_t (0-4095)</td>
     <td><code>void</code></td>
     <td>ตั้งค่า prescaler และ reload ด้วยตนเอง (อิสระเต็มที่)</td>
+    <td><strong>ใช้แทน <code>IWDG_SimpleInit()</code></strong> เมื่อต้องการคุม prescaler/reload ตรงๆ — ค่า <code>reload</code> ควรมาจาก <code>IWDG_CALC_RELOAD(prescaler, timeout_ms)</code> เพื่อให้ได้ timeout ตามต้องการ แทนที่จะเดาค่าเอง</td>
 </tr>
 <tr>
     <td><code>IWDG_IsBusy()</code></td>
     <td>—</td>
     <td><code>uint8_t</code></td>
     <td>กำลังอัปเดต register? (1=กำลังอัปเดต, 0=พร้อม)</td>
+    <td>เช็คก่อนเรียก <code>IWDG_Init()</code> ซ้ำหรือเปลี่ยนค่า prescaler/reload ขณะทำงาน</td>
 </tr>
 <tr>
     <td><code>IWDG_GetTimeout(prescaler, reload)</code></td>
     <td><code>prescaler</code>: IWDG_PRESCALER_*<br><code>reload</code>: uint16_t</td>
     <td><code>uint32_t</code> (ms)</td>
     <td>คำนวณ timeout จริงจาก prescaler + reload</td>
+    <td>ใช้ตรวจสอบย้อนกลับหลัง <code>IWDG_Init()</code> ว่าค่าที่ตั้งได้ timeout ตรงตามต้องการหรือไม่ — เป็นทิศทางกลับของ <code>IWDG_CALC_RELOAD()</code></td>
 </tr>
 <tr>
     <td><code>IWDG_WasResetCause()</code></td>
     <td>—</td>
     <td><code>uint8_t</code> (1/0)</td>
     <td>รีเซ็ตล่าสุดเกิดจาก IWDG หรือไม่?</td>
+    <td><strong>ควรเรียกที่ต้น <code>main()</code> ก่อน <code>IWDG_SimpleInit()</code>/<code>IWDG_Init()</code></strong> เพื่อตรวจสอบสาเหตุ reset รอบก่อน แล้วตามด้วย <code>IWDG_ClearResetFlag()</code> ถ้า true</td>
 </tr>
 <tr>
     <td><code>IWDG_ClearResetFlag()</code></td>
     <td>—</td>
     <td><code>void</code></td>
     <td>⚠️ เคลียร์<strong>ทุก</strong> reset flag (ไม่ใช่แค่ IWDG)</td>
+    <td>เรียกหลัง <code>IWDG_WasResetCause()</code> คืน true — ถ้าไม่เคลียร์ flag จะค้างเป็น true ในรอบถัดไปแม้ reset ครั้งใหม่ไม่ได้มาจาก IWDG</td>
 </tr>
 </tbody>
 </table>
@@ -111,20 +118,39 @@
 <section>
 <h2>Helper Macros</h2>
 <table>
-<thead><tr><th>Macro</th><th>พารามิเตอร์</th><th>คำอธิบาย</th></tr></thead>
+<thead><tr><th>Macro</th><th>พารามิเตอร์</th><th>คำอธิบาย</th><th>ใช้ร่วมกับ</th></tr></thead>
 <tbody>
 <tr>
     <td><code>IWDG_TIMEOUT_MS(prescaler, reload)</code></td>
     <td><code>prescaler</code>: IWDG_PRESCALER_*<br><code>reload</code>: uint16_t</td>
     <td>คำนวณ timeout เป็น ms (LSI=40kHz)</td>
+    <td>ทำหน้าที่เดียวกับ <code>IWDG_GetTimeout()</code> ในรูปแบบ macro — ใช้ตรวจสอบค่าก่อนส่งเข้า <code>IWDG_Init()</code></td>
 </tr>
 <tr>
-    <td><code>IWDG_CALC_RELOAD(timeout_ms, prescaler)</code></td>
-    <td><code>timeout_ms</code>: uint32_t<br><code>prescaler</code>: IWDG_PRESCALER_*</td>
+    <td><code>IWDG_CALC_RELOAD(prescaler, timeout_ms)</code></td>
+    <td><code>prescaler</code>: IWDG_PRESCALER_*<br><code>timeout_ms</code>: uint32_t</td>
     <td>คำนวณ reload value จาก timeout ที่ต้องการ</td>
+    <td><strong>ใช้ก่อนเรียก <code>IWDG_Init(prescaler, reload)</code></strong> เสมอเมื่อต้องการ timeout เฉพาะเจาะจง — ผลลัพธ์ส่งตรงเข้าพารามิเตอร์ <code>reload</code> ได้เลย (ดูตัวอย่าง "ตั้งค่าด้วยตนเอง" ด้านล่าง)</td>
 </tr>
 </tbody>
 </table>
+</section>
+
+<section>
+<h2>ลำดับการเรียกใช้ฟังก์ชัน (Call Sequence)</h2>
+<div class="flowchart">
+    <pre class="mermaid">
+flowchart TD
+    A["ต้น main()"] --> B["IWDG_WasResetCause()"]
+    B -->|"true"| C["IWDG_ClearResetFlag()"]
+    B -->|"false"| D["เลือก 1 ใน 2 ทาง init"]
+    C --> D
+    D -->|"ง่าย"| E["IWDG_SimpleInit(timeout_ms)"]
+    D -->|"คุม prescaler เอง"| F["IWDG_CALC_RELOAD(psc, timeout_ms)<br>→ IWDG_Init(psc, reload)"]
+    E --> G["loop: IWDG_Feed()<br>หรือ arduino_SetIWDGActive()+yield()"]
+    F --> G
+    </pre>
+</div>
 </section>
 
 <section>
@@ -209,7 +235,7 @@ int main(void) {
 
     IWDG_Init(IWDG_PRESCALER_64, 312);  // ~500ms
     // หรือคำนวณด้วย macro:
-    // uint16_t reload = IWDG_CALC_RELOAD(500, IWDG_PRESCALER_64);
+    // uint16_t reload = IWDG_CALC_RELOAD(64, 500);  // prescaler=64, timeout=500ms → 312
 
     while (1) {
         // ทำงาน...
@@ -223,6 +249,8 @@ int main(void) {
     <a href="wwdg.html">SimpleWWDG →</a>
 </nav>
 
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <script>hljs.highlightAll();</script>
 </body>

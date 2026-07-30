@@ -90,24 +90,27 @@
 <section>
     <h2>ตารางฟังก์ชัน</h2>
     <table>
-        <tr><th>ฟังก์ชัน</th><th>คืนค่า</th><th>คำอธิบาย</th></tr>
-        <tr><td><code>PWM_Init(channel, freq_hz)</code></td><td>void</td><td>เริ่ม PWM ที่ความถี่ที่กำหนด — duty=0%, ต้องเรียก <code>PWM_Start()</code> ต่อ</td></tr>
-        <tr><td><code>PWM_InitRemap(channel, freq_hz, remap)</code></td><td>void</td><td>เริ่ม PWM พร้อมกำหนด remap</td></tr>
-        <tr><td><code>PWM_Start(channel)</code></td><td>void</td><td>เริ่มเอาต์พุต PWM</td></tr>
-        <tr><td><code>PWM_Stop(channel)</code></td><td>void</td><td>หยุดเอาต์พุต — ขาเป็น LOW</td></tr>
-        <tr><td><code>PWM_SetDutyCycle(channel, percent)</code></td><td>void</td><td>ตั้ง Duty Cycle 0-100%</td></tr>
-        <tr><td><code>PWM_SetDutyCycleRaw(channel, raw)</code></td><td>void</td><td>ตั้ง Duty Cycle แบบ raw (0 ถึง period)</td></tr>
-        <tr><td><code>PWM_SetFrequency(channel, freq_hz)</code></td><td>void</td><td>เปลี่ยนความถี่ — รีเซ็ต duty=0, เปลี่ยนทุกช่องบน timer เดียวกัน</td></tr>
-        <tr><td><code>PWM_Write(channel, value)</code></td><td>void</td><td>Arduino-style 0-255 — auto-init 1kHz ถ้ายังไม่ init</td></tr>
-        <tr><td><code>PWM_SetRemap(channel, remap)</code></td><td>void</td><td>ตั้ง remap ล่วงหน้าก่อนเริ่ม PWM</td></tr>
-        <tr><td><code>PWM_GetPeriod(channel)</code></td><td>uint16_t</td><td>อ่านค่า period ปัจจุบัน</td></tr>
-        <tr><td><code>PWM_GetDutyCycle(channel)</code></td><td>uint8_t</td><td>อ่าน Duty Cycle เป็น %</td></tr>
-        <tr><td><code>PWM_GetDutyCycleRaw(channel)</code></td><td>uint16_t</td><td>อ่าน Duty Cycle แบบ raw</td></tr>
-        <tr><td><code>PWM_AdvancedInit(ch, prescaler, period, duty)</code></td><td>void</td><td>ตั้งค่า PWM เองทั้งหมด (ผู้เชี่ยวชาญ)</td></tr>
-        <tr><td><code>PWM_SetPolarity(channel, inverted)</code></td><td>void</td><td>กลับขั้ว — <code>1</code> = inverted, <code>0</code> = ปกติ</td></tr>
-        <tr><td><code>PWM_PERCENT_TO_RAW(percent, period)</code></td><td>uint16_t</td><td>มาโคร — แปลง % เป็น raw</td></tr>
-        <tr><td><code>PWM_RAW_TO_PERCENT(raw, period)</code></td><td>uint8_t</td><td>มาโคร — แปลง raw เป็น %</td></tr>
+        <tr><th>ฟังก์ชัน</th><th>คืนค่า</th><th>คำอธิบาย</th><th>ใช้ร่วมกับ</th></tr>
+        <tr><td><code>PWM_Init(channel, freq_hz)</code></td><td>void</td><td>เริ่ม PWM ที่ความถี่ที่กำหนด — duty=0%</td><td><strong>เรียก <code>PWM_Start()</code> ให้อัตโนมัติภายในอยู่แล้ว</strong> (auto-start) — ไม่จำเป็นต้องเรียก <code>PWM_Start()</code> เองซ้ำ (เรียกซ้ำได้แต่ไม่มีผลเพิ่มเติม); ตามด้วย <code>PWM_SetDutyCycle()</code> เพื่อให้มีสัญญาณออกจริง (duty เริ่มที่ 0%)</td></tr>
+        <tr><td><code>PWM_InitRemap(channel, freq_hz, remap)</code></td><td>void</td><td>เริ่ม PWM พร้อมกำหนด remap</td><td>ใช้แทน <code>PWM_Init()</code> เมื่อต้องเลือก remap เอง — <strong>auto-start เช่นเดียวกับ <code>PWM_Init()</code></strong>; ควรเรียก <code>PWM_SetRemap()</code>/ตั้ง remap ก่อนถ้าจะใช้ผ่าน <code>PWM_Write()</code>/<code>analogWrite()</code> แทน</td></tr>
+        <tr><td><code>PWM_Start(channel)</code></td><td>void</td><td>เริ่มเอาต์พุต PWM</td><td>ปกติไม่ต้องเรียกเอง เพราะ <code>PWM_Init()</code>/<code>InitRemap()</code> เรียกให้แล้ว — ใช้เรียกอีกครั้งเฉพาะหลัง <code>PWM_Stop()</code> เพื่อเปิดเอาต์พุตกลับมา</td></tr>
+        <tr><td><code>PWM_Stop(channel)</code></td><td>void</td><td>หยุดเอาต์พุต — ขาเป็น LOW</td><td>เรียก <code>PWM_Start()</code> เพื่อเปิดกลับมา — ค่า duty/frequency ที่ตั้งไว้ยังคงอยู่ ไม่ต้องตั้งใหม่</td></tr>
+        <tr><td><code>PWM_SetDutyCycle(channel, percent)</code></td><td>void</td><td>ตั้ง Duty Cycle 0-100%</td><td>ต้องเรียกหลัง <code>PWM_Init()</code>/<code>InitRemap()</code> — เรียกซ้ำได้ตลอดเวลาที่ทำงานอยู่ (ไม่ต้อง Stop/Start ใหม่)</td></tr>
+        <tr><td><code>PWM_SetDutyCycleRaw(channel, raw)</code></td><td>void</td><td>ตั้ง Duty Cycle แบบ raw (0 ถึง period)</td><td>ใช้แทน <code>PWM_SetDutyCycle()</code> เมื่อต้องการความละเอียดกว่า % — ค่า <code>raw</code> สูงสุดต้องไม่เกิน <code>PWM_GetPeriod()</code></td></tr>
+        <tr><td><code>PWM_SetFrequency(channel, freq_hz)</code></td><td>void</td><td>เปลี่ยนความถี่ — รีเซ็ต duty=0, เปลี่ยนทุกช่องบน timer เดียวกัน</td><td><strong>ต้องเรียก <code>PWM_SetDutyCycle()</code> ใหม่หลังจากนี้เสมอ</strong> เพราะ duty ถูกรีเซ็ตเป็น 0 — กระทบทุกช่องที่แชร์ timer เดียวกัน ไม่ใช่แค่ channel ที่ระบุ</td></tr>
+        <tr><td><code>PWM_Write(channel, value)</code></td><td>void</td><td>Arduino-style 0-255 — auto-init 1kHz ถ้ายังไม่ init</td><td><strong>ทางลัดรวม <code>PWM_Init()</code>+<code>PWM_SetDutyCycle()</code></strong> — auto-init และ auto-start ให้ในครั้งแรกที่เรียก ไม่ต้องเรียก <code>PWM_Init()</code>/<code>PWM_Start()</code> เอง; <code>analogWrite()</code> เป็น alias เดียวกัน</td></tr>
+        <tr><td><code>PWM_SetRemap(channel, remap)</code></td><td>void</td><td>ตั้ง remap ล่วงหน้าก่อนเริ่ม PWM</td><td><strong>ต้องเรียกก่อน <code>PWM_Write()</code>/<code>analogWrite()</code> ครั้งแรก</strong> ถ้าต้องการ remap ผ่านเส้นทาง auto-init (ฟังก์ชันนี้แค่ "จำ" remap ไว้ใช้ตอน auto-init เท่านั้น ไม่ได้ตั้งค่าฮาร์ดแวร์ทันที)</td></tr>
+        <tr><td><code>PWM_GetPeriod(channel)</code></td><td>uint16_t</td><td>อ่านค่า period ปัจจุบัน</td><td>ใช้เป็นค่าอ้างอิงสูงสุดให้ <code>PWM_SetDutyCycleRaw()</code>/<code>PWM_RAW_TO_PERCENT()</code></td></tr>
+        <tr><td><code>PWM_GetDutyCycle(channel)</code></td><td>uint8_t</td><td>อ่าน Duty Cycle เป็น %</td><td>อ่านค่าที่ตั้งจาก <code>PWM_SetDutyCycle()</code>/<code>SetDutyCycleRaw()</code> ล่าสุด — ใช้ debug</td></tr>
+        <tr><td><code>PWM_GetDutyCycleRaw(channel)</code></td><td>uint16_t</td><td>อ่าน Duty Cycle แบบ raw</td><td>เช่นเดียวกับด้านบนแต่คืนหน่วย raw — คู่กับ <code>PWM_GetPeriod()</code> เพื่อคำนวณ % เอง</td></tr>
+        <tr><td><code>PWM_AdvancedInit(ch, prescaler, period, duty)</code></td><td>void</td><td>ตั้งค่า PWM เองทั้งหมด (ผู้เชี่ยวชาญ)</td><td><strong>ใช้แทน <code>PWM_Init()</code></strong> ไม่ใช่ใช้ร่วมกัน — ตรวจสอบว่า auto-start เหมือนกันหรือไม่จากพฤติกรรมจริงก่อนตัด <code>PWM_Start()</code> ทิ้ง</td></tr>
+        <tr><td><code>PWM_SetPolarity(channel, inverted)</code></td><td>void</td><td>กลับขั้ว — <code>1</code> = inverted, <code>0</code> = ปกติ</td><td>เรียกได้หลัง <code>PWM_Init()</code> เมื่อใดก็ได้ — ไม่กระทบ duty/frequency ที่ตั้งไว้</td></tr>
+        <tr><td><code>PWM_PERCENT_TO_RAW(percent, period)</code></td><td>uint16_t</td><td>มาโคร — แปลง % เป็น raw</td><td>ใช้ <code>period</code> จาก <code>PWM_GetPeriod()</code> — ผลลัพธ์ส่งเข้า <code>PWM_SetDutyCycleRaw()</code> ได้ตรง</td></tr>
+        <tr><td><code>PWM_RAW_TO_PERCENT(raw, period)</code></td><td>uint8_t</td><td>มาโคร — แปลง raw เป็น %</td><td>ทิศทางกลับของด้านบน — <code>raw</code> มาจาก <code>PWM_GetDutyCycleRaw()</code></td></tr>
     </table>
+    <div class="callout callout-note">
+        <strong>PWM_Init/InitRemap เริ่มเอาต์พุตให้อัตโนมัติ:</strong> ไม่เหมือน <code>TIM_SimpleInit()</code>/<code>WWDG_Init()</code> ที่ต้องเรียก Start เอง — <code>PWM_Init()</code> เรียก <code>PWM_Start()</code> ให้ภายในเสร็จแล้ว โค้ดตัวอย่างที่เรียก <code>PWM_Start()</code> ซ้ำหลัง <code>PWM_Init()</code> จึงไม่ผิด เพียงแค่ไม่จำเป็น
+    </div>
 </section>
 
 <section>
@@ -138,7 +141,7 @@ PWM_SetFrequency(PWM1_CH1, 50);</code></pre>
     <h2>ข้อผิดพลาดที่พบบ่อย</h2>
     <table>
         <tr><th>อาการ</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
-        <tr><td>PWM ไม่มีเอาต์พุต</td><td>ลืมเรียก <code>PWM_Start()</code></td><td>เรียก <code>PWM_Start(channel)</code> หลัง <code>PWM_Init()</code></td></tr>
+        <tr><td>PWM ไม่มีเอาต์พุต</td><td><code>PWM_Init()</code> auto-start ให้แล้ว แต่ duty ยังเป็น 0% หรือถูก <code>PWM_Stop()</code> ไปก่อนหน้า</td><td>เรียก <code>PWM_SetDutyCycle(channel, ...)</code> ให้มากกว่า 0 หรือเรียก <code>PWM_Start(channel)</code> ถ้าเคย Stop ไปแล้ว</td></tr>
         <tr><td>PWM_Init ไม่ทำงาน</td><td>TIM1/TIM2 ถูกใช้แล้ว</td><td>Timer Ownership Guard return ทันที — ตรวจสอบว่า timer ถูกใช้ที่อื่นหรือไม่</td></tr>
         <tr><td>บางช่องใช้ไม่ได้ใน SOP-8</td><td>ขาไม่มีใน SOP-8</td><td>ใช้เฉพาะ PWM1_CH2 (PA1) และ PWM1_CH4 (PC4)</td></tr>
         <tr><td>เปลี่ยนความถี่แล้ว duty หาย</td><td>ความถี่รีเซ็ต duty เป็น 0</td><td>เรียก <code>PWM_SetDutyCycle()</code> ใหม่หลังเปลี่ยนความถี่</td></tr>

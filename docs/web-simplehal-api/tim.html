@@ -63,22 +63,37 @@
 <section>
     <h2>ตารางฟังก์ชัน</h2>
     <table>
-        <tr><th>ฟังก์ชัน</th><th>คืนค่า</th><th>คำอธิบาย</th></tr>
-        <tr><td><code>TIM_SimpleInit(timer, freq_hz)</code></td><td>void</td><td>เริ่ม timer ที่ความถี่ที่กำหนด — ต้องเรียก <code>TIM_Start()</code> ต่อ</td></tr>
-        <tr><td><code>TIM_Start(timer)</code></td><td>void</td><td>เริ่มนับ</td></tr>
-        <tr><td><code>TIM_Stop(timer)</code></td><td>void</td><td>หยุดนับ</td></tr>
-        <tr><td><code>TIM_SetFrequency(timer, freq_hz)</code></td><td>void</td><td>เปลี่ยนความถี่ (คำนวณ prescaler + period ใหม่)</td></tr>
-        <tr><td><code>Simple_TIM_GetCounter(timer)</code></td><td>uint16_t</td><td>อ่านค่า counter ปัจจุบัน</td></tr>
-        <tr><td><code>Simple_TIM_SetCounter(timer, value)</code></td><td>void</td><td>ตั้งค่า counter</td></tr>
-        <tr><td><code>TIM_GetPeriod(timer)</code></td><td>uint16_t</td><td>อ่านค่า period</td></tr>
-        <tr><td><code>TIM_AttachInterrupt(timer, callback)</code></td><td>void</td><td>ติด interrupt callback — callback ห้ามใช้ delay</td></tr>
-        <tr><td><code>TIM_DetachInterrupt(timer)</code></td><td>void</td><td>ยกเลิก interrupt</td></tr>
-        <tr><td><code>TIM_AdvancedInit(timer, psc, period, mode)</code></td><td>void</td><td>ตั้งค่า timer เองทั้งหมด (ผู้เชี่ยวชาญ)</td></tr>
-        <tr><td><code>TIM_SetPrescaler(timer, psc)</code></td><td>void</td><td>ตั้งค่า prescaler เอง</td></tr>
-        <tr><td><code>TIM_GetPrescaler(timer)</code></td><td>uint16_t</td><td>อ่านค่า prescaler</td></tr>
-        <tr><td><code>TIM_SetMode(timer, mode)</code></td><td>void</td><td>ตั้งค่า timer mode</td></tr>
-        <tr><td><code>TIM_GenerateUpdate(timer)</code></td><td>void</td><td>สร้าง update event (บังคับ reload ค่า)</td></tr>
+        <tr><th>ฟังก์ชัน</th><th>คืนค่า</th><th>คำอธิบาย</th><th>ใช้ร่วมกับ</th></tr>
+        <tr><td><code>TIM_SimpleInit(timer, freq_hz)</code></td><td>void</td><td>เริ่ม timer ที่ความถี่ที่กำหนด — ต้องเรียก <code>TIM_Start()</code> ต่อ</td><td><strong>ต้องเรียกก่อนฟังก์ชัน TIM_* อื่นทุกตัวของ timer นั้น</strong> (เช่น TIM1 หรือ TIM2 แยกกัน) — ตั้ง owner guard ให้ timer นี้ทันที</td></tr>
+        <tr><td><code>TIM_Start(timer)</code></td><td>void</td><td>เริ่มนับ</td><td>เรียกหลัง <code>TIM_SimpleInit()</code>/<code>TIM_AdvancedInit()</code> — ถ้าจะใช้ interrupt ให้เรียก <code>TIM_AttachInterrupt()</code> ก่อน <code>TIM_Start()</code> เพื่อไม่พลาด tick แรก</td></tr>
+        <tr><td><code>TIM_Stop(timer)</code></td><td>void</td><td>หยุดนับ</td><td>เรียก <code>TIM_Start()</code> ซ้ำเพื่อนับต่อ — counter ค้างที่ค่าเดิม (ใช้ <code>Simple_TIM_SetCounter()</code> รีเซ็ตถ้าต้องการ)</td></tr>
+        <tr><td><code>TIM_SetFrequency(timer, freq_hz)</code></td><td>void</td><td>เปลี่ยนความถี่ (คำนวณ prescaler + period ใหม่)</td><td>เรียกได้ทั้งก่อน/หลัง <code>TIM_Start()</code> — ถ้า timer นี้แชร์กับ PWM (ดู Ownership Guard) การเปลี่ยนความถี่จะกระทบ PWM channel อื่นบน timer เดียวกันด้วย</td></tr>
+        <tr><td><code>Simple_TIM_GetCounter(timer)</code></td><td>uint16_t</td><td>อ่านค่า counter ปัจจุบัน</td><td>ใช้คู่กับ <code>TIM_GetPeriod()</code> เพื่อคำนวณเปอร์เซ็นต์ที่นับไปแล้ว</td></tr>
+        <tr><td><code>Simple_TIM_SetCounter(timer, value)</code></td><td>void</td><td>ตั้งค่า counter</td><td>เรียกหลัง <code>TIM_SimpleInit()</code> — ใช้รีเซ็ต/sync จุดเริ่มนับ ไม่กระทบ period ที่ตั้งไว้</td></tr>
+        <tr><td><code>TIM_GetPeriod(timer)</code></td><td>uint16_t</td><td>อ่านค่า period</td><td>ค่าที่ได้มาจาก <code>TIM_SimpleInit()</code>/<code>TIM_SetFrequency()</code> คำนวณไว้ — ใช้ debug ความถี่จริง</td></tr>
+        <tr><td><code>TIM_AttachInterrupt(timer, callback)</code></td><td>void</td><td>ติด interrupt callback — callback ห้ามใช้ delay</td><td><strong>ควรเรียกก่อน <code>TIM_Start()</code></strong> — ต้องเรียกหลัง <code>TIM_SimpleInit()</code>/<code>TIM_AdvancedInit()</code> เสมอ (timer ต้องถูก init ก่อนถึงจะติด callback ได้)</td></tr>
+        <tr><td><code>TIM_DetachInterrupt(timer)</code></td><td>void</td><td>ยกเลิก interrupt</td><td>เรียกได้ทุกเมื่อหลัง AttachInterrupt — timer ยังนับต่อได้ปกติ เพียงไม่เรียก callback อีก</td></tr>
+        <tr><td><code>TIM_AdvancedInit(timer, psc, period, mode)</code></td><td>void</td><td>ตั้งค่า timer เองทั้งหมด (ผู้เชี่ยวชาญ)</td><td><strong>ใช้แทน <code>TIM_SimpleInit()</code></strong> ไม่ใช่ใช้ร่วมกัน — เลือกทางใดทางหนึ่ง ตามด้วย <code>TIM_Start()</code> เหมือนกัน</td></tr>
+        <tr><td><code>TIM_SetPrescaler(timer, psc)</code></td><td>void</td><td>ตั้งค่า prescaler เอง</td><td>ใช้หลัง <code>TIM_AdvancedInit()</code> เท่านั้น — เปลี่ยนแล้วควรเรียก <code>TIM_GenerateUpdate()</code> เพื่อให้ค่ามีผลทันที</td></tr>
+        <tr><td><code>TIM_GetPrescaler(timer)</code></td><td>uint16_t</td><td>อ่านค่า prescaler</td><td>ใช้ debug คู่กับ <code>TIM_GetPeriod()</code> เพื่อคำนวณความถี่จริง</td></tr>
+        <tr><td><code>TIM_SetMode(timer, mode)</code></td><td>void</td><td>ตั้งค่า timer mode</td><td>ใช้หลัง <code>TIM_AdvancedInit()</code> — เปลี่ยนโหมดนับ (up/down/center-aligned)</td></tr>
+        <tr><td><code>TIM_GenerateUpdate(timer)</code></td><td>void</td><td>สร้าง update event (บังคับ reload ค่า)</td><td>เรียกหลัง <code>TIM_SetPrescaler()</code>/<code>TIM_SetMode()</code> เพื่อให้ค่าใหม่มีผลทันทีแทนที่จะรอรอบถัดไป</td></tr>
     </table>
+</section>
+
+<section>
+    <h2>ลำดับการเรียกใช้ฟังก์ชัน (Call Sequence)</h2>
+    <div class="flowchart">
+        <pre class="mermaid">
+flowchart LR
+    A["TIM_SimpleInit(timer, freq_hz)<br>หรือ TIM_AdvancedInit()"] --> B["TIM_AttachInterrupt(timer, cb)<br>★ ทำก่อน Start เพื่อไม่พลาด tick แรก"]
+    B --> C["TIM_Start(timer)"]
+    C --> D["ทำงานใน main loop<br>callback ทำงานเองใน ISR"]
+        </pre>
+    </div>
+    <div class="callout callout-warn">
+        <strong>เลือกเส้นทางเดียว:</strong> <code>TIM_SimpleInit()</code> กับ <code>TIM_AdvancedInit()</code> ตั้งค่า timer ตัวเดียวกัน — เรียกอย่างใดอย่างหนึ่งเท่านั้น ห้ามเรียกทั้งคู่กับ timer เดียวกัน
+    </div>
 </section>
 
 <section>
@@ -164,35 +179,38 @@ int main(void)
 <section>
     <h2>ตารางฟังก์ชัน Stopwatch</h2>
     <table>
-        <tr><th>ฟังก์ชัน</th><th>คืนค่า</th><th>คำอธิบาย</th></tr>
-        <tr><td><code>Stopwatch_Init()</code></td><td>void</td><td>เริ่มต้น stopwatch</td></tr>
-        <tr><td><code>Stopwatch_Start()</code></td><td>void</td><td>เริ่มนับ</td></tr>
-        <tr><td><code>Stopwatch_Stop()</code></td><td>void</td><td>หยุดนับ</td></tr>
-        <tr><td><code>Stopwatch_Reset()</code></td><td>void</td><td>รีเซ็ตเวลาเป็น 0</td></tr>
-        <tr><td><code>Stopwatch_GetTime(Time_t*)</code></td><td>void</td><td>อ่านเวลาใส่ struct</td></tr>
-        <tr><td><code>Stopwatch_GetTimeString(buf, format, mode)</code></td><td>void</td><td>อ่านเวลาเป็น string</td></tr>
-        <tr><td><code>Stopwatch_GetTotalSeconds()</code></td><td>uint32_t</td><td>อ่านจำนวนวินาทีทั้งหมด</td></tr>
-        <tr><td><code>Stopwatch_GetMilliseconds()</code></td><td>uint32_t</td><td>อ่านจำนวนมิลลิวินาทีทั้งหมด</td></tr>
-        <tr><td><code>Stopwatch_IsRunning()</code></td><td>uint8_t</td><td>1 = กำลังนับ, 0 = หยุด</td></tr>
+        <tr><th>ฟังก์ชัน</th><th>คืนค่า</th><th>คำอธิบาย</th><th>ใช้ร่วมกับ</th></tr>
+        <tr><td><code>Stopwatch_Init()</code></td><td>void</td><td>เริ่มต้น stopwatch</td><td><strong>ต้องเรียกก่อน <code>Stopwatch_Start()</code> และฟังก์ชัน Stopwatch_* อื่นทุกตัว</strong> — ใช้ TIM2 ภายใน (ดูคำเตือน TIM2 ขัดแย้งด้านบน)</td></tr>
+        <tr><td><code>Stopwatch_Start()</code></td><td>void</td><td>เริ่มนับ</td><td>เรียกหลัง <code>Stopwatch_Init()</code> เท่านั้น</td></tr>
+        <tr><td><code>Stopwatch_Stop()</code></td><td>void</td><td>หยุดนับ</td><td>เรียก <code>Stopwatch_Start()</code> ซ้ำเพื่อนับต่อจากค่าเดิม หรือ <code>Stopwatch_Reset()</code> ก่อนเพื่อเริ่มใหม่</td></tr>
+        <tr><td><code>Stopwatch_Reset()</code></td><td>void</td><td>รีเซ็ตเวลาเป็น 0</td><td>เรียกได้ทั้งตอนนับอยู่หรือหยุดแล้ว — ไม่กระทบสถานะ running/stopped</td></tr>
+        <tr><td><code>Stopwatch_GetTime(Time_t*)</code></td><td>void</td><td>อ่านเวลาใส่ struct</td><td>ผล <code>Time_t</code> ที่ได้ส่งต่อให้ <code>Time_ToString()</code>/<code>Time_ToSeconds()</code> แปลงรูปแบบต่อได้</td></tr>
+        <tr><td><code>Stopwatch_GetTimeString(buf, format, mode)</code></td><td>void</td><td>อ่านเวลาเป็น string</td><td><code>buf</code> ต้องจองขนาดตาม format ที่เลือก (ดูตาราง "ขนาด Buffer" ด้านบน) ก่อนเรียก</td></tr>
+        <tr><td><code>Stopwatch_GetTotalSeconds()</code></td><td>uint32_t</td><td>อ่านจำนวนวินาทีทั้งหมด</td><td>ทางลัดแทน <code>Stopwatch_GetTime()</code>+<code>Time_ToSeconds()</code> เมื่อต้องการแค่ตัวเลขวินาที</td></tr>
+        <tr><td><code>Stopwatch_GetMilliseconds()</code></td><td>uint32_t</td><td>อ่านจำนวนมิลลิวินาทีทั้งหมด</td><td>ใช้เมื่อต้องการความละเอียดกว่า <code>GetTotalSeconds()</code></td></tr>
+        <tr><td><code>Stopwatch_IsRunning()</code></td><td>uint8_t</td><td>1 = กำลังนับ, 0 = หยุด</td><td>เช็คก่อนเรียก <code>Stopwatch_Start()</code>/<code>Stop()</code> ซ้ำเพื่อเลี่ยงเรียกโดยไม่จำเป็น</td></tr>
     </table>
 </section>
 
 <section>
     <h2>ตารางฟังก์ชัน Countdown</h2>
     <table>
-        <tr><th>ฟังก์ชัน</th><th>คืนค่า</th><th>คำอธิบาย</th></tr>
-        <tr><td><code>Countdown_Init(h, m, s)</code></td><td>void</td><td>ตั้งเวลานับถอยหลัง (ชั่วโมง, นาที, วินาที)</td></tr>
-        <tr><td><code>Countdown_InitFromSeconds(s)</code></td><td>void</td><td>ตั้งเวลาจากจำนวนวินาที</td></tr>
-        <tr><td><code>Countdown_Start()</code></td><td>void</td><td>เริ่มนับถอยหลัง</td></tr>
-        <tr><td><code>Countdown_Stop()</code></td><td>void</td><td>หยุดนับ</td></tr>
-        <tr><td><code>Countdown_Reset()</code></td><td>void</td><td>รีเซ็ตกลับเป็นเวลาเริ่มต้น</td></tr>
-        <tr><td><code>Countdown_GetTime(Time_t*)</code></td><td>void</td><td>อ่านเวลาที่เหลือใส่ struct</td></tr>
-        <tr><td><code>Countdown_GetTimeString(buf, format, mode)</code></td><td>void</td><td>อ่านเวลาที่เหลือเป็น string</td></tr>
-        <tr><td><code>Countdown_IsFinished()</code></td><td>uint8_t</td><td>1 = หมดเวลาแล้ว</td></tr>
-        <tr><td><code>Countdown_SetAlarmCallback(callback)</code></td><td>void</td><td>ตั้ง callback เมื่อหมดเวลา</td></tr>
-        <tr><td><code>Countdown_GetRemainingSeconds()</code></td><td>uint32_t</td><td>อ่านวินาทีที่เหลือ</td></tr>
-        <tr><td><code>Countdown_IsRunning()</code></td><td>uint8_t</td><td>1 = กำลังนับถอยหลัง</td></tr>
+        <tr><th>ฟังก์ชัน</th><th>คืนค่า</th><th>คำอธิบาย</th><th>ใช้ร่วมกับ</th></tr>
+        <tr><td><code>Countdown_Init(h, m, s)</code></td><td>void</td><td>ตั้งเวลานับถอยหลัง (ชั่วโมง, นาที, วินาที)</td><td><strong>ต้องเรียกก่อน <code>Countdown_Start()</code></strong> — ใช้แทน <code>Countdown_InitFromSeconds()</code> เลือกอย่างใดอย่างหนึ่ง</td></tr>
+        <tr><td><code>Countdown_InitFromSeconds(s)</code></td><td>void</td><td>ตั้งเวลาจากจำนวนวินาที</td><td>ทางเลือกแทน <code>Countdown_Init(h,m,s)</code> เมื่อสะดวกคิดเป็นวินาทีมากกว่า</td></tr>
+        <tr><td><code>Countdown_Start()</code></td><td>void</td><td>เริ่มนับถอยหลัง</td><td>ถ้าจะใช้ alarm ต้องเรียก <code>Countdown_SetAlarmCallback()</code> <strong>ก่อน</strong> เรียกฟังก์ชันนี้ มิฉะนั้นอาจพลาด callback ตอนหมดเวลาพอดี</td></tr>
+        <tr><td><code>Countdown_Stop()</code></td><td>void</td><td>หยุดนับ</td><td>เรียก <code>Countdown_Start()</code> ซ้ำเพื่อนับต่อจากเวลาที่เหลือ</td></tr>
+        <tr><td><code>Countdown_Reset()</code></td><td>void</td><td>รีเซ็ตกลับเป็นเวลาเริ่มต้น</td><td>กลับไปที่ค่าจาก <code>Countdown_Init()</code>/<code>InitFromSeconds()</code> ล่าสุด ไม่ใช่ 0</td></tr>
+        <tr><td><code>Countdown_GetTime(Time_t*)</code></td><td>void</td><td>อ่านเวลาที่เหลือใส่ struct</td><td>ผลส่งต่อให้ <code>Time_ToString()</code>/<code>Time_ToSeconds()</code> ได้เหมือน Stopwatch</td></tr>
+        <tr><td><code>Countdown_GetTimeString(buf, format, mode)</code></td><td>void</td><td>อ่านเวลาที่เหลือเป็น string</td><td><code>buf</code> ต้องจองขนาดตาม format ที่เลือกเช่นเดียวกับ Stopwatch</td></tr>
+        <tr><td><code>Countdown_IsFinished()</code></td><td>uint8_t</td><td>1 = หมดเวลาแล้ว</td><td>ใช้เช็คใน main loop เป็นทางเลือกแทนการรอ <code>Countdown_SetAlarmCallback()</code></td></tr>
+        <tr><td><code>Countdown_SetAlarmCallback(callback)</code></td><td>void</td><td>ตั้ง callback เมื่อหมดเวลา</td><td><strong>ต้องเรียกก่อน <code>Countdown_Start()</code></strong> — callback ทำงานใน ISR ห้ามใช้ Delay เหมือน <code>TIM_AttachInterrupt()</code></td></tr>
+        <tr><td><code>Countdown_GetRemainingSeconds()</code></td><td>uint32_t</td><td>อ่านวินาทีที่เหลือ</td><td>ทางลัดแทน <code>Countdown_GetTime()</code>+<code>Time_ToSeconds()</code></td></tr>
+        <tr><td><code>Countdown_IsRunning()</code></td><td>uint8_t</td><td>1 = กำลังนับถอยหลัง</td><td>เช็คก่อนเรียก <code>Start()</code>/<code>Stop()</code> ซ้ำ</td></tr>
     </table>
+    <div class="callout callout-warn">
+        <strong>ลำดับที่พลาดบ่อย:</strong> <code>Countdown_Init/InitFromSeconds()</code> → <code>Countdown_SetAlarmCallback()</code> (ถ้าต้องการ) → <code>Countdown_Start()</code> — สลับให้ <code>SetAlarmCallback</code> อยู่หลัง <code>Start()</code> อาจทำให้พลาด callback รอบแรกถ้าตั้งเวลาไว้สั้นมาก
+    </div>
 </section>
 
 <section>
@@ -287,6 +305,6 @@ printf("Raw: %s\r\n", buf);</code></pre>
 </nav>
 
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
-<script>mermaid.initialize({startOnLoad:false,theme:'base'});</script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
 </html>

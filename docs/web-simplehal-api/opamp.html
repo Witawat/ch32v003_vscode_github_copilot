@@ -128,7 +128,7 @@
 <h2>ตารางอ้างอิงฟังก์ชัน</h2>
 <table>
 <thead>
-<tr><th>ฟังก์ชัน</th><th>พารามิเตอร์</th><th>คืนค่า</th><th>คำอธิบาย</th></tr>
+<tr><th>ฟังก์ชัน</th><th>พารามิเตอร์</th><th>คืนค่า</th><th>คำอธิบาย</th><th>ใช้ร่วมกับ</th></tr>
 </thead>
 <tbody>
 <tr>
@@ -136,99 +136,132 @@
     <td><code>mode</code>: OPAMP_VOLTAGE_FOLLOWER / OPAMP_COMPARATOR</td>
     <td><code>void</code></td>
     <td>เริ่ม OPAMP แบบง่าย — ใช้ channel 0 ทั้งคู่</td>
+    <td><strong>ทางลัดที่รวม Config+Enable ในตัว</strong> — เรียกครั้งเดียวจบ ไม่ต้องเรียก <code>OPAMP_Enable()</code> ซ้ำ; <strong>ห้ามผสมกับ <code>OPAMP_ConfigXxx()</code>/<code>OPAMP_Init()</code></strong> เลือกใช้ทางใดทางหนึ่งเท่านั้น</td>
 </tr>
 <tr>
     <td><code>OPAMP_Enable()</code></td>
     <td>—</td>
     <td><code>void</code></td>
     <td>เปิด OPAMP</td>
+    <td><strong>ต้องเรียกหลัง <code>OPAMP_ConfigXxx()</code> เสมอ</strong> — Config อย่างเดียวไม่เพียงพอ output จะยังไม่ออกจนกว่าจะ Enable (ไม่จำเป็นถ้าใช้ <code>OPAMP_SimpleInit()</code> ซึ่ง enable ให้แล้ว)</td>
 </tr>
 <tr>
     <td><code>OPAMP_Disable()</code></td>
     <td>—</td>
     <td><code>void</code></td>
     <td>ปิด OPAMP (ประหยัดพลังงาน)</td>
+    <td>เรียกได้ทุกเมื่อหลัง Enable — เรียก <code>OPAMP_ConfigXxx()</code>+<code>Enable()</code> ใหม่เพื่อกลับมาใช้งานอีกครั้ง</td>
 </tr>
 <tr>
     <td><code>OPAMP_SetMode(mode)</code></td>
     <td><code>mode</code>: OPAMP_*</td>
     <td><code>void</code></td>
     <td>เปลี่ยนโหมดขณะทำงาน</td>
+    <td>ใช้แทน <code>OPAMP_ConfigXxx()</code> เมื่อ channel เดิมอยู่แล้วแต่ต้องการเปลี่ยนแค่โหมด — ไม่ต้องเรียก Enable ซ้ำถ้า enable อยู่แล้ว</td>
 </tr>
 <tr>
     <td><code>OPAMP_Init(pos_ch, neg_ch)</code></td>
     <td><code>pos_ch</code>: OPAMP_CHP0/OPAMP_CHP1<br><code>neg_ch</code>: OPAMP_CHN0/OPAMP_CHN1</td>
     <td><code>void</code></td>
     <td>เริ่ม OPAMP + เลือก channel เอง</td>
+    <td>ใช้แทน <code>OPAMP_SimpleInit()</code> เมื่อต้องเลือก channel เอง — ยังต้องเรียก <code>OPAMP_ConfigXxx()</code> เพื่อกำหนดโหมด แล้วตามด้วย <code>OPAMP_Enable()</code></td>
 </tr>
 <tr>
     <td><code>OPAMP_ConfigVoltageFollower(pos)</code></td>
     <td><code>pos</code>: OPAMP_CHP0/OPAMP_CHP1</td>
     <td><code>void</code></td>
     <td>ตั้งโหมด voltage follower</td>
+    <td><strong>ต้องตามด้วย <code>OPAMP_Enable()</code></strong> เสมอ — ตั้งค่าอย่างเดียวยังไม่ทำงาน</td>
 </tr>
 <tr>
     <td><code>OPAMP_ConfigNonInverting(pos, neg)</code></td>
     <td><code>pos</code>: OPAMP_CHP*<br><code>neg</code>: OPAMP_CHN*</td>
     <td><code>void</code></td>
     <td>ตั้งโหมด non-inverting</td>
+    <td><strong>ต้องตามด้วย <code>OPAMP_Enable()</code></strong> — และต้องต่อ R1/R2 จริงบนบอร์ดคู่กับค่าที่คำนวณจาก <code>OPAMP_CalculateGainNonInv()</code></td>
 </tr>
 <tr>
     <td><code>OPAMP_ConfigInverting(pos, neg)</code></td>
     <td><code>pos</code>: OPAMP_CHP*<br><code>neg</code>: OPAMP_CHN*</td>
     <td><code>void</code></td>
     <td>ตั้งโหมด inverting</td>
+    <td><strong>ต้องตามด้วย <code>OPAMP_Enable()</code></strong> — คู่กับ R1/R2 จริงตามค่าจาก <code>OPAMP_CalculateGainInv()</code></td>
 </tr>
 <tr>
     <td><code>OPAMP_ConfigComparator(pos, neg)</code></td>
     <td><code>pos</code>: OPAMP_CHP*<br><code>neg</code>: OPAMP_CHN*</td>
     <td><code>void</code></td>
     <td>ตั้งโหมด comparator</td>
+    <td><strong>ต้องตามด้วย <code>OPAMP_Enable()</code></strong> — ไม่ต้องต่อ R ภายนอก (ต่างจาก NonInverting/Inverting)</td>
 </tr>
 <tr>
     <td><code>OPAMP_SetChannels(pos, neg)</code></td>
     <td><code>pos</code>: OPAMP_CHP*<br><code>neg</code>: OPAMP_CHN*</td>
     <td><code>void</code></td>
     <td>เปลี่ยน channel โดยไม่เปลี่ยนโหมด</td>
+    <td>ใช้หลังเคย Config+Enable ไปแล้ว เมื่อต้องการสลับ input channel เท่านั้น</td>
 </tr>
 <tr>
     <td><code>OPAMP_CalculateGainNonInv(r1, r2)</code></td>
     <td><code>r1</code>, <code>r2</code>: R ภายนอก (ohm)</td>
     <td><code>float</code></td>
     <td>คำนวณ gain = 1 + R1/R2</td>
+    <td><strong>เป็น calculator ล้วนๆ ไม่ยุ่งกับฮาร์ดแวร์</strong> — ใช้ตรวจสอบ gain จาก R ที่ต่อจริงบนบอร์ดเท่านั้น ไม่ได้ตั้งค่าอะไรให้ OPAMP (ต้องต่อ R จริงเองคู่กับ <code>OPAMP_ConfigNonInverting()</code>)</td>
 </tr>
 <tr>
     <td><code>OPAMP_CalculateGainInv(r1, r2)</code></td>
     <td><code>r1</code>, <code>r2</code>: R ภายนอก (ohm)</td>
     <td><code>float</code></td>
     <td>คำนวณ gain = -(R2/R1)</td>
+    <td>calculator ล้วนๆ เช่นกัน — คู่กับ <code>OPAMP_ConfigInverting()</code> + R จริงบนบอร์ด</td>
 </tr>
 <tr>
     <td><code>OPAMP_CalculateR2NonInv(r1, gain)</code></td>
     <td><code>r1</code>: ohm, <code>gain</code>: >1</td>
     <td><code>uint32_t</code></td>
     <td>คำนวณ R2 จาก R1 และ gain ที่ต้องการ</td>
+    <td>ใช้ตอน<strong>ออกแบบวงจรก่อนบัดกรี</strong> — ผลลัพธ์คือค่า R2 ที่ต้องไปหาซื้อ/ต่อจริง ไม่ใช่ค่าที่ส่งเข้าฟังก์ชันไหนต่อ</td>
 </tr>
 <tr>
     <td><code>OPAMP_CalculateR2Inv(r1, gain)</code></td>
     <td><code>r1</code>: ohm, <code>gain</code>: magnitude</td>
     <td><code>uint32_t</code></td>
     <td>คำนวณ R2 จาก R1 และ gain magnitude</td>
+    <td>เช่นเดียวกับด้านบน แต่สำหรับวงจร inverting</td>
 </tr>
 <tr>
     <td><code>OPAMP_IsEnabled()</code></td>
     <td>—</td>
     <td><code>uint8_t</code> (1/0)</td>
     <td>ตรวจสอบ OPAMP เปิดอยู่หรือไม่</td>
+    <td>เรียกได้ทุกเมื่อ — ใช้เช็คก่อนเรียก <code>OPAMP_Disable()</code>/<code>Enable()</code> ซ้ำ</td>
 </tr>
 <tr>
     <td><code>OPAMP_GetConfig()</code></td>
     <td>—</td>
     <td><code>uint32_t</code></td>
     <td>อ่านค่า configuration register ปัจจุบัน</td>
+    <td>สำหรับ debug — เรียกได้หลัง Config/Init แล้ว</td>
 </tr>
 </tbody>
 </table>
+</section>
+
+<section>
+<h2>ลำดับการเรียกใช้ฟังก์ชัน (Call Sequence)</h2>
+<div class="flowchart">
+    <pre class="mermaid">
+flowchart TD
+    A["เลือกเส้นทาง"] -->|"ง่าย: channel 0 พอ"| B["OPAMP_SimpleInit(mode)<br>Config+Enable ในตัว — จบ"]
+    A -->|"ต้องเลือก channel เอง"| C["OPAMP_Init(pos, neg)"]
+    C --> D["OPAMP_ConfigXxx(pos, neg)<br>Follower/NonInv/Inv/Comparator"]
+    D --> E["OPAMP_Enable()<br>★ ต้องเรียกก่อน output จะออก"]
+    E --> F["analogRead(ADC_OPAMP)<br>อ่านผลผ่าน ADC"]
+    </pre>
+</div>
+<div class="callout callout-warn">
+    <strong>ห้ามผสมสองเส้นทาง:</strong> เลือกใช้ <code>OPAMP_SimpleInit()</code> (ง่าย) <strong>หรือ</strong> <code>OPAMP_Init()</code>+<code>OPAMP_ConfigXxx()</code>+<code>OPAMP_Enable()</code> (กำหนด channel เอง) อย่างใดอย่างหนึ่งเท่านั้น — <strong>ทุกครั้งที่เรียก <code>OPAMP_ConfigXxx()</code> ต้องตามด้วย <code>OPAMP_Enable()</code></strong> มิฉะนั้น output จะยังไม่ทำงานแม้ config ถูกต้องแล้ว
+</div>
 </section>
 
 <section>
@@ -329,6 +362,8 @@ int main(void) {
     <a href="pwr.html">SimplePWR →</a>
 </nav>
 
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <script>hljs.highlightAll();</script>
 </body>

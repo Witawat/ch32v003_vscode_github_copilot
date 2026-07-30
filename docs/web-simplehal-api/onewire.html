@@ -90,7 +90,7 @@
 <h2>ตารางอ้างอิงฟังก์ชัน</h2>
 <table>
 <thead>
-<tr><th>ฟังก์ชัน</th><th>พารามิเตอร์</th><th>คืนค่า</th><th>คำอธิบาย</th></tr>
+<tr><th>ฟังก์ชัน</th><th>พารามิเตอร์</th><th>คืนค่า</th><th>คำอธิบาย</th><th>ใช้ร่วมกับ</th></tr>
 </thead>
 <tbody>
 <tr>
@@ -98,123 +98,172 @@
     <td><code>pin</code>: GPIO pin</td>
     <td><code>OneWire_Bus*</code> / NULL</td>
     <td>สร้าง bus — NULL ถ้าเต็ม (max 4)</td>
+    <td><strong>ต้องเรียกก่อนฟังก์ชัน 1-Wire อื่นทุกตัว</strong> — ผลลัพธ์ <code>bus</code> ต้องส่งเข้าทุกฟังก์ชันที่ตามมา</td>
 </tr>
 <tr>
     <td><code>OneWire_Reset(bus)</code></td>
     <td><code>bus</code>: OneWire_Bus*</td>
     <td><code>bool</code></td>
     <td>Reset + detect presence pulse</td>
+    <td><strong>ต้องเรียกก่อน ROM command ทุกครั้ง</strong> (SkipROM/MatchROM/ReadROM) — คืน false = ไม่มีอุปกรณ์ตอบสนอง อย่าเรียกฟังก์ชันถัดไปถ้า false</td>
 </tr>
 <tr>
     <td><code>OneWire_WriteBit(bus, bit)</code></td>
     <td><code>bus</code>: OneWire_Bus*<br><code>bit</code>: 0/1</td>
     <td><code>void</code></td>
     <td>เขียน 1 bit — low-level</td>
+    <td>ใช้เฉพาะเมื่อเขียน custom protocol เอง ปกติใช้ <code>WriteByte/WriteBytes</code> แทน</td>
 </tr>
 <tr>
     <td><code>OneWire_ReadBit(bus)</code></td>
     <td><code>bus</code>: OneWire_Bus*</td>
     <td><code>uint8_t</code> (0/1)</td>
     <td>อ่าน 1 bit — low-level</td>
+    <td>ใช้ภายใน <code>OneWire_Search()</code> เอง — ผู้ใช้ทั่วไปไม่ต้องเรียกตรง</td>
 </tr>
 <tr>
     <td><code>OneWire_WriteByte(bus, data)</code></td>
     <td><code>bus</code>: OneWire_Bus*<br><code>data</code>: uint8_t</td>
     <td><code>void</code></td>
     <td>เขียน 1 byte</td>
+    <td>ต้องเรียกหลัง <code>Reset()</code> + ROM command (SkipROM/MatchROM) เสมอ — ใช้ส่ง function command เช่น <code>0x44</code> (Convert T)</td>
 </tr>
 <tr>
     <td><code>OneWire_ReadByte(bus)</code></td>
     <td><code>bus</code>: OneWire_Bus*</td>
     <td><code>uint8_t</code></td>
     <td>อ่าน 1 byte</td>
+    <td>ต้องเรียกหลัง <code>Reset()</code> + ROM command + <code>WriteByte()</code> (ส่ง read command ก่อน เช่น <code>0xBE</code>)</td>
 </tr>
 <tr>
     <td><code>OneWire_WriteBytes(bus, data, len)</code></td>
     <td><code>bus</code>: OneWire_Bus*<br><code>data</code>: uint8_t*<br><code>len</code>: uint16_t</td>
     <td><code>void</code></td>
     <td>เขียนหลาย byte</td>
+    <td>ลำดับเดียวกับ <code>WriteByte()</code> แต่ส่งทีเดียวหลายไบต์</td>
 </tr>
 <tr>
     <td><code>OneWire_ReadBytes(bus, data, len)</code></td>
     <td><code>bus</code>: OneWire_Bus*<br><code>data</code>: uint8_t*<br><code>len</code>: uint16_t</td>
     <td><code>void</code></td>
     <td>อ่านหลาย byte</td>
+    <td>ผล data ที่ได้ควรส่งต่อให้ <code>OneWire_VerifyCRC(data, len)</code> ตรวจก่อนใช้งานเสมอ</td>
 </tr>
 <tr>
     <td><code>OneWire_SkipROM(bus)</code></td>
     <td><code>bus</code>: OneWire_Bus*</td>
     <td><code>void</code></td>
     <td>ข้าม ROM — ใช้ได้กรณีอุปกรณ์ตัวเดียวบนบัส</td>
+    <td>ต้องเรียกหลัง <code>Reset()</code> ทันที — ตามด้วย <code>WriteByte()</code> ส่ง function command; <strong>ห้ามใช้ถ้ามีหลายอุปกรณ์บนบัส</strong> (ใช้ <code>MatchROM</code> แทน)</td>
 </tr>
 <tr>
     <td><code>OneWire_ReadROM(bus, rom)</code></td>
     <td><code>bus</code>: OneWire_Bus*<br><code>rom</code>: uint8_t[8]</td>
     <td><code>bool</code></td>
     <td>อ่าน ROM — ใช้ได้เมื่อมีอุปกรณ์<strong>ตัวเดียว</strong>เท่านั้น</td>
+    <td>ต้องเรียกหลัง <code>Reset()</code> ทันที (แทนที่ SkipROM/MatchROM) — ต่างจาก <code>GetAddress()</code> ตรงที่นี่คืออ่านจากฮาร์ดแวร์จริง ไม่ใช่คัดลอกจาก search state</td>
 </tr>
 <tr>
     <td><code>OneWire_MatchROM(bus, rom)</code></td>
     <td><code>bus</code>: OneWire_Bus*<br><code>rom</code>: uint8_t[8]</td>
     <td><code>void</code></td>
     <td>เลือกอุปกรณ์ตาม ROM address</td>
+    <td>ต้องเรียกหลัง <code>Reset()</code> ทันที — <code>rom</code> ควรมาจาก <code>OneWire_Search()</code>+<code>GetAddress()</code> ก่อนหน้า; ตามด้วย <code>WriteByte()</code></td>
 </tr>
 <tr>
     <td><code>OneWire_Select(bus, rom)</code></td>
     <td><code>bus</code>: OneWire_Bus*<br><code>rom</code>: uint8_t[8]</td>
     <td><code>bool</code></td>
     <td>Reset + MatchROM — เลือกอุปกรณ์ในขั้นตอนเดียว</td>
+    <td><strong>ทางลัดของ <code>OneWire_Reset(bus)</code> + <code>OneWire_MatchROM(bus, rom)</code> รวมกัน</strong> — ใช้แทน 2 บรรทัดนั้นได้เลยเมื่อรู้ ROM แล้ว</td>
 </tr>
 <tr>
     <td><code>OneWire_ResetSearch(bus)</code></td>
     <td><code>bus</code>: OneWire_Bus*</td>
     <td><code>void</code></td>
     <td>รีเซ็ตสถานะ search — เริ่มค้นหาใหม่</td>
+    <td><strong>ต้องเรียกก่อนเริ่ม loop <code>OneWire_Search()</code> ทุกครั้ง</strong> (ครั้งแรกหรือค้นหาใหม่) มิฉะนั้นจะข้าม/พลาดอุปกรณ์</td>
 </tr>
 <tr>
     <td><code>OneWire_Search(bus)</code></td>
     <td><code>bus</code>: OneWire_Bus*</td>
     <td><code>bool</code></td>
     <td>ค้นหา ROM ถัดไป — ใช้ Maxim AN187 algorithm</td>
+    <td>เรียกวนใน loop หลัง <code>ResetSearch()</code> — true = เจอ 1 ตัว (ให้เรียก <code>GetAddress()</code> ต่อ), false = ค้นครบแล้ว หยุด loop</td>
 </tr>
 <tr>
     <td><code>OneWire_AlarmSearch(bus)</code></td>
     <td><code>bus</code>: OneWire_Bus*</td>
     <td><code>bool</code></td>
     <td>ค้นหาเฉพาะอุปกรณ์ที่มี alarm active</td>
+    <td>ใช้แทน <code>OneWire_Search()</code> ใน loop เดียวกัน — ยังต้อง <code>ResetSearch()</code> ก่อนเช่นกัน</td>
 </tr>
 <tr>
     <td><code>OneWire_GetAddress(bus, rom)</code></td>
     <td><code>bus</code>: OneWire_Bus*<br><code>rom</code>: uint8_t[8]</td>
     <td><code>void</code></td>
     <td>คัดลอก ROM address จาก bus state</td>
+    <td><strong>ต้องเรียกทันทีหลัง <code>OneWire_Search()</code> คืน true</strong> — คัดลอกจาก search state ที่เพิ่งเจอ (ไม่ใช่อ่านฮาร์ดแวร์ใหม่แบบ <code>ReadROM</code>) ผล <code>rom</code> นำไปใช้กับ <code>MatchROM/Select</code> ภายหลังได้</td>
 </tr>
 <tr>
     <td><code>OneWire_CRC8(data, len)</code></td>
     <td><code>data</code>: uint8_t*<br><code>len</code>: uint8_t</td>
     <td><code>uint8_t</code></td>
     <td>คำนวณ Dallas CRC8 (x^8 + x^5 + x^4 + 1)</td>
+    <td>ใช้เมื่อต้องการค่า CRC ดิบเอง — ถ้าแค่ต้องการเช็คถูก/ผิดให้ใช้ <code>OneWire_VerifyCRC()</code> แทน (เรียกง่ายกว่า)</td>
 </tr>
 <tr>
     <td><code>OneWire_VerifyCRC(data, len)</code></td>
     <td><code>data</code>: uint8_t*<br><code>len</code>: uint8_t</td>
     <td><code>bool</code></td>
     <td>ตรวจสอบ CRC — true = ถูกต้อง</td>
+    <td>เรียกทันทีหลัง <code>OneWire_ReadBytes()</code> ก่อนนำข้อมูลไปใช้ — ภายในเรียก <code>OneWire_CRC8()</code> ให้อัตโนมัติแล้ว</td>
 </tr>
 <tr>
     <td><code>OneWire_Depower(bus)</code></td>
     <td><code>bus</code>: OneWire_Bus*</td>
     <td><code>void</code></td>
     <td>หยุด parasite power</td>
+    <td>ใช้เฉพาะโหมด parasite power — เรียกหลังจบ operation ที่ดึงกระแสจากบัส (เช่น หลัง Convert T)</td>
 </tr>
 <tr>
     <td><code>OneWire_GetBusByPin(pin)</code></td>
     <td><code>pin</code>: GPIO pin</td>
     <td><code>OneWire_Bus*</code> / NULL</td>
     <td>ค้นหา bus จาก pin — NULL ถ้าไม่พบบัสที่ pin นั้น</td>
+    <td>ใช้แทน <code>OneWire_Init()</code> ถ้าเคย init pin นี้ไปแล้วที่อื่นในโค้ด (เลี่ยงเต็ม 4 bus โดยไม่จำเป็น)</td>
 </tr>
 </tbody>
 </table>
+</section>
+
+<section>
+<h2>ลำดับการเรียกใช้ฟังก์ชัน (Call Sequence)</h2>
+<p>1-Wire เป็นโปรโตคอลที่ <strong>ลำดับการเรียกสำคัญที่สุด</strong> — ผิดลำดับแล้ว device จะไม่ตอบหรือได้ข้อมูลผิด กฎหลัก 2 ข้อที่ต้องจำ:</p>
+<div class="flowchart">
+    <pre class="mermaid">
+flowchart LR
+    A["OneWire_Init(pin)<br>ครั้งเดียวตอนเริ่ม"] --> B["OneWire_Reset(bus)<br>ก่อน ROM command ทุกครั้ง"]
+    B --> C{"กี่อุปกรณ์บนบัส?"}
+    C -->|"ตัวเดียว"| D["SkipROM(bus)"]
+    C -->|"หลายตัว รู้ ROM แล้ว"| E["MatchROM(bus, rom)<br>= Select(bus, rom)"]
+    D --> F["WriteByte/ReadBytes<br>ส่ง command + รับข้อมูล"]
+    E --> F
+    F --> G["VerifyCRC(data, len)<br>ก่อนใช้ข้อมูล"]
+    </pre>
+</div>
+<div class="flowchart">
+    <pre class="mermaid">
+flowchart LR
+    H["ResetSearch(bus)<br>ครั้งเดียวก่อน loop"] --> I["Search(bus)"]
+    I -->|"true: เจอ 1 ตัว"| J["GetAddress(bus, rom)"]
+    J --> I
+    I -->|"false: ครบแล้ว"| K["จบ loop"]
+    </pre>
+</div>
+<div class="callout callout-warn">
+    <strong>กฎที่พลาดบ่อย:</strong> (1) <code>OneWire_Reset()</code> ต้องเรียกก่อน ROM command <strong>ทุกครั้ง</strong> ไม่ใช่แค่ครั้งแรก — แต่ละ transaction (เช่น Convert T แล้วค่อย Read Scratchpad) ต้อง Reset ใหม่เสมอ ดูตัวอย่างโค้ดด้านล่างที่ Reset ซ้ำ 2 รอบ (2) <code>ResetSearch()</code> เรียกแค่ครั้งเดียวก่อนเริ่ม loop ไม่ใช่ทุกรอบของ <code>Search()</code>
+</div>
 </section>
 
 <section>
@@ -328,6 +377,8 @@ int main(void) {
     <a href="arduino.html">SimpleArduino →</a>
 </nav>
 
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <script>hljs.highlightAll();</script>
 </body>

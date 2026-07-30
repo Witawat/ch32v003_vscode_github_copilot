@@ -26,7 +26,7 @@
 <tr><td>RX Buffer</td><td>Ring buffer 64 bytes (ISR-driven)</td></tr>
 <tr><td>Baud rates</td><td>7 ค่า (9600 — 460800)</td></tr>
 <tr><td>Pin remap</td><td>4 configs (DEFAULT, REMAP1, REMAP2, FULL_REMAP)</td></tr>
-<tr><td>Header</td><td><code>#include "simple_usart.h"</code></td></tr>
+<tr><td>Header</td><td><code>#include "SimpleUSART.h"</code></td></tr>
 </tbody>
 </table>
 </section>
@@ -34,18 +34,18 @@
 <section>
 <h2>ตารางฟังก์ชัน</h2>
 <table>
-<thead><tr><th>ฟังก์ชัน</th><th>คืนค่า</th><th>คำอธิบาย</th><th>หมายเหตุ</th></tr></thead>
+<thead><tr><th>ฟังก์ชัน</th><th>คืนค่า</th><th>คำอธิบาย</th><th>ใช้ร่วมกับ</th></tr></thead>
 <tbody>
-<tr><td><code>USART_SimpleInit(baud, pin_config)</code></td><td>void</td><td>เริ่ม USART</td><td>เรียกครั้งแรกก่อนใช้งาน</td></tr>
-<tr><td><code>USART_Print(str)</code></td><td>void</td><td>ส่ง string</td><td></td></tr>
-<tr><td><code>USART_PrintNum(num)</code></td><td>void</td><td>ส่ง int32</td><td></td></tr>
-<tr><td><code>USART_PrintHex(num, uppercase)</code></td><td>void</td><td>ส่ง hex</td><td>uppercase=1 แสดง A-F</td></tr>
-<tr><td><code>USART_WriteByte(data)</code></td><td>void</td><td>ส่ง 1 byte</td><td></td></tr>
-<tr><td><code>USART_Available()</code></td><td>uint8_t</td><td>มีข้อมูลรอ?</td><td>1=มี 0=ไม่มี</td></tr>
-<tr><td><code>USART_Read()</code></td><td>uint8_t</td><td>อ่าน 1 byte (blocking)</td><td>รอจนมีข้อมูล</td></tr>
-<tr><td><code>USART_ReadBytes(buffer, length)</code></td><td>uint16_t</td><td>อ่านหลาย byte</td><td>คืนจำนวนที่อ่านได้</td></tr>
-<tr><td><code>USART_Flush()</code></td><td>void</td><td>ล้าง buffer</td><td>ลบข้อมูลค้างใน ring buffer</td></tr>
-<tr><td><code>USART_RxByteHook(data)</code></td><td>void</td><td>weak — hook callback</td><td>แอบดู byte โดยไม่แย่ง ISR</td></tr>
+<tr><td><code>USART_SimpleInit(baud, pin_config)</code></td><td>void</td><td>เริ่ม USART</td><td><strong>ต้องเรียกก่อนฟังก์ชัน USART_* อื่นทุกตัว</strong> — ต้องมี <code>SystemCoreClockUpdate()</code> เรียกไปก่อนแล้วด้วย (ดู "ข้อผิดพลาดที่พบบ่อย") มิฉะนั้น baud rate จะผิด</td></tr>
+<tr><td><code>USART_Print(str)</code></td><td>void</td><td>ส่ง string</td><td>เรียกได้หลัง <code>USART_SimpleInit()</code> เท่านั้น</td></tr>
+<tr><td><code>USART_PrintNum(num)</code></td><td>void</td><td>ส่ง int32</td><td>มักเรียกสลับกับ <code>USART_Print()</code> เพื่อคั่น label/ขึ้นบรรทัดใหม่ (ดูตัวอย่าง Number Printing)</td></tr>
+<tr><td><code>USART_PrintHex(num, uppercase)</code></td><td>void</td><td>ส่ง hex</td><td>uppercase=1 แสดง A-F — ใช้คู่กับ <code>USART_WriteByte('0')</code> เองถ้าต้องการ zero-pad (ดูตัวอย่าง Hex Dump)</td></tr>
+<tr><td><code>USART_WriteByte(data)</code></td><td>void</td><td>ส่ง 1 byte</td><td>ใช้เป็น building block ของฟังก์ชันพิมพ์อื่น หรือส่ง echo กลับข้อมูลที่ <code>USART_Read()</code> อ่านมา (ดูตัวอย่าง Echo)</td></tr>
+<tr><td><code>USART_Available()</code></td><td>uint8_t</td><td>มีข้อมูลรอ?</td><td><strong>ควรเรียกเช็คก่อน <code>USART_Read()</code></strong> เสมอในโค้ดที่ไม่ต้องการ block รอ (ถ้าไม่เช็คก่อน <code>USART_Read()</code> จะ block รอข้อมูลจนกว่าจะมาถึง)</td></tr>
+<tr><td><code>USART_Read()</code></td><td>uint8_t</td><td>อ่าน 1 byte (blocking)</td><td>คู่กับ <code>USART_Available()</code> — เรียกโดยไม่เช็คก่อนจะทำให้โปรแกรม block รอ ไม่เหมาะกับ main loop ที่ต้องทำงานอื่นด้วย</td></tr>
+<tr><td><code>USART_ReadBytes(buffer, length)</code></td><td>uint16_t</td><td>อ่านหลาย byte</td><td>ทางลัดแทนเรียก <code>USART_Read()</code> วนหลายครั้ง — คืนค่าจริงที่อ่านได้ซึ่งอาจน้อยกว่า <code>length</code> ถ้าข้อมูลใน buffer ไม่พอ</td></tr>
+<tr><td><code>USART_Flush()</code></td><td>void</td><td>ล้าง buffer</td><td>เรียกก่อนเริ่ม transaction ใหม่ที่ไม่ต้องการข้อมูลเก่าค้างจากรอบก่อนปนมา</td></tr>
+<tr><td><code>USART_RxByteHook(data)</code></td><td>void</td><td>weak — hook callback</td><td><strong>ทำงานคู่ขนานกับ ring buffer เสมอ ไม่ใช่ทางเลือกแทนกัน</strong> — ทุก byte ที่เข้ามาจะถูกเติมเข้า ring buffer (อ่านต่อด้วย <code>USART_Available()</code>/<code>USART_Read()</code> ได้ตามปกติ) แล้วจึงเรียก hook นี้เพิ่มด้วยเสมอ — override ฟังก์ชันนี้เพื่อ "แอบดู" ข้อมูลโดยไม่ต้องเปลี่ยนโค้ดที่ใช้ Available/Read อยู่เดิม</td></tr>
 </tbody>
 </table>
 </section>
@@ -108,7 +108,7 @@
 <h2>ปรับขนาด Buffer</h2>
 <p>ค่า default คือ 64 bytes สามารถเปลี่ยนได้โดย <code>#define</code> <strong>ก่อน</strong> <code>#include</code>:</p>
 <pre><code class="language-c">#define USART_RX_BUFFER_SIZE 128
-#include "simple_usart.h"
+#include "SimpleUSART.h"
 </code></pre>
 <div class="callout callout-warn">
 <strong>ข้อควรระวัง:</strong> CH32V003 มี RAM เพียง 2KB — การเพิ่ม buffer มากเกินไปอาจทำให้ RAM ไม่พอ
@@ -137,7 +137,7 @@
 <h2>ตัวอย่างโค้ด</h2>
 
 <h3>Hello World</h3>
-<pre><code class="language-c">#include "simplehal.h"
+<pre><code class="language-c">#include "SimpleHAL.h"
 
 int main(void) {
     SystemCoreClockUpdate();
@@ -156,7 +156,7 @@ int main(void) {
 </code></pre>
 
 <h3>Echo</h3>
-<pre><code class="language-c">#include "simplehal.h"
+<pre><code class="language-c">#include "SimpleHAL.h"
 
 int main(void) {
     SystemCoreClockUpdate();
