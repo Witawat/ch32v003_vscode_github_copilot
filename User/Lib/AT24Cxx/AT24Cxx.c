@@ -139,7 +139,9 @@ AT24Cxx_Status AT24Cxx_WriteArray(AT24Cxx_Instance* eeprom, uint32_t address,
                                    const uint8_t* data, uint16_t len) {
     if (eeprom == NULL || !eeprom->initialized || data == NULL) return AT24CXX_ERROR_PARAM;
     if (len == 0) return AT24CXX_OK;
-    if (address + len > eeprom->capacity) return AT24CXX_ERROR_ADDR_OOB;
+    /* address + len can overflow uint32_t and wrap past the check — compare
+     * without adding instead (see LIB_AUDIT.md #15) */
+    if (address >= eeprom->capacity || len > eeprom->capacity - address) return AT24CXX_ERROR_ADDR_OOB;
 
     uint32_t  cur_addr  = address;
     uint16_t  remaining = len;
@@ -184,7 +186,7 @@ AT24Cxx_Status AT24Cxx_ReadArray(AT24Cxx_Instance* eeprom, uint32_t address,
                                   uint8_t* data, uint16_t len) {
     if (eeprom == NULL || !eeprom->initialized || data == NULL) return AT24CXX_ERROR_PARAM;
     if (len == 0) return AT24CXX_OK;
-    if (address + len > eeprom->capacity) return AT24CXX_ERROR_ADDR_OOB;
+    if (address >= eeprom->capacity || len > eeprom->capacity - address) return AT24CXX_ERROR_ADDR_OOB;
 
     uint8_t dev_addr = _get_dev_addr(eeprom, address);
     I2C_Status st    = _set_address(eeprom, address);

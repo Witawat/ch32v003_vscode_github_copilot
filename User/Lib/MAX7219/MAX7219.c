@@ -200,13 +200,19 @@ void MAX7219_DisplayTest(MAX7219_Handle* handle, bool test) {
 
 void MAX7219_SetPixel(MAX7219_Handle* handle, int16_t x, int16_t y, bool on) {
     if (!handle) return;
-    
+
+    // Check bounds (must happen before the division below: negative x
+    // truncates towards zero and produces a negative local_x, which would
+    // then be shifted by a negative amount — see LIB_AUDIT.md #6)
+    if (x < 0 || y < 0 || y >= MAX7219_MATRIX_SIZE) {
+        return;
+    }
+
     // Calculate which device and local x coordinate
     uint8_t device_idx = x / MAX7219_MATRIX_SIZE;
     uint8_t local_x = x % MAX7219_MATRIX_SIZE;
-    
-    // Check bounds
-    if (device_idx >= handle->num_devices || y < 0 || y >= MAX7219_MATRIX_SIZE) {
+
+    if (device_idx >= handle->num_devices) {
         return;
     }
     
@@ -220,13 +226,17 @@ void MAX7219_SetPixel(MAX7219_Handle* handle, int16_t x, int16_t y, bool on) {
 
 bool MAX7219_GetPixel(MAX7219_Handle* handle, int16_t x, int16_t y) {
     if (!handle) return false;
-    
+
+    // Check bounds before the division (see MAX7219_SetPixel for why)
+    if (x < 0 || y < 0 || y >= MAX7219_MATRIX_SIZE) {
+        return false;
+    }
+
     // Calculate which device and local x coordinate
     uint8_t device_idx = x / MAX7219_MATRIX_SIZE;
     uint8_t local_x = x % MAX7219_MATRIX_SIZE;
-    
-    // Check bounds
-    if (device_idx >= handle->num_devices || y < 0 || y >= MAX7219_MATRIX_SIZE) {
+
+    if (device_idx >= handle->num_devices) {
         return false;
     }
     

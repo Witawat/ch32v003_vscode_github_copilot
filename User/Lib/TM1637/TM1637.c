@@ -254,24 +254,24 @@ void TM1637_Clear(TM1637_Handle* handle) {
 
 void TM1637_DisplayNumber(TM1637_Handle* handle, int16_t number, bool leading_zero) {
     bool negative = (number < 0);
-    if (negative) {
-        number = -(int16_t)((uint16_t)number);
-    }
-    
+    /* Negating INT16_MIN in int16_t overflows (UB) and leaves the value
+     * negative; widen to int32_t first so -32768 fits (see LIB_AUDIT.md #12) */
+    int32_t magnitude = negative ? -(int32_t)number : (int32_t)number;
+
     // Clear buffer
     memset(handle->buffer, 0, handle->num_digits);
-    
+
     // Convert number to digits
     uint8_t pos = handle->num_digits - 1;
-    
+
     do {
-        uint8_t digit = number % 10;
+        uint8_t digit = (uint8_t)(magnitude % 10);
         handle->buffer[pos] = DIGIT_SEGMENTS[digit];
-        number /= 10;
-        
+        magnitude /= 10;
+
         if (pos == 0) break;
         pos--;
-    } while (number > 0 || (leading_zero && pos < handle->num_digits - 1));
+    } while (magnitude > 0 || (leading_zero && pos < handle->num_digits - 1));
     
     // Add minus sign if negative
     if (negative && pos > 0) {

@@ -21,8 +21,9 @@ SoilMoisture_Status SoilMoisture_Init(SoilMoisture_Instance* soil, ADC_Channel a
     if (soil == NULL) return SOILMOISTURE_ERROR_PARAM;
 
     soil->adc_channel = adc_channel;
-    soil->dry_value   = 4095;  /* default: max dry */
-    soil->wet_value   = 0;     /* default: min wet */
+    /* CH32V003's ADC is 10-bit (0-1023), not 12-bit — see LIB_AUDIT.md #18 */
+    soil->dry_value   = ADC_MAX_VALUE;  /* default: max dry */
+    soil->wet_value   = 0;              /* default: min wet */
     soil->initialized = 1;
     return SOILMOISTURE_OK;
 }

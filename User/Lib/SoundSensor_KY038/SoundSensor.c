@@ -34,7 +34,8 @@ float SoundSensor_ReadLevel(SoundSensor_Instance* sound) {
     if (sound == NULL || !sound->initialized) return 0.0f;
 
     uint16_t raw = ADC_Read(sound->adc_channel);
-    float level = (float)raw / 4095.0f;
+    /* CH32V003's ADC is 10-bit (0-1023), not 12-bit — see LIB_AUDIT.md #17 */
+    float level = (float)raw / (float)ADC_MAX_VALUE;
 
     /* update peak tracking */
     sound->peak_value = _fmaxf(sound->peak_value, level);

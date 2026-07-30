@@ -26,8 +26,6 @@ HC05_Status HC05_Init(HC05_Instance* bt, uint32_t baudrate) {
     if (bt == NULL) return HC05_ERROR_PARAM;
 
     bt->baudrate    = baudrate;
-    bt->rx_head     = 0;
-    bt->rx_tail     = 0;
     bt->initialized = 0;
 
     /* Init USART ผ่าน SimpleUSART */

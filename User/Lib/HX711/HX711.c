@@ -87,13 +87,13 @@ HX711_Status HX711_Init(HX711_Instance* hx, GPIO_Pin pin_dout, GPIO_Pin pin_sck)
     pinMode(pin_sck,  PIN_MODE_OUTPUT);
     digitalWrite(pin_sck, 0);  /* SCK LOW = power up */
 
-    hx->initialized = 1;
-
-    /* อ่าน 1 ครั้งเพื่อ apply gain setting */
-    int32_t dummy;
+    /* อ่าน 1 ครั้งเพื่อ apply gain setting และยืนยันว่าฮาร์ดแวร์ตอบสนองจริง
+     * ก่อนตั้ง initialized — เดิมตั้ง flag ก่อนตรวจสอบ ทำให้ timeout ยังถูก
+     * มองว่า init สำเร็จ (see LIB_AUDIT.md #25) */
     if (!_wait_ready(hx)) return HX711_ERROR_TIMEOUT;
     _read_raw(hx);
-    (void)dummy;
+
+    hx->initialized = 1;
 
     return HX711_OK;
 }

@@ -12,7 +12,11 @@
 /* ========== Private Variables ========== */
 
 // Receiver state
-static struct {
+// volatile: every field here is written by IR_EdgeInterrupt (ISR context) and
+// read from main-loop functions (IR_Process/IR_Available/IR_GetData/...);
+// without it, the compiler is free to cache stale values across those reads
+// (see LIB_AUDIT.md #24)
+static volatile struct {
     uint8_t           pin;              // GPIO pin สำหรับ receiver
     IR_Callback_t     callback;         // User callback function
     IR_RawData_t      raw_data;         // Raw timing buffer
@@ -58,8 +62,8 @@ void IR_ReceiverInit(uint8_t pin, IR_Callback_t callback) {
     attachInterrupt(pin, IR_EdgeInterrupt, CHANGE);
     
     // เคลียร์ buffer
-    memset(&ir_rx.raw_data, 0, sizeof(IR_RawData_t));
-    memset(&ir_rx.decoded_data, 0, sizeof(IR_DecodedData_t));
+    memset((void*)&ir_rx.raw_data, 0, sizeof(IR_RawData_t));
+    memset((void*)&ir_rx.decoded_data, 0, sizeof(IR_DecodedData_t));
 }
 
 /**
@@ -102,15 +106,28 @@ void IR_Process(void) {
     uint32_t elapsed = Get_CurrentUs() - ir_rx.last_edge_time;
     
     if (elapsed > IR_TIMEOUT_US && ir_rx.raw_data.count > 0) {
+        /* Snapshot raw_data into a local, non-volatile copy while
+         * interrupts are off: the instant `receiving` flips false, the ISR
+         * would otherwise be free to treat the next edge as a new signal
+         * and reset raw_data.count mid-decode (see LIB_AUDIT.md #24) */
+        IR_RawData_t raw_snapshot;
+        IR_DecodedData_t decoded;
+
+        __disable_irq();
         ir_rx.receiving = false;
-        
+        memcpy(&raw_snapshot, (const void*)&ir_rx.raw_data, sizeof(raw_snapshot));
+        __enable_irq();
+
         // พยายาม decode ข้อมูล
-        if (IR_DecodeAuto(&ir_rx.raw_data, &ir_rx.decoded_data)) {
+        if (IR_DecodeAuto(&raw_snapshot, &decoded)) {
+            __disable_irq();
+            memcpy((void*)&ir_rx.decoded_data, &decoded, sizeof(decoded));
             ir_rx.data_ready = true;
-            
+            __enable_irq();
+
             // เรียก callback ถ้ามี
             if (ir_rx.callback != NULL) {
-                ir_rx.callback(&ir_rx.decoded_data);
+                ir_rx.callback((IR_DecodedData_t*)&ir_rx.decoded_data);
             }
         }
     }
@@ -127,15 +144,22 @@ bool IR_Available(void) {
  * @brief อ่านข้อมูลที่ decode แล้ว
  */
 IR_DecodedData_t IR_GetData(void) {
+    IR_DecodedData_t snapshot;
+    __disable_irq();
     ir_rx.data_ready = false;
-    return ir_rx.decoded_data;
+    memcpy(&snapshot, (const void*)&ir_rx.decoded_data, sizeof(snapshot));
+    __enable_irq();
+    return snapshot;
 }
 
 /**
  * @brief อ่าน raw timing data
+ * @warning คืน pointer เข้าไปใน buffer ที่ ISR อาจเขียนทับได้ทันทีที่มีสัญญาณใหม่
+ *          เข้ามา (ดู LIB_AUDIT.md #24) — เรียกใช้และอ่านให้เสร็จก่อนที่จะมี
+ *          สัญญาณ IR ใหม่เข้ามา หรือใช้ IR_Available()/IR_GetData() แทนถ้าเป็นไปได้
  */
 IR_RawData_t* IR_GetRawData(void) {
-    return &ir_rx.raw_data;
+    return (IR_RawData_t*)&ir_rx.raw_data;
 }
 
 /**

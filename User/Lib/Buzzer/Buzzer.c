@@ -419,7 +419,7 @@ BuzzerState Buzzer_GetState(void) {
 
 void Buzzer_FrequencySweep(uint16_t start_freq, uint16_t end_freq, 
                            uint16_t duration_ms, uint16_t step_ms) {
-    if(!buzzer.initialized || step_ms == 0) return;
+    if(!buzzer.initialized || step_ms == 0 || duration_ms == 0) return;
     
     int32_t freq_step = (int32_t)(end_freq - start_freq) * step_ms / duration_ms;
     int32_t current = start_freq;

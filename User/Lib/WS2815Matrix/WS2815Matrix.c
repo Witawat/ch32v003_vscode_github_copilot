@@ -308,8 +308,9 @@ uint16_t Matrix_DrawTextThai(int16_t x, int16_t y, const char* text, uint32_t co
     uint16_t total_width = 0;
     
     while (*text) {
-        // ตรวจสอบว่าเป็น UTF-8 Thai character หรือไม่
-        if ((*text & 0xE0) == 0xE0) {
+        // ตรวจสอบว่าเป็น UTF-8 Thai character หรือไม่ (ต้องเช็ค '\0' ป้องกัน
+        // อ่านเกินถ้า string ถูกตัดกลาง sequence — see LIB_AUDIT.md #28)
+        if ((*text & 0xE0) == 0xE0 && text[1] != '\0' && text[2] != '\0') {
             // UTF-8 3-byte character (Thai)
             uint8_t char_width = Matrix_DrawCharThai(cursor_x, y, text, color);
             cursor_x += char_width;
@@ -331,7 +332,7 @@ uint16_t Matrix_GetTextWidth(const char* text) {
     uint16_t width = 0;
     
     while (*text) {
-        if ((*text & 0xE0) == 0xE0) {
+        if ((*text & 0xE0) == 0xE0 && text[1] != '\0' && text[2] != '\0') {
             // Thai character (8 pixels)
             width += 8;
             text += 3;
@@ -611,12 +612,15 @@ void Matrix_PatternGradientH(uint32_t start_color, uint32_t end_color) {
     uint8_t end_r = (end_color >> 16) & 0xFF;
     uint8_t end_g = (end_color >> 8) & 0xFF;
     uint8_t end_b = end_color & 0xFF;
-    
+
+    /* width == 1 makes (width - 1) a divide-by-zero (see LIB_AUDIT.md #29) */
+    uint8_t span = (matrix_config.width > 1) ? (matrix_config.width - 1) : 1;
+
     for (uint8_t x = 0; x < matrix_config.width; x++) {
-        uint8_t r = start_r + ((end_r - start_r) * x) / (matrix_config.width - 1);
-        uint8_t g = start_g + ((end_g - start_g) * x) / (matrix_config.width - 1);
-        uint8_t b = start_b + ((end_b - start_b) * x) / (matrix_config.width - 1);
-        
+        uint8_t r = start_r + ((end_r - start_r) * x) / span;
+        uint8_t g = start_g + ((end_g - start_g) * x) / span;
+        uint8_t b = start_b + ((end_b - start_b) * x) / span;
+
         for (uint8_t y = 0; y < matrix_config.height; y++) {
             Matrix_SetPixel(x, y, r, g, b);
         }
@@ -631,12 +635,15 @@ void Matrix_PatternGradientV(uint32_t start_color, uint32_t end_color) {
     uint8_t end_r = (end_color >> 16) & 0xFF;
     uint8_t end_g = (end_color >> 8) & 0xFF;
     uint8_t end_b = end_color & 0xFF;
-    
+
+    /* height == 1 makes (height - 1) a divide-by-zero (see LIB_AUDIT.md #29) */
+    uint8_t span = (matrix_config.height > 1) ? (matrix_config.height - 1) : 1;
+
     for (uint8_t y = 0; y < matrix_config.height; y++) {
-        uint8_t r = start_r + ((end_r - start_r) * y) / (matrix_config.height - 1);
-        uint8_t g = start_g + ((end_g - start_g) * y) / (matrix_config.height - 1);
-        uint8_t b = start_b + ((end_b - start_b) * y) / (matrix_config.height - 1);
-        
+        uint8_t r = start_r + ((end_r - start_r) * y) / span;
+        uint8_t g = start_g + ((end_g - start_g) * y) / span;
+        uint8_t b = start_b + ((end_b - start_b) * y) / span;
+
         for (uint8_t x = 0; x < matrix_config.width; x++) {
             Matrix_SetPixel(x, y, r, g, b);
         }
@@ -693,7 +700,9 @@ static uint16_t xy_to_index_columns(int16_t x, int16_t y) {
 
 static uint16_t utf8_to_unicode(const char* utf8_char) {
     // แปลง UTF-8 3-byte เป็น Unicode (สำหรับภาษาไทย)
-    if ((utf8_char[0] & 0xE0) == 0xE0) {
+    // ต้องเช็ค '\0' ก่อนอ่าน byte ที่ 2/3 ป้องกันอ่านเกิน NUL terminator
+    // เมื่อ string ถูกตัดกลาง multi-byte sequence (see LIB_AUDIT.md #28)
+    if ((utf8_char[0] & 0xE0) == 0xE0 && utf8_char[1] != '\0' && utf8_char[2] != '\0') {
         uint16_t unicode = ((utf8_char[0] & 0x0F) << 12) |
                           ((utf8_char[1] & 0x3F) << 6) |
                           (utf8_char[2] & 0x3F);

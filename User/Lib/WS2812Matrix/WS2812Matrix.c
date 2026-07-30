@@ -351,7 +351,10 @@ uint16_t WS2812M_DrawTextColor(WS2812M_Instance* inst, int16_t x, int16_t y,
  * @brief แปลง UTF-8 3-byte sequence เป็น Unicode code point
  */
 static uint16_t utf8_to_unicode(const char* utf8_char) {
-    if ((utf8_char[0] & 0xE0) == 0xE0) {
+    /* Guard against a 3-byte lead byte at the very end of a truncated/
+     * malformed string — without checking for '\0' first, utf8_char[1]/[2]
+     * would read past the NUL terminator (see LIB_AUDIT.md #28) */
+    if ((utf8_char[0] & 0xE0) == 0xE0 && utf8_char[1] != '\0' && utf8_char[2] != '\0') {
         // 3-byte UTF-8
         return ((uint16_t)(utf8_char[0] & 0x0F) << 12)
              | ((uint16_t)(utf8_char[1] & 0x3F) << 6)
@@ -427,7 +430,7 @@ uint16_t WS2812M_DrawTextThai(WS2812M_Instance* inst, int16_t x, int16_t y,
     if (text == NULL) return 0;
 
     while (*text) {
-        if ((*text & 0xE0) == 0xE0) {
+        if ((*text & 0xE0) == 0xE0 && text[1] != '\0' && text[2] != '\0') {
             // UTF-8 3-byte (Thai)
             total += WS2812M_DrawCharThai(inst, cursor_x, y, text, color);
             cursor_x += 8;
@@ -454,7 +457,7 @@ uint16_t WS2812M_GetTextWidth(const char* text) {
     if (text == NULL) return 0;
 
     while (*text) {
-        if ((*text & 0xE0) == 0xE0) {
+        if ((*text & 0xE0) == 0xE0 && text[1] != '\0' && text[2] != '\0') {
             width += 8;   // Thai char
             text += 3;
         } else {

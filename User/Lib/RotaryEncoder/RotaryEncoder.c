@@ -31,7 +31,25 @@ static const int8_t quadrature_table[4][4] = {
 
 static uint8_t Rotary_ReadState(RotaryEncoder* encoder);
 static void Rotary_ProcessRotation(RotaryEncoder* encoder);
-static RotaryEncoder* Rotary_FindEncoder(uint8_t pin);
+
+/* ========== ISR Trampolines ==========
+ * attachInterrupt() only accepts a void(*)(void) callback with no user
+ * data/pin argument, so a per-encoder-slot trampoline is needed to safely
+ * recover the RotaryEncoder* instance instead of misusing the callback
+ * pointer's calling convention (see LIB_AUDIT.md #1). */
+static void Rotary_Trampoline0(void);
+static void Rotary_Trampoline1(void);
+static void Rotary_Trampoline2(void);
+static void Rotary_Trampoline3(void);
+static void Rotary_Trampoline4(void);
+static void Rotary_Trampoline5(void);
+static void Rotary_Trampoline6(void);
+static void Rotary_Trampoline7(void);
+
+static void (*const g_rotary_trampolines[8])(void) = {
+    Rotary_Trampoline0, Rotary_Trampoline1, Rotary_Trampoline2, Rotary_Trampoline3,
+    Rotary_Trampoline4, Rotary_Trampoline5, Rotary_Trampoline6, Rotary_Trampoline7
+};
 
 /* ========== Initialization Functions ========== */
 
@@ -77,13 +95,14 @@ void Rotary_Init(RotaryEncoder* encoder, uint8_t pin_clk, uint8_t pin_dt, uint8_
     Delay_Ms(10);  // Wait for pins to stabilize
     encoder->last_state = Rotary_ReadState(encoder);
     
-    // Setup interrupts for CLK and DT
-    attachInterrupt(pin_clk, (void (*)(void))Rotary_CLK_ISR, CHANGE);
-    attachInterrupt(pin_dt, (void (*)(void))Rotary_DT_ISR, CHANGE);
-    
     // Register encoder for interrupt handling
     if (g_encoder_count < 8) {
-        g_encoders[g_encoder_count++] = encoder;
+        uint8_t slot = g_encoder_count++;
+        g_encoders[slot] = encoder;
+
+        // Setup interrupts for CLK and DT via the slot's trampoline
+        attachInterrupt(pin_clk, g_rotary_trampolines[slot], CHANGE);
+        attachInterrupt(pin_dt, g_rotary_trampolines[slot], CHANGE);
     }
 }
 
@@ -262,14 +281,6 @@ void Rotary_Update(RotaryEncoder* encoder) {
     Rotary_ProcessRotation(encoder);
 }
 
-void Rotary_CLK_ISR(RotaryEncoder* encoder) {
-    Rotary_ProcessRotation(encoder);
-}
-
-void Rotary_DT_ISR(RotaryEncoder* encoder) {
-    Rotary_ProcessRotation(encoder);
-}
-
 /* ========== Private Functions ========== */
 
 /**
@@ -367,30 +378,13 @@ static void Rotary_ProcessRotation(RotaryEncoder* encoder) {
     encoder->last_state = current_state;
 }
 
-/**
- * @brief ค้นหา encoder instance จาก pin number
- * @param pin Pin number
- * @return Pointer to encoder หรือ NULL
- */
-static RotaryEncoder* Rotary_FindEncoder(uint8_t pin) {
-    for (uint8_t i = 0; i < g_encoder_count; i++) {
-        if (g_encoders[i]->pin_clk == pin || g_encoders[i]->pin_dt == pin) {
-            return g_encoders[i];
-        }
-    }
-    return NULL;
-}
+/* ========== ISR Trampolines ========== */
 
-/* ========== Global Interrupt Handlers ========== */
-
-/**
- * @brief Global EXTI interrupt handler
- * @note ฟังก์ชันนี้ถูกเรียกจาก EXTI ISR ของ SimpleGPIO
- * @note ต้อง link กับ interrupt system ของ CH32V003
- */
-void Rotary_EXTI_Handler(uint8_t pin) {
-    RotaryEncoder* encoder = Rotary_FindEncoder(pin);
-    if (encoder) {
-        Rotary_ProcessRotation(encoder);
-    }
-}
+static void Rotary_Trampoline0(void) { if (g_encoders[0]) Rotary_ProcessRotation(g_encoders[0]); }
+static void Rotary_Trampoline1(void) { if (g_encoders[1]) Rotary_ProcessRotation(g_encoders[1]); }
+static void Rotary_Trampoline2(void) { if (g_encoders[2]) Rotary_ProcessRotation(g_encoders[2]); }
+static void Rotary_Trampoline3(void) { if (g_encoders[3]) Rotary_ProcessRotation(g_encoders[3]); }
+static void Rotary_Trampoline4(void) { if (g_encoders[4]) Rotary_ProcessRotation(g_encoders[4]); }
+static void Rotary_Trampoline5(void) { if (g_encoders[5]) Rotary_ProcessRotation(g_encoders[5]); }
+static void Rotary_Trampoline6(void) { if (g_encoders[6]) Rotary_ProcessRotation(g_encoders[6]); }
+static void Rotary_Trampoline7(void) { if (g_encoders[7]) Rotary_ProcessRotation(g_encoders[7]); }

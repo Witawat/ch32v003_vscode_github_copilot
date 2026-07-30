@@ -79,11 +79,15 @@ extern "C" {
 /* ========== Status ========== */
 
 typedef enum {
-    MAX31855_OK        = 0,
-    MAX31855_ERROR     = 1,
-    MAX31855_FAULT_OC  = 2,
-    MAX31855_FAULT_SCG = 3,
-    MAX31855_FAULT_SCV = 4
+    MAX31855_OK               = 0,
+    MAX31855_ERROR            = 1,
+    /* Distinct names from the MAX31855_FAULT_* bitmask macros below —
+     * previously these enum members shared names with the macros, so the
+     * macros silently won and MAX31855_STATUS_FAULT_OC (0x01) became
+     * indistinguishable from MAX31855_ERROR (see LIB_AUDIT.md #4) */
+    MAX31855_STATUS_FAULT_OC  = 2,
+    MAX31855_STATUS_FAULT_SCG = 3,
+    MAX31855_STATUS_FAULT_SCV = 4
 } MAX31855_Status;
 
 /* ========== Fault Bits ========== */

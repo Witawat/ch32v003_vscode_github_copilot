@@ -464,9 +464,16 @@ void NeoPixel_Comet(uint8_t r, uint8_t g, uint8_t b, uint8_t tail_length, uint16
  * @brief KITT Scanner effect
  */
 void NeoPixel_Scanner(uint8_t r, uint8_t g, uint8_t b, uint8_t eye_size, uint16_t speed, uint8_t cycles) {
+    // neo_num_leds - eye_size - 2 can be negative for small strips / large
+    // eyes; compute in a signed width first and bail out instead of wrapping
+    // to a huge uint16_t loop bound (see LIB_AUDIT.md #7).
+    int32_t scan_range = (int32_t)neo_num_leds - (int32_t)eye_size - 2;
+    if (scan_range <= 0) return;
+    uint16_t limit = (uint16_t)scan_range;
+
     for(uint8_t cycle = 0; cycle < cycles; cycle++) {
         // Scan right
-        for(uint16_t i = 0; i < neo_num_leds - eye_size - 2; i++) {
+        for(uint16_t i = 0; i < limit; i++) {
             NeoPixel_Clear();
             NeoPixel_SetPixelColor(i, r/10, g/10, b/10);
             for(uint8_t j = 1; j <= eye_size; j++) {
@@ -476,9 +483,9 @@ void NeoPixel_Scanner(uint8_t r, uint8_t g, uint8_t b, uint8_t eye_size, uint16_
             NeoPixel_Show();
             Delay_Ms(speed);
         }
-        
+
         // Scan left
-        for(uint16_t i = neo_num_leds - eye_size - 2; i > 0; i--) {
+        for(uint16_t i = limit; i > 0; i--) {
             NeoPixel_Clear();
             NeoPixel_SetPixelColor(i, r/10, g/10, b/10);
             for(uint8_t j = 1; j <= eye_size; j++) {
@@ -817,7 +824,14 @@ uint8_t NeoPixel_UpdateEffect(NeoPixel_Effect_t* effect) {
             uint8_t g = (effect->param2 >> 8) & 0xFF;
             uint8_t b = effect->param2 & 0xFF;
             
-            uint16_t max_pos = (neo_num_leds - eye_size - 2) * 2;
+            int32_t scan_range = (int32_t)neo_num_leds - (int32_t)eye_size - 2;
+            if (scan_range <= 0) {
+                // Strip too small for this eye size — nothing to animate
+                // (see LIB_AUDIT.md #8, avoids the max_pos == 0 divide-by-zero)
+                effect->step++;
+                break;
+            }
+            uint16_t max_pos = (uint16_t)scan_range * 2;
             uint16_t pos = effect->step % max_pos;
             
             if(pos < (neo_num_leds - eye_size - 2)) {

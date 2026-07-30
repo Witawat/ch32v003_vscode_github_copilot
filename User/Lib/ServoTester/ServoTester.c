@@ -13,11 +13,14 @@
 static void _write_pulse(ServoTester_Instance* tester, uint16_t pulse_us) {
     uint32_t period = 1000000UL / SERVOTESTER_FREQ;  /* 20000µs for 50Hz */
     uint16_t duty;
+    uint16_t timer_period = PWM_GetPeriod(tester->channel);
 
-    if (period == 0) return;
+    if (period == 0 || timer_period == 0) return;
 
-    /* duty = (pulse / period) * 65535 */
-    duty = (uint16_t)(((uint32_t)pulse_us * 65535) / period);
+    /* duty = (pulse / period) * timer_period (see LIB_AUDIT.md #2 —
+     * PWM_SetDutyCycleRaw() expects a value scaled to the timer's ARR,
+     * not a hardcoded 0-65535 range) */
+    duty = (uint16_t)(((uint32_t)pulse_us * timer_period) / period);
     PWM_SetDutyCycleRaw(tester->channel, duty);
     tester->current_pulse = pulse_us;
 }

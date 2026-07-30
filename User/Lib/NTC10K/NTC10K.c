@@ -135,6 +135,7 @@ NTC_Instance* NTC_Init(ADC_Channel adc_channel) {
  * @brief เริ่มต้น NTC พร้อม configuration
  */
 NTC_Instance* NTC_InitWithConfig(NTC_Config* config) {
+    if (config == NULL) return NULL;
     if (ntc_instance_count >= NTC_MAX_INSTANCES) {
         return NULL;  // เต็มแล้ว
     }

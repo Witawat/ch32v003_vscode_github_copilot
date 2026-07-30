@@ -184,9 +184,9 @@ TM1650_Status TM1650_DisplayNumber(TM1650_Handle* handle, int16_t number, bool l
     if (handle == NULL || !handle->initialized) return TM1650_ERROR_PARAM;
 
     bool negative = (number < 0);
-    if (negative) {
-        number = -number;
-    }
+    /* Negating INT16_MIN in int16_t overflows (UB) and leaves the value
+     * negative; widen to int32_t first so -32768 fits (see LIB_AUDIT.md #13) */
+    int32_t magnitude = negative ? -(int32_t)number : (int32_t)number;
 
     /* Clear buffer */
     memset(handle->buffer, 0, TM1650_NUM_DIGITS);
@@ -195,21 +195,21 @@ TM1650_Status TM1650_DisplayNumber(TM1650_Handle* handle, int16_t number, bool l
     int8_t pos = TM1650_NUM_DIGITS - 1;
     uint8_t digit_count = 0;
 
-    if (number == 0 && leading_zero) {
+    if (magnitude == 0 && leading_zero) {
         /* Show "0000" */
         for (uint8_t i = 0; i < TM1650_NUM_DIGITS; i++) {
             handle->buffer[i] = DIGIT_SEGMENTS[0];
         }
     } else {
         do {
-            uint8_t digit = number % 10;
+            uint8_t digit = (uint8_t)(magnitude % 10);
             handle->buffer[pos] = DIGIT_SEGMENTS[digit];
-            number /= 10;
+            magnitude /= 10;
             digit_count++;
 
             if (pos == 0) break;
             pos--;
-        } while (number > 0);
+        } while (magnitude > 0);
 
         /* Fill leading zeros if requested */
         if (leading_zero) {

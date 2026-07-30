@@ -90,7 +90,10 @@ uint8_t P10_Init(P10_Instance* inst, P10_Config* cfg) {
     if (cfg->oe_pin     == 0xFF) return 0;
     if (cfg->row_a_pin  == 0xFF) return 0;
     if (cfg->row_b_pin  == 0xFF) return 0;
-    if (cfg->width  == 0 || cfg->width  > 64) return 0;
+    /* byte_index math elsewhere packs 8 pixels per byte per row, so a width
+     * that isn't a multiple of 8 makes the last column of a row spill its
+     * remaining bits into the next row (see LIB_AUDIT.md #21) */
+    if (cfg->width  == 0 || cfg->width  > 64 || (cfg->width % 8) != 0) return 0;
     if (cfg->height == 0 || cfg->height > 32) return 0;
     if (cfg->rows   == 0 || cfg->rows   > cfg->height) return 0;
     if (cfg->refresh_rate == 0) return 0;

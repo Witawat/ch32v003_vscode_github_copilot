@@ -70,7 +70,10 @@ static void LCD_SendData(LCD1602_Handle* lcd, uint8_t data) {
  * @brief เริ่มต้นการใช้งาน LCD
  */
 void LCD_Init(LCD1602_Handle* lcd, uint8_t i2c_addr, LCD_Size size) {
+    if (lcd == NULL) return;
+
     // เก็บ configuration
+    lcd->initialized = 0;  /* จนกว่าจะ init สำเร็จครบ */
     lcd->i2c_addr = i2c_addr;
     lcd->backlight = LCD_BL;  // เปิด backlight ตั้งแต่เริ่มต้น
     
@@ -109,13 +112,15 @@ void LCD_Init(LCD1602_Handle* lcd, uint8_t i2c_addr, LCD_Size size) {
     lcd->display_control = LCD_DISPLAYON | LCD_CURSOROFF | LCD_BLINKOFF;
     LCD_SendCommand(lcd, LCD_DISPLAYCONTROL | lcd->display_control);
     
+    lcd->initialized = 1;
+
     // ล้างหน้าจอ
     LCD_Clear(lcd);
-    
+
     // ตั้งค่า entry mode
     lcd->display_mode = LCD_ENTRYLEFT | LCD_ENTRYSHIFTDECREMENT;
     LCD_SendCommand(lcd, LCD_ENTRYMODESET | lcd->display_mode);
-    
+
     // กลับไปตำแหน่งเริ่มต้น
     LCD_Home(lcd);
 }
@@ -124,6 +129,7 @@ void LCD_Init(LCD1602_Handle* lcd, uint8_t i2c_addr, LCD_Size size) {
  * @brief ล้างหน้าจอ LCD
  */
 void LCD_Clear(LCD1602_Handle* lcd) {
+    if (lcd == NULL || !lcd->initialized) return;
     LCD_SendCommand(lcd, LCD_CLEARDISPLAY);
     Delay_Ms(2);  // Clear command ใช้เวลานาน
 }
@@ -132,6 +138,7 @@ void LCD_Clear(LCD1602_Handle* lcd) {
  * @brief กลับไปตำแหน่งเริ่มต้น (0,0)
  */
 void LCD_Home(LCD1602_Handle* lcd) {
+    if (lcd == NULL || !lcd->initialized) return;
     LCD_SendCommand(lcd, LCD_RETURNHOME);
     Delay_Ms(2);  // Home command ใช้เวลานาน
 }
@@ -140,9 +147,11 @@ void LCD_Home(LCD1602_Handle* lcd) {
  * @brief ตั้งตำแหน่ง cursor
  */
 void LCD_SetCursor(LCD1602_Handle* lcd, uint8_t col, uint8_t row) {
+    if (lcd == NULL || !lcd->initialized) return;
+
     // Row offsets สำหรับ LCD แต่ละแบบ
     static const uint8_t row_offsets[] = {0x00, 0x40, 0x14, 0x54};
-    
+
     if (row >= lcd->rows) {
         row = lcd->rows - 1;  // จำกัดไม่ให้เกิน
     }
@@ -154,6 +163,7 @@ void LCD_SetCursor(LCD1602_Handle* lcd, uint8_t col, uint8_t row) {
  * @brief แสดงข้อความ
  */
 void LCD_Print(LCD1602_Handle* lcd, const char* str) {
+    if (lcd == NULL || !lcd->initialized || str == NULL) return;
     while (*str) {
         LCD_SendData(lcd, *str++);
     }
@@ -163,6 +173,7 @@ void LCD_Print(LCD1602_Handle* lcd, const char* str) {
  * @brief แสดงตัวอักษรเดียว
  */
 void LCD_PrintChar(LCD1602_Handle* lcd, char c) {
+    if (lcd == NULL || !lcd->initialized) return;
     LCD_SendData(lcd, c);
 }
 
@@ -172,6 +183,7 @@ void LCD_PrintChar(LCD1602_Handle* lcd, char c) {
  * @brief เปิด/ปิดการแสดงผล
  */
 void LCD_Display(LCD1602_Handle* lcd, uint8_t on) {
+    if (lcd == NULL || !lcd->initialized) return;
     if (on) {
         lcd->display_control |= LCD_DISPLAYON;
     } else {
@@ -184,6 +196,7 @@ void LCD_Display(LCD1602_Handle* lcd, uint8_t on) {
  * @brief เปิด/ปิด cursor
  */
 void LCD_Cursor(LCD1602_Handle* lcd, uint8_t on) {
+    if (lcd == NULL || !lcd->initialized) return;
     if (on) {
         lcd->display_control |= LCD_CURSORON;
     } else {
@@ -196,6 +209,7 @@ void LCD_Cursor(LCD1602_Handle* lcd, uint8_t on) {
  * @brief เปิด/ปิด cursor blink
  */
 void LCD_Blink(LCD1602_Handle* lcd, uint8_t on) {
+    if (lcd == NULL || !lcd->initialized) return;
     if (on) {
         lcd->display_control |= LCD_BLINKON;
     } else {
@@ -208,6 +222,7 @@ void LCD_Blink(LCD1602_Handle* lcd, uint8_t on) {
  * @brief เปิด/ปิด backlight
  */
 void LCD_Backlight(LCD1602_Handle* lcd, uint8_t on) {
+    if (lcd == NULL || !lcd->initialized) return;
     if (on) {
         lcd->backlight = LCD_BL;
     } else {
@@ -222,6 +237,7 @@ void LCD_Backlight(LCD1602_Handle* lcd, uint8_t on) {
  * @brief สร้าง custom character
  */
 void LCD_CreateChar(LCD1602_Handle* lcd, uint8_t location, uint8_t charmap[8]) {
+    if (lcd == NULL || !lcd->initialized || charmap == NULL) return;
     location &= 0x7;  // เรามี 8 ตำแหน่ง (0-7)
     LCD_SendCommand(lcd, LCD_SETCGRAMADDR | (location << 3));
     
@@ -234,6 +250,7 @@ void LCD_CreateChar(LCD1602_Handle* lcd, uint8_t location, uint8_t charmap[8]) {
  * @brief เลื่อนหน้าจอไปทางซ้าย
  */
 void LCD_ScrollDisplayLeft(LCD1602_Handle* lcd) {
+    if (lcd == NULL || !lcd->initialized) return;
     LCD_SendCommand(lcd, LCD_CURSORSHIFT | LCD_DISPLAYMOVE | LCD_MOVELEFT);
 }
 
@@ -241,6 +258,7 @@ void LCD_ScrollDisplayLeft(LCD1602_Handle* lcd) {
  * @brief เลื่อนหน้าจอไปทางขวา
  */
 void LCD_ScrollDisplayRight(LCD1602_Handle* lcd) {
+    if (lcd == NULL || !lcd->initialized) return;
     LCD_SendCommand(lcd, LCD_CURSORSHIFT | LCD_DISPLAYMOVE | LCD_MOVERIGHT);
 }
 
@@ -248,6 +266,7 @@ void LCD_ScrollDisplayRight(LCD1602_Handle* lcd) {
  * @brief ตั้งทิศทางการเขียนจากซ้ายไปขวา
  */
 void LCD_LeftToRight(LCD1602_Handle* lcd) {
+    if (lcd == NULL || !lcd->initialized) return;
     lcd->display_mode |= LCD_ENTRYLEFT;
     LCD_SendCommand(lcd, LCD_ENTRYMODESET | lcd->display_mode);
 }
@@ -256,6 +275,7 @@ void LCD_LeftToRight(LCD1602_Handle* lcd) {
  * @brief ตั้งทิศทางการเขียนจากขวาไปซ้าย
  */
 void LCD_RightToLeft(LCD1602_Handle* lcd) {
+    if (lcd == NULL || !lcd->initialized) return;
     lcd->display_mode &= ~LCD_ENTRYLEFT;
     LCD_SendCommand(lcd, LCD_ENTRYMODESET | lcd->display_mode);
 }
@@ -264,6 +284,7 @@ void LCD_RightToLeft(LCD1602_Handle* lcd) {
  * @brief เปิด/ปิด auto scroll
  */
 void LCD_AutoScroll(LCD1602_Handle* lcd, uint8_t on) {
+    if (lcd == NULL || !lcd->initialized) return;
     if (on) {
         lcd->display_mode |= LCD_ENTRYSHIFTINCREMENT;
     } else {
@@ -278,6 +299,7 @@ void LCD_AutoScroll(LCD1602_Handle* lcd, uint8_t on) {
  * @brief แสดงตัวเลข integer
  */
 void LCD_PrintInt(LCD1602_Handle* lcd, int32_t num) {
+    if (lcd == NULL || !lcd->initialized) return;
     char buffer[12];  // เพียงพอสำหรับ int32_t (-2147483648 ถึง 2147483647)
     sprintf(buffer, "%d", num);
     LCD_Print(lcd, buffer);
@@ -287,6 +309,7 @@ void LCD_PrintInt(LCD1602_Handle* lcd, int32_t num) {
  * @brief แสดงตัวเลข float
  */
 void LCD_PrintFloat(LCD1602_Handle* lcd, float num, uint8_t decimals) {
+    if (lcd == NULL || !lcd->initialized) return;
     char buffer[16];
     char format[8];
     
@@ -301,6 +324,7 @@ void LCD_PrintFloat(LCD1602_Handle* lcd, float num, uint8_t decimals) {
  * @brief แสดงข้อความที่ตำแหน่งที่กำหนด
  */
 void LCD_PrintAt(LCD1602_Handle* lcd, uint8_t col, uint8_t row, const char* str) {
+    if (lcd == NULL || !lcd->initialized) return;
     LCD_SetCursor(lcd, col, row);
     LCD_Print(lcd, str);
 }
@@ -309,6 +333,7 @@ void LCD_PrintAt(LCD1602_Handle* lcd, uint8_t col, uint8_t row, const char* str)
  * @brief แสดงผลแบบ formatted string (เหมือน printf)
  */
 void LCD_Printf(LCD1602_Handle* lcd, const char* format, ...) {
+    if (lcd == NULL || !lcd->initialized || format == NULL) return;
     char buffer[32]; // ขนาดบัฟเฟอร์ที่เหมาะสมสำหรับ LCD 16x2 หรือ 20x4
     va_list args;
     va_start(args, format);
@@ -321,6 +346,7 @@ void LCD_Printf(LCD1602_Handle* lcd, const char* format, ...) {
  * @brief ล้างข้อความเฉพาะบรรทัด
  */
 void LCD_ClearLine(LCD1602_Handle* lcd, uint8_t row) {
+    if (lcd == NULL || !lcd->initialized) return;
     LCD_SetCursor(lcd, 0, row);
     for (int i = 0; i < lcd->cols; i++) {
         LCD_SendData(lcd, ' ');
@@ -332,6 +358,7 @@ void LCD_ClearLine(LCD1602_Handle* lcd, uint8_t row) {
  * @brief แสดงข้อความกึ่งกลางบรรทัด
  */
 void LCD_CenterPrint(LCD1602_Handle* lcd, uint8_t row, const char* str) {
+    if (lcd == NULL || !lcd->initialized || str == NULL) return;
     uint8_t len = strlen(str);
     if (len >= lcd->cols) {
         LCD_SetCursor(lcd, 0, row);
@@ -348,6 +375,7 @@ void LCD_CenterPrint(LCD1602_Handle* lcd, uint8_t row, const char* str) {
  * @brief สลับสถานะ Backlight
  */
 void LCD_ToggleBacklight(LCD1602_Handle* lcd) {
+    if (lcd == NULL || !lcd->initialized) return;
     if (lcd->backlight == LCD_BL) {
         LCD_Backlight(lcd, 0);
     } else {

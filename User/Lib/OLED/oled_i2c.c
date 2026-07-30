@@ -24,6 +24,7 @@ static union {
  * @brief ส่ง Command ไปยัง OLED
  */
 void OLED_WriteCommand(OLED_Handle* oled, uint8_t cmd) {
+    if (oled == NULL) return;
     uint8_t data[2] = {0x00, cmd};  // 0x00 = Command mode
     I2C_Write(oled->i2c_addr, data, 2);
 }
@@ -32,6 +33,7 @@ void OLED_WriteCommand(OLED_Handle* oled, uint8_t cmd) {
  * @brief ส่ง Data ไปยัง OLED
  */
 void OLED_WriteData(OLED_Handle* oled, uint8_t data) {
+    if (oled == NULL) return;
     uint8_t buf[2] = {0x40, data};  // 0x40 = Data mode
     I2C_Write(oled->i2c_addr, buf, 2);
 }
@@ -79,7 +81,10 @@ static void OLED_SetAddressWindow(OLED_Handle* oled, uint8_t x, uint8_t y, uint8
  * @brief เริ่มต้นการใช้งาน OLED
  */
 uint8_t OLED_Init(OLED_Handle* oled, OLED_Size size, uint8_t i2c_addr) {
+    if (oled == NULL) return 0;
+
     // Set parameters based on size
+    oled->initialized = 0;
     oled->i2c_addr = i2c_addr;
     oled->buffer_mode = OLED_SINGLE_BUFFER;
     oled->back_buffer = NULL;
@@ -181,11 +186,12 @@ uint8_t OLED_Init(OLED_Handle* oled, OLED_Size size, uint8_t i2c_addr) {
     // Turn on display
     OLED_WriteCommand(oled, SSD1306_DISPLAY_ON);
     
+    oled->initialized = 1;
+
     // Clear buffer
     OLED_Clear(oled);
     OLED_Update(oled);
-    
-    oled->initialized = 1;
+
     return 1;
 }
 
@@ -193,6 +199,7 @@ uint8_t OLED_Init(OLED_Handle* oled, OLED_Size size, uint8_t i2c_addr) {
  * @brief เปิดใช้งาน Double Buffering
  */
 void OLED_EnableDoubleBuffer(OLED_Handle* oled, uint8_t* back_buffer) {
+    if (oled == NULL || !oled->initialized || back_buffer == NULL) return;
     oled->buffer_mode = OLED_DOUBLE_BUFFER;
     oled->back_buffer = back_buffer;
     
@@ -205,6 +212,7 @@ void OLED_EnableDoubleBuffer(OLED_Handle* oled, uint8_t* back_buffer) {
  * @brief สลับ buffer
  */
 void OLED_SwapBuffers(OLED_Handle* oled) {
+    if (oled == NULL || !oled->initialized) return;
     if(oled->buffer_mode == OLED_DOUBLE_BUFFER && oled->back_buffer != NULL) {
         uint8_t* temp = oled->buffer;
         oled->buffer = oled->back_buffer;
@@ -218,6 +226,7 @@ void OLED_SwapBuffers(OLED_Handle* oled) {
  * @brief อัพเดทหน้าจอทั้งหมด
  */
 void OLED_Update(OLED_Handle* oled) {
+    if (oled == NULL || !oled->initialized) return;
     OLED_SetAddressWindow(oled, 0, 0, oled->width, oled->height);
     
     uint16_t buffer_size = (oled->width * oled->height) / 8;
@@ -228,6 +237,7 @@ void OLED_Update(OLED_Handle* oled) {
  * @brief อัพเดทหน้าจอบางส่วน
  */
 void OLED_UpdateArea(OLED_Handle* oled, uint8_t x, uint8_t y, uint8_t w, uint8_t h) {
+    if (oled == NULL || !oled->initialized) return;
     // Align to page boundaries
     uint8_t page_start = y / 8;
     uint8_t page_end = (y + h - 1) / 8;
@@ -245,6 +255,7 @@ void OLED_UpdateArea(OLED_Handle* oled, uint8_t x, uint8_t y, uint8_t w, uint8_t
  * @brief ล้างหน้าจอ
  */
 void OLED_Clear(OLED_Handle* oled) {
+    if (oled == NULL || !oled->initialized) return;
     uint16_t buffer_size = (oled->width * oled->height) / 8;
     memset(oled->buffer, 0, buffer_size);
 }
@@ -253,6 +264,7 @@ void OLED_Clear(OLED_Handle* oled) {
  * @brief เติมหน้าจอด้วยสี
  */
 void OLED_Fill(OLED_Handle* oled, OLED_Color color) {
+    if (oled == NULL || !oled->initialized) return;
     uint16_t buffer_size = (oled->width * oled->height) / 8;
     uint8_t fill_value = (color == OLED_COLOR_WHITE) ? 0xFF : 0x00;
     memset(oled->buffer, fill_value, buffer_size);
@@ -264,6 +276,7 @@ void OLED_Fill(OLED_Handle* oled, OLED_Color color) {
  * @brief เปิด/ปิดหน้าจอ
  */
 void OLED_DisplayOn(OLED_Handle* oled, uint8_t on) {
+    if (oled == NULL || !oled->initialized) return;
     OLED_WriteCommand(oled, on ? SSD1306_DISPLAY_ON : SSD1306_DISPLAY_OFF);
 }
 
@@ -271,6 +284,7 @@ void OLED_DisplayOn(OLED_Handle* oled, uint8_t on) {
  * @brief ตั้งค่า Contrast
  */
 void OLED_SetContrast(OLED_Handle* oled, uint8_t contrast) {
+    if (oled == NULL || !oled->initialized) return;
     OLED_WriteCommand(oled, SSD1306_SET_CONTRAST);
     OLED_WriteCommand(oled, contrast);
 }
@@ -279,6 +293,7 @@ void OLED_SetContrast(OLED_Handle* oled, uint8_t contrast) {
  * @brief กลับสีหน้าจอ
  */
 void OLED_InvertDisplay(OLED_Handle* oled, uint8_t invert) {
+    if (oled == NULL || !oled->initialized) return;
     OLED_WriteCommand(oled, invert ? SSD1306_INVERT_DISPLAY : SSD1306_NORMAL_DISPLAY);
 }
 
@@ -288,6 +303,8 @@ void OLED_InvertDisplay(OLED_Handle* oled, uint8_t invert) {
  * @brief ตั้งค่า pixel
  */
 void OLED_SetPixel(OLED_Handle* oled, uint8_t x, uint8_t y, OLED_Color color) {
+    if (oled == NULL || !oled->initialized) return;
+
     // Bounds check
     if(x >= oled->width || y >= oled->height) {
         return;
@@ -317,6 +334,8 @@ void OLED_SetPixel(OLED_Handle* oled, uint8_t x, uint8_t y, OLED_Color color) {
  * @brief อ่านค่า pixel
  */
 uint8_t OLED_GetPixel(OLED_Handle* oled, uint8_t x, uint8_t y) {
+    if (oled == NULL || !oled->initialized) return 0;
+
     // Bounds check
     if(x >= oled->width || y >= oled->height) {
         return 0;
@@ -335,6 +354,7 @@ uint8_t OLED_GetPixel(OLED_Handle* oled, uint8_t x, uint8_t y) {
  * @brief เริ่ม Scrolling
  */
 void OLED_StartScroll(OLED_Handle* oled, OLED_ScrollDir dir, uint8_t start, uint8_t end, uint8_t interval) {
+    if (oled == NULL || !oled->initialized) return;
     OLED_StopScroll(oled);  // Stop any existing scroll
     
     switch(dir) {
@@ -390,5 +410,6 @@ void OLED_StartScroll(OLED_Handle* oled, OLED_ScrollDir dir, uint8_t start, uint
  * @brief หยุด Scrolling
  */
 void OLED_StopScroll(OLED_Handle* oled) {
+    if (oled == NULL || !oled->initialized) return;
     OLED_WriteCommand(oled, SSD1306_DEACTIVATE_SCROLL);
 }

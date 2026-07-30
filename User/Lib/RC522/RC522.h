@@ -27,7 +27,7 @@
  * SPI_SimpleInit(SPI_MODE0, SPI_4MHZ, SPI_PINS_DEFAULT);
  * RC522_Init(&rfid, PC4, PD2);   // CS=PC4, RST=PD2
  *
- * uint8_t uid[4];
+ * uint8_t uid[RC522_UID_MAX_LEN];
  * uint8_t uid_len;
  * if (RC522_IsCardPresent(&rfid)) {
  *     if (RC522_ReadUID(&rfid, uid, &uid_len) == RC522_OK) {

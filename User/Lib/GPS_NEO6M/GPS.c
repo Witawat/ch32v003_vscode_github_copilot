@@ -186,10 +186,9 @@ static void _parse_gprmc(GPS_Instance* gps, char* sentence) {
 
     if (n < 10) return;
 
-    /* status: A=active, V=void */
-    if (fields[2][0] == 'A') {
-        gps->fix_valid = 1;
-    }
+    /* status: A=active, V=void — must clear on 'V' or a stale fix from a
+     * previous sentence keeps reading as valid (see LIB_AUDIT.md #16) */
+    gps->fix_valid = (fields[2][0] == 'A') ? 1 : 0;
 
     /* time */
     if (fields[1][0] != '\0') {

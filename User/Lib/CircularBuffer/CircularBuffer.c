@@ -4,6 +4,7 @@
  */
 
 #include "CircularBuffer.h"
+#include <ch32v00x.h>  /* __disable_irq() / __enable_irq() (via core_riscv.h) */
 #include <stddef.h>
 
 CircularBuffer_Status CircularBuffer_Init(CircularBuffer* cb, uint8_t* buf, uint16_t size) {
@@ -19,21 +20,37 @@ CircularBuffer_Status CircularBuffer_Init(CircularBuffer* cb, uint8_t* buf, uint
 
 CircularBuffer_Status CircularBuffer_Push(CircularBuffer* cb, uint8_t data) {
     if (cb == NULL || cb->buffer == NULL) return CIRCULAR_BUFFER_ERROR;
-    if (cb->count >= cb->size) return CIRCULAR_BUFFER_FULL;
+
+    /* count is read-modify-written from both Push (often called from an
+     * ISR) and Pop (main loop); without disabling interrupts around the
+     * mutation, a Push that preempts a Pop's count-- (or vice versa) loses
+     * an update and count drifts permanently (see LIB_AUDIT.md #14) */
+    __disable_irq();
+    if (cb->count >= cb->size) {
+        __enable_irq();
+        return CIRCULAR_BUFFER_FULL;
+    }
 
     cb->buffer[cb->head] = data;
     cb->head = (cb->head + 1) % cb->size;
     cb->count++;
+    __enable_irq();
     return CIRCULAR_BUFFER_OK;
 }
 
 CircularBuffer_Status CircularBuffer_Pop(CircularBuffer* cb, uint8_t* data) {
     if (cb == NULL || cb->buffer == NULL || data == NULL) return CIRCULAR_BUFFER_ERROR;
-    if (cb->count == 0) return CIRCULAR_BUFFER_EMPTY;
+
+    __disable_irq();
+    if (cb->count == 0) {
+        __enable_irq();
+        return CIRCULAR_BUFFER_EMPTY;
+    }
 
     *data = cb->buffer[cb->tail];
     cb->tail = (cb->tail + 1) % cb->size;
     cb->count--;
+    __enable_irq();
     return CIRCULAR_BUFFER_OK;
 }
 

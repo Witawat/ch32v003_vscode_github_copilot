@@ -56,13 +56,6 @@ extern "C" {
 #include <stdint.h>
 #include <string.h>
 
-/* ========== Configuration ========== */
-
-/** @brief USART RX buffer size (bytes) — ปรับตาม RAM ที่มี */
-#ifndef HC05_RX_BUFFER_SIZE
-#define HC05_RX_BUFFER_SIZE   64
-#endif
-
 /* ========== Type Definitions ========== */
 
 /**
@@ -80,9 +73,6 @@ typedef enum {
  */
 typedef struct {
     uint32_t  baudrate;
-    uint8_t   rx_buf[HC05_RX_BUFFER_SIZE];
-    uint8_t   rx_head;
-    uint8_t   rx_tail;
     uint8_t   initialized;
 } HC05_Instance;
 

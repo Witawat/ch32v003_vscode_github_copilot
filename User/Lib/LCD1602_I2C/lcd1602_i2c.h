@@ -148,6 +148,7 @@ typedef struct {
     uint8_t display_control;    /**< Display control flags */
     uint8_t display_mode;       /**< Display mode flags */
     uint8_t display_function;   /**< Function set flags */
+    uint8_t initialized;        /**< 1 หลังจาก LCD_Init() สำเร็จ */
 } LCD1602_Handle;
 
 /* ========== Core Functions ========== */

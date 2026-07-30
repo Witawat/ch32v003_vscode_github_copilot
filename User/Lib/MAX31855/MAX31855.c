@@ -77,9 +77,9 @@ MAX31855_Status MAX31855_GetFault(MAX31855_Instance* therm, uint8_t* fault) {
     uint32_t raw = _spi_read32(therm);
     *fault = (uint8_t)(raw & 0x0F);
 
-    if (*fault & MAX31855_FAULT_OC)  return MAX31855_FAULT_OC;
-    if (*fault & MAX31855_FAULT_SCG) return MAX31855_FAULT_SCG;
-    if (*fault & MAX31855_FAULT_SCV) return MAX31855_FAULT_SCV;
+    if (*fault & MAX31855_FAULT_OC)  return MAX31855_STATUS_FAULT_OC;
+    if (*fault & MAX31855_FAULT_SCG) return MAX31855_STATUS_FAULT_SCG;
+    if (*fault & MAX31855_FAULT_SCV) return MAX31855_STATUS_FAULT_SCV;
 
     return MAX31855_OK;
 }
@@ -112,11 +112,10 @@ float MAX6675_ReadTemp(MAX31855_Instance* therm) {
         return 0.0f;
     }
 
-    int16_t temp_raw = (int16_t)((raw >> 3) & 0xFFF);
-
-    if (temp_raw & 0x800) {
-        temp_raw |= 0xF000;
-    }
+    /* MAX6675's 12-bit temperature is unsigned (0-1024°C range), unlike
+     * MAX31855's signed field — sign-extending it corrupts readings
+     * >= 512°C (see LIB_AUDIT.md #5) */
+    uint16_t temp_raw = (uint16_t)((raw >> 3) & 0xFFF);
 
     return (float)temp_raw * 0.25f;
 }

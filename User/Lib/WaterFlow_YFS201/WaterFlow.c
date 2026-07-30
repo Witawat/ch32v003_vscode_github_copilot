@@ -12,29 +12,21 @@
 static WaterFlow_Instance* g_flow_instances[WATERFLOW_MAX_INSTANCES] = {NULL};
 static uint8_t g_flow_count = 0;
 
-/* ========== Private Helpers ========== */
+/* ========== ISR Handlers ==========
+ * attachInterrupt() dispatches per-EXTI-line, so each registered callback
+ * already only fires for its own pin's edge. The previous single shared
+ * ISR ignored that and incremented every instance whose pin happened to
+ * read HIGH at the time, corrupting counts with 2+ sensors attached (see
+ * LIB_AUDIT.md #11). A per-slot trampoline fixes this by only ever
+ * touching the one instance registered to that pin. */
+static void WaterFlow_Trampoline0(void) { if (g_flow_instances[0]) g_flow_instances[0]->pulse_count++; }
+static void WaterFlow_Trampoline1(void) { if (g_flow_instances[1]) g_flow_instances[1]->pulse_count++; }
+static void WaterFlow_Trampoline2(void) { if (g_flow_instances[2]) g_flow_instances[2]->pulse_count++; }
+static void WaterFlow_Trampoline3(void) { if (g_flow_instances[3]) g_flow_instances[3]->pulse_count++; }
 
-/* ========== ISR Handlers ========== */
-
-/**
- * @brief ISR callback สำหรับ pulse counting
- * @note ฟังก์ชันนี้ถูกเรียกจาก EXTI interrupt
- *       ต้องใช้ __disable_irq/__enable_irq เมื่อ access จาก main loop
- */
-static void WaterFlow_PulseISR(void) {
-    /* หา instance จาก pin ที่เกิด interrupt */
-    /* Note: ใช้ polling approach — อ่าน pin state แล้ว match กับ instance */
-    uint8_t i;
-    for (i = 0; i < g_flow_count; i++) {
-        WaterFlow_Instance* flow = g_flow_instances[i];
-        if (flow == NULL || !flow->initialized) continue;
-
-        /* check if this pin triggered (RISING edge) */
-        if (digitalRead(flow->pin) == HIGH) {
-            flow->pulse_count++;
-        }
-    }
-}
+static void (*const g_flow_trampolines[WATERFLOW_MAX_INSTANCES])(void) = {
+    WaterFlow_Trampoline0, WaterFlow_Trampoline1, WaterFlow_Trampoline2, WaterFlow_Trampoline3
+};
 
 /* ========== Public Functions ========== */
 
@@ -58,11 +50,10 @@ WaterFlow_Status WaterFlow_Init(WaterFlow_Instance* flow, uint8_t pin, float k_f
     /* setup GPIO as input */
     pinMode(pin, PIN_MODE_INPUT_PULLUP);
 
-    /* setup EXTI interrupt on RISING edge */
-    attachInterrupt(pin, WaterFlow_PulseISR, RISING);
-
-    /* register instance */
-    g_flow_instances[g_flow_count++] = flow;
+    /* register instance, then attach its dedicated trampoline */
+    uint8_t slot = g_flow_count++;
+    g_flow_instances[slot] = flow;
+    attachInterrupt(pin, g_flow_trampolines[slot], RISING);
 
     return WATERFLOW_OK;
 }

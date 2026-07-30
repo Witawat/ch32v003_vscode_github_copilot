@@ -134,10 +134,12 @@ static RC522_Status _transceive(RC522_Instance* rfid,
 /* ========== Private: Anti-collision & Select ========== */
 
 /**
- * @brief Anti-collision ระดับ 1 — อ่าน UID 4 bytes แรก
+ * @brief Anti-collision — อ่าน 4 bytes (UID bytes หรือ cascade tag + UID bytes)
+ *        ของ cascade level ที่ระบุ
+ * @param sel_cmd PICC_CMD_SEL_CL1/CL2/CL3
  */
-static RC522_Status _anticoll(RC522_Instance* rfid, uint8_t* uid_buf) {
-    uint8_t send[2] = { PICC_CMD_SEL_CL1, 0x20 };
+static RC522_Status _anticoll(RC522_Instance* rfid, uint8_t sel_cmd, uint8_t* cl_buf) {
+    uint8_t send[2] = { sel_cmd, 0x20 };
     uint8_t recv[5] = {0};
     uint8_t recv_len = 5;
 
@@ -150,25 +152,28 @@ static RC522_Status _anticoll(RC522_Instance* rfid, uint8_t* uid_buf) {
     uint8_t bcc = recv[0] ^ recv[1] ^ recv[2] ^ recv[3];
     if (bcc != recv[4]) return RC522_ERROR_CRC;
 
-    uid_buf[0] = recv[0];
-    uid_buf[1] = recv[1];
-    uid_buf[2] = recv[2];
-    uid_buf[3] = recv[3];
+    cl_buf[0] = recv[0];
+    cl_buf[1] = recv[1];
+    cl_buf[2] = recv[2];
+    cl_buf[3] = recv[3];
     return RC522_OK;
 }
 
 /**
- * @brief Select card — ยืนยัน UID และรับ SAK
+ * @brief Select card ในระดับ cascade ที่ระบุ — ยืนยัน UID bytes และรับ SAK
+ * @param sel_cmd PICC_CMD_SEL_CL1/CL2/CL3
+ * @param cl_buf  4 bytes จาก _anticoll ของ cascade level เดียวกัน
+ * @param sak_out ค่า SAK ที่ได้ (bit 0x04 = "UID not complete", ต้องมี cascade level ถัดไป)
  */
-static RC522_Status _select(RC522_Instance* rfid, uint8_t* uid_buf) {
+static RC522_Status _select(RC522_Instance* rfid, uint8_t sel_cmd, const uint8_t* cl_buf, uint8_t* sak_out) {
     uint8_t send[9];
-    send[0] = PICC_CMD_SEL_CL1;
+    send[0] = sel_cmd;
     send[1] = 0x70;  /* NVB: 7 bytes follow */
-    send[2] = uid_buf[0];
-    send[3] = uid_buf[1];
-    send[4] = uid_buf[2];
-    send[5] = uid_buf[3];
-    send[6] = uid_buf[0] ^ uid_buf[1] ^ uid_buf[2] ^ uid_buf[3];  /* BCC */
+    send[2] = cl_buf[0];
+    send[3] = cl_buf[1];
+    send[4] = cl_buf[2];
+    send[5] = cl_buf[3];
+    send[6] = cl_buf[0] ^ cl_buf[1] ^ cl_buf[2] ^ cl_buf[3];  /* BCC */
 
     /* คำนวณ CRC */
     _flush_fifo(rfid);
@@ -190,6 +195,32 @@ static RC522_Status _select(RC522_Instance* rfid, uint8_t* uid_buf) {
     RC522_Status st = _transceive(rfid, RC522_CMD_TRANSCEIVE,
                                    send, 9, recv, &recv_len, 0);
     if (st != RC522_OK) return st;
+    if (recv_len < 1)   return RC522_ERROR_GENERAL;
+
+    if (sak_out != NULL) *sak_out = recv[0];
+    return RC522_OK;
+}
+
+/**
+ * @brief รัน anti-collision + select ของ cascade level เดียว และต่อ UID bytes
+ *        เข้า uid_out ตาม ISO14443-3 (คั่น cascade tag 0x88 ออกถ้ามี)
+ * @param out_len [in/out] ตำแหน่งถัดไปที่จะเขียนใน uid_out ก่อนเรียก / หลังเรียก
+ * @param sak_out ค่า SAK ของ cascade level นี้
+ */
+static RC522_Status _select_cascade_level(RC522_Instance* rfid, uint8_t sel_cmd,
+                                           uint8_t* uid_out, uint8_t* out_len,
+                                           uint8_t* sak_out) {
+    uint8_t cl_buf[4];
+    RC522_Status st = _anticoll(rfid, sel_cmd, cl_buf);
+    if (st != RC522_OK) return st;
+
+    st = _select(rfid, sel_cmd, cl_buf, sak_out);
+    if (st != RC522_OK) return st;
+
+    uint8_t start_idx = (cl_buf[0] == PICC_CMD_CT) ? 1 : 0;  /* skip cascade tag byte */
+    for (uint8_t i = start_idx; i < 4; i++) {
+        uid_out[(*out_len)++] = cl_buf[i];
+    }
     return RC522_OK;
 }
 
@@ -263,20 +294,28 @@ RC522_Status RC522_ReadUID(RC522_Instance* rfid, uint8_t* uid, uint8_t* uid_len)
                                    &cmd, 1, atqa, &rlen, 7);
     if (st != RC522_OK) return RC522_ERROR_NOCARD;
 
-    /* Anti-collision */
-    uint8_t uid_buf[4] = {0};
-    st = _anticoll(rfid, uid_buf);
+    /* Cascade Level 1 (see LIB_AUDIT.md #3: 7/10-byte UIDs need CL2/CL3 too,
+     * and the cascade tag 0x88 must be stripped rather than stored as a real
+     * UID byte) */
+    uint8_t out_len = 0;
+    uint8_t sak = 0;
+    st = _select_cascade_level(rfid, PICC_CMD_SEL_CL1, uid, &out_len, &sak);
     if (st != RC522_OK) return st;
 
-    /* Select */
-    st = _select(rfid, uid_buf);
-    if (st != RC522_OK) return st;
+    /* SAK bit 0x04 = "UID not complete" -> another cascade level follows */
+    if (sak & 0x04) {
+        st = _select_cascade_level(rfid, PICC_CMD_SEL_CL2, uid, &out_len, &sak);
+        if (st != RC522_OK) return st;
 
-    uid[0] = uid_buf[0];
-    uid[1] = uid_buf[1];
-    uid[2] = uid_buf[2];
-    uid[3] = uid_buf[3];
-    *uid_len = 4;
+        if (sak & 0x04) {
+            st = _select_cascade_level(rfid, PICC_CMD_SEL_CL3, uid, &out_len, &sak);
+            if (st != RC522_OK) return st;
+
+            if (sak & 0x04) return RC522_ERROR_GENERAL;  /* CL3 must be final */
+        }
+    }
+
+    *uid_len = out_len;
     return RC522_OK;
 }
 

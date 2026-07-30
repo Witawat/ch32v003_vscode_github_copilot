@@ -19,6 +19,15 @@ static void swap_uint8(uint8_t* a, uint8_t* b) {
 }
 
 /**
+ * @brief Swap two int16_t values
+ */
+static void swap_int16(int16_t* a, int16_t* b) {
+    int16_t temp = *a;
+    *a = *b;
+    *b = temp;
+}
+
+/**
  * @brief Absolute value
  */
 static uint8_t abs_int(int16_t x) {
@@ -298,7 +307,10 @@ void OLED_FillTriangle(OLED_Handle* oled, uint8_t x0, uint8_t y0, uint8_t x1, ui
         b = x0 + sb / dy01;
         sa += dx02;
         sb += dx01;
-        if(a > b) swap_uint8((uint8_t*)&a, (uint8_t*)&b);
+        /* a/b are int16_t; casting to uint8_t* here swapped only the low
+         * byte and left them corrupted whenever the computed span went
+         * negative or above 255 (see LIB_AUDIT.md #19) */
+        if(a > b) swap_int16(&a, &b);
         OLED_DrawHLine(oled, a, y, b - a + 1, color);
     }
     
@@ -310,7 +322,10 @@ void OLED_FillTriangle(OLED_Handle* oled, uint8_t x0, uint8_t y0, uint8_t x1, ui
         b = x0 + sb / dy02;
         sa += dx12;
         sb += dx02;
-        if(a > b) swap_uint8((uint8_t*)&a, (uint8_t*)&b);
+        /* a/b are int16_t; casting to uint8_t* here swapped only the low
+         * byte and left them corrupted whenever the computed span went
+         * negative or above 255 (see LIB_AUDIT.md #19) */
+        if(a > b) swap_int16(&a, &b);
         OLED_DrawHLine(oled, a, y, b - a + 1, color);
     }
 }

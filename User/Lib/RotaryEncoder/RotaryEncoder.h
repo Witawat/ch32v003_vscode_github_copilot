@@ -404,22 +404,6 @@ void Rotary_OnButtonDoubleClick(RotaryEncoder* encoder, void (*callback)(void));
  */
 void Rotary_Update(RotaryEncoder* encoder);
 
-/**
- * @brief Interrupt handler สำหรับ CLK pin (internal use)
- * @param encoder Pointer to RotaryEncoder structure
- * 
- * @note ฟังก์ชันนี้ถูกเรียกจาก EXTI ISR
- */
-void Rotary_CLK_ISR(RotaryEncoder* encoder);
-
-/**
- * @brief Interrupt handler สำหรับ DT pin (internal use)
- * @param encoder Pointer to RotaryEncoder structure
- * 
- * @note ฟังก์ชันนี้ถูกเรียกจาก EXTI ISR
- */
-void Rotary_DT_ISR(RotaryEncoder* encoder);
-
 #ifdef __cplusplus
 }
 #endif

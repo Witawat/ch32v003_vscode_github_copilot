@@ -7,7 +7,7 @@
 #include <stddef.h>
 
 PID_Status PID_Init(PID_Controller* pid, float kp, float ki, float kd, float dt) {
-    if (pid == NULL) return PID_ERROR;
+    if (pid == NULL || dt <= 0.0f) return PID_ERROR;
 
     pid->kp        = kp;
     pid->ki        = ki;
@@ -92,6 +92,9 @@ PID_Status PID_Reset(PID_Controller* pid) {
 }
 
 static float _clamp(float value, float min, float max) {
+    /* NaN compares false against min/max, so a NaN value would otherwise
+     * pass through unclamped (see LIB_AUDIT.md #20) */
+    if (value != value) return min;
     if (value < min) return min;
     if (value > max) return max;
     return value;
