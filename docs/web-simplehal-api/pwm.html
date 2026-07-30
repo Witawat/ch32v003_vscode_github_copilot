@@ -180,11 +180,14 @@ int main(void)
 PWM_Start(PWM1_CH2);
 
 // SG90: 500-2400us pulse = 2.5-12% ที่ 50Hz
-PWM_SetDutyCycle(PWM1_CH2, 7.5);  // center
+// PWM_SetDutyCycle รับ duty_percent เป็น uint8_t (จำนวนเต็ม 0-100)
+// ค่าที่ต้องการเป็นทศนิยม (2.5, 7.5, 12.5) จะถูกปัดเศษทิ้ง — ใช้ PWM_SetDutyCycleRaw()
+// กับค่า period แทนถ้าต้องการความละเอียดระดับ sub-percent
+PWM_SetDutyCycle(PWM1_CH2, 8);  // center (~7.5%, ปัดขึ้นจาก uint8_t)
 Delay_Ms(1000);
-PWM_SetDutyCycle(PWM1_CH2, 2.5);  // 0°
+PWM_SetDutyCycle(PWM1_CH2, 3);  // 0° (~2.5%)
 Delay_Ms(1000);
-PWM_SetDutyCycle(PWM1_CH2, 12.5); // 180°</code></pre>
+PWM_SetDutyCycle(PWM1_CH2, 13); // 180° (~12.5%)</code></pre>
 
     <h3>เปลี่ยนความถี่ขณะทำงาน</h3>
     <pre><code class="language-c">PWM_Init(PWM1_CH1, 1000);

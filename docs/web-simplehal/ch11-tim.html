@@ -58,7 +58,7 @@ flowchart TD
         <thead><tr><th>Timer</th><th>ประเภท</th><th>Channel</th><th>หมายเหตุ</th></tr></thead>
         <tbody>
             <tr><td>TIM_1</td><td>Advanced</td><td>4 channels</td><td>รองรับ PWM, complementary output</td></tr>
-            <tr><td>TIM_2</td><td>General</td><td>2 channels</td><td>ใช้เป็น Timer หรือ PWM ได้</td></tr>
+            <tr><td>TIM_2</td><td>General</td><td>4 channels</td><td>ใช้เป็น Timer หรือ PWM ได้</td></tr>
         </tbody>
     </table>
 </section>
@@ -95,7 +95,7 @@ flowchart TD
             <tr><td><code>Simple_TIM_SetCounter(timer, val)</code></td><td>ตั้งค่า counter ใหม่</td><td><code>Simple_TIM_SetCounter(TIM_2, 0);</code></td></tr>
             <tr><td><code>TIM_GetPeriod(timer)</code></td><td>อ่านค่า period (auto-reload)</td><td><code>uint32_t per = TIM_GetPeriod(TIM_2);</code></td></tr>
             <tr><td><code>TIM_SetMode(timer, mode)</code></td><td>เปลี่ยนโหมด timer</td><td><code>TIM_SetMode(TIM_2, TIM_MODE_UP);</code></td></tr>
-            <tr><td><code>TIM_AdvancedInit(timer, config)</code></td><td>ตั้งค่า timer แบบละเอียด</td><td><code>TIM_AdvancedInit(TIM_1, &cfg);</code></td></tr>
+            <tr><td><code>TIM_AdvancedInit(timer, prescaler, period, mode)</code></td><td>ตั้งค่า timer แบบละเอียด</td><td><code>TIM_AdvancedInit(TIM_1, 47, 999, TIM_MODE_UP);</code></td></tr>
             <tr><td><code>TIM_SetPrescaler(timer, psc)</code></td><td>ตั้งค่า prescaler</td><td><code>TIM_SetPrescaler(TIM_2, 4800);</code></td></tr>
             <tr><td><code>TIM_GenerateUpdate(timer)</code></td><td>สร้าง update event ด้วย software</td><td><code>TIM_GenerateUpdate(TIM_2);</code></td></tr>
         </tbody>
@@ -194,7 +194,7 @@ void tick_isr(void) {
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    USART_SimpleInit(USART_115200);
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
     ADC_SimpleInit();
 
     pinMode(PA1, PIN_MODE_OUTPUT);
@@ -213,7 +213,9 @@ int main(void) {
         if (now - last_adc >= 100) {
             last_adc = now;
             uint16_t val = ADC_Read(PA2);
-            printf("ADC: %u\r\n", val);
+            USART_Print("ADC: ");
+            USART_PrintNum(val);
+            USART_Print("\r\n");
         }
 
         // Task 2: Heartbeat LED ทุก 1000ms
@@ -247,7 +249,7 @@ void onFallingEdge(void) {
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    USART_SimpleInit(USART_115200);
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
 
     // TIM2 free-running @ 1MHz (1 tick = 1μs)
     TIM_SimpleInit(TIM_2);
@@ -261,7 +263,9 @@ int main(void) {
 
     while (1) {
         if (pulse_width > 0) {
-            printf("Pulse width: %lu us\r\n", pulse_width);
+            USART_Print("Pulse width: ");
+            USART_PrintNum(pulse_width);
+            USART_Print(" us\r\n");
             pulse_width = 0;
         }
         Delay_Ms(500);
@@ -304,7 +308,7 @@ int main(void) {
     A: <strong>SimpleTIM</strong> ใช้ hardware timer interrupt — โปรแกรมไม่หยุด, <strong>SimpleDelay</strong> ใช้ SysTick busy-wait — โปรแกรมหยุดรอ การเลือกใช้ขึ้นกับงาน: ถ้าต้องการ non-blocking ใช้ SimpleTIM</p>
 
     <p><strong>Q: TIM_1 กับ TIM_2 ต่างกันอย่างไร?</strong><br>
-    A: ทั้งคู่ใช้ API เดียวกัน — ต่างกันที่ hardware: TIM_1 เป็น Advanced timer (4 channels, complementary output), TIM_2 เป็น General purpose (2 channels) — สำหรับ periodic interrupt ใช้ตัวไหนก็ได้</p>
+    A: ทั้งคู่ใช้ API เดียวกัน — ต่างกันที่ hardware: TIM_1 เป็น Advanced timer (4 channels, complementary output), TIM_2 เป็น General purpose (4 channels) — สำหรับ periodic interrupt ใช้ตัวไหนก็ได้</p>
 
     <p><strong>Q: เปลี่ยนความถี่ Timer ระหว่างรันได้ไหม?</strong><br>
     A: ได้ — เรียก <code>TIM_Stop()</code> → <code>TIM_SetFrequency()</code> → <code>TIM_Start()</code> ใหม่</p>

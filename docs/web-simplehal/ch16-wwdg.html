@@ -125,17 +125,17 @@ flowchart TD
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    USART_SimpleInit(USART_115200);
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
 
     // counter=0x7F, window=0x5F (ต้อง refresh ระหว่าง 0x5F-0x40)
     WWDG_SimpleInit(0x7F, 0x5F);
 
-    printf("WWDG started\r\n");
+    USART_Print("WWDG started\r\n");
 
     while (1) {
         Delay_Ms(20); // รอให้ counter อยู่ในช่วง window
         WWDG_Refresh();
-        printf("Refresh ok\r\n");
+        USART_Print("Refresh ok\r\n");
     }
 }</code></pre>
 </section>
@@ -148,25 +148,25 @@ int main(void) {
     <pre><code class="language-c">#include "SimpleHAL.h"
 
 void wwdg_warning_callback(void) {
-    printf("WARNING: WWDG near reset!\r\n");
+    USART_Print("WARNING: WWDG near reset!\r\n");
     // บันทึก debug info, เตรียม shutdown ฯลฯ
 }
 
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    USART_SimpleInit(USART_115200);
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
 
     // ต้องตั้ง callback ก่อน InitWithInterrupt
     WWDG_SetCallback(wwdg_warning_callback);
     WWDG_InitWithInterrupt(0x7F, 0x5F);
 
-    printf("WWDG with Early Warning started\r\n");
+    USART_Print("WWDG with Early Warning started\r\n");
 
     while (1) {
         Delay_Ms(15);
         WWDG_Refresh();
-        printf("Running...\r\n");
+        USART_Print("Running...\r\n");
     }
 }</code></pre>
 </section>
@@ -183,7 +183,7 @@ volatile uint8_t task_done = 0;
 void realtime_task(void) {
     // งานสำคัญ: อ่าน sensor, คำนวณ PID, ส่ง motor command
     // ห้ามช้ากว่า 40ms หรือเร็วเกิน 10ms
-    printf("Realtime task running...\r\n");
+    USART_Print("Realtime task running...\r\n");
     Delay_Ms(25);
     task_done = 1;
 }
@@ -191,12 +191,12 @@ void realtime_task(void) {
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    USART_SimpleInit(USART_115200);
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
 
     // counter=0x7F, window=0x5F (refresh window: ~10-40ms)
     WWDG_SimpleInit(0x7F, 0x5F);
 
-    printf("Timing violation detector started\r\n");
+    USART_Print("Timing violation detector started\r\n");
 
     while (1) {
         task_done = 0;

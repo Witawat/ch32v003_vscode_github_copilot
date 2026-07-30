@@ -217,7 +217,7 @@ int main(void)
     SystemCoreClockUpdate();
     Timer_Init();
 
-    USART_Printf_Init(USART1, BAUD_115200);
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
 
     Stopwatch_Init();
     Stopwatch_Start();
@@ -225,11 +225,15 @@ int main(void)
     Delay_Ms(5000);  // หน่วง 5 วิ
 
     uint32_t elapsed = Stopwatch_GetTotalSeconds();
-    printf("Elapsed: %lu seconds\r\n", elapsed);
+    USART_Print("Elapsed: ");
+    USART_PrintNum(elapsed);
+    USART_Print(" seconds\r\n");
 
     char buf[16];
     Stopwatch_GetTimeString(buf, MMSS, DISPLAY_NORMALIZED);
-    printf("Time: %s\r\n", buf);
+    USART_Print("Time: ");
+    USART_Print(buf);
+    USART_Print("\r\n");
 
     while(1);
 }</code></pre>
@@ -238,7 +242,7 @@ int main(void)
     <pre><code class="language-c">void onAlarm(void)
 {
     // callback — ห้ามใช้ delay
-    printf("Time's up!\r\n");
+    USART_Print("Time's up!\r\n");
 }
 
 int main(void)
@@ -246,7 +250,7 @@ int main(void)
     SystemCoreClockUpdate();
     Timer_Init();
 
-    USART_Printf_Init(USART1, BAUD_115200);
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
 
     Countdown_Init(0, 0, 10);  // 10 วินาที
     Countdown_SetAlarmCallback(onAlarm);
@@ -256,11 +260,13 @@ int main(void)
     {
         char buf[12];
         Countdown_GetTimeString(buf, SS, DISPLAY_NORMALIZED);
-        printf("Remaining: %s\r\n", buf);
+        USART_Print("Remaining: ");
+        USART_Print(buf);
+        USART_Print("\r\n");
         Delay_Ms(1000);
     }
 
-    printf("Done!\r\n");
+    USART_Print("Done!\r\n");
     while(1);
 }</code></pre>
 
@@ -274,10 +280,14 @@ Delay_Ms(125000);  // 125 วิ = 2 นาที 5 วิ
 // RAW:         "02:05" (ค่าเท่ากันในกรณีนี้)
 char buf[16];
 Stopwatch_GetTimeString(buf, MMSS, DISPLAY_NORMALIZED);
-printf("Normalized: %s\r\n", buf);
+USART_Print("Normalized: ");
+USART_Print(buf);
+USART_Print("\r\n");
 
 Stopwatch_GetTimeString(buf, MMSS, DISPLAY_RAW);
-printf("Raw: %s\r\n", buf);</code></pre>
+USART_Print("Raw: ");
+USART_Print(buf);
+USART_Print("\r\n");</code></pre>
 </section>
 
 <nav class="bottom-nav">

@@ -125,10 +125,10 @@ flowchart TD
             <tr><td><code>digitalToggle(pin)</code></td><td>สลับสถานะ pin HIGH↔LOW</td><td><code>digitalToggle(PA1);</code></td></tr>
             <tr><td><code>attachInterrupt(pin, callback, mode)</code></td><td>ผูก ISR กับ pin (RISING/FALLING/CHANGE)</td><td><code>attachInterrupt(PC1, onBtn, FALLING);</code></td></tr>
             <tr><td><code>detachInterrupt(pin)</code></td><td>ยกเลิก interrupt ที่ผูกไว้</td><td><code>detachInterrupt(PC1);</code></td></tr>
-            <tr><td><code>pinModeMultiple(mask, mode)</code></td><td>ตั้งโหมดหลาย pin ของพอร์ตเดียวกันพร้อมกัน</td><td><code>pinModeMultiple(PORT_C, 0x0F, PIN_MODE_OUTPUT);</code></td></tr>
-            <tr><td><code>digitalWriteMultiple(mask, value)</code></td><td>เขียนค่าหลาย pin ของพอร์ตเดียวกัน</td><td><code>digitalWriteMultiple(PORT_C, 0x0F, 0x05);</code></td></tr>
-            <tr><td><code>portWrite(port, value)</code></td><td>เขียนครบ 8-bit ไปที่พอร์ต</td><td><code>portWrite(PORT_C, 0xAA);</code></td></tr>
-            <tr><td><code>portRead(port)</code></td><td>อ่านครบ 8-bit จากพอร์ต</td><td><code>uint8_t v = portRead(PORT_C);</code></td></tr>
+            <tr><td><code>pinModeMultiple(pins_array, mode)</code></td><td>ตั้งโหมดหลาย pin พร้อมกัน (รับ array ของ pin)</td><td><code>uint8_t leds[] = {PC0, PC1, PC2, PC3}; pinModeMultiple(leds, PIN_MODE_OUTPUT);</code></td></tr>
+            <tr><td><code>digitalWriteMultiple(pins_array, values_array)</code></td><td>เขียนค่าหลาย pin พร้อมกัน (รับ array ของ pin และ array ของค่า)</td><td><code>uint8_t leds[] = {PC0, PC1, PC2, PC3}; uint8_t states[] = {1, 0, 1, 0}; digitalWriteMultiple(leds, states);</code></td></tr>
+            <tr><td><code>portWrite(port, value)</code></td><td>เขียนครบ 8-bit ไปที่พอร์ต (รับ <code>GPIO_TypeDef*</code> เช่น <code>GPIOC</code>)</td><td><code>portWrite(GPIOC, 0xAA);</code></td></tr>
+            <tr><td><code>portRead(port)</code></td><td>อ่านครบ 8-bit จากพอร์ต (รับ <code>GPIO_TypeDef*</code> เช่น <code>GPIOC</code>)</td><td><code>uint8_t v = portRead(GPIOC);</code></td></tr>
             <tr><td><code>pulseIn(pin, state, timeout)</code></td><td>วัดความกว้างพัลส์ (μs)</td><td><code>uint32_t w = pulseIn(PC1, HIGH, 10000);</code></td></tr>
             <tr><td><code>shiftOut(dataPin, clockPin, order, data)</code></td><td>ส่งข้อมูลแบบ Serial Shift (8-bit)</td><td><code>shiftOut(PA1, PA2, LSBFIRST, 0x55);</code></td></tr>
             <tr><td><code>shiftIn(dataPin, clockPin, order)</code></td><td>รับข้อมูลแบบ Serial Shift (8-bit)</td><td><code>uint8_t v = shiftIn(PA2, PA1, MSBFIRST);</code></td></tr>

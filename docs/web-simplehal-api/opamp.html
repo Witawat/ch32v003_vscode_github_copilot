@@ -40,25 +40,25 @@
 <thead><tr><th>โหมด</th><th>Gain</th><th>สูตร</th><th>ใช้เมื่อ</th></tr></thead>
 <tbody>
 <tr>
-    <td><code>OPAMP_VOLTAGE_FOLLOWER</code></td>
+    <td><code>OPAMP_MODE_VOLTAGE_FOLLOWER</code></td>
     <td>1</td>
     <td>Vout = Vin</td>
     <td>Buffer สัญญาณ, impedance matching</td>
 </tr>
 <tr>
-    <td><code>OPAMP_NON_INVERTING</code></td>
+    <td><code>OPAMP_MODE_NON_INVERTING</code></td>
     <td>>1</td>
     <td>Vout = Vin * (1 + R1/R2)</td>
     <td>ขยายสัญญาณเฟสไม่กลับ</td>
 </tr>
 <tr>
-    <td><code>OPAMP_INVERTING</code></td>
+    <td><code>OPAMP_MODE_INVERTING</code></td>
     <td><0</td>
     <td>Vout = -Vin * (R2/R1)</td>
     <td>ขยายสัญญาณกลับเฟส</td>
 </tr>
 <tr>
-    <td><code>OPAMP_COMPARATOR</code></td>
+    <td><code>OPAMP_MODE_COMPARATOR</code></td>
     <td>∞ (digital)</td>
     <td>Vout = HIGH if Vin+ > Vin-</td>
     <td>เปรียบเทียบแรงดันสองสัญญาณ</td>
@@ -133,7 +133,7 @@
 <tbody>
 <tr>
     <td><code>OPAMP_SimpleInit(mode)</code></td>
-    <td><code>mode</code>: OPAMP_VOLTAGE_FOLLOWER / OPAMP_COMPARATOR</td>
+    <td><code>mode</code>: OPAMP_MODE_VOLTAGE_FOLLOWER / OPAMP_MODE_COMPARATOR</td>
     <td><code>void</code></td>
     <td>เริ่ม OPAMP แบบง่าย — ใช้ channel 0 ทั้งคู่</td>
 </tr>
@@ -222,10 +222,10 @@
     <td>ตรวจสอบ OPAMP เปิดอยู่หรือไม่</td>
 </tr>
 <tr>
-    <td><code>OPAMP_GetConfig()</code></td>
-    <td>—</td>
-    <td><code>uint32_t</code></td>
-    <td>อ่านค่า configuration register ปัจจุบัน</td>
+    <td><code>OPAMP_GetConfig(pos, neg)</code></td>
+    <td><code>pos</code>: Pointer เก็บ positive channel<br><code>neg</code>: Pointer เก็บ negative channel</td>
+    <td><code>void</code></td>
+    <td>อ่านค่า channel configuration ปัจจุบันผ่าน out-pointer</td>
 </tr>
 </tbody>
 </table>

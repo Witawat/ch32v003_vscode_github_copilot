@@ -165,8 +165,18 @@ void loop() {
     float vdd = ADC_GetVDD();                           // VDD จริง
     float bat_pct = ADC_GetBatteryPercent(vdd, 3.0, 4.2); // % แบต (3.0V=0%, 4.2V=100%)
 
-    // แสดงผล
-    printf("VDD: %.2fV, Battery: %.1f%%\n", vdd, bat_pct);
+    // แสดงผล — SimpleHAL ไม่มีฟังก์ชันพิมพ์ float จึงแปลงเป็นจำนวนเต็มทศนิยม 2/1 ตำแหน่ง
+    int32_t vdd_x100 = (int32_t)(vdd * 100.0f);
+    int32_t pct_x10 = (int32_t)(bat_pct * 10.0f);
+    USART_Print("VDD: ");
+    USART_PrintNum(vdd_x100 / 100);
+    USART_Print(".");
+    USART_PrintNum(vdd_x100 % 100);
+    USART_Print("V, Battery: ");
+    USART_PrintNum(pct_x10 / 10);
+    USART_Print(".");
+    USART_PrintNum(pct_x10 % 10);
+    USART_Print("%\n");
 
     Delay_Ms(1000);
 }
@@ -244,7 +254,20 @@ void loop() {
     float voltage = ADC_ToVoltage(val, 3.3);
     float percent = ADC_ToPercent(val);
 
-    printf("ADC: %d, V: %.2f, %%: %.1f\n", val, voltage, percent);
+    // SimpleHAL ไม่มีฟังก์ชันพิมพ์ float — แปลงเป็นจำนวนเต็มทศนิยม 2/1 ตำแหน่ง
+    int32_t v_x100 = (int32_t)(voltage * 100.0f);
+    int32_t pct_x10 = (int32_t)(percent * 10.0f);
+    USART_Print("ADC: ");
+    USART_PrintNum(val);
+    USART_Print(", V: ");
+    USART_PrintNum(v_x100 / 100);
+    USART_Print(".");
+    USART_PrintNum(v_x100 % 100);
+    USART_Print(", %: ");
+    USART_PrintNum(pct_x10 / 10);
+    USART_Print(".");
+    USART_PrintNum(pct_x10 % 10);
+    USART_Print("\n");
     Delay_Ms(500);
 }
 </code></pre>
@@ -262,7 +285,13 @@ void loop() {
 
     ADC_ReadMultiple(ch_list, values, 3);
 
-    printf("PA2: %d, PA1: %d, PC4: %d\n", values[0], values[1], values[2]);
+    USART_Print("PA2: ");
+    USART_PrintNum(values[0]);
+    USART_Print(", PA1: ");
+    USART_PrintNum(values[1]);
+    USART_Print(", PC4: ");
+    USART_PrintNum(values[2]);
+    USART_Print("\n");
     Delay_Ms(500);
 }
 </code></pre>
@@ -280,7 +309,18 @@ void loop() {
         // แบตเตอรี่ใกล้หมด — เตือน
     }
 
-    printf("VDD: %.2fV | Battery: %.1f%%\n", vdd, bat_pct);
+    // SimpleHAL ไม่มีฟังก์ชันพิมพ์ float — แปลงเป็นจำนวนเต็มทศนิยม 2/1 ตำแหน่ง
+    int32_t vdd_x100 = (int32_t)(vdd * 100.0f);
+    int32_t pct_x10 = (int32_t)(bat_pct * 10.0f);
+    USART_Print("VDD: ");
+    USART_PrintNum(vdd_x100 / 100);
+    USART_Print(".");
+    USART_PrintNum(vdd_x100 % 100);
+    USART_Print("V | Battery: ");
+    USART_PrintNum(pct_x10 / 10);
+    USART_Print(".");
+    USART_PrintNum(pct_x10 % 10);
+    USART_Print("%\n");
     Delay_Ms(2000);
 }
 </code></pre>
@@ -293,7 +333,14 @@ void loop() {
 void loop() {
     // ชดเชย VDD อัตโนมัติ — แม่นยำแม้ VDD เปลี่ยน
     float voltage = ADC_ReadVoltageCompensated(ADC_CH_PA2);
-    printf("Voltage: %.3fV (VDD-compensated)\n", voltage);
+
+    // SimpleHAL ไม่มีฟังก์ชันพิมพ์ float — แปลงเป็นทศนิยม 3 ตำแหน่งด้วยจำนวนเต็ม
+    int32_t v_x1000 = (int32_t)(voltage * 1000.0f);
+    USART_Print("Voltage: ");
+    USART_PrintNum(v_x1000 / 1000);
+    USART_Print(".");
+    USART_PrintNum(v_x1000 % 1000);
+    USART_Print("V (VDD-compensated)\n");
     Delay_Ms(500);
 }
 </code></pre>
@@ -308,7 +355,15 @@ void loop() {
     uint16_t avg = ADC_ReadAverage(ADC_CH_PA2, 16);
     float voltage = ADC_ToVoltage(avg, 3.3);
 
-    printf("Average: %d → %.3fV\n", avg, voltage);
+    // SimpleHAL ไม่มีฟังก์ชันพิมพ์ float — แปลงเป็นทศนิยม 3 ตำแหน่งด้วยจำนวนเต็ม
+    int32_t v_x1000 = (int32_t)(voltage * 1000.0f);
+    USART_Print("Average: ");
+    USART_PrintNum(avg);
+    USART_Print(" -> ");
+    USART_PrintNum(v_x1000 / 1000);
+    USART_Print(".");
+    USART_PrintNum(v_x1000 % 1000);
+    USART_Print("V\n");
     Delay_Ms(100);
 }
 </code></pre>
@@ -327,7 +382,11 @@ void loop() {
     ADC_EnableChannel(ADC_CH_PC4);
     uint16_t val2 = ADC_Read(ADC_CH_PC4);
 
-    printf("PA2: %d, PC4: %d\n", val1, val2);
+    USART_Print("PA2: ");
+    USART_PrintNum(val1);
+    USART_Print(", PC4: ");
+    USART_PrintNum(val2);
+    USART_Print("\n");
     Delay_Ms(500);
 }
 </code></pre>

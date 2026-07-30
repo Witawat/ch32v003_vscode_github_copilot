@@ -74,8 +74,8 @@ flowchart TD
     <table>
         <thead><tr><th>Mode</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr></thead>
         <tbody>
-            <tr><td><code>TIME_MODE_NORMALIZED</code></td><td>60 วินาที → 1 นาที, 60 นาที → 1 ชั่วโมง</td><td>130s → 2m 10s</td></tr>
-            <tr><td><code>TIME_MODE_RAW</code></td><td>แสดงค่าวินาทีดิบ ไม่ normalize</td><td>130s → 130s</td></tr>
+            <tr><td><code>TIME_DISPLAY_NORMALIZED</code></td><td>60 วินาที → 1 นาที, 60 นาที → 1 ชั่วโมง</td><td>130s → 2m 10s</td></tr>
+            <tr><td><code>TIME_DISPLAY_RAW</code></td><td>แสดงค่าวินาทีดิบ ไม่ normalize</td><td>130s → 130s</td></tr>
         </tbody>
     </table>
 
@@ -100,10 +100,10 @@ flowchart TD
             <tr><td><code>Stopwatch_Stop()</code></td><td>หยุดจับเวลา (ค้างค่า)</td><td><code>Stopwatch_Stop();</code></td></tr>
             <tr><td><code>Stopwatch_Reset()</code></td><td>รีเซ็ตเวลาเป็น 0</td><td><code>Stopwatch_Reset();</code></td></tr>
             <tr><td><code>Stopwatch_IsRunning()</code></td><td>เช็คว่ากำลังจับเวลาอยู่ไหม</td><td><code>if (Stopwatch_IsRunning()) { ... }</code></td></tr>
-            <tr><td><code>Stopwatch_GetTime()</code></td><td>อ่านค่า Time_t ปัจจุบัน</td><td><code>Time_t t = Stopwatch_GetTime();</code></td></tr>
+            <tr><td><code>Stopwatch_GetTime(time)</code></td><td>อ่านค่า Time_t ปัจจุบันผ่าน out-pointer</td><td><code>Time_t t; Stopwatch_GetTime(&t);</code></td></tr>
             <tr><td><code>Stopwatch_GetTotalSeconds()</code></td><td>วินาทีรวม (uint32_t)</td><td><code>uint32_t s = Stopwatch_GetTotalSeconds();</code></td></tr>
             <tr><td><code>Stopwatch_GetTotalMilliseconds()</code></td><td>มิลลิวินาทีรวม</td><td><code>uint32_t ms = Stopwatch_GetTotalMilliseconds();</code></td></tr>
-            <tr><td><code>Stopwatch_GetTimeString(buf, format)</code></td><td>แปลงเป็น string</td><td><code>Stopwatch_GetTimeString(buf, TIME_FORMAT_HHMMSS);</code></td></tr>
+            <tr><td><code>Stopwatch_GetTimeString(buf, format, mode)</code></td><td>แปลงเป็น string</td><td><code>Stopwatch_GetTimeString(buf, TIME_FORMAT_HHMMSS, TIME_DISPLAY_NORMALIZED);</code></td></tr>
         </tbody>
     </table>
 
@@ -111,15 +111,15 @@ flowchart TD
     <table>
         <thead><tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr></thead>
         <tbody>
-            <tr><td><code>Countdown_Init(time)</code></td><td>เริ่มต้นตัวนับถอยหลัง</td><td><code>Time_t t = {0, 1, 30}; Countdown_Init(t);</code></td></tr>
+            <tr><td><code>Countdown_Init(hours, minutes, seconds)</code></td><td>เริ่มต้นตัวนับถอยหลัง</td><td><code>Countdown_Init(0, 1, 30); // 1 นาที 30 วินาที</code></td></tr>
             <tr><td><code>Countdown_InitFromSeconds(sec)</code></td><td>เริ่มต้นจากวินาที</td><td><code>Countdown_InitFromSeconds(90); // 1m30s</code></td></tr>
             <tr><td><code>Countdown_Start()</code></td><td>เริ่มนับถอยหลัง</td><td><code>Countdown_Start();</code></td></tr>
             <tr><td><code>Countdown_Stop()</code></td><td>หยุดนับ (ค้างค่า)</td><td><code>Countdown_Stop();</code></td></tr>
             <tr><td><code>Countdown_Reset()</code></td><td>รีเซ็ตกลับค่าเริ่มต้น</td><td><code>Countdown_Reset();</code></td></tr>
             <tr><td><code>Countdown_IsRunning()</code></td><td>กำลังนับถอยหลังอยู่ไหม</td><td><code>if (Countdown_IsRunning()) { ... }</code></td></tr>
             <tr><td><code>Countdown_IsFinished()</code></td><td>นับถึงศูนย์แล้วหรือยัง</td><td><code>if (Countdown_IsFinished()) { alert(); }</code></td></tr>
-            <tr><td><code>Countdown_GetTime()</code></td><td>เวลาคงเหลือในรูปแบบ Time_t</td><td><code>Time_t r = Countdown_GetTime();</code></td></tr>
-            <tr><td><code>Countdown_GetTimeString(buf, fmt)</code></td><td>แปลงเวลาคงเหลือเป็น string</td><td><code>Countdown_GetTimeString(buf, TIME_FORMAT_MMSS);</code></td></tr>
+            <tr><td><code>Countdown_GetTime(time)</code></td><td>เวลาคงเหลือในรูปแบบ Time_t ผ่าน out-pointer</td><td><code>Time_t r; Countdown_GetTime(&r);</code></td></tr>
+            <tr><td><code>Countdown_GetTimeString(buf, fmt, mode)</code></td><td>แปลงเวลาคงเหลือเป็น string</td><td><code>Countdown_GetTimeString(buf, TIME_FORMAT_MMSS, TIME_DISPLAY_NORMALIZED);</code></td></tr>
             <tr><td><code>Countdown_GetRemainingSeconds()</code></td><td>วินาทีคงเหลือ</td><td><code>uint32_t r = Countdown_GetRemainingSeconds();</code></td></tr>
             <tr><td><code>Countdown_SetAlarmCallback(cb)</code></td><td>ตั้ง callback เมื่อหมดเวลา</td><td><code>Countdown_SetAlarmCallback(onAlarm);</code></td></tr>
         </tbody>
@@ -129,8 +129,8 @@ flowchart TD
     <table>
         <thead><tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th></tr></thead>
         <tbody>
-            <tr><td><code>Time_ToString(time, buf, size, mode, format)</code></td><td>แปลง Time_t → string</td></tr>
-            <tr><td><code>Time_FromSeconds(seconds, mode)</code></td><td>แปลงวินาที → Time_t</td></tr>
+            <tr><td><code>Time_ToString(time, buf, format, mode)</code></td><td>แปลง Time_t → string</td></tr>
+            <tr><td><code>Time_FromSeconds(seconds, time, mode)</code></td><td>แปลงวินาที → Time_t ผ่าน out-pointer</td></tr>
             <tr><td><code>Time_ToSeconds(time)</code></td><td>แปลง Time_t → วินาทีรวม</td></tr>
         </tbody>
     </table>
@@ -151,7 +151,7 @@ flowchart TD
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    USART_SimpleInit(USART_115200);</code></pre>
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);</code></pre>
         <p class="explain">🔍 ระบบพื้นฐานพร้อม — USART สำหรับแสดงผลเวลา</p>
     </div>
 
@@ -167,8 +167,9 @@ int main(void) {
     <div class="step">
         <h3>ขั้นที่ 3: แสดงผลเวลาใน Loop</h3>
         <pre><code class="language-c">    while (1) {
-        Stopwatch_GetTimeString(time_buf, TIME_FORMAT_HHMMSS);
-        printf("\r%s", time_buf);  // \r เขียนทับบรรทัดเดิม
+        Stopwatch_GetTimeString(time_buf, TIME_FORMAT_HHMMSS, TIME_DISPLAY_NORMALIZED);
+        USART_Print("\r");
+        USART_Print(time_buf);  // \r เขียนทับบรรทัดเดิม
         Delay_Ms(200);
     }</code></pre>
         <p class="explain">🔍 <code>TIME_FORMAT_HHMMSS</code> ให้ผลลัพธ์เช่น <code>"01:23:45"</code></p>
@@ -195,8 +196,9 @@ int main(void) {
             while (digitalRead(PC2) == LOW);
         }
 
-        Stopwatch_GetTimeString(time_buf, TIME_FORMAT_HHMMSS);
-        printf("\r%s", time_buf);
+        Stopwatch_GetTimeString(time_buf, TIME_FORMAT_HHMMSS, TIME_DISPLAY_NORMALIZED);
+        USART_Print("\r");
+        USART_Print(time_buf);
         Delay_Ms(100);
     }</code></pre>
         <p class="explain">🔍 ปุ่มเดียวสลับ Start/Stop — <code>Stopwatch_IsRunning()</code> ใช้เช็คสถานะเพื่อตัดสินใจ</p>
@@ -212,14 +214,14 @@ int main(void) {
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    USART_SimpleInit(USART_115200);
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
 
     pinMode(PC1, PIN_MODE_INPUT_PULLUP);
 
     Stopwatch_Init();
     char buf[16];
 
-    printf("--- Stopwatch Ready ---\r\n");
+    USART_Print("--- Stopwatch Ready ---\r\n");
 
     while (1) {
         if (digitalRead(PC1) == LOW) {
@@ -232,8 +234,9 @@ int main(void) {
             Delay_Ms(30);
         }
 
-        Stopwatch_GetTimeString(buf, TIME_FORMAT_HHMMSS);
-        printf("\rTime: %s", buf);
+        Stopwatch_GetTimeString(buf, TIME_FORMAT_HHMMSS, TIME_DISPLAY_NORMALIZED);
+        USART_Print("\rTime: ");
+        USART_Print(buf);
         Delay_Ms(200);
     }
 }</code></pre>
@@ -255,7 +258,7 @@ void onAlarm(void) {
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    USART_SimpleInit(USART_115200);
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
 
     pinMode(PC1, PIN_MODE_INPUT_PULLUP); // Start
     pinMode(PC3, PIN_MODE_INPUT_PULLUP); // Stop
@@ -265,7 +268,7 @@ int main(void) {
     Countdown_SetAlarmCallback(onAlarm);
 
     char buf[16];
-    printf("--- Countdown 60s Ready ---\r\n");
+    USART_Print("--- Countdown 60s Ready ---\r\n");
 
     while (1) {
         if (digitalRead(PC1) == LOW) {
@@ -283,11 +286,12 @@ int main(void) {
             Delay_Ms(30);
         }
 
-        Countdown_GetTimeString(buf, TIME_FORMAT_MMSS);
-        printf("\rRemaining: %s", buf);
+        Countdown_GetTimeString(buf, TIME_FORMAT_MMSS, TIME_DISPLAY_NORMALIZED);
+        USART_Print("\rRemaining: ");
+        USART_Print(buf);
 
         if (Countdown_IsFinished()) {
-            printf("\r\n*** TIME'S UP! ***\r\n");
+            USART_Print("\r\n*** TIME'S UP! ***\r\n");
             Delay_Ms(3000);
             Countdown_Reset();
         }
@@ -313,7 +317,7 @@ uint8_t lap_count = 0;
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    USART_SimpleInit(USART_115200);
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
 
     pinMode(PC1, PIN_MODE_INPUT_PULLUP); // Start
     pinMode(PC2, PIN_MODE_INPUT_PULLUP); // Lap
@@ -322,7 +326,7 @@ int main(void) {
     Stopwatch_Init();
     char buf[16];
 
-    printf("--- Lap Timer (5 Laps) ---\r\n");
+    USART_Print("--- Lap Timer (5 Laps) ---\r\n");
 
     while (1) {
         // Start / Stop
@@ -340,7 +344,11 @@ int main(void) {
         if (digitalRead(PC2) == LOW && lap_count &lt; MAX_LAPS) {
             Delay_Ms(30);
             lap_times[lap_count] = Stopwatch_GetTotalMilliseconds();
-            printf("Lap %d: %lums\r\n", lap_count + 1, lap_times[lap_count]);
+            USART_Print("Lap ");
+            USART_PrintNum(lap_count + 1);
+            USART_Print(": ");
+            USART_PrintNum(lap_times[lap_count]);
+            USART_Print("ms\r\n");
             lap_count++;
             while (digitalRead(PC2) == LOW);
             Delay_Ms(30);
@@ -351,20 +359,28 @@ int main(void) {
             Delay_Ms(30);
             Stopwatch_Reset();
             lap_count = 0;
-            printf("--- Reset ---\r\n");
+            USART_Print("--- Reset ---\r\n");
             while (digitalRead(PC3) == LOW);
             Delay_Ms(30);
         }
 
         if (lap_count >= MAX_LAPS) {
-            printf("=== ALL %d LAPS ===\r\n", MAX_LAPS);
-            for (uint8_t i = 0; i &lt; MAX_LAPS; i++)
-                printf("  Lap %d: %lums\r\n", i + 1, lap_times[i]);
+            USART_Print("=== ALL ");
+            USART_PrintNum(MAX_LAPS);
+            USART_Print(" LAPS ===\r\n");
+            for (uint8_t i = 0; i &lt; MAX_LAPS; i++) {
+                USART_Print("  Lap ");
+                USART_PrintNum(i + 1);
+                USART_Print(": ");
+                USART_PrintNum(lap_times[i]);
+                USART_Print("ms\r\n");
+            }
             lap_count = 0;
         }
 
-        Stopwatch_GetTimeString(buf, TIME_FORMAT_MMSS);
-        printf("\rTime: %s", buf);
+        Stopwatch_GetTimeString(buf, TIME_FORMAT_MMSS, TIME_DISPLAY_NORMALIZED);
+        USART_Print("\rTime: ");
+        USART_Print(buf);
         Delay_Ms(100);
     }
 }</code></pre>

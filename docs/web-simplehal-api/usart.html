@@ -75,7 +75,7 @@
 <tr><td><code>DEFAULT</code></td><td>PD5</td><td>PD6</td><td></td></tr>
 <tr><td><code>REMAP1</code></td><td>PD0</td><td>PD1</td><td>เฉพาะ TSSOP20 / QFN20</td></tr>
 <tr><td><code>REMAP2</code></td><td>PD6</td><td>PD5</td><td></td></tr>
-<tr><td><code>FULL_REMAP</code></td><td>PD5</td><td>PD6</td><td>สลับบทบาท TX/RX</td></tr>
+<tr><td><code>FULL_REMAP</code></td><td>PD6</td><td>PD5</td><td>สลับบทบาท TX/RX</td></tr>
 </tbody>
 </table>
 </section>
@@ -141,7 +141,7 @@
 
 int main(void) {
     SystemCoreClockUpdate();
-    USART_SimpleInit(USART_BAUD_115200, USART_PIN_DEFAULT);
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
 
     USART_Print("Hello from CH32V003!\r\n");
 
@@ -160,7 +160,7 @@ int main(void) {
 
 int main(void) {
     SystemCoreClockUpdate();
-    USART_SimpleInit(USART_BAUD_115200, USART_PIN_DEFAULT);
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
 
     USART_Print("Echo ready\r\n");
     while (1) {

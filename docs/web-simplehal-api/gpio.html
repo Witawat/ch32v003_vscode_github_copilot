@@ -39,9 +39,9 @@ flowchart LR
 <table>
 <thead><tr><th>พอร์ท</th><th>Pin</th><th>ฟังก์ชันพิเศษ</th><th>หมายเหตุ</th></tr></thead>
 <tbody>
-<tr><td>PA</td><td>PA1, PA2</td><td>ADC, PWM</td><td>TSSOP20/SOP16/QFN20 เท่านั้น</td></tr>
-<tr><td>PC</td><td>PC0, PC1, PC2, PC3, PC4, PC5, PC6, PC7</td><td>ADC (PC1-PC7), PWM</td><td>ครบทุกแพ็กเกจ</td></tr>
-<tr><td>PD</td><td>PD0, PD1, PD2, PD3, PD4, PD5, PD6, PD7</td><td>ADC (PD1-PD7), PWM</td><td>PD0/PD1 = SWIO ใช้ร่วมกับ debugger; SOP8 <strong>ไม่มี PD ทั้งหมด</strong></td></tr>
+<tr><td>PA</td><td>PA1, PA2</td><td>ADC (PA1, PA2), PWM</td><td>TSSOP20/SOP16/QFN20 เท่านั้น</td></tr>
+<tr><td>PC</td><td>PC0, PC1, PC2, PC3, PC4, PC5, PC6, PC7</td><td>ADC (PC4 เท่านั้น), PWM</td><td>ครบทุกแพ็กเกจ</td></tr>
+<tr><td>PD</td><td>PD0, PD1, PD2, PD3, PD4, PD5, PD6, PD7</td><td>ADC (PD2-PD6; <strong>PD7 ไม่รองรับ</strong>), PWM</td><td>PD0/PD1 = SWIO ใช้ร่วมกับ debugger; SOP8 <strong>ไม่มี PD ทั้งหมด</strong></td></tr>
 </tbody>
 </table>
 
@@ -167,14 +167,14 @@ flowchart LR
 </tr>
 <tr>
     <td><code>portWrite(port, value)</code></td>
-    <td><code>port</code>: 'C' หรือ 'D'<br><code>value</code>: 0-255</td>
+    <td><code>port</code>: <code>GPIO_TypeDef*</code> เช่น <code>GPIOC</code> หรือ <code>GPIOD</code><br><code>value</code>: 0-255</td>
     <td><code>void</code></td>
     <td>เขียนทั้งพอร์ท 8 bit พร้อมกัน</td>
     <td>เร็วกว่า digitalWrite ทีละ pin</td>
 </tr>
 <tr>
     <td><code>portRead(port)</code></td>
-    <td><code>port</code>: 'C' หรือ 'D'</td>
+    <td><code>port</code>: <code>GPIO_TypeDef*</code> เช่น <code>GPIOC</code> หรือ <code>GPIOD</code></td>
     <td><code>uint8_t</code></td>
     <td>อ่านทั้งพอร์ท 8 bit</td>
     <td>อ่าน 8 input พร้อมกัน</td>

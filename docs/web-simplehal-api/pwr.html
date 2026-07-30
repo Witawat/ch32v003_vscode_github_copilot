@@ -53,28 +53,28 @@
 <p>AWU (Auto Wake-Up) ใช้ LSI 128kHz จับเวลาในโหมด Standby — ปลุก MCU อัตโนมัติหลังจากหมดเวลา</p>
 
 <table>
-<thead><tr><th>Prescaler</th><th>Divider</th><th>Min Timeout</th><th>Max Timeout (window=0x3F)</th></tr></thead>
+<thead><tr><th>Prescaler</th><th>Divider</th><th>Min Timeout (window=1)</th><th>Max Timeout (window=0x3F)</th></tr></thead>
 <tbody>
-<tr><td><code>AWU_PRESCALER_1024</code></td><td>2^10</td><td>8 ms</td><td>~0.5 s</td></tr>
-<tr><td><code>AWU_PRESCALER_2048</code></td><td>2^11</td><td>16 ms</td><td>~1.0 s</td></tr>
-<tr><td><code>AWU_PRESCALER_4096</code></td><td>2^12</td><td>32 ms</td><td>~2.0 s</td></tr>
-<tr><td><code>AWU_PRESCALER_8192</code></td><td>2^13</td><td>64 ms</td><td>~4.1 s</td></tr>
-<tr><td><code>AWU_PRESCALER_16384</code></td><td>2^14</td><td>128 ms</td><td>~8.2 s</td></tr>
-<tr><td><code>AWU_PRESCALER_32768</code></td><td>2^15</td><td>256 ms</td><td>~16.4 s</td></tr>
-<tr><td><code>AWU_PRESCALER_65536</code></td><td>2^16</td><td>512 ms</td><td>~32.8 s</td></tr>
-<tr><td><code>AWU_PRESCALER_131072</code></td><td>2^17</td><td>1.0 s</td><td>~65.5 s</td></tr>
-<tr><td><code>AWU_PRESCALER_262144</code></td><td>2^18</td><td>2.0 s</td><td>~131 s</td></tr>
-<tr><td><code>AWU_PRESCALER_524288</code></td><td>2^19</td><td>4.1 s</td><td>~262 s</td></tr>
-<tr><td><code>AWU_PRESCALER_1048576</code></td><td>2^20</td><td>8.2 s</td><td>~524 s</td></tr>
-<tr><td><code>AWU_PRESCALER_2097152</code></td><td>2^21</td><td>16.4 s</td><td>~1049 s</td></tr>
-<tr><td><code>AWU_PRESCALER_4194304</code></td><td>2^22</td><td>32.8 s</td><td>~2097 s</td></tr>
-<tr><td><code>AWU_PRESCALER_8388608</code></td><td>2^23</td><td>65.5 s</td><td>~4194 s</td></tr>
-<tr><td><code>AWU_PRESCALER_16777216</code></td><td>2^24</td><td>131 s</td><td>~8389 s</td></tr>
+<tr><td><code>PWR_AWU_PRESCALER_1</code></td><td>1</td><td>~0.008 ms</td><td>~0.49 ms</td></tr>
+<tr><td><code>PWR_AWU_PRESCALER_2</code></td><td>2</td><td>~0.016 ms</td><td>~0.98 ms</td></tr>
+<tr><td><code>PWR_AWU_PRESCALER_4</code></td><td>4</td><td>~0.03 ms</td><td>~1.97 ms</td></tr>
+<tr><td><code>PWR_AWU_PRESCALER_8</code></td><td>8</td><td>~0.06 ms</td><td>~3.94 ms</td></tr>
+<tr><td><code>PWR_AWU_PRESCALER_16</code></td><td>16</td><td>~0.125 ms</td><td>~7.88 ms</td></tr>
+<tr><td><code>PWR_AWU_PRESCALER_32</code></td><td>32</td><td>~0.25 ms</td><td>~15.75 ms</td></tr>
+<tr><td><code>PWR_AWU_PRESCALER_64</code></td><td>64</td><td>~0.5 ms</td><td>~31.5 ms</td></tr>
+<tr><td><code>PWR_AWU_PRESCALER_128</code></td><td>128</td><td>1 ms</td><td>63 ms</td></tr>
+<tr><td><code>PWR_AWU_PRESCALER_256</code></td><td>256</td><td>2 ms</td><td>126 ms</td></tr>
+<tr><td><code>PWR_AWU_PRESCALER_512</code></td><td>512</td><td>4 ms</td><td>252 ms</td></tr>
+<tr><td><code>PWR_AWU_PRESCALER_1024</code></td><td>1024</td><td>8 ms</td><td>504 ms</td></tr>
+<tr><td><code>PWR_AWU_PRESCALER_2048</code></td><td>2048</td><td>16 ms</td><td>~1.01 s</td></tr>
+<tr><td><code>PWR_AWU_PRESCALER_4096</code></td><td>4096</td><td>32 ms</td><td>~2.02 s</td></tr>
+<tr><td><code>PWR_AWU_PRESCALER_10240</code></td><td>10240</td><td>80 ms</td><td>~5.04 s</td></tr>
+<tr><td><code>PWR_AWU_PRESCALER_61440</code></td><td>61440</td><td>480 ms</td><td>~30.24 s</td></tr>
 </tbody>
 </table>
 
 <div class="callout callout-note">
-    <strong>Timeout = (prescaler * (window + 1)) / 128000</strong> — window 0x00-0x3F, LSI = 128kHz
+    <strong>Timeout (ms) = (prescaler * window * 1000) / 128000</strong> — window 0x00-0x3F, LSI = 128kHz
 </div>
 </section>
 
@@ -85,14 +85,14 @@
 <table>
 <thead><tr><th>Level</th><th>Threshold</th><th>ใช้เมื่อ</th></tr></thead>
 <tbody>
-<tr><td><code>PVD_LEVEL_0</code></td><td>2.9V</td><td>ตรวจจับแบตเตอรี่ใกล้หมด</td></tr>
-<tr><td><code>PVD_LEVEL_1</code></td><td>3.1V</td><td>แรงดันเริ่มลด</td></tr>
-<tr><td><code>PVD_LEVEL_2</code></td><td>3.3V</td><td>มาตรฐาน 3.3V</td></tr>
-<tr><td><code>PVD_LEVEL_3</code></td><td>3.5V</td><td>สำรอง</td></tr>
-<tr><td><code>PVD_LEVEL_4</code></td><td>3.7V</td><td>สำรอง</td></tr>
-<tr><td><code>PVD_LEVEL_5</code></td><td>3.9V</td><td>สำรอง</td></tr>
-<tr><td><code>PVD_LEVEL_6</code></td><td>4.1V</td><td>สำรอง</td></tr>
-<tr><td><code>PVD_LEVEL_7</code></td><td>4.4V</td><td>แรงดันสูงเกิน</td></tr>
+<tr><td><code>PWR_PVD_2V9</code></td><td>2.9V</td><td>ตรวจจับแบตเตอรี่ใกล้หมด</td></tr>
+<tr><td><code>PWR_PVD_3V1</code></td><td>3.1V</td><td>แรงดันเริ่มลด</td></tr>
+<tr><td><code>PWR_PVD_3V3</code></td><td>3.3V</td><td>มาตรฐาน 3.3V</td></tr>
+<tr><td><code>PWR_PVD_3V5</code></td><td>3.5V</td><td>สำรอง</td></tr>
+<tr><td><code>PWR_PVD_3V7</code></td><td>3.7V</td><td>สำรอง</td></tr>
+<tr><td><code>PWR_PVD_3V9</code></td><td>3.9V</td><td>สำรอง</td></tr>
+<tr><td><code>PWR_PVD_4V1</code></td><td>4.1V</td><td>สำรอง</td></tr>
+<tr><td><code>PWR_PVD_4V4</code></td><td>4.4V</td><td>แรงดันสูงเกิน</td></tr>
 </tbody>
 </table>
 </section>
@@ -136,13 +136,13 @@
 </tr>
 <tr>
     <td><code>PWR_ConfigureAWU(prescaler, window)</code></td>
-    <td><code>prescaler</code>: AWU_PRESCALER_*<br><code>window</code>: uint8_t (0-0x3F)</td>
+    <td><code>prescaler</code>: PWR_AWU_PRESCALER_*<br><code>window</code>: uint8_t (0-0x3F)</td>
     <td><code>void</code></td>
     <td>ตั้งค่า AWU timer</td>
 </tr>
 <tr>
     <td><code>PWR_EnablePVD(level)</code></td>
-    <td><code>level</code>: PVD_LEVEL_*</td>
+    <td><code>level</code>: PWR_PVD_*</td>
     <td><code>void</code></td>
     <td>เปิด PVD + ตั้ง threshold</td>
 </tr>
@@ -153,10 +153,10 @@
     <td>ปิด PVD</td>
 </tr>
 <tr>
-    <td><code>PWR_GetPVDStatus(level)</code></td>
-    <td><code>level</code>: PVD_LEVEL_*</td>
+    <td><code>PWR_GetPVDStatus()</code></td>
+    <td>—</td>
     <td><code>uint8_t</code> (1/0)</td>
-    <td>ตรวจสอบ VDD ต่ำกว่า level หรือไม่</td>
+    <td>ตรวจสอบ VDD ต่ำกว่า threshold ที่ตั้งไว้หรือไม่</td>
 </tr>
 <tr>
     <td><code>PWR_WasStandbyWakeup()</code></td>
@@ -290,10 +290,10 @@ int main(void) {
 
     pinMode(PC0, PIN_MODE_OUTPUT);
 
-    PWR_EnablePVD(PVD_LEVEL_0);  // threshold 2.9V
+    PWR_EnablePVD(PWR_PVD_2V9);  // threshold 2.9V
 
     while (1) {
-        if (PWR_GetPVDStatus(PVD_LEVEL_0)) {
+        if (PWR_GetPVDStatus()) {
             // แรงดันต่ำกว่า 2.9V → กระพริบ LED เตือน
             digitalToggle(PC0);
             Delay_Ms(200);

@@ -129,11 +129,11 @@ flowchart TD
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    USART_SimpleInit(USART_115200);
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
 
     IWDG_SimpleInit(2000); // timeout 2 วินาที
 
-    printf("Watchdog started\r\n");
+    USART_Print("Watchdog started\r\n");
     uint32_t last_feed = Get_CurrentMs();
 
     while (1) {
@@ -141,7 +141,7 @@ int main(void) {
         if (Get_CurrentMs() - last_feed >= 1000) {
             last_feed = Get_CurrentMs();
             IWDG_Feed();
-            printf("Feed ok\r\n");
+            USART_Print("Feed ok\r\n");
         }
     }
 }</code></pre>
@@ -160,11 +160,13 @@ void risky_receive_task(void) {
     while (1) {
         if (USART_Available() > 0) {
             uint8_t ch = USART_ReadChar();
-            printf("Received: %c\r\n", ch);
+            USART_Print("Received: ");
+            USART_WriteByte(ch);
+            USART_Print("\r\n");
             return; // สำเร็จ
         }
         if (Get_CurrentMs() - start > 5000) {
-            printf("Timeout!\r\n");
+            USART_Print("Timeout!\r\n");
             return; // ออกเองก่อน watchdog reset
         }
     }
@@ -173,7 +175,7 @@ void risky_receive_task(void) {
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    USART_SimpleInit(USART_115200);
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
     IWDG_SimpleInit(3000);
 
     while (1) {
@@ -194,13 +196,13 @@ int main(void) {
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    USART_SimpleInit(USART_115200);
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
 
-    printf("--- Boot ---\r\n");
+    USART_Print("--- Boot ---\r\n");
 
     if (IWDG_WasResetCause()) {
-        printf("Reset cause: IWDG (Watchdog timeout!)\r\n");
-        printf("ระบบอาจค้างก่อนหน้านี้ กรุณาตรวจสอบ\r\n");
+        USART_Print("Reset cause: IWDG (Watchdog timeout!)\r\n");
+        USART_Print("ระบบอาจค้างก่อนหน้านี้ กรุณาตรวจสอบ\r\n");
         IWDG_ClearResetFlag();
     }
 
@@ -210,7 +212,7 @@ int main(void) {
     while (1) {
         IWDG_Feed();
         Delay_Ms(1000);
-        printf("Running...\r\n");
+        USART_Print("Running...\r\n");
     }
 }</code></pre>
 </section>

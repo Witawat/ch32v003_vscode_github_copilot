@@ -49,9 +49,9 @@ flowchart TD
     <table>
         <tr><th>แพ็กเกจ</th><th>ขาที่ใช้ได้</th><th>ชิป</th></tr>
         <tr><td><code>PACKAGE_SOP8</code></td><td>6 pins</td><td>CH32V003J4M6</td></tr>
-        <tr><td><code>PACKAGE_SOP16</code></td><td>14+ pins</td><td>CH32V003F4P6</td></tr>
-        <tr><td><code>PACKAGE_TSSOP20</code></td><td>18 pins</td><td>CH32V003F4U6</td></tr>
-        <tr><td><code>PACKAGE_QFN20</code></td><td>18 pins</td><td>CH32V003F4K6</td></tr>
+        <tr><td><code>PACKAGE_SOP16</code></td><td>14+ pins</td><td>CH32V003A4M6</td></tr>
+        <tr><td><code>PACKAGE_TSSOP20</code></td><td>18 pins</td><td>CH32V003F4P6</td></tr>
+        <tr><td><code>PACKAGE_QFN20</code></td><td>18 pins</td><td>CH32V003F4U6</td></tr>
     </table>
 
     <div class="callout callout-warn">
@@ -69,10 +69,10 @@ flowchart TD
     // ...
 }</code></pre>
 
-    <p>ฟังก์ชันนี้เป็นส่วนหนึ่งของ CMSIS — ถูกใช้ภายในโดย <code>Delay_Ms()</code>, <code>Delay_Us()</code>, <code>USART_Printf_Init()</code> และโมดูลอื่น ๆ อีกมาก</p>
+    <p>ฟังก์ชันนี้เป็นส่วนหนึ่งของ CMSIS — ถูกใช้ภายในโดย <code>Delay_Ms()</code>, <code>Delay_Us()</code>, <code>USART_SimpleInit()</code> และโมดูลอื่น ๆ อีกมาก</p>
 
     <div class="callout callout-warn">
-        <strong>ถ้าลืม:</strong> <code>Delay_Ms()</code> จะหน่วงเวลาไม่ถูกต้อง (อาจช้าหรือเร็วผิด), <code>USART_Printf_Init()</code> จะคำนวณ baud rate ผิด — ทำให้สื่อสาร Serial ไม่ได้
+        <strong>ถ้าลืม:</strong> <code>Delay_Ms()</code> จะหน่วงเวลาไม่ถูกต้อง (อาจช้าหรือเร็วผิด), <code>USART_SimpleInit()</code> จะคำนวณ baud rate ผิด — ทำให้สื่อสาร Serial ไม่ได้
     </div>
 </section>
 
@@ -126,8 +126,8 @@ int main(void)
     pinMode(PC0, PIN_MODE_OUTPUT);
 
     // USART Debug
-    USART_Printf_Init(USART1, BAUD_115200);
-    printf("\r\nSimpleHAL Ready\r\n");
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    USART_Print("\r\nSimpleHAL Ready\r\n");
 
     while(1)
     {
@@ -135,7 +135,7 @@ int main(void)
         Delay_Ms(500);
         digitalWrite(PC0, LOW);
         Delay_Ms(500);
-        printf("Tick\r\n");
+        USART_Print("Tick\r\n");
     }
 }</code></pre>
 </section>

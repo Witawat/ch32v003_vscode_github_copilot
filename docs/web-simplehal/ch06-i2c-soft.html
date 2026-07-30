@@ -89,7 +89,7 @@ flowchart TD
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    USART_SimpleInit(USART_115200);
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
 
     // Bus 1: Hardware I2C (sensor หลัก)
     I2C_SimpleInit(I2C_100KHZ, I2C_PINS_DEFAULT);
@@ -97,7 +97,7 @@ int main(void) {
     // Bus 2: Software I2C (อุปกรณ์เสริม) — ใช้ PA1=SDA, PA2=SCL
     I2C_Soft_Init(PA1, PA2);
 
-    printf("Dual I2C bus ready\r\n");
+    USART_Print("Dual I2C bus ready\r\n");
     while (1) {
         // อ่านจาก bus 1 (HW)
         uint8_t val1 = I2C_ReadReg(0x50, 0x00);
@@ -121,12 +121,12 @@ int main(void) {
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    USART_SimpleInit(USART_115200);
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
 
     // Software I2C บนขาใดก็ได้ — debug mode ignore_ack
     I2C_Soft_Init(PD2, PD3);
 
-    printf("Sending test data (ignore ack)...\r\n");
+    USART_Print("Sending test data (ignore ack)...\r\n");
     while (1) {
         // ส่งข้อมูลโดยไม่สนใจว่า device ตอบ ACK หรือไม่
         uint8_t test_data[] = {0x00, 0x42};
@@ -153,7 +153,7 @@ typedef struct {
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    USART_SimpleInit(USART_115200);
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
 
     I2C_Soft_Init(PC6, PC7);
 
@@ -178,7 +178,16 @@ int main(void) {
 
         uint16_t temp_raw = (data[0] << 8) | data[1];
         float temp = -45.0f + 175.0f * (temp_raw / 65535.0f);
-        printf("Temp = %.1f C\r\n", temp);
+
+        // SimpleHAL ไม่มีฟังก์ชันพิมพ์ float — แปลงเป็นทศนิยม 1 ตำแหน่งด้วยจำนวนเต็ม
+        int32_t temp_x10 = (int32_t)(temp * 10.0f);
+        int32_t temp_frac = temp_x10 % 10;
+        if (temp_frac < 0) temp_frac = -temp_frac;
+        USART_Print("Temp = ");
+        USART_PrintNum(temp_x10 / 10);
+        USART_Print(".");
+        USART_PrintNum(temp_frac);
+        USART_Print(" C\r\n");
         Delay_Ms(2000);
     }
 }</code></pre>

@@ -57,14 +57,14 @@ SOP-8 และ SOP-16 <strong>ไม่มี SPI Hardware</strong> — โค�
 
 <table>
 <tr><th>Enum</th><th>Divider</th><th>ความเร็วจริง (approx.)</th></tr>
-<tr><td><code>SPI_125KHZ</code></td><td>256</td><td>~187.5 kHz</td></tr>
-<tr><td><code>SPI_250KHZ</code></td><td>128</td><td>~375 kHz</td></tr>
-<tr><td><code>SPI_500KHZ</code></td><td>64</td><td>~750 kHz</td></tr>
-<tr><td><code>SPI_1MHZ</code></td><td>32</td><td>~1.5 MHz</td></tr>
-<tr><td><code>SPI_2MHZ</code></td><td>16</td><td>~3 MHz</td></tr>
-<tr><td><code>SPI_4MHZ</code></td><td>8</td><td>~6 MHz</td></tr>
-<tr><td><code>SPI_8MHZ</code></td><td>4</td><td>~12 MHz</td></tr>
-<tr><td><code>SPI_12MHZ</code></td><td>2</td><td>~24 MHz</td></tr>
+<tr><td><code>SPI_125KHZ</code></td><td>256</td><td>250 kHz</td></tr>
+<tr><td><code>SPI_250KHZ</code></td><td>128</td><td>500 kHz</td></tr>
+<tr><td><code>SPI_500KHZ</code></td><td>64</td><td>1 MHz</td></tr>
+<tr><td><code>SPI_1MHZ</code></td><td>32</td><td>2 MHz</td></tr>
+<tr><td><code>SPI_2MHZ</code></td><td>16</td><td>4 MHz</td></tr>
+<tr><td><code>SPI_4MHZ</code></td><td>8</td><td>8 MHz</td></tr>
+<tr><td><code>SPI_8MHZ</code></td><td>4</td><td>16 MHz</td></tr>
+<tr><td><code>SPI_12MHZ</code></td><td>2</td><td>24 MHz</td></tr>
 </table>
 </section>
 
@@ -132,7 +132,7 @@ SOP-8 และ SOP-16 <strong>ไม่มี SPI Hardware</strong> — โค�
 <tr>
     <td><code>SPI_SetBitOrder(order)</code></td>
     <td>void</td>
-    <td>เปลี่ยนลำดับบิต — <code>MSB_FIRST</code> หรือ <code>LSB_FIRST</code></td>
+    <td>เปลี่ยนลำดับบิต — <code>SPI_MSB_FIRST</code> หรือ <code>SPI_LSB_FIRST</code></td>
 </tr>
 <tr>
     <td><code>SPI_SetSpeed(speed)</code></td>
@@ -154,13 +154,13 @@ SPI_SetCS(1);              // CS HIGH → ปล่อยอุปกรณ์
 
 <p>ถ้าใช้หลายอุปกรณ์ต่อ SPI bus เดียวกัน:</p>
 <pre><code class="language-c">// อุปกรณ์ A — CS ที่ PA1
-SPI_SetCSPin('A', 1);
+SPI_SetCSPin(GPIOA, 1);
 SPI_SetCS(0);
 SPI_Transfer(0x10);
 SPI_SetCS(1);
 
 // อุปกรณ์ B — CS ที่ PA2
-SPI_SetCSPin('A', 2);
+SPI_SetCSPin(GPIOA, 2);
 SPI_SetCS(0);
 SPI_Transfer(0x20);
 SPI_SetCS(1);
@@ -172,13 +172,13 @@ SPI_SetCS(1);
 
 <table>
 <tr><th>Enum</th><th>คำอธิบาย</th></tr>
-<tr><td><code>MSB_FIRST</code></td><td>ส่งบิตสูงสุด (Bit 7) ก่อน — ค่าเริ่มต้น</td></tr>
-<tr><td><code>LSB_FIRST</code></td><td>ส่งบิตต่ำสุด (Bit 0) ก่อน — บางอุปกรณ์ต้องการ</td></tr>
+<tr><td><code>SPI_MSB_FIRST</code></td><td>ส่งบิตสูงสุด (Bit 7) ก่อน — ค่าเริ่มต้น</td></tr>
+<tr><td><code>SPI_LSB_FIRST</code></td><td>ส่งบิตต่ำสุด (Bit 0) ก่อน — บางอุปกรณ์ต้องการ</td></tr>
 </table>
 
-<pre><code class="language-c">SPI_SetBitOrder(LSB_FIRST);  // เปลี่ยนเป็น LSB first
+<pre><code class="language-c">SPI_SetBitOrder(SPI_LSB_FIRST);  // เปลี่ยนเป็น LSB first
 SPI_Transfer(data);
-SPI_SetBitOrder(MSB_FIRST);  // กลับเป็น MSB first
+SPI_SetBitOrder(SPI_MSB_FIRST);  // กลับเป็น MSB first
 </code></pre>
 </section>
 
@@ -222,7 +222,7 @@ SPI_SetCS(1);
 }
 
 uint8_t read_sensor_a() {
-    SPI_SetCSPin('A', 1);        // CS → PA1
+    SPI_SetCSPin(GPIOA, 1);      // CS → PA1
     SPI_SetCS(0);
     uint8_t val = SPI_Transfer(0x00);
     SPI_SetCS(1);
@@ -230,7 +230,7 @@ uint8_t read_sensor_a() {
 }
 
 uint8_t read_sensor_b() {
-    SPI_SetCSPin('A', 2);        // CS → PA2
+    SPI_SetCSPin(GPIOA, 2);      // CS → PA2
     SPI_SetCS(0);
     uint8_t val = SPI_Transfer(0x00);
     SPI_SetCS(1);

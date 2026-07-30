@@ -311,7 +311,7 @@ int main(void) {
 
 <h3>SysTick กับ Hardware Timer</h3>
 <ul>
-    <li><strong>SysTick</strong> เป็น hardware timer ภายใน Cortex-M core — ไม่ใช่ timer ทั่วไปของ CH32V003</li>
+    <li><strong>SysTick</strong> เป็น hardware timer ภายใน QingKe V2A core (RISC-V) ของ CH32V003 — ไม่ใช่ timer ทั่วไปของ CH32V003</li>
     <li>ใช้งาน SysTick <strong>ไม่เปลือง</strong> TIM1/TIM2 — เหลือไว้ให้ PWM, input capture, encoder</li>
     <li>ความละเอียด 1ms (1kHz) — เข้ากันกับ HAL ทั่วไป</li>
 </ul>

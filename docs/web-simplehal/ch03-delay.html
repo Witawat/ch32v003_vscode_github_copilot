@@ -57,7 +57,7 @@ flowchart TD
 
 <section>
     <h2>📚 ภาพรวมและหลักการทำงาน</h2>
-    <p>SimpleHAL ใช้ <strong>SysTick Timer</strong> ซึ่งเป็น hardware timer 24-bit ภายใน Cortex-M0 core มาเป็นฐานเวลาสำหรับระบบ delay ทั้งหมด:</p>
+    <p>SimpleHAL ใช้ <strong>SysTick Timer</strong> ซึ่งเป็น hardware timer 24-bit ภายใน QingKe V2A core (RISC-V) ของ CH32V003 มาเป็นฐานเวลาสำหรับระบบ delay ทั้งหมด:</p>
     <ul>
         <li><code>Timer_Init()</code> ตั้งค่า SysTick ให้สร้าง interrupt ทุก 1 มิลลิวินาที</li>
         <li>ภายใน interrupt handler จะเพิ่มตัวนับ global <code>current_ms</code> ขึ้นทีละ 1</li>
@@ -86,10 +86,10 @@ flowchart TD
             <tr><td><code>Delay_Us(n)</code></td><td>หน่วงเวลา n ไมโครวินาที (blocking, ใช้ busy-wait)</td><td><code>Delay_Us(100);</code></td></tr>
             <tr><td><code>Get_CurrentMs()</code></td><td>อ่านค่า millisecond counter ตั้งแต่ระบบเริ่ม — ใช้สร้าง non-blocking timer</td><td><code>uint32_t t = Get_CurrentMs();</code></td></tr>
             <tr><td><code>Get_CurrentUs()</code></td><td>อ่านค่า microsecond counter (รวมจาก SysTick counter + count register)</td><td><code>uint32_t t = Get_CurrentUs();</code></td></tr>
-            <tr><td><code>Get_TickMicros()</code></td><td>คืนค่าจำนวน microseconds ต่อ SysTick — ปกติ 1000</td><td><code>uint32_t t = Get_TickMicros();</code></td></tr>
-            <tr><td><code>Start_Timer(timer, ms)</code></td><td>เริ่มจับเวลา Timer_t เป็นเวลา ms มิลลิวินาที</td><td><code>Start_Timer(&myTimer, 1000);</code></td></tr>
+            <tr><td><code>Get_TickMicros()</code></td><td>คืนค่าตำแหน่งปัจจุบันภายใน tick (0-999 μs) ของ SysTick ขณะนั้น</td><td><code>uint32_t t = Get_TickMicros();</code></td></tr>
+            <tr><td><code>Start_Timer(timer, ms, repeat)</code></td><td>เริ่มจับเวลา Timer_t เป็นเวลา ms มิลลิวินาที (repeat: 1 = ทำงานซ้ำอัตโนมัติ, 0 = ครั้งเดียว)</td><td><code>Start_Timer(&myTimer, 1000, 0);</code></td></tr>
             <tr><td><code>Is_Timer_Expired(timer)</code></td><td>ตรวจสอบว่า Timer_t ครบเวลาหรือยัง (คืน 1 = ครบ, 0 = ยัง)</td><td><code>if (Is_Timer_Expired(&myTimer)) { ... }</code></td></tr>
-            <tr><td><code>Reset_Timer(timer)</code></td><td>รีเซ็ต Timer_t ให้เริ่มนับใหม่ (ใช้กับ Start_Timer)</td><td><code>Reset_Timer(&myTimer);</code></td></tr>
+            <tr><td><code>Reset_Timer(timer, repeat)</code></td><td>รีเซ็ต Timer_t ให้เริ่มนับใหม่ (ใช้กับ Start_Timer)</td><td><code>Reset_Timer(&myTimer, 0);</code></td></tr>
             <tr><td><code>Stop_Timer(timer)</code></td><td>หยุด Timer_t (ทำให้ Is_Timer_Expired คืน 1 ทันที)</td><td><code>Stop_Timer(&myTimer);</code></td></tr>
         </tbody>
     </table>
@@ -142,12 +142,12 @@ int main(void) {
     Timer_Init();
 
     pinMode(PA1, PIN_MODE_OUTPUT);
-    Start_Timer(&ledTimer, 500);  // เริ่มจับเวลา 500 ms
+    Start_Timer(&ledTimer, 500, 0);  // เริ่มจับเวลา 500 ms
 
     while (1) {
         if (Is_Timer_Expired(&ledTimer)) {
             digitalToggle(PA1);       // toggle LED
-            Start_Timer(&ledTimer, 500);  // รีเซ็ต timer ใหม่
+            Start_Timer(&ledTimer, 500, 0);  // รีเซ็ต timer ใหม่
         }
 
         // โค้ดอื่น ๆ ทำงานได้ตลอดโดยไม่ต้องรอ!
@@ -218,27 +218,27 @@ int main(void) {
     pinMode(PA2, PIN_MODE_OUTPUT);  // LED2: กระพริบช้า 1s
     pinMode(PC0, PIN_MODE_OUTPUT);  // heartbeat: 50ms on, 2s off
 
-    Start_Timer(&led1Timer, 200);
-    Start_Timer(&led2Timer, 1000);
-    Start_Timer(&heartbeatTimer, 50);
+    Start_Timer(&led1Timer, 200, 0);
+    Start_Timer(&led2Timer, 1000, 0);
+    Start_Timer(&heartbeatTimer, 50, 0);
 
     while (1) {
         if (Is_Timer_Expired(&led1Timer)) {
             digitalToggle(PA1);
-            Start_Timer(&led1Timer, 200);
+            Start_Timer(&led1Timer, 200, 0);
         }
 
         if (Is_Timer_Expired(&led2Timer)) {
             digitalToggle(PA2);
-            Start_Timer(&led2Timer, 1000);
+            Start_Timer(&led2Timer, 1000, 0);
         }
 
         if (Is_Timer_Expired(&heartbeatTimer)) {
             digitalToggle(PC0);
             if (digitalRead(PC0) == HIGH) {
-                Start_Timer(&heartbeatTimer, 50);    // ON 50ms
+                Start_Timer(&heartbeatTimer, 50, 0);    // ON 50ms
             } else {
-                Start_Timer(&heartbeatTimer, 2000);  // OFF 2s
+                Start_Timer(&heartbeatTimer, 2000, 0);  // OFF 2s
             }
         }
 

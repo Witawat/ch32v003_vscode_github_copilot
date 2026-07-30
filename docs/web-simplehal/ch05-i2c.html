@@ -61,7 +61,7 @@ flowchart TD
         <tr><th>ชื่อ Config</th><th>SCL</th><th>SDA</th></tr>
         <tr><td>I2C_PINS_DEFAULT</td><td>PC2</td><td>PC1</td></tr>
         <tr><td>I2C_PINS_REMAP</td><td>PD0</td><td>PD1</td></tr>
-        <tr><td>I2C_PINS_PARTIAL_REMAP</td><td>PD0</td><td>PD1</td></tr>
+        <tr><td>I2C_PINS_PARTIAL_REMAP</td><td>PD2</td><td>PD1</td></tr>
     </table>
     <div class="callout callout-warn">
         <strong>สำคัญ:</strong> SOP-8 ใช้ได้เฉพาะ DEFAULT เท่านั้น ต้องต่อตัวต้านทาน pull-up 4.7k&Omega; ภายนอก
@@ -128,7 +128,7 @@ flowchart TD
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    USART_SimpleInit(USART_115200);
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
     I2C_SimpleInit(I2C_100KHZ, I2C_PINS_DEFAULT);
 
     uint8_t write_data = 0x42;
@@ -137,7 +137,9 @@ int main(void) {
     Delay_Ms(5);
 
     uint8_t read_data = I2C_ReadReg(0x50, 0x00);
-    printf("EEPROM[0x00] = 0x%02X\r\n", read_data);
+    USART_Print("EEPROM[0x00] = 0x");
+    USART_PrintHex(read_data, 0);
+    USART_Print("\r\n");
 
     while (1);
 }</code></pre>
@@ -155,7 +157,7 @@ int main(void) {
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    USART_SimpleInit(USART_115200);
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
     I2C_SimpleInit(I2C_100KHZ, I2C_PINS_DEFAULT);
 
     // ปลุก MPU6050 จาก sleep
@@ -171,7 +173,13 @@ int main(void) {
         accel[1] = (raw[2] << 8) | raw[3]; // Y
         accel[2] = (raw[4] << 8) | raw[5]; // Z
 
-        printf("X=%d Y=%d Z=%d\r\n", accel[0], accel[1], accel[2]);
+        USART_Print("X=");
+        USART_PrintNum(accel[0]);
+        USART_Print(" Y=");
+        USART_PrintNum(accel[1]);
+        USART_Print(" Z=");
+        USART_PrintNum(accel[2]);
+        USART_Print("\r\n");
         Delay_Ms(500);
     }
 }</code></pre>
@@ -187,26 +195,38 @@ int main(void) {
 void safe_read(uint8_t addr, uint8_t reg, uint8_t retries) {
     uint8_t data;
     for (uint8_t i = 0; i < retries; i++) {
-        if (I2C_TryReadReg(addr, reg, &data)) {
-            printf("Addr 0x%02X Reg 0x%02X = 0x%02X\r\n", addr, reg, data);
+        if (I2C_TryReadReg(addr, reg, &data) == I2C_OK) {
+            USART_Print("Addr 0x");
+            USART_PrintHex(addr, 0);
+            USART_Print(" Reg 0x");
+            USART_PrintHex(reg, 0);
+            USART_Print(" = 0x");
+            USART_PrintHex(data, 0);
+            USART_Print("\r\n");
             return;
         }
-        printf("Retry %d...\r\n", i + 1);
+        USART_Print("Retry ");
+        USART_PrintNum(i + 1);
+        USART_Print("...\r\n");
         Delay_Ms(10);
     }
-    printf("Failed after %d retries\r\n", retries);
+    USART_Print("Failed after ");
+    USART_PrintNum(retries);
+    USART_Print(" retries\r\n");
 }
 
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    USART_SimpleInit(USART_115200);
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
     I2C_SimpleInit(I2C_100KHZ, I2C_PINS_DEFAULT);
 
-    printf("--- I2C Bus Scan ---\r\n");
+    USART_Print("--- I2C Bus Scan ---\r\n");
     for (uint8_t addr = 1; addr < 127; addr++) {
         if (I2C_IsDeviceReady(addr)) {
-            printf("Found device at 0x%02X\r\n", addr);
+            USART_Print("Found device at 0x");
+            USART_PrintHex(addr, 0);
+            USART_Print("\r\n");
         }
     }
 

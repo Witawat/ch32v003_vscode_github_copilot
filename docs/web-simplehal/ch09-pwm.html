@@ -61,16 +61,16 @@ flowchart TD
     <table>
         <tr><th>ชื่อ Channel</th><th>Pin</th><th>Timer</th></tr>
         <tr><td>PWM1_CH1</td><td>PD2</td><td>TIM1</td></tr>
-        <tr><td>PWM1_CH2</td><td>PD3</td><td>TIM1</td></tr>
-        <tr><td>PWM1_CH3</td><td>PD4</td><td>TIM1</td></tr>
-        <tr><td>PWM1_CH4</td><td>PD5</td><td>TIM1</td></tr>
-        <tr><td>PWM2_CH1</td><td>PD6</td><td>TIM2</td></tr>
-        <tr><td>PWM2_CH2</td><td>PD7</td><td>TIM2</td></tr>
-        <tr><td>PWM2_CH3</td><td>PD0</td><td>TIM2</td></tr>
-        <tr><td>PWM2_CH4</td><td>PD1</td><td>TIM2</td></tr>
+        <tr><td>PWM1_CH2</td><td>PA1</td><td>TIM1</td></tr>
+        <tr><td>PWM1_CH3</td><td>PC3</td><td>TIM1</td></tr>
+        <tr><td>PWM1_CH4</td><td>PC4</td><td>TIM1</td></tr>
+        <tr><td>PWM2_CH1</td><td>PD4</td><td>TIM2</td></tr>
+        <tr><td>PWM2_CH2</td><td>PD3</td><td>TIM2</td></tr>
+        <tr><td>PWM2_CH3</td><td>PC0</td><td>TIM2</td></tr>
+        <tr><td>PWM2_CH4</td><td>PD7</td><td>TIM2</td></tr>
     </table>
     <div class="callout callout-warn">
-        <strong>สำคัญ:</strong> SOP-8 มีเฉพาะ PWM1_CH1 + PWM2_CH1 เท่านั้น<br>
+        <strong>สำคัญ:</strong> SOP-8 มีเฉพาะ <code>PWM1_CH2</code> (PA1) และ <code>PWM1_CH4</code> (PC4) เท่านั้น<br>
         <strong>Frequency sharing:</strong> ทุก channel บน timer เดียวกันใช้ความถี่เดียวกัน<br>
         <strong>Auto-start:</strong> PWM_Init เริ่ม output อัตโนมัติ (v2.0+)
     </div>
@@ -215,7 +215,7 @@ int main(void) {
     <h3>ความถี่ PWM ไหนเหมาะกับอะไร?</h3>
     <p>LED >100Hz (ไม่กระพริบ), Servo = 50Hz (มาตรฐาน), Motor >10kHz (ไม่หอน), Audio >20kHz</p>
     <h3>SOP-8 มีกี่ PWM channels?</h3>
-    <p>แค่ 2 channels: PWM1_CH1 + PWM2_CH1</p>
+    <p>แค่ 2 channels: PWM1_CH2 (PA1) + PWM1_CH4 (PC4)</p>
 </section>
 
 <section>
