@@ -135,14 +135,18 @@ table.wiring-table td:nth-child(2) { text-align: center; font-weight: 700; color
     padding: 1.5rem 0.5rem;
     max-width: 100%;
 }
-.flowchart svg { background: #fff !important; max-width: 100% !important; height: auto; }
+.flowchart svg { background: #fff !important; max-width: 100%; height: auto; }
 .flowchart svg rect { fill: #fff !important; }
 .flowchart svg g rect { fill: #fff !important; }
 .flowchart svg text { font-size: 22px !important; }
 .flowchart svg g.edgeLabel text { font-size: 19px !important; }
 
-/* Mermaid diagrams outside .flowchart (per-example ผังการทำงาน) still need width containment */
-pre.mermaid svg { max-width: 100% !important; height: auto; }
+/* Mermaid diagrams outside .flowchart (per-example ผังการทำงาน) still need a fallback cap
+   in case mermaid doesn't set its own inline max-width; mermaid's inline style (per-diagram
+   natural size) normally wins over this without needing !important — don't add !important
+   here or it forces every diagram to stretch/shrink to the container width regardless of
+   its actual complexity, making simple diagrams huge and dense ones tiny. */
+pre.mermaid svg { max-width: 100%; height: auto; }
 
 /* Index page */
 #toc { list-style: none; }
