@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SPI — Serial Peripheral Interface — Peripheral API Reference</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="i2c.html">← I2C</a>
+    <a href="index.html">สารบัญ →</a>
+</nav>
+
+<h1>SPI — Serial Peripheral Interface</h1>
+<span class="level level-advanced">ระดับสูง</span>
+
+<div class="callout callout-note">
+    <strong>ไลบรารี:</strong> <code>#include &lt;ch32v00x_spi.h&gt;</code> — นี่คือ Standard Peripheral Library (SPL) ระดับล่าง เขียนคอนฟิกผ่าน struct <code>SPI_InitTypeDef</code> โดยตรงกับเรจิสเตอร์ฮาร์ดแวร์ และตรวจสอบสถานะการรับ-ส่งด้วยการ <strong>poll flag</strong> เอง (เช่น <code>SPI_I2S_FLAG_TXE</code>/<code>_RXNE</code>) ไม่มี buffer อัตโนมัติแบบ wrapper
+</div>
+
+<div class="callout callout-good">
+    <strong>อยากได้อะไรที่ง่ายกว่านี้?</strong> ถ้าต้องการ SPI แบบเรียกใช้งานง่าย ดูที่ <a href="../web-simplehal-api/spi.html">SimpleSPI (SimpleHAL wrapper)</a> แทน หน้านี้เหมาะสำหรับคนที่ต้องการควบคุมรายละเอียดระดับ register/flag เอง
+</div>
+
+<section class="flowchart">
+<h2>ผังการทำงานของ SPI Master (Polling Model)</h2>
+<pre class="mermaid">
+flowchart LR
+    INIT["SPI_Init()"] --> EN["SPI_Cmd(ENABLE)"]
+    EN --> NSS["ลด NSS/CS ลง (software GPIO)"]
+    NSS --> TXE["รอ SPI_I2S_FLAG_TXE"]
+    TXE --> SEND["SPI_I2S_SendData()"]
+    SEND --> RXNE["รอ SPI_I2S_FLAG_RXNE"]
+    RXNE --> RECV["SPI_I2S_ReceiveData()"]
+    RECV --> NSSUP["ยก NSS/CS ขึ้น"]
+</pre>
+</section>
+
+<section>
+<h2>SPI_InitTypeDef — โครงสร้างการตั้งค่า</h2>
+<table>
+<thead><tr><th>สมาชิก</th><th>ชนิด</th><th>ค่าที่เป็นไปได้</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>SPI_Direction</code></td><td><code>uint16_t</code></td><td><code>SPI_Direction_2Lines_FullDuplex</code>, <code>_2Lines_RxOnly</code>, <code>_1Line_Rx</code>, <code>_1Line_Tx</code></td><td>โหมดทิศทางข้อมูล (2 สายเต็มดูเพล็กซ์ หรือสายเดียว)</td></tr>
+<tr><td><code>SPI_Mode</code></td><td><code>uint16_t</code></td><td><code>SPI_Mode_Master</code>, <code>SPI_Mode_Slave</code></td><td>โหมด Master หรือ Slave</td></tr>
+<tr><td><code>SPI_DataSize</code></td><td><code>uint16_t</code></td><td><code>SPI_DataSize_8b</code>, <code>SPI_DataSize_16b</code></td><td>ขนาดข้อมูลต่อครั้ง 8 หรือ 16 บิต</td></tr>
+<tr><td><code>SPI_CPOL</code></td><td><code>uint16_t</code></td><td><code>SPI_CPOL_Low</code>, <code>SPI_CPOL_High</code></td><td>ระดับ clock ตอน idle (Mode 0/2 = Low, Mode 1/3 = High)</td></tr>
+<tr><td><code>SPI_CPHA</code></td><td><code>uint16_t</code></td><td><code>SPI_CPHA_1Edge</code>, <code>SPI_CPHA_2Edge</code></td><td>ขอบ clock ที่ใช้จับข้อมูล (ขอบแรก/ขอบที่สอง)</td></tr>
+<tr><td><code>SPI_NSS</code></td><td><code>uint16_t</code></td><td><code>SPI_NSS_Hard</code>, <code>SPI_NSS_Soft</code></td><td>NSS จัดการโดยฮาร์ดแวร์ (ขา NSS) หรือซอฟต์แวร์ (บิต SSI)</td></tr>
+<tr><td><code>SPI_BaudRatePrescaler</code></td><td><code>uint16_t</code></td><td><code>SPI_BaudRatePrescaler_2</code> ถึง <code>_256</code></td><td>ตัวหารความถี่ clock ระบบ → SCK (2,4,8,...,256)</td></tr>
+<tr><td><code>SPI_FirstBit</code></td><td><code>uint16_t</code></td><td><code>SPI_FirstBit_MSB</code>, <code>SPI_FirstBit_LSB</code></td><td>ลำดับบิตที่ส่งก่อน (LSB ไม่รองรับโหมด Slave)</td></tr>
+<tr><td><code>SPI_CRCPolynomial</code></td><td><code>uint16_t</code></td><td>ค่าพหุนาม เช่น <code>7</code></td><td>พหุนามสำหรับคำนวณ CRC (ถ้าใช้ฟีเจอร์ CRC)</td></tr>
+</tbody>
+</table>
+<p><code>SPI_StructInit()</code> ตั้งค่าเริ่มต้น: Direction=2Lines_FullDuplex, Mode=Slave, DataSize=8b, CPOL=Low, CPHA=1Edge, BaudRatePrescaler=2, FirstBit=MSB, CRCPolynomial=7 — <strong>ต้องเปลี่ยน Mode/NSS เองถ้าจะใช้เป็น Master</strong></p>
+</section>
+
+<section>
+<h2>Flag และ Interrupt Macros</h2>
+<table>
+<thead><tr><th>กลุ่ม</th><th>ค่าคงที่</th><th>ความหมาย</th></tr></thead>
+<tbody>
+<tr><td rowspan="6">Flag (ใช้กับ <code>SPI_I2S_GetFlagStatus</code>)</td><td><code>SPI_I2S_FLAG_RXNE</code></td><td>Receive buffer ไม่ว่าง (มีข้อมูลรอให้อ่าน)</td></tr>
+<tr><td><code>SPI_I2S_FLAG_TXE</code></td><td>Transmit buffer ว่าง (ส่งข้อมูลใหม่ได้)</td></tr>
+<tr><td><code>SPI_I2S_FLAG_BSY</code></td><td>บัส SPI กำลังส่ง/รับข้อมูลอยู่</td></tr>
+<tr><td><code>SPI_FLAG_MODF</code></td><td>Mode Fault — เกิดข้อขัดแย้งของ Master/Slave (NSS ผิดพลาด)</td></tr>
+<tr><td><code>SPI_FLAG_CRCERR</code></td><td>ค่า CRC ที่รับไม่ตรงกับที่คำนวณ</td></tr>
+<tr><td><code>SPI_I2S_FLAG_OVR</code></td><td>Overrun — ข้อมูลใหม่มาทับที่ยังไม่ได้อ่าน</td></tr>
+<tr><td rowspan="5">Interrupt (ใช้กับ <code>SPI_I2S_ITConfig</code>/<code>GetITStatus</code>)</td><td><code>SPI_I2S_IT_TXE</code></td><td>interrupt เมื่อ transmit buffer ว่าง</td></tr>
+<tr><td><code>SPI_I2S_IT_RXNE</code></td><td>interrupt เมื่อรับข้อมูลมาใหม่</td></tr>
+<tr><td><code>SPI_I2S_IT_ERR</code></td><td>เปิดกลุ่ม error interrupt (mode fault/overrun/CRC)</td></tr>
+<tr><td><code>SPI_I2S_IT_OVR</code>, <code>SPI_IT_MODF</code>, <code>SPI_IT_CRCERR</code></td><td>สถานะ error แต่ละประเภท (ใช้ตรวจใน ISR)</td></tr>
+<tr><td>อื่นๆ</td><td><code>SPI_I2S_DMAReq_Tx</code>, <code>SPI_I2S_DMAReq_Rx</code></td><td>คำขอ DMA (ใช้กับ <code>SPI_I2S_DMACmd</code>)</td></tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>ตารางอ้างอิงฟังก์ชัน</h2>
+<table>
+<thead><tr><th>ฟังก์ชัน</th><th>พารามิเตอร์</th><th>คืนค่า</th><th>คำอธิบาย</th><th>หมายเหตุ</th></tr></thead>
+<tbody>
+<tr><td><code>SPI_I2S_DeInit(SPIx)</code></td><td><code>SPIx</code>: <code>SPI1</code></td><td><code>void</code></td><td>รีเซ็ตเรจิสเตอร์ SPI ทั้งหมดกลับค่าเริ่มต้น</td><td>ใช้ก่อนตั้งค่าใหม่ทั้งหมด</td></tr>
+<tr><td><code>SPI_Init(SPIx, SPI_InitStruct)</code></td><td><code>SPI_InitStruct</code>: ตัวชี้ <code>SPI_InitTypeDef</code></td><td><code>void</code></td><td>ตั้งค่า SPI ตาม struct (mode, CPOL/CPHA, prescaler ฯลฯ)</td><td>ต้องเปิด RCC clock ของ SPI1 และตั้งค่า GPIO เป็น AF ก่อน</td></tr>
+<tr><td><code>SPI_StructInit(SPI_InitStruct)</code></td><td>ตัวชี้ <code>SPI_InitTypeDef</code></td><td><code>void</code></td><td>เติมค่าเริ่มต้นให้ struct</td><td>ค่าเริ่มต้นเป็นโหมด Slave — ต้องเปลี่ยนเองถ้าใช้ Master</td></tr>
+<tr><td><code>SPI_Cmd(SPIx, NewState)</code></td><td>ENABLE/DISABLE</td><td><code>void</code></td><td>เปิด/ปิดการทำงานของ peripheral SPI</td><td>ต้องเรียกหลัง <code>SPI_Init()</code> เสมอ ไม่งั้นส่งข้อมูลไม่ได้</td></tr>
+<tr><td><code>SPI_I2S_ITConfig(SPIx, SPI_I2S_IT, NewState)</code></td><td><code>SPI_I2S_IT_*</code></td><td><code>void</code></td><td>เปิด/ปิด interrupt ที่ระบุ</td><td>ต้องตั้ง NVIC ด้วยถ้าจะใช้ ISR จริง</td></tr>
+<tr><td><code>SPI_I2S_DMACmd(SPIx, SPI_I2S_DMAReq, NewState)</code></td><td><code>SPI_I2S_DMAReq_Tx</code>/<code>_Rx</code></td><td><code>void</code></td><td>เปิด/ปิดการขอ DMA สำหรับ Tx หรือ Rx</td><td>ใช้ร่วมกับโมดูล DMA</td></tr>
+<tr><td><code>SPI_I2S_SendData(SPIx, Data)</code></td><td><code>Data</code>: <code>uint16_t</code> (หรือ 8 บิตต่ำถ้า DataSize=8b)</td><td><code>void</code></td><td>เขียนข้อมูลลง DATAR เพื่อส่งออก</td><td>เรียกได้เมื่อ <code>SPI_I2S_FLAG_TXE</code> = SET</td></tr>
+<tr><td><code>SPI_I2S_ReceiveData(SPIx)</code></td><td>—</td><td><code>uint16_t</code></td><td>อ่านข้อมูลที่รับมาจาก DATAR</td><td>เรียกได้เมื่อ <code>SPI_I2S_FLAG_RXNE</code> = SET มิฉะนั้นได้ค่าค้าง (stale)</td></tr>
+<tr><td><code>SPI_NSSInternalSoftwareConfig(SPIx, SPI_NSSInternalSoft)</code></td><td><code>SPI_NSSInternalSoft_Set</code>/<code>_Reset</code></td><td><code>void</code></td><td>ตั้งค่าบิต SSI ภายใน (จำลองสถานะ NSS เมื่อใช้ NSS แบบซอฟต์แวร์)</td><td>จำเป็นเมื่อ <code>SPI_NSS = SPI_NSS_Soft</code> และต้องการเป็น Master — ถ้าไม่ตั้งเป็น Set จะค้างในโหมด Slave</td></tr>
+<tr><td><code>SPI_SSOutputCmd(SPIx, NewState)</code></td><td>ENABLE/DISABLE</td><td><code>void</code></td><td>เปิด/ปิดการส่งออกสัญญาณ NSS ที่ขา (SS output, hardware NSS multi-master)</td><td>ใช้กับ <code>SPI_NSS_Hard</code> เท่านั้น</td></tr>
+<tr><td><code>SPI_DataSizeConfig(SPIx, SPI_DataSize)</code></td><td><code>SPI_DataSize_8b</code>/<code>_16b</code></td><td><code>void</code></td><td>เปลี่ยนขนาดข้อมูลหลังจาก Init แล้ว</td><td>ใช้สลับ 8/16 บิตโดยไม่ต้อง Init ใหม่ทั้งหมด</td></tr>
+<tr><td><code>SPI_TransmitCRC(SPIx)</code></td><td>—</td><td><code>void</code></td><td>สั่งส่งค่า CRC ครั้งถัดไปแทนข้อมูล</td><td>ใช้ร่วมกับฟีเจอร์ CRC</td></tr>
+<tr><td><code>SPI_CalculateCRC(SPIx, NewState)</code></td><td>ENABLE/DISABLE</td><td><code>void</code></td><td>เปิด/ปิดการคำนวณ CRC อัตโนมัติของฮาร์ดแวร์</td><td>ต้องตั้งก่อนเปิด <code>SPI_Cmd</code></td></tr>
+<tr><td><code>SPI_GetCRC(SPIx, SPI_CRC)</code></td><td><code>SPI_CRC_Tx</code>/<code>_Rx</code></td><td><code>uint16_t</code></td><td>อ่านค่า CRC ที่คำนวณได้ (ฝั่งส่งหรือฝั่งรับ)</td><td>ใช้ตรวจสอบความถูกต้องของข้อมูล</td></tr>
+<tr><td><code>SPI_GetCRCPolynomial(SPIx)</code></td><td>—</td><td><code>uint16_t</code></td><td>อ่านค่าพหุนาม CRC ที่ตั้งไว้ปัจจุบัน</td><td>ใช้ debug</td></tr>
+<tr><td><code>SPI_BiDirectionalLineConfig(SPIx, SPI_Direction)</code></td><td><code>SPI_Direction_Tx</code>/<code>_Rx</code></td><td><code>void</code></td><td>สลับทิศทางสายเดียว (1-line mode) ระหว่างส่ง/รับ</td><td>ใช้เฉพาะเมื่อ <code>SPI_Direction_1Line_*</code></td></tr>
+<tr><td><code>SPI_I2S_GetFlagStatus(SPIx, SPI_I2S_FLAG)</code></td><td><code>SPI_I2S_FLAG_*</code></td><td><code>FlagStatus</code> (SET/RESET)</td><td>ตรวจสอบสถานะ flag ที่ระบุ</td><td>ใช้ poll <code>TXE</code>/<code>RXNE</code> ก่อนส่ง/รับทุกครั้ง</td></tr>
+<tr><td><code>SPI_I2S_ClearFlag(SPIx, SPI_I2S_FLAG)</code></td><td><code>SPI_I2S_FLAG_*</code></td><td><code>void</code></td><td>เคลียร์ flag ที่ระบุ (ใช้ได้กับบาง flag เช่น <code>CRCERR</code>)</td><td>flag ส่วนใหญ่ล้างด้วยลำดับอ่าน/เขียนเรจิสเตอร์ ไม่ใช่ฟังก์ชันนี้โดยตรง</td></tr>
+<tr><td><code>SPI_I2S_GetITStatus(SPIx, SPI_I2S_IT)</code></td><td><code>SPI_I2S_IT_*</code></td><td><code>ITStatus</code> (SET/RESET)</td><td>ตรวจสอบว่า interrupt ที่ระบุเกิดขึ้นหรือไม่</td><td>ใช้ใน ISR</td></tr>
+<tr><td><code>SPI_I2S_ClearITPendingBit(SPIx, SPI_I2S_IT)</code></td><td><code>SPI_I2S_IT_*</code></td><td><code>void</code></td><td>เคลียร์ pending bit ของ interrupt</td><td>ใช้ใน ISR</td></tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>ตัวอย่างโค้ด</h2>
+
+<h3>1. เริ่มต้นใช้งาน SPI1 (Master, Full-Duplex, NSS Software)</h3>
+<pre><code class="language-c">#include &lt;ch32v00x_spi.h&gt;
+#include &lt;ch32v00x_gpio.h&gt;
+#include &lt;ch32v00x_rcc.h&gt;
+
+#define CS_PIN   GPIO_Pin_4   /* PC4 = Chip Select (software) */
+
+void SPI1_Init_Master(void)
+{
+    GPIO_InitTypeDef GPIO_InitStructure = {0};
+    SPI_InitTypeDef SPI_InitStructure = {0};
+
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOC | RCC_APB2Periph_SPI1, ENABLE);
+
+    /* PC5=SCK, PC6=MOSI -> AF Push-Pull */
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_5 | GPIO_Pin_6;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_10MHz;
+    GPIO_Init(GPIOC, &amp;GPIO_InitStructure);
+
+    /* PC7=MISO -> Input floating */
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_7;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+    GPIO_Init(GPIOC, &amp;GPIO_InitStructure);
+
+    /* PC4=CS -> Output push-pull ควบคุมด้วยซอฟต์แวร์ */
+    GPIO_InitStructure.GPIO_Pin = CS_PIN;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
+    GPIO_Init(GPIOC, &amp;GPIO_InitStructure);
+    GPIO_SetBits(GPIOC, CS_PIN);   /* idle = HIGH (ไม่เลือกอุปกรณ์) */
+
+    SPI_InitStructure.SPI_Direction = SPI_Direction_2Lines_FullDuplex;
+    SPI_InitStructure.SPI_Mode = SPI_Mode_Master;
+    SPI_InitStructure.SPI_DataSize = SPI_DataSize_8b;
+    SPI_InitStructure.SPI_CPOL = SPI_CPOL_Low;
+    SPI_InitStructure.SPI_CPHA = SPI_CPHA_1Edge;
+    SPI_InitStructure.SPI_NSS = SPI_NSS_Soft;
+    SPI_InitStructure.SPI_BaudRatePrescaler = SPI_BaudRatePrescaler_16;
+    SPI_InitStructure.SPI_FirstBit = SPI_FirstBit_MSB;
+    SPI_InitStructure.SPI_CRCPolynomial = 7;
+    SPI_Init(SPI1, &amp;SPI_InitStructure);
+
+    /* จำเป็น! ไม่ตั้งค่านี้ SPI จะค้างในโหมด Slave แม้ตั้ง SPI_Mode_Master ไว้แล้ว */
+    SPI_NSSInternalSoftwareConfig(SPI1, SPI_NSSInternalSoft_Set);
+
+    SPI_Cmd(SPI1, ENABLE);
+}</code></pre>
+
+<h3>2. ส่ง-รับ 1 byte แบบ Full-Duplex (poll TXE/RXNE)</h3>
+<pre><code class="language-c">uint8_t SPI1_TransferByte(uint8_t data)
+{
+    while (SPI_I2S_GetFlagStatus(SPI1, SPI_I2S_FLAG_TXE) == RESET);
+    SPI_I2S_SendData(SPI1, data);
+
+    while (SPI_I2S_GetFlagStatus(SPI1, SPI_I2S_FLAG_RXNE) == RESET);
+    return (uint8_t)SPI_I2S_ReceiveData(SPI1);
+}</code></pre>
+
+<h3>3. อ่าน/เขียน register ของอุปกรณ์ SPI ภายนอก ด้วย CS ควบคุมเอง</h3>
+<pre><code class="language-c">uint8_t SPI1_ReadReg(uint8_t regAddr)
+{
+    uint8_t value;
+
+    GPIO_ResetBits(GPIOC, CS_PIN);           /* CS ลง = เลือกอุปกรณ์ */
+    SPI1_TransferByte(regAddr | 0x80);        /* บิต 0x80 = read command (แล้วแต่ IC) */
+    value = SPI1_TransferByte(0xFF);          /* ส่ง dummy byte เพื่อ clock ข้อมูลออกมา */
+    GPIO_SetBits(GPIOC, CS_PIN);             /* CS ขึ้น = ปล่อยอุปกรณ์ */
+
+    return value;
+}</code></pre>
+
+<div class="callout callout-warn">
+    <strong>NSS Software ต้องคู่กับ SSI:</strong> เมื่อตั้ง <code>SPI_NSS = SPI_NSS_Soft</code> ต้องเรียก <code>SPI_NSSInternalSoftwareConfig(SPI1, SPI_NSSInternalSoft_Set)</code> เพิ่มเสมอ ไม่งั้นฮาร์ดแวร์จะมองว่า NSS เป็น LOW ตลอดเวลา ทำให้ peripheral ตกกลับไปอยู่ในสถานะ Slave โดยอัตโนมัติแม้ config เป็น Master
+</div>
+</section>
+
+<section>
+<h2>ปัญหาที่พบบ่อย</h2>
+<table>
+<thead><tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr></thead>
+<tbody>
+<tr>
+    <td>ส่งข้อมูลไม่ออก / <code>SPI_I2S_SendData()</code> ไม่มีผล</td>
+    <td>ลืมเรียก <code>SPI_Cmd(SPI1, ENABLE)</code> หลัง <code>SPI_Init()</code></td>
+    <td>ต้องเรียก <code>SPI_Cmd(ENABLE)</code> เสมอก่อนใช้งานจริง — <code>SPI_Init()</code> ตั้งค่าเรจิสเตอร์แต่ไม่เปิด peripheral</td>
+</tr>
+<tr>
+    <td>ตั้ง <code>SPI_Mode_Master</code> แล้วแต่พฤติกรรมเหมือน Slave / ไม่ generate clock</td>
+    <td>ใช้ <code>SPI_NSS_Soft</code> แต่ไม่ได้เรียก <code>SPI_NSSInternalSoftwareConfig(SPI_NSSInternalSoft_Set)</code></td>
+    <td>เรียก <code>SPI_NSSInternalSoftwareConfig()</code> เป็น Set ทันทีหลัง <code>SPI_Init()</code> เมื่อใช้ NSS แบบซอฟต์แวร์</td>
+</tr>
+<tr>
+    <td>อ่านค่าจาก <code>SPI_I2S_ReceiveData()</code> ได้ข้อมูลเก่า/ค้าง</td>
+    <td>อ่านโดยไม่เช็ค <code>SPI_I2S_FLAG_RXNE</code> ก่อน</td>
+    <td>ต้อง poll <code>SPI_I2S_GetFlagStatus(SPI_I2S_FLAG_RXNE)</code> จนเป็น SET ก่อนอ่านทุกครั้ง</td>
+</tr>
+<tr>
+    <td>ข้อมูลสลับบิต/อ่านผิด (bit-reversed) หรือสื่อสารไม่ตรงกับอุปกรณ์อื่น</td>
+    <td>ตั้ง CPOL/CPHA ไม่ตรงกับ SPI Mode ที่อุปกรณ์ปลายทางต้องการ (Mode 0-3)</td>
+    <td>ตรวจ datasheet อุปกรณ์ว่าใช้ Mode ใด แล้วจับคู่ CPOL/CPHA ให้ตรง (Mode0=CPOL_Low+CPHA_1Edge, Mode3=CPOL_High+CPHA_2Edge)</td>
+</tr>
+<tr>
+    <td>MOSI/SCK ทำงานแต่ไม่มีข้อมูลรับกลับมา</td>
+    <td>ตั้ง MISO pin เป็นโหมดอื่นที่ไม่ใช่ Input (เช่น Output ทับกัน) หรือลืมตั้ง GPIO เป็น AF</td>
+    <td>MOSI/SCK = <code>GPIO_Mode_AF_PP</code>, MISO (ฝั่ง Master) = <code>GPIO_Mode_IN_FLOATING</code></td>
+</tr>
+<tr>
+    <td>อุปกรณ์ SPI หลายตัวบนบัสเดียวกันรับคำสั่งพร้อมกันผิดตัว</td>
+    <td>ใช้ NSS ฮาร์ดแวร์ร่วมกันหลายอุปกรณ์ หรือไม่ได้ยก CS ของตัวที่ไม่ได้ใช้งานขึ้น</td>
+    <td>ใช้ CS แยกขา GPIO ธรรมดา ควบคุมด้วยซอฟต์แวร์ทีละตัว (ตัวอย่างที่ 3) แทนการแชร์ NSS ฮาร์ดแวร์เดียว</td>
+</tr>
+</tbody>
+</table>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="i2c.html">← I2C</a>
+    <a href="index.html">สารบัญ →</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

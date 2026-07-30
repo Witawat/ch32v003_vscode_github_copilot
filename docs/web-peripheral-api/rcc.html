@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RCC — Reset and Clock Control — Peripheral API Reference</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="misc.html">MISC (NVIC) →</a>
+</nav>
+
+<h1>RCC — Reset and Clock Control</h1>
+<span class="level level-intermediate">ระดับกลาง</span>
+
+<div class="callout callout-note">
+    <strong>ไลบรารี:</strong> <code>#include "ch32v00x_rcc.h"</code> — นี่คือ Standard Peripheral Library (SPL) ระดับล่างที่เข้าถึงเรจิสเตอร์ฮาร์ดแวร์โดยตรง <strong>ไม่ใช่ SimpleHAL</strong><br>
+    RCC ไม่มี wrapper ใน SimpleHAL โดยตรง — <code>SystemCoreClockUpdate()</code> และการตั้งค่านาฬิกาเริ่มต้นใน SimpleHAL เรียกใช้ฟังก์ชัน RCC เหล่านี้ "ภายใน" อยู่แล้ว ผู้ใช้ทั่วไปที่ใช้ SimpleHAL จึง<strong>ไม่จำเป็นต้องเรียก RCC เองเลย</strong> — หน้านี้เหมาะกับผู้ที่ต้องการปรับความถี่นาฬิกาเอง, เปิด/ปิด peripheral clock แบบละเอียด, หรือเขียนโค้ดแบบ bare-metal
+</div>
+
+<section class="flowchart">
+<h2>ผังการทำงาน RCC</h2>
+<pre class="mermaid">
+flowchart LR
+    HSI["HSI 24MHz (ภายใน)"] --> SW["RCC_SYSCLKConfig()"]
+    HSE["HSE (ภายนอก, ต้อง RCC_HSEConfig ON)"] --> SW
+    PLL["PLL (RCC_PLLConfig + RCC_PLLCmd)"] --> SW
+    SW --> SYSCLK["SYSCLK"]
+    SYSCLK --> HCLK["RCC_HCLKConfig() → HCLK (AHB)"]
+    HCLK --> PCLK["PCLK1/PCLK2 (APB)"]
+    PCLK --> PERIPH["RCC_APB1/APB2/AHBPeriphClockCmd() เปิด clock ให้ peripheral"]
+    PERIPH --> USE["ใช้งาน GPIO/TIM/USART/ฯลฯ ได้"]
+</pre>
+</section>
+
+<section>
+<h2>แนวคิดสำคัญ: ต้องเปิด Peripheral Clock ก่อนใช้งานเสมอ</h2>
+<div class="callout callout-warn">
+    <strong>กฎเหล็กของ CH32V003:</strong> ทุก peripheral (GPIO, TIM, USART, SPI, I2C, ADC, ...) มี "clock gate" ที่ปิดอยู่โดย default หลัง reset — ถ้าไม่เรียก <code>RCC_APB2PeriphClockCmd()</code> / <code>RCC_APB1PeriphClockCmd()</code> / <code>RCC_AHBPeriphClockCmd()</code> เปิด clock ก่อน การเขียนอ่านเรจิสเตอร์ของ peripheral นั้นจะ<strong>ไม่มีผลใดๆ (อ่านได้ 0 เสมอ หรือค้าง)</strong> เพราะวงจรไม่มีสัญญาณนาฬิกาขับ
+</div>
+</section>
+
+<section>
+<h2>ค่าคงที่ / Enum ที่ใช้บ่อย</h2>
+
+<h3>1. แหล่งนาฬิการะบบ (System Clock Source)</h3>
+<table>
+<thead><tr><th>ค่าคงที่</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>RCC_SYSCLKSource_HSI</code></td><td>ใช้ HSI (ออสซิลเลเตอร์ภายใน 24MHz) เป็นนาฬิการะบบ — ค่า default หลัง reset</td></tr>
+<tr><td><code>RCC_SYSCLKSource_HSE</code></td><td>ใช้ HSE (คริสตัลภายนอก) เป็นนาฬิการะบบ</td></tr>
+<tr><td><code>RCC_SYSCLKSource_PLLCLK</code></td><td>ใช้ผลลัพธ์จาก PLL เป็นนาฬิการะบบ</td></tr>
+</tbody>
+</table>
+
+<h3>2. แหล่งนาฬิกาเข้า PLL</h3>
+<table>
+<thead><tr><th>ค่าคงที่</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>RCC_PLLSource_HSI_MUL2</code></td><td>PLL รับสัญญาณจาก HSI คูณ 2 (24MHz → 48MHz)</td></tr>
+<tr><td><code>RCC_PLLSource_HSE_MUL2</code></td><td>PLL รับสัญญาณจาก HSE คูณ 2</td></tr>
+</tbody>
+</table>
+
+<h3>3. HSE Mode</h3>
+<table>
+<thead><tr><th>ค่าคงที่</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>RCC_HSE_OFF</code></td><td>ปิด HSE</td></tr>
+<tr><td><code>RCC_HSE_ON</code></td><td>เปิด HSE (ใช้คริสตัล/เรโซเนเตอร์)</td></tr>
+<tr><td><code>RCC_HSE_Bypass</code></td><td>ข้าม oscillator ใช้สัญญาณนาฬิกาจากภายนอกโดยตรง (เช่นจากชิปอื่น)</td></tr>
+</tbody>
+</table>
+
+<h3>4. ตัวหารนาฬิกา AHB (RCC_HCLKConfig)</h3>
+<table>
+<thead><tr><th>ค่าคงที่</th><th>ตัวหาร</th></tr></thead>
+<tbody>
+<tr><td><code>RCC_SYSCLK_Div1</code></td><td>÷1 (HCLK = SYSCLK)</td></tr>
+<tr><td><code>RCC_SYSCLK_Div2</code> ... <code>RCC_SYSCLK_Div8</code></td><td>÷2 ถึง ÷8</td></tr>
+<tr><td><code>RCC_SYSCLK_Div16</code> ... <code>RCC_SYSCLK_Div256</code></td><td>÷16, ÷32, ÷64, ÷128, ÷256</td></tr>
+</tbody>
+</table>
+
+<h3>5. ตัวหารนาฬิกา ADC (RCC_ADCCLKConfig, หารจาก PCLK2)</h3>
+<table>
+<thead><tr><th>ค่าคงที่</th><th>ตัวหาร</th></tr></thead>
+<tbody>
+<tr><td><code>RCC_PCLK2_Div2</code> / <code>Div4</code> / <code>Div6</code> / <code>Div8</code></td><td>÷2, ÷4, ÷6, ÷8</td></tr>
+<tr><td><code>RCC_PCLK2_Div12</code> / <code>Div16</code> / <code>Div24</code> / <code>Div32</code></td><td>÷12, ÷16, ÷24, ÷32</td></tr>
+<tr><td><code>RCC_PCLK2_Div48</code> / <code>Div64</code> / <code>Div96</code> / <code>Div128</code></td><td>÷48, ÷64, ÷96, ÷128</td></tr>
+</tbody>
+</table>
+
+<h3>6. Peripheral Clock Enable Bits</h3>
+<table>
+<thead><tr><th>บัส</th><th>ค่าคงที่</th><th>Peripheral</th></tr></thead>
+<tbody>
+<tr><td rowspan="2">AHB</td><td><code>RCC_AHBPeriph_DMA1</code></td><td>DMA1</td></tr>
+<tr><td><code>RCC_AHBPeriph_SRAM</code></td><td>SRAM (ปิดได้เฉพาะตอน sleep mode เท่านั้น)</td></tr>
+<tr><td rowspan="8">APB2 (เร็ว)</td><td><code>RCC_APB2Periph_AFIO</code></td><td>Alternate Function I/O (จำเป็นก่อนตั้งค่า remap/EXTI)</td></tr>
+<tr><td><code>RCC_APB2Periph_GPIOA</code></td><td>GPIO พอร์ต A</td></tr>
+<tr><td><code>RCC_APB2Periph_GPIOC</code></td><td>GPIO พอร์ต C</td></tr>
+<tr><td><code>RCC_APB2Periph_GPIOD</code></td><td>GPIO พอร์ต D</td></tr>
+<tr><td><code>RCC_APB2Periph_ADC1</code></td><td>ADC1</td></tr>
+<tr><td><code>RCC_APB2Periph_TIM1</code></td><td>Timer 1 (advanced timer)</td></tr>
+<tr><td><code>RCC_APB2Periph_SPI1</code></td><td>SPI1</td></tr>
+<tr><td><code>RCC_APB2Periph_USART1</code></td><td>USART1</td></tr>
+<tr><td rowspan="4">APB1 (ช้า)</td><td><code>RCC_APB1Periph_TIM2</code></td><td>Timer 2 (general purpose)</td></tr>
+<tr><td><code>RCC_APB1Periph_WWDG</code></td><td>Window Watchdog</td></tr>
+<tr><td><code>RCC_APB1Periph_I2C1</code></td><td>I2C1</td></tr>
+<tr><td><code>RCC_APB1Periph_PWR</code></td><td>Power management (จำเป็นก่อนใช้ standby/sleep บางโหมด)</td></tr>
+</tbody>
+</table>
+<p><em>ค่าเหล่านี้เป็น bitmask — ใช้ <code>|</code> รวมหลายตัวเรียกครั้งเดียวได้ เช่น <code>RCC_APB2Periph_GPIOC | RCC_APB2Periph_GPIOD</code></p>
+
+<h3>7. RCC_ClocksTypeDef (โครงสร้างผลลัพธ์ RCC_GetClocksFreq)</h3>
+<table>
+<thead><tr><th>ฟิลด์</th><th>ความหมาย</th></tr></thead>
+<tbody>
+<tr><td><code>SYSCLK_Frequency</code></td><td>ความถี่นาฬิการะบบ (Hz)</td></tr>
+<tr><td><code>HCLK_Frequency</code></td><td>ความถี่ AHB (Hz)</td></tr>
+<tr><td><code>PCLK1_Frequency</code></td><td>ความถี่ APB1 (Hz) — บนชิปนี้เท่ากับ HCLK เสมอ (ไม่มีตัวหารแยก)</td></tr>
+<tr><td><code>PCLK2_Frequency</code></td><td>ความถี่ APB2 (Hz) — เท่ากับ HCLK เสมอเช่นกัน</td></tr>
+<tr><td><code>ADCCLK_Frequency</code></td><td>ความถี่นาฬิกา ADC (Hz)</td></tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>ตารางอ้างอิงฟังก์ชัน</h2>
+<table>
+<thead><tr><th>ฟังก์ชัน</th><th>พารามิเตอร์</th><th>คืนค่า</th><th>คำอธิบาย</th><th>หมายเหตุ</th></tr></thead>
+<tbody>
+<tr>
+    <td><code>RCC_DeInit(void)</code></td>
+    <td>ไม่มี</td>
+    <td><code>void</code></td>
+    <td>รีเซ็ตการตั้งค่านาฬิกาทั้งหมดกลับสู่ค่า default (HSI, ไม่มี PLL, ไม่มี prescaler)</td>
+    <td>ใช้ตอนเริ่มโปรแกรมใหม่หรือ debug ปัญหานาฬิกา</td>
+</tr>
+<tr>
+    <td><code>RCC_HSEConfig(RCC_HSE)</code></td>
+    <td><code>RCC_HSE</code>: <code>RCC_HSE_OFF</code> / <code>_ON</code> / <code>_Bypass</code></td>
+    <td><code>void</code></td>
+    <td>เปิด/ปิด/bypass ออสซิลเลเตอร์ภายนอก HSE</td>
+    <td>ห้ามปิด HSE ขณะกำลังใช้เป็นนาฬิการะบบ (ตรงหรือผ่าน PLL)</td>
+</tr>
+<tr>
+    <td><code>RCC_WaitForHSEStartUp(void)</code></td>
+    <td>ไม่มี</td>
+    <td><code>ErrorStatus</code> (<code>READY</code>/<code>NoREADY</code>)</td>
+    <td>รอ HSE จนเสถียร หรือจน timeout (<code>HSE_STARTUP_TIMEOUT</code>)</td>
+    <td>เรียกหลัง <code>RCC_HSEConfig(RCC_HSE_ON)</code> ก่อนใช้ HSE จริง</td>
+</tr>
+<tr>
+    <td><code>RCC_AdjustHSICalibrationValue(HSICalibrationValue)</code></td>
+    <td><code>HSICalibrationValue</code>: 0–0x1F</td>
+    <td><code>void</code></td>
+    <td>ปรับค่า trim ของ HSI ภายใน</td>
+    <td>ไม่จำเป็นสำหรับผู้ใช้ทั่วไป — ใช้เมื่อต้องการความแม่นยำนาฬิกาสูงเป็นพิเศษ</td>
+</tr>
+<tr>
+    <td><code>RCC_HSICmd(NewState)</code></td>
+    <td><code>NewState</code>: <code>ENABLE</code>/<code>DISABLE</code></td>
+    <td><code>void</code></td>
+    <td>เปิด/ปิด HSI</td>
+    <td>ห้ามปิด HSI ถ้ากำลังใช้เป็นนาฬิการะบบ/PLL source อยู่ ไม่งั้น MCU ค้าง</td>
+</tr>
+<tr>
+    <td><code>RCC_PLLConfig(RCC_PLLSource)</code></td>
+    <td><code>RCC_PLLSource</code>: <code>RCC_PLLSource_HSI_MUL2</code> / <code>_HSE_MUL2</code></td>
+    <td><code>void</code></td>
+    <td>ตั้งค่าแหล่งสัญญาณเข้า PLL</td>
+    <td>ต้องตั้งก่อนเปิด PLL ด้วย <code>RCC_PLLCmd</code></td>
+</tr>
+<tr>
+    <td><code>RCC_PLLCmd(NewState)</code></td>
+    <td><code>NewState</code>: <code>ENABLE</code>/<code>DISABLE</code></td>
+    <td><code>void</code></td>
+    <td>เปิด/ปิด PLL</td>
+    <td>ห้ามปิด PLL ถ้ากำลังใช้เป็นนาฬิการะบบอยู่</td>
+</tr>
+<tr>
+    <td><code>RCC_SYSCLKConfig(RCC_SYSCLKSource)</code></td>
+    <td><code>RCC_SYSCLKSource</code>: <code>_HSI</code>/<code>_HSE</code>/<code>_PLLCLK</code></td>
+    <td><code>void</code></td>
+    <td>สลับแหล่งนาฬิการะบบ (SYSCLK)</td>
+    <td>ต้องเปิดและรอแหล่งสัญญาณนั้นเสถียรก่อนสลับมาใช้ ไม่งั้น MCU ค้าง</td>
+</tr>
+<tr>
+    <td><code>RCC_GetSYSCLKSource(void)</code></td>
+    <td>ไม่มี</td>
+    <td><code>uint8_t</code> (0x00=HSI, 0x04=HSE, 0x08=PLL)</td>
+    <td>อ่านแหล่งนาฬิการะบบปัจจุบัน</td>
+    <td>ใช้ตรวจสอบว่าการสลับนาฬิกาสำเร็จจริงหรือไม่</td>
+</tr>
+<tr>
+    <td><code>RCC_HCLKConfig(RCC_SYSCLK)</code></td>
+    <td><code>RCC_SYSCLK</code>: <code>RCC_SYSCLK_Div1</code>...<code>Div256</code></td>
+    <td><code>void</code></td>
+    <td>ตั้งตัวหารนาฬิกา AHB (HCLK) จาก SYSCLK</td>
+    <td>HCLK ขับ core, memory, DMA และเป็นฐานของ APB1/APB2</td>
+</tr>
+<tr>
+    <td><code>RCC_ITConfig(RCC_IT, NewState)</code></td>
+    <td><code>RCC_IT</code>: <code>RCC_IT_LSIRDY</code>/<code>_HSIRDY</code>/<code>_HSERDY</code>/<code>_PLLRDY</code><br><code>NewState</code>: <code>ENABLE</code>/<code>DISABLE</code></td>
+    <td><code>void</code></td>
+    <td>เปิด/ปิด interrupt เมื่อ clock source พร้อมใช้งาน</td>
+    <td>ใช้ร่วมกับ RCC IRQ handler ถ้าต้องการ async clock switching</td>
+</tr>
+<tr>
+    <td><code>RCC_ADCCLKConfig(RCC_PCLK2)</code></td>
+    <td><code>RCC_PCLK2</code>: <code>RCC_PCLK2_Div2</code>...<code>Div128</code></td>
+    <td><code>void</code></td>
+    <td>ตั้งตัวหารนาฬิกา ADC จาก PCLK2</td>
+    <td>ADC ต้องการนาฬิกาไม่เกิน 14MHz โดยประมาณ — เลือกตัวหารให้เหมาะกับ SYSCLK ที่ใช้</td>
+</tr>
+<tr>
+    <td><code>RCC_LSICmd(NewState)</code></td>
+    <td><code>NewState</code>: <code>ENABLE</code>/<code>DISABLE</code></td>
+    <td><code>void</code></td>
+    <td>เปิด/ปิดออสซิลเลเตอร์ความเร็วต่ำภายใน LSI</td>
+    <td>ห้ามปิด LSI ถ้า IWDG (Independent Watchdog) กำลังทำงานอยู่</td>
+</tr>
+<tr>
+    <td><code>RCC_GetClocksFreq(RCC_Clocks)</code></td>
+    <td><code>RCC_Clocks</code>: <code>RCC_ClocksTypeDef*</code></td>
+    <td><code>void</code></td>
+    <td>คำนวณและเขียนความถี่นาฬิกาปัจจุบันทุกจุด (SYSCLK/HCLK/PCLK1/PCLK2/ADCCLK) ลงในโครงสร้างที่ส่งมา</td>
+    <td>ผลลัพธ์อาจไม่แม่นยำถ้า HSE เป็นค่าที่ไม่ใช่จำนวนเต็ม MHz</td>
+</tr>
+<tr>
+    <td><code>RCC_AHBPeriphClockCmd(RCC_AHBPeriph, NewState)</code></td>
+    <td><code>RCC_AHBPeriph</code>: bitmask <code>RCC_AHBPeriph_*</code><br><code>NewState</code>: <code>ENABLE</code>/<code>DISABLE</code></td>
+    <td><code>void</code></td>
+    <td>เปิด/ปิด clock ให้ peripheral บนบัส AHB (DMA1, SRAM)</td>
+    <td>ต้องเปิดก่อนใช้ DMA1 เสมอ</td>
+</tr>
+<tr>
+    <td><code>RCC_APB2PeriphClockCmd(RCC_APB2Periph, NewState)</code></td>
+    <td><code>RCC_APB2Periph</code>: bitmask <code>RCC_APB2Periph_*</code><br><code>NewState</code>: <code>ENABLE</code>/<code>DISABLE</code></td>
+    <td><code>void</code></td>
+    <td>เปิด/ปิด clock ให้ peripheral บนบัส APB2 (GPIO, AFIO, ADC1, TIM1, SPI1, USART1)</td>
+    <td>ฟังก์ชันที่ถูกเรียกบ่อยที่สุดใน RCC — ต้องเรียกก่อนตั้งค่า GPIO ทุกครั้ง</td>
+</tr>
+<tr>
+    <td><code>RCC_APB1PeriphClockCmd(RCC_APB1Periph, NewState)</code></td>
+    <td><code>RCC_APB1Periph</code>: bitmask <code>RCC_APB1Periph_*</code><br><code>NewState</code>: <code>ENABLE</code>/<code>DISABLE</code></td>
+    <td><code>void</code></td>
+    <td>เปิด/ปิด clock ให้ peripheral บนบัส APB1 (TIM2, WWDG, I2C1, PWR)</td>
+    <td>ต้องเรียกก่อนใช้ TIM2/I2C1 เสมอ</td>
+</tr>
+<tr>
+    <td><code>RCC_APB2PeriphResetCmd(RCC_APB2Periph, NewState)</code></td>
+    <td>เหมือนด้านบน (APB2)</td>
+    <td><code>void</code></td>
+    <td>บังคับหรือปล่อย reset ของ peripheral บน APB2 (คนละอย่างกับเปิด/ปิด clock)</td>
+    <td>ใช้ reset peripheral ให้กลับสู่ค่า default โดยไม่ต้อง reset ทั้งชิป — ต้องเรียก ENABLE แล้วค่อย DISABLE เพื่อ "สะบัด" reset</td>
+</tr>
+<tr>
+    <td><code>RCC_APB1PeriphResetCmd(RCC_APB1Periph, NewState)</code></td>
+    <td>เหมือนด้านบน (APB1)</td>
+    <td><code>void</code></td>
+    <td>บังคับหรือปล่อย reset ของ peripheral บน APB1</td>
+    <td>เหมือนกับ APB2 แต่สำหรับ TIM2/WWDG/I2C1/PWR</td>
+</tr>
+<tr>
+    <td><code>RCC_ClockSecuritySystemCmd(NewState)</code></td>
+    <td><code>NewState</code>: <code>ENABLE</code>/<code>DISABLE</code></td>
+    <td><code>void</code></td>
+    <td>เปิด/ปิดระบบตรวจจับ HSE ล้มเหลว (Clock Security System) — ถ้า HSE ดับกะทันหันจะสลับไป HSI อัตโนมัติและเกิด NMI</td>
+    <td>ใช้ในงานที่ต้องการความน่าเชื่อถือสูง เมื่อใช้ HSE เป็นนาฬิการะบบ</td>
+</tr>
+<tr>
+    <td><code>RCC_MCOConfig(RCC_MCO)</code></td>
+    <td><code>RCC_MCO</code>: <code>RCC_MCO_NoClock</code>/<code>_SYSCLK</code>/<code>_HSI</code>/<code>_HSE</code>/<code>_PLLCLK</code></td>
+    <td><code>void</code></td>
+    <td>ส่งสัญญาณนาฬิกาที่เลือกออกทางขา MCO เพื่อตรวจวัดด้วยออสซิลโลสโคป</td>
+    <td>มีประโยชน์มากสำหรับ debug ว่านาฬิกาจริงตรงกับที่ตั้งค่าไว้หรือไม่</td>
+</tr>
+<tr>
+    <td><code>RCC_GetFlagStatus(RCC_FLAG)</code></td>
+    <td><code>RCC_FLAG</code>: <code>RCC_FLAG_*</code></td>
+    <td><code>FlagStatus</code> (<code>SET</code>/<code>RESET</code>)</td>
+    <td>ตรวจสอบสถานะแฟล็ก RCC เช่น oscillator ready หรือสาเหตุการรีเซ็ตล่าสุด</td>
+    <td>ใช้ตรวจว่า MCU รีเซ็ตมาจากอะไร (power-on, watchdog, pin, ...)</td>
+</tr>
+<tr>
+    <td><code>RCC_ClearFlag(void)</code></td>
+    <td>ไม่มี</td>
+    <td><code>void</code></td>
+    <td>ล้างแฟล็กสาเหตุการรีเซ็ตทั้งหมด (PINRST, PORRST, SFTRST, IWDGRST, WWDGRST, LPWRRST)</td>
+    <td>เรียกหลังอ่านสาเหตุ reset แล้ว เพื่อให้รอบถัดไปตรวจสอบใหม่ได้ถูกต้อง</td>
+</tr>
+<tr>
+    <td><code>RCC_GetITStatus(RCC_IT)</code></td>
+    <td><code>RCC_IT</code>: <code>RCC_IT_*</code> (รวม <code>RCC_IT_CSS</code>)</td>
+    <td><code>ITStatus</code> (<code>SET</code>/<code>RESET</code>)</td>
+    <td>ตรวจสอบว่า interrupt ของ RCC เกิดขึ้นหรือยัง</td>
+    <td>ใช้ใน RCC IRQ handler</td>
+</tr>
+<tr>
+    <td><code>RCC_ClearITPendingBit(RCC_IT)</code></td>
+    <td><code>RCC_IT</code>: <code>RCC_IT_*</code></td>
+    <td><code>void</code></td>
+    <td>ล้างบิต interrupt ที่ค้างอยู่ของ RCC</td>
+    <td>ต้องเรียกใน ISR ไม่งั้น interrupt จะเข้าซ้ำไม่จบ</td>
+</tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>ตัวอย่างโค้ด</h2>
+
+<h3>1. เปิด Clock ให้ GPIOC ก่อนใช้งาน (พื้นฐานที่สุด)</h3>
+<pre><code class="language-c">#include "ch32v00x_rcc.h"
+#include "ch32v00x_gpio.h"
+
+int main(void)
+{
+    // ต้องเปิด clock ให้ GPIOC ก่อน ไม่งั้นเขียนเรจิสเตอร์ GPIO ไม่มีผล
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOC, ENABLE);
+
+    GPIO_InitTypeDef GPIO_InitStructure = {0};
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_0;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_10MHz;
+    GPIO_Init(GPIOC, &GPIO_InitStructure);
+
+    while (1) { }
+}</code></pre>
+
+<h3>2. เปิดหลาย Peripheral พร้อมกันด้วย bitwise OR</h3>
+<pre><code class="language-c">// เปิด GPIOC, GPIOD และ AFIO (จำเป็นสำหรับ EXTI/remap) พร้อมกันในครั้งเดียว
+RCC_APB2PeriphClockCmd(
+    RCC_APB2Periph_GPIOC | RCC_APB2Periph_GPIOD | RCC_APB2Periph_AFIO,
+    ENABLE
+);
+
+// เปิด TIM2 บนบัส APB1 แยกต่างหาก
+RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, ENABLE);</code></pre>
+
+<h3>3. สลับไปใช้ PLL เป็นนาฬิการะบบ (เพิ่มความเร็ว)</h3>
+<pre><code class="language-c">#include "ch32v00x_rcc.h"
+
+void SetupPLL_48MHz(void)
+{
+    RCC_DeInit();                                  // เริ่มจากค่า default
+    RCC_PLLConfig(RCC_PLLSource_HSI_MUL2);          // PLL = HSI(24MHz) x2 = 48MHz
+    RCC_PLLCmd(ENABLE);                             // เปิด PLL
+
+    // รอ PLL ล็อกก่อนสลับไปใช้งานจริง
+    while (RCC_GetFlagStatus(RCC_FLAG_PLLRDY) == RESET) { }
+
+    RCC_HCLKConfig(RCC_SYSCLK_Div1);                // HCLK = SYSCLK (ไม่หาร)
+    RCC_SYSCLKConfig(RCC_SYSCLKSource_PLLCLK);      // สลับ SYSCLK ไปใช้ PLL
+
+    // ตรวจสอบผลว่าสลับสำเร็จจริง
+    while (RCC_GetSYSCLKSource() != 0x08) { }
+}</code></pre>
+
+<h3>4. อ่านความถี่นาฬิกาปัจจุบัน และตรวจสอบสาเหตุการรีเซ็ต</h3>
+<pre><code class="language-c">#include "ch32v00x_rcc.h"
+
+RCC_ClocksTypeDef clocks;
+RCC_GetClocksFreq(&clocks);
+// clocks.SYSCLK_Frequency, clocks.HCLK_Frequency, ... เป็นหน่วย Hz
+
+if (RCC_GetFlagStatus(RCC_FLAG_IWDGRST) != RESET) {
+    // รีบูตล่าสุดเกิดจาก watchdog timeout — โปรแกรมค้างมาก่อน
+}
+RCC_ClearFlag();  // ล้างแฟล็กเพื่อตรวจรอบถัดไปให้ถูกต้อง</code></pre>
+</section>
+
+<section>
+<h2>ปัญหาที่พบบ่อย</h2>
+<table>
+<thead><tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr></thead>
+<tbody>
+<tr>
+    <td>ตั้งค่า GPIO/TIM/USART แล้วไม่มีผล เหมือน peripheral ไม่ทำงานเลย</td>
+    <td>ลืมเปิด peripheral clock ก่อน — เรจิสเตอร์ของ peripheral ที่ไม่มีนาฬิกาขับจะเขียนไม่ติด อ่านค่าคงที่หรือ 0 เสมอ</td>
+    <td>เรียก <code>RCC_APB2PeriphClockCmd()</code> หรือ <code>RCC_APB1PeriphClockCmd()</code> ให้ตรงกับ peripheral นั้น <strong>ก่อน</strong> <code>_Init()</code> ของ peripheral เสมอ</td>
+</tr>
+<tr>
+    <td>MCU ค้าง/แฮงค์ หลังเรียก <code>RCC_SYSCLKConfig(RCC_SYSCLKSource_PLLCLK)</code></td>
+    <td>สลับไปใช้ PLL/HSE ก่อนที่แหล่งสัญญาณนั้นจะพร้อม (ยังไม่ล็อก/ยังไม่เสถียร)</td>
+    <td>ต้อง poll <code>RCC_GetFlagStatus(RCC_FLAG_PLLRDY)</code> หรือ <code>RCC_WaitForHSEStartUp()</code> จนพร้อมก่อน แล้วค่อยเรียก <code>RCC_SYSCLKConfig()</code></td>
+</tr>
+<tr>
+    <td>ปิด HSE/HSI/PLL แล้ว MCU ค้างทันที</td>
+    <td>ปิดแหล่งนาฬิกาที่กำลังเป็นนาฬิการะบบอยู่ (โดยตรงหรือผ่าน PLL) — MCU ไม่มีสัญญาณนาฬิกาขับ core เลย</td>
+    <td>สลับ <code>RCC_SYSCLKConfig()</code> ไปใช้แหล่งอื่นก่อน แล้วค่อยปิดแหล่งเดิมที่ไม่ใช้แล้ว</td>
+</tr>
+<tr>
+    <td>ADC อ่านค่าผิดเพี้ยน/ไม่นิ่ง</td>
+    <td>นาฬิกา ADC (ADCCLK) เร็วเกินสเปกที่ ADC รองรับ เพราะไม่ได้ตั้ง <code>RCC_ADCCLKConfig()</code> ให้เหมาะกับ SYSCLK ที่ใช้จริง</td>
+    <td>เลือกตัวหาร <code>RCC_PCLK2_Div*</code> ให้ ADCCLK อยู่ในช่วงที่ datasheet กำหนด (โดยทั่วไปไม่เกินสิบกว่า MHz)</td>
+</tr>
+<tr>
+    <td>เรียก <code>RCC_APB1PeriphResetCmd(..., ENABLE)</code> แล้ว peripheral ไม่ทำงานอีกเลย</td>
+    <td>ฟังก์ชัน ResetCmd ต่างจาก ClockCmd — ENABLE คือ "บังคับ hold reset ค้างไว้" ไม่ใช่ "เปิดใช้งาน" ถ้าไม่เรียก DISABLE ต่อ peripheral จะติด reset ตลอดไป</td>
+    <td>ใช้ ENABLE แล้วตามด้วย DISABLE ทันที (สะบัด reset ครั้งเดียว) ไม่ใช่ปล่อย ENABLE ค้างไว้</td>
+</tr>
+<tr>
+    <td><code>RCC_GetFlagStatus(RCC_FLAG_IWDGRST)</code> แสดงค่า SET ตลอดแม้รีเซ็ตด้วยสาเหตุอื่นแล้ว</td>
+    <td>ไม่ได้เรียก <code>RCC_ClearFlag()</code> หลังตรวจสอบ — แฟล็กค้างจากรอบก่อนหน้า</td>
+    <td>เรียก <code>RCC_ClearFlag()</code> ทุกครั้งหลังอ่านสาเหตุ reset เสร็จ</td>
+</tr>
+</tbody>
+</table>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="misc.html">MISC (NVIC) →</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

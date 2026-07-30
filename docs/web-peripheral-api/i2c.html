@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>I2C — Inter-Integrated Circuit — Peripheral API Reference</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="gpio.html">← GPIO</a>
+    <a href="spi.html">SPI →</a>
+</nav>
+
+<h1>I2C — Inter-Integrated Circuit</h1>
+<span class="level level-advanced">ระดับสูง</span>
+
+<div class="callout callout-note">
+    <strong>ไลบรารี:</strong> <code>#include &lt;ch32v00x_i2c.h&gt;</code> — นี่คือ Standard Peripheral Library (SPL) ระดับล่าง เขียนคอนฟิกผ่าน struct <code>I2C_InitTypeDef</code> โดยตรงกับเรจิสเตอร์ฮาร์ดแวร์ และตรวจสอบสถานะการสื่อสารด้วยการ <strong>poll event/flag</strong> เอง (ไม่มี buffer, ไม่มี interrupt callback อัตโนมัติแบบ wrapper)
+</div>
+
+<div class="callout callout-good">
+    <strong>อยากได้อะไรที่ง่ายกว่านี้?</strong> ถ้าต้องการ I2C แบบเรียกใช้งานง่าย ไม่ต้อง poll event เอง ดูที่ <a href="../web-simplehal-api/i2c.html">SimpleI2C (SimpleHAL wrapper)</a> แทน หน้านี้เหมาะสำหรับคนที่ต้องการควบคุมรายละเอียดระดับ register/event เอง
+</div>
+
+<section class="flowchart">
+<h2>ผังการทำงานของ I2C Master (Event Polling Model)</h2>
+<pre class="mermaid">
+flowchart LR
+    INIT["I2C_Init()"] --> EN["I2C_Cmd(ENABLE)"]
+    EN --> START["I2C_GenerateSTART()"]
+    START --> EVT5["รอ EVT5:<br>I2C_EVENT_MASTER_MODE_SELECT"]
+    EVT5 --> ADDR["I2C_Send7bitAddress()"]
+    ADDR --> EVT6["รอ EVT6:<br>MODE_SELECTED (Tx/Rx)"]
+    EVT6 --> DATA["I2C_SendData() / I2C_ReceiveData()"]
+    DATA --> EVT8["รอ EVT8/EVT7:<br>BYTE_TRANSMITTED/RECEIVED"]
+    EVT8 --> STOP["I2C_GenerateSTOP()"]
+</pre>
+</section>
+
+<section>
+<h2>I2C_InitTypeDef — โครงสร้างการตั้งค่า</h2>
+<table>
+<thead><tr><th>สมาชิก</th><th>ชนิด</th><th>ค่าที่เป็นไปได้</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>I2C_ClockSpeed</code></td><td><code>uint32_t</code></td><td>ค่าความถี่ (Hz) เช่น <code>100000</code>, <code>400000</code></td><td>ความถี่สัญญาณนาฬิกา SCL ต้อง &lt; 400kHz</td></tr>
+<tr><td><code>I2C_Mode</code></td><td><code>uint16_t</code></td><td><code>I2C_Mode_I2C</code></td><td>โหมดการทำงาน (CH32V003 มีเพียงโหมดเดียว)</td></tr>
+<tr><td><code>I2C_DutyCycle</code></td><td><code>uint16_t</code></td><td><code>I2C_DutyCycle_2</code>, <code>I2C_DutyCycle_16_9</code></td><td>อัตราส่วน Tlow/Thigh เมื่อความเร็ว &gt; 100kHz (Fast mode)</td></tr>
+<tr><td><code>I2C_OwnAddress1</code></td><td><code>uint16_t</code></td><td>ที่อยู่ 7 หรือ 10 บิต</td><td>ที่อยู่ของตัวเองเมื่อทำงานเป็น Slave</td></tr>
+<tr><td><code>I2C_Ack</code></td><td><code>uint16_t</code></td><td><code>I2C_Ack_Enable</code>, <code>I2C_Ack_Disable</code></td><td>เปิด/ปิดการตอบรับ ACK อัตโนมัติ</td></tr>
+<tr><td><code>I2C_AcknowledgedAddress</code></td><td><code>uint16_t</code></td><td><code>I2C_AcknowledgedAddress_7bit</code>, <code>_10bit</code></td><td>ขนาดที่อยู่ที่ยอมรับเมื่อเป็น Slave</td></tr>
+</tbody>
+</table>
+<p><code>I2C_StructInit()</code> ตั้งค่าเริ่มต้น: ClockSpeed=5000, Mode=I2C_Mode_I2C, DutyCycle=I2C_DutyCycle_2, OwnAddress1=0, Ack=Disable, AcknowledgedAddress=7bit</p>
+</section>
+
+<section>
+<h2>I2C Event Macros (ใช้กับ I2C_CheckEvent)</h2>
+<p>ค่าคงที่เหล่านี้แทนรูปแบบ flag รวมกันในเรจิสเตอร์ STAR1/STAR2 ที่บอกจุดต่างๆ ของการสื่อสาร — ใช้คู่กับ <code>I2C_CheckEvent(I2Cx, EVENT)</code></p>
+<h3>Master events</h3>
+<table>
+<thead><tr><th>Macro</th><th>เมื่อไหร่ (EVTx)</th><th>ความหมาย</th></tr></thead>
+<tbody>
+<tr><td><code>I2C_EVENT_MASTER_MODE_SELECT</code></td><td>EVT5</td><td>ส่ง START สำเร็จแล้ว บัสพร้อมส่งที่อยู่</td></tr>
+<tr><td><code>I2C_EVENT_MASTER_TRANSMITTER_MODE_SELECTED</code></td><td>EVT6</td><td>Slave ตอบรับที่อยู่แล้ว โหมด Transmitter (ส่งข้อมูล)</td></tr>
+<tr><td><code>I2C_EVENT_MASTER_RECEIVER_MODE_SELECTED</code></td><td>EVT6</td><td>Slave ตอบรับที่อยู่แล้ว โหมด Receiver (รับข้อมูล)</td></tr>
+<tr><td><code>I2C_EVENT_MASTER_MODE_ADDRESS10</code></td><td>EVT9</td><td>ส่ง header ที่อยู่ 10-bit ท่อนแรกสำเร็จ</td></tr>
+<tr><td><code>I2C_EVENT_MASTER_BYTE_RECEIVED</code></td><td>EVT7</td><td>รับข้อมูล 1 byte แล้ว อ่านได้ด้วย <code>I2C_ReceiveData()</code></td></tr>
+<tr><td><code>I2C_EVENT_MASTER_BYTE_TRANSMITTING</code></td><td>EVT8</td><td>ข้อมูลอยู่ใน shift register กำลังส่งออก (TXE=1)</td></tr>
+<tr><td><code>I2C_EVENT_MASTER_BYTE_TRANSMITTED</code></td><td>EVT8_2</td><td>ส่งข้อมูลออกบัสสำเร็จจริง (TXE=1, BTF=1) — เชื่อถือได้กว่า EVT8</td></tr>
+</tbody>
+</table>
+<h3>Slave events</h3>
+<table>
+<thead><tr><th>Macro</th><th>เมื่อไหร่ (EVTx)</th><th>ความหมาย</th></tr></thead>
+<tbody>
+<tr><td><code>I2C_EVENT_SLAVE_RECEIVER_ADDRESS_MATCHED</code></td><td>EVT1</td><td>Master เรียกที่อยู่ตรงกับ OwnAddress1 โหมด Receiver</td></tr>
+<tr><td><code>I2C_EVENT_SLAVE_TRANSMITTER_ADDRESS_MATCHED</code></td><td>EVT1</td><td>Master เรียกที่อยู่ตรงกับ OwnAddress1 โหมด Transmitter</td></tr>
+<tr><td><code>I2C_EVENT_SLAVE_RECEIVER_SECONDADDRESS_MATCHED</code></td><td>EVT1</td><td>ตรงกับที่อยู่ที่สอง (Dual Address) โหมด Receiver</td></tr>
+<tr><td><code>I2C_EVENT_SLAVE_TRANSMITTER_SECONDADDRESS_MATCHED</code></td><td>EVT1</td><td>ตรงกับที่อยู่ที่สอง โหมด Transmitter</td></tr>
+<tr><td><code>I2C_EVENT_SLAVE_GENERALCALLADDRESS_MATCHED</code></td><td>EVT1</td><td>Master ส่ง General Call address (0x00)</td></tr>
+<tr><td><code>I2C_EVENT_SLAVE_BYTE_RECEIVED</code></td><td>EVT2</td><td>รับข้อมูล 1 byte จาก Master แล้ว</td></tr>
+<tr><td><code>I2C_EVENT_SLAVE_STOP_DETECTED</code></td><td>EVT4</td><td>ตรวจพบ STOP condition จาก Master</td></tr>
+<tr><td><code>I2C_EVENT_SLAVE_BYTE_TRANSMITTED</code></td><td>EVT3</td><td>ส่งข้อมูล 1 byte ให้ Master สำเร็จ (BTF=1)</td></tr>
+<tr><td><code>I2C_EVENT_SLAVE_BYTE_TRANSMITTING</code></td><td>EVT3</td><td>กำลังส่งข้อมูลให้ Master (TXE=1)</td></tr>
+<tr><td><code>I2C_EVENT_SLAVE_ACK_FAILURE</code></td><td>EVT3_2</td><td>Master ส่ง NACK บอกให้หยุดส่งข้อมูล (AF flag)</td></tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>ค่าคงที่และแฟล็กอื่นๆ</h2>
+<table>
+<thead><tr><th>กลุ่ม</th><th>ค่าคงที่</th><th>ความหมาย</th></tr></thead>
+<tbody>
+<tr><td rowspan="2">ทิศทาง</td><td><code>I2C_Direction_Transmitter</code></td><td>Master เป็นผู้ส่ง (ใช้กับ <code>I2C_Send7bitAddress</code>)</td></tr>
+<tr><td><code>I2C_Direction_Receiver</code></td><td>Master เป็นผู้รับ</td></tr>
+<tr><td rowspan="8">IT (Interrupt)</td><td><code>I2C_IT_BUF</code>, <code>I2C_IT_EVT</code>, <code>I2C_IT_ERR</code></td><td>บิตเปิดใช้ interrupt กลุ่มหลัก (ใช้กับ <code>I2C_ITConfig</code>)</td></tr>
+<tr><td><code>I2C_IT_PECERR</code>, <code>I2C_IT_OVR</code>, <code>I2C_IT_AF</code>, <code>I2C_IT_ARLO</code>, <code>I2C_IT_BERR</code></td><td>Error interrupt แต่ละประเภท</td></tr>
+<tr><td><code>I2C_IT_SB</code>, <code>I2C_IT_ADDR</code>, <code>I2C_IT_BTF</code>, <code>I2C_IT_ADD10</code>, <code>I2C_IT_STOPF</code>, <code>I2C_IT_TXE</code>, <code>I2C_IT_RXNE</code></td><td>Event interrupt แต่ละประเภท (ใช้กับ <code>I2C_GetITStatus</code>/<code>I2C_ClearITPendingBit</code>)</td></tr>
+<tr><td rowspan="4">Flag (STAR1/STAR2)</td><td><code>I2C_FLAG_BUSY</code>, <code>I2C_FLAG_MSL</code>, <code>I2C_FLAG_TRA</code></td><td>สถานะบัส/โหมด Master-Slave/ทิศทาง</td></tr>
+<tr><td><code>I2C_FLAG_SB</code>, <code>I2C_FLAG_ADDR</code>, <code>I2C_FLAG_BTF</code>, <code>I2C_FLAG_STOPF</code></td><td>flag เหตุการณ์การสื่อสารปกติ</td></tr>
+<tr><td><code>I2C_FLAG_TXE</code>, <code>I2C_FLAG_RXNE</code></td><td>buffer ว่าง/มีข้อมูลรอรับ</td></tr>
+<tr><td><code>I2C_FLAG_AF</code>, <code>I2C_FLAG_BERR</code>, <code>I2C_FLAG_ARLO</code>, <code>I2C_FLAG_OVR</code>, <code>I2C_FLAG_PECERR</code></td><td>flag ข้อผิดพลาด</td></tr>
+<tr><td rowspan="2">Register</td><td><code>I2C_Register_CTLR1..CKCFGR</code></td><td>รหัสเรจิสเตอร์ ใช้กับ <code>I2C_ReadRegister</code></td></tr>
+<tr><td><code>I2C_PECPosition_*</code>, <code>I2C_NACKPosition_*</code></td><td>ตำแหน่ง PEC/NACK ปัจจุบันหรือถัดไป (สำหรับโหมดรับหลาย byte)</td></tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>ตารางอ้างอิงฟังก์ชัน</h2>
+<table>
+<thead><tr><th>ฟังก์ชัน</th><th>พารามิเตอร์</th><th>คืนค่า</th><th>คำอธิบาย</th><th>หมายเหตุ</th></tr></thead>
+<tbody>
+<tr><td><code>I2C_DeInit(I2Cx)</code></td><td><code>I2Cx</code>: <code>I2C1</code></td><td><code>void</code></td><td>รีเซ็ตเรจิสเตอร์ I2C ทั้งหมดกลับค่าเริ่มต้น</td><td>ใช้ก่อนตั้งค่าใหม่ทั้งหมด</td></tr>
+<tr><td><code>I2C_Init(I2Cx, I2C_InitStruct)</code></td><td><code>I2C_InitStruct</code>: ตัวชี้ <code>I2C_InitTypeDef</code></td><td><code>void</code></td><td>ตั้งค่า I2C ตาม struct (ความเร็ว, mode, ACK ฯลฯ)</td><td>ต้องเปิด clock ของ I2C1 (RCC) และตั้งค่า GPIO เป็น AF Open-Drain ก่อน</td></tr>
+<tr><td><code>I2C_StructInit(I2C_InitStruct)</code></td><td>ตัวชี้ <code>I2C_InitTypeDef</code></td><td><code>void</code></td><td>เติมค่าเริ่มต้นให้ struct</td><td>ควรเรียกก่อนแก้ค่าที่ต้องการเอง</td></tr>
+<tr><td><code>I2C_Cmd(I2Cx, NewState)</code></td><td><code>NewState</code>: ENABLE/DISABLE</td><td><code>void</code></td><td>เปิด/ปิดการทำงานของ peripheral I2C</td><td>ต้องเรียกหลัง <code>I2C_Init</code></td></tr>
+<tr><td><code>I2C_DMACmd(I2Cx, NewState)</code></td><td>ENABLE/DISABLE</td><td><code>void</code></td><td>เปิด/ปิดการขอ DMA</td><td>ใช้ร่วมกับโมดูล DMA</td></tr>
+<tr><td><code>I2C_DMALastTransferCmd(I2Cx, NewState)</code></td><td>ENABLE/DISABLE</td><td><code>void</code></td><td>ระบุว่า DMA transfer ปัจจุบันเป็น byte สุดท้าย (ควบคุม ACK/NACK อัตโนมัติ)</td><td>ใช้เมื่อรับข้อมูลผ่าน DMA</td></tr>
+<tr><td><code>I2C_GenerateSTART(I2Cx, NewState)</code></td><td>ENABLE=ส่ง START, DISABLE=เคลียร์บิต</td><td><code>void</code></td><td>สร้างสัญญาณ START/Repeated START บนบัส</td><td>ต้องรอ EVT5 (<code>I2C_EVENT_MASTER_MODE_SELECT</code>) หลังเรียก</td></tr>
+<tr><td><code>I2C_GenerateSTOP(I2Cx, NewState)</code></td><td>ENABLE=ส่ง STOP</td><td><code>void</code></td><td>สร้างสัญญาณ STOP บนบัส ปลดปล่อยบัส</td><td>เรียกหลังส่ง/รับ byte สุดท้ายเสร็จ</td></tr>
+<tr><td><code>I2C_AcknowledgeConfig(I2Cx, NewState)</code></td><td>ENABLE=ตอบ ACK, DISABLE=ตอบ NACK</td><td><code>void</code></td><td>เปิด/ปิดการตอบรับ ACK อัตโนมัติของ Master/Slave</td><td>ต้อง DISABLE <strong>ก่อน</strong>อ่าน byte สุดท้ายเพื่อสั่ง NACK</td></tr>
+<tr><td><code>I2C_OwnAddress2Config(I2Cx, Address)</code></td><td><code>Address</code>: ที่อยู่ 7 บิต</td><td><code>void</code></td><td>ตั้งที่อยู่ที่สองของอุปกรณ์ (Dual Addressing)</td><td>ใช้ร่วมกับ <code>I2C_DualAddressCmd</code></td></tr>
+<tr><td><code>I2C_DualAddressCmd(I2Cx, NewState)</code></td><td>ENABLE/DISABLE</td><td><code>void</code></td><td>เปิด/ปิดโหมดที่อยู่คู่ (Dual Address)</td><td>Slave mode เท่านั้น</td></tr>
+<tr><td><code>I2C_GeneralCallCmd(I2Cx, NewState)</code></td><td>ENABLE/DISABLE</td><td><code>void</code></td><td>เปิด/ปิดการตอบสนอง General Call address (0x00)</td><td>Slave mode</td></tr>
+<tr><td><code>I2C_ITConfig(I2Cx, I2C_IT, NewState)</code></td><td><code>I2C_IT</code>: <code>I2C_IT_BUF</code>/<code>_EVT</code>/<code>_ERR</code></td><td><code>void</code></td><td>เปิด/ปิด interrupt กลุ่มที่ระบุ</td><td>ต้องตั้ง NVIC ด้วยถ้าจะใช้ ISR จริง</td></tr>
+<tr><td><code>I2C_SendData(I2Cx, Data)</code></td><td><code>Data</code>: <code>uint8_t</code></td><td><code>void</code></td><td>เขียนข้อมูล 1 byte ลง DATAR เพื่อส่งออก</td><td>ใช้เมื่อ TXE=1 (EVT8)</td></tr>
+<tr><td><code>I2C_ReceiveData(I2Cx)</code></td><td>—</td><td><code>uint8_t</code></td><td>อ่านข้อมูล 1 byte ที่รับมาจาก DATAR</td><td>ใช้เมื่อ RXNE=1 (EVT7)</td></tr>
+<tr><td><code>I2C_Send7bitAddress(I2Cx, Address, I2C_Direction)</code></td><td><code>Address</code>: ที่อยู่ 7 บิต (เลื่อนซ้าย 1 บิตอัตโนมัติ)<br><code>I2C_Direction</code>: Transmitter/Receiver</td><td><code>void</code></td><td>ส่งที่อยู่ slave + บิตทิศทาง หลัง START</td><td>ต้องรอ EVT6 หลังเรียก</td></tr>
+<tr><td><code>I2C_ReadRegister(I2Cx, I2C_Register)</code></td><td><code>I2C_Register</code>: <code>I2C_Register_CTLR1</code> ฯลฯ</td><td><code>uint16_t</code></td><td>อ่านค่าเรจิสเตอร์ดิบของ I2C peripheral โดยตรง</td><td>ใช้ debug ระดับ register</td></tr>
+<tr><td><code>I2C_SoftwareResetCmd(I2Cx, NewState)</code></td><td>ENABLE=รีเซ็ตค้าง, DISABLE=ปลดรีเซ็ต</td><td><code>void</code></td><td>รีเซ็ตบัส I2C ด้วยซอฟต์แวร์ (SWRST)</td><td>ใช้กู้บัสที่ค้าง (บัส lockup)</td></tr>
+<tr><td><code>I2C_NACKPositionConfig(I2Cx, I2C_NACKPosition)</code></td><td><code>I2C_NACKPosition_Next</code>/<code>_Current</code></td><td><code>void</code></td><td>กำหนดตำแหน่งของ byte ที่จะตอบ NACK เมื่อรับหลาย byte</td><td>ใช้กับโหมดรับ 2 byte สุดท้าย</td></tr>
+<tr><td><code>I2C_TransmitPEC(I2Cx, NewState)</code></td><td>ENABLE/DISABLE</td><td><code>void</code></td><td>สั่งส่ง PEC byte (Packet Error Checking) ครั้งถัดไป</td><td>ใช้ร่วมกับ SMBus/PEC</td></tr>
+<tr><td><code>I2C_PECPositionConfig(I2Cx, I2C_PECPosition)</code></td><td><code>I2C_PECPosition_Next</code>/<code>_Current</code></td><td><code>void</code></td><td>กำหนดตำแหน่งของ byte ที่จะเป็น PEC</td><td>ใช้ร่วมกับ PEC</td></tr>
+<tr><td><code>I2C_CalculatePEC(I2Cx, NewState)</code></td><td>ENABLE/DISABLE</td><td><code>void</code></td><td>เปิด/ปิดการคำนวณ PEC อัตโนมัติ</td><td>ฟีเจอร์ SMBus</td></tr>
+<tr><td><code>I2C_GetPEC(I2Cx)</code></td><td>—</td><td><code>uint8_t</code></td><td>อ่านค่า PEC ที่คำนวณได้ล่าสุด</td><td>ใช้ร่วมกับ PEC</td></tr>
+<tr><td><code>I2C_ARPCmd(I2Cx, NewState)</code></td><td>ENABLE/DISABLE</td><td><code>void</code></td><td>เปิด/ปิดฟีเจอร์ ARP (Address Resolution Protocol)</td><td>ฟีเจอร์ SMBus</td></tr>
+<tr><td><code>I2C_StretchClockCmd(I2Cx, NewState)</code></td><td>ENABLE=อนุญาต stretch, DISABLE=ปิด</td><td><code>void</code></td><td>เปิด/ปิดการยืดสัญญาณนาฬิกา (Clock Stretching) ของ Slave</td><td>Slave mode</td></tr>
+<tr><td><code>I2C_FastModeDutyCycleConfig(I2Cx, I2C_DutyCycle)</code></td><td><code>I2C_DutyCycle_2</code>/<code>_16_9</code></td><td><code>void</code></td><td>ตั้งค่า duty cycle ของ Fast mode หลังจาก Init แล้ว</td><td>ใช้ปรับแบบไม่ต้อง Init ใหม่</td></tr>
+<tr><td><code>I2C_CheckEvent(I2Cx, I2C_EVENT)</code></td><td><code>I2C_EVENT</code>: ค่า <code>I2C_EVENT_*</code></td><td><code>ErrorStatus</code> (SUCCESS/ERROR)</td><td>ตรวจสอบว่าสถานะปัจจุบันตรงกับ event ที่ระบุหรือไม่</td><td>วิธีมาตรฐานที่แนะนำสำหรับ polling</td></tr>
+<tr><td><code>I2C_GetLastEvent(I2Cx)</code></td><td>—</td><td><code>uint32_t</code></td><td>คืนค่า STAR1/STAR2 รวมกันเป็นคำเดียว เทียบกับ event เองได้</td><td>ใช้เมื่อต้องตรวจหลาย flag พร้อมกันแบบละเอียด</td></tr>
+<tr><td><code>I2C_GetFlagStatus(I2Cx, I2C_FLAG)</code></td><td><code>I2C_FLAG_*</code></td><td><code>FlagStatus</code> (SET/RESET)</td><td>ตรวจสอบ flag เดียวโดยเฉพาะ</td><td>เหมาะกับ debug หรือเช็ค error flag เดียว</td></tr>
+<tr><td><code>I2C_ClearFlag(I2Cx, I2C_FLAG)</code></td><td><code>I2C_FLAG_*</code></td><td><code>void</code></td><td>เคลียร์ flag ที่ระบุ (เฉพาะ flag ที่ล้างด้วยซอฟต์แวร์ได้)</td><td>flag ส่วนใหญ่ล้างด้วยลำดับอ่าน STAR1 ตามด้วยอ่าน/เขียนอีกเรจิสเตอร์</td></tr>
+<tr><td><code>I2C_GetITStatus(I2Cx, I2C_IT)</code></td><td><code>I2C_IT_*</code></td><td><code>ITStatus</code> (SET/RESET)</td><td>ตรวจสอบว่า interrupt ที่ระบุเกิดขึ้นหรือไม่</td><td>ใช้ใน ISR</td></tr>
+<tr><td><code>I2C_ClearITPendingBit(I2Cx, I2C_IT)</code></td><td><code>I2C_IT_*</code></td><td><code>void</code></td><td>เคลียร์ pending bit ของ interrupt</td><td>ใช้ใน ISR</td></tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>ตัวอย่างโค้ด</h2>
+
+<h3>1. เริ่มต้นใช้งาน I2C1 (Master, 100kHz)</h3>
+<pre><code class="language-c">#include &lt;ch32v00x_i2c.h&gt;
+#include &lt;ch32v00x_gpio.h&gt;
+#include &lt;ch32v00x_rcc.h&gt;
+
+void I2C1_Init_Master(void)
+{
+    GPIO_InitTypeDef GPIO_InitStructure = {0};
+    I2C_InitTypeDef I2C_InitStructure = {0};
+
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOC, ENABLE);
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_I2C1, ENABLE);
+
+    /* PC1=SDA, PC2=SCL ต้องเป็น AF Open-Drain เสมอสำหรับ I2C */
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_1 | GPIO_Pin_2;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_OD;
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_10MHz;
+    GPIO_Init(GPIOC, &amp;GPIO_InitStructure);
+
+    I2C_InitStructure.I2C_ClockSpeed = 100000;
+    I2C_InitStructure.I2C_Mode = I2C_Mode_I2C;
+    I2C_InitStructure.I2C_DutyCycle = I2C_DutyCycle_2;
+    I2C_InitStructure.I2C_OwnAddress1 = 0x00;
+    I2C_InitStructure.I2C_Ack = I2C_Ack_Enable;
+    I2C_InitStructure.I2C_AcknowledgedAddress = I2C_AcknowledgedAddress_7bit;
+    I2C_Init(I2C1, &amp;I2C_InitStructure);
+
+    I2C_Cmd(I2C1, ENABLE);
+}</code></pre>
+
+<h3>2. Master เขียนข้อมูล (Write) — START → Address → Data → STOP</h3>
+<pre><code class="language-c">uint8_t I2C1_WriteByte(uint8_t slaveAddr, uint8_t regAddr, uint8_t data)
+{
+    /* EVT5: ส่ง START */
+    I2C_GenerateSTART(I2C1, ENABLE);
+    while (!I2C_CheckEvent(I2C1, I2C_EVENT_MASTER_MODE_SELECT));
+
+    /* EVT6: ส่งที่อยู่ slave โหมด Transmitter */
+    I2C_Send7bitAddress(I2C1, slaveAddr, I2C_Direction_Transmitter);
+    while (!I2C_CheckEvent(I2C1, I2C_EVENT_MASTER_TRANSMITTER_MODE_SELECTED));
+
+    /* EVT8: ส่ง register address */
+    I2C_SendData(I2C1, regAddr);
+    while (!I2C_CheckEvent(I2C1, I2C_EVENT_MASTER_BYTE_TRANSMITTED));
+
+    /* EVT8_2: ส่งข้อมูลจริง */
+    I2C_SendData(I2C1, data);
+    while (!I2C_CheckEvent(I2C1, I2C_EVENT_MASTER_BYTE_TRANSMITTED));
+
+    I2C_GenerateSTOP(I2C1, ENABLE);
+    return 0;
+}</code></pre>
+
+<h3>3. Master อ่านข้อมูล (Read) พร้อม ACK/NACK — อ่านหลาย byte</h3>
+<pre><code class="language-c">void I2C1_ReadBytes(uint8_t slaveAddr, uint8_t regAddr, uint8_t *buf, uint8_t len)
+{
+    /* เขียน register address ก่อน (repeated-start pattern) */
+    I2C_GenerateSTART(I2C1, ENABLE);
+    while (!I2C_CheckEvent(I2C1, I2C_EVENT_MASTER_MODE_SELECT));
+    I2C_Send7bitAddress(I2C1, slaveAddr, I2C_Direction_Transmitter);
+    while (!I2C_CheckEvent(I2C1, I2C_EVENT_MASTER_TRANSMITTER_MODE_SELECTED));
+    I2C_SendData(I2C1, regAddr);
+    while (!I2C_CheckEvent(I2C1, I2C_EVENT_MASTER_BYTE_TRANSMITTED));
+
+    /* Repeated START แล้วเปลี่ยนเป็น Receiver */
+    I2C_GenerateSTART(I2C1, ENABLE);
+    while (!I2C_CheckEvent(I2C1, I2C_EVENT_MASTER_MODE_SELECT));
+    I2C_AcknowledgeConfig(I2C1, ENABLE);   /* เปิด ACK ไว้ก่อนสำหรับ byte ที่ไม่ใช่ตัวสุดท้าย */
+    I2C_Send7bitAddress(I2C1, slaveAddr, I2C_Direction_Receiver);
+    while (!I2C_CheckEvent(I2C1, I2C_EVENT_MASTER_RECEIVER_MODE_SELECTED));
+
+    for (uint8_t i = 0; i < len; i++) {
+        if (i == len - 1) {
+            /* byte สุดท้าย: ปิด ACK ก่อนรับ เพื่อให้ตอบ NACK แล้วตามด้วย STOP */
+            I2C_AcknowledgeConfig(I2C1, DISABLE);
+            I2C_GenerateSTOP(I2C1, ENABLE);
+        }
+        while (!I2C_CheckEvent(I2C1, I2C_EVENT_MASTER_BYTE_RECEIVED));
+        buf[i] = I2C_ReceiveData(I2C1);
+    }
+}</code></pre>
+
+<div class="callout callout-warn">
+    <strong>ลำดับ NACK สำคัญมาก:</strong> ต้องเรียก <code>I2C_AcknowledgeConfig(I2C1, DISABLE)</code> และ <code>I2C_GenerateSTOP()</code> <strong>ก่อน</strong>อ่าน byte สุดท้ายด้วย <code>I2C_ReceiveData()</code> เสมอ ถ้าเรียกหลังอ่านจะไปมีผลกับ byte ถัดไปแทน (ผิดจังหวะ ทำให้ค้างหรืออ่านเกิน)
+</div>
+</section>
+
+<section>
+<h2>ปัญหาที่พบบ่อย</h2>
+<table>
+<thead><tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr></thead>
+<tbody>
+<tr>
+    <td>บัสค้าง (bus lockup) ไม่ตอบสนอง</td>
+    <td>ลืม poll <code>I2C_CheckEvent()</code> ให้ครบทุกขั้นตอน หรือ slave ไม่ตอบ ACK</td>
+    <td>เช็ค event ทุกขั้น (START → ADDR → DATA) ตามลำดับ, เพิ่ม timeout กันค้างตลอดกาล, ถ้าค้างจริงใช้ <code>I2C_SoftwareResetCmd()</code> กู้บัส</td>
+</tr>
+<tr>
+    <td>อ่าน byte สุดท้ายผิด/บัสไม่ปล่อย</td>
+    <td>เรียก <code>I2C_AcknowledgeConfig(DISABLE)</code> + <code>I2C_GenerateSTOP()</code> <strong>หลัง</strong>อ่าน <code>I2C_ReceiveData()</code> แทนที่จะเรียกก่อน</td>
+    <td>ต้องตั้ง NACK และ STOP <strong>ก่อน</strong>อ่าน byte สุดท้ายเสมอ (ดูตัวอย่างที่ 3)</td>
+</tr>
+<tr>
+    <td>ใช้ event ผิด ทำให้ <code>I2C_CheckEvent</code> ไม่คืน SUCCESS ตลอด (ค้างที่ while loop)</td>
+    <td>สลับใช้ event ของ Master กับ Slave ผิด หรือใช้ Transmitter event ทั้งที่เป็นโหมด Receiver</td>
+    <td>ตรวจสอบทิศทางที่ตั้งใน <code>I2C_Send7bitAddress()</code> ให้ตรงกับ event ที่รอ (Transmitter → <code>_TRANSMITTER_MODE_SELECTED</code>, Receiver → <code>_RECEIVER_MODE_SELECTED</code>)</td>
+</tr>
+<tr>
+    <td>GPIO ตั้งผิดโหมด สื่อสารไม่ได้เลย</td>
+    <td>ตั้ง SDA/SCL เป็น <code>GPIO_Mode_Out_PP</code> แทนที่จะเป็น Open-Drain</td>
+    <td>I2C ต้องใช้ <code>GPIO_Mode_AF_OD</code> (Alternate Function Open-Drain) เสมอ เพราะบัสต้องรองรับหลายอุปกรณ์ดึงลงพร้อมกันได้</td>
+</tr>
+<tr>
+    <td>ความเร็วบัสไม่ตรงที่ตั้งไว้</td>
+    <td><code>I2C_Init()</code> คำนวณค่าจาก PCLK1 จริง ไม่ใช่ค่าคงที่ ถ้า clock system ตั้งผิดจะได้ความเร็วบัสผิด</td>
+    <td>เรียก <code>RCC_GetClocksFreq()</code>/ตรวจ system clock ให้ถูกต้องก่อน <code>I2C_Init()</code></td>
+</tr>
+<tr>
+    <td>ลืมเปิด peripheral clock (RCC) ของ I2C1</td>
+    <td>ไม่ได้เรียก <code>RCC_APB1PeriphClockCmd(RCC_APB1Periph_I2C1, ENABLE)</code></td>
+    <td>เปิด RCC clock ทั้ง GPIO port และ I2C1 ก่อนเรียก <code>I2C_Init()</code> เสมอ</td>
+</tr>
+</tbody>
+</table>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="gpio.html">← GPIO</a>
+    <a href="spi.html">SPI →</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

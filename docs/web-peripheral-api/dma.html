@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DMA — Direct Memory Access — Peripheral API Reference</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="adc.html">← ADC</a>
+</nav>
+
+<h1>DMA — Direct Memory Access</h1>
+<span class="level level-advanced">ระดับขั้นสูง (Raw SPL)</span>
+
+<div class="callout callout-note">
+    <strong>Header:</strong> <code>#include "ch32v00x_dma.h"</code> — SPL ระดับล่างสำหรับตั้งค่าช่อง DMA โดยตรงผ่าน struct <code>DMA_InitTypeDef</code> CH32V003 มี DMA controller ตัวเดียว (<code>DMA1</code>) พร้อม 7 ช่อง (<code>DMA1_Channel1</code> … <code>DMA1_Channel7</code>) แต่ละช่อง<strong>ผูกตายตัวกับอุปกรณ์ต่อพ่วงเฉพาะ</strong> (fixed hardware mapping) ไม่สามารถสลับช่องให้อุปกรณ์อื่นเองแบบ DMAMUX ได้
+</div>
+
+<div class="callout callout-good">
+    <strong>อยากได้อะไรที่ง่ายกว่านี้?</strong> ถ้าต้องการแค่ถ่ายโอนข้อมูลแบบไม่ต้องยุ่งกับ struct/เรจิสเตอร์เอง ดูที่ <a href="../web-simplehal-api/dma.html">SimpleDMA</a> แทน — หน้านี้เหมาะสำหรับกรณีที่ต้องคุมรายละเอียดเต็มรูปแบบ เช่น DMA คู่กับ ADC scan ต่อเนื่อง, memory-to-memory, หรือจัดการ interrupt เอง
+</div>
+
+<section class="flowchart">
+<h2>ผังการทำงาน DMA (Raw SPL)</h2>
+<pre class="mermaid">
+flowchart TD
+    A["RCC_AHBPeriphClockCmd(DMA1, ENABLE)"] --> B["DMA_DeInit(DMAy_Channelx)"]
+    B --> C["ตั้งค่า DMA_InitTypeDef: PeripheralBaseAddr, MemoryBaseAddr, DIR, BufferSize ฯลฯ"]
+    C --> D["DMA_Init(DMAy_Channelx, &DMA_InitStruct)"]
+    D --> E{"ต้องการ interrupt?"}
+    E -- ใช่ --> F["DMA_ITConfig(..., DMA_IT_TC, ENABLE) + ตั้ง NVIC"]
+    E -- ไม่ --> G["DMA_Cmd(DMAy_Channelx, ENABLE)"]
+    F --> G
+    G --> H["อุปกรณ์ต้นทาง (ADC/SPI/USART) ส่งคำขอ DMA อัตโนมัติ"]
+    H --> I["โพลหรือรอ interrupt DMA_FLAG_TCx / DMA_IT_TC"]
+    I --> J["DMA_ClearFlag / DMA_ClearITPendingBit"]
+</pre>
+</section>
+
+<section>
+<h2>โครงสร้าง DMA_InitTypeDef</h2>
+<table>
+<thead><tr><th>สมาชิก</th><th>ชนิด</th><th>ค่าที่เป็นไปได้</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>DMA_PeripheralBaseAddr</code></td><td><code>uint32_t</code></td><td>ที่อยู่เรจิสเตอร์อุปกรณ์ เช่น <code>(uint32_t)&ADC1->RDATAR</code></td><td>ที่อยู่ฐานของฝั่งอุปกรณ์ต่อพ่วง</td></tr>
+<tr><td><code>DMA_MemoryBaseAddr</code></td><td><code>uint32_t</code></td><td>ที่อยู่ตัวแปร/บัฟเฟอร์ เช่น <code>(uint32_t)buffer</code></td><td>ที่อยู่ฐานของฝั่งหน่วยความจำ</td></tr>
+<tr><td><code>DMA_DIR</code></td><td><code>uint32_t</code></td><td><code>DMA_DIR_PeripheralDST</code> / <code>DMA_DIR_PeripheralSRC</code></td><td>ทิศทาง: อุปกรณ์เป็นปลายทาง (เขียนออก) หรือแหล่งที่มา (อ่านเข้า)</td></tr>
+<tr><td><code>DMA_BufferSize</code></td><td><code>uint32_t</code></td><td>0-65535</td><td>จำนวนหน่วยข้อมูลที่จะถ่ายโอน (หน่วยตาม DataSize)</td></tr>
+<tr><td><code>DMA_PeripheralInc</code></td><td><code>uint32_t</code></td><td><code>DMA_PeripheralInc_Enable</code> / <code>_Disable</code></td><td>เพิ่มที่อยู่ฝั่งอุปกรณ์อัตโนมัติหรือไม่ (ปกติ Disable เพราะเรจิสเตอร์คงที่)</td></tr>
+<tr><td><code>DMA_MemoryInc</code></td><td><code>uint32_t</code></td><td><code>DMA_MemoryInc_Enable</code> / <code>_Disable</code></td><td>เพิ่มที่อยู่ฝั่งหน่วยความจำอัตโนมัติหรือไม่ (ปกติ Enable เมื่อถ่ายลง buffer/array)</td></tr>
+<tr><td><code>DMA_PeripheralDataSize</code></td><td><code>uint32_t</code></td><td><code>Byte</code> / <code>HalfWord</code> / <code>Word</code></td><td>ความกว้างข้อมูลฝั่งอุปกรณ์</td></tr>
+<tr><td><code>DMA_MemoryDataSize</code></td><td><code>uint32_t</code></td><td><code>Byte</code> / <code>HalfWord</code> / <code>Word</code></td><td>ความกว้างข้อมูลฝั่งหน่วยความจำ (ควรตรงกับ PeripheralDataSize ในกรณีทั่วไป)</td></tr>
+<tr><td><code>DMA_Mode</code></td><td><code>uint32_t</code></td><td><code>DMA_Mode_Circular</code> / <code>DMA_Mode_Normal</code></td><td>วนซ้ำอัตโนมัติเมื่อถ่ายครบ vs หยุดเมื่อถ่ายครบครั้งเดียว</td></tr>
+<tr><td><code>DMA_Priority</code></td><td><code>uint32_t</code></td><td><code>VeryHigh</code> / <code>High</code> / <code>Medium</code> / <code>Low</code></td><td>ลำดับความสำคัญเมื่อหลายช่องแย่ง bus พร้อมกัน</td></tr>
+<tr><td><code>DMA_M2M</code></td><td><code>uint32_t</code></td><td><code>DMA_M2M_Enable</code> / <code>_Disable</code></td><td>เปิดโหมด memory-to-memory (ห้ามใช้ร่วมกับ <code>DMA_Mode_Circular</code>)</td></tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>ค่าคงที่และ Enum หลัก</h2>
+
+<table>
+<thead><tr><th>กลุ่ม</th><th>ค่าคงที่</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td rowspan="2">DMA_data_transfer_direction</td><td><code>DMA_DIR_PeripheralDST</code></td><td>อุปกรณ์เป็นปลายทาง — ใช้ตอนส่งข้อมูลออกอุปกรณ์ (เช่น หน่วยความจำ → USART_DATAR)</td></tr>
+<tr><td><code>DMA_DIR_PeripheralSRC</code></td><td>อุปกรณ์เป็นแหล่งที่มา — ใช้ตอนรับข้อมูลจากอุปกรณ์ (เช่น ADC1->RDATAR → หน่วยความจำ)</td></tr>
+<tr><td rowspan="2">DMA_peripheral_incremented_mode</td><td><code>DMA_PeripheralInc_Enable</code></td><td>เพิ่มที่อยู่อุปกรณ์ทุกครั้งที่ถ่ายโอน</td></tr>
+<tr><td><code>DMA_PeripheralInc_Disable</code></td><td>ที่อยู่อุปกรณ์คงที่ (ปกติสำหรับเรจิสเตอร์เดี่ยว เช่น ADC/USART data register)</td></tr>
+<tr><td rowspan="2">DMA_memory_incremented_mode</td><td><code>DMA_MemoryInc_Enable</code></td><td>เพิ่มที่อยู่หน่วยความจำทุกครั้ง (เขียนลง array ตามลำดับ)</td></tr>
+<tr><td><code>DMA_MemoryInc_Disable</code></td><td>ที่อยู่หน่วยความจำคงที่ (เขียนทับตัวแปรเดิมซ้ำๆ)</td></tr>
+<tr><td rowspan="3">DMA_peripheral_data_size / DMA_memory_data_size</td><td><code>DMA_PeripheralDataSize_Byte</code> / <code>DMA_MemoryDataSize_Byte</code></td><td>1 ไบต์ต่อหน่วย</td></tr>
+<tr><td><code>DMA_PeripheralDataSize_HalfWord</code> / <code>DMA_MemoryDataSize_HalfWord</code></td><td>2 ไบต์ต่อหน่วย (ใช้กับ ADC 10-bit ที่เก็บใน uint16_t)</td></tr>
+<tr><td><code>DMA_PeripheralDataSize_Word</code> / <code>DMA_MemoryDataSize_Word</code></td><td>4 ไบต์ต่อหน่วย</td></tr>
+<tr><td rowspan="2">DMA_circular_normal_mode</td><td><code>DMA_Mode_Circular</code></td><td>วนกลับไปที่อยู่เริ่มต้นอัตโนมัติเมื่อถ่ายครบ <code>DMA_BufferSize</code> — เหมาะกับ ADC scan ต่อเนื่อง</td></tr>
+<tr><td><code>DMA_Mode_Normal</code></td><td>หยุดเมื่อถ่ายครบ ต้องเรียก <code>DMA_SetCurrDataCounter</code> + <code>DMA_Cmd</code> ใหม่เพื่อเริ่มรอบถัดไป</td></tr>
+<tr><td rowspan="4">DMA_priority_level</td><td><code>DMA_Priority_VeryHigh</code></td><td>สูงสุด</td></tr>
+<tr><td><code>DMA_Priority_High</code></td><td>สูง</td></tr>
+<tr><td><code>DMA_Priority_Medium</code></td><td>ปานกลาง</td></tr>
+<tr><td><code>DMA_Priority_Low</code></td><td>ต่ำสุด (ค่า default)</td></tr>
+<tr><td rowspan="2">DMA_memory_to_memory</td><td><code>DMA_M2M_Enable</code></td><td>ถ่ายโอนหน่วยความจำสู่หน่วยความจำ (ไม่ต้องรอคำขอจากอุปกรณ์ เริ่มทันทีที่ <code>DMA_Cmd</code> ENABLE)</td></tr>
+<tr><td><code>DMA_M2M_Disable</code></td><td>โหมดปกติ ต้องรอคำขอจากอุปกรณ์ต่อพ่วง</td></tr>
+</tbody>
+</table>
+
+<h3>Interrupt / Flag (ตัวอย่างช่อง 1 — DMA1_IT_xx1 / DMA1_FLAG_xx1 มีครบทุกช่อง 1-7)</h3>
+<table>
+<thead><tr><th>ค่าคงที่ (ใช้กับ DMA_ITConfig)</th><th>ค่าคงที่ Flag เฉพาะช่อง (ใช้กับ DMA_GetFlagStatus/DMA_ClearFlag)</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>DMA_IT_TC</code></td><td><code>DMA1_FLAG_TC1</code> … <code>DMA1_FLAG_TC7</code></td><td>Transfer Complete — ถ่ายโอนครบตามที่ตั้งไว้</td></tr>
+<tr><td><code>DMA_IT_HT</code></td><td><code>DMA1_FLAG_HT1</code> … <code>DMA1_FLAG_HT7</code></td><td>Half Transfer — ถ่ายโอนได้ครึ่งหนึ่ง (มีประโยชน์กับ circular double-buffer)</td></tr>
+<tr><td><code>DMA_IT_TE</code></td><td><code>DMA1_FLAG_TE1</code> … <code>DMA1_FLAG_TE7</code></td><td>Transfer Error — เกิดข้อผิดพลาดระหว่างถ่ายโอน (เช่น bus error)</td></tr>
+<tr><td>—</td><td><code>DMA1_FLAG_GL1</code> … <code>DMA1_FLAG_GL7</code></td><td>Global flag — รวมสถานะ TC/HT/TE ของช่องนั้นไว้บิตเดียว</td></tr>
+</tbody>
+</table>
+<p>สำหรับ <code>DMA_GetITStatus</code>/<code>DMA_ClearITPendingBit</code> ใช้ชุดค่าคงที่รูปแบบเดียวกันแต่ขึ้นต้นด้วย <code>DMA1_IT_</code> แทน <code>DMA1_FLAG_</code> (เช่น <code>DMA1_IT_TC1</code>) ความหมายเดียวกัน</p>
+</section>
+
+<section>
+<h2>การจับคู่ช่อง DMA กับอุปกรณ์ (Fixed Hardware Mapping)</h2>
+<div class="callout callout-warn">
+    <strong>สำคัญ:</strong> บน CH32V003 การจับคู่ระหว่างช่อง DMA กับอุปกรณ์ต่อพ่วง<strong>ถูกกำหนดตายตัวโดยฮาร์ดแวร์</strong> ไม่ใช่เลือกได้อิสระเหมือน DMAMUX ใน MCU บางตระกูล — <code>ADC1</code> ผูกกับ <code>DMA1_Channel1</code> เท่านั้น ถ้าใช้ช่องอื่นกับ ADC จะไม่มีข้อผิดพลาดตอนคอมไพล์แต่ DMA จะไม่ทำงานเลย (เงียบๆ ไม่มีข้อมูลไหล) ให้ตรวจสอบตาราง DMA request mapping ในคู่มืออ้างอิง CH32V003 Reference Manual ก่อนกำหนดช่องให้อุปกรณ์อื่น เช่น SPI1 หรือ USART1
+</div>
+</section>
+
+<section>
+<h2>ตารางอ้างอิงฟังก์ชันทั้งหมด</h2>
+<table>
+<thead><tr><th>ฟังก์ชัน</th><th>พารามิเตอร์</th><th>คืนค่า</th><th>คำอธิบาย</th><th>หมายเหตุ</th></tr></thead>
+<tbody>
+<tr><td><code>DMA_DeInit(DMAy_Channelx)</code></td><td><code>DMAy_Channelx</code>: <code>DMA1_Channel1</code>…<code>DMA1_Channel7</code></td><td><code>void</code></td><td>รีเซ็ตเรจิสเตอร์ของช่องกลับค่าเริ่มต้น (CFGR, CNTR, PADDR, MADDR = 0) และล้าง flag ค้าง</td><td>ควรเรียกก่อน <code>DMA_Init</code> ทุกครั้งเพื่อล้างค่าเก่า</td></tr>
+<tr><td><code>DMA_Init(DMAy_Channelx, DMA_InitStruct)</code></td><td><code>DMA_InitStruct</code>: pointer ไปยัง <code>DMA_InitTypeDef</code></td><td><code>void</code></td><td>ตั้งค่าทิศทาง, ขนาดข้อมูล, โหมด, priority, ที่อยู่ต้นทาง/ปลายทาง, buffer size</td><td>ไม่เปิดใช้งานช่องทันที ต้องเรียก <code>DMA_Cmd</code> ต่อ</td></tr>
+<tr><td><code>DMA_StructInit(DMA_InitStruct)</code></td><td>pointer ไปยัง struct ที่จะเติมค่า default</td><td><code>void</code></td><td>เติมค่า default: PeripheralSRC, BufferSize=0, Inc ทั้งคู่ Disable, DataSize=Byte, Normal mode, Priority Low, M2M Disable</td><td>เรียกก่อนแก้ค่าเฉพาะที่ต้องการ</td></tr>
+<tr><td><code>DMA_Cmd(DMAy_Channelx, NewState)</code></td><td><code>NewState</code>: ENABLE/DISABLE</td><td><code>void</code></td><td>เปิด/ปิดช่อง DMA ให้เริ่มทำงานตามที่ตั้งไว้</td><td>ต้องเรียกหลัง <code>DMA_Init</code> เสมอ ไม่งั้นช่องจะไม่ทำงาน</td></tr>
+<tr><td><code>DMA_ITConfig(DMAy_Channelx, DMA_IT, NewState)</code></td><td><code>DMA_IT</code>: <code>DMA_IT_TC</code>/<code>DMA_IT_HT</code>/<code>DMA_IT_TE</code> (OR รวมได้)</td><td><code>void</code></td><td>เปิด/ปิด interrupt ของช่องนั้น</td><td>ต้องเปิด NVIC ของ <code>DMA1_ChannelX_IRQn</code> คู่กันด้วย</td></tr>
+<tr><td><code>DMA_SetCurrDataCounter(DMAy_Channelx, DataNumber)</code></td><td><code>DataNumber</code>: uint16_t</td><td><code>void</code></td><td>ตั้งจำนวนหน่วยข้อมูลที่เหลือให้ถ่ายโอนใหม่</td><td>ใช้รีสตาร์ทรอบถ่ายโอนใน <code>DMA_Mode_Normal</code> โดยไม่ต้อง <code>DMA_Init</code> ใหม่ทั้งหมด</td></tr>
+<tr><td><code>DMA_GetCurrDataCounter(DMAy_Channelx)</code></td><td>—</td><td><code>uint16_t</code></td><td>อ่านจำนวนหน่วยข้อมูลที่ยังเหลือในรอบปัจจุบัน</td><td>ใช้ตรวจความคืบหน้าโดยไม่ต้องรอ interrupt</td></tr>
+<tr><td><code>DMA_GetFlagStatus(DMAy_FLAG)</code></td><td><code>DMAy_FLAG</code>: <code>DMA1_FLAG_xxN</code></td><td><code>FlagStatus</code></td><td>ตรวจสอบธงสถานะของช่องที่ระบุ (ไม่ต้องส่ง channel pointer เพราะ flag encode ช่องไว้ในตัวเอง)</td><td>อ่านจากเรจิสเตอร์ <code>DMA1-&gt;INTFR</code> รวมทุกช่อง</td></tr>
+<tr><td><code>DMA_ClearFlag(DMAy_FLAG)</code></td><td><code>DMAy_FLAG</code>: <code>DMA1_FLAG_xxN</code></td><td><code>void</code></td><td>ล้างธงสถานะของช่องที่ระบุ</td><td>ต้องเรียกหลังตรวจ flag แล้วเสมอ ไม่งั้น flag จะค้าง</td></tr>
+<tr><td><code>DMA_GetITStatus(DMAy_IT)</code></td><td><code>DMAy_IT</code>: <code>DMA1_IT_xxN</code></td><td><code>ITStatus</code></td><td>ตรวจสอบว่า interrupt ของช่องนั้นเกิดขึ้นหรือไม่</td><td>—</td></tr>
+<tr><td><code>DMA_ClearITPendingBit(DMAy_IT)</code></td><td><code>DMAy_IT</code>: <code>DMA1_IT_xxN</code></td><td><code>void</code></td><td>ล้างบิต pending ของ interrupt ช่องนั้น</td><td>ต้องเรียกใน ISR ก่อนออกจากฟังก์ชันเสมอ ไม่งั้น ISR จะยิงซ้ำไม่หยุด</td></tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>ตัวอย่างโค้ด</h2>
+
+<h3>1. Memory-to-Memory Copy (คัดลอกหน่วยความจำโดยไม่ใช้ CPU)</h3>
+<pre><code class="language-c">#include "ch32v00x_dma.h"
+#include "ch32v00x_rcc.h"
+
+uint8_t src_buf[64] = { /* ... ข้อมูลต้นทาง ... */ };
+uint8_t dst_buf[64];
+
+void DMA_M2M_Copy(void)
+{
+    DMA_InitTypeDef DMA_InitStructure = {0};
+
+    RCC_AHBPeriphClockCmd(RCC_AHBPeriph_DMA1, ENABLE);
+
+    DMA_DeInit(DMA1_Channel3);
+    DMA_InitStructure.DMA_PeripheralBaseAddr = (uint32_t)src_buf;
+    DMA_InitStructure.DMA_MemoryBaseAddr     = (uint32_t)dst_buf;
+    DMA_InitStructure.DMA_DIR                = DMA_DIR_PeripheralSRC;
+    DMA_InitStructure.DMA_BufferSize         = sizeof(src_buf);
+    DMA_InitStructure.DMA_PeripheralInc      = DMA_PeripheralInc_Enable;  // M2M ต้อง Enable ทั้งสองฝั่ง
+    DMA_InitStructure.DMA_MemoryInc          = DMA_MemoryInc_Enable;
+    DMA_InitStructure.DMA_PeripheralDataSize = DMA_PeripheralDataSize_Byte;
+    DMA_InitStructure.DMA_MemoryDataSize     = DMA_MemoryDataSize_Byte;
+    DMA_InitStructure.DMA_Mode               = DMA_Mode_Normal;          // ห้ามใช้ Circular กับ M2M
+    DMA_InitStructure.DMA_Priority           = DMA_Priority_Medium;
+    DMA_InitStructure.DMA_M2M                = DMA_M2M_Enable;
+    DMA_Init(DMA1_Channel3, &DMA_InitStructure);
+
+    DMA_Cmd(DMA1_Channel3, ENABLE);   // M2M เริ่มทำงานทันที ไม่ต้องรอคำขอจากอุปกรณ์
+
+    while (DMA_GetFlagStatus(DMA1_FLAG_TC3) == RESET);
+    DMA_ClearFlag(DMA1_FLAG_TC3);
+}</code></pre>
+
+<h3>2. Peripheral-to-Memory พร้อม Transfer-Complete Interrupt</h3>
+<pre><code class="language-c">#include "ch32v00x_dma.h"
+#include "ch32v00x_rcc.h"
+#include "ch32v00x_misc.h"
+
+#define BUF_LEN 32
+volatile uint8_t rx_buf[BUF_LEN];
+volatile uint8_t rx_done = 0;
+
+void DMA_USART_RxInit(void)
+{
+    DMA_InitTypeDef DMA_InitStructure = {0};
+    NVIC_InitTypeDef NVIC_InitStructure = {0};
+
+    RCC_AHBPeriphClockCmd(RCC_AHBPeriph_DMA1, ENABLE);
+
+    // ตัวอย่าง: USART1_RX ผูกกับ DMA1_Channel5 บน CH32V003 (ตรวจสอบ mapping จริงจาก Reference Manual)
+    DMA_DeInit(DMA1_Channel5);
+    DMA_InitStructure.DMA_PeripheralBaseAddr = (uint32_t)&USART1->DATAR;
+    DMA_InitStructure.DMA_MemoryBaseAddr     = (uint32_t)rx_buf;
+    DMA_InitStructure.DMA_DIR                = DMA_DIR_PeripheralSRC;
+    DMA_InitStructure.DMA_BufferSize         = BUF_LEN;
+    DMA_InitStructure.DMA_PeripheralInc      = DMA_PeripheralInc_Disable;
+    DMA_InitStructure.DMA_MemoryInc          = DMA_MemoryInc_Enable;
+    DMA_InitStructure.DMA_PeripheralDataSize = DMA_PeripheralDataSize_Byte;
+    DMA_InitStructure.DMA_MemoryDataSize     = DMA_MemoryDataSize_Byte;
+    DMA_InitStructure.DMA_Mode               = DMA_Mode_Normal;
+    DMA_InitStructure.DMA_Priority           = DMA_Priority_High;
+    DMA_InitStructure.DMA_M2M                = DMA_M2M_Disable;
+    DMA_Init(DMA1_Channel5, &DMA_InitStructure);
+
+    DMA_ITConfig(DMA1_Channel5, DMA_IT_TC, ENABLE);
+
+    NVIC_InitStructure.NVIC_IRQChannel = DMA1_Channel5_IRQn;
+    NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 1;
+    NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
+    NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+    NVIC_Init(&NVIC_InitStructure);
+
+    DMA_Cmd(DMA1_Channel5, ENABLE);
+    // ... เปิด USART_DMACmd(USART1, USART_DMAReq_Rx, ENABLE) ด้วย ...
+}
+
+void DMA1_Channel5_IRQHandler(void) __attribute__((interrupt("WCH-Interrupt-fast")));
+void DMA1_Channel5_IRQHandler(void)
+{
+    if (DMA_GetITStatus(DMA1_IT_TC5) != RESET) {
+        rx_done = 1;
+        DMA_ClearITPendingBit(DMA1_IT_TC5);   // ต้องล้างเสมอ ไม่งั้น ISR ยิงซ้ำไม่หยุด
+    }
+}</code></pre>
+
+<h3>3. รีสตาร์ทรอบถ่ายโอนใน Normal Mode โดยไม่เรียก DMA_Init ใหม่</h3>
+<pre><code class="language-c">void DMA_Restart(DMA_Channel_TypeDef *ch, uint16_t len)
+{
+    DMA_Cmd(ch, DISABLE);              // ต้องปิดก่อนแก้ counter
+    DMA_ClearFlag(DMA1_FLAG_TC1);      // ล้าง flag รอบก่อน (ปรับเลขช่องตามที่ใช้จริง)
+    DMA_SetCurrDataCounter(ch, len);   // ตั้งจำนวนใหม่
+    DMA_Cmd(ch, ENABLE);               // เริ่มรอบใหม่
+}</code></pre>
+<p>ใน <code>DMA_Mode_Normal</code> เมื่อถ่ายโอนครบแล้ว DMA จะหยุดเอง ต้อง disable/set counter/enable ใหม่ทุกครั้งถ้าต้องการถ่ายโอนรอบถัดไป (ต่างจาก <code>DMA_Mode_Circular</code> ที่วนอัตโนมัติ)</p>
+</section>
+
+<section>
+<h2>ปัญหาที่พบบ่อย</h2>
+<table>
+<thead><tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr></thead>
+<tbody>
+<tr>
+    <td>ตั้งค่า DMA ครบแล้วแต่ไม่มีข้อมูลไหลเลย</td>
+    <td>ใช้ช่อง DMA ที่ไม่ตรงกับ mapping ตายตัวของอุปกรณ์นั้น (เช่น ผูก ADC1 กับ <code>DMA1_Channel3</code> ทั้งที่ ADC1 ใช้ได้แค่ Channel1) — ไม่มี error ตอนคอมไพล์หรือรัน แค่เงียบๆ ไม่ทำงาน</td>
+    <td>ตรวจตาราง DMA request mapping ใน CH32V003 Reference Manual ให้ตรงกับอุปกรณ์ที่ใช้ก่อนตั้งค่า</td>
+</tr>
+<tr>
+    <td>DMA ทำงานรอบแรกแล้วหยุด ไม่ยอมถ่ายรอบถัดไป</td>
+    <td>ใช้ <code>DMA_Mode_Normal</code> ซึ่งหยุดอัตโนมัติเมื่อ <code>DMA_BufferSize</code> ถ่ายครบ</td>
+    <td>ใช้ <code>DMA_Mode_Circular</code> ถ้าต้องการวนซ้ำอัตโนมัติ หรือเรียก <code>DMA_SetCurrDataCounter</code> + <code>DMA_Cmd</code> ใหม่ทุกรอบถ้าจงใจใช้ Normal</td>
+</tr>
+<tr>
+    <td>Interrupt Transfer-Complete ยิงครั้งเดียวแล้วไม่ยิงอีกเลย (ทั้งที่ DMA ยังทำงานต่อ)</td>
+    <td>ลืมเรียก <code>DMA_ClearITPendingBit</code>/<code>DMA_ClearFlag</code> ใน ISR ทำให้ flag ค้าง บาง MCU/สถาปัตยกรรมจะไม่ trigger ซ้ำจนกว่าจะล้างก่อน</td>
+    <td>ล้าง flag ที่ต้นๆ หรือท้ายๆ ของ ISR ทุกครั้งก่อนออกจากฟังก์ชัน</td>
+</tr>
+<tr>
+    <td>ข้อมูลใน buffer เพี้ยน/ไม่ตรงตำแหน่งที่คาดไว้</td>
+    <td>ตั้ง <code>DMA_PeripheralDataSize</code> กับ <code>DMA_MemoryDataSize</code> ไม่ตรงกัน (เช่น อุปกรณ์เป็น HalfWord แต่ buffer เป็น <code>uint8_t</code>) ทำให้ address คำนวณผิด</td>
+    <td>ให้ DataSize ทั้งสองฝั่งตรงกับชนิดข้อมูลจริง เช่น ADC 10-bit ควรใช้ <code>HalfWord</code> ทั้งคู่ และ buffer เป็น <code>uint16_t</code></td>
+</tr>
+<tr>
+    <td>Compile ผ่านแต่ใช้ <code>DMA_M2M_Enable</code> ร่วมกับ <code>DMA_Mode_Circular</code> แล้วพฤติกรรมแปลกๆ</td>
+    <td>Errata/ข้อจำกัดฮาร์ดแวร์: circular buffer mode ใช้ไม่ได้กับ memory-to-memory ตามที่ระบุใน comment ของ header เอง</td>
+    <td>ใช้ <code>DMA_Mode_Normal</code> เสมอเมื่อ <code>DMA_M2M_Enable</code></td>
+</tr>
+<tr>
+    <td>เขียนทับ buffer เดิมทุกครั้ง ไม่เลื่อนตำแหน่ง</td>
+    <td>ลืมตั้ง <code>DMA_MemoryInc = DMA_MemoryInc_Enable</code> — ค่า default จาก <code>DMA_StructInit</code> คือ Disable</td>
+    <td>ตั้ง <code>DMA_MemoryInc_Enable</code> เมื่อถ่ายลง array/buffer ที่ต้องการเก็บหลายค่า</td>
+</tr>
+</tbody>
+</table>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="adc.html">← ADC</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EXTI — External Interrupt/Event Controller — Peripheral API Reference</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="gpio.html">← GPIO</a>
+</nav>
+
+<h1>EXTI — External Interrupt/Event Controller</h1>
+<span class="level level-advanced">ระดับ Peripheral (SPL ดิบ)</span>
+
+<div class="callout callout-note">
+    <strong>ไฟล์:</strong> <code>#include "ch32v00x_exti.h"</code> — เป็นไลบรารี SPL ระดับต่ำที่คุมวงจร EXTI (External Interrupt/Event) ตั้งค่าผ่าน struct <code>EXTI_InitTypeDef</code> แล้วแก้ register <code>INTENR</code>/<code>EVENR</code>/<code>RTENR</code>/<code>FTENR</code>/<code>INTFR</code> ตรง ๆ EXTI ใช้คู่กับ <code>GPIO_EXTILineConfig()</code> (จาก <code>ch32v00x_gpio.h</code>) เพื่อเลือกว่าขาไหนจะเป็นแหล่งของ interrupt line<br>
+    ถ้าต้องการ API ที่ใช้ง่ายกว่านี้ ดูที่ <a href="../web-simplehal-api/gpio.html">SimpleGPIO — attachInterrupt() (SimpleHAL wrapper)</a> ซึ่งซ่อนรายละเอียด EXTI/NVIC ไว้ให้หมดแล้ว
+</div>
+
+<section class="flowchart">
+<h2>ผังการทำงาน EXTI</h2>
+<pre class="mermaid">
+flowchart LR
+    A["GPIO_Init() โหมด input"] --> B["GPIO_EXTILineConfig(port, pin)"]
+    B --> C["EXTI_Init() ตั้ง line/mode/trigger"]
+    C --> D["NVIC_Init() เปิด EXTI7_0_IRQn"]
+    D --> E["เกิดขอบสัญญาณจริง"]
+    E --> F["EXTI7_0_IRQHandler()"]
+    F --> G["EXTI_GetITStatus() ตรวจ line"]
+    G --> H["ทำงานตาม logic"]
+    H --> I["EXTI_ClearITPendingBit() ล้าง flag"]
+</pre>
+</section>
+
+<section>
+<h2>EXTI_InitTypeDef — โครงสร้างตั้งค่า</h2>
+<table>
+<thead><tr><th>สมาชิก</th><th>ชนิด</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>EXTI_Line</code></td><td><code>uint32_t</code></td><td>เลือก line ที่จะตั้งค่า ใช้ <code>EXTI_Line0</code> .. <code>EXTI_Line9</code> หรือ OR รวมกันได้หลาย line</td></tr>
+<tr><td><code>EXTI_Mode</code></td><td><code>EXTIMode_TypeDef</code></td><td>โหมด Interrupt หรือ Event</td></tr>
+<tr><td><code>EXTI_Trigger</code></td><td><code>EXTITrigger_TypeDef</code></td><td>ขอบสัญญาณที่จะกระตุ้น (ขึ้น/ลง/ทั้งสองขอบ)</td></tr>
+<tr><td><code>EXTI_LineCmd</code></td><td><code>FunctionalState</code></td><td><code>ENABLE</code> เพื่อเปิดใช้งาน line นี้ หรือ <code>DISABLE</code> เพื่อปิด</td></tr>
+</tbody>
+</table>
+
+<h3>EXTI_Lines</h3>
+<table>
+<thead><tr><th>Macro</th><th>ค่า bitmask</th><th>หมายเหตุ</th></tr></thead>
+<tbody>
+<tr><td><code>EXTI_Line0</code> .. <code>EXTI_Line7</code></td><td><code>0x0001</code> .. <code>0x0080</code></td><td>ผูกกับขา GPIO หมายเลข 0-7 ผ่าน <code>GPIO_EXTILineConfig()</code></td></tr>
+<tr><td><code>EXTI_Line8</code></td><td><code>0x0100</code></td><td>เชื่อมต่อภายในกับสัญญาณ PVD Output (ไม่ใช่ขา GPIO)</td></tr>
+<tr><td><code>EXTI_Line9</code></td><td><code>0x0200</code></td><td>เชื่อมต่อภายในกับเหตุการณ์ PWR Auto Wake-up (ไม่ใช่ขา GPIO)</td></tr>
+</tbody>
+</table>
+
+<h3>EXTIMode_TypeDef</h3>
+<table>
+<thead><tr><th>ค่าคงที่</th><th>ความหมาย</th></tr></thead>
+<tbody>
+<tr><td><code>EXTI_Mode_Interrupt</code></td><td>สร้าง interrupt request เข้า NVIC เมื่อเกิดขอบสัญญาณ</td></tr>
+<tr><td><code>EXTI_Mode_Event</code></td><td>สร้าง event ภายใน (เช่น ปลุก MCU จาก low-power) โดยไม่เข้า interrupt handler</td></tr>
+</tbody>
+</table>
+
+<h3>EXTITrigger_TypeDef</h3>
+<table>
+<thead><tr><th>ค่าคงที่</th><th>ความหมาย</th></tr></thead>
+<tbody>
+<tr><td><code>EXTI_Trigger_Rising</code></td><td>กระตุ้นที่ขอบขาขึ้น (LOW→HIGH)</td></tr>
+<tr><td><code>EXTI_Trigger_Falling</code></td><td>กระตุ้นที่ขอบขาลง (HIGH→LOW)</td></tr>
+<tr><td><code>EXTI_Trigger_Rising_Falling</code></td><td>กระตุ้นทั้งสองขอบ</td></tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>ตารางอ้างอิงฟังก์ชัน</h2>
+<table>
+<thead>
+<tr><th>ฟังก์ชัน</th><th>พารามิเตอร์</th><th>คืนค่า</th><th>คำอธิบาย</th><th>หมายเหตุ</th></tr>
+</thead>
+<tbody>
+<tr>
+    <td><code>void EXTI_DeInit(void)</code></td>
+    <td>ไม่มี</td>
+    <td><code>void</code></td>
+    <td>ล้างค่า <code>INTENR</code>, <code>EVENR</code>, <code>RTENR</code>, <code>FTENR</code> เป็น 0 และล้าง <code>INTFR</code> ทั้งหมด (ปิดทุก line กลับสถานะเริ่มต้น)</td>
+    <td>เรียกตอนต้นโปรแกรมเพื่อล้างค่า EXTI ก่อนตั้งค่าใหม่</td>
+</tr>
+<tr>
+    <td><code>void EXTI_Init(EXTI_InitTypeDef *EXTI_InitStruct)</code></td>
+    <td><code>EXTI_InitStruct</code>: pointer struct ตั้งค่า</td>
+    <td><code>void</code></td>
+    <td>ตั้งค่า mode/trigger/enable ของ line ตาม struct — ฟังก์ชันหลักที่ใช้เปิด EXTI</td>
+    <td>ต้องเรียก <code>GPIO_EXTILineConfig()</code> ก่อนเสมอ (สำหรับ line 0-7) ไม่งั้น line จะยังผูกกับพอร์ต default (GPIOA)</td>
+</tr>
+<tr>
+    <td><code>void EXTI_StructInit(EXTI_InitTypeDef *EXTI_InitStruct)</code></td>
+    <td><code>EXTI_InitStruct</code>: pointer struct</td>
+    <td><code>void</code></td>
+    <td>ใส่ค่า default ให้ struct: <code>EXTI_Line</code>=ไม่มี line, <code>EXTI_Mode_Interrupt</code>, <code>EXTI_Trigger_Falling</code>, <code>DISABLE</code></td>
+    <td>เรียกก่อนแก้บาง field เพื่อกัน garbage value ใน struct</td>
+</tr>
+<tr>
+    <td><code>void EXTI_GenerateSWInterrupt(uint32_t EXTI_Line)</code></td>
+    <td><code>EXTI_Line</code>: <code>EXTI_Line_x</code> ที่จะบังคับกระตุ้น</td>
+    <td><code>void</code></td>
+    <td>สั่งกระตุ้น interrupt/event ของ line นั้นด้วยซอฟต์แวร์ (ผ่าน <code>SWIEVR</code>) โดยไม่ต้องรอสัญญาณจริง</td>
+    <td>มีประโยชน์ตอน debug/ทดสอบ ISR โดยไม่ต้องมีฮาร์ดแวร์จริงมากระตุ้น</td>
+</tr>
+<tr>
+    <td><code>FlagStatus EXTI_GetFlagStatus(uint32_t EXTI_Line)</code></td>
+    <td><code>EXTI_Line</code>: line ที่ต้องการเช็ค</td>
+    <td><code>FlagStatus</code> (<code>SET</code>/<code>RESET</code>)</td>
+    <td>อ่านค่า flag ค้าง (pending) ของ line จาก <code>INTFR</code> โดยตรง</td>
+    <td>ต่างจาก <code>EXTI_GetITStatus</code> ตรงที่ไม่เช็คว่า line เปิดใช้งาน (<code>INTENR</code>) อยู่หรือไม่</td>
+</tr>
+<tr>
+    <td><code>void EXTI_ClearFlag(uint32_t EXTI_Line)</code></td>
+    <td><code>EXTI_Line</code>: line ที่ต้องการล้าง</td>
+    <td><code>void</code></td>
+    <td>ล้าง flag ค้างของ line นั้นใน <code>INTFR</code></td>
+    <td>เขียนการทำงานเหมือนกับ <code>EXTI_ClearITPendingBit</code> ทุกประการ</td>
+</tr>
+<tr>
+    <td><code>ITStatus EXTI_GetITStatus(uint32_t EXTI_Line)</code></td>
+    <td><code>EXTI_Line</code>: line ที่ต้องการเช็ค</td>
+    <td><code>ITStatus</code> (<code>SET</code>/<code>RESET</code>)</td>
+    <td>เช็คว่า line นี้ทั้งค้าง (<code>INTFR</code>) และเปิดใช้งานอยู่ (<code>INTENR</code>) พร้อมกันหรือไม่</td>
+    <td>ใช้ใน ISR เพื่อกรองว่า interrupt ที่เข้ามาเป็นของ line ไหน — แม่นกว่า <code>EXTI_GetFlagStatus</code></td>
+</tr>
+<tr>
+    <td><code>void EXTI_ClearITPendingBit(uint32_t EXTI_Line)</code></td>
+    <td><code>EXTI_Line</code>: line ที่ต้องการล้าง</td>
+    <td><code>void</code></td>
+    <td>ล้างบิตค้างของ line ใน <code>INTFR</code> (เขียน 1 เพื่อล้าง)</td>
+    <td><strong>ต้องเรียกใน ISR ทุกครั้ง</strong> ก่อนออกจาก handler ไม่งั้น interrupt จะเข้าซ้ำทันที</td>
+</tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>ตัวอย่างการใช้งาน</h2>
+
+<h3>1. ตั้ง Interrupt ขอบขาลงบนขา PC1 (ปุ่มกด)</h3>
+<pre><code class="language-c">#include "ch32v00x_gpio.h"
+#include "ch32v00x_exti.h"
+#include "ch32v00x_misc.h"
+
+void Button_EXTI_Init(void)
+{
+    // 1. เปิด clock พอร์ต GPIO และ AFIO
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOC | RCC_APB2Periph_AFIO, ENABLE);
+
+    // 2. ตั้งขาเป็น input pull-up
+    GPIO_InitTypeDef GPIO_InitStructure = {0};
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_1;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPU;
+    GPIO_Init(GPIOC, &GPIO_InitStructure);
+
+    // 3. ผูกขา PC1 เข้ากับ EXTI Line1
+    GPIO_EXTILineConfig(GPIO_PortSourceGPIOC, GPIO_PinSource1);
+
+    // 4. ตั้งค่า EXTI line
+    EXTI_InitTypeDef EXTI_InitStructure = {0};
+    EXTI_InitStructure.EXTI_Line = EXTI_Line1;
+    EXTI_InitStructure.EXTI_Mode = EXTI_Mode_Interrupt;
+    EXTI_InitStructure.EXTI_Trigger = EXTI_Trigger_Falling;  // ปุ่มกด = ขอบลง
+    EXTI_InitStructure.EXTI_LineCmd = ENABLE;
+    EXTI_Init(&EXTI_InitStructure);
+
+    // 5. เปิด NVIC ให้ interrupt line 0-7 (CH32V003 รวม EXTI0-7 ไว้ที่ IRQ เดียว)
+    NVIC_InitTypeDef NVIC_InitStructure = {0};
+    NVIC_InitStructure.NVIC_IRQChannel = EXTI7_0_IRQn;
+    NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 1;
+    NVIC_InitStructure.NVIC_IRQChannelSubPriority = 2;
+    NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+    NVIC_Init(&NVIC_InitStructure);
+}</code></pre>
+
+<h3>2. IRQ Handler อ่านและล้าง flag ให้ถูก line</h3>
+<pre><code class="language-c">volatile uint16_t buttonPressCount = 0;
+
+void EXTI7_0_IRQHandler(void) __attribute__((interrupt("WCH-Interrupt-fast")));
+void EXTI7_0_IRQHandler(void)
+{
+    if (EXTI_GetITStatus(EXTI_Line1) != RESET) {
+        buttonPressCount++;              // งานให้เร็วที่สุด ห้ามหน่วงเวลาใน ISR
+        EXTI_ClearITPendingBit(EXTI_Line1);  // ต้องล้างเสมอ ไม่งั้นเข้า ISR ซ้ำไม่จบ
+    }
+}</code></pre>
+
+<h3>3. หลาย EXTI Line พร้อมกัน (ต้องเลขขาไม่ซ้ำกัน)</h3>
+<pre><code class="language-c">// PC1 -> Line1, PD2 -> Line2 (คนละเลขขา ใช้พร้อมกันได้)
+GPIO_EXTILineConfig(GPIO_PortSourceGPIOC, GPIO_PinSource1);
+GPIO_EXTILineConfig(GPIO_PortSourceGPIOD, GPIO_PinSource2);
+
+EXTI_InitTypeDef EXTI_InitStructure = {0};
+EXTI_InitStructure.EXTI_Line = EXTI_Line1 | EXTI_Line2;   // ตั้งสอง line พร้อมกันได้ใน struct เดียว
+EXTI_InitStructure.EXTI_Mode = EXTI_Mode_Interrupt;
+EXTI_InitStructure.EXTI_Trigger = EXTI_Trigger_Rising_Falling;
+EXTI_InitStructure.EXTI_LineCmd = ENABLE;
+EXTI_Init(&EXTI_InitStructure);
+
+// ใน handler ต้องแยกตรวจทีละ line
+void EXTI7_0_IRQHandler(void)
+{
+    if (EXTI_GetITStatus(EXTI_Line1) != RESET) {
+        EXTI_ClearITPendingBit(EXTI_Line1);
+        // ... งานของ PC1
+    }
+    if (EXTI_GetITStatus(EXTI_Line2) != RESET) {
+        EXTI_ClearITPendingBit(EXTI_Line2);
+        // ... งานของ PD2
+    }
+}</code></pre>
+
+<h3>4. ปิดการใช้งาน EXTI Line เมื่อเลิกใช้</h3>
+<pre><code class="language-c">EXTI_InitTypeDef EXTI_InitStructure = {0};
+EXTI_InitStructure.EXTI_Line = EXTI_Line1;
+EXTI_InitStructure.EXTI_LineCmd = DISABLE;   // field อื่นไม่มีผลตอน DISABLE
+EXTI_Init(&EXTI_InitStructure);</code></pre>
+</section>
+
+<section>
+<h2>ปัญหาที่พบบ่อย</h2>
+<table>
+<thead><tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr></thead>
+<tbody>
+<tr>
+    <td>ตั้ง <code>EXTI_Init()</code> แล้ว interrupt ไม่เกิดขึ้นเลย</td>
+    <td>ลืมเรียก <code>GPIO_EXTILineConfig()</code> ก่อน — ถ้าไม่เรียก line จะยังผูกกับพอร์ต/ขา default (มักเป็น GPIOA) ไม่ใช่ขาที่ตั้งใจใช้จริง และลืมเปิด clock <code>RCC_APB2Periph_AFIO</code> ด้วย (เขียน <code>AFIO->EXTICR</code> ต้องมี clock ของ AFIO)</td>
+    <td>เรียกตามลำดับเสมอ: เปิด clock GPIO+AFIO → <code>GPIO_Init()</code> โหมด input → <code>GPIO_EXTILineConfig()</code> → <code>EXTI_Init()</code> → <code>NVIC_Init()</code></td>
+</tr>
+<tr>
+    <td>ใช้ interrupt สองขาที่เลขท้ายเหมือนกัน (เช่น PC1 กับ PD1) แล้วตัวหนึ่งหายไปเงียบ ๆ</td>
+    <td>EXTI Line ผูกกับ<strong>เลขขา ไม่ใช่ port</strong> — <code>GPIO_PinSource1</code> มีได้แค่ตัวเดียวต่อครั้ง เรียก <code>GPIO_EXTILineConfig()</code> ครั้งหลังจะ<strong>ทับ</strong>การตั้งค่าของครั้งแรกใน <code>AFIO->EXTICR</code> โดยไม่มี error ใด ๆ</td>
+    <td>เลือกขาที่เลขท้ายไม่ซ้ำกันสำหรับแต่ละ interrupt เช่น PC1 (Line1) คู่กับ PD2 (Line2) แทน PC1 คู่กับ PD1</td>
+</tr>
+<tr>
+    <td>ลืมเรียก <code>EXTI_ClearITPendingBit()</code> ใน ISR ทำให้ MCU เหมือนค้าง/เข้า ISR รัวถี่ยิบ</td>
+    <td>ถ้าไม่ล้างบิตค้างใน <code>INTFR</code> ก่อนออกจาก handler ตัว interrupt controller จะเห็นว่ายังมี flag ค้างอยู่ แล้วเรียก ISR ซ้ำทันทีที่ออกจาก handler เดิม กลายเป็นวนไม่จบ</td>
+    <td>เรียก <code>EXTI_ClearITPendingBit(EXTI_Line_x)</code> เป็นบรรทัดสุดท้ายของการจัดการ line นั้นใน ISR เสมอ</td>
+</tr>
+<tr>
+    <td>ตั้งหลาย line ใน struct เดียว (<code>EXTI_Line1 | EXTI_Line2</code>) แล้วแยกแยะไม่ได้ว่า interrupt มาจากขาไหน</td>
+    <td>CH32V003 รวม EXTI Line 0-7 เข้า IRQ เดียวคือ <code>EXTI7_0_IRQn</code> / <code>EXTI7_0_IRQHandler</code> — handler ตัวเดียวต้องรับผิดชอบทุก line ที่เปิดไว้ในช่วง 0-7</td>
+    <td>ใน handler ต้องเช็คทีละ line ด้วย <code>EXTI_GetITStatus(EXTI_Line_x)</code> แล้วล้างเฉพาะ line ที่ตรวจพบ ก่อนจะทำ logic ของ line นั้น</td>
+</tr>
+<tr>
+    <td>ขาที่ตั้ง EXTI ไม่เคยเข้า ISR เลยแม้สัญญาณเปลี่ยนจริง</td>
+    <td>ลืมตั้งขาเป็นโหมด input (<code>GPIO_Mode_IN_FLOATING</code>/<code>IPD</code>/<code>IPU</code>) ก่อน — ถ้าขายังเป็นโหมด output หรือ analog input (<code>GPIO_Mode_AIN</code>) วงจรตรวจจับขอบสัญญาณของ EXTI จะไม่เห็นการเปลี่ยนแปลงเดิน</td>
+    <td>ต้อง <code>GPIO_Init()</code> ตั้งขาเป็น input ก่อนเสมอ แล้วค่อยเรียก <code>GPIO_EXTILineConfig()</code> และ <code>EXTI_Init()</code></td>
+</tr>
+</tbody>
+</table>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="gpio.html">← GPIO</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

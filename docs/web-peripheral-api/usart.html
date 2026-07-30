@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>USART — Serial Communication — Peripheral API Reference</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="gpio.html">← GPIO</a>
+    <a href="tim.html">TIM →</a>
+</nav>
+
+<h1>USART — Universal Synchronous/Asynchronous Receiver Transmitter</h1>
+<span class="level level-advanced">ระดับขั้นสูง (Raw SPL)</span>
+
+<div class="callout callout-note">
+    <strong>Header:</strong> <code>#include &lt;ch32v00x_usart.h&gt;</code> — นี่คือ <strong>Standard Peripheral Library (SPL) ระดับล่าง</strong> ต้องตั้งค่า struct เอง เปิด clock เอง (<code>RCC_APB2PeriphClockCmd</code>) และตั้งค่า GPIO เอง (AFIO alternate function) ก่อนเรียกใช้งาน — ไม่มีการ auto-config ให้เหมือน wrapper
+</div>
+
+<div class="callout callout-good">
+    <strong>อยากง่ายกว่านี้?</strong> ถ้าไม่จำเป็นต้องคุมทุกบิตเอง ให้ใช้ <a href="../web-simplehal-api/usart.html">SimpleUSART</a> แทน — มี ring buffer รับข้อมูลผ่าน interrupt ให้พร้อมใช้ ไม่ต้องตั้งค่า NVIC/GPIO เอง
+</div>
+
+<section class="flowchart">
+    <h2>ผังการทำงาน USART (SPL)</h2>
+    <pre class="mermaid">
+flowchart LR
+    RCC["RCC_APB2PeriphClockCmd\n(USART1 + GPIO)"] --> GPIOCFG["GPIO_Init\n(TX=AF_PP, RX=IN_FLOATING)"]
+    GPIOCFG --> INIT["USART_Init\n(baud/word/stop/parity)"]
+    INIT --> CMD["USART_Cmd(ENABLE)"]
+    CMD --> TXP["Polling TX:\nUSART_SendData + รอ USART_FLAG_TXE"]
+    CMD --> RXP["Polling RX:\nรอ USART_FLAG_RXNE + USART_ReceiveData"]
+    CMD --> ITC["USART_ITConfig(USART_IT_RXNE, ENABLE)\n+ NVIC_Init"]
+    ITC --> ISR["USART1_IRQHandler\nUSART_GetITStatus → USART_ReceiveData"]
+    </pre>
+</section>
+
+<section>
+<h2>USART_InitTypeDef — โครงสร้างตั้งค่าหลัก</h2>
+<p>ส่ง pointer ของ struct นี้ให้ <code>USART_Init(USART1, &amp;init)</code> เพื่อกำหนดค่าทั้งหมดในครั้งเดียว</p>
+<table>
+<thead><tr><th>ฟิลด์</th><th>ชนิด</th><th>ค่าที่ใช้ได้</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>USART_BaudRate</code></td><td><code>uint32_t</code></td><td>เช่น 9600, 115200</td><td>อัตราบิต — คำนวณ BRR จาก PCLK2 (USART1 อยู่บน APB2)</td></tr>
+<tr><td><code>USART_WordLength</code></td><td><code>uint16_t</code></td><td><code>USART_WordLength_8b</code>, <code>USART_WordLength_9b</code></td><td>จำนวนบิตข้อมูลต่อเฟรม</td></tr>
+<tr><td><code>USART_StopBits</code></td><td><code>uint16_t</code></td><td><code>USART_StopBits_1</code>, <code>_0_5</code>, <code>_2</code>, <code>_1_5</code></td><td>จำนวนบิตหยุด</td></tr>
+<tr><td><code>USART_Parity</code></td><td><code>uint16_t</code></td><td><code>USART_Parity_No</code>, <code>_Even</code>, <code>_Odd</code></td><td>โหมดพาริตี — เมื่อเปิดใช้ พาริตีจะแทรกที่บิต MSB ของเฟรม</td></tr>
+<tr><td><code>USART_Mode</code></td><td><code>uint16_t</code></td><td><code>USART_Mode_Rx</code>, <code>USART_Mode_Tx</code> (OR รวมกันได้)</td><td>เปิดโหมดรับ/ส่ง — ปกติใช้ <code>USART_Mode_Rx | USART_Mode_Tx</code></td></tr>
+<tr><td><code>USART_HardwareFlowControl</code></td><td><code>uint16_t</code></td><td><code>_None</code>, <code>_RTS</code>, <code>_CTS</code>, <code>_RTS_CTS</code></td><td>ควบคุมการไหลด้วยฮาร์ดแวร์ (CH32V003 ปกติใช้ <code>_None</code>)</td></tr>
+</tbody>
+</table>
+
+<div class="callout callout-warn">
+    <strong>USART_StructInit:</strong> เรียก <code>USART_StructInit(&amp;init)</code> ก่อนได้ เพื่อเซ็ตค่าเริ่มต้น (9600, 8b, 1 stop, no parity, Rx+Tx, no flow control) แล้วค่อยแก้เฉพาะฟิลด์ที่ต้องการ
+</div>
+</section>
+
+<section>
+<h2>USART_ClockInitTypeDef — สำหรับโหมด Synchronous เท่านั้น</h2>
+<table>
+<thead><tr><th>ฟิลด์</th><th>ค่าที่ใช้ได้</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>USART_Clock</code></td><td><code>USART_Clock_Disable</code>, <code>USART_Clock_Enable</code></td><td>เปิด/ปิดสัญญาณนาฬิกา SCLK ออกขา</td></tr>
+<tr><td><code>USART_CPOL</code></td><td><code>USART_CPOL_Low</code>, <code>USART_CPOL_High</code></td><td>ขั้วสัญญาณนาฬิกาขณะ idle</td></tr>
+<tr><td><code>USART_CPHA</code></td><td><code>USART_CPHA_1Edge</code>, <code>USART_CPHA_2Edge</code></td><td>ขอบที่ใช้จับบิตข้อมูล</td></tr>
+<tr><td><code>USART_LastBit</code></td><td><code>USART_LastBit_Disable</code>, <code>USART_LastBit_Enable</code></td><td>ส่งพัลส์นาฬิกาของบิตสุดท้ายออกขา SCLK หรือไม่</td></tr>
+</tbody>
+</table>
+<p>ใช้กับ <code>USART_ClockInit(USART1, &amp;clockInit)</code> — เกี่ยวข้องเฉพาะเมื่อใช้ USART แบบซิงโครนัส (มีขา SCLK) ซึ่งไม่ค่อยได้ใช้งานทั่วไปในโปรเจกต์ CH32V003</p>
+</section>
+
+<section>
+<h2>ค่าคงที่ Flag และ Interrupt</h2>
+<table>
+<thead><tr><th>กลุ่ม</th><th>ค่าคงที่</th><th>ความหมาย</th></tr></thead>
+<tbody>
+<tr><td rowspan="9">USART_FLAG (ใช้กับ <code>USART_GetFlagStatus</code>/<code>USART_ClearFlag</code>)</td><td><code>USART_FLAG_CTS</code></td><td>สถานะขา CTS เปลี่ยน</td></tr>
+<tr><td><code>USART_FLAG_LBD</code></td><td>ตรวจพบ LIN Break</td></tr>
+<tr><td><code>USART_FLAG_TXE</code></td><td>Transmit Data Register ว่าง — <strong>ใช้บ่อยที่สุดสำหรับ polling TX</strong></td></tr>
+<tr><td><code>USART_FLAG_TC</code></td><td>ส่งข้อมูลเสร็จสมบูรณ์ (shift register ว่างด้วย)</td></tr>
+<tr><td><code>USART_FLAG_RXNE</code></td><td>มีข้อมูลใหม่ให้อ่าน — <strong>ใช้บ่อยที่สุดสำหรับ polling RX</strong></td></tr>
+<tr><td><code>USART_FLAG_IDLE</code></td><td>ตรวจพบเส้น idle</td></tr>
+<tr><td><code>USART_FLAG_ORE</code></td><td>Overrun error — รับข้อมูลใหม่ทับข้อมูลเก่าที่ยังไม่ได้อ่าน</td></tr>
+<tr><td><code>USART_FLAG_NE</code></td><td>Noise error</td></tr>
+<tr><td><code>USART_FLAG_FE</code></td><td>Framing error</td></tr>
+<tr><td rowspan="7">USART_IT (ใช้กับ <code>USART_ITConfig</code>/<code>USART_GetITStatus</code>/<code>USART_ClearITPendingBit</code>)</td><td><code>USART_IT_TXE</code></td><td>ขัดจังหวะเมื่อ TX ว่าง</td></tr>
+<tr><td><code>USART_IT_TC</code></td><td>ขัดจังหวะเมื่อส่งเสร็จ</td></tr>
+<tr><td><code>USART_IT_RXNE</code></td><td>ขัดจังหวะเมื่อมีข้อมูลรับเข้ามา — <strong>ตัวที่ใช้บ่อยสุดสำหรับ RX แบบ interrupt</strong></td></tr>
+<tr><td><code>USART_IT_IDLE</code></td><td>ขัดจังหวะเมื่อพบเส้น idle</td></tr>
+<tr><td><code>USART_IT_PE</code></td><td>ขัดจังหวะ parity error</td></tr>
+<tr><td><code>USART_IT_LBD</code></td><td>ขัดจังหวะ LIN break detect</td></tr>
+<tr><td><code>USART_IT_ERR</code> / <code>_ORE</code> / <code>_NE</code> / <code>_FE</code> / <code>_CTS</code></td><td>ขัดจังหวะกลุ่ม error (ต้องเปิด <code>USART_IT_ERR</code> ด้วย)</td></tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>ตารางอ้างอิงฟังก์ชัน (ครบทุกฟังก์ชันใน ch32v00x_usart.h)</h2>
+<table>
+<thead><tr><th>ฟังก์ชัน</th><th>พารามิเตอร์</th><th>คืนค่า</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>USART_DeInit(USARTx)</code></td><td>USART1</td><td>void</td><td>รีเซ็ตเรจิสเตอร์ USART กลับค่าเริ่มต้นผ่าน RCC reset</td></tr>
+<tr><td><code>USART_Init(USARTx, initStruct)</code></td><td>USART1, ptr struct</td><td>void</td><td>ตั้งค่า word length, stop bits, parity, mode, flow control และคำนวณ BRR จาก baud rate</td></tr>
+<tr><td><code>USART_StructInit(initStruct)</code></td><td>ptr struct</td><td>void</td><td>เติมค่าเริ่มต้น (9600-8-N-1) ให้ struct</td></tr>
+<tr><td><code>USART_ClockInit(USARTx, clkStruct)</code></td><td>USART1, ptr struct</td><td>void</td><td>ตั้งค่านาฬิกาสำหรับโหมด synchronous</td></tr>
+<tr><td><code>USART_ClockStructInit(clkStruct)</code></td><td>ptr struct</td><td>void</td><td>เติมค่าเริ่มต้นให้ clock struct</td></tr>
+<tr><td><code>USART_Cmd(USARTx, state)</code></td><td>ENABLE/DISABLE</td><td>void</td><td>เปิด/ปิดการทำงานของ USART (บิต UE) — <strong>ต้องเรียกหลัง USART_Init เสมอ</strong></td></tr>
+<tr><td><code>USART_ITConfig(USARTx, IT, state)</code></td><td>USART_IT_*, ENABLE/DISABLE</td><td>void</td><td>เปิด/ปิด interrupt source ที่ระบุ</td></tr>
+<tr><td><code>USART_DMACmd(USARTx, req, state)</code></td><td>USART_DMAReq_Tx/Rx</td><td>void</td><td>เปิด/ปิดการขอ DMA สำหรับ TX/RX</td></tr>
+<tr><td><code>USART_SetAddress(USARTx, addr)</code></td><td>uint8_t 0-15</td><td>void</td><td>ตั้งที่อยู่โหนดสำหรับโหมด multiprocessor</td></tr>
+<tr><td><code>USART_WakeUpConfig(USARTx, method)</code></td><td>USART_WakeUp_IdleLine/AddressMark</td><td>void</td><td>เลือกวิธีปลุกจากโหมด mute</td></tr>
+<tr><td><code>USART_ReceiverWakeUpCmd(USARTx, state)</code></td><td>ENABLE/DISABLE</td><td>void</td><td>เข้า/ออกโหมด mute (ไม่รับข้อมูลจนกว่าจะถูกปลุก)</td></tr>
+<tr><td><code>USART_LINBreakDetectLengthConfig(USARTx, len)</code></td><td>_10b/_11b</td><td>void</td><td>ความยาวบิตของ LIN break ที่จะตรวจจับ</td></tr>
+<tr><td><code>USART_LINCmd(USARTx, state)</code></td><td>ENABLE/DISABLE</td><td>void</td><td>เปิด/ปิดโหมด LIN</td></tr>
+<tr><td><code>USART_SendData(USARTx, data)</code></td><td>uint16_t (9 บิต)</td><td>void</td><td>เขียนข้อมูลลง DATAR เพื่อส่ง — เขียนทับ TXE flag อัตโนมัติ</td></tr>
+<tr><td><code>USART_ReceiveData(USARTx)</code></td><td>-</td><td>uint16_t</td><td>อ่านข้อมูลล่าสุดจาก DATAR — การอ่านนี้เคลียร์ RXNE โดยอัตโนมัติ</td></tr>
+<tr><td><code>USART_SendBreak(USARTx)</code></td><td>-</td><td>void</td><td>ส่งอักขระ break</td></tr>
+<tr><td><code>USART_SetGuardTime(USARTx, time)</code></td><td>uint8_t</td><td>void</td><td>ตั้งเวลา guard time (สำหรับ Smart Card)</td></tr>
+<tr><td><code>USART_SetPrescaler(USARTx, presc)</code></td><td>uint8_t</td><td>void</td><td>ตั้งตัวหารนาฬิการะบบ (สำหรับ IrDA/Smart Card)</td></tr>
+<tr><td><code>USART_SmartCardCmd(USARTx, state)</code></td><td>ENABLE/DISABLE</td><td>void</td><td>เปิด/ปิดโหมด Smart Card</td></tr>
+<tr><td><code>USART_SmartCardNACKCmd(USARTx, state)</code></td><td>ENABLE/DISABLE</td><td>void</td><td>เปิด/ปิดการส่ง NACK ของ Smart Card</td></tr>
+<tr><td><code>USART_HalfDuplexCmd(USARTx, state)</code></td><td>ENABLE/DISABLE</td><td>void</td><td>เปิดโหมด Half-Duplex (TX/RX ใช้ขาเดียวกัน)</td></tr>
+<tr><td><code>USART_OverSampling8Cmd(USARTx, state)</code></td><td>ENABLE/DISABLE</td><td>void</td><td>เปิดโหมดสุ่มตัวอย่าง 8x (baud สูงขึ้นได้) — ต้องเรียก<strong>ก่อน</strong> USART_Init</td></tr>
+<tr><td><code>USART_OneBitMethodCmd(USARTx, state)</code></td><td>ENABLE/DISABLE</td><td>void</td><td>เปิดวิธีสุ่มตัวอย่างแบบ 1 บิต</td></tr>
+<tr><td><code>USART_IrDAConfig(USARTx, mode)</code></td><td>_LowPower/_Normal</td><td>void</td><td>ตั้งโหมดพลังงานของ IrDA</td></tr>
+<tr><td><code>USART_IrDACmd(USARTx, state)</code></td><td>ENABLE/DISABLE</td><td>void</td><td>เปิด/ปิดอินเทอร์เฟส IrDA</td></tr>
+<tr><td><code>USART_GetFlagStatus(USARTx, flag)</code></td><td>USART_FLAG_*</td><td>FlagStatus (SET/RESET)</td><td>อ่านสถานะ flag จาก STATR</td></tr>
+<tr><td><code>USART_ClearFlag(USARTx, flag)</code></td><td>USART_FLAG_*</td><td>void</td><td>เคลียร์ flag ที่เคลียร์ได้ด้วยการเขียน (LBD, CTS) — flag อื่นต้องเคลียร์ตามลำดับอ่านที่ datasheet กำหนด</td></tr>
+<tr><td><code>USART_GetITStatus(USARTx, IT)</code></td><td>USART_IT_*</td><td>ITStatus (SET/RESET)</td><td>ตรวจว่า interrupt เกิดขึ้นและถูกเปิดใช้งานอยู่หรือไม่ — ใช้เช็คใน ISR</td></tr>
+<tr><td><code>USART_ClearITPendingBit(USARTx, IT)</code></td><td>USART_IT_*</td><td>void</td><td>เคลียร์ pending bit ของ interrupt (สำหรับ LBD/TC/RXNE โดยตรง)</td></tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>ตัวอย่างโค้ด</h2>
+
+<h3>1. USART_Init + Polling TX (ส่งข้อมูล)</h3>
+<pre><code class="language-c">#include &lt;ch32v00x.h&gt;
+
+void USART1_Init_115200(void)
+{
+    GPIO_InitTypeDef  GPIO_InitStructure = {0};
+    USART_InitTypeDef USART_InitStructure = {0};
+
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOD | RCC_APB2Periph_USART1, ENABLE);
+
+    /* PD5 = USART1_TX (alternate function push-pull) */
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_5;
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
+    GPIO_Init(GPIOD, &amp;GPIO_InitStructure);
+
+    /* PD6 = USART1_RX (floating input) */
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_6;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+    GPIO_Init(GPIOD, &amp;GPIO_InitStructure);
+
+    USART_InitStructure.USART_BaudRate = 115200;
+    USART_InitStructure.USART_WordLength = USART_WordLength_8b;
+    USART_InitStructure.USART_StopBits = USART_StopBits_1;
+    USART_InitStructure.USART_Parity = USART_Parity_No;
+    USART_InitStructure.USART_Mode = USART_Mode_Rx | USART_Mode_Tx;
+    USART_InitStructure.USART_HardwareFlowControl = USART_HardwareFlowControl_None;
+    USART_Init(USART1, &amp;USART_InitStructure);
+
+    USART_Cmd(USART1, ENABLE);   /* อย่าลืมบรรทัดนี้! */
+}
+
+void USART1_SendByte(uint8_t b)
+{
+    while (USART_GetFlagStatus(USART1, USART_FLAG_TXE) == RESET);
+    USART_SendData(USART1, b);
+}
+
+void USART1_SendString(const char *s)
+{
+    while (*s) USART1_SendByte(*s++);
+}</code></pre>
+
+<h3>2. Polling RX (รับข้อมูล)</h3>
+<pre><code class="language-c">uint8_t USART1_ReceiveByte(void)
+{
+    while (USART_GetFlagStatus(USART1, USART_FLAG_RXNE) == RESET);
+    return (uint8_t)USART_ReceiveData(USART1);   /* การอ่านนี้เคลียร์ RXNE ให้อัตโนมัติ */
+}
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    USART1_Init_115200();
+
+    while (1) {
+        uint8_t c = USART1_ReceiveByte();
+        USART1_SendByte(c);   /* echo กลับ */
+    }
+}</code></pre>
+
+<h3>3. รับข้อมูลผ่าน Interrupt (RXNE ISR)</h3>
+<pre><code class="language-c">#include &lt;ch32v00x.h&gt;
+
+volatile uint8_t rxByte;
+volatile uint8_t rxReady = 0;
+
+void USART1_Init_IT(void)
+{
+    /* ... ตั้งค่า GPIO + USART_Init + USART_Cmd เหมือนตัวอย่างที่ 1 ... */
+
+    USART_ITConfig(USART1, USART_IT_RXNE, ENABLE);
+
+    NVIC_InitTypeDef NVIC_InitStructure = {0};
+    NVIC_InitStructure.NVIC_IRQChannel = USART1_IRQn;
+    NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 1;
+    NVIC_InitStructure.NVIC_IRQChannelSubPriority = 1;
+    NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+    NVIC_Init(&amp;NVIC_InitStructure);
+}
+
+void USART1_IRQHandler(void) __attribute__((interrupt("WCH-Interrupt-fast")));
+void USART1_IRQHandler(void)
+{
+    if (USART_GetITStatus(USART1, USART_IT_RXNE) != RESET) {
+        rxByte = (uint8_t)USART_ReceiveData(USART1);  /* อ่านค่าเคลียร์ RXNE ให้อัตโนมัติ */
+        rxReady = 1;
+    }
+}</code></pre>
+<p>CH32V003 ใช้ attribute <code>__attribute__((interrupt("WCH-Interrupt-fast")))</code> สำหรับ ISR ตามธรรมเนียมของ RISC-V core นี้ — ดูตัวอย่างอื่นในโปรเจกต์ที่ <code>User/</code></p>
+</section>
+
+<section>
+<h2>ปัญหาที่พบบ่อย</h2>
+<table>
+<thead><tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr></thead>
+<tbody>
+<tr>
+    <td>ตั้งค่าครบแล้วแต่ไม่ส่ง/ไม่รับข้อมูลเลย</td>
+    <td>ลืมเรียก <code>USART_Cmd(USART1, ENABLE)</code> หลัง <code>USART_Init</code></td>
+    <td>ตรวจสอบว่ามีบรรทัด <code>USART_Cmd</code> อยู่เสมอหลังตั้งค่า struct</td>
+</tr>
+<tr>
+    <td>Baud rate ผิด (ตัวหนังสือมั่ว/ไม่ตรงกัน)</td>
+    <td><code>USART_Init</code> คำนวณ BRR จาก PCLK2 (สำหรับ USART1) ผ่าน <code>RCC_GetClocksFreq</code> — ถ้า clock ระบบตั้งไว้ผิด (เช่นลืม <code>SystemCoreClockUpdate()</code>) ค่าที่คำนวณจะผิดตาม</td>
+    <td>เรียก <code>SystemCoreClockUpdate()</code> ก่อนตั้งค่า USART เสมอ และตรวจสอบว่า RCC clock config ตรงกับที่ต้องการ</td>
+</tr>
+<tr>
+    <td>ข้อมูลรับเพี้ยน/หายบางไบต์ (Overrun)</td>
+    <td>ไม่ได้อ่าน <code>USART_ReceiveData</code> ให้ทันก่อนไบต์ถัดไปมาถึง ทำให้เกิด <code>USART_FLAG_ORE</code></td>
+    <td>อ่าน DATAR ให้เร็ว (ใช้ interrupt แทน polling ถ้า loop หลักช้า) หรือใช้ ring buffer อย่าง SimpleUSART</td>
+</tr>
+<tr>
+    <td>ใช้ Interrupt แต่ ISR ไม่ถูกเรียก</td>
+    <td>ลืมตั้งค่า NVIC (<code>NVIC_Init</code> กับ <code>USART1_IRQn</code>) หรือลืม <code>USART_ITConfig(..., ENABLE)</code></td>
+    <td>ตรวจสอบทั้งสองขั้นตอน — <code>USART_ITConfig</code> เปิดที่ตัว peripheral, <code>NVIC_Init</code> เปิดที่ตัว core</td>
+</tr>
+<tr>
+    <td>ลืมตั้งค่า GPIO ให้ตรงโหมด</td>
+    <td>ขา TX ต้องเป็น <code>GPIO_Mode_AF_PP</code> (alternate function push-pull) ไม่ใช่ output ธรรมดา ขา RX ต้องเป็น <code>GPIO_Mode_IN_FLOATING</code></td>
+    <td>ตรวจสอบโหมด GPIO ให้ตรงตามตารางในเอกสาร datasheet ของแต่ละขา</td>
+</tr>
+</tbody>
+</table>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="gpio.html">← GPIO</a>
+    <a href="tim.html">TIM →</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

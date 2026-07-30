@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TIM — Timer, PWM, Input Capture — Peripheral API Reference</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="usart.html">← USART</a>
+    <a href="index.html">สารบัญ →</a>
+</nav>
+
+<h1>TIM — Timer, PWM, Input Capture, Encoder</h1>
+<span class="level level-advanced">ระดับขั้นสูง (Raw SPL)</span>
+
+<div class="callout callout-note">
+    <strong>Header:</strong> <code>#include &lt;ch32v00x_tim.h&gt;</code> — Standard Peripheral Library ระดับล่างของ Timer ตั้งค่าผ่าน struct โดยตรง ไม่มี auto-calculate prescaler/period ให้เหมือน wrapper ต้องคำนวณเองจาก system clock
+</div>
+
+<div class="callout callout-warn">
+    <strong>CH32V003 มี Timer แค่ 2 ตัว:</strong> <code>TIM1</code> เป็น <strong>Advanced-control timer</strong> (มี dead-time, break input, complementary output N — เหมาะกับควบคุมมอเตอร์) อยู่บน APB2 และ <code>TIM2</code> เป็น <strong>General-purpose timer</strong> (ไม่มี BDTR/ complementary output) อยู่บน APB1 — ฟีเจอร์ที่ระบุว่า "TIM1 only" ในเอกสารนี้จะไม่มีผลกับ TIM2 (ฮาร์ดแวร์ไม่รองรับ ถึงเรียกฟังก์ชันก็ไม่เกิดอะไรขึ้น)
+</div>
+
+<div class="callout callout-good">
+    <strong>อยากง่ายกว่านี้?</strong> ถ้าแค่ต้องการ interrupt เป็นจังหวะหรือ PWM ธรรมดา ให้ใช้ <a href="../web-simplehal-api/tim.html">SimpleTIM</a> หรือ <a href="../web-simplehal-api/pwm.html">SimplePWM</a> แทน — คำนวณ prescaler/period ให้อัตโนมัติจากความถี่ที่ต้องการ
+
+</div>
+
+<section class="flowchart">
+    <h2>ผังการทำงาน TIM (SPL)</h2>
+    <pre class="mermaid">
+flowchart LR
+    RCC["RCC_APB2/APB1PeriphClockCmd\n(TIM1/TIM2)"] --> TB["TIM_TimeBaseInit\n(prescaler, period, counter mode)"]
+    TB --> BASIC["โหมด Update Interrupt\nTIM_ITConfig(TIM_IT_Update)"]
+    TB --> PWM["โหมด PWM Output\nTIM_OCxInit(OCMode_PWM1) + TIM_Cmd"]
+    TB --> IC["โหมด Input Capture\nTIM_ICInit + TIM_GetCaptureX"]
+    PWM --> ADV["TIM1 เท่านั้น:\nTIM_BDTRConfig + TIM_CtrlPWMOutputs(ENABLE)"]
+    BASIC --> ISR["TIMx_UP_IRQHandler\nTIM_GetITStatus → TIM_ClearITPendingBit"]
+    </pre>
+</section>
+
+<section>
+<h2>TIM_TimeBaseInitTypeDef — ตั้งค่าฐานเวลา</h2>
+<table>
+<thead><tr><th>ฟิลด์</th><th>ชนิด</th><th>ค่าที่ใช้ได้ / ช่วง</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>TIM_Prescaler</code></td><td>uint16_t</td><td>0x0000 - 0xFFFF</td><td>ตัวหารนาฬิกา — ความถี่ counter = TIMclk / (Prescaler+1)</td></tr>
+<tr><td><code>TIM_CounterMode</code></td><td>uint16_t</td><td>ดูตารางด้านล่าง</td><td>ทิศทางการนับ</td></tr>
+<tr><td><code>TIM_Period</code></td><td>uint16_t</td><td>0x0000 - 0xFFFF</td><td>ค่า Auto-Reload (ARR) — เมื่อ counter ถึงค่านี้จะเกิด Update Event</td></tr>
+<tr><td><code>TIM_ClockDivision</code></td><td>uint16_t</td><td><code>TIM_CKD_DIV1</code>/<code>_DIV2</code>/<code>_DIV4</code></td><td>ตัวหารนาฬิกาสำหรับ dead-time และ filter sampling</td></tr>
+<tr><td><code>TIM_RepetitionCounter</code></td><td>uint8_t</td><td>0x00 - 0xFF</td><td><strong>TIM1 เท่านั้น</strong> — จำนวนรอบ overflow ก่อนเกิด Update Event จริง (ใช้กับ center-aligned PWM)</td></tr>
+</tbody>
+</table>
+
+<h3>TIM_CounterMode</h3>
+<table>
+<thead><tr><th>ค่าคงที่</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>TIM_CounterMode_Up</code></td><td>นับขึ้นจาก 0 ถึง ARR</td></tr>
+<tr><td><code>TIM_CounterMode_Down</code></td><td>นับลงจาก ARR ถึง 0</td></tr>
+<tr><td><code>TIM_CounterMode_CenterAligned1/2/3</code></td><td>นับขึ้น-ลงสลับ (center-aligned) — ต่างกันที่จังหวะสร้าง compare interrupt flag</td></tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>TIM_OCInitTypeDef — ตั้งค่า Output Compare / PWM</h2>
+<table>
+<thead><tr><th>ฟิลด์</th><th>ค่าที่ใช้ได้</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>TIM_OCMode</code></td><td>ดูตารางด้านล่าง</td><td>โหมดการทำงานของช่องสัญญาณ</td></tr>
+<tr><td><code>TIM_OutputState</code></td><td><code>TIM_OutputState_Enable</code>/<code>_Disable</code></td><td>เปิด/ปิดขาเอาต์พุตหลัก (OCx)</td></tr>
+<tr><td><code>TIM_OutputNState</code></td><td><code>TIM_OutputNState_Enable</code>/<code>_Disable</code></td><td><strong>TIM1 เท่านั้น</strong> — เปิด/ปิดขาเอาต์พุตคู่เสริม (OCxN)</td></tr>
+<tr><td><code>TIM_Pulse</code></td><td>0x0000 - 0xFFFF</td><td>ค่าที่โหลดเข้า Capture/Compare Register (CCR) — กำหนด duty cycle ในโหมด PWM</td></tr>
+<tr><td><code>TIM_OCPolarity</code></td><td><code>TIM_OCPolarity_High</code>/<code>_Low</code></td><td>ขั้วสัญญาณเอาต์พุตหลัก</td></tr>
+<tr><td><code>TIM_OCNPolarity</code></td><td><code>TIM_OCNPolarity_High</code>/<code>_Low</code></td><td><strong>TIM1 เท่านั้น</strong> — ขั้วสัญญาณเอาต์พุตคู่เสริม</td></tr>
+<tr><td><code>TIM_OCIdleState</code></td><td><code>TIM_OCIdleState_Set</code>/<code>_Reset</code></td><td><strong>TIM1 เท่านั้น</strong> — สถานะขาช่วง Idle (เมื่อ MOE=0)</td></tr>
+<tr><td><code>TIM_OCNIdleState</code></td><td><code>TIM_OCNIdleState_Set</code>/<code>_Reset</code></td><td><strong>TIM1 เท่านั้น</strong> — สถานะขาคู่เสริมช่วง Idle</td></tr>
+</tbody>
+</table>
+
+<h3>TIM_OCMode (Output Compare / PWM modes)</h3>
+<table>
+<thead><tr><th>ค่าคงที่</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>TIM_OCMode_Timing</code></td><td>ไม่ขับขาเอาต์พุต ใช้จับเวลา/สร้าง interrupt ที่ค่า compare เท่านั้น</td></tr>
+<tr><td><code>TIM_OCMode_Active</code></td><td>ขาเอาต์พุตเป็น active เมื่อ counter ตรงกับ compare</td></tr>
+<tr><td><code>TIM_OCMode_Inactive</code></td><td>ขาเอาต์พุตเป็น inactive เมื่อ counter ตรงกับ compare</td></tr>
+<tr><td><code>TIM_OCMode_Toggle</code></td><td>สลับสถานะขาเอาต์พุตเมื่อ counter ตรงกับ compare</td></tr>
+<tr><td><code>TIM_OCMode_PWM1</code></td><td>PWM แบบที่ 1 — active ตราบเท่าที่ counter &lt; CCR (ถ้า OCPolarity_High)</td></tr>
+<tr><td><code>TIM_OCMode_PWM2</code></td><td>PWM แบบที่ 2 — active ตราบเท่าที่ counter &gt;= CCR (สลับตรรกะจาก PWM1)</td></tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>TIM_ICInitTypeDef — ตั้งค่า Input Capture</h2>
+<table>
+<thead><tr><th>ฟิลด์</th><th>ค่าที่ใช้ได้</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>TIM_Channel</code></td><td><code>TIM_Channel_1/2/3/4</code></td><td>ช่องสัญญาณที่ใช้จับสัญญาณ</td></tr>
+<tr><td><code>TIM_ICPolarity</code></td><td><code>TIM_ICPolarity_Rising</code>/<code>_Falling</code>/<code>_BothEdge</code></td><td>ขอบสัญญาณที่ trigger การจับค่า</td></tr>
+<tr><td><code>TIM_ICSelection</code></td><td><code>TIM_ICSelection_DirectTI</code>/<code>_IndirectTI</code>/<code>_TRC</code></td><td>เลือกแหล่งสัญญาณอินพุตที่จะต่อเข้าช่องจับ (ตรง/ไขว้กับช่องคู่/จาก trigger controller)</td></tr>
+<tr><td><code>TIM_ICPrescaler</code></td><td><code>TIM_ICPSC_DIV1/2/4/8</code></td><td>จับค่าทุก N ขอบสัญญาณ แทนที่จะจับทุกขอบ</td></tr>
+<tr><td><code>TIM_ICFilter</code></td><td>0x0 - 0xF</td><td>ตัวกรองสัญญาณรบกวนดิจิทัล (ยิ่งมากยิ่งกรองนาน — ดีเลย์เพิ่ม)</td></tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>TIM_BDTRInitTypeDef — Break &amp; Dead-Time (TIM1 เท่านั้น)</h2>
+<table>
+<thead><tr><th>ฟิลด์</th><th>ค่าที่ใช้ได้</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>TIM_OSSRState</code></td><td><code>TIM_OSSRState_Enable</code>/<code>_Disable</code></td><td>สถานะเอาต์พุตขณะ Run mode เมื่อ MOE ถูกปิดจาก software</td></tr>
+<tr><td><code>TIM_OSSIState</code></td><td><code>TIM_OSSIState_Enable</code>/<code>_Disable</code></td><td>สถานะเอาต์พุตขณะ Idle mode</td></tr>
+<tr><td><code>TIM_LOCKLevel</code></td><td><code>TIM_LOCKLevel_OFF/_1/_2/_3</code></td><td>ระดับล็อกการเขียนทับค่า config ด้านความปลอดภัย (ยิ่งสูงยิ่งล็อกมาก จนกว่าจะ reset)</td></tr>
+<tr><td><code>TIM_DeadTime</code></td><td>0x00 - 0xFF</td><td>เวลาหน่วง (dead-time) ระหว่างปิด OCx กับเปิด OCxN เพื่อป้องกัน shoot-through ในวงจร H-bridge</td></tr>
+<tr><td><code>TIM_Break</code></td><td><code>TIM_Break_Enable</code>/<code>_Disable</code></td><td>เปิดใช้ขา Break input (ตัดเอาต์พุตทันทีเมื่อเกิดเหตุฉุกเฉิน)</td></tr>
+<tr><td><code>TIM_BreakPolarity</code></td><td><code>TIM_BreakPolarity_Low</code>/<code>_High</code></td><td>ขั้วสัญญาณ active ของขา Break</td></tr>
+<tr><td><code>TIM_AutomaticOutput</code></td><td><code>TIM_AutomaticOutput_Enable</code>/<code>_Disable</code></td><td>เปิดแล้ว MOE จะกลับมา 1 เองหลัง break event จบ (ไม่ต้องเรียก <code>TIM_CtrlPWMOutputs</code> ซ้ำ)</td></tr>
+</tbody>
+</table>
+<div class="callout callout-warn">
+    <strong>TIM_BDTRConfig / TIM_CtrlPWMOutputs ใช้ได้เฉพาะ TIM1:</strong> การเรียกฟังก์ชันนี้กับ TIM2 ไม่มีผล เพราะ TIM2 ไม่มีเรจิสเตอร์ BDTR — สัญญาณ PWM ของ TIM2 จะออกทันทีที่ <code>TIM_Cmd(TIM2, ENABLE)</code> โดยไม่ต้องเปิด Main Output เพิ่ม
+</div>
+</section>
+
+<section>
+<h2>ตารางอ้างอิงฟังก์ชัน (ครบทุกฟังก์ชันใน ch32v00x_tim.h)</h2>
+
+<h3>1. ตั้งค่าพื้นฐาน / Time Base / Clock</h3>
+<table>
+<thead><tr><th>ฟังก์ชัน</th><th>พารามิเตอร์</th><th>คืนค่า</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>TIM_DeInit(TIMx)</code></td><td>TIM1/TIM2</td><td>void</td><td>รีเซ็ตเรจิสเตอร์ Timer กลับค่าเริ่มต้นผ่าน RCC reset</td></tr>
+<tr><td><code>TIM_TimeBaseInit(TIMx, struct)</code></td><td>TIM1/TIM2, ptr struct</td><td>void</td><td>ตั้งค่า prescaler, period, counter mode, clock division</td></tr>
+<tr><td><code>TIM_TimeBaseStructInit(struct)</code></td><td>ptr struct</td><td>void</td><td>เติมค่าเริ่มต้น (period=0xFFFF ฯลฯ) ให้ struct</td></tr>
+<tr><td><code>TIM_Cmd(TIMx, state)</code></td><td>ENABLE/DISABLE</td><td>void</td><td>เปิด/ปิด counter (บิต CEN) — เริ่ม/หยุดนับ</td></tr>
+<tr><td><code>TIM_PrescalerConfig(TIMx, presc, reloadMode)</code></td><td>uint16_t, <code>TIM_PSCReloadMode_Update/Immediate</code></td><td>void</td><td>เปลี่ยนค่า prescaler แบบเลือกได้ว่าจะมีผลทันทีหรือรอ update event ถัดไป</td></tr>
+<tr><td><code>TIM_CounterModeConfig(TIMx, mode)</code></td><td>TIM_CounterMode_*</td><td>void</td><td>เปลี่ยนทิศทางการนับหลังตั้งค่าไปแล้ว</td></tr>
+<tr><td><code>TIM_SetClockDivision(TIMx, ckd)</code></td><td>TIM_CKD_*</td><td>void</td><td>ตั้งตัวหารนาฬิกาแยกจาก TimeBaseInit</td></tr>
+<tr><td><code>TIM_SetCounter(TIMx, cnt)</code></td><td>uint16_t</td><td>void</td><td>เซ็ตค่า counter (CNT) ปัจจุบันโดยตรง</td></tr>
+<tr><td><code>TIM_SetAutoreload(TIMx, arr)</code></td><td>uint16_t</td><td>void</td><td>เปลี่ยนค่า ARR (period) ระหว่างทำงาน — ใช้ปรับความถี่ PWM/interrupt</td></tr>
+<tr><td><code>TIM_GetCounter(TIMx)</code></td><td>-</td><td>uint16_t</td><td>อ่านค่า counter ปัจจุบัน</td></tr>
+<tr><td><code>TIM_GetPrescaler(TIMx)</code></td><td>-</td><td>uint16_t</td><td>อ่านค่า prescaler ปัจจุบัน</td></tr>
+<tr><td><code>TIM_ARRPreloadConfig(TIMx, state)</code></td><td>ENABLE/DISABLE</td><td>void</td><td>เปิด/ปิด ARR preload buffer — <strong>ต้องเปิดเพื่อเปลี่ยน period/duty แบบไม่กระตุก (glitch-free)</strong></td></tr>
+<tr><td><code>TIM_UpdateDisableConfig(TIMx, state)</code></td><td>ENABLE/DISABLE</td><td>void</td><td>ปิดการสร้าง Update Event (shadow register ยังอัปเดตแต่ไม่ generate event/interrupt)</td></tr>
+<tr><td><code>TIM_UpdateRequestConfig(TIMx, source)</code></td><td><code>TIM_UpdateSource_Global/Regular</code></td><td>void</td><td>เลือกแหล่งที่ทำให้เกิด Update Event (นับ overflow อย่างเดียว หรือรวม UG/slave controller ด้วย)</td></tr>
+<tr><td><code>TIM_GenerateEvent(TIMx, source)</code></td><td>TIM_EventSource_*</td><td>void</td><td>สั่งสร้าง event ด้วย software (เช่น <code>TIM_EventSource_Update</code> เพื่อบังคับโหลดค่า ARR/PSC ทันที)</td></tr>
+</tbody>
+</table>
+
+<h3>2. PWM Output / Output Compare (OCx)</h3>
+<table>
+<thead><tr><th>ฟังก์ชัน</th><th>พารามิเตอร์</th><th>คืนค่า</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>TIM_OC1Init/OC2Init/OC3Init/OC4Init(TIMx, struct)</code></td><td>ptr TIM_OCInitTypeDef</td><td>void</td><td>ตั้งค่าช่องสัญญาณ 1-4 ตาม struct (mode, polarity, pulse ฯลฯ) — ต้องเรียกแยกทีละช่อง</td></tr>
+<tr><td><code>TIM_OCStructInit(struct)</code></td><td>ptr struct</td><td>void</td><td>เติมค่าเริ่มต้นให้ OC struct</td></tr>
+<tr><td><code>TIM_SetCompare1/2/3/4(TIMx, val)</code></td><td>uint16_t</td><td>void</td><td>เปลี่ยนค่า CCR (duty cycle) ของช่องนั้น ๆ ระหว่างทำงาน — ใช้บ่อยที่สุดสำหรับปรับ PWM duty</td></tr>
+<tr><td><code>TIM_GetCapture1/2/3/4(TIMx)</code></td><td>-</td><td>uint16_t</td><td>อ่านค่า CCR ปัจจุบันของช่อง (ใช้ทั้งอ่านค่า capture และอ่านค่า compare ที่ตั้งไว้)</td></tr>
+<tr><td><code>TIM_OC1PreloadConfig ... OC4PreloadConfig(TIMx, state)</code></td><td><code>TIM_OCPreload_Enable/Disable</code></td><td>void</td><td>เปิด preload ของ CCR แต่ละช่อง — คู่กับ ARRPreload เพื่อ duty เปลี่ยนแบบไม่กระตุก</td></tr>
+<tr><td><code>TIM_OC1FastConfig ... OC4FastConfig(TIMx, state)</code></td><td><code>TIM_OCFast_Enable/Disable</code></td><td>void</td><td>เปิดโหมดตอบสนองเร็วต่อสัญญาณ trigger (ข้าม synchronization ปกติ)</td></tr>
+<tr><td><code>TIM_ClearOC1Ref ... ClearOC4Ref(TIMx, state)</code></td><td><code>TIM_OCClear_Enable/Disable</code></td><td>void</td><td>เปิดฟีเจอร์เคลียร์เอาต์พุตด้วยสัญญาณ ETR ทันที (OCREF_CLR)</td></tr>
+<tr><td><code>TIM_OC1PolarityConfig ... OC4PolarityConfig(TIMx, pol)</code></td><td><code>TIM_OCPolarity_High/Low</code></td><td>void</td><td>เปลี่ยนขั้วเอาต์พุตหลักของแต่ละช่อง</td></tr>
+<tr><td><code>TIM_OC1NPolarityConfig/OC2N/OC3N</code></td><td><code>TIM_OCNPolarity_High/Low</code></td><td>void</td><td><strong>TIM1 เท่านั้น</strong> — เปลี่ยนขั้วเอาต์พุตคู่เสริม (ช่อง 1-3 เท่านั้นที่มี N)</td></tr>
+<tr><td><code>TIM_CCxCmd(TIMx, channel, state)</code></td><td>TIM_Channel_*, <code>TIM_CCx_Enable/Disable</code></td><td>void</td><td>เปิด/ปิดเอาต์พุตหลักของช่องที่ระบุ (บิต CCxE)</td></tr>
+<tr><td><code>TIM_CCxNCmd(TIMx, channel, state)</code></td><td>TIM_Channel_*, <code>TIM_CCxN_Enable/Disable</code></td><td>void</td><td><strong>TIM1 เท่านั้น</strong> — เปิด/ปิดเอาต์พุตคู่เสริมของช่อง</td></tr>
+<tr><td><code>TIM_SelectOCxM(TIMx, channel, mode)</code></td><td>TIM_Channel_*, TIM_OCMode_*</td><td>void</td><td>เปลี่ยนโหมด OC ของช่องที่ระบุแบบ runtime โดยไม่ต้องเรียก OCxInit ใหม่ทั้ง struct</td></tr>
+<tr><td><code>TIM_ForcedOC1Config ... ForcedOC4Config(TIMx, action)</code></td><td><code>TIM_ForcedAction_Active/InActive</code></td><td>void</td><td>บังคับสถานะเอาต์พุตทันทีโดยไม่รอ compare match (ใช้ debug/ทดสอบวงจร)</td></tr>
+<tr><td><code>TIM_CCPreloadControl(TIMx, state)</code></td><td>ENABLE/DISABLE</td><td>void</td><td>เปิด preload รวมของ CCR ทุกช่อง (CCUS bit) ควบคู่กับ COM event</td></tr>
+<tr><td><code>TIM_SelectCOM(TIMx, state)</code></td><td>ENABLE/DISABLE</td><td>void</td><td><strong>TIM1 เท่านั้น</strong> — เปิดใช้ Commutation event (สลับค่า preload ของ OC พร้อมกันหลายช่อง เหมาะกับมอเตอร์ 3 เฟส)</td></tr>
+</tbody>
+</table>
+
+<h3>3. Input Capture / PWM Input / Encoder</h3>
+<table>
+<thead><tr><th>ฟังก์ชัน</th><th>พารามิเตอร์</th><th>คืนค่า</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>TIM_ICInit(TIMx, struct)</code></td><td>ptr TIM_ICInitTypeDef</td><td>void</td><td>ตั้งค่าช่องสัญญาณเป็น Input Capture ตาม struct</td></tr>
+<tr><td><code>TIM_ICStructInit(struct)</code></td><td>ptr struct</td><td>void</td><td>เติมค่าเริ่มต้นให้ IC struct</td></tr>
+<tr><td><code>TIM_PWMIConfig(TIMx, struct)</code></td><td>ptr TIM_ICInitTypeDef</td><td>void</td><td>ตั้งค่าจับสัญญาณ PWM ภายนอกโดยอัตโนมัติ — ตั้งช่องคู่ (เช่น IC1+IC2) ให้จับขอบตรงข้ามกันเพื่อวัดคาบและ duty พร้อมกัน</td></tr>
+<tr><td><code>TIM_SetIC1Prescaler ... SetIC4Prescaler(TIMx, psc)</code></td><td>TIM_ICPSC_*</td><td>void</td><td>ตั้งตัวหารการจับของแต่ละช่องแยกจาก ICInit</td></tr>
+<tr><td><code>TIM_EncoderInterfaceConfig(TIMx, mode, ic1Pol, ic2Pol)</code></td><td><code>TIM_EncoderMode_TI1/TI2/TI12</code>, ICPolarity ทั้งสองขา</td><td>void</td><td>ตั้งโหมด quadrature encoder — counter จะนับขึ้น/ลงตามทิศทางหมุนของ encoder อัตโนมัติ</td></tr>
+<tr><td><code>TIM_SelectHallSensor(TIMx, state)</code></td><td>ENABLE/DISABLE</td><td>void</td><td>เปิดโหมด Hall sensor interface (XOR ของ TI1/2/3 เข้า TI1)</td></tr>
+<tr><td><code>TIM_IndicateCaptureLevelCmd(TIMx, state)</code></td><td>ENABLE/DISABLE</td><td>void</td><td>ควบคุมบิตพิเศษที่เกี่ยวกับระดับสัญญาณจับ (เฉพาะ WCH silicon variant นี้)</td></tr>
+</tbody>
+</table>
+
+<h3>4. Interrupt / Flag / DMA</h3>
+<table>
+<thead><tr><th>ฟังก์ชัน</th><th>พารามิเตอร์</th><th>คืนค่า</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>TIM_ITConfig(TIMx, IT, state)</code></td><td>TIM_IT_*, ENABLE/DISABLE</td><td>void</td><td>เปิด/ปิด interrupt source ที่ระบุ (Update, CC1-4, COM, Trigger, Break)</td></tr>
+<tr><td><code>TIM_GetITStatus(TIMx, IT)</code></td><td>TIM_IT_*</td><td>ITStatus</td><td>เช็คว่า interrupt เกิดขึ้นและถูกเปิดใช้งานอยู่หรือไม่ — ใช้ใน ISR</td></tr>
+<tr><td><code>TIM_ClearITPendingBit(TIMx, IT)</code></td><td>TIM_IT_*</td><td>void</td><td>เคลียร์ pending bit ของ interrupt — <strong>ต้องเรียกใน ISR ทุกครั้ง</strong></td></tr>
+<tr><td><code>TIM_GetFlagStatus(TIMx, flag)</code></td><td>TIM_FLAG_*</td><td>FlagStatus</td><td>อ่านสถานะ flag จาก INTFR (รวม flag CCxOF ที่ไม่มี interrupt คู่กัน)</td></tr>
+<tr><td><code>TIM_ClearFlag(TIMx, flag)</code></td><td>TIM_FLAG_*</td><td>void</td><td>เคลียร์ flag โดยตรง (ไม่ผ่าน interrupt system)</td></tr>
+<tr><td><code>TIM_DMAConfig(TIMx, base, burstLen)</code></td><td>TIM_DMABase_*, TIM_DMABurstLength_*</td><td>void</td><td>ตั้งค่า base address และความยาวสำหรับ DMA burst transfer</td></tr>
+<tr><td><code>TIM_DMACmd(TIMx, source, state)</code></td><td>TIM_DMA_*, ENABLE/DISABLE</td><td>void</td><td>เปิด/ปิดคำขอ DMA จาก event ที่ระบุ</td></tr>
+<tr><td><code>TIM_SelectCCDMA(TIMx, state)</code></td><td>ENABLE/DISABLE</td><td>void</td><td>เลือกให้คำขอ DMA ของ capture/compare ทำงานที่ event CC แทน Update</td></tr>
+</tbody>
+</table>
+
+<h3>5. Trigger / Slave Mode / Clock Source ภายนอก</h3>
+<table>
+<thead><tr><th>ฟังก์ชัน</th><th>พารามิเตอร์</th><th>คืนค่า</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>TIM_InternalClockConfig(TIMx)</code></td><td>-</td><td>void</td><td>ใช้ internal clock (ค่าเริ่มต้นปกติ) แทน external/trigger clock</td></tr>
+<tr><td><code>TIM_ITRxExternalClockConfig(TIMx, source)</code></td><td>TIM_TS_ITR0-3</td><td>void</td><td>ใช้สัญญาณจาก timer อื่นเป็น clock (internal trigger)</td></tr>
+<tr><td><code>TIM_TIxExternalClockConfig(TIMx, source, pol, filter)</code></td><td>TIM_TIxExternalCLK1Source_*</td><td>void</td><td>ใช้ขา TI1/TI2 เป็น external clock</td></tr>
+<tr><td><code>TIM_ETRClockMode1Config / ETRClockMode2Config(TIMx, psc, pol, filter)</code></td><td>ExtTRGPSC, ExtTRGPolarity, filter</td><td>void</td><td>ตั้ง external trigger (ขา ETR) เป็นแหล่ง clock โหมด 1 หรือ 2</td></tr>
+<tr><td><code>TIM_ETRConfig(TIMx, psc, pol, filter)</code></td><td>เหมือนด้านบน</td><td>void</td><td>ตั้งค่า ETR สำหรับใช้เป็น trigger ทั่วไป (ไม่จำกัดแค่ clock)</td></tr>
+<tr><td><code>TIM_SelectInputTrigger(TIMx, source)</code></td><td>TIM_TS_*</td><td>void</td><td>เลือกแหล่ง trigger input สำหรับ slave mode controller</td></tr>
+<tr><td><code>TIM_SelectOutputTrigger(TIMx, source)</code></td><td>TIM_TRGOSource_*</td><td>void</td><td>เลือกสัญญาณที่จะส่งออกที่ TRGO (ใช้ sync timer อื่นหรือ trigger ADC)</td></tr>
+<tr><td><code>TIM_SelectSlaveMode(TIMx, mode)</code></td><td>TIM_SlaveMode_*</td><td>void</td><td>ตั้งโหมด slave (Reset/Gated/Trigger/External1)</td></tr>
+<tr><td><code>TIM_SelectMasterSlaveMode(TIMx, mode)</code></td><td><code>TIM_MasterSlaveMode_Enable/Disable</code></td><td>void</td><td>เปิด/ปิดการ sync ระหว่าง master-slave timer</td></tr>
+<tr><td><code>TIM_SelectOnePulseMode(TIMx, mode)</code></td><td><code>TIM_OPMode_Single/Repetitive</code></td><td>void</td><td>โหมด One-Pulse — counter หยุดเองหลัง update event ครั้งถัดไป (สร้างพัลส์เดียวความกว้างที่กำหนด)</td></tr>
+</tbody>
+</table>
+
+<h3>6. Break &amp; Dead-Time (Advanced-Timer — TIM1 เท่านั้น)</h3>
+<table>
+<thead><tr><th>ฟังก์ชัน</th><th>พารามิเตอร์</th><th>คืนค่า</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>TIM_BDTRConfig(TIMx, struct)</code></td><td>ptr TIM_BDTRInitTypeDef</td><td>void</td><td>ตั้งค่า Break, Dead-Time, Lock level, OSSI/OSSR, Automatic Output ทั้งหมดในครั้งเดียว</td></tr>
+<tr><td><code>TIM_BDTRStructInit(struct)</code></td><td>ptr struct</td><td>void</td><td>เติมค่าเริ่มต้นให้ BDTR struct</td></tr>
+<tr><td><code>TIM_CtrlPWMOutputs(TIMx, state)</code></td><td>ENABLE/DISABLE</td><td>void</td><td>เปิด/ปิดบิต MOE (Main Output Enable) — <strong>ถ้าไม่เปิด ขา PWM ของ TIM1 จะไม่มีสัญญาณออกเลยแม้ตั้งค่า OC ครบแล้ว</strong></td></tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>ตัวอย่างโค้ด</h2>
+
+<h3>1. Timebase Interrupt — สร้าง Update Event ทุก 1ms (TIM2)</h3>
+<pre><code class="language-c">#include &lt;ch32v00x.h&gt;
+
+volatile uint32_t msTick = 0;
+
+void TIM2_Init_1ms(void)
+{
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, ENABLE);
+
+    /* สมมติ SystemCoreClock = 48MHz, ต้องการ tick 1ms
+       48MHz / (Prescaler+1) / (Period+1) = 1000Hz */
+    TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure = {0};
+    TIM_TimeBaseStructure.TIM_Period = 999;          /* นับ 0-999 = 1000 tick */
+    TIM_TimeBaseStructure.TIM_Prescaler = 47;         /* 48MHz/48 = 1MHz counter clock */
+    TIM_TimeBaseStructure.TIM_ClockDivision = TIM_CKD_DIV1;
+    TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
+    TIM_TimeBaseInit(TIM2, &amp;TIM_TimeBaseStructure);
+
+    TIM_ITConfig(TIM2, TIM_IT_Update, ENABLE);
+
+    NVIC_InitTypeDef NVIC_InitStructure = {0};
+    NVIC_InitStructure.NVIC_IRQChannel = TIM2_IRQn;
+    NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0;
+    NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
+    NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+    NVIC_Init(&amp;NVIC_InitStructure);
+
+    TIM_Cmd(TIM2, ENABLE);
+}
+
+void TIM2_IRQHandler(void) __attribute__((interrupt("WCH-Interrupt-fast")));
+void TIM2_IRQHandler(void)
+{
+    if (TIM_GetITStatus(TIM2, TIM_IT_Update) != RESET) {
+        msTick++;
+        TIM_ClearITPendingBit(TIM2, TIM_IT_Update);  /* ต้องเคลียร์ ไม่งั้น ISR วนซ้ำ */
+    }
+}</code></pre>
+
+<h3>2. PWM Output บน TIM1 Channel 1 พร้อมปรับ Duty Cycle</h3>
+<pre><code class="language-c">#include &lt;ch32v00x.h&gt;
+
+void TIM1_PWM_Init(uint16_t period)
+{
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_TIM1 | RCC_APB2Periph_GPIOD, ENABLE);
+
+    GPIO_InitTypeDef GPIO_InitStructure = {0};
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_2;          /* PD2 = TIM1_CH1 (ตัวอย่าง) */
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
+    GPIO_Init(GPIOD, &amp;GPIO_InitStructure);
+
+    TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure = {0};
+    TIM_TimeBaseStructure.TIM_Period = period;         /* กำหนดความถี่ PWM */
+    TIM_TimeBaseStructure.TIM_Prescaler = 0;
+    TIM_TimeBaseStructure.TIM_ClockDivision = TIM_CKD_DIV1;
+    TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
+    TIM_TimeBaseInit(TIM1, &amp;TIM_TimeBaseStructure);
+
+    TIM_OCInitTypeDef TIM_OCInitStructure = {0};
+    TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM1;
+    TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable;
+    TIM_OCInitStructure.TIM_Pulse = 0;                 /* duty เริ่มต้น 0% */
+    TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_High;
+    TIM_OC1Init(TIM1, &amp;TIM_OCInitStructure);
+
+    TIM_OC1PreloadConfig(TIM1, TIM_OCPreload_Enable);  /* duty เปลี่ยนแบบไม่กระตุก */
+    TIM_ARRPreloadConfig(TIM1, ENABLE);
+
+    TIM_CtrlPWMOutputs(TIM1, ENABLE);   /* TIM1 (advanced timer) ต้องเปิดบรรทัดนี้ ไม่งั้นไม่มีสัญญาณออก */
+    TIM_Cmd(TIM1, ENABLE);
+}
+
+void TIM1_SetDutyPercent(uint16_t period, uint8_t percent)
+{
+    TIM_SetCompare1(TIM1, (uint32_t)period * percent / 100);
+}</code></pre>
+
+<h3>3. Input Capture — วัดความกว้างพัลส์ / ความถี่บน Channel 1</h3>
+<pre><code class="language-c">#include &lt;ch32v00x.h&gt;
+
+volatile uint16_t capturedWidth = 0;
+volatile uint8_t  edgeState = 0;    /* 0 = รอขอบขึ้น, 1 = รอขอบลง */
+volatile uint16_t risingValue = 0;
+
+void TIM2_IC_Init(void)
+{
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM2, ENABLE);
+    /* ... ตั้งขา TIM2_CH1 เป็น GPIO_Mode_IN_FLOATING ก่อนหน้านี้ ... */
+
+    TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure = {0};
+    TIM_TimeBaseStructure.TIM_Period = 0xFFFF;
+    TIM_TimeBaseStructure.TIM_Prescaler = 47;    /* 48MHz/48 = 1MHz => นับ 1 tick = 1us */
+    TIM_TimeBaseStructure.TIM_ClockDivision = TIM_CKD_DIV1;
+    TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
+    TIM_TimeBaseInit(TIM2, &amp;TIM_TimeBaseStructure);
+
+    TIM_ICInitTypeDef TIM_ICInitStructure = {0};
+    TIM_ICInitStructure.TIM_Channel = TIM_Channel_1;
+    TIM_ICInitStructure.TIM_ICPolarity = TIM_ICPolarity_Rising;
+    TIM_ICInitStructure.TIM_ICSelection = TIM_ICSelection_DirectTI;
+    TIM_ICInitStructure.TIM_ICPrescaler = TIM_ICPSC_DIV1;
+    TIM_ICInitStructure.TIM_ICFilter = 0;
+    TIM_ICInit(TIM2, &amp;TIM_ICInitStructure);
+
+    TIM_ITConfig(TIM2, TIM_IT_CC1, ENABLE);
+    /* ... NVIC_Init กับ TIM2_IRQn เหมือนตัวอย่างที่ 1 ... */
+    TIM_Cmd(TIM2, ENABLE);
+}
+
+void TIM2_IRQHandler(void) __attribute__((interrupt("WCH-Interrupt-fast")));
+void TIM2_IRQHandler(void)
+{
+    if (TIM_GetITStatus(TIM2, TIM_IT_CC1) != RESET) {
+        uint16_t val = TIM_GetCapture1(TIM2);
+        if (edgeState == 0) {
+            risingValue = val;
+            edgeState = 1;
+            TIM_OC1PolarityConfig(TIM2, TIM_OCPolarity_Low);  /* สลับไปจับขอบลงครั้งถัดไป */
+        } else {
+            capturedWidth = val - risingValue;   /* หน่วย us — ความกว้างพัลส์ HIGH */
+            edgeState = 0;
+            TIM_OC1PolarityConfig(TIM2, TIM_OCPolarity_High);
+        }
+        TIM_ClearITPendingBit(TIM2, TIM_IT_CC1);
+    }
+}</code></pre>
+<p>สำหรับวัดทั้งคาบและ duty cycle พร้อมกันในครั้งเดียว ใช้ <code>TIM_PWMIConfig</code> ซึ่งตั้งช่องคู่ (เช่น CH1+CH2) ให้จับขอบตรงข้ามกันอัตโนมัติ แทนการสลับ polarity เองแบบตัวอย่างข้างต้น</p>
+</section>
+
+<section>
+<h2>ปัญหาที่พบบ่อย</h2>
+<table>
+<thead><tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr></thead>
+<tbody>
+<tr>
+    <td>PWM บน TIM1 ไม่มีสัญญาณออกเลย</td>
+    <td>TIM1 เป็น advanced-control timer ต้องเปิด <strong>Main Output Enable</strong> เพิ่มเติมจาก <code>TIM_Cmd</code></td>
+    <td>เรียก <code>TIM_CtrlPWMOutputs(TIM1, ENABLE)</code> คู่กับ <code>TIM_Cmd(TIM1, ENABLE)</code> เสมอ — ขั้นตอนนี้ <strong>ไม่จำเป็นสำหรับ TIM2</strong></td>
+</tr>
+<tr>
+    <td>เปลี่ยน duty cycle แล้วสัญญาณ PWM กระตุก/มีขอบแหว่ง</td>
+    <td>ลืมเปิด preload buffer ทำให้ค่า CCR/ARR ใหม่มีผลทันทีกลางคาบ แทนที่จะรอ update event รอบถัดไป</td>
+    <td>เปิด <code>TIM_OCxPreloadConfig(TIMx, TIM_OCPreload_Enable)</code> และ <code>TIM_ARRPreloadConfig(TIMx, ENABLE)</code> ก่อนเริ่ม PWM</td>
+</tr>
+<tr>
+    <td>ใช้ Interrupt แล้ว ISR ถูกเรียกซ้ำไม่หยุด / ค้าง</td>
+    <td>ลืมเคลียร์ pending bit ในตัว ISR ทำให้ NVIC เข้า handler ซ้ำทันทีที่ออกจาก ISR</td>
+    <td>เรียก <code>TIM_ClearITPendingBit(TIMx, TIM_IT_*)</code> เป็นบรรทัดสุดท้ายของ ISR เสมอ</td>
+</tr>
+<tr>
+    <td>ตั้งค่า TIM_RepetitionCounter หรือ complementary output (OCxN) กับ TIM2 แล้วไม่มีผล</td>
+    <td>ฟีเจอร์เหล่านี้มีเฉพาะใน advanced-control timer (TIM1) เท่านั้น — TIM2 เป็น general-purpose timer ไม่มีเรจิสเตอร์รองรับ</td>
+    <td>ใช้ TIM1 แทนถ้าต้องการ dead-time / complementary output / repetition counter</td>
+</tr>
+<tr>
+    <td>Input Capture อ่านค่าคาบ/ความกว้างพัลส์ผิดเมื่อ counter overflow</td>
+    <td>ค่า <code>TIM_GetCaptureX</code> เป็น 16-bit วนกลับที่ 0xFFFF ถ้าลบกันตรง ๆ โดยไม่ตรวจ overflow จะได้ค่าติดลบ (wrap) ที่ผิด</td>
+    <td>ลบแบบ unsigned 16-bit ตามธรรมชาติ (<code>uint16_t diff = new - old;</code> จะ wrap ถูกต้องเองถ้าไม่เกิน 1 รอบ) หรือใช้ prescaler ให้ 1 tick มีหน่วยเวลาที่เหมาะกับความถี่สัญญาณ</td>
+</tr>
+</tbody>
+</table>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="usart.html">← USART</a>
+    <a href="index.html">สารบัญ →</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PWR — Power Control (Sleep/Standby, PVD, AWU) — Peripheral API Reference</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="opa.html">OPA →</a>
+</nav>
+
+<h1>PWR — Power Control</h1>
+<span class="level level-advanced">ระดับสูง</span>
+
+<div class="callout callout-note">
+    <strong>Header:</strong> <code>#include "ch32v00x_pwr.h"</code> — นี่คือไลบรารีระดับ<strong>ล่าง (Standard Peripheral Library)</strong> เขียนตรงเข้าเรจิสเตอร์ <code>PWR</code> โดยตรง ไม่มีการห่อหุ้ม/ค่า default ให้เหมือน wrapper — ถ้าต้องการ API ที่ใช้ง่ายกว่า (มีฟังก์ชันคำนวณ AWU อัตโนมัติ, ตรวจ wakeup flag ให้) ดูที่ <a href="../web-simplehal-api/pwr.html">SimplePWR (web-simplehal-api/pwr.html)</a> แทน
+</div>
+
+<section>
+<h2>ภาพรวม</h2>
+<p>โมดูล PWR ของ CH32V003 มีเรจิสเตอร์หลัก 3 กลุ่ม: <code>CTLR</code> (ควบคุม PVD และโหมด Standby), <code>CSR</code> (สถานะ PVD), และ <code>AWUCSR</code>/<code>AWUPSC</code>/<code>AWUWR</code> (Auto Wake-Up timer ที่ใช้ปลุกจาก Standby)</p>
+
+<div class="callout callout-warn">
+    <strong>ต้องเปิด clock ของ PWR ก่อนใช้งานเสมอ:</strong> ฟังก์ชันในไฟล์ <code>ch32v00x_pwr.c</code> เขียนเรจิสเตอร์ <code>PWR-&gt;CTLR</code>/<code>PWR-&gt;AWUCSR</code> โดยตรง <strong>ไม่มีการเปิด peripheral clock ให้เอง</strong> ต้องเรียก <code>RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR, ENABLE);</code> ก่อนเรียกฟังก์ชัน PWR ใดๆ มิฉะนั้นการเขียนเรจิสเตอร์จะไม่มีผล
+</div>
+
+<div class="callout callout-err">
+    <strong>ไม่มีฟังก์ชัน "Sleep Mode" ในไลบรารีนี้:</strong> ต่างจาก wrapper (<code>PWR_EnterSleepMode()</code>ใน SimplePWR) ไฟล์ <code>ch32v00x_pwr.h</code> <strong>มีฟังก์ชันเข้าโหมดประหยัดไฟเพียงตัวเดียวคือ <code>PWR_EnterSTANDBYMode()</code></strong> โหมด Sleep (CPU หยุด peripherals ทำงานต่อ) ทำได้ด้วยการเรียก core intrinsic <code>__WFI()</code> หรือ <code>__WFE()</code> ตรงๆ โดย<strong>ไม่ต้อง</strong>ยุ่งกับ <code>PWR-&gt;CTLR</code> เลย (ไม่ตั้งบิต PDDS = CPU จะกลับมาทำงานต่อแบบ sleep ธรรมดา ไม่ใช่ standby)
+</div>
+</section>
+
+<section>
+<h2>ค่าคงที่ — PWR_PVDLevel (ระดับตรวจจับแรงดัน PVD)</h2>
+<table>
+<thead><tr><th>ค่าคงที่</th><th>Alias</th><th>Threshold</th></tr></thead>
+<tbody>
+<tr><td><code>PWR_PVDLevel_MODE0</code></td><td><code>PWR_PVDLevel_2V9</code></td><td>2.9V</td></tr>
+<tr><td><code>PWR_PVDLevel_MODE1</code></td><td><code>PWR_PVDLevel_3V1</code></td><td>3.1V</td></tr>
+<tr><td><code>PWR_PVDLevel_MODE2</code></td><td><code>PWR_PVDLevel_3V3</code></td><td>3.3V</td></tr>
+<tr><td><code>PWR_PVDLevel_MODE3</code></td><td><code>PWR_PVDLevel_3V5</code></td><td>3.5V</td></tr>
+<tr><td><code>PWR_PVDLevel_MODE4</code></td><td><code>PWR_PVDLevel_3V7</code></td><td>3.7V</td></tr>
+<tr><td><code>PWR_PVDLevel_MODE5</code></td><td><code>PWR_PVDLevel_3V9</code></td><td>3.9V</td></tr>
+<tr><td><code>PWR_PVDLevel_MODE6</code></td><td><code>PWR_PVDLevel_4V1</code></td><td>4.1V</td></tr>
+<tr><td><code>PWR_PVDLevel_MODE7</code></td><td><code>PWR_PVDLevel_4V4</code></td><td>4.4V</td></tr>
+</tbody>
+</table>
+<p>ทั้งสองชื่อ (<code>_MODE#</code> และ <code>_#V#</code>) คือ macro ตัวเดียวกัน (alias) — ใช้ชื่อไหนก็ได้ค่าเท่ากัน</p>
+</section>
+
+<section>
+<h2>ค่าคงที่ — PWR_AWU_Prescaler (ตัวหารนาฬิกา Auto Wake-Up, อ้างอิงจาก LSI 128kHz)</h2>
+<table>
+<thead><tr><th>ค่าคงที่</th><th>ตัวหาร</th></tr></thead>
+<tbody>
+<tr><td><code>PWR_AWU_Prescaler_1</code></td><td>÷1</td></tr>
+<tr><td><code>PWR_AWU_Prescaler_2</code></td><td>÷2</td></tr>
+<tr><td><code>PWR_AWU_Prescaler_4</code></td><td>÷4</td></tr>
+<tr><td><code>PWR_AWU_Prescaler_8</code></td><td>÷8</td></tr>
+<tr><td><code>PWR_AWU_Prescaler_16</code></td><td>÷16</td></tr>
+<tr><td><code>PWR_AWU_Prescaler_32</code></td><td>÷32</td></tr>
+<tr><td><code>PWR_AWU_Prescaler_64</code></td><td>÷64</td></tr>
+<tr><td><code>PWR_AWU_Prescaler_128</code></td><td>÷128</td></tr>
+<tr><td><code>PWR_AWU_Prescaler_256</code></td><td>÷256</td></tr>
+<tr><td><code>PWR_AWU_Prescaler_512</code></td><td>÷512</td></tr>
+<tr><td><code>PWR_AWU_Prescaler_1024</code></td><td>÷1024</td></tr>
+<tr><td><code>PWR_AWU_Prescaler_2048</code></td><td>÷2048</td></tr>
+<tr><td><code>PWR_AWU_Prescaler_4096</code></td><td>÷4096</td></tr>
+<tr><td><code>PWR_AWU_Prescaler_10240</code></td><td>÷10240</td></tr>
+<tr><td><code>PWR_AWU_Prescaler_61440</code></td><td>÷61440</td></tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>ค่าคงที่อื่นๆ</h2>
+<table>
+<thead><tr><th>ค่าคงที่</th><th>ใช้กับ</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>PWR_STANDBYEntry_WFI</code></td><td><code>PWR_EnterSTANDBYMode()</code></td><td>เข้า Standby ด้วยคำสั่ง <code>WFI</code> (Wait For Interrupt)</td></tr>
+<tr><td><code>PWR_STANDBYEntry_WFE</code></td><td><code>PWR_EnterSTANDBYMode()</code></td><td>เข้า Standby ด้วยคำสั่ง <code>WFE</code> (Wait For Event)</td></tr>
+<tr><td><code>PWR_FLAG_PVDO</code></td><td><code>PWR_GetFlagStatus()</code></td><td>Flag เดียวที่มีในโมดูลนี้ — บอกว่า VDD ต่ำกว่าระดับ PVD ที่ตั้งไว้หรือไม่</td></tr>
+</tbody>
+</table>
+
+<div class="callout callout-warn">
+    <strong>ไม่มี flag "wakeup from standby" ในโมดูล PWR:</strong> <code>PWR_GetFlagStatus()</code> อ่านได้เฉพาะ <code>PWR_FLAG_PVDO</code> เท่านั้น — การตรวจว่ารอบนี้ MCU ตื่นจาก Standby หรือเพิ่งเปิดไฟใหม่ ต้องใช้ <strong>โมดูล RCC แทน</strong> ด้วย <code>RCC_GetFlagStatus(RCC_FLAG_LPWRRST)</code> (ดูไฟล์ <code>ch32v00x_rcc.h</code>) ไม่ใช่หน้าที่ของ PWR
+</div>
+</section>
+
+<section>
+<h2>Typedef</h2>
+<table>
+<thead><tr><th>Typedef</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>FunctionalState</code></td><td><code>ENABLE</code> / <code>DISABLE</code> — ใช้กับ <code>PWR_PVDCmd()</code>, <code>PWR_AutoWakeUpCmd()</code></td></tr>
+<tr><td><code>FlagStatus</code></td><td><code>SET</code> / <code>RESET</code> — ค่าที่คืนจาก <code>PWR_GetFlagStatus()</code></td></tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>ตารางอ้างอิงฟังก์ชัน</h2>
+<table>
+<thead>
+<tr><th>ฟังก์ชัน</th><th>พารามิเตอร์</th><th>คืนค่า</th><th>คำอธิบาย</th></tr>
+</thead>
+<tbody>
+<tr>
+    <td><code>PWR_DeInit(void)</code></td>
+    <td>—</td>
+    <td><code>void</code></td>
+    <td>รีเซ็ตเรจิสเตอร์ PWR ทั้งหมดกลับค่าเริ่มต้น (ผ่าน <code>RCC_APB1PeriphResetCmd</code>)</td>
+</tr>
+<tr>
+    <td><code>PWR_PVDCmd(NewState)</code></td>
+    <td><code>NewState</code>: <code>ENABLE</code>/<code>DISABLE</code></td>
+    <td><code>void</code></td>
+    <td>เปิด/ปิดวงจร PVD (Programmable Voltage Detector) — ตั้งบิต 4 ของ <code>CTLR</code></td>
+</tr>
+<tr>
+    <td><code>PWR_PVDLevelConfig(PWR_PVDLevel)</code></td>
+    <td><code>PWR_PVDLevel</code>: <code>PWR_PVDLevel_*</code></td>
+    <td><code>void</code></td>
+    <td>ตั้งระดับแรงดันที่ PVD จะตรวจจับ (bits 5-7 ของ <code>CTLR</code>)</td>
+</tr>
+<tr>
+    <td><code>PWR_AutoWakeUpCmd(NewState)</code></td>
+    <td><code>NewState</code>: <code>ENABLE</code>/<code>DISABLE</code></td>
+    <td><code>void</code></td>
+    <td>เปิด/ปิด AWU (Auto Wake-Up timer) — ตั้งบิต 1 ของ <code>AWUCSR</code></td>
+</tr>
+<tr>
+    <td><code>PWR_AWU_SetPrescaler(AWU_Prescaler)</code></td>
+    <td><code>AWU_Prescaler</code>: <code>PWR_AWU_Prescaler_*</code></td>
+    <td><code>void</code></td>
+    <td>ตั้งตัวหารนาฬิกา AWU (เขียน <code>AWUPSC</code>)</td>
+</tr>
+<tr>
+    <td><code>PWR_AWU_SetWindowValue(WindowValue)</code></td>
+    <td><code>WindowValue</code>: <code>uint8_t</code>, ต้อง &lt; 0x3F</td>
+    <td><code>void</code></td>
+    <td>ตั้งค่า window ของตัวนับถอยหลัง AWU (เขียน <code>AWUWR</code>) — คือค่า "timeout" ที่จะเปรียบเทียบกับตัวนับ</td>
+</tr>
+<tr>
+    <td><code>PWR_EnterSTANDBYMode(PWR_STANDBYEntry)</code></td>
+    <td><code>PWR_STANDBYEntry</code>: <code>PWR_STANDBYEntry_WFI</code>/<code>_WFE</code></td>
+    <td><code>void</code></td>
+    <td>เข้าโหมด Standby จริง — ตั้งบิต <code>PDDS</code> ใน <code>CTLR</code>, ตั้งบิต <code>SLEEPDEEP</code> ใน <code>NVIC-&gt;SCTLR</code>, แล้วเรียก <code>__WFI()</code>/<code>__WFE()</code> ค้างจนกว่าจะถูกปลุก จากนั้นเคลียร์ <code>SLEEPDEEP</code></td>
+</tr>
+<tr>
+    <td><code>PWR_GetFlagStatus(PWR_FLAG)</code></td>
+    <td><code>PWR_FLAG</code>: <code>PWR_FLAG_PVDO</code></td>
+    <td><code>FlagStatus</code> (<code>SET</code>/<code>RESET</code>)</td>
+    <td>อ่านสถานะ flag จาก <code>PWR-&gt;CSR</code></td>
+</tr>
+</tbody>
+</table>
+</section>
+
+<section class="flowchart">
+<h2>ผังการเข้า/ออกโหมดพลังงาน</h2>
+<pre class="mermaid">
+flowchart TD
+    A["RCC_APB1PeriphClockCmd(PWR, ENABLE)<br>★ ต้องทำก่อนเสมอ"] --> B{"เลือกโหมด"}
+    B -->|"Sleep — CPU หยุด peripherals ทำงานต่อ"| C["__WFI() หรือ __WFE()<br>(ไม่แตะ PWR-&gt;CTLR เลย)"]
+    B -->|"Standby — ทุกอย่างหยุด, RAM หาย"| D["PWR_AWU_SetPrescaler()<br>PWR_AWU_SetWindowValue()<br>PWR_AutoWakeUpCmd(ENABLE)"]
+    D --> E["PWR_EnterSTANDBYMode(entry)"]
+    C --> F["interrupt ปลุก → กลับมาทำงานต่อจากจุดเดิม"]
+    E --> G["reset ทั้งชิป → main() เริ่มใหม่"]
+    G --> H["ตรวจ RCC_GetFlagStatus(RCC_FLAG_LPWRRST)<br>เพื่อรู้ว่าตื่นจาก standby"]
+</pre>
+</section>
+
+<section>
+<h2>ตัวอย่างโค้ด</h2>
+
+<h3>1. Sleep Mode ด้วย WFI (CPU หยุด peripherals ทำงานต่อ)</h3>
+<pre><code class="language-c">#include "ch32v00x.h"
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+
+    // ไม่มีฟังก์ชัน PWR_EnterSleepMode() ในไลบรารีนี้ —
+    // sleep ธรรมดาทำได้ด้วยการเรียก __WFI() ตรงๆ โดยไม่แตะ PWR->CTLR
+    while (1)
+    {
+        // ... งานปกติ ...
+        __WFI();   // CPU หยุดจนกว่าจะมี interrupt ใดๆ มาปลุก
+        // กลับมาทำงานต่อจากบรรทัดนี้ (ไม่ reset)
+    }
+}</code></pre>
+
+<h3>2. ตั้งค่า PVD ตรวจจับแรงดันต่ำพร้อม interrupt</h3>
+<pre><code class="language-c">#include "ch32v00x.h"
+
+void PVD_Config(void)
+{
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR, ENABLE);
+
+    PWR_PVDLevelConfig(PWR_PVDLevel_3V3);   // threshold 3.3V
+    PWR_PVDCmd(ENABLE);
+}
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    PVD_Config();
+
+    while (1)
+    {
+        if (PWR_GetFlagStatus(PWR_FLAG_PVDO) == SET)
+        {
+            // VDD ต่ำกว่า 3.3V — เตือนผู้ใช้ / บันทึกข้อมูลก่อนไฟดับ
+        }
+    }
+}</code></pre>
+
+<h3>3. เข้า Standby Mode พร้อม Auto Wake-Up (AWU)</h3>
+<pre><code class="language-c">#include "ch32v00x.h"
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR, ENABLE);
+
+    // ตรวจก่อนว่ารอบนี้ตื่นจาก standby หรือเพิ่งเปิดไฟใหม่ (ต้องเช็คผ่าน RCC ไม่ใช่ PWR)
+    if (RCC_GetFlagStatus(RCC_FLAG_LPWRRST) != RESET)
+    {
+        RCC_ClearFlag();   // ★ ต้องเคลียร์ก่อนเข้า standby รอบถัดไป มิฉะนั้น flag จะค้าง
+        // ... โค้ดกรณีตื่นจาก standby ...
+    }
+
+    // ตั้ง AWU ให้ปลุกทุกๆ ~1 วินาที (prescaler=4096 -> ~32ms/count, window=0x3F -> ~2s)
+    PWR_AWU_SetPrescaler(PWR_AWU_Prescaler_4096);
+    PWR_AWU_SetWindowValue(0x1F);
+    PWR_AutoWakeUpCmd(ENABLE);
+
+    // ... งานก่อน standby ...
+
+    PWR_EnterSTANDBYMode(PWR_STANDBYEntry_WFI);
+    // ไม่มีโค้ดใดทำงานต่อจากบรรทัดนี้ — Standby = รีเซ็ตทั้งชิป, main() เริ่มใหม่ทั้งหมด
+}</code></pre>
+
+<div class="callout callout-warn">
+    <strong>ต่างจาก Sleep:</strong> <code>PWR_EnterSTANDBYMode()</code> ไม่ได้ "คืนค่า" กลับมาที่บรรทัดถัดไปเหมือน <code>__WFI()</code> ธรรมดา — เพราะตั้งบิต <code>PDDS</code> ทำให้ MCU ตัดไฟโดเมน 1.8V เมื่อตื่นขึ้นมาจะเป็นการ <strong>รีเซ็ตทั้งชิป</strong> (เทียบเท่า power-on ใหม่) โค้ดหลังบรรทัด <code>PWR_EnterSTANDBYMode()</code> จะไม่ถูกรันต่อ
+</div>
+</section>
+
+<section>
+<h2>ปัญหาที่พบบ่อย</h2>
+<table>
+<thead><tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr></thead>
+<tbody>
+<tr>
+    <td>เรียกฟังก์ชัน PWR แล้วไม่มีผลอะไรเลย (เช่น PVD ไม่ทำงาน, AWU ไม่ปลุก)</td>
+    <td>ลืมเปิด peripheral clock — <code>ch32v00x_pwr.c</code> เขียนเรจิสเตอร์ตรงๆ โดยไม่เปิด clock ให้เอง</td>
+    <td>เรียก <code>RCC_APB1PeriphClockCmd(RCC_APB1Periph_PWR, ENABLE);</code> ก่อนใช้ฟังก์ชัน PWR ใดๆ เป็นอย่างแรก</td>
+</tr>
+<tr>
+    <td>ตื่นจาก Standby แล้วตัวแปร/สถานะเดิมหายหมด</td>
+    <td>Standby mode ตัดไฟโดเมน 1.8V ทั้งหมด — SRAM ไม่ถูก retain เหมือนโหมด Sleep</td>
+    <td>ออกแบบโปรแกรมให้ตรวจ <code>RCC_GetFlagStatus(RCC_FLAG_LPWRRST)</code> ที่ต้น <code>main()</code> แล้วกู้สถานะจาก flash/EEPROM แทนการพึ่ง RAM</td>
+</tr>
+<tr>
+    <td>ตื่นจาก Standby ครั้งเดียวแล้วกลับเข้า Standby ใหม่ทันที (loop วนไม่หยุด)</td>
+    <td>ไม่ได้เคลียร์ flag รีเซ็ตของ RCC (<code>RCC_FLAG_LPWRRST</code>) — ค้างเป็น SET ข้ามรอบ ทำให้ logic เข้าใจผิดว่ายังอยู่ในสถานะ "เพิ่งตื่น" ตลอด</td>
+    <td>เรียก <code>RCC_ClearFlag()</code> ทันทีหลังตรวจสอบสาเหตุการรีเซ็ตแล้ว</td>
+</tr>
+<tr>
+    <td>ใช้ <code>PWR_GetFlagStatus()</code> เพื่อเช็คว่าตื่นจาก Standby แล้วได้ผลผิด/ไม่คาดคิด</td>
+    <td>โมดูล PWR ของ CH32V003 มี flag เดียวคือ <code>PWR_FLAG_PVDO</code> เท่านั้น — ไม่มี WUF/SBF แบบ STM32</td>
+    <td>ใช้ <code>RCC_GetFlagStatus(RCC_FLAG_LPWRRST)</code> จากโมดูล RCC แทนสำหรับตรวจ wakeup จาก standby</td>
+</tr>
+<tr>
+    <td>ตั้งใจเข้า Sleep mode แต่ MCU กลับรีเซ็ตทั้งชิป (พฤติกรรมเหมือน Standby)</td>
+    <td>เผลอเรียก <code>PWR_EnterSTANDBYMode()</code> แทนที่จะเรียก <code>__WFI()</code> ตรงๆ — ฟังก์ชันนี้ตั้งบิต PDDS เสมอ ไม่มีโหมด "sleep เฉยๆ" ให้เรียกแยก</td>
+    <td>ถ้าต้องการแค่ sleep (CPU หยุดชั่วคราว, กลับมาทำงานต่อ) ให้เรียก <code>__WFI()</code>/<code>__WFE()</code> ตรงๆ โดยไม่ผ่านฟังก์ชัน PWR เลย</td>
+</tr>
+<tr>
+    <td><code>PWR_AWU_SetWindowValue()</code> ตั้งค่าแล้วดูเหมือนปลุกเร็ว/ช้ากว่าที่คำนวณ</td>
+    <td>ค่า <code>WindowValue</code> ต้องน้อยกว่า <code>0x3F</code> (63) ตามที่ระบุใน header — ค่าที่เกินจะถูกมาสก์ทิ้งบางส่วนโดย <code>AWUWR_MASK</code></td>
+    <td>ตรวจสอบว่า <code>WindowValue &lt; 0x3F</code> เสมอ และคำนวณ timeout จาก prescaler และ LSI 128kHz ให้ตรงก่อนตั้งค่า</td>
+</tr>
+</tbody>
+</table>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="opa.html">OPA →</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

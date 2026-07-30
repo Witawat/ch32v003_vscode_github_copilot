@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Peripheral API Reference — CH32V003</title>
+<link rel="stylesheet" href="css/style.css">
+<style>.hero{text-align:center;padding:3rem 0}.hero h1{font-size:2.4em}.hero p{color:#64748b;font-size:1.1em;margin:1rem 0}.stats{display:flex;gap:1.5rem;justify-content:center;flex-wrap:wrap;margin:2rem 0}.stat{text-align:center;padding:1rem 1.5rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)}.stat-num{font-size:2em;font-weight:800;color:var(--accent)}.stat-label{font-size:.85em;color:#64748b}</style>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+
+<div class="hero">
+    <h1>Peripheral API Reference</h1>
+    <p>เอกสารอ้างอิง Standard Peripheral Library (SPL) ระดับ register/struct สำหรับ CH32V003<br>ครบ 16 โมดูล อิงจากซอร์สโค้ดจริงใน <code>Peripheral/inc</code> และ <code>Peripheral/src</code></p>
+    <div class="stats">
+        <div class="stat"><div class="stat-num">16</div><div class="stat-label">โมดูล</div></div>
+        <div class="stat"><div class="stat-num">250+</div><div class="stat-label">ฟังก์ชัน</div></div>
+        <div class="stat"><div class="stat-num">ไทย</div><div class="stat-label">ภาษาไทย</div></div>
+    </div>
+</div>
+
+<div class="callout callout-note">
+    <strong>ความแตกต่างจาก SimpleHAL:</strong> เอกสารชุดนี้อธิบาย <strong>Standard Peripheral Library (SPL)</strong> ซึ่งเป็นไลบรารีระดับล่าง เข้าถึง register/struct ของ MCU โดยตรง (เช่น <code>GPIO_Init()</code>, <code>ADC_Init()</code>) — ยืดหยุ่นและควบคุมได้ละเอียดกว่า แต่ใช้ยากกว่า ถ้าต้องการ API ที่ใช้ง่ายกว่า ดู <a href="../web-simplehal-api/index.html">SimpleHAL API Reference</a> ซึ่งห่อ (wrap) SPL นี้ไว้อีกชั้น
+</div>
+
+<h2>สารบัญโมดูล</h2>
+
+<ul id="toc">
+
+<li style="border-top:2px solid var(--border);margin-top:1rem;padding-top:1rem"><span style="color:#166534;font-weight:700">Core / System</span></li>
+<li><a href="rcc.html">
+    <span class="ch-num">1 — RCC</span><span class="ch-level level-beginner">พื้นฐาน</span>
+    <span class="ch-desc">Reset and Clock Control — HSE/HSI/PLL, peripheral clock enable, RCC_GetClocksFreq</span>
+</a></li>
+<li><a href="gpio.html">
+    <span class="ch-num">2 — GPIO</span><span class="ch-level level-beginner">พื้นฐาน</span>
+    <span class="ch-desc">GPIO + AFIO remap — GPIO_Init, GPIO_ReadInputDataBit, GPIO_SetBits/ResetBits, Pin Remap</span>
+</a></li>
+<li><a href="exti.html">
+    <span class="ch-num">3 — EXTI</span><span class="ch-level level-beginner">พื้นฐาน</span>
+    <span class="ch-desc">External Interrupt Lines — EXTI_Init, Trigger Rising/Falling, ใช้คู่กับ GPIO Interrupt</span>
+</a></li>
+<li><a href="misc.html">
+    <span class="ch-num">4 — MISC (NVIC)</span><span class="ch-level level-beginner">พื้นฐาน</span>
+    <span class="ch-desc">NVIC — NVIC_PriorityGroupConfig, NVIC_Init, ตั้งลำดับความสำคัญ interrupt</span>
+</a></li>
+<li><a href="dbgmcu.html">
+    <span class="ch-num">5 — DBGMCU</span><span class="ch-level level-beginner">พื้นฐาน</span>
+    <span class="ch-desc">Debug MCU — DBGMCU_GetCHIPID/DEVID/REVID, debug behavior ใน low-power mode</span>
+</a></li>
+
+<li style="border-top:2px solid var(--border);margin-top:1rem;padding-top:1rem"><span style="color:#92400e;font-weight:700">Communication</span></li>
+<li><a href="usart.html">
+    <span class="ch-num">6 — USART</span><span class="ch-level level-intermediate">กลาง</span>
+    <span class="ch-desc">USART_Init, USART_SendData/ReceiveData, IrDA, Smart Card, Half-Duplex</span>
+</a></li>
+<li><a href="i2c.html">
+    <span class="ch-num">7 — I2C</span><span class="ch-level level-intermediate">กลาง</span>
+    <span class="ch-desc">I2C_Init, GenerateSTART/STOP, Send7bitAddress, CheckEvent, PEC</span>
+</a></li>
+<li><a href="spi.html">
+    <span class="ch-num">8 — SPI</span><span class="ch-level level-intermediate">กลาง</span>
+    <span class="ch-desc">SPI_Init, SPI_I2S_SendData/ReceiveData, NSS Software, CRC</span>
+</a></li>
+
+<li style="border-top:2px solid var(--border);margin-top:1rem;padding-top:1rem"><span style="color:#991b1b;font-weight:700">Analog / Timer</span></li>
+<li><a href="adc.html">
+    <span class="ch-num">9 — ADC</span><span class="ch-level level-advanced">สูง</span>
+    <span class="ch-desc">ADC_Init, Calibration, Regular/Injected Channel, Analog Watchdog, DMA</span>
+</a></li>
+<li><a href="opa.html">
+    <span class="ch-num">10 — OPA</span><span class="ch-level level-advanced">สูง</span>
+    <span class="ch-desc">Op-Amp/Comparator — OPA_Init, PSEL/NSEL channel select, OPA_Cmd</span>
+</a></li>
+<li><a href="tim.html">
+    <span class="ch-num">11 — TIM</span><span class="ch-level level-advanced">สูง</span>
+    <span class="ch-desc">TIM1 (advanced) / TIM2 — Time Base, PWM/Output Compare, Input Capture, Encoder, Dead-Time</span>
+</a></li>
+<li><a href="dma.html">
+    <span class="ch-num">12 — DMA</span><span class="ch-level level-advanced">สูง</span>
+    <span class="ch-desc">DMA_Init, Memory-to-Memory, Circular Mode, ผูก channel ตายตัวกับ peripheral</span>
+</a></li>
+
+<li style="border-top:2px solid var(--border);margin-top:1rem;padding-top:1rem"><span style="color:#3730a3;font-weight:700">Power / Safety</span></li>
+<li><a href="flash.html">
+    <span class="ch-num">13 — FLASH</span><span class="ch-level level-expert">ผู้เชี่ยวชาญ</span>
+    <span class="ch-desc">Flash Erase/Program, Option Bytes, Fast Program (CH32V003 extension)</span>
+</a></li>
+<li><a href="pwr.html">
+    <span class="ch-num">14 — PWR</span><span class="ch-level level-expert">ผู้เชี่ยวชาญ</span>
+    <span class="ch-desc">PWR_EnterSTANDBYMode, PVD, Auto Wake-Up (AWU), WFI/WFE Sleep</span>
+</a></li>
+<li><a href="iwdg.html">
+    <span class="ch-num">15 — IWDG</span><span class="ch-level level-expert">ผู้เชี่ยวชาญ</span>
+    <span class="ch-desc">Independent Watchdog — IWDG_SetReload, IWDG_ReloadCounter, IWDG_Enable</span>
+</a></li>
+<li><a href="wwdg.html">
+    <span class="ch-num">16 — WWDG</span><span class="ch-level level-expert">ผู้เชี่ยวชาญ</span>
+    <span class="ch-desc">Window Watchdog — WWDG_SetWindowValue, WWDG_SetCounter, WWDG_EnableIT</span>
+</a></li>
+
+</ul>
+
+<div class="callout callout-note" style="margin-top:2rem">
+    <strong>วิธีอ่าน:</strong> เริ่มจาก <a href="rcc.html">RCC</a> และ <a href="gpio.html">GPIO</a> ก่อน เพราะทุกโมดูลต้องเปิด peripheral clock ผ่าน RCC ก่อนใช้งาน จากนั้นเลือกโมดูลตามลำดับหมวดหมู่ที่ต้องการใช้งาน
+</div>
+
+<div class="callout callout-warn">
+    <strong>ข้อควรระวัง:</strong> ก่อนเรียกฟังก์ชันของ peripheral ใดๆ ต้องเปิด clock ให้ peripheral นั้นก่อนเสมอ ผ่าน <code>RCC_APB2PeriphClockCmd()</code> / <code>RCC_APB1PeriphClockCmd()</code> / <code>RCC_AHBPeriphClockCmd()</code> ตามบัสที่ peripheral นั้นสังกัด — ไม่เช่นนั้น register จะไม่ตอบสนอง (อ่านค่าเป็น 0 หรือค้าง) ดูรายละเอียดที่หน้า <a href="rcc.html">RCC</a>
+</div>
+
+<p style="text-align:center;margin:3rem 0;color:#94a3b8;font-size:0.85em">
+    CH32V003 Standard Peripheral Library — MIT License
+</p>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:false,theme:'base'});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script></body>
+</html>

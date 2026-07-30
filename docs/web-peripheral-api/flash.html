@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FLASH — การเขียน/ลบ/อ่านหน่วยความจำแฟลช — Peripheral API Reference</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="dbgmcu.html">DBGMCU →</a>
+</nav>
+
+<h1>FLASH — การเขียน/ลบ/อ่านหน่วยความจำแฟลช</h1>
+<span class="level level-advanced">ระดับสูง</span>
+
+<div class="callout callout-note">
+    <strong>ไลบรารี:</strong> <code>#include &lt;ch32v00x_flash.h&gt;</code> — นี่คือ <strong>Standard Peripheral Library (SPL)</strong> ระดับล่างที่เข้าถึง FPEC (Flash Program/Erase Controller) โดยตรง ต้องเข้าใจโครงสร้าง register และลำดับการเรียกให้ถูกต้องเอง ไม่มีการตรวจสอบ error ให้อัตโนมัติเหมือน wrapper
+</div>
+
+<div class="callout callout-note">
+    ถ้าต้องการใช้งานง่ายกว่านี้ (บันทึก config พร้อม CRC16, auto-erase, ไม่ต้องยุ่งกับ register) ดู <a href="../web-simplehal-api/flash.html">SimpleFlash</a> ซึ่งเป็น wrapper ที่สร้างขึ้นบน SPL นี้อีกที
+</div>
+
+<div class="callout callout-err">
+    <strong>คำเตือน:</strong> การเขียน/ลบ Flash เป็นการ<strong>ทำลายข้อมูลเดิม</strong>และ<strong>จำกัดจำนวนรอบ</strong> (wear-limited ~10,000-100,000 รอบต่อหน้า) ทุกฟังก์ชันที่แก้ไข Flash (ยกเว้นฟังก์ชันอ่าน) ต้องเรียก <code>FLASH_Unlock()</code> ก่อนเสมอ และต้อง <code>FLASH_Lock()</code> กลับหลังใช้งานเสร็จ — address ที่ใช้ต้องตรง<strong>alignment</strong>ตามที่แต่ละฟังก์ชันกำหนด (2 หรือ 4 ไบต์) มิฉะนั้นข้อมูลจะเสียหายหรือ hard fault
+</div>
+
+<section class="flowchart">
+<h2>ผังการทำงานพื้นฐาน (Erase → Program → Lock)</h2>
+<pre class="mermaid">
+flowchart LR
+    UL["FLASH_Unlock()"] --> ER["FLASH_ErasePage()"]
+    ER --> ST1{"status ==<br/>FLASH_COMPLETE?"}
+    ST1 -- ใช่ --> PG["FLASH_ProgramWord()<br/>/ProgramHalfWord()"]
+    ST1 -- ไม่ --> ERR1["จัดการ error"]
+    PG --> ST2{"status ==<br/>FLASH_COMPLETE?"}
+    ST2 -- ใช่ --> LK["FLASH_Lock()"]
+    ST2 -- ไม่ --> ERR2["จัดการ error"]
+</pre>
+</section>
+
+<section>
+<h2>FLASH_Status — ค่าสถานะที่ฟังก์ชันส่วนใหญ่คืนกลับ</h2>
+<table>
+<thead><tr><th>ค่า</th><th>ความหมาย</th></tr></thead>
+<tbody>
+<tr><td><code>FLASH_BUSY</code></td><td>FPEC กำลังทำงานอยู่ (ค่า 1)</td></tr>
+<tr><td><code>FLASH_ERROR_PG</code></td><td>ข้อผิดพลาดระหว่างการโปรแกรม (program)</td></tr>
+<tr><td><code>FLASH_ERROR_WRP</code></td><td>ถูก write-protect กันไว้ — เขียน/ลบไม่ได้</td></tr>
+<tr><td><code>FLASH_COMPLETE</code></td><td>ทำงานสำเร็จ — ค่าที่ต้องเช็คว่าเท่ากับนี้ก่อนทำขั้นถัดไป</td></tr>
+<tr><td><code>FLASH_TIMEOUT</code></td><td>รอเกินเวลาที่กำหนด (timeout) — FPEC ไม่ตอบสนอง</td></tr>
+<tr><td><code>FLASH_OP_RANGE_ERROR</code> (0xFD)</td><td>ช่วงการทำงาน (StartAddr+Length) เกินพื้นที่ที่อนุญาต — เฉพาะ <code>FLASH_ROM_ERASE</code>/<code>FLASH_ROM_WRITE</code></td></tr>
+<tr><td><code>FLASH_ALIGN_ERROR</code> (0xFE)</td><td>Address หรือ Length ไม่ align กับขนาด 64 ไบต์ — เฉพาะ <code>FLASH_ROM_ERASE</code>/<code>FLASH_ROM_WRITE</code></td></tr>
+<tr><td><code>FLASH_ADR_RANGE_ERROR</code> (0xFF)</td><td>Address เริ่มต้นอยู่นอกช่วง Flash ที่โปรแกรมได้ — เฉพาะ <code>FLASH_ROM_ERASE</code>/<code>FLASH_ROM_WRITE</code></td></tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>ค่าคงที่หลัก (#define)</h2>
+
+<h3>FLASH_Latency — จำนวนรอบสัญญาณนาฬิกาหน่วงของ Flash</h3>
+<table>
+<thead><tr><th>ค่าคงที่</th><th>ความหมาย</th></tr></thead>
+<tbody>
+<tr><td><code>FLASH_Latency_0</code></td><td>ไม่หน่วง (ใช้กับความถี่ต่ำ)</td></tr>
+<tr><td><code>FLASH_Latency_1</code></td><td>หน่วง 1 รอบ</td></tr>
+<tr><td><code>FLASH_Latency_2</code></td><td>หน่วง 2 รอบ (ใช้เมื่อ system clock สูง)</td></tr>
+</tbody>
+</table>
+
+<h3>FLASH_WRProt_Pages* — เลือกกลุ่มหน้าที่จะ write-protect (1 หน้า = 64 ไบต์)</h3>
+<table>
+<thead><tr><th>ค่าคงที่</th><th>ความหมาย</th></tr></thead>
+<tbody>
+<tr><td><code>FLASH_WRProt_Pages0to15</code> … <code>FLASH_WRProt_Pages240to255</code></td><td>บิตละ 16 หน้า รวม 16 บิต ครอบคลุมหน้า 0-255 — ใช้ OR รวมกันได้หลายกลุ่ม</td></tr>
+<tr><td><code>FLASH_WRProt_AllPages</code></td><td>เลือกป้องกันทุกหน้า (0x0000FFFF)</td></tr>
+</tbody>
+</table>
+
+<h3>Option Bytes — ตัวเลือกที่เก็บถาวรใน Flash แยกจากพื้นที่โปรแกรม</h3>
+<table>
+<thead><tr><th>กลุ่ม</th><th>ค่าคงที่</th><th>ความหมาย</th></tr></thead>
+<tbody>
+<tr><td rowspan="2">Independent Watchdog</td><td><code>OB_IWDG_SW</code></td><td>ควบคุม IWDG ด้วยซอฟต์แวร์ (เปิด/ปิดเองในโค้ด)</td></tr>
+<tr><td><code>OB_IWDG_HW</code></td><td>IWDG เปิดทำงานอัตโนมัติโดยฮาร์ดแวร์ตั้งแต่ startup</td></tr>
+<tr><td rowspan="2">STOP mode reset</td><td><code>OB_STOP_NoRST</code></td><td>ไม่รีเซ็ตเมื่อเข้าโหมด STOP</td></tr>
+<tr><td><code>OB_STOP_RST</code></td><td>รีเซ็ตเมื่อเข้าโหมด STOP</td></tr>
+<tr><td rowspan="2">STANDBY reset</td><td><code>OB_STDBY_NoRST</code></td><td>ไม่รีเซ็ตเมื่อเข้าโหมด STANDBY</td></tr>
+<tr><td><code>OB_STDBY_RST</code></td><td>รีเซ็ตเมื่อเข้าโหมด STANDBY</td></tr>
+<tr><td rowspan="4">ขา RESET (PD7)</td><td><code>OB_RST_NoEN</code></td><td>ปิดใช้งานขา RESET — PD7 ใช้เป็น GPIO ปกติได้</td></tr>
+<tr><td><code>OB_RST_EN_DT12ms</code></td><td>เปิดขา RESET หน่วงเวลา 12ms</td></tr>
+<tr><td><code>OB_RST_EN_DT1ms</code></td><td>เปิดขา RESET หน่วงเวลา 1ms</td></tr>
+<tr><td><code>OB_RST_EN_DT128us</code></td><td>เปิดขา RESET หน่วงเวลา 128µs</td></tr>
+<tr><td rowspan="2">โหมดเริ่มต้นหลังจ่ายไฟ</td><td><code>OB_PowerON_Start_Mode_BOOT</code></td><td>เริ่มจาก Bootloader หลัง power-on</td></tr>
+<tr><td><code>OB_PowerON_Start_Mode_USER</code></td><td>เริ่มจากโปรแกรมผู้ใช้หลัง power-on</td></tr>
+</tbody>
+</table>
+
+<h3>Flags / Interrupts / Start Mode</h3>
+<table>
+<thead><tr><th>ค่าคงที่</th><th>ความหมาย</th></tr></thead>
+<tbody>
+<tr><td><code>FLASH_IT_ERROR</code></td><td>เปิด/ปิด interrupt เมื่อเกิดข้อผิดพลาด FPEC</td></tr>
+<tr><td><code>FLASH_IT_EOP</code></td><td>เปิด/ปิด interrupt เมื่อการทำงานเสร็จสิ้น (End Of Operation)</td></tr>
+<tr><td><code>FLASH_FLAG_BSY</code></td><td>Flag แสดงว่า FPEC กำลังทำงาน (busy)</td></tr>
+<tr><td><code>FLASH_FLAG_EOP</code></td><td>Flag แสดงว่าการทำงานเสร็จสิ้นแล้ว</td></tr>
+<tr><td><code>FLASH_FLAG_WRPRTERR</code></td><td>Flag แสดงว่าเขียน/ลบพื้นที่ที่ถูก write-protect</td></tr>
+<tr><td><code>FLASH_FLAG_OPTERR</code></td><td>Flag แสดง option byte error</td></tr>
+<tr><td><code>Start_Mode_USER</code> / <code>Start_Mode_BOOT</code></td><td>ใช้กับ <code>SystemReset_StartMode()</code> เลือกโหมดเริ่มทำงานหลัง reset ครั้งถัดไป</td></tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>ตารางอ้างอิงฟังก์ชัน</h2>
+
+<h3>1. Unlock / Lock</h3>
+<table>
+<thead><tr><th>ฟังก์ชัน</th><th>พารามิเตอร์</th><th>คืนค่า</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>FLASH_Unlock(void)</code></td><td>—</td><td><code>void</code></td><td>ปลดล็อก FPEC มาตรฐาน (เขียน key sequence ลง <code>FLASH-&gt;KEYR</code>) ต้องเรียกก่อน erase/program ทุกครั้ง</td></tr>
+<tr><td><code>FLASH_Lock(void)</code></td><td>—</td><td><code>void</code></td><td>ล็อก FPEC กลับ — ตั้งบิต LOCK ใน <code>FLASH-&gt;CTLR</code></td></tr>
+<tr><td><code>FLASH_Unlock_Fast(void)</code></td><td>—</td><td><code>void</code></td><td>ปลดล็อกทั้ง FPEC มาตรฐาน<em>และ</em>โหมด Fast Program/Erase (เขียน key ลง <code>KEYR</code> และ <code>MODEKEYR</code>)</td></tr>
+<tr><td><code>FLASH_Lock_Fast(void)</code></td><td>—</td><td><code>void</code></td><td>ล็อกเฉพาะโหมด Fast Program/Erase (ตั้งบิต FLOCK)</td></tr>
+</tbody>
+</table>
+
+<h3>2. Erase (มาตรฐาน)</h3>
+<table>
+<thead><tr><th>ฟังก์ชัน</th><th>พารามิเตอร์</th><th>คืนค่า</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>FLASH_ErasePage(Page_Address)</code></td><td><code>Page_Address</code>: address เริ่มต้นของหน้า (1 หน้า = 1KB)</td><td><code>FLASH_Status</code></td><td>ลบ 1 หน้า (1KB) ให้เป็น <code>0xFF</code> ทั้งหมด</td></tr>
+<tr><td><code>FLASH_EraseAllPages(void)</code></td><td>—</td><td><code>FLASH_Status</code></td><td>ลบทั้งชิป (mass erase) — ลบโค้ดโปรแกรมทั้งหมดด้วย</td></tr>
+<tr><td><code>FLASH_EraseOptionBytes(void)</code></td><td>—</td><td><code>FLASH_Status</code></td><td>ลบ option bytes ทั้งหมด (คืนค่า default) — ใช้ <code>OBKEYR</code> ปลดล็อกแยกต่างหาก</td></tr>
+</tbody>
+</table>
+
+<h3>3. Program (มาตรฐาน)</h3>
+<table>
+<thead><tr><th>ฟังก์ชัน</th><th>พารามิเตอร์</th><th>คืนค่า</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>FLASH_ProgramWord(Address, Data)</code></td><td><code>Address</code>: address ปลายทาง (align 4 ไบต์)<br><code>Data</code>: ค่า 32-bit</td><td><code>FLASH_Status</code></td><td>เขียน 1 word (4 ไบต์) โดยเขียนเป็น 2 half-word ภายใน — พื้นที่ต้องถูก erase (=0xFF) มาก่อน</td></tr>
+<tr><td><code>FLASH_ProgramHalfWord(Address, Data)</code></td><td><code>Address</code>: address ปลายทาง (align 2 ไบต์)<br><code>Data</code>: ค่า 16-bit</td><td><code>FLASH_Status</code></td><td>เขียน 1 half-word (2 ไบต์) — ฟังก์ชันโปรแกรมพื้นฐานที่สุด</td></tr>
+</tbody>
+</table>
+
+<h3>4. Option Bytes / Protection / Status</h3>
+<table>
+<thead><tr><th>ฟังก์ชัน</th><th>พารามิเตอร์</th><th>คืนค่า</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>FLASH_ProgramOptionByteData(Address, Data)</code></td><td><code>Address</code>: address ของ option byte<br><code>Data</code>: ค่า 8-bit</td><td><code>FLASH_Status</code></td><td>เขียนค่าลง option byte data ตำแหน่งที่ระบุ</td></tr>
+<tr><td><code>FLASH_EnableWriteProtection(FLASH_Pages)</code></td><td><code>FLASH_Pages</code>: OR ของ <code>FLASH_WRProt_Pages*</code></td><td><code>FLASH_Status</code></td><td>ตั้งค่า write-protect ให้กลุ่มหน้าที่ระบุ — ต้อง power-cycle เพื่อให้มีผล</td></tr>
+<tr><td><code>FLASH_ReadOutProtection(NewState)</code></td><td><code>NewState</code>: <code>ENABLE</code>/<code>DISABLE</code></td><td><code>FLASH_Status</code></td><td>เปิด/ปิดการป้องกันอ่านทั้งชิป (readout protection) — เปิดแล้วจะ<strong>ลบทั้งชิป</strong>ตอนปิดกลับ</td></tr>
+<tr><td><code>FLASH_UserOptionByteConfig(OB_IWDG, OB_STDBY, OB_RST, OB_PowerON_Start_Mode)</code></td><td>ค่าคงที่ <code>OB_*</code> ทั้ง 4 กลุ่มด้านบน</td><td><code>FLASH_Status</code></td><td>ตั้งค่า user option byte ทั้งหมดในครั้งเดียว</td></tr>
+<tr><td><code>FLASH_GetUserOptionByte(void)</code></td><td>—</td><td><code>uint32_t</code></td><td>อ่านค่า user option byte ปัจจุบัน (IWDG_SW=bit0, RST_STOP=bit1, RST_STDBY=bit2)</td></tr>
+<tr><td><code>FLASH_GetWriteProtectionOptionByte(void)</code></td><td>—</td><td><code>uint32_t</code></td><td>อ่านค่า write-protection option byte register ปัจจุบัน</td></tr>
+<tr><td><code>FLASH_GetReadOutProtectionStatus(void)</code></td><td>—</td><td><code>FlagStatus</code></td><td>ตรวจสอบว่าเปิด readout protection อยู่หรือไม่</td></tr>
+<tr><td><code>FLASH_ITConfig(FLASH_IT, NewState)</code></td><td><code>FLASH_IT</code>: <code>FLASH_IT_ERROR</code>/<code>FLASH_IT_EOP</code><br><code>NewState</code>: <code>ENABLE</code>/<code>DISABLE</code></td><td><code>void</code></td><td>เปิด/ปิด interrupt ของ FPEC</td></tr>
+<tr><td><code>FLASH_GetFlagStatus(FLASH_FLAG)</code></td><td><code>FLASH_FLAG</code>: ค่า <code>FLASH_FLAG_*</code></td><td><code>FlagStatus</code></td><td>ตรวจสอบ flag ที่ระบุว่า SET หรือ RESET</td></tr>
+<tr><td><code>FLASH_ClearFlag(FLASH_FLAG)</code></td><td><code>FLASH_FLAG</code>: ค่า <code>FLASH_FLAG_*</code></td><td><code>void</code></td><td>เคลียร์ flag ที่ค้างอยู่ (เขียน 1 เพื่อล้าง)</td></tr>
+<tr><td><code>FLASH_GetStatus(void)</code></td><td>—</td><td><code>FLASH_Status</code></td><td>อ่านสถานะ FPEC ปัจจุบัน (BUSY/ERROR_WRP/COMPLETE) จากการอ่าน register โดยตรง ไม่รอ</td></tr>
+<tr><td><code>FLASH_WaitForLastOperation(Timeout)</code></td><td><code>Timeout</code>: จำนวนรอบสูงสุดที่จะรอ</td><td><code>FLASH_Status</code></td><td>วนรออ่านสถานะจนกว่าจะไม่ busy หรือครบ timeout — ฟังก์ชัน erase/program ภายในเรียกใช้ตัวนี้ก่อนเริ่มงานเสมอ</td></tr>
+<tr><td><code>FLASH_SetLatency(FLASH_Latency)</code></td><td><code>FLASH_Latency</code>: <code>FLASH_Latency_0/1/2</code></td><td><code>void</code></td><td>ตั้งค่ารอบหน่วงของการอ่าน Flash ให้เหมาะกับความถี่ system clock ที่ใช้งาน</td></tr>
+</tbody>
+</table>
+
+<h3>5. Fast Program/Erase (เฉพาะตระกูล CH32V003) และ CRC/ROM helper</h3>
+<div class="callout callout-warn">
+    กลุ่มฟังก์ชัน <strong>Fast Program/Erase</strong> (ลงท้าย <code>_Fast</code>) และ <code>FLASH_ROM_ERASE</code>/<code>FLASH_ROM_WRITE</code> เป็นชุดคำสั่งเฉพาะของ CH32V00x ที่เข้าถึง buffer ภายใน FPEC โดยตรง เพื่อเขียนทีละหน้า (64 ไบต์) เร็วกว่าการเขียนทีละ word — <strong>ไม่คืนค่า FLASH_Status ตรวจสอบ error</strong> (ยกเว้น ROM_ERASE/ROM_WRITE) ต้องเรียกตามลำดับที่กำหนดอย่างเคร่งครัด
+</div>
+<table>
+<thead><tr><th>ฟังก์ชัน</th><th>พารามิเตอร์</th><th>คืนค่า</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>FLASH_BufReset(void)</code></td><td>—</td><td><code>void</code></td><td>ล้างบัฟเฟอร์ page-program ภายใน FPEC ก่อนโหลดข้อมูลชุดใหม่</td></tr>
+<tr><td><code>FLASH_BufLoad(Address, Data0)</code></td><td><code>Address</code>: address ปลายทาง (ต้องอยู่ในช่วง flash ที่ถูกต้อง)<br><code>Data0</code>: ค่า 32-bit</td><td><code>void</code></td><td>โหลดข้อมูล 4 ไบต์เข้าบัฟเฟอร์ภายใน — เรียกซ้ำสะสมทีละ word จนครบ 1 หน้า (16 ครั้ง = 64 ไบต์) ก่อนเรียก <code>FLASH_ProgramPage_Fast</code></td></tr>
+<tr><td><code>FLASH_ErasePage_Fast(Page_Address)</code></td><td><code>Page_Address</code>: address เริ่มหน้า (1 หน้า = 64 ไบต์)</td><td><code>void</code></td><td>ลบ 1 หน้าแบบเร็ว (64 ไบต์/หน้า ต่างจาก <code>FLASH_ErasePage</code> ที่ลบทีละ 1KB)</td></tr>
+<tr><td><code>FLASH_ProgramPage_Fast(Page_Address)</code></td><td><code>Page_Address</code>: address เริ่มหน้าที่จะเขียนจริง</td><td><code>void</code></td><td>เขียนข้อมูลที่โหลดไว้ด้วย <code>FLASH_BufLoad</code> ลงหน้า Flash จริงในครั้งเดียว</td></tr>
+<tr><td><code>SystemReset_StartMode(Mode)</code></td><td><code>Mode</code>: <code>Start_Mode_USER</code>/<code>Start_Mode_BOOT</code></td><td><code>void</code></td><td>ตั้งค่าโหมดเริ่มทำงานสำหรับการ reset ครั้งถัดไป (unlock → set → lock ให้ภายในฟังก์ชันแล้ว)</td></tr>
+<tr><td><code>FLASH_ROM_ERASE(StartAddr, Length)</code></td><td><code>StartAddr</code>: address เริ่มต้น (ต้องหาร 64 ลงตัว)<br><code>Length</code>: ความยาวไบต์ (ต้องหาร 64 ลงตัว)</td><td><code>FLASH_Status</code></td><td>ลบช่วง Flash ตามความยาวที่ระบุ โดยเลือกใช้ erase แบบ 1KB หรือ 64B อัตโนมัติให้เหมาะกับ alignment — unlock/lock (รวม Fast lock) ให้ภายในฟังก์ชันแล้ว</td></tr>
+<tr><td><code>FLASH_ROM_WRITE(StartAddr, pbuf, Length)</code></td><td><code>StartAddr</code>: address เริ่มต้น (หาร 64 ลงตัว)<br><code>pbuf</code>: pointer ข้อมูล 32-bit<br><code>Length</code>: ความยาวไบต์ (หาร 64 ลงตัว)</td><td><code>FLASH_Status</code></td><td>เขียนข้อมูลทีละหน้า (64 ไบต์) โดยใช้ buffer-load ภายใน — พื้นที่ต้องถูก erase มาก่อน (ฟังก์ชันนี้ไม่ erase ให้)</td></tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>กลุ่มฟังก์ชันที่ใช้ร่วมกัน</h2>
+
+<h3>1. Unlock → ErasePage → ProgramWord → Lock (มาตรฐาน)</h3>
+<pre><code class="language-c">#include &lt;ch32v00x.h&gt;
+
+#define TARGET_PAGE   0x08003C00   // หน้าสุดท้ายก่อน option bytes (ตัวอย่าง)
+
+FLASH_Status status;
+
+FLASH_Unlock();
+
+status = FLASH_ErasePage(TARGET_PAGE);
+if (status != FLASH_COMPLETE) {
+    // จัดการ error: BUSY / ERROR_WRP / TIMEOUT
+    FLASH_Lock();
+    return;
+}
+
+status = FLASH_ProgramWord(TARGET_PAGE, 0x12345678);
+if (status != FLASH_COMPLETE) {
+    FLASH_Lock();
+    return;
+}
+
+FLASH_Lock();   // ล็อกกลับทุกครั้งหลังใช้งานเสร็จ</code></pre>
+<p>ลำดับมาตรฐาน: <code>Unlock</code> → เช็ค busy/erase/program ทีละขั้น → <code>Lock</code> เสมอ ไม่ว่าจะสำเร็จหรือ error</p>
+
+<h3>2. เขียนหลาย word ต่อเนื่องในหน้าเดียวกัน</h3>
+<pre><code class="language-c">FLASH_Unlock();
+FLASH_ErasePage(TARGET_PAGE);
+
+for (uint32_t i = 0; i < 16; i++) {
+    FLASH_Status s = FLASH_ProgramWord(TARGET_PAGE + i * 4, data_array[i]);
+    if (s != FLASH_COMPLETE) break;   // หยุดทันทีถ้าเขียนล้มเหลว
+}
+
+FLASH_Lock();</code></pre>
+<p>เขียนทีละ word ต่อเนื่อง 16 ตัว (รวม 64 ไบต์ = 1 หน้า) — ต้อง erase หน้าเดียวครั้งเดียวก่อนเริ่ม ไม่ใช่ erase ซ้ำระหว่าง loop</p>
+
+<h3>3. Fast Program/Erase — เขียนทีละหน้าแบบเร็ว</h3>
+<pre><code class="language-c">FLASH_Unlock_Fast();
+
+FLASH_ErasePage_Fast(TARGET_PAGE);
+
+FLASH_BufReset();
+for (uint32_t i = 0; i < 16; i++) {
+    FLASH_BufLoad(TARGET_PAGE + i * 4, data_array[i]);
+}
+FLASH_ProgramPage_Fast(TARGET_PAGE);
+
+FLASH_Lock_Fast();
+FLASH_Lock();</code></pre>
+<p>โหมด Fast ต้องปลดล็อก 2 ชั้น (<code>Unlock_Fast</code> ปลดทั้ง KEYR และ MODEKEYR) และล็อกกลับทั้ง <code>Lock_Fast</code> และ <code>Lock</code> มาตรฐาน</p>
+
+<h3>4. ตรวจสอบ write-protection ก่อนเขียนจริง</h3>
+<pre><code class="language-c">FLASH_Unlock();
+
+if (FLASH_GetFlagStatus(FLASH_FLAG_WRPRTERR) == SET) {
+    FLASH_ClearFlag(FLASH_FLAG_WRPRTERR);
+}
+
+FLASH_Status status = FLASH_WaitForLastOperation(0x00002000);
+if (status == FLASH_COMPLETE) {
+    FLASH_ProgramHalfWord(TARGET_PAGE, 0xABCD);
+}
+
+FLASH_Lock();</code></pre>
+<p>เคลียร์ flag ค้างก่อน แล้วรอด้วย <code>FLASH_WaitForLastOperation</code> เพื่อให้แน่ใจว่า FPEC ว่างก่อนเขียนจริง</p>
+</section>
+
+<section>
+<h2>ปัญหาที่พบบ่อย</h2>
+<table>
+<thead><tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr></thead>
+<tbody>
+<tr>
+    <td>เขียนค่าแล้วอ่านกลับมาไม่ตรง (bit ไม่เปลี่ยนจาก 0 เป็น 1)</td>
+    <td>Flash เขียนได้ทิศทางเดียว: 1→0 เท่านั้น การ<strong>ลบ (erase)</strong> คือการตั้งทุกบิตกลับเป็น 1 — จะ program 0→1 โดยไม่ erase ก่อนไม่ได้</td>
+    <td>เรียก <code>FLASH_ErasePage()</code> ให้พื้นที่กลับเป็น <code>0xFF</code> ทั้งหมดก่อน แล้วค่อย <code>FLASH_ProgramWord()</code>/<code>ProgramHalfWord()</code></td>
+</tr>
+<tr>
+    <td>เขียน/ลบไม่สำเร็จ หรือได้ผลลัพธ์ไม่แน่นอน (undefined)</td>
+    <td>เรียก erase/program ซ้อนกันขณะที่ FPEC ยัง busy จากคำสั่งก่อนหน้า — ฟังก์ชัน erase/program ภายในมีการรอ (<code>FLASH_WaitForLastOperation</code>) อยู่แล้ว แต่ถ้าไปเขียน register ตรงๆ หรือ interrupt แทรกกลางคัน อาจข้ามการเช็คนี้ได้</td>
+    <td>เช็ค <code>FLASH_GetBank1Status()</code>/<code>FLASH_GetStatus()</code> ว่าไม่ใช่ <code>FLASH_BUSY</code> ก่อนเรียกคำสั่งถัดไปเสมอ และห้าม disable การรอ timeout</td>
+</tr>
+<tr>
+    <td>โปรแกรมอื่นเขียนทับ Flash โดยไม่ตั้งใจหลัง flash ทำงานเสร็จ</td>
+    <td>ลืมเรียก <code>FLASH_Lock()</code> หลังใช้งานเสร็จ — FPEC จะค้างอยู่ในสถานะปลดล็อก ทำให้โค้ดส่วนอื่น (หรือบั๊ก pointer) เขียนทับ Flash โดยไม่ได้ตั้งใจ</td>
+    <td>เรียก <code>FLASH_Lock()</code> ทุกครั้งหลัง erase/program เสร็จ ไม่ว่าผลลัพธ์จะสำเร็จหรือ error ก็ตาม (ใส่ใน path error ด้วย)</td>
+</tr>
+<tr>
+    <td>เขียนข้อมูลผิดตำแหน่งหรือ hard fault</td>
+    <td>Address ไม่ตรง alignment ที่ฟังก์ชันต้องการ — <code>FLASH_ProgramWord</code> ต้อง align 4 ไบต์, <code>FLASH_ProgramHalfWord</code> ต้อง align 2 ไบต์, ส่วน <code>FLASH_ROM_ERASE</code>/<code>FLASH_ROM_WRITE</code> ต้องหาร 64 ลงตัวทั้ง address และ length</td>
+    <td>ตรวจสอบ <code>address % 4 == 0</code> (word) หรือ <code>% 2 == 0</code> (half-word) ก่อนเรียกเสมอ — ฟังก์ชัน ROM_* จะคืน <code>FLASH_ALIGN_ERROR</code> ให้เองถ้าไม่ตรง</td>
+</tr>
+<tr>
+    <td>เผลอเรียก <code>FLASH_EraseAllPages()</code> แล้วโปรแกรมหาย</td>
+    <td>ฟังก์ชันนี้ mass-erase ทั้งชิปรวมถึง sector ที่เก็บโค้ดโปรแกรมด้วย ไม่ใช่แค่ข้อมูล</td>
+    <td>ใช้ <code>FLASH_ErasePage()</code> เฉพาะหน้าที่ต้องการแทน สงวน <code>EraseAllPages</code> ไว้สำหรับ factory-reset/bootloader เท่านั้น และกันพื้นที่โปรแกรมด้วย linker script</td>
+</tr>
+</tbody>
+</table>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="dbgmcu.html">DBGMCU →</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

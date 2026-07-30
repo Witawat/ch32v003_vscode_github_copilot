@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ADC — Analog-to-Digital Converter — Peripheral API Reference</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="dma.html">DMA →</a>
+</nav>
+
+<h1>ADC — Analog-to-Digital Converter</h1>
+<span class="level level-advanced">ระดับขั้นสูง (Raw SPL)</span>
+
+<div class="callout callout-note">
+    <strong>Header:</strong> <code>#include "ch32v00x_adc.h"</code> — นี่คือ Standard Peripheral Library (SPL) ระดับล่าง ทำงานผ่าน struct <code>ADC_InitTypeDef</code> และเขียนตรงไปยังเรจิสเตอร์ฮาร์ดแวร์ <strong>ไม่มี</strong> การช่วยเหลือแบบ lazy-init, ไม่มี compile-time validation ของ pin เหมือน SimpleHAL — ผู้ใช้ต้องตั้งค่า RCC clock, GPIO analog mode, calibration และลำดับการเปิดใช้งานเองทั้งหมด
+</div>
+
+<div class="callout callout-good">
+    <strong>อยากได้อะไรที่ง่ายกว่านี้?</strong> ถ้าต้องการแค่ <code>analogRead(pin)</code> แบบไม่ต้องยุ่งกับเรจิสเตอร์ ดูที่ <a href="../web-simplehal-api/adc.html">SimpleADC</a> แทน — หน้านี้เหมาะสำหรับกรณีที่ต้องการควบคุมละเอียด เช่น DMA scan หลายช่อง, injected channel, analog watchdog, หรือปรับแต่ง sample time เอง
+</div>
+
+<section class="flowchart">
+    <h2>ผังการทำงาน ADC (Raw SPL)</h2>
+    <pre class="mermaid">
+flowchart TD
+    A["RCC_APB2PeriphClockCmd(ADC1, ENABLE)"] --> B["RCC_ADCCLKConfig(prescaler)"]
+    B --> C["GPIO เป็น GPIO_Mode_AIN"]
+    C --> D["ADC_Init(ADC1, &ADC_InitStructure)"]
+    D --> E["ADC_RegularChannelConfig(...)"]
+    E --> F["ADC_Cmd(ADC1, ENABLE)"]
+    F --> G["ADC_ResetCalibration + รอสถานะ"]
+    G --> H["ADC_StartCalibration + รอสถานะ"]
+    H --> I["ADC_SoftwareStartConvCmd(ADC1, ENABLE)"]
+    I --> J{"ใช้ DMA?"}
+    J -- ไม่ --> K["poll ADC_FLAG_EOC → ADC_GetConversionValue()"]
+    J -- ใช่ --> L["ADC_DMACmd(ADC1, ENABLE) + ตั้งค่า DMA channel"]
+    </pre>
+</section>
+
+<section>
+<h2>โครงสร้าง ADC_InitTypeDef</h2>
+<table>
+<thead><tr><th>สมาชิก</th><th>ชนิด</th><th>ค่าที่เป็นไปได้</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>ADC_Mode</code></td><td><code>uint32_t</code></td><td><code>ADC_Mode_Independent</code></td><td>โหมดการทำงาน — CH32V003 มี ADC ตัวเดียวจึงมีค่าเดียว (independent)</td></tr>
+<tr><td><code>ADC_ScanConvMode</code></td><td><code>FunctionalState</code></td><td><code>ENABLE</code> / <code>DISABLE</code></td><td>สแกนหลายช่องตามลำดับ (ต้องเปิดถ้าจะแปลงมากกว่า 1 ช่อง)</td></tr>
+<tr><td><code>ADC_ContinuousConvMode</code></td><td><code>FunctionalState</code></td><td><code>ENABLE</code> / <code>DISABLE</code></td><td>แปลงต่อเนื่องอัตโนมัติ vs แปลงครั้งเดียวแล้วหยุด</td></tr>
+<tr><td><code>ADC_ExternalTrigConv</code></td><td><code>uint32_t</code></td><td>ดูตาราง ADC_external_trigger ด้านล่าง</td><td>แหล่งทริกเกอร์เริ่มแปลงช่อง regular</td></tr>
+<tr><td><code>ADC_DataAlign</code></td><td><code>uint32_t</code></td><td><code>ADC_DataAlign_Right</code> / <code>ADC_DataAlign_Left</code></td><td>จัดเรียงบิตผลลัพธ์ 10-bit ชิดซ้ายหรือขวาใน 16-bit</td></tr>
+<tr><td><code>ADC_NbrOfChannel</code></td><td><code>uint8_t</code></td><td>1–16</td><td>จำนวนช่องในลำดับ (sequence) ของ regular group</td></tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>ค่าคงที่และ Enum หลัก</h2>
+
+<h3>ADC_external_trigger_sources_for_regular_channels_conversion</h3>
+<table>
+<thead><tr><th>ค่าคงที่</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>ADC_ExternalTrigConv_T1_TRGO</code></td><td>ทริกเกอร์จาก Timer1 TRGO</td></tr>
+<tr><td><code>ADC_ExternalTrigConv_T1_CC1</code></td><td>ทริกเกอร์จาก Timer1 Capture/Compare1</td></tr>
+<tr><td><code>ADC_ExternalTrigConv_T1_CC2</code></td><td>ทริกเกอร์จาก Timer1 Capture/Compare2</td></tr>
+<tr><td><code>ADC_ExternalTrigConv_T2_TRGO</code></td><td>ทริกเกอร์จาก Timer2 TRGO</td></tr>
+<tr><td><code>ADC_ExternalTrigConv_T2_CC1</code></td><td>ทริกเกอร์จาก Timer2 Capture/Compare1</td></tr>
+<tr><td><code>ADC_ExternalTrigConv_T2_CC2</code></td><td>ทริกเกอร์จาก Timer2 Capture/Compare2</td></tr>
+<tr><td><code>ADC_ExternalTrigConv_Ext_PD3_PC2</code></td><td>ทริกเกอร์จากขา PD3 หรือ PC2 (ภายนอก)</td></tr>
+<tr><td><code>ADC_ExternalTrigConv_None</code></td><td>ไม่มีทริกเกอร์ภายนอก (ใช้ software start แทน)</td></tr>
+</tbody>
+</table>
+
+<h3>ADC_channels</h3>
+<table>
+<thead><tr><th>ค่าคงที่</th><th>ช่อง</th><th>หมายเหตุ</th></tr></thead>
+<tbody>
+<tr><td><code>ADC_Channel_0</code> … <code>ADC_Channel_7</code></td><td>0–7</td><td>ช่องภายนอกที่ผูกกับขา GPIO (ต้องตั้งขาเป็น <code>GPIO_Mode_AIN</code> ก่อน)</td></tr>
+<tr><td><code>ADC_Channel_8</code> / <code>ADC_Channel_Vrefint</code></td><td>8</td><td>แรงดันอ้างอิงภายใน (Vrefint ~1.2V)</td></tr>
+<tr><td><code>ADC_Channel_9</code> / <code>ADC_Channel_Vcalint</code></td><td>9</td><td>ช่องสอบเทียบแรงดันภายใน (Vcalint)</td></tr>
+</tbody>
+</table>
+
+<h3>ADC_sampling_time (จำนวนรอบนาฬิกา ADC)</h3>
+<table>
+<thead><tr><th>ค่าคงที่</th><th>รอบนาฬิกา</th></tr></thead>
+<tbody>
+<tr><td><code>ADC_SampleTime_3Cycles</code></td><td>3</td></tr>
+<tr><td><code>ADC_SampleTime_9Cycles</code></td><td>9</td></tr>
+<tr><td><code>ADC_SampleTime_15Cycles</code></td><td>15</td></tr>
+<tr><td><code>ADC_SampleTime_30Cycles</code></td><td>30</td></tr>
+<tr><td><code>ADC_SampleTime_43Cycles</code></td><td>43</td></tr>
+<tr><td><code>ADC_SampleTime_57Cycles</code></td><td>57</td></tr>
+<tr><td><code>ADC_SampleTime_73Cycles</code></td><td>73</td></tr>
+<tr><td><code>ADC_SampleTime_241Cycles</code></td><td>241 (แม่นยำสุด แต่ช้าสุด)</td></tr>
+</tbody>
+</table>
+
+<h3>Injected channel (ช่องพิเศษที่แทรกระหว่างลำดับ regular)</h3>
+<table>
+<thead><tr><th>ค่าคงที่</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>ADC_ExternalTrigInjecConv_T1_CC3</code></td><td>ทริกเกอร์จาก Timer1 CC3</td></tr>
+<tr><td><code>ADC_ExternalTrigInjecConv_T1_CC4</code></td><td>ทริกเกอร์จาก Timer1 CC4</td></tr>
+<tr><td><code>ADC_ExternalTrigInjecConv_T2_CC3</code></td><td>ทริกเกอร์จาก Timer2 CC3</td></tr>
+<tr><td><code>ADC_ExternalTrigInjecConv_T2_CC4</code></td><td>ทริกเกอร์จาก Timer2 CC4</td></tr>
+<tr><td><code>ADC_ExternalTrigInjecConv_Ext_PD1_PA2</code></td><td>ทริกเกอร์จากขา PD1 หรือ PA2</td></tr>
+<tr><td><code>ADC_ExternalTrigInjecConv_None</code></td><td>ไม่มีทริกเกอร์ภายนอก — เริ่มด้วย <code>ADC_SoftwareStartInjectedConvCmd</code></td></tr>
+<tr><td><code>ADC_InjectedChannel_1</code> … <code>ADC_InjectedChannel_4</code></td><td>ระบุ offset/rank ของช่อง Injected ที่ 1-4</td></tr>
+</tbody>
+</table>
+
+<h3>Analog Watchdog</h3>
+<table>
+<thead><tr><th>ค่าคงที่</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>ADC_AnalogWatchdog_SingleRegEnable</code></td><td>เฝ้าระวังช่อง regular ช่องเดียว (ตามที่ตั้งด้วย <code>ADC_AnalogWatchdogSingleChannelConfig</code>)</td></tr>
+<tr><td><code>ADC_AnalogWatchdog_SingleInjecEnable</code></td><td>เฝ้าระวังช่อง injected ช่องเดียว</td></tr>
+<tr><td><code>ADC_AnalogWatchdog_SingleRegOrInjecEnable</code></td><td>เฝ้าระวังช่องเดียวทั้ง regular หรือ injected</td></tr>
+<tr><td><code>ADC_AnalogWatchdog_AllRegEnable</code></td><td>เฝ้าระวังทุกช่อง regular</td></tr>
+<tr><td><code>ADC_AnalogWatchdog_AllInjecEnable</code></td><td>เฝ้าระวังทุกช่อง injected</td></tr>
+<tr><td><code>ADC_AnalogWatchdog_AllRegAllInjecEnable</code></td><td>เฝ้าระวังทุกช่องทั้งสองกลุ่ม</td></tr>
+<tr><td><code>ADC_AnalogWatchdog_None</code></td><td>ปิด watchdog</td></tr>
+</tbody>
+</table>
+
+<h3>อื่นๆ: Data Align, Interrupt, Flag, Calibration Voltage</h3>
+<table>
+<thead><tr><th>ค่าคงที่</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>ADC_DataAlign_Right</code> / <code>ADC_DataAlign_Left</code></td><td>ผลลัพธ์ 10-bit ชิดขวา (ปกติ) หรือชิดซ้าย</td></tr>
+<tr><td><code>ADC_IT_EOC</code></td><td>Interrupt เมื่อแปลง regular เสร็จ (End Of Conversion)</td></tr>
+<tr><td><code>ADC_IT_AWD</code></td><td>Interrupt เมื่อ analog watchdog ตรวจพบค่านอกช่วง</td></tr>
+<tr><td><code>ADC_IT_JEOC</code></td><td>Interrupt เมื่อแปลง injected เสร็จ</td></tr>
+<tr><td><code>ADC_FLAG_AWD</code></td><td>ธง watchdog ทำงาน</td></tr>
+<tr><td><code>ADC_FLAG_EOC</code></td><td>ธงแปลง regular เสร็จ</td></tr>
+<tr><td><code>ADC_FLAG_JEOC</code></td><td>ธงแปลง injected เสร็จ</td></tr>
+<tr><td><code>ADC_FLAG_JSTRT</code></td><td>ธงเริ่มแปลง injected แล้ว</td></tr>
+<tr><td><code>ADC_FLAG_STRT</code></td><td>ธงเริ่มแปลง regular แล้ว</td></tr>
+<tr><td><code>ADC_CALVOL_50PERCENT</code> / <code>ADC_CALVOL_75PERCENT</code></td><td>เลือกแรงดัน 50%/75% ของ VDD สำหรับใช้ในกระบวนการ calibration (เฉพาะบางรุ่น)</td></tr>
+<tr><td><code>ADC_ExternalTrigRegul_DLY</code> / <code>ADC_ExternalTrigInjec_DLY</code></td><td>เลือกกลุ่มช่อง (regular/injected) ที่จะใช้กับ <code>ADC_ExternalTrig_DLY()</code> หน่วงเวลาก่อนเริ่มแปลงหลังทริกเกอร์</td></tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>ตารางอ้างอิงฟังก์ชันทั้งหมด</h2>
+<table>
+<thead><tr><th>ฟังก์ชัน</th><th>พารามิเตอร์</th><th>คืนค่า</th><th>คำอธิบาย</th><th>หมายเหตุ</th></tr></thead>
+<tbody>
+<tr><td><code>ADC_DeInit(ADCx)</code></td><td><code>ADCx</code>: <code>ADC1</code></td><td><code>void</code></td><td>รีเซ็ตเรจิสเตอร์ ADC ทั้งหมดกลับค่าเริ่มต้น (ผ่าน RCC reset)</td><td>เรียกก่อนตั้งค่าใหม่ถ้าต้องการล้างสถานะเดิม</td></tr>
+<tr><td><code>ADC_Init(ADCx, ADC_InitStruct)</code></td><td><code>ADC_InitStruct</code>: pointer ไปยัง <code>ADC_InitTypeDef</code></td><td><code>void</code></td><td>ตั้งค่า mode, scan, continuous, trigger, align, จำนวนช่อง</td><td>ต้องตั้งค่า clock (<code>RCC_ADCCLKConfig</code>) และ GPIO analog mode ก่อนเสมอ</td></tr>
+<tr><td><code>ADC_StructInit(ADC_InitStruct)</code></td><td>pointer ไปยัง struct ที่จะเติมค่า default</td><td><code>void</code></td><td>เติมค่า default: Independent, Scan=DISABLE, Continuous=DISABLE, Trigger=T1_TRGO, Align=Right, 1 ช่อง</td><td>เรียกก่อนแก้ค่าเฉพาะที่ต้องการ กัน field ตกหล่น</td></tr>
+<tr><td><code>ADC_Cmd(ADCx, NewState)</code></td><td><code>NewState</code>: ENABLE/DISABLE</td><td><code>void</code></td><td>เปิด/ปิดวงจร ADC (บิต ADON)</td><td>ต้องเปิดก่อนเริ่ม calibration หรือแปลงค่า</td></tr>
+<tr><td><code>ADC_DMACmd(ADCx, NewState)</code></td><td><code>NewState</code>: ENABLE/DISABLE</td><td><code>void</code></td><td>เปิด/ปิดการส่งคำขอ DMA เมื่อแปลงเสร็จ</td><td>ต้องตั้งค่า DMA channel (DMA_Init) คู่กันด้วย</td></tr>
+<tr><td><code>ADC_ITConfig(ADCx, ADC_IT, NewState)</code></td><td><code>ADC_IT</code>: EOC/AWD/JEOC</td><td><code>void</code></td><td>เปิด/ปิด interrupt ของ ADC</td><td>ต้องเปิด NVIC ของ ADC1_IRQn เพิ่มด้วย</td></tr>
+<tr><td><code>ADC_ResetCalibration(ADCx)</code></td><td>—</td><td><code>void</code></td><td>สั่งรีเซ็ตค่า calibration register</td><td>ต้องเรียกก่อน <code>ADC_StartCalibration</code> ทุกครั้งหลังเปิดเครื่อง</td></tr>
+<tr><td><code>ADC_GetResetCalibrationStatus(ADCx)</code></td><td>—</td><td><code>FlagStatus</code> (SET/RESET)</td><td>เช็คว่ารีเซ็ต calibration เสร็จหรือยัง</td><td>ใช้ใน loop <code>while(ADC_GetResetCalibrationStatus(ADC1));</code></td></tr>
+<tr><td><code>ADC_StartCalibration(ADCx)</code></td><td>—</td><td><code>void</code></td><td>เริ่มกระบวนการ self-calibration</td><td>ต้องทำหลังรีเซ็ต calibration เสร็จ และก่อนเริ่มแปลงค่าจริง</td></tr>
+<tr><td><code>ADC_GetCalibrationStatus(ADCx)</code></td><td>—</td><td><code>FlagStatus</code></td><td>เช็คว่า calibration เสร็จหรือยัง</td><td>ใช้ใน loop <code>while(ADC_GetCalibrationStatus(ADC1));</code></td></tr>
+<tr><td><code>ADC_SoftwareStartConvCmd(ADCx, NewState)</code></td><td><code>NewState</code>: ENABLE/DISABLE</td><td><code>void</code></td><td>สั่งเริ่ม/ยกเลิกแปลงช่อง regular ด้วยซอฟต์แวร์</td><td>ใช้แทน external trigger เมื่อ <code>ADC_ExternalTrigConv_None</code></td></tr>
+<tr><td><code>ADC_GetSoftwareStartConvStatus(ADCx)</code></td><td>—</td><td><code>FlagStatus</code></td><td>เช็คสถานะ software start conversion</td><td>—</td></tr>
+<tr><td><code>ADC_DiscModeChannelCountConfig(ADCx, Number)</code></td><td><code>Number</code>: 1–8</td><td><code>void</code></td><td>ตั้งจำนวนช่องต่อกลุ่มในโหมด discontinuous</td><td>ใช้คู่กับ <code>ADC_DiscModeCmd</code></td></tr>
+<tr><td><code>ADC_DiscModeCmd(ADCx, NewState)</code></td><td><code>NewState</code>: ENABLE/DISABLE</td><td><code>void</code></td><td>เปิด/ปิดโหมด discontinuous ของ regular group</td><td>แปลงทีละกลุ่มย่อยแทนที่จะสแกนรวดเดียวทั้งลำดับ</td></tr>
+<tr><td><code>ADC_RegularChannelConfig(ADCx, ADC_Channel, Rank, ADC_SampleTime)</code></td><td><code>ADC_Channel</code>: 0-9<br><code>Rank</code>: 1-16 (ลำดับในคิว)<br><code>ADC_SampleTime</code>: ค่า cycle</td><td><code>void</code></td><td>กำหนดว่า rank ที่เท่าไรในลำดับ regular ใช้ช่องไหน sample time เท่าไร</td><td>ต้องเรียกซ้ำสำหรับทุก rank ถ้า scan หลายช่อง</td></tr>
+<tr><td><code>ADC_ExternalTrigConvCmd(ADCx, NewState)</code></td><td><code>NewState</code>: ENABLE/DISABLE</td><td><code>void</code></td><td>เปิด/ปิดการยอมรับ external trigger สำหรับ regular group</td><td>—</td></tr>
+<tr><td><code>ADC_GetConversionValue(ADCx)</code></td><td>—</td><td><code>uint16_t</code></td><td>อ่านค่าผลลัพธ์ล่าสุดของ regular channel จาก <code>RDATAR</code></td><td>10-bit (0-1023 เมื่อ align right)</td></tr>
+<tr><td><code>ADC_AutoInjectedConvCmd(ADCx, NewState)</code></td><td><code>NewState</code>: ENABLE/DISABLE</td><td><code>void</code></td><td>เปิด/ปิดให้แปลงกลุ่ม injected ต่ออัตโนมัติหลัง regular จบ</td><td>ห้ามใช้ร่วมกับ external trigger ของ injected</td></tr>
+<tr><td><code>ADC_InjectedDiscModeCmd(ADCx, NewState)</code></td><td><code>NewState</code>: ENABLE/DISABLE</td><td><code>void</code></td><td>เปิด/ปิดโหมด discontinuous สำหรับ injected group</td><td>—</td></tr>
+<tr><td><code>ADC_ExternalTrigInjectedConvConfig(ADCx, ADC_ExternalTrigInjecConv)</code></td><td>ค่าจากตาราง injected trigger</td><td><code>void</code></td><td>เลือกแหล่งทริกเกอร์ภายนอกของ injected group</td><td>—</td></tr>
+<tr><td><code>ADC_ExternalTrigInjectedConvCmd(ADCx, NewState)</code></td><td><code>NewState</code>: ENABLE/DISABLE</td><td><code>void</code></td><td>เปิด/ปิดการยอมรับ external trigger ของ injected group</td><td>—</td></tr>
+<tr><td><code>ADC_SoftwareStartInjectedConvCmd(ADCx, NewState)</code></td><td><code>NewState</code>: ENABLE/DISABLE</td><td><code>void</code></td><td>สั่งเริ่มแปลง injected group ด้วยซอฟต์แวร์</td><td>ใช้เมื่อ <code>ADC_ExternalTrigInjecConv_None</code></td></tr>
+<tr><td><code>ADC_GetSoftwareStartInjectedConvCmdStatus(ADCx)</code></td><td>—</td><td><code>FlagStatus</code></td><td>เช็คสถานะ software start ของ injected group</td><td>—</td></tr>
+<tr><td><code>ADC_InjectedChannelConfig(ADCx, ADC_Channel, Rank, ADC_SampleTime)</code></td><td><code>Rank</code>: 1-4</td><td><code>void</code></td><td>กำหนดช่องและ sample time ของแต่ละ rank ใน injected group</td><td>สูงสุด 4 ช่อง (ตาม <code>ADC_InjectedChannel_1..4</code>)</td></tr>
+<tr><td><code>ADC_InjectedSequencerLengthConfig(ADCx, Length)</code></td><td><code>Length</code>: 1-4</td><td><code>void</code></td><td>ตั้งจำนวนช่องทั้งหมดในลำดับ injected</td><td>—</td></tr>
+<tr><td><code>ADC_SetInjectedOffset(ADCx, ADC_InjectedChannel, Offset)</code></td><td><code>ADC_InjectedChannel</code>: 1-4<br><code>Offset</code>: 10-bit</td><td><code>void</code></td><td>ตั้งค่า offset ที่จะถูกลบออกจากผลลัพธ์ injected channel นั้น</td><td>ใช้ชดเชย DC offset ของเซนเซอร์</td></tr>
+<tr><td><code>ADC_GetInjectedConversionValue(ADCx, ADC_InjectedChannel)</code></td><td><code>ADC_InjectedChannel</code>: 1-4</td><td><code>uint16_t</code></td><td>อ่านผลลัพธ์ของช่อง injected ที่ระบุ (หลังหัก offset)</td><td>—</td></tr>
+<tr><td><code>ADC_AnalogWatchdogCmd(ADCx, ADC_AnalogWatchdog)</code></td><td>ค่าจากตาราง watchdog</td><td><code>void</code></td><td>เปิด/เลือกโหมด analog watchdog</td><td>—</td></tr>
+<tr><td><code>ADC_AnalogWatchdogThresholdsConfig(ADCx, HighThreshold, LowThreshold)</code></td><td>ทั้งคู่ 10-bit</td><td><code>void</code></td><td>ตั้งค่า threshold บน/ล่างของ watchdog</td><td>ค่านอกช่วงนี้จะตั้ง <code>ADC_FLAG_AWD</code></td></tr>
+<tr><td><code>ADC_AnalogWatchdogSingleChannelConfig(ADCx, ADC_Channel)</code></td><td>0-9</td><td><code>void</code></td><td>เลือกช่องที่จะถูกเฝ้าระวังเมื่อใช้โหมด Single*</td><td>—</td></tr>
+<tr><td><code>ADC_GetFlagStatus(ADCx, ADC_FLAG)</code></td><td>ค่าจากตาราง ADC_flags</td><td><code>FlagStatus</code></td><td>ตรวจสอบธงสถานะ ADC</td><td>—</td></tr>
+<tr><td><code>ADC_ClearFlag(ADCx, ADC_FLAG)</code></td><td>ค่าจากตาราง ADC_flags</td><td><code>void</code></td><td>ล้างธงสถานะ ADC</td><td>—</td></tr>
+<tr><td><code>ADC_GetITStatus(ADCx, ADC_IT)</code></td><td>EOC/AWD/JEOC</td><td><code>ITStatus</code></td><td>ตรวจสอบว่า interrupt เกิดขึ้นจริง (รวมเช็ค enable bit)</td><td>—</td></tr>
+<tr><td><code>ADC_ClearITPendingBit(ADCx, ADC_IT)</code></td><td>EOC/AWD/JEOC</td><td><code>void</code></td><td>ล้างบิต pending ของ interrupt</td><td>ต้องเรียกใน ISR ไม่งั้น interrupt จะยิงซ้ำไม่หยุด</td></tr>
+<tr><td><code>ADC_Calibration_Vol(ADCx, ADC_CALVOL)</code></td><td><code>ADC_CALVOL_50PERCENT</code>/<code>75PERCENT</code></td><td><code>void</code></td><td>ตั้งแรงดันอ้างอิงที่ใช้ระหว่าง calibration</td><td>เฉพาะ MCU บางรุ่นในตระกูล CH32V0 ที่รองรับฟีเจอร์นี้</td></tr>
+<tr><td><code>ADC_ExternalTrig_DLY(ADCx, channel, DelayTim)</code></td><td><code>channel</code>: Regul_DLY/Injec_DLY<br><code>DelayTim</code>: 0-0x1FF</td><td><code>void</code></td><td>หน่วงเวลาก่อนเริ่มแปลงหลังได้รับทริกเกอร์ภายนอก</td><td>ใช้ปรับจังหวะ sampling ให้ตรงจุดที่ต้องการของสัญญาณ</td></tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>ตัวอย่างโค้ด</h2>
+
+<h3>1. แปลงค่าเดียวแบบ Polling (single channel, software trigger)</h3>
+<pre><code class="language-c">#include "ch32v00x_adc.h"
+#include "ch32v00x_gpio.h"
+#include "ch32v00x_rcc.h"
+
+void ADC_SingleInit(void)
+{
+    GPIO_InitTypeDef  GPIO_InitStructure = {0};
+    ADC_InitTypeDef   ADC_InitStructure = {0};
+
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOC | RCC_APB2Periph_ADC1, ENABLE);
+    RCC_ADCCLKConfig(RCC_PCLK2_Div8);   // ADCCLK = PCLK2/8 (ห้ามเกิน max ตาม datasheet)
+
+    // ตั้งขา PC4 เป็น analog input
+    GPIO_InitStructure.GPIO_Pin  = GPIO_Pin_4;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
+    GPIO_Init(GPIOC, &GPIO_InitStructure);
+
+    ADC_DeInit(ADC1);
+    ADC_InitStructure.ADC_Mode = ADC_Mode_Independent;
+    ADC_InitStructure.ADC_ScanConvMode = DISABLE;
+    ADC_InitStructure.ADC_ContinuousConvMode = DISABLE;
+    ADC_InitStructure.ADC_ExternalTrigConv = ADC_ExternalTrigConv_None;
+    ADC_InitStructure.ADC_DataAlign = ADC_DataAlign_Right;
+    ADC_InitStructure.ADC_NbrOfChannel = 1;
+    ADC_Init(ADC1, &ADC_InitStructure);
+
+    ADC_RegularChannelConfig(ADC1, ADC_Channel_2, 1, ADC_SampleTime_241Cycles);
+
+    ADC_Cmd(ADC1, ENABLE);
+
+    // ลำดับ calibration ต้องทำก่อนแปลงค่าจริงเสมอ
+    ADC_ResetCalibration(ADC1);
+    while (ADC_GetResetCalibrationStatus(ADC1));
+    ADC_StartCalibration(ADC1);
+    while (ADC_GetCalibrationStatus(ADC1));
+}
+
+uint16_t ADC_ReadOnce(void)
+{
+    ADC_SoftwareStartConvCmd(ADC1, ENABLE);
+    while (ADC_GetFlagStatus(ADC1, ADC_FLAG_EOC) == RESET);
+    return ADC_GetConversionValue(ADC1);
+}</code></pre>
+
+<h3>2. Scan หลายช่อง + DMA แบบต่อเนื่อง (circular)</h3>
+<pre><code class="language-c">#include "ch32v00x_adc.h"
+#include "ch32v00x_dma.h"
+#include "ch32v00x_gpio.h"
+#include "ch32v00x_rcc.h"
+
+#define NUM_CH 3
+volatile uint16_t adc_buf[NUM_CH];   // ต้อง volatile เพราะ DMA เขียนโดยไม่ผ่าน CPU
+
+void ADC_DMA_ScanInit(void)
+{
+    GPIO_InitTypeDef GPIO_InitStructure = {0};
+    ADC_InitTypeDef  ADC_InitStructure  = {0};
+    DMA_InitTypeDef  DMA_InitStructure  = {0};
+
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOD | RCC_APB2Periph_ADC1, ENABLE);
+    RCC_AHBPeriphClockCmd(RCC_AHBPeriph_DMA1, ENABLE);
+    RCC_ADCCLKConfig(RCC_PCLK2_Div8);
+
+    GPIO_InitStructure.GPIO_Pin  = GPIO_Pin_2 | GPIO_Pin_3 | GPIO_Pin_4;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
+    GPIO_Init(GPIOD, &GPIO_InitStructure);
+
+    // DMA1 Channel1 คือช่องที่ผูกกับ ADC1 ตายตัวบน CH32V003
+    DMA_DeInit(DMA1_Channel1);
+    DMA_InitStructure.DMA_PeripheralBaseAddr = (uint32_t)&ADC1->RDATAR;
+    DMA_InitStructure.DMA_MemoryBaseAddr     = (uint32_t)adc_buf;
+    DMA_InitStructure.DMA_DIR                = DMA_DIR_PeripheralSRC;
+    DMA_InitStructure.DMA_BufferSize         = NUM_CH;
+    DMA_InitStructure.DMA_PeripheralInc      = DMA_PeripheralInc_Disable;
+    DMA_InitStructure.DMA_MemoryInc          = DMA_MemoryInc_Enable;
+    DMA_InitStructure.DMA_PeripheralDataSize = DMA_PeripheralDataSize_HalfWord;
+    DMA_InitStructure.DMA_MemoryDataSize     = DMA_MemoryDataSize_HalfWord;
+    DMA_InitStructure.DMA_Mode               = DMA_Mode_Circular;
+    DMA_InitStructure.DMA_Priority           = DMA_Priority_High;
+    DMA_InitStructure.DMA_M2M                = DMA_M2M_Disable;
+    DMA_Init(DMA1_Channel1, &DMA_InitStructure);
+    DMA_Cmd(DMA1_Channel1, ENABLE);
+
+    ADC_DeInit(ADC1);
+    ADC_InitStructure.ADC_Mode = ADC_Mode_Independent;
+    ADC_InitStructure.ADC_ScanConvMode = ENABLE;
+    ADC_InitStructure.ADC_ContinuousConvMode = ENABLE;
+    ADC_InitStructure.ADC_ExternalTrigConv = ADC_ExternalTrigConv_None;
+    ADC_InitStructure.ADC_DataAlign = ADC_DataAlign_Right;
+    ADC_InitStructure.ADC_NbrOfChannel = NUM_CH;
+    ADC_Init(ADC1, &ADC_InitStructure);
+
+    ADC_RegularChannelConfig(ADC1, ADC_Channel_2, 1, ADC_SampleTime_241Cycles);
+    ADC_RegularChannelConfig(ADC1, ADC_Channel_3, 2, ADC_SampleTime_241Cycles);
+    ADC_RegularChannelConfig(ADC1, ADC_Channel_4, 3, ADC_SampleTime_241Cycles);
+
+    ADC_DMACmd(ADC1, ENABLE);
+    ADC_Cmd(ADC1, ENABLE);
+
+    ADC_ResetCalibration(ADC1);
+    while (ADC_GetResetCalibrationStatus(ADC1));
+    ADC_StartCalibration(ADC1);
+    while (ADC_GetCalibrationStatus(ADC1));
+
+    ADC_SoftwareStartConvCmd(ADC1, ENABLE);   // circular DMA + continuous mode = สแกนวนไม่หยุด
+}
+// อ่านค่าล่าสุดได้ตลอดเวลาโดยตรงจาก adc_buf[0..2] โดยไม่ต้อง poll ADC เลย</code></pre>
+
+<h3>3. Injected Channel แทรกระหว่างลำดับ Regular</h3>
+<pre><code class="language-c">#include "ch32v00x_adc.h"
+
+void ADC_InjectedInit(void)
+{
+    // ... เปิด clock, ตั้ง GPIO analog, ADC_Init ปกติเหมือนตัวอย่างที่ 1 ...
+
+    ADC_InjectedSequencerLengthConfig(ADC1, 1);                      // มี injected 1 ช่อง
+    ADC_InjectedChannelConfig(ADC1, ADC_Channel_7, 1, ADC_SampleTime_73Cycles);
+    ADC_ExternalTrigInjectedConvConfig(ADC1, ADC_ExternalTrigInjecConv_None);
+    ADC_ExternalTrigInjectedConvCmd(ADC1, ENABLE);
+    ADC_SetInjectedOffset(ADC1, ADC_InjectedChannel_1, 0);           // ไม่ชดเชย offset
+
+    ADC_Cmd(ADC1, ENABLE);
+    ADC_ResetCalibration(ADC1);
+    while (ADC_GetResetCalibrationStatus(ADC1));
+    ADC_StartCalibration(ADC1);
+    while (ADC_GetCalibrationStatus(ADC1));
+}
+
+uint16_t ADC_ReadInjected(void)
+{
+    ADC_SoftwareStartInjectedConvCmd(ADC1, ENABLE);
+    while (ADC_GetFlagStatus(ADC1, ADC_FLAG_JEOC) == RESET);
+    ADC_ClearFlag(ADC1, ADC_FLAG_JEOC);
+    return ADC_GetInjectedConversionValue(ADC1, ADC_InjectedChannel_1);
+}</code></pre>
+<p>Injected group เหมาะกับกรณีที่ต้องแอบแปลงช่องพิเศษ (เช่น อ่านกระแสฉุกเฉิน) แทรกกลางลำดับ regular โดยไม่รบกวนลำดับ scan หลัก</p>
+
+<h3>4. Analog Watchdog แจ้งเตือนเมื่อแรงดันเกินช่วง</h3>
+<pre><code class="language-c">#include "ch32v00x_adc.h"
+#include "ch32v00x_misc.h"
+
+void ADC_WatchdogInit(void)
+{
+    // ... ADC_Init + ADC_RegularChannelConfig ปกติ ...
+
+    ADC_AnalogWatchdogThresholdsConfig(ADC1, 900, 100);  // เตือนถ้าค่านอกช่วง 100-900 (10-bit)
+    ADC_AnalogWatchdogSingleChannelConfig(ADC1, ADC_Channel_2);
+    ADC_AnalogWatchdogCmd(ADC1, ADC_AnalogWatchdog_SingleRegEnable);
+    ADC_ITConfig(ADC1, ADC_IT_AWD, ENABLE);
+
+    NVIC_InitTypeDef NVIC_InitStructure = {0};
+    NVIC_InitStructure.NVIC_IRQChannel = ADC1_IRQn;
+    NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 1;
+    NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
+    NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+    NVIC_Init(&NVIC_InitStructure);
+}
+
+void ADC1_IRQHandler(void) __attribute__((interrupt("WCH-Interrupt-fast")));
+void ADC1_IRQHandler(void)
+{
+    if (ADC_GetITStatus(ADC1, ADC_IT_AWD) != RESET) {
+        // แรงดันหลุดช่วงที่กำหนด — จัดการ event ที่นี่
+        ADC_ClearITPendingBit(ADC1, ADC_IT_AWD);
+    }
+}</code></pre>
+</section>
+
+<section>
+<h2>ปัญหาที่พบบ่อย</h2>
+<table>
+<thead><tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr></thead>
+<tbody>
+<tr>
+    <td>ค่าที่อ่านได้เพี้ยน/ไม่แม่นยำตั้งแต่ครั้งแรก</td>
+    <td>ลืมทำลำดับ calibration (<code>ADC_ResetCalibration</code> → รอ → <code>ADC_StartCalibration</code> → รอ) ก่อนเริ่มแปลงค่าจริง</td>
+    <td>ทำ calibration ทุกครั้งหลัง <code>ADC_Cmd(ADC1, ENABLE)</code> และก่อนเรียก <code>ADC_SoftwareStartConvCmd</code> ครั้งแรก</td>
+</tr>
+<tr>
+    <td>ADC ไม่ทำงานเลย หรือค่าที่ได้คงที่ 0/1023 ตลอด</td>
+    <td>ลืมตั้งขา GPIO เป็น <code>GPIO_Mode_AIN</code> (ยังเป็น digital I/O อยู่) หรือลืมเปิด clock ของ ADC1/GPIO</td>
+    <td>ตรวจว่าตั้ง <code>GPIO_Mode_AIN</code> และเปิด <code>RCC_APB2PeriphClockCmd</code> ทั้งของ GPIO และ ADC1 แล้ว</td>
+</tr>
+<tr>
+    <td>DMA ไม่ยอมส่งข้อมูลต่อรอบถัดไป (ทำงานแค่ครั้งเดียว)</td>
+    <td>ใช้ <code>DMA_Mode_Normal</code> แทน <code>DMA_Mode_Circular</code> ทำให้ DMA หยุดหลัง buffer เต็มรอบเดียว</td>
+    <td>ใช้ <code>DMA_Mode_Circular</code> คู่กับ <code>ADC_ContinuousConvMode = ENABLE</code> ถ้าต้องการสแกนวนไม่หยุด</td>
+</tr>
+<tr>
+    <td>ตั้งค่า ADC clock เร็วเกินไปจนอ่านค่าไม่นิ่ง/ผิดสเปก</td>
+    <td>ลืมเรียก <code>RCC_ADCCLKConfig()</code> หรือตั้ง prescaler น้อยไป ทำให้ ADCCLK เกินค่าสูงสุดตาม datasheet</td>
+    <td>เรียก <code>RCC_ADCCLKConfig(RCC_PCLK2_Div8)</code> หรือค่าที่หารแล้วไม่เกิน max ADCCLK ตามสเปกจริงของ MCU</td>
+</tr>
+<tr>
+    <td>Interrupt (EOC/AWD/JEOC) ยิงรัวไม่หยุด หรือ ISR ค้าง</td>
+    <td>ลืมล้าง flag ด้วย <code>ADC_ClearITPendingBit</code> / <code>ADC_ClearFlag</code> ใน ISR</td>
+    <td>ทุก ISR ต้องเรียก <code>ADC_ClearITPendingBit(ADC1, ADC_IT_xxx)</code> ก่อนออกจากฟังก์ชันเสมอ</td>
+</tr>
+<tr>
+    <td>Scan หลายช่องแต่ได้ผลลัพธ์แค่ช่องเดียว</td>
+    <td>ลืมตั้ง <code>ADC_ScanConvMode = ENABLE</code> หรือ <code>ADC_NbrOfChannel</code> ไม่ตรงกับจำนวนที่ตั้งด้วย <code>ADC_RegularChannelConfig</code></td>
+    <td>ตรวจว่า <code>ADC_NbrOfChannel</code> เท่ากับจำนวนครั้งที่เรียก <code>ADC_RegularChannelConfig</code> และเปิด scan mode แล้ว</td>
+</tr>
+</tbody>
+</table>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="dma.html">DMA →</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

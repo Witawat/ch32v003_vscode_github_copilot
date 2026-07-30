@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OPA — Operational Amplifier / Comparator — Peripheral API Reference</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="pwr.html">← PWR</a>
+</nav>
+
+<h1>OPA — Operational Amplifier</h1>
+<span class="level level-advanced">ระดับสูง</span>
+
+<div class="callout callout-note">
+    <strong>Header:</strong> <code>#include "ch32v00x_opa.h"</code> — นี่คือไลบรารีระดับ<strong>ล่าง (Standard Peripheral Library)</strong> เขียนตรงเข้าเรจิสเตอร์ <code>EXTEN-&gt;EXTEN_CTR</code> โดยตรง ถ้าต้องการ API ที่มี "โหมด" สำเร็จรูป (Voltage Follower / Non-Inverting / Inverting / Comparator พร้อมสูตรคำนวณ gain) ดูที่ <a href="../web-simplehal-api/opamp.html">SimpleOPAMP (web-simplehal-api/opamp.html)</a> แทน
+</div>
+
+<section>
+<h2>ภาพรวม</h2>
+<p>CH32V003 มี Operational Amplifier ภายใน 1 ตัว ควบคุมผ่านเรจิสเตอร์รวม <code>EXTEN_CTR</code> (Extended Configuration Register) เพียง 3 บิต:</p>
+<ul>
+    <li><strong>EN</strong> (bit 16) — เปิด/ปิดวงจร OPA</li>
+    <li><strong>NSEL</strong> (bit 17) — เลือกขาอินพุตลบ (CHN0/CHN1)</li>
+    <li><strong>PSEL</strong> (bit 18) — เลือกขาอินพุตบวก (CHP0/CHP1)</li>
+</ul>
+
+<div class="callout callout-err">
+    <strong>ไม่มี "โหมด" ในไลบรารีนี้:</strong> ไฟล์ <code>ch32v00x_opa.h</code>/<code>.c</code> ทำหน้าที่แค่ <strong>เลือกขา input (PSEL/NSEL) และเปิด/ปิดวงจร</strong> เท่านั้น — ไม่มีบิตหรือฟังก์ชันสำหรับเลือก "Voltage Follower" / "Non-Inverting" / "Inverting" / "Comparator" ในฮาร์ดแวร์เลย พฤติกรรมของ op-amp (buffer, ขยายสัญญาณ, เปรียบเทียบ) เกิดจาก<strong>การต่อวงจรภายนอก</strong> (feedback resistor ระหว่างขา output กับขา input ลบ) ทั้งหมด ไม่ใช่ค่าที่ตั้งผ่านซอฟต์แวร์ — "โหมด" ที่เห็นใน SimpleOPAMP wrapper เป็นแค่ชื่อเรียกตามวิธีต่อวงจรที่แนะนำ ไม่มีอยู่จริงในเรจิสเตอร์
+</div>
+
+<div class="callout callout-good">
+    <strong>ไม่ต้องเปิด peripheral clock:</strong> <code>EXTEN_CTR</code> เป็นเรจิสเตอร์ configuration พิเศษที่ถูก clock ตลอดเวลา (ไม่ผูกกับ RCC APB/AHB gate เหมือน peripheral อื่น) เรียก <code>OPA_Init()</code>/<code>OPA_Cmd()</code> ได้ทันทีโดยไม่ต้องเรียก <code>RCC_xxxPeriphClockCmd()</code> ก่อน
+</div>
+</section>
+
+<section>
+<h2>Typedef และค่าคงที่</h2>
+<table>
+<thead><tr><th>ชื่อ</th><th>ชนิด</th><th>ค่า/สมาชิก</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr>
+    <td><code>OPA_PSEL_TypeDef</code></td>
+    <td>enum</td>
+    <td><code>CHP0</code> = 0, <code>CHP1</code> = 1</td>
+    <td>เลือกขาอินพุต<strong>บวก</strong> (non-inverting input)</td>
+</tr>
+<tr>
+    <td><code>OPA_NSEL_TypeDef</code></td>
+    <td>enum</td>
+    <td><code>CHN0</code> = 0, <code>CHN1</code> = 1</td>
+    <td>เลือกขาอินพุต<strong>ลบ</strong> (inverting input)</td>
+</tr>
+<tr>
+    <td><code>OPA_InitTypeDef</code></td>
+    <td>struct</td>
+    <td><code>PSEL</code> (<code>OPA_PSEL_TypeDef</code>), <code>NSEL</code> (<code>OPA_NSEL_TypeDef</code>)</td>
+    <td>โครงสร้างพารามิเตอร์สำหรับ <code>OPA_Init()</code></td>
+</tr>
+</tbody>
+</table>
+
+<div class="callout callout-note">
+    <strong>ชื่อ enum ไม่มี prefix:</strong> ค่า <code>CHP0</code>, <code>CHP1</code>, <code>CHN0</code>, <code>CHN1</code> ประกาศแบบ global ไม่มี prefix <code>OPA_</code> นำหน้า (ต่างจาก wrapper ที่ใช้ <code>OPAMP_CHP0</code> เป็นต้น) — ระวังชนกับชื่ออื่นถ้ามี macro/enum ชื่อซ้ำในโปรเจกต์
+</div>
+</section>
+
+<section>
+<h2>ตารางอ้างอิงฟังก์ชัน</h2>
+<table>
+<thead>
+<tr><th>ฟังก์ชัน</th><th>พารามิเตอร์</th><th>คืนค่า</th><th>คำอธิบาย</th></tr>
+</thead>
+<tbody>
+<tr>
+    <td><code>OPA_DeInit(void)</code></td>
+    <td>—</td>
+    <td><code>void</code></td>
+    <td>รีเซ็ต bit 16-18 (EN, NSEL, PSEL) ของ <code>EXTEN_CTR</code> กลับเป็น 0 ทั้งหมด (ปิด OPA และล้างการเลือก channel)</td>
+</tr>
+<tr>
+    <td><code>OPA_Init(OPA_InitTypeDef *OPA_InitStruct)</code></td>
+    <td><code>OPA_InitStruct</code>: pointer ไปยังโครงสร้างที่ตั้งค่า <code>PSEL</code>/<code>NSEL</code></td>
+    <td><code>void</code></td>
+    <td>เลือกขาอินพุตบวก/ลบ (เขียนบิต 17-18 ของ <code>EXTEN_CTR</code> แบบ read-modify-write) — <strong>ไม่แตะบิต EN</strong></td>
+</tr>
+<tr>
+    <td><code>OPA_StructInit(OPA_InitTypeDef *OPA_InitStruct)</code></td>
+    <td><code>OPA_InitStruct</code>: pointer โครงสร้างที่จะถูกเติมค่า</td>
+    <td><code>void</code></td>
+    <td>เติมค่า default ลงโครงสร้าง: <code>PSEL = CHP0</code>, <code>NSEL = CHN0</code></td>
+</tr>
+<tr>
+    <td><code>OPA_Cmd(FunctionalState NewState)</code></td>
+    <td><code>NewState</code>: <code>ENABLE</code>/<code>DISABLE</code></td>
+    <td><code>void</code></td>
+    <td>เปิด/ปิดวงจร OPA (ตั้ง/เคลียร์บิต 16 ของ <code>EXTEN_CTR</code>) เท่านั้น — ไม่ยุ่งกับ channel</td>
+</tr>
+</tbody>
+</table>
+
+<div class="callout callout-warn">
+    <strong>Doxygen comment ของ <code>OPA_Cmd</code> คลาดเคลื่อน:</strong> comment ในซอร์ส (<code>ch32v00x_opa.c</code>) ระบุพารามิเตอร์ <code>OPA_NUM - Select OPA</code> แต่ลายเซ็นฟังก์ชันจริงมีแค่ <code>NewState</code> พารามิเตอร์เดียว — CH32V003 มี OPA เพียงตัวเดียว ไม่มีให้เลือกเบอร์ อย่าคาดหวัง overload หรือพารามิเตอร์เพิ่มตามที่ comment บอก
+</div>
+</section>
+
+<section class="flowchart">
+<h2>ลำดับการเรียกใช้ฟังก์ชัน</h2>
+<pre class="mermaid">
+flowchart TD
+    A["OPA_InitTypeDef s;"] --> B["OPA_StructInit(&s);<br>(ไม่จำเป็น ถ้าจะตั้งเองทั้งหมด)"]
+    B --> C["s.PSEL = CHP0; s.NSEL = CHN0;<br>เลือก channel ตามที่ต่อวงจรจริง"]
+    C --> D["OPA_Init(&s);<br>เขียน PSEL/NSEL ลง EXTEN_CTR"]
+    D --> E["OPA_Cmd(ENABLE);<br>★ ต้องเรียกแยก — Init ไม่ได้ enable ให้"]
+    E --> F["อ่านผลลัพธ์ผ่านขา output จริงบนบอร์ด<br>(ต่อเข้า ADC เอง — ไลบรารีนี้ไม่มีฟังก์ชันอ่านค่า)"]
+</pre>
+</section>
+
+<section>
+<h2>ตัวอย่างโค้ด</h2>
+
+<h3>1. Init + Enable พื้นฐาน (channel 0 ทั้งคู่)</h3>
+<pre><code class="language-c">#include "ch32v00x.h"
+
+OPA_InitTypeDef OPA_InitStructure;
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+
+    OPA_StructInit(&OPA_InitStructure);   // PSEL = CHP0, NSEL = CHN0 (default)
+    OPA_Init(&OPA_InitStructure);         // เขียนค่าลง EXTEN_CTR
+    OPA_Cmd(ENABLE);                      // ★ ต้องเรียกแยก — เปิดวงจรจริง
+
+    while (1)
+    {
+        // output ของ OPA ออกที่ขา OPO บนบอร์ด — วัดผลผ่าน ADC ภายนอกฟังก์ชันนี้เอง
+    }
+}</code></pre>
+
+<h3>2. เลือก channel เอง (PSEL=CHP1, NSEL=CHN1)</h3>
+<pre><code class="language-c">#include "ch32v00x.h"
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+
+    OPA_InitTypeDef OPA_InitStructure;
+    OPA_InitStructure.PSEL = CHP1;
+    OPA_InitStructure.NSEL = CHN1;
+
+    OPA_Init(&OPA_InitStructure);
+    OPA_Cmd(ENABLE);
+
+    while (1)
+    {
+        // ...
+    }
+}</code></pre>
+
+<h3>3. Voltage Follower (buffer) — ต่อ output กลับเข้า input ลบเอง</h3>
+<pre><code class="language-c">#include "ch32v00x.h"
+
+// ต่อวงจรจริงบนบอร์ด: ขา OPO (output) ต่อสายตรงกลับเข้าขา OPN0 (CHN0)
+// -> เกิดผล voltage follower (gain = 1) ล้วนๆ จากการต่อวงจร ไม่ใช่จาก register ใดๆ
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+
+    OPA_InitTypeDef OPA_InitStructure;
+    OPA_InitStructure.PSEL = CHP0;   // สัญญาณ input เข้าที่นี่
+    OPA_InitStructure.NSEL = CHN0;   // ต้องต่อสายจาก OPO กลับมาที่ขานี้จริงบนบอร์ด
+
+    OPA_Init(&OPA_InitStructure);
+    OPA_Cmd(ENABLE);
+
+    while (1)
+    {
+        // ...
+    }
+}</code></pre>
+
+<h3>4. ปิดใช้งาน / รีเซ็ตกลับค่าเริ่มต้น</h3>
+<pre><code class="language-c">OPA_Cmd(DISABLE);   // ปิดวงจร แต่ channel ที่เลือกไว้ยังอยู่
+// หรือ
+OPA_DeInit();        // ล้างทั้ง EN + PSEL + NSEL กลับเป็น 0 (ต้อง Init+Cmd ใหม่ทั้งหมดถ้าจะใช้ต่อ)</code></pre>
+</section>
+
+<section>
+<h2>ปัญหาที่พบบ่อย</h2>
+<table>
+<thead><tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr></thead>
+<tbody>
+<tr>
+    <td>เรียก <code>OPA_Init()</code> แล้ว output ยังไม่ออก</td>
+    <td><code>OPA_Init()</code> ตั้งค่าแค่ PSEL/NSEL เท่านั้น — ไม่แตะบิต EN เลย</td>
+    <td>ต้องเรียก <code>OPA_Cmd(ENABLE)</code> แยกต่างหากเสมอหลัง <code>OPA_Init()</code></td>
+</tr>
+<tr>
+    <td>อยากได้ Non-Inverting/Inverting gain แต่ตั้งค่าอย่างไรก็ไม่มีฟังก์ชันให้เลือก mode</td>
+    <td>ไลบรารีนี้ไม่มีแนวคิด "mode" ในซอฟต์แวร์ — เป็นแค่ raw op-amp ที่เลือกได้เฉพาะ input pin</td>
+    <td>ต้องต่อ<strong>ตัวต้านทาน feedback ภายนอกจริงบนบอร์ด</strong>ระหว่างขา output (OPO) กับขา input ลบ (OPN0/OPN1) เพื่อกำหนดพฤติกรรม gain เอง — ซอฟต์แวร์ทำได้แค่เลือกว่า input บวก/ลบมาจากขาไหน</td>
+</tr>
+<tr>
+    <td>เขียนโค้ดปิด/เปิด OPA ซ้ำๆ แล้วบิตอื่นในเรจิสเตอร์เดียวกันเปลี่ยนไปด้วยโดยไม่ตั้งใจ</td>
+    <td><code>EXTEN_CTR</code> เป็นเรจิสเตอร์รวมที่ใช้ร่วมกับฟีเจอร์อื่น (เช่น <code>EXTEN_LOCKUP_EN</code> bit 6, <code>EXTEN_LDO_TRIM</code> bit 10) — ฟังก์ชัน OPA ในไลบรารีนี้ทำ read-modify-write เฉพาะบิตของตัวเองอยู่แล้ว (ปลอดภัย) แต่ถ้าไปเขียน <code>EXTEN-&gt;EXTEN_CTR</code> ตรงๆ เองที่อื่นในโปรแกรม อาจไปทับบิต OPA โดยไม่ตั้งใจ</td>
+    <td>อย่าเขียน <code>EXTEN-&gt;EXTEN_CTR = value;</code> แบบเขียนทับทั้งเรจิสเตอร์เอง ให้ใช้ฟังก์ชัน <code>OPA_*</code> หรือทำ read-modify-write เองด้วย mask <code>(7&lt;&lt;16)</code> เท่านั้น</td>
+</tr>
+<tr>
+    <td>ต้องการอ่านผลเปรียบเทียบ (comparator) แบบ digital HIGH/LOW แต่หาไม่เจอฟังก์ชันอ่านสถานะ</td>
+    <td>ไลบรารี OPA นี้ไม่มีเรจิสเตอร์/ฟังก์ชันอ่านผลลัพธ์ใดๆ เลย (ไม่มี status flag เหมือน comparator ของ STM32 บางรุ่น)</td>
+    <td>ต้องอ่านค่าที่ขา output (OPO) ผ่านโมดูล ADC หรือ GPIO digital input เอง — ไลบรารีนี้ทำหน้าที่แค่ config input/enable เท่านั้น</td>
+</tr>
+<tr>
+    <td>เรียก <code>OPA_DeInit()</code> แล้วเรียก <code>OPA_Cmd(ENABLE)</code> ต่อทันที แต่ output ผิดเพี้ยน</td>
+    <td><code>OPA_DeInit()</code> ล้างทั้ง PSEL/NSEL กลับเป็น 0 (= CHP0/CHN0) พร้อมกับ EN — ถ้าเรียก <code>OPA_Cmd(ENABLE)</code> ทันทีโดยไม่เรียก <code>OPA_Init()</code> ใหม่ จะได้ channel 0/0 เสมอ ไม่ใช่ channel เดิมที่เคยตั้งไว้</td>
+    <td>หลัง <code>OPA_DeInit()</code> ต้องเรียก <code>OPA_Init()</code> เพื่อตั้ง channel ใหม่ก่อน แล้วค่อย <code>OPA_Cmd(ENABLE)</code></td>
+</tr>
+</tbody>
+</table>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="pwr.html">← PWR</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

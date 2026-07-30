@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MISC — NVIC Interrupt Priority Configuration — Peripheral API Reference</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="rcc.html">← RCC</a>
+</nav>
+
+<h1>MISC — NVIC Interrupt Priority Configuration</h1>
+<span class="level level-intermediate">ระดับกลาง</span>
+
+<div class="callout callout-note">
+    <strong>ไลบรารี:</strong> <code>#include "ch32v00x_misc.h"</code> — นี่คือ Standard Peripheral Library (SPL) ระดับล่างที่ตั้งค่า NVIC (Nested Vectored Interrupt Controller) ของแกน RISC-V โดยตรง <strong>ไม่ใช่ SimpleHAL</strong><br>
+    MISC ไม่มี wrapper ใน SimpleHAL โดยตรง — ฟังก์ชัน <code>attachInterrupt()</code> ของ SimpleHAL เรียกใช้ <code>NVIC_Init()</code> "ภายใน" ให้อัตโนมัติด้วยค่า priority ที่ตั้งไว้ล่วงหน้า ผู้ใช้ SimpleHAL ทั่วไปจึง<strong>ไม่จำเป็นต้องเรียก NVIC เอง</strong> — หน้านี้เหมาะกับผู้ที่ต้องการควบคุมลำดับความสำคัญของ interrupt แบบละเอียด (เช่น ให้ UART ขัดจังหวะ timer ได้) หรือเขียนโค้ดแบบ bare-metal
+</div>
+
+<section class="flowchart">
+<h2>ผังการทำงาน NVIC</h2>
+<pre class="mermaid">
+flowchart LR
+    A["NVIC_PriorityGroupConfig() เรียกครั้งเดียวตอนต้นโปรแกรม"] --> B["กำหนดว่าใช้บิตกี่บิตเป็น Preemption / Sub priority"]
+    B --> C["กรอก NVIC_InitTypeDef (channel, priority, cmd)"]
+    C --> D["NVIC_Init() ต่อ IRQ แต่ละตัว"]
+    D --> E["เปิด/ปิด IRQ ผ่าน NVIC_IRQChannelCmd"]
+    E --> F["IRQ Handler (เช่น TIM2_IRQHandler) ทำงานเมื่อเกิด interrupt"]
+</pre>
+</section>
+
+<section>
+<h2>แนวคิดสำคัญ: Priority Group ต้องตั้งครั้งเดียวก่อน NVIC_Init ทั้งหมด</h2>
+<div class="callout callout-warn">
+    <strong>กฎเหล็กของ NVIC บน CH32V003:</strong> CH32V003 ใช้แกน RISC-V (QingKe V2A) ซึ่งมี priority เพียง 2 บิต (ไม่เหมือน ARM Cortex-M ที่มีถึง 4-8 บิต) การ<strong>ซ้อนทับของ interrupt (nesting)</strong> ถูกกำหนดจากค่า CSR 0x804 บิต 1 ในไฟล์ startup (.S) — ถ้าเปิด nesting (<code>INTSYSCR_INEST_EN</code>) priority จะแบ่งเป็น 1 บิต preemption + 1 บิต sub; ถ้าปิด nesting priority จะเป็น 0 บิต preemption + 2 บิต sub เท่านั้น ต้องเรียก <code>NVIC_PriorityGroupConfig()</code> <strong>เพียงครั้งเดียว</strong> ก่อนเรียก <code>NVIC_Init()</code> ตัวแรก — ถ้าเปลี่ยนกลุ่มภายหลัง priority ที่ IRQ อื่นตั้งไว้ก่อนหน้าจะตีความผิดทันที
+</div>
+</section>
+
+<section>
+<h2>Enum / Struct / ค่าคงที่ที่ใช้บ่อย</h2>
+
+<h3>1. NVIC_InitTypeDef (โครงสร้างตั้งค่าแต่ละ IRQ)</h3>
+<table>
+<thead><tr><th>ฟิลด์</th><th>ชนิด</th><th>ความหมาย</th></tr></thead>
+<tbody>
+<tr><td><code>NVIC_IRQChannel</code></td><td><code>uint8_t</code></td><td>หมายเลข IRQ เช่น <code>TIM2_IRQn</code>, <code>USART1_IRQn</code>, <code>EXTI7_0_IRQn</code> (นิยามอยู่ใน <code>ch32v00x.h</code>)</td></tr>
+<tr><td><code>NVIC_IRQChannelPreemptionPriority</code></td><td><code>uint8_t</code></td><td>ลำดับความสำคัญก่อน — ถ้าเปิด nesting: 0–1, ถ้าปิด nesting: ต้องเป็น 0 เสมอ</td></tr>
+<tr><td><code>NVIC_IRQChannelSubPriority</code></td><td><code>uint8_t</code></td><td>ลำดับความสำคัญรอง — ถ้าเปิด nesting: 0–1, ถ้าปิด nesting: 0–3</td></tr>
+<tr><td><code>NVIC_IRQChannelCmd</code></td><td><code>FunctionalState</code></td><td><code>ENABLE</code> = เปิดใช้งาน IRQ นี้, <code>DISABLE</code> = ปิด</td></tr>
+</tbody>
+</table>
+
+<h3>2. Interrupt Nesting Config (ตั้งใน startup file ไม่ใช่ใน C runtime)</h3>
+<table>
+<thead><tr><th>ค่าคงที่</th><th>ความหมาย</th></tr></thead>
+<tbody>
+<tr><td><code>INTSYSCR_INEST_NoEN</code></td><td>ปิดการซ้อนทับ interrupt (CSR 0x804 bit1 = 0) — priority มีแค่ sub priority 2 บิต (0-3), ไม่มี preemption</td></tr>
+<tr><td><code>INTSYSCR_INEST_EN</code></td><td>เปิดการซ้อนทับ interrupt (CSR 0x804 bit1 = 1) — priority แบ่งเป็น preemption 1 บิต + sub 1 บิต — <strong>ค่า default ของไลบรารีนี้</strong></td></tr>
+</tbody>
+</table>
+
+<h3>3. Priority Group</h3>
+<table>
+<thead><tr><th>ค่าคงที่</th><th>เมื่อไรมีให้ใช้</th><th>ความหมาย</th></tr></thead>
+<tbody>
+<tr><td><code>NVIC_PriorityGroup_0</code></td><td>เมื่อ <code>INTSYSCR_INEST == INTSYSCR_INEST_NoEN</code> (ปิด nesting)</td><td>0 บิต preemption / 2 บิต sub priority</td></tr>
+<tr><td><code>NVIC_PriorityGroup_1</code></td><td>เมื่อ <code>INTSYSCR_INEST != INTSYSCR_INEST_NoEN</code> (เปิด nesting, ค่า default)</td><td>1 บิต preemption / 1 บิต sub priority</td></tr>
+</tbody>
+</table>
+<div class="callout callout-warn">
+    <code>NVIC_PriorityGroup_0</code> และ <code>NVIC_PriorityGroup_1</code> ถูก <code>#if/#else</code> เลือกไว้ตั้งแต่ตอนคอมไพล์ตามค่า <code>INTSYSCR_INEST</code> — <strong>มีให้ใช้แค่ตัวเดียวในโปรแกรมเดียวกัน</strong> ไม่ใช่เลือกได้ทั้งสองแบบตอนรัน
+</div>
+</section>
+
+<section>
+<h2>ตารางอ้างอิงฟังก์ชัน</h2>
+<table>
+<thead><tr><th>ฟังก์ชัน</th><th>พารามิเตอร์</th><th>คืนค่า</th><th>คำอธิบาย</th><th>หมายเหตุ</th></tr></thead>
+<tbody>
+<tr>
+    <td><code>NVIC_PriorityGroupConfig(NVIC_PriorityGroup)</code></td>
+    <td><code>NVIC_PriorityGroup</code>: <code>NVIC_PriorityGroup_0</code> หรือ <code>NVIC_PriorityGroup_1</code> (แล้วแต่ค่า <code>INTSYSCR_INEST</code>)</td>
+    <td><code>void</code></td>
+    <td>กำหนดว่า priority ของ IRQ แบ่งเป็นกี่บิต preemption และกี่บิต sub priority</td>
+    <td>เรียก<strong>เพียงครั้งเดียว</strong>ตอนต้นโปรแกรม ก่อนเรียก <code>NVIC_Init()</code> ตัวใดๆ ทั้งหมด</td>
+</tr>
+<tr>
+    <td><code>NVIC_Init(NVIC_InitStruct)</code></td>
+    <td><code>NVIC_InitStruct</code>: <code>NVIC_InitTypeDef*</code></td>
+    <td><code>void</code></td>
+    <td>ตั้งค่า priority และเปิด/ปิด IRQ channel ที่ระบุตามโครงสร้างที่ส่งมา</td>
+    <td>ต้องเรียก <code>NVIC_PriorityGroupConfig()</code> ก่อนหน้าแล้ว และต้องกำหนดค่าในโครงสร้างให้อยู่ในช่วงที่ priority group นั้นรองรับ ไม่งั้นค่าจะถูกละเว้นเงียบๆ (ฟังก์ชันภายในเช็ค group ตรงหรือไม่ก่อนเรียก <code>NVIC_SetPriority</code>)</td>
+</tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>ตัวอย่างโค้ด</h2>
+
+<h3>1. ตั้งค่าพื้นฐาน: เปิด priority group แล้วเปิดใช้งาน 1 IRQ</h3>
+<pre><code class="language-c">#include "ch32v00x_misc.h"
+#include "ch32v00x_tim.h"
+
+int main(void)
+{
+    // เรียกครั้งเดียวตอนต้นโปรแกรม ก่อน NVIC_Init ทั้งหมด
+    NVIC_PriorityGroupConfig(NVIC_PriorityGroup_1);
+
+    NVIC_InitTypeDef NVIC_InitStructure = {0};
+    NVIC_InitStructure.NVIC_IRQChannel = TIM2_IRQn;
+    NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 1;
+    NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
+    NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+    NVIC_Init(&NVIC_InitStructure);
+
+    while (1) { }
+}</code></pre>
+
+<h3>2. ตั้งค่าหลาย IRQ ให้ priority ต่างกัน (ให้ตัวหนึ่งขัดจังหวะอีกตัวได้)</h3>
+<pre><code class="language-c">#include "ch32v00x_misc.h"
+
+void SetupInterrupts(void)
+{
+    NVIC_PriorityGroupConfig(NVIC_PriorityGroup_1);  // 1 บิต preempt / 1 บิต sub
+
+    NVIC_InitTypeDef NVIC_InitStructure = {0};
+
+    // USART1: preemption priority สูงกว่า (1) — ขัดจังหวะ TIM2 ได้ระหว่างทำงาน
+    NVIC_InitStructure.NVIC_IRQChannel = USART1_IRQn;
+    NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 1;
+    NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
+    NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+    NVIC_Init(&NVIC_InitStructure);
+
+    // TIM2: preemption priority ต่ำกว่า (0) — ถูก USART1 แทรกได้
+    NVIC_InitStructure.NVIC_IRQChannel = TIM2_IRQn;
+    NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0;
+    NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
+    NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+    NVIC_Init(&NVIC_InitStructure);
+}</code></pre>
+
+<h3>3. ปิดใช้งาน IRQ ชั่วคราว (critical section)</h3>
+<pre><code class="language-c">#include "ch32v00x_misc.h"
+
+void DisableTimerIRQ(void)
+{
+    NVIC_InitTypeDef NVIC_InitStructure = {0};
+    NVIC_InitStructure.NVIC_IRQChannel = TIM2_IRQn;
+    NVIC_InitStructure.NVIC_IRQChannelCmd = DISABLE;  // ปิด IRQ นี้เท่านั้น
+    NVIC_Init(&NVIC_InitStructure);
+
+    // ทำงานที่ต้องการให้ TIM2 IRQ ไม่มาแทรก ...
+
+    NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;   // เปิดกลับ
+    NVIC_Init(&NVIC_InitStructure);
+}</code></pre>
+
+<h3>4. โหมด No-Nesting: ใช้แค่ Sub Priority 2 บิต (0-3)</h3>
+<pre><code class="language-c">// ในไฟล์ startup (.S) ตั้ง CSR 0x804 bit1 = 0 และ define ก่อน include:
+// #define INTSYSCR_INEST INTSYSCR_INEST_NoEN
+#include "ch32v00x_misc.h"
+
+void SetupNoNesting(void)
+{
+    NVIC_PriorityGroupConfig(NVIC_PriorityGroup_0);  // 0 บิต preempt / 2 บิต sub
+
+    NVIC_InitTypeDef NVIC_InitStructure = {0};
+    NVIC_InitStructure.NVIC_IRQChannel = EXTI7_0_IRQn;
+    NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0;  // ต้องเป็น 0 เสมอในโหมดนี้
+    NVIC_InitStructure.NVIC_IRQChannelSubPriority = 2;          // 0-3 ได้
+    NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+    NVIC_Init(&NVIC_InitStructure);
+}</code></pre>
+</section>
+
+<section>
+<h2>ปัญหาที่พบบ่อย</h2>
+<table>
+<thead><tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr></thead>
+<tbody>
+<tr>
+    <td>IRQ ไม่ทำงานเลย แม้ตั้ง <code>NVIC_IRQChannelCmd = ENABLE</code> แล้ว</td>
+    <td>ไม่ได้เรียก <code>NVIC_PriorityGroupConfig()</code> ก่อน — ตัวแปร <code>NVIC_Priority_Group</code> ภายในยังเป็น 0 ซึ่งอาจไม่ตรงกับ group ที่ต้องใช้ ทำให้ <code>NVIC_Init()</code> ข้ามการตั้ง priority (แต่ยังเปิด IRQ อยู่ — พฤติกรรม priority จะไม่แน่นอน)</td>
+    <td>เรียก <code>NVIC_PriorityGroupConfig(NVIC_PriorityGroup_1)</code> (หรือ <code>_0</code> ตามโหมด nesting) ก่อน <code>NVIC_Init()</code> ตัวแรกเสมอ</td>
+</tr>
+<tr>
+    <td>ลำดับความสำคัญของ IRQ ที่ตั้งไว้ก่อนหน้าเพี้ยนไปหลังเรียก <code>NVIC_Init()</code> ตัวใหม่</td>
+    <td>เรียก <code>NVIC_PriorityGroupConfig()</code> ซ้ำหลายครั้งกลางโปรแกรม เปลี่ยน group ไปมา — ค่า preemption/sub ของ IRQ ที่ตั้งไว้ก่อนหน้าถูกตีความใหม่ตาม group ปัจจุบันทันที ไม่ได้ถูกคำนวณใหม่ให้อัตโนมัติ</td>
+    <td>เรียก <code>NVIC_PriorityGroupConfig()</code> เพียง<strong>ครั้งเดียว</strong>ตอนต้นโปรแกรม อย่าเปลี่ยนกลางทาง</td>
+</tr>
+<tr>
+    <td>ตั้ง <code>NVIC_IRQChannelPreemptionPriority = 1</code> แล้วไม่มีผล / คอมไพล์ผ่านแต่พฤติกรรมแปลก</td>
+    <td>ใช้ค่านอกช่วงที่ priority group รองรับ เช่น preemption = 1 ขณะที่ compile ด้วย <code>INTSYSCR_INEST_NoEN</code> (ซึ่งอนุญาตแค่ preemption = 0 เท่านั้น เพราะ NVIC_Init เช็คเฉพาะกรณี group ตรงกับโหมด nesting)</td>
+    <td>ตรวจสอบว่า <code>INTSYSCR_INEST</code> ในไฟล์ startup ตรงกับ priority group ที่ใช้ และค่า preemption/sub priority อยู่ในช่วงที่ตารางกำหนด (ดูตาราง NVIC_InitTypeDef ด้านบน)</td>
+</tr>
+<tr>
+    <td>เรียก <code>NVIC_Init()</code> ด้วย struct ที่ไม่ได้ initialize ทุกฟิลด์ แล้วพฤติกรรม IRQ เพี้ยน</td>
+    <td>ฟิลด์ที่ไม่ได้ตั้งค่า (เช่นลืม <code>NVIC_IRQChannelSubPriority</code>) มีขยะจาก stack เดิม เพราะ struct local ไม่ได้ zero-initialize</td>
+    <td>ประกาศด้วย <code>NVIC_InitTypeDef NVIC_InitStructure = {0};</code> เสมอ แล้วค่อยตั้งเฉพาะฟิลด์ที่ต้องใช้</td>
+</tr>
+<tr>
+    <td>Interrupt ซ้อน (nested) ไม่เกิดขึ้นทั้งที่ตั้ง priority ต่างกันแล้ว</td>
+    <td>ไฟล์ startup (.S) ตั้ง CSR 0x804 bit1 = 0 (ปิด nesting) อยู่ ทำให้ไม่ว่าตั้ง preemption priority เท่าไรก็ไม่มีการซ้อนทับเกิดขึ้นจริงในฮาร์ดแวร์</td>
+    <td>ตรวจสอบการตั้งค่า CSR 0x804 ในไฟล์ startup ให้ตรงกับที่ต้องการ และ define <code>INTSYSCR_INEST</code> ให้สอดคล้องกันก่อน include <code>ch32v00x_misc.h</code></td>
+</tr>
+</tbody>
+</table>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="rcc.html">← RCC</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

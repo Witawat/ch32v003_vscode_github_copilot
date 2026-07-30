@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WWDG — Window Watchdog (วอทช์ด็อกแบบหน้าต่าง) — Peripheral API Reference</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="iwdg.html">← IWDG</a>
+</nav>
+
+<h1>WWDG — Window Watchdog (วอทช์ด็อกแบบหน้าต่าง)</h1>
+<span class="level level-advanced">ระดับสูง</span>
+
+<div class="callout callout-note">
+    <strong>Header:</strong> <code>#include &lt;ch32v00x_wwdg.h&gt;</code> — นี่คือ Standard Peripheral Library (SPL) ระดับต่ำ เขียนเรจิสเตอร์ตรง <strong>ไม่มีการตรวจสอบพารามิเตอร์หรือ abstraction ใดๆ</strong> ผู้ใช้ต้องคำนวณค่า window/counter เองและเข้าใจพฤติกรรมฮาร์ดแวร์
+</div>
+
+<div class="callout callout-good">
+    <strong>ทางเลือกที่ง่ายกว่า:</strong> ถ้าต้องการ API ที่ตั้งค่าให้อัตโนมัติ ดูที่ <a href="../web-simplehal-api/wwdg.html">SimpleWWDG (SimpleHAL API Reference)</a> ซึ่งห่อ (wrap) ฟังก์ชันชุดนี้ไว้อีกชั้น
+</div>
+
+<section>
+<h2>ภาพรวม</h2>
+<p><strong>WWDG (Window Watchdog)</strong> เป็นวอทช์ด็อกที่ใช้นาฬิกา <strong>PCLK1</strong> (นาฬิการะบบหลัก ไม่ใช่ LSI แบบ IWDG) มีจุดต่างสำคัญจาก IWDG คือ ต้อง reload counter ภายใน<strong>ช่วงเวลาที่กำหนด (window)</strong> เท่านั้น — ถ้า reload <strong>เร็วเกินไป</strong> (ก่อนเข้าหน้าต่าง) ก็รีเซ็ตทันที ไม่ใช่แค่ reload ช้าเกินไปเหมือน IWDG</p>
+<ul>
+    <li><strong>Counter (T[6:0])</strong> — นับถอยหลัง 7 บิต ช่วง 0x40-0x7F เมื่อ T6 หลุดจาก 1 เป็น 0 (ค่าลดผ่าน 0x3F) จะเกิดรีเซ็ตทันที</li>
+    <li><strong>Window (W[6:0])</strong> — ค่าเปรียบเทียบ ต้องน้อยกว่า 0x80 ห้าม refresh counter ตราบใดที่ T ยังมากกว่า W (ช่วง "ปิด")</li>
+    <li><strong>Prescaler (WDGTB)</strong> — หาร (PCLK1/4096) ด้วย 1/2/4/8</li>
+    <li><strong>Early Wakeup Interrupt (EWI)</strong> — แจ้งเตือนก่อนรีเซ็ตจริง ให้โอกาส reload ใน ISR</li>
+</ul>
+
+<div class="callout callout-warn">
+    <strong>ต่างจาก IWDG:</strong> IWDG แค่ "ห้ามช้าเกินไป" แต่ WWDG "ห้ามทั้งเร็วเกินไปและช้าเกินไป" — ต้อง reload ในหน้าต่างเวลาที่กำหนดพอดี
+</div>
+</section>
+
+<section class="flowchart">
+<h2>ผังการทำงาน WWDG</h2>
+<pre class="mermaid">
+flowchart LR
+    SP["WWDG_SetPrescaler()"] --> SW["WWDG_SetWindowValue()"]
+    SW --> EI["WWDG_EnableIT() (ถ้าต้องการ EWI)"]
+    EI --> EN["WWDG_Enable(Counter)"]
+    EN --> CD["Counter นับถอยหลัง"]
+    CD -->|"T ยังมากกว่า W (หน้าต่างปิด)"| BLK["ห้าม SetCounter — รีเซ็ตทันทีถ้าเขียน"]
+    CD -->|"T ต่ำกว่า W (หน้าต่างเปิด)"| OK["WWDG_SetCounter() ได้ปลอดภัย"]
+    CD -->|"T ลดผ่าน 0x3F โดยไม่ reload"| RST["MCU รีเซ็ต"]
+    CD -->|"ใกล้ 0x40 (ถ้าเปิด EWI)"| ISR["WWDG_IRQHandler (EWIF)"]
+    ISR --> OK
+</pre>
+</section>
+
+<section>
+<h2>ค่าคงที่ (Constants)</h2>
+
+<h3>WWDG_Prescaler — ตัวหารนาฬิกา (WDGTB)</h3>
+<table>
+<thead><tr><th>ค่าคงที่</th><th>ค่า</th><th>Counter clock</th></tr></thead>
+<tbody>
+<tr><td><code>WWDG_Prescaler_1</code></td><td>0x00000000</td><td>(PCLK1/4096)/1</td></tr>
+<tr><td><code>WWDG_Prescaler_2</code></td><td>0x00000080</td><td>(PCLK1/4096)/2</td></tr>
+<tr><td><code>WWDG_Prescaler_4</code></td><td>0x00000100</td><td>(PCLK1/4096)/4</td></tr>
+<tr><td><code>WWDG_Prescaler_8</code></td><td>0x00000180</td><td>(PCLK1/4096)/8</td></tr>
+</tbody>
+</table>
+
+<h3>ช่วงค่า Counter / Window</h3>
+<table>
+<thead><tr><th>พารามิเตอร์</th><th>ช่วงค่าที่ถูกต้อง</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>Counter</code> (<code>WWDG_SetCounter</code>/<code>WWDG_Enable</code>)</td><td>0x40 - 0x7F</td><td>บิต T6 ต้องเป็น 1 เสมอตอนตั้งค่า มิฉะนั้นรีเซ็ตทันที (T6=0 คือเงื่อนไขรีเซ็ต)</td></tr>
+<tr><td><code>WindowValue</code> (<code>WWDG_SetWindowValue</code>)</td><td>0x00 - 0x7F</td><td>ต้องน้อยกว่า 0x80 (มาสก์ 7 บิต); เปรียบเทียบกับ downcounter T[6:0]</td></tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>สูตรคำนวณเวลา</h2>
+<pre><code class="language-c">// คาบนับ 1 tick (ms) = 4096 * prescaler_divide / PCLK1_Hz * 1000
+// เวลาจนรีเซ็ต (จาก Counter=C ถึง 0x3F) = tick_ms * (C - 0x3F)
+// เวลาจนหน้าต่างเปิด (จาก Counter=C ถึง Window=W) = tick_ms * (C - W)
+//
+// ตัวอย่าง: PCLK1 = 48MHz, prescaler = 8
+// tick = 4096 * 8 / 48,000,000 = 0.6827 ms ต่อ 1 นับ
+// Counter = 0x7F (127), Window = 0x50 (80)
+//   หน้าต่างปิดจนถึง 0x50: (127-80)*0.6827 ms ≈ 32.1 ms  (reload ก่อนหน้านี้ = รีเซ็ตทันที)
+//   ตั้งแต่ 0x50 ถึงขอบรีเซ็ต 0x3F: (80-63)*0.6827 ms ≈ 11.6 ms (ต้อง reload ในช่วงนี้)</code></pre>
+</section>
+
+<section>
+<h2>ตารางอ้างอิงฟังก์ชัน</h2>
+<table>
+<thead>
+<tr><th>ฟังก์ชัน</th><th>พารามิเตอร์</th><th>คืนค่า</th><th>คำอธิบาย</th><th>หมายเหตุ</th></tr>
+</thead>
+<tbody>
+<tr>
+    <td><code>WWDG_DeInit()</code></td>
+    <td>-</td>
+    <td><code>void</code></td>
+    <td>รีเซ็ตเรจิสเตอร์ WWDG ทั้งหมดกลับค่า default ผ่าน RCC APB1 peripheral reset</td>
+    <td>ใช้ตอนเริ่มต้นก่อนตั้งค่าใหม่ทั้งหมด</td>
+</tr>
+<tr>
+    <td><code>WWDG_SetPrescaler(WWDG_Prescaler)</code></td>
+    <td><code>WWDG_Prescaler</code>: <code>WWDG_Prescaler_1/2/4/8</code></td>
+    <td><code>void</code></td>
+    <td>ตั้งบิต WDGTB ใน CFGR (แก้เฉพาะ field prescaler ค่าอื่นใน CFGR คงเดิม)</td>
+    <td>เรียกก่อน <code>WWDG_Enable</code></td>
+</tr>
+<tr>
+    <td><code>WWDG_SetWindowValue(WindowValue)</code></td>
+    <td><code>WindowValue</code>: <code>uint8_t</code> &lt; 0x80</td>
+    <td><code>void</code></td>
+    <td>ตั้งบิต W[6:0] ใน CFGR</td>
+    <td>ต้องน้อยกว่า Counter เริ่มต้น เพื่อให้มีช่วง "หน้าต่างปิด" จริง</td>
+</tr>
+<tr>
+    <td><code>WWDG_EnableIT()</code></td>
+    <td>-</td>
+    <td><code>void</code></td>
+    <td>ตั้งบิต 9 (EWI) ใน CFGR เปิด Early Wakeup Interrupt</td>
+    <td>ต้องเปิด NVIC สำหรับ WWDG_IRQn เองแยกต่างหาก; ISR ต้องเคลียร์ flag ด้วย <code>WWDG_ClearFlag()</code></td>
+</tr>
+<tr>
+    <td><code>WWDG_SetCounter(Counter)</code></td>
+    <td><code>Counter</code>: <code>uint8_t</code> 0x40-0x7F</td>
+    <td><code>void</code></td>
+    <td>เขียนค่า Counter ลง CTLR โดยไม่แตะบิต WDGA (เปิด/ปิด)</td>
+    <td>ใช้สำหรับ "ป้อนอาหาร"/reload ระหว่างทำงาน ต้องเรียกเฉพาะตอนอยู่ในหน้าต่างเปิดเท่านั้น</td>
+</tr>
+<tr>
+    <td><code>WWDG_Enable(Counter)</code></td>
+    <td><code>Counter</code>: <code>uint8_t</code> 0x40-0x7F</td>
+    <td><code>void</code></td>
+    <td>ตั้งบิต WDGA (เปิดใช้งาน) พร้อมโหลดค่า Counter เริ่มต้นในการเขียนครั้งเดียว</td>
+    <td><strong>เมื่อเปิดแล้วปิดด้วยซอฟต์แวร์ไม่ได้ — ต้อง reset MCU เท่านั้น</strong></td>
+</tr>
+<tr>
+    <td><code>WWDG_GetFlagStatus()</code></td>
+    <td>-</td>
+    <td><code>FlagStatus</code> (<code>SET</code>/<code>RESET</code>)</td>
+    <td>อ่านค่า STATR (บิต EWIF) — แจ้งว่าเกิด Early Wakeup Interrupt แล้วหรือยัง</td>
+    <td>เรียกใน <code>WWDG_IRQHandler</code> เพื่อยืนยันสาเหตุ interrupt</td>
+</tr>
+<tr>
+    <td><code>WWDG_ClearFlag()</code></td>
+    <td>-</td>
+    <td><code>void</code></td>
+    <td>เขียน STATR = 0 ล้าง flag EWIF</td>
+    <td>ต้องเรียกใน ISR มิฉะนั้น interrupt จะค้าง (pending ซ้ำ)</td>
+</tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>ตัวอย่างโค้ด</h2>
+
+<h3>1. Init WWDG พื้นฐาน + reload ใน main loop (ไม่ใช้ interrupt)</h3>
+<pre><code class="language-c">#include &lt;ch32v00x.h&gt;
+#include &lt;ch32v00x_wwdg.h&gt;
+
+void WWDG_Init_Basic(void)
+{
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_WWDG, ENABLE);
+
+    WWDG_DeInit();
+    WWDG_SetPrescaler(WWDG_Prescaler_8);
+    WWDG_SetWindowValue(0x50);   // หน้าต่างเปิดเมื่อ Counter ลดต่ำกว่า 0x50
+    WWDG_Enable(0x7F);           // เริ่ม Counter ที่ค่าสูงสุด แล้วเปิดใช้งานทันที
+}
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    WWDG_Init_Basic();
+
+    while (1) {
+        // ... งานหลัก วนรอบให้คาบเวลาตรงกับหน้าต่างที่คำนวณไว้ ...
+        Delay_Ms(15);            // ต้องอยู่ในช่วงหน้าต่างเปิดพอดี (ดูสูตรคำนวณด้านบน)
+        WWDG_SetCounter(0x7F);   // reload กลับค่าสูงสุด
+    }
+}</code></pre>
+
+<h3>2. ใช้ Early Wakeup Interrupt (EWI) เพื่อ reload อัตโนมัติก่อนหน้าต่างปิด</h3>
+<pre><code class="language-c">#include &lt;ch32v00x.h&gt;
+#include &lt;ch32v00x_wwdg.h&gt;
+
+void WWDG_Init_WithEWI(void)
+{
+    RCC_APB1PeriphClockCmd(RCC_APB1Periph_WWDG, ENABLE);
+
+    WWDG_DeInit();
+    WWDG_SetPrescaler(WWDG_Prescaler_8);
+    WWDG_SetWindowValue(0x50);
+
+    NVIC_InitTypeDef nvic = {0};
+    nvic.NVIC_IRQChannel = WWDG_IRQn;
+    nvic.NVIC_IRQChannelPreemptionPriority = 2;
+    nvic.NVIC_IRQChannelSubPriority = 0;
+    nvic.NVIC_IRQChannelCmd = ENABLE;
+    NVIC_Init(&nvic);
+
+    WWDG_EnableIT();      // เปิด EWI - จะเกิด interrupt ตอน Counter ลดถึง 0x40
+    WWDG_Enable(0x7F);
+}
+
+// ต้อง reload ทันทีใน ISR ก่อนที่ Counter จะลดผ่าน 0x3F (จุดรีเซ็ต)
+void WWDG_IRQHandler(void) __attribute__((interrupt("WCH-Interrupt-fast")));
+void WWDG_IRQHandler(void)
+{
+    if (WWDG_GetFlagStatus() != RESET) {
+        WWDG_SetCounter(0x7F);   // reload ก่อนขอบเขต — ต้องอยู่ในหน้าต่างเปิดอยู่แล้วตอนนี้
+        WWDG_ClearFlag();
+    }
+}</code></pre>
+
+<h3>3. คำนวณ Window/Prescaler จากเวลาที่ต้องการ (PCLK1 = 48MHz)</h3>
+<pre><code class="language-c">// ต้องการคาบ reload window กว้างประมาณ 10-20ms
+// tick (prescaler=8) = 4096*8/48,000,000 = 0.6827 ms
+// เลือก Window = 0x60 (96), Counter เริ่ม = 0x7F (127)
+//   หน้าต่างปิดนาน (127-96)*0.6827 ≈ 21.2 ms
+//   หน้าต่างเปิดนาน (96-63)*0.6827 ≈ 22.5 ms  <- ต้อง reload ในช่วงนี้
+WWDG_SetPrescaler(WWDG_Prescaler_8);
+WWDG_SetWindowValue(0x60);
+WWDG_Enable(0x7F);</code></pre>
+</section>
+
+<section>
+<h2>ปัญหาที่พบบ่อย</h2>
+<table>
+<thead><tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr></thead>
+<tbody>
+<tr>
+    <td>Reload แล้ว MCU รีเซ็ตทันที (ตรงข้ามกับที่ตั้งใจ)</td>
+    <td>เรียก <code>WWDG_SetCounter()</code> <strong>ก่อน</strong> Counter ลดต่ำกว่า Window (ยังอยู่ในหน้าต่าง "ปิด") — WWDG ถือว่าเป็นการ refresh ที่ผิดเวลาและรีเซ็ตทันที ไม่ใช่แค่ไม่มีผล</td>
+    <td>reload เฉพาะเมื่อ Counter (T) ต่ำกว่า Window (W) แล้วเท่านั้น คำนวณช่วงเวลาให้แม่นด้วยสูตร tick ก่อน หรือใช้ EWI เพื่อให้ฮาร์ดแวร์บอกจังหวะที่ถูกต้อง</td>
+</tr>
+<tr>
+    <td>เปิด WWDG แล้วปิดไม่ได้ ดีบักลำบาก</td>
+    <td><code>WWDG_Enable()</code> ตั้งบิต WDGA แล้ว<strong>ไม่มีฟังก์ชัน Disable</strong> — ต้องรีเซ็ตชิปเท่านั้นจึงจะปิดได้</td>
+    <td>อย่าเปิด WWDG ตอนช่วง debug จนกว่าจะพร้อม reload ต่อเนื่องในหน้าต่างที่ถูกต้อง</td>
+</tr>
+<tr>
+    <td>ตั้ง Counter หรือ Window ผิดช่วงแล้วพฤติกรรมประหลาด</td>
+    <td><code>Counter</code> ต้องอยู่ 0x40-0x7F (บิต T6=1) และ <code>WindowValue</code> ต้อง &lt; 0x80 — ค่านอกช่วงนี้ทำให้ตรรกะ "หน้าต่าง" ผิดเพี้ยนหรือรีเซ็ตทันทีตอนเปิดใช้งาน</td>
+    <td>ตรวจสอบค่าที่ส่งให้อยู่ในช่วงตามสเปกเสมอ โดยเฉพาะ Counter เริ่มต้นต้องมีบิต 6 เป็น 1</td>
+</tr>
+<tr>
+    <td>ISR ของ EWI เกิดซ้ำถี่/ค้าง</td>
+    <td>ลืมเรียก <code>WWDG_ClearFlag()</code> ใน <code>WWDG_IRQHandler</code> ทำให้ flag EWIF ค้างเป็น pending</td>
+    <td>เคลียร์ flag ทุกครั้งใน ISR หลังจัดการ reload เสร็จ</td>
+</tr>
+<tr>
+    <td>คำนวณเวลาหน้าต่างผิดเมื่อเปลี่ยนความถี่ระบบ</td>
+    <td>สูตรเวลาอิงกับ <strong>PCLK1</strong> ของระบบ ไม่ใช่ค่าคงที่แบบ LSI ของ IWDG — ถ้าปรับ system clock (เช่นเปลี่ยนจาก 48MHz เป็นความถี่อื่น) ค่า tick ทั้งหมดเปลี่ยนตาม</td>
+    <td>คำนวณ Window/Counter ใหม่ทุกครั้งที่เปลี่ยนความถี่ system clock อย่าใช้ค่าคงที่ตายตัวข้ามโปรเจกต์ที่ clock ต่างกัน</td>
+</tr>
+</tbody>
+</table>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="iwdg.html">← IWDG</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

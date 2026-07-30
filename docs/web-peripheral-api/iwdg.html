@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IWDG — Independent Watchdog (วอทช์ด็อกอิสระ) — Peripheral API Reference</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="wwdg.html">WWDG →</a>
+</nav>
+
+<h1>IWDG — Independent Watchdog (วอทช์ด็อกอิสระ)</h1>
+<span class="level level-advanced">ระดับสูง</span>
+
+<div class="callout callout-note">
+    <strong>Header:</strong> <code>#include &lt;ch32v00x_iwdg.h&gt;</code> — นี่คือ Standard Peripheral Library (SPL) ระดับต่ำ เขียนเรจิสเตอร์ตรง <strong>ไม่มีการตรวจสอบพารามิเตอร์หรือ abstraction ใดๆ</strong> ผู้ใช้ต้องคำนวณค่า prescaler/reload เองและเข้าใจพฤติกรรมฮาร์ดแวร์
+</div>
+
+<div class="callout callout-good">
+    <strong>ทางเลือกที่ง่ายกว่า:</strong> ถ้าต้องการ API ที่คำนวณ timeout เป็น ms ให้อัตโนมัติ ดูที่ <a href="../web-simplehal-api/iwdg.html">SimpleIWDG (SimpleHAL API Reference)</a> ซึ่งห่อ (wrap) ฟังก์ชันชุดนี้ไว้อีกชั้น
+</div>
+
+<section>
+<h2>ภาพรวม</h2>
+<p><strong>IWDG (Independent Watchdog)</strong> เป็นวอทช์ด็อกฮาร์ดแวร์ที่ใช้นาฬิกา <strong>LSI ~40kHz</strong> ซึ่งเป็นอิสระจากนาฬิการะบบหลัก (HSE/HSI/PLL) — แม้ระบบนาฬิกาหลักหยุดทำงาน IWDG ก็ยังนับถอยหลังต่อไปและรีเซ็ต MCU ได้ตามปกติ</p>
+<ul>
+    <li><strong>Reload register (RLDR)</strong> — 12 บิต ค่า 0x000-0xFFF (0-4095)</li>
+    <li><strong>Prescaler (PSCR)</strong> — 7 ระดับ หาร 4 ถึง 256</li>
+    <li><strong>Key register (CTLR)</strong> — เขียนผ่าน "key" พิเศษ 3 ค่า (0x5555 / 0xAAAA / 0xCCCC) เท่านั้น ไม่มีฟิลด์อื่นให้เขียนตรง</li>
+</ul>
+</section>
+
+<section class="flowchart">
+<h2>ผังการทำงาน IWDG</h2>
+<pre class="mermaid">
+flowchart LR
+    WA["IWDG_WriteAccessCmd(Enable)"] --> SP["IWDG_SetPrescaler()"]
+    SP --> SR["IWDG_SetReload()"]
+    SR --> RC["IWDG_ReloadCounter()"]
+    RC --> EN["IWDG_Enable()"]
+    EN --> LOOP["นับถอยหลังจาก Reload → 0"]
+    LOOP -->|"เรียก IWDG_ReloadCounter() ทัน"| RC
+    LOOP -->|"ไม่เรียกทัน (โปรแกรมค้าง)"| RST["MCU รีเซ็ต"]
+</pre>
+</section>
+
+<section>
+<h2>ค่าคงที่ (Constants)</h2>
+
+<h3>IWDG_WriteAccess — คีย์เปิด/ปิดการเขียน PSCR และ RLDR</h3>
+<table>
+<thead><tr><th>ค่าคงที่</th><th>ค่า</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>IWDG_WriteAccess_Enable</code></td><td>0x5555</td><td>เปิดการเขียนเรจิสเตอร์ PSCR/RLDR (ต้องเรียกก่อน SetPrescaler/SetReload ทุกครั้ง)</td></tr>
+<tr><td><code>IWDG_WriteAccess_Disable</code></td><td>0x0000</td><td>ปิดการเขียน (ป้องกันการเขียนโดยไม่ตั้งใจ)</td></tr>
+</tbody>
+</table>
+
+<h3>IWDG_Prescaler — ตัวหารนาฬิกา LSI (~40kHz)</h3>
+<table>
+<thead><tr><th>ค่าคงที่</th><th>ค่า</th><th>หารด้วย</th><th>Timeout สูงสุด* (Reload=0xFFF)</th></tr></thead>
+<tbody>
+<tr><td><code>IWDG_Prescaler_4</code></td><td>0x00</td><td>4</td><td>≈ 0.41 s</td></tr>
+<tr><td><code>IWDG_Prescaler_8</code></td><td>0x01</td><td>8</td><td>≈ 0.82 s</td></tr>
+<tr><td><code>IWDG_Prescaler_16</code></td><td>0x02</td><td>16</td><td>≈ 1.64 s</td></tr>
+<tr><td><code>IWDG_Prescaler_32</code></td><td>0x03</td><td>32</td><td>≈ 3.28 s</td></tr>
+<tr><td><code>IWDG_Prescaler_64</code></td><td>0x04</td><td>64</td><td>≈ 6.55 s</td></tr>
+<tr><td><code>IWDG_Prescaler_128</code></td><td>0x05</td><td>128</td><td>≈ 13.1 s</td></tr>
+<tr><td><code>IWDG_Prescaler_256</code></td><td>0x06</td><td>256</td><td>≈ 26.2 s</td></tr>
+</tbody>
+</table>
+<p>*คำนวณจาก LSI = 40kHz พอดี ในความเป็นจริง LSI มี tolerance กว้าง ค่าจริงจึงคลาดเคลื่อนได้มาก — ดูหัวข้อ "ปัญหาที่พบบ่อย"</p>
+
+<h3>IWDG_Flag — บิตสถานะใน STATR</h3>
+<table>
+<thead><tr><th>ค่าคงที่</th><th>ค่า</th><th>ความหมาย</th></tr></thead>
+<tbody>
+<tr><td><code>IWDG_FLAG_PVU</code></td><td>0x0001</td><td>Prescaler Value Update — ค่า PSCR กำลังถูกอัปเดตเข้าโดเมนนาฬิกา LSI ยังไม่เสร็จ</td></tr>
+<tr><td><code>IWDG_FLAG_RVU</code></td><td>0x0002</td><td>Reload Value Update — ค่า RLDR กำลังถูกอัปเดตเข้าโดเมนนาฬิกา LSI ยังไม่เสร็จ</td></tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>สูตรคำนวณ Timeout</h2>
+<pre><code class="language-c">// timeout (ms) = prescaler_divide * (Reload + 1) / 40   (LSI ~40kHz)
+// ตัวอย่าง: ต้องการ timeout ~500ms
+// เลือก prescaler = 32 (หาร 32) -> Reload = 500*40/32 - 1 = 624 (0x270)
+IWDG_WriteAccessCmd(IWDG_WriteAccess_Enable);
+IWDG_SetPrescaler(IWDG_Prescaler_32);
+IWDG_SetReload(624);
+IWDG_ReloadCounter();
+IWDG_Enable();</code></pre>
+</section>
+
+<section>
+<h2>ตารางอ้างอิงฟังก์ชัน</h2>
+<table>
+<thead>
+<tr><th>ฟังก์ชัน</th><th>พารามิเตอร์</th><th>คืนค่า</th><th>คำอธิบาย</th><th>หมายเหตุ</th></tr>
+</thead>
+<tbody>
+<tr>
+    <td><code>IWDG_WriteAccessCmd(IWDG_WriteAccess)</code></td>
+    <td><code>IWDG_WriteAccess</code>: <code>IWDG_WriteAccess_Enable</code> / <code>_Disable</code></td>
+    <td><code>void</code></td>
+    <td>เขียนคีย์ 0x5555 ลง CTLR เพื่อปลดล็อกการเขียน PSCR/RLDR</td>
+    <td>ต้องเรียกก่อน <code>IWDG_SetPrescaler</code>/<code>IWDG_SetReload</code> ทุกครั้ง มิฉะนั้นค่าจะไม่ถูกเขียน</td>
+</tr>
+<tr>
+    <td><code>IWDG_SetPrescaler(IWDG_Prescaler)</code></td>
+    <td><code>IWDG_Prescaler</code>: <code>IWDG_Prescaler_4</code> ... <code>_256</code></td>
+    <td><code>void</code></td>
+    <td>เขียนค่าตัวหารลง PSCR</td>
+    <td>ต้อง unlock ด้วย <code>IWDG_WriteAccessCmd(Enable)</code> ก่อน</td>
+</tr>
+<tr>
+    <td><code>IWDG_SetReload(Reload)</code></td>
+    <td><code>Reload</code>: <code>uint16_t</code> ช่วง 0-0x0FFF (0-4095)</td>
+    <td><code>void</code></td>
+    <td>เขียนค่าโหลดใหม่ลง RLDR</td>
+    <td>ต้อง unlock ด้วย <code>IWDG_WriteAccessCmd(Enable)</code> ก่อน</td>
+</tr>
+<tr>
+    <td><code>IWDG_ReloadCounter()</code></td>
+    <td>-</td>
+    <td><code>void</code></td>
+    <td>เขียนคีย์ 0xAAAA ลง CTLR สั่งให้ counter โหลดค่าจาก RLDR ใหม่ ("ป้อนอาหาร" watchdog)</td>
+    <td>ต้องเรียกซ้ำๆ ในลูปหลักก่อน timeout หมด</td>
+</tr>
+<tr>
+    <td><code>IWDG_Enable()</code></td>
+    <td>-</td>
+    <td><code>void</code></td>
+    <td>เขียนคีย์ 0xCCCC ลง CTLR เปิดใช้งาน IWDG แล้วรอจนกว่า RCC_RSTSCKR bit1 (IWDGRSTF) จะไม่ว่าง</td>
+    <td><strong>เมื่อเปิดแล้วปิดด้วยซอฟต์แวร์ไม่ได้ — ต้อง reset MCU เท่านั้น</strong></td>
+</tr>
+<tr>
+    <td><code>IWDG_GetFlagStatus(IWDG_FLAG)</code></td>
+    <td><code>IWDG_FLAG</code>: <code>IWDG_FLAG_PVU</code> / <code>IWDG_FLAG_RVU</code></td>
+    <td><code>FlagStatus</code> (<code>SET</code>/<code>RESET</code>)</td>
+    <td>อ่านบิตจาก STATR ตรวจว่าเรจิสเตอร์กำลังอัปเดตอยู่หรือไม่</td>
+    <td>ควร poll จนเป็น <code>RESET</code> ก่อนเขียนค่าใหม่ซ้ำ (การอัปเดตข้ามโดเมนนาฬิกาใช้เวลาหลายรอบ LSI)</td>
+</tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>ตัวอย่างโค้ด</h2>
+
+<h3>1. Init IWDG timeout ~1 วินาที + ป้อนใน main loop</h3>
+<pre><code class="language-c">#include &lt;ch32v00x.h&gt;
+#include &lt;ch32v00x_iwdg.h&gt;
+
+void IWDG_Init_1s(void)
+{
+    // prescaler=64 -> LSI/64 = 625 Hz, ต้องการ 1000ms
+    // Reload = 1000 * 40 / 64 - 1 = 624 (0x270)
+    IWDG_WriteAccessCmd(IWDG_WriteAccess_Enable);
+    IWDG_SetPrescaler(IWDG_Prescaler_64);
+    IWDG_SetReload(624);
+    IWDG_ReloadCounter();
+    IWDG_Enable();
+}
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    IWDG_Init_1s();
+
+    while (1) {
+        // ... งานหลัก ...
+        IWDG_ReloadCounter();   // ต้องเรียกให้ทันภายใน ~1s เสมอ
+        Delay_Ms(200);
+    }
+}</code></pre>
+
+<h3>2. ตรวจสอบว่ารีเซ็ตล่าสุดเกิดจาก IWDG หรือไม่</h3>
+<pre><code class="language-c">#include &lt;ch32v00x.h&gt;
+#include &lt;ch32v00x_iwdg.h&gt;
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+
+    if (RCC_GetFlagStatus(RCC_FLAG_IWDGRST) != RESET) {
+        // รีเซ็ตครั้งล่าสุดเกิดจาก IWDG timeout -> โปรแกรมเคยค้าง
+        RCC_ClearFlag();
+    }
+
+    IWDG_Init_1s();
+    while (1) {
+        IWDG_ReloadCounter();
+        Delay_Ms(200);
+    }
+}</code></pre>
+
+<h3>3. รอให้ PVU/RVU เคลียร์ก่อนเขียนค่าซ้ำ (เปลี่ยน timeout ระหว่างรันไทม์)</h3>
+<pre><code class="language-c">void IWDG_ChangeTimeout(uint8_t prescaler, uint16_t reload)
+{
+    IWDG_WriteAccessCmd(IWDG_WriteAccess_Enable);
+
+    while (IWDG_GetFlagStatus(IWDG_FLAG_PVU) == SET);  // รอ prescaler เก่าเขียนเสร็จ
+    IWDG_SetPrescaler(prescaler);
+
+    while (IWDG_GetFlagStatus(IWDG_FLAG_RVU) == SET);  // รอ reload เก่าเขียนเสร็จ
+    IWDG_SetReload(reload);
+
+    IWDG_ReloadCounter();
+}</code></pre>
+</section>
+
+<section>
+<h2>ปัญหาที่พบบ่อย</h2>
+<table>
+<thead><tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr></thead>
+<tbody>
+<tr>
+    <td>Timeout จริงคลาดเคลื่อนจากที่คำนวณมาก</td>
+    <td>LSI เป็น RC oscillator ภายใน ไม่ผ่านการ trim ละเอียดเหมือน HSE — ค่าความถี่เปลี่ยนตามอุณหภูมิ/แรงดันไฟ ±tolerance กว้าง (ไม่ใช่ 40kHz แม่นยำ)</td>
+    <td>อย่าตั้ง timeout ให้ตึงเกินไป เผื่อ margin อย่างน้อย 2-3 เท่าของคาบ loop จริง และเลือก reload ให้ห่างขอบเขต</td>
+</tr>
+<tr>
+    <td>เปิด IWDG แล้วปิดไม่ได้ ดีบักลำบาก</td>
+    <td>เมื่อเรียก <code>IWDG_Enable()</code> แล้ว <strong>ไม่มีฟังก์ชัน Disable ในฮาร์ดแวร์</strong> — ต้องรีเซ็ตชิปเท่านั้นจึงจะปิดได้</td>
+    <td>อย่าเปิด IWDG ตอนช่วง debug ถ้ายังไม่พร้อม feed ต่อเนื่อง หรือหยุด debugger ค้างไว้ที่ breakpoint จะโดน IWDG รีเซ็ตกลางคัน</td>
+</tr>
+<tr>
+    <td>ตั้งค่า Prescaler/Reload ใหม่แล้วไม่มีผล</td>
+    <td>ลืมเรียก <code>IWDG_WriteAccessCmd(IWDG_WriteAccess_Enable)</code> ก่อน — ถ้าไม่ unlock การเขียน PSCR/RLDR จะถูกฮาร์ดแวร์เพิกเฉย</td>
+    <td>เรียก <code>IWDG_WriteAccessCmd(Enable)</code> ทุกครั้งก่อน <code>SetPrescaler</code>/<code>SetReload</code></td>
+</tr>
+<tr>
+    <td>เขียนค่าซ้ำเร็วเกินไปแล้วค่าไม่อัปเดต</td>
+    <td>การเขียน PSCR/RLDR ต้อง sync ข้ามจากโดเมนนาฬิกา APB ไปยังโดเมน LSI ใช้เวลาหลายรอบ LSI (ไม่ใช่ทันที) — ถ้าเขียนซ้ำถี่เกินไปจะชนกับการอัปเดตที่ยังค้างอยู่</td>
+    <td>ตรวจ <code>IWDG_GetFlagStatus(IWDG_FLAG_PVU/RVU)</code> ให้เป็น <code>RESET</code> ก่อนเขียนค่าครั้งถัดไป</td>
+</tr>
+<tr>
+    <td>Reload() ไม่ได้เรียกทัน MCU รีเซ็ตเอง</td>
+    <td>โค้ดใน main loop มีจุดที่ block นาน (เช่น รอ I2C/SPI timeout, delay ยาว) เกินกว่า timeout ที่ตั้งไว้</td>
+    <td>ตั้ง timeout ให้ครอบคลุม worst-case ของทุก path ในลูป หรือเรียก <code>IWDG_ReloadCounter()</code> เพิ่มในจุดที่ block นาน</td>
+</tr>
+</tbody>
+</table>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="wwdg.html">WWDG →</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

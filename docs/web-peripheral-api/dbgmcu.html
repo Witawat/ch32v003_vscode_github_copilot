@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DBGMCU — ระบุตัวตนชิปและควบคุมพฤติกรรมดีบัก — Peripheral API Reference</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="flash.html">← FLASH</a>
+</nav>
+
+<h1>DBGMCU — ระบุตัวตนชิปและควบคุมพฤติกรรมดีบัก</h1>
+<span class="level level-advanced">ระดับสูง</span>
+
+<div class="callout callout-note">
+    <strong>ไลบรารี:</strong> <code>#include &lt;ch32v00x_dbgmcu.h&gt;</code> — นี่คือ <strong>Standard Peripheral Library (SPL)</strong> ระดับล่าง ใช้สำหรับอ่านรหัสระบุชิป (Chip ID / Device ID / Revision ID) และควบคุมว่าเพอริเฟอรัลบางตัวควรหยุดทำงานหรือไม่เมื่อ core ถูกหยุดโดย debugger
+</div>
+
+<div class="callout callout-note">
+    DBGMCU <strong>ไม่มี wrapper ใน SimpleHAL</strong> เพราะเป็นฟังก์ชันสำหรับงาน debug/introspection โดยเฉพาะ (เช่น พิมพ์รุ่นชิปออก UART ตอน boot, ตรวจสอบรุ่นก่อนใช้ feature เฉพาะรุ่น) ไม่ใช่ peripheral ที่ใช้ในโค้ด production ทั่วไป — เรียกใช้ฟังก์ชันในหน้านี้โดยตรงได้เลย
+</div>
+
+<section class="flowchart">
+<h2>ผังการใช้งานทั่วไป</h2>
+<pre class="mermaid">
+flowchart LR
+    ID["DBGMCU_GetCHIPID()"] --> CHK{"เทียบกับค่าที่รู้จัก<br/>เช่น 0x003005x0"}
+    CHK --> LOG["พิมพ์ผ่าน UART<br/>เพื่อ debug"]
+    CFG["DBGMCU_Config()"] --> CR["__set_DEBUG_CR() ภายใน"]
+    GET["__get_DEBUG_CR()"] --> CFG
+</pre>
+</section>
+
+<section>
+<h2>ค่าคงที่หลัก (#define) — CFGR0 / DEBUG Control Register</h2>
+<p>ใช้กับ <code>DBGMCU_Config()</code> เพื่อกำหนดว่าเพอริเฟอรัลใดจะ<strong>หยุดทำงานตามไปด้วย</strong>เมื่อ core ถูกหยุด (halt) โดย debugger — มีประโยชน์เวลา single-step เพื่อไม่ให้ watchdog หรือ timer นับต่อจนรีเซ็ตขณะ breakpoint ค้าง</p>
+<table>
+<thead><tr><th>ค่าคงที่</th><th>ความหมาย</th></tr></thead>
+<tbody>
+<tr><td><code>DBGMCU_IWDG_STOP</code></td><td>หยุด IWDG (Independent Watchdog) เมื่อ core หยุด</td></tr>
+<tr><td><code>DBGMCU_WWDG_STOP</code></td><td>หยุด WWDG (Window Watchdog) เมื่อ core หยุด</td></tr>
+<tr><td><code>DBGMCU_TIM1_STOP</code></td><td>หยุดตัวนับ TIM1 เมื่อ core หยุด</td></tr>
+<tr><td><code>DBGMCU_TIM2_STOP</code></td><td>หยุดตัวนับ TIM2 เมื่อ core หยุด</td></tr>
+</tbody>
+</table>
+
+<div class="callout callout-note">
+    ค่าเหล่านี้ใช้แบบ OR รวมกันได้ เช่น <code>DBGMCU_Config(DBGMCU_IWDG_STOP | DBGMCU_WWDG_STOP, ENABLE)</code> เพื่อหยุดทั้งสอง watchdog พร้อมกันตอนดีบัก
+</div>
+</section>
+
+<section>
+<h2>ตารางอ้างอิงฟังก์ชัน</h2>
+<table>
+<thead><tr><th>ฟังก์ชัน</th><th>พารามิเตอร์</th><th>คืนค่า</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr>
+    <td><code>DBGMCU_GetCHIPID(void)</code></td>
+    <td>—</td>
+    <td><code>uint32_t</code></td>
+    <td>อ่านรหัสระบุชิปแบบเต็ม (32-bit) จาก address <code>0x1FFFF7C4</code> — ใช้แยกรุ่น/แพ็กเกจของ CH32V003 ได้ เช่น <code>0x003005x0</code> = CH32V003F4P6, <code>0x003105x0</code> = CH32V003F4U6, <code>0x003205x0</code> = CH32V003A4M6, <code>0x003305x0</code> = CH32V003J4M6</td>
+</tr>
+<tr>
+    <td><code>DBGMCU_GetDEVID(void)</code></td>
+    <td>—</td>
+    <td><code>uint32_t</code></td>
+    <td>อ่านเฉพาะส่วน Device ID (16 บิตล่างของ Chip ID เดียวกัน — มาสก์ด้วย <code>0x0000FFFF</code>)</td>
+</tr>
+<tr>
+    <td><code>DBGMCU_GetREVID(void)</code></td>
+    <td>—</td>
+    <td><code>uint32_t</code></td>
+    <td>อ่านเฉพาะส่วน Revision ID (16 บิตบนของค่าเดียวกัน — shift ขวา 16 บิต)</td>
+</tr>
+<tr>
+    <td><code>__get_DEBUG_CR(void)</code></td>
+    <td>—</td>
+    <td><code>uint32_t</code></td>
+    <td>อ่านค่า DEBUG Control Register ปัจจุบันโดยตรงผ่าน CSR instruction (<code>csrr</code> จาก CSR 0x7C0) — ใช้ภายใน <code>DBGMCU_Config()</code> เมื่อต้องอ่านค่าก่อนแก้บางบิต</td>
+</tr>
+<tr>
+    <td><code>__set_DEBUG_CR(value)</code></td>
+    <td><code>value</code>: ค่า 32-bit ที่จะเขียนทับทั้ง register</td>
+    <td><code>void</code></td>
+    <td>เขียนค่าลง DEBUG Control Register โดยตรงผ่าน CSR instruction (<code>csrw</code>) — เขียนทับทั้ง register ไม่ใช่ set/clear เฉพาะบิต</td>
+</tr>
+<tr>
+    <td><code>DBGMCU_Config(DBGMCU_Periph, NewState)</code></td>
+    <td><code>DBGMCU_Periph</code>: OR ของ <code>DBGMCU_*_STOP</code><br><code>NewState</code>: <code>ENABLE</code>/<code>DISABLE</code></td>
+    <td><code>void</code></td>
+    <td>เปิด/ปิดพฤติกรรม "หยุดเพอริเฟอรัลเมื่อดีบัก" — ตอน <code>ENABLE</code> จะเขียนทับค่าใหม่ทั้ง register ด้วย <code>__set_DEBUG_CR</code> ตรงๆ; ตอน <code>DISABLE</code> จะอ่านค่าเดิมด้วย <code>__get_DEBUG_CR</code> ก่อนแล้วเคลียร์เฉพาะบิตที่ระบุ</td>
+</tr>
+</tbody>
+</table>
+
+<div class="callout callout-warn">
+    <strong>ข้อควรระวังของ <code>DBGMCU_Config(..., ENABLE)</code>:</strong> เส้นทาง ENABLE เขียนทับ<strong>ทั้ง register</strong>ด้วยค่าพารามิเตอร์ที่ส่งเข้าไปตรงๆ (ไม่ได้ OR กับค่าที่มีอยู่เดิมเหมือนเส้นทาง DISABLE) — ถ้าเคยตั้งค่าอื่นไว้ก่อนหน้าแล้วเรียก ENABLE ซ้ำด้วยค่าพารามิเตอร์ใหม่ จะทำให้บิตที่ตั้งไว้ก่อนหน้าหายไปโดยไม่ตั้งใจ ถ้าต้องการเพิ่มบิตใหม่โดยคงบิตเดิมไว้ ให้ OR ค่าที่อ่านจาก <code>__get_DEBUG_CR()</code> เข้ากับบิตใหม่เองก่อนส่งเข้า <code>DBGMCU_Config</code>
+</div>
+</section>
+
+<section>
+<h2>กลุ่มฟังก์ชันที่ใช้ร่วมกัน</h2>
+
+<h3>1. อ่าน Chip ID เต็มรูปแบบตอน boot</h3>
+<pre><code class="language-c">#include &lt;ch32v00x.h&gt;
+
+uint32_t chip_id = DBGMCU_GetCHIPID();
+
+// เทียบกับรุ่นที่รู้จัก
+switch (chip_id & 0xFFFFFF00) {
+    case 0x00300500: /* CH32V003F4P6 */ break;
+    case 0x00310500: /* CH32V003F4U6 */ break;
+    case 0x00320500: /* CH32V003A4M6 */ break;
+    case 0x00330500: /* CH32V003J4M6 */ break;
+    default: /* รุ่นที่ไม่รู้จัก */ break;
+}</code></pre>
+<p>ใช้ <code>DBGMCU_GetCHIPID()</code> เพื่อดึงรหัสชิปแบบเต็ม แล้วเทียบ bit pattern เพื่อระบุแพ็กเกจ/รุ่นที่ใช้งานจริง</p>
+
+<h3>2. แยก Device ID และ Revision ID</h3>
+<pre><code class="language-c">uint32_t dev_id = DBGMCU_GetDEVID();   // 16 บิตล่าง
+uint32_t rev_id = DBGMCU_GetREVID();   // 16 บิตบน
+
+// ตัวอย่างพิมพ์ผ่าน USART (สมมติมีฟังก์ชัน USART_Printf)
+USART_Printf("Device ID: 0x%04X, Revision: 0x%04X\r\n", dev_id, rev_id);</code></pre>
+<p>ใช้เมื่อสนใจแยกเฉพาะ Device ID หรือ Revision ID โดยไม่ต้องเอามาแยกบิตเอง</p>
+
+<h3>3. หยุด Watchdog ระหว่างดีบัก (ป้องกันรีเซ็ตขณะ breakpoint)</h3>
+<pre><code class="language-c">// หยุดทั้ง IWDG และ WWDG เมื่อ core ถูกหยุดโดย debugger
+DBGMCU_Config(DBGMCU_IWDG_STOP | DBGMCU_WWDG_STOP, ENABLE);
+
+// ภายหลังถ้าต้องการเพิ่ม TIM1 โดยไม่ทำลายบิตเดิม ต้องอ่านค่าปัจจุบันมา OR เอง
+uint32_t cur = __get_DEBUG_CR();
+__set_DEBUG_CR(cur | DBGMCU_TIM1_STOP);</code></pre>
+<p>ป้องกัน watchdog รีเซ็ต MCU ขณะหยุด single-step อยู่นาน ๆ ใน debugger — ปิดกลับก่อน flash รุ่น production จริงเพื่อให้ watchdog ทำงานตามปกติ</p>
+</section>
+
+<section>
+<h2>ปัญหาที่พบบ่อย</h2>
+<table>
+<thead><tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr></thead>
+<tbody>
+<tr>
+    <td>เทียบค่า Chip ID แล้วไม่ตรงกับที่คาดไว้เลยสักรุ่น</td>
+    <td>เทียบ <code>DBGMCU_GetCHIPID()</code> แบบเต็ม 32-bit ตรงๆ ทั้งที่ค่าจริงมีส่วนท้าย (lot/wafer marking) ที่เปลี่ยนได้ในแต่ละล็อตการผลิต — เอกสารเขียนไว้เป็น <code>0x003005x0</code> ที่ <code>x</code> เป็นค่าที่แปรผันได้</td>
+    <td>มาสก์เฉพาะบิตที่ใช้แยกรุ่นจริง (เช่น <code>chip_id & 0xFFFFFF00</code>) ก่อนเทียบ อย่าเทียบทั้ง 32-bit ตรงๆ</td>
+</tr>
+<tr>
+    <td>เรียก <code>DBGMCU_Config(..., ENABLE)</code> ครั้งที่สองแล้วการตั้งค่าก่อนหน้าหายไป</td>
+    <td>เส้นทาง ENABLE ของ <code>DBGMCU_Config</code> เขียนทับทั้ง register ด้วยค่าพารามิเตอร์ที่ส่งเข้าไป ไม่ได้ OR กับค่าเดิมเหมือนเส้นทาง DISABLE</td>
+    <td>ถ้าต้องการเพิ่มบิตใหม่โดยคงบิตเดิม ให้ OR ค่าเดิมจาก <code>__get_DEBUG_CR()</code> เข้ากับบิตใหม่เอง แล้วส่งผลรวมเข้า <code>DBGMCU_Config</code> หรือเรียก <code>__set_DEBUG_CR()</code> ตรงๆ</td>
+</tr>
+<tr>
+    <td>ตั้งค่า <code>DBGMCU_Config(DBGMCU_IWDG_STOP, ENABLE)</code> ไว้ในโค้ด production แล้วลืมปิด</td>
+    <td>ค่านี้มีผลเฉพาะตอน core ถูก debugger หยุด (halt) เท่านั้น — ไม่กระทบการทำงานปกติเมื่อรันอิสระ (free-run) จึงมักถูกลืมทิ้งไว้ในโค้ดจริงโดยไม่มีผลเสียทันที</td>
+    <td>ไม่จำเป็นต้องนำออกเพราะไม่กระทบการทำงานตอน free-run แต่ควรตระหนักว่าเวลา debug ด้วย breakpoint watchdog จะไม่นับต่อ ทำให้พฤติกรรม watchdog ตอน debug กับตอนใช้งานจริงต่างกัน</td>
+</tr>
+<tr>
+    <td>ใช้ <code>__get_DEBUG_CR()</code>/<code>__set_DEBUG_CR()</code> แล้ว build ไม่ผ่านหรือพฤติกรรมแปลก</td>
+    <td>ฟังก์ชันทั้งสองนี้เข้าถึง CSR (Control and Status Register) เฉพาะของแกน RISC-V ผ่าน inline assembly (<code>csrr</code>/<code>csrw</code> ที่ CSR 0x7C0) โดยตรง — เป็นรีจิสเตอร์ระดับ debug ที่ไม่ใช่ memory-mapped ปกติ</td>
+    <td>เรียกผ่าน <code>DBGMCU_Config()</code> แทนถ้าแค่ต้องการเปิด/ปิดการหยุดเพอริเฟอรัล ใช้ <code>__get_DEBUG_CR</code>/<code>__set_DEBUG_CR</code> ตรงๆ เฉพาะกรณีต้องการควบคุมบิตอื่นที่ <code>DBGMCU_Config</code> ไม่รองรับเท่านั้น</td>
+</tr>
+</tbody>
+</table>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="flash.html">← FLASH</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

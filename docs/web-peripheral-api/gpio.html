@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GPIO — Digital I/O ระดับ Register — Peripheral API Reference</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="exti.html">EXTI →</a>
+</nav>
+
+<h1>GPIO — Digital I/O ระดับ Register</h1>
+<span class="level level-advanced">ระดับ Peripheral (SPL ดิบ)</span>
+
+<div class="callout callout-note">
+    <strong>ไฟล์:</strong> <code>#include "ch32v00x_gpio.h"</code> — นี่คือไลบรารี <strong>Standard Peripheral Library (SPL) ระดับต่ำ</strong> เขียนตั้งค่าผ่าน struct <code>GPIO_InitTypeDef</code> และเรียกฟังก์ชันที่แก้ register ตรง ๆ (<code>CFGLR</code>, <code>INDR</code>, <code>OUTDR</code>, <code>BSHR</code>, <code>BCR</code>) ต้องเปิด clock เองด้วย <code>RCC_APB2PeriphClockCmd</code> ก่อนใช้งานทุกครั้ง<br>
+    ถ้าต้องการ API ที่ใช้ง่ายกว่านี้ (เช่น <code>pinMode()</code>, <code>digitalWrite()</code>) ดูที่ <a href="../web-simplehal-api/gpio.html">SimpleGPIO — Digital I/O (SimpleHAL wrapper)</a> ซึ่งสร้างต่อยอดจากไลบรารีนี้
+</div>
+
+<section class="flowchart">
+<h2>ผังการทำงาน GPIO (SPL)</h2>
+<pre class="mermaid">
+flowchart LR
+    RCC["RCC_APB2PeriphClockCmd(GPIOx)"] --> INIT["GPIO_Init()"]
+    INIT --> MODE{"GPIO_Mode"}
+    MODE --> OUT["Out_PP / Out_OD"]
+    MODE --> IN["IN_FLOATING / IPD / IPU"]
+    MODE --> AIN["AIN (ADC)"]
+    MODE --> AF["AF_PP / AF_OD"]
+    OUT --> WR["GPIO_SetBits / GPIO_ResetBits / GPIO_WriteBit"]
+    IN --> RD["GPIO_ReadInputDataBit"]
+    AF --> REMAP["GPIO_PinRemapConfig()"]
+    IN --> EXTICFG["GPIO_EXTILineConfig() → EXTI_Init()"]
+</pre>
+</section>
+
+<section>
+<h2>GPIO_InitTypeDef — โครงสร้างตั้งค่า</h2>
+<table>
+<thead><tr><th>สมาชิก</th><th>ชนิด</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>GPIO_Pin</code></td><td><code>uint16_t</code></td><td>ขาที่ต้องการตั้งค่า ใช้ <code>GPIO_Pin_0</code> .. <code>GPIO_Pin_7</code> หรือ OR รวมกันได้หลายขา หรือ <code>GPIO_Pin_All</code></td></tr>
+<tr><td><code>GPIO_Speed</code></td><td><code>GPIOSpeed_TypeDef</code></td><td>ความเร็วเอาต์พุต ใช้เฉพาะเมื่อเป็นโหมด output/AF เท่านั้น</td></tr>
+<tr><td><code>GPIO_Mode</code></td><td><code>GPIOMode_TypeDef</code></td><td>โหมดการทำงานของขา (input/output/AF/analog)</td></tr>
+</tbody>
+</table>
+
+<h3>GPIOMode_TypeDef (ค่า GPIO_Mode)</h3>
+<table>
+<thead><tr><th>ค่าคงที่</th><th>ค่า hex</th><th>ความหมาย</th></tr></thead>
+<tbody>
+<tr><td><code>GPIO_Mode_AIN</code></td><td>0x00</td><td>Analog Input — ใช้กับ ADC</td></tr>
+<tr><td><code>GPIO_Mode_IN_FLOATING</code></td><td>0x04</td><td>Input Floating — ไม่มี pull ภายใน ต้องมี pull ภายนอกถ้าจำเป็น</td></tr>
+<tr><td><code>GPIO_Mode_IPD</code></td><td>0x28</td><td>Input Pull-Down ภายใน</td></tr>
+<tr><td><code>GPIO_Mode_IPU</code></td><td>0x48</td><td>Input Pull-Up ภายใน</td></tr>
+<tr><td><code>GPIO_Mode_Out_OD</code></td><td>0x14</td><td>Output Open-Drain</td></tr>
+<tr><td><code>GPIO_Mode_Out_PP</code></td><td>0x10</td><td>Output Push-Pull</td></tr>
+<tr><td><code>GPIO_Mode_AF_OD</code></td><td>0x1C</td><td>Alternate Function Open-Drain (เช่น I2C)</td></tr>
+<tr><td><code>GPIO_Mode_AF_PP</code></td><td>0x18</td><td>Alternate Function Push-Pull (เช่น USART TX, PWM)</td></tr>
+</tbody>
+</table>
+
+<h3>GPIOSpeed_TypeDef (ค่า GPIO_Speed)</h3>
+<table>
+<thead><tr><th>ค่าคงที่</th><th>ความเร็ว</th></tr></thead>
+<tbody>
+<tr><td><code>GPIO_Speed_10MHz</code></td><td>10 MHz</td></tr>
+<tr><td><code>GPIO_Speed_2MHz</code></td><td>2 MHz</td></tr>
+<tr><td><code>GPIO_Speed_30MHz</code></td><td>30 MHz (มี alias <code>GPIO_Speed_50MHz</code> ชี้มาที่ค่าเดียวกัน)</td></tr>
+</tbody>
+</table>
+
+<h3>GPIO_pins_define</h3>
+<table>
+<thead><tr><th>Macro</th><th>ค่า</th></tr></thead>
+<tbody>
+<tr><td><code>GPIO_Pin_0</code> .. <code>GPIO_Pin_7</code></td><td>bitmask ขาที่ 0-7 (<code>0x0001</code> .. <code>0x0080</code>)</td></tr>
+<tr><td><code>GPIO_Pin_All</code></td><td><code>0xFFFF</code> — ทุกขาในพอร์ต</td></tr>
+</tbody>
+</table>
+
+<div class="callout callout-warn">
+    CH32V003 ใช้จริงแค่ขา 0-7 ต่อพอร์ต (register กว้าง 32 บิตแต่ตัว MCU มีแค่ 8 pin ต่อพอร์ต) ค่า <code>GPIO_Pin_8</code> ขึ้นไปไม่มีนิยามในไฟล์นี้
+</div>
+</section>
+
+<section>
+<h2>BitAction (สำหรับ GPIO_WriteBit)</h2>
+<table>
+<thead><tr><th>ค่าคงที่</th><th>ความหมาย</th></tr></thead>
+<tbody>
+<tr><td><code>Bit_RESET</code></td><td>= 0, เขียนขาเป็น LOW</td></tr>
+<tr><td><code>Bit_SET</code></td><td>= 1, เขียนขาเป็น HIGH</td></tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>GPIO_Remap_define (สำหรับ GPIO_PinRemapConfig)</h2>
+<table>
+<thead><tr><th>Macro</th><th>ใช้ทำอะไร</th></tr></thead>
+<tbody>
+<tr><td><code>GPIO_Remap_SPI1</code></td><td>ย้ายขา SPI1 ไปตำแหน่งสำรอง</td></tr>
+<tr><td><code>GPIO_PartialRemap_I2C1</code> / <code>GPIO_FullRemap_I2C1</code></td><td>ย้ายขา I2C1 บางส่วน/ทั้งหมด</td></tr>
+<tr><td><code>GPIO_PartialRemap1_USART1</code> / <code>GPIO_PartialRemap2_USART1</code> / <code>GPIO_FullRemap_USART1</code></td><td>ย้ายขา USART1 แบบต่าง ๆ</td></tr>
+<tr><td><code>GPIO_PartialRemap1_TIM1</code> / <code>GPIO_PartialRemap2_TIM1</code> / <code>GPIO_FullRemap_TIM1</code></td><td>ย้ายขา TIM1 (PWM)</td></tr>
+<tr><td><code>GPIO_PartialRemap1_TIM2</code> / <code>GPIO_PartialRemap2_TIM2</code> / <code>GPIO_FullRemap_TIM2</code></td><td>ย้ายขา TIM2 (PWM)</td></tr>
+<tr><td><code>GPIO_Remap_PA1PA2</code> (alias <code>GPIO_Remap_PA1_2</code>)</td><td>เปิดใช้งาน PA1/PA2 เป็น GPIO ทั่วไป</td></tr>
+<tr><td><code>GPIO_Remap_ADC1_ETRGINJ</code> / <code>GPIO_Remap_ADC1_ETRGREG</code></td><td>ย้าย external trigger ของ ADC1</td></tr>
+<tr><td><code>GPIO_Remap_LSI_CAL</code></td><td>เปิดฟังก์ชันสอบเทียบ LSI ออกทางขา</td></tr>
+<tr><td><code>GPIO_Remap_SDI_Disable</code></td><td>ปิดใช้งาน SDI (Single-wire Debug Interface)</td></tr>
+</tbody>
+</table>
+
+<h3>GPIO_Port_Sources / GPIO_Pin_sources (สำหรับ GPIO_EXTILineConfig)</h3>
+<table>
+<thead><tr><th>Macro</th><th>ความหมาย</th></tr></thead>
+<tbody>
+<tr><td><code>GPIO_PortSourceGPIOA</code></td><td>เลือกพอร์ต A เป็นแหล่งของ EXTI line</td></tr>
+<tr><td><code>GPIO_PortSourceGPIOC</code></td><td>เลือกพอร์ต C เป็นแหล่งของ EXTI line</td></tr>
+<tr><td><code>GPIO_PortSourceGPIOD</code></td><td>เลือกพอร์ต D เป็นแหล่งของ EXTI line</td></tr>
+<tr><td><code>GPIO_PinSource0</code> .. <code>GPIO_PinSource7</code></td><td>เลขขา (0-7) ที่จะผูกกับ EXTI line ตามเลขเดียวกัน</td></tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>ตารางอ้างอิงฟังก์ชัน</h2>
+<table>
+<thead>
+<tr><th>ฟังก์ชัน</th><th>พารามิเตอร์</th><th>คืนค่า</th><th>คำอธิบาย</th><th>หมายเหตุ</th></tr>
+</thead>
+<tbody>
+<tr>
+    <td><code>void GPIO_DeInit(GPIO_TypeDef *GPIOx)</code></td>
+    <td><code>GPIOx</code>: <code>GPIOA</code>/<code>GPIOC</code>/<code>GPIOD</code></td>
+    <td><code>void</code></td>
+    <td>รีเซ็ตเรจิสเตอร์ของพอร์ตนั้นกลับค่าเริ่มต้น (ผ่าน RCC reset)</td>
+    <td>ไม่ปิด clock ให้ — เป็นแค่ reset การตั้งค่า</td>
+</tr>
+<tr>
+    <td><code>void GPIO_AFIODeInit(void)</code></td>
+    <td>ไม่มี</td>
+    <td><code>void</code></td>
+    <td>รีเซ็ต AFIO (remap, event, EXTI select) กลับค่าเริ่มต้น</td>
+    <td>ใช้ล้าง remap/EXTI mapping ทั้งหมดพร้อมกัน</td>
+</tr>
+<tr>
+    <td><code>void GPIO_Init(GPIO_TypeDef *GPIOx, GPIO_InitTypeDef *GPIO_InitStruct)</code></td>
+    <td><code>GPIOx</code>: พอร์ต<br><code>GPIO_InitStruct</code>: pointer struct ตั้งค่า</td>
+    <td><code>void</code></td>
+    <td>ตั้งค่าโหมด/ความเร็วของขาตาม struct — ฟังก์ชันหลักที่ต้องเรียกก่อนใช้ GPIO ทุกครั้ง</td>
+    <td>ต้อง <code>RCC_APB2PeriphClockCmd</code> เปิด clock พอร์ตก่อน ไม่งั้นค่าที่ตั้งไม่มีผล</td>
+</tr>
+<tr>
+    <td><code>void GPIO_StructInit(GPIO_InitTypeDef *GPIO_InitStruct)</code></td>
+    <td><code>GPIO_InitStruct</code>: pointer struct</td>
+    <td><code>void</code></td>
+    <td>ใส่ค่า default ให้ struct: <code>GPIO_Pin_All</code>, <code>GPIO_Speed_2MHz</code>, <code>GPIO_Mode_IN_FLOATING</code></td>
+    <td>เรียกก่อนแก้บาง field เอง เพื่อไม่ให้ field อื่นเป็นขยะ (garbage)</td>
+</tr>
+<tr>
+    <td><code>uint8_t GPIO_ReadInputDataBit(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin)</code></td>
+    <td><code>GPIOx</code>: พอร์ต<br><code>GPIO_Pin</code>: <code>GPIO_Pin_x</code> ขาเดียว</td>
+    <td><code>uint8_t</code> (<code>Bit_SET</code>/<code>Bit_RESET</code>)</td>
+    <td>อ่านค่าลอจิกปัจจุบันของขา 1 ขา จากรีจิสเตอร์ <code>INDR</code></td>
+    <td>อ่านได้ทั้งขา input และ output (อ่านสถานะจริงบนขา)</td>
+</tr>
+<tr>
+    <td><code>uint16_t GPIO_ReadInputData(GPIO_TypeDef *GPIOx)</code></td>
+    <td><code>GPIOx</code>: พอร์ต</td>
+    <td><code>uint16_t</code></td>
+    <td>อ่านค่า <code>INDR</code> ทั้งพอร์ตพร้อมกัน (16 บิต บิตที่ไม่ใช้เป็น 0)</td>
+    <td>เร็วกว่าอ่านทีละขา ใช้ตอนต้องอ่านหลายขาพร้อมกัน</td>
+</tr>
+<tr>
+    <td><code>uint8_t GPIO_ReadOutputDataBit(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin)</code></td>
+    <td><code>GPIOx</code>, <code>GPIO_Pin</code>: ขาเดียว</td>
+    <td><code>uint8_t</code></td>
+    <td>อ่านค่าที่ <em>เขียนไว้ล่าสุด</em> ใน <code>OUTDR</code> (ไม่ใช่ค่าที่วัดจากขาจริง)</td>
+    <td>ใช้ตรวจสอบสถานะเอาต์พุตที่ MCU สั่งไว้</td>
+</tr>
+<tr>
+    <td><code>uint16_t GPIO_ReadOutputData(GPIO_TypeDef *GPIOx)</code></td>
+    <td><code>GPIOx</code>: พอร์ต</td>
+    <td><code>uint16_t</code></td>
+    <td>อ่านค่า <code>OUTDR</code> ทั้งพอร์ต</td>
+    <td>-</td>
+</tr>
+<tr>
+    <td><code>void GPIO_SetBits(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin)</code></td>
+    <td><code>GPIOx</code>, <code>GPIO_Pin</code>: 1 ขาหรือหลายขา OR กัน</td>
+    <td><code>void</code></td>
+    <td>ตั้งขาที่ระบุเป็น HIGH ผ่าน <code>BSHR</code> (atomic bit-set)</td>
+    <td>เร็วและปลอดภัยกว่า read-modify-write ด้วย <code>GPIO_Write</code></td>
+</tr>
+<tr>
+    <td><code>void GPIO_ResetBits(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin)</code></td>
+    <td><code>GPIOx</code>, <code>GPIO_Pin</code></td>
+    <td><code>void</code></td>
+    <td>ตั้งขาที่ระบุเป็น LOW ผ่าน <code>BCR</code> (atomic bit-clear)</td>
+    <td>-</td>
+</tr>
+<tr>
+    <td><code>void GPIO_WriteBit(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin, BitAction BitVal)</code></td>
+    <td><code>GPIOx</code>, <code>GPIO_Pin</code><br><code>BitVal</code>: <code>Bit_SET</code>/<code>Bit_RESET</code></td>
+    <td><code>void</code></td>
+    <td>เขียนขาตามค่า <code>BitVal</code> ที่ส่งมา (ภายในเรียก SetBits/ResetBits)</td>
+    <td>สะดวกเมื่อค่า HIGH/LOW มาจากตัวแปร (เช่น ผลลัพธ์ if-else)</td>
+</tr>
+<tr>
+    <td><code>void GPIO_Write(GPIO_TypeDef *GPIOx, uint16_t PortVal)</code></td>
+    <td><code>GPIOx</code>: พอร์ต<br><code>PortVal</code>: ค่า 16 บิตเขียนทับทั้งพอร์ต</td>
+    <td><code>void</code></td>
+    <td>เขียนทับค่า <code>OUTDR</code> ทั้งพอร์ตในครั้งเดียว</td>
+    <td>ไม่ atomic ต่อบิต — ระวังไปทับขาอื่นที่ไม่ได้ตั้งใจเปลี่ยน</td>
+</tr>
+<tr>
+    <td><code>void GPIO_PinLockConfig(GPIO_TypeDef *GPIOx, uint16_t GPIO_Pin)</code></td>
+    <td><code>GPIOx</code>, <code>GPIO_Pin</code></td>
+    <td><code>void</code></td>
+    <td>ล็อกค่าคอนฟิกของขา (โหมด/ความเร็ว) ไม่ให้เปลี่ยนได้จนกว่าจะรีเซ็ต MCU</td>
+    <td>ต้องเรียกตามลำดับ sequence เฉพาะ (ฟังก์ชันจัดการให้แล้ว) ใช้กับขาที่สำคัญ เช่น ขาที่คุมฮาร์ดแวร์อันตราย</td>
+</tr>
+<tr>
+    <td><code>void GPIO_EventOutputConfig(uint8_t GPIO_PortSource, uint8_t GPIO_PinSource)</code></td>
+    <td><code>GPIO_PortSource</code>: <code>GPIO_PortSourceGPIOx</code><br><code>GPIO_PinSource</code>: <code>GPIO_PinSourcex</code></td>
+    <td><code>void</code></td>
+    <td>เลือกขาที่จะส่งสัญญาณ Cortex/RISC-V event output ออกไป</td>
+    <td>ใช้ร่วมกับ <code>GPIO_EventOutputCmd</code></td>
+</tr>
+<tr>
+    <td><code>void GPIO_EventOutputCmd(FunctionalState NewState)</code></td>
+    <td><code>NewState</code>: <code>ENABLE</code>/<code>DISABLE</code></td>
+    <td><code>void</code></td>
+    <td>เปิด/ปิดการส่งออก event ที่ตั้งค่าไว้จาก <code>GPIO_EventOutputConfig</code></td>
+    <td>ใช้งานไม่บ่อยในโปรเจกต์ทั่วไป</td>
+</tr>
+<tr>
+    <td><code>void GPIO_PinRemapConfig(uint32_t GPIO_Remap, FunctionalState NewState)</code></td>
+    <td><code>GPIO_Remap</code>: ค่าคงที่ <code>GPIO_*Remap*</code><br><code>NewState</code>: <code>ENABLE</code>/<code>DISABLE</code></td>
+    <td><code>void</code></td>
+    <td>ย้ายฟังก์ชันสำรอง (SPI1/I2C1/USART1/TIM1/TIM2/ฯลฯ) ไปขาชุดอื่นตามที่ชิปรองรับ</td>
+    <td>ต้องเปิด clock ของ <code>AFIO</code> (<code>RCC_APB2Periph_AFIO</code>) ก่อนเรียก</td>
+</tr>
+<tr>
+    <td><code>void GPIO_EXTILineConfig(uint8_t GPIO_PortSource, uint8_t GPIO_PinSource)</code></td>
+    <td><code>GPIO_PortSource</code>: <code>GPIO_PortSourceGPIOx</code><br><code>GPIO_PinSource</code>: <code>GPIO_PinSourcex</code></td>
+    <td><code>void</code></td>
+    <td>ผูกขา GPIO เข้ากับ EXTI line หมายเลขเดียวกับ pin source (แก้ <code>AFIO->EXTICR</code>)</td>
+    <td>ต้องเรียก<strong>ก่อน</strong> <code>EXTI_Init()</code> เสมอ — ดูรายละเอียดที่หน้า <a href="exti.html">EXTI</a></td>
+</tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>ตัวอย่างการใช้งาน</h2>
+
+<h3>1. Output Push-Pull: กระพริบ LED ด้วย SPL ดิบ</h3>
+<pre><code class="language-c">#include "ch32v00x_gpio.h"
+#include "ch32v00x_rcc.h"
+
+void LED_Init(void)
+{
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOC, ENABLE);   // 1. เปิด clock พอร์ตก่อนเสมอ
+
+    GPIO_InitTypeDef GPIO_InitStructure = {0};
+    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_0;
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_10MHz;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;         // push-pull output
+    GPIO_Init(GPIOC, &GPIO_InitStructure);
+}
+
+int main(void)
+{
+    LED_Init();
+    while (1) {
+        GPIO_SetBits(GPIOC, GPIO_Pin_0);     // HIGH
+        Delay_Ms(500);
+        GPIO_ResetBits(GPIOC, GPIO_Pin_0);   // LOW
+        Delay_Ms(500);
+    }
+}</code></pre>
+
+<h3>2. Input Pull-Up: อ่านปุ่มกด</h3>
+<pre><code class="language-c">RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOC, ENABLE);
+
+GPIO_InitTypeDef GPIO_InitStructure = {0};
+GPIO_InitStructure.GPIO_Pin = GPIO_Pin_1;
+GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPU;   // input pull-up ภายใน
+GPIO_Init(GPIOC, &GPIO_InitStructure);
+
+if (GPIO_ReadInputDataBit(GPIOC, GPIO_Pin_1) == Bit_RESET) {
+    // ปุ่มกด (ต่อ PC1 กับ GND) = อ่านได้ LOW
+}</code></pre>
+
+<h3>3. Alternate Function + Remap: ย้าย USART1 ไปตำแหน่งสำรอง</h3>
+<pre><code class="language-c">RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOD | RCC_APB2Periph_AFIO, ENABLE);
+
+GPIO_PinRemapConfig(GPIO_PartialRemap1_USART1, ENABLE);  // ย้ายขา USART1 TX/RX
+
+GPIO_InitTypeDef GPIO_InitStructure = {0};
+GPIO_InitStructure.GPIO_Pin = GPIO_Pin_5;         // ขา TX (ตำแหน่งใหม่หลัง remap)
+GPIO_InitStructure.GPIO_Speed = GPIO_Speed_10MHz;
+GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;   // alternate function push-pull
+GPIO_Init(GPIOD, &GPIO_InitStructure);</code></pre>
+
+<h3>4. EXTI Interrupt บนขา GPIO (ดูรายละเอียดเต็มที่หน้า EXTI)</h3>
+<pre><code class="language-c">RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOC | RCC_APB2Periph_AFIO, ENABLE);
+
+GPIO_InitTypeDef GPIO_InitStructure = {0};
+GPIO_InitStructure.GPIO_Pin = GPIO_Pin_1;
+GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPU;     // ต้องเป็น input ก่อนตั้ง interrupt
+GPIO_Init(GPIOC, &GPIO_InitStructure);
+
+GPIO_EXTILineConfig(GPIO_PortSourceGPIOC, GPIO_PinSource1);  // ผูก PC1 -> EXTI Line1
+// ต่อด้วย EXTI_Init() + NVIC_Init() — ดูตัวอย่างเต็มในหน้า exti.html</code></pre>
+</section>
+
+<section>
+<h2>ปัญหาที่พบบ่อย</h2>
+<table>
+<thead><tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr></thead>
+<tbody>
+<tr>
+    <td>เรียก <code>GPIO_Init()</code> แล้วขาไม่ตอบสนองเลย</td>
+    <td>ลืมเปิด clock ให้พอร์ตด้วย <code>RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOx, ENABLE)</code> ก่อน — เขียน register ของพอร์ตที่ยังไม่มี clock จะไม่มีผลใด ๆ</td>
+    <td>เรียก <code>RCC_APB2PeriphClockCmd</code> เปิด clock พอร์ตนั้นเสมอ ก่อน <code>GPIO_Init()</code></td>
+</tr>
+<tr>
+    <td><code>GPIO_Mode_AF_PP</code>/<code>AF_OD</code> ตั้งแล้วแต่อุปกรณ์ต่อพ่วง (USART/SPI/I2C/PWM) ไม่ทำงาน</td>
+    <td>โหมด AF บอกแค่ว่าขาให้วงจร alternate function ควบคุม — ต้องเปิด peripheral clock และ config peripheral นั้นเอง (เช่น <code>USART_Init</code>) ด้วย ไม่ใช่แค่ตั้ง GPIO</td>
+    <td>ตรวจว่าเปิด clock ของ peripheral ที่เกี่ยวข้อง และเรียก <code>_Init()</code> ของ peripheral นั้นครบแล้ว</td>
+</tr>
+<tr>
+    <td>ใช้ <code>GPIO_PinRemapConfig()</code> แล้ว remap ไม่ทำงาน</td>
+    <td>ลืมเปิด clock ของ <code>AFIO</code> (<code>RCC_APB2Periph_AFIO</code>) — การเขียน <code>AFIO->PCFR1</code> ต้องมี clock ของ AFIO ก่อน</td>
+    <td>เพิ่ม <code>RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE)</code> คู่กับ clock ของพอร์ต GPIO</td>
+</tr>
+<tr>
+    <td><code>GPIO_ReadOutputDataBit()</code> คืนค่าไม่ตรงกับสถานะจริงบนขา</td>
+    <td>ฟังก์ชันนี้อ่านจากรีจิสเตอร์ <code>OUTDR</code> (ค่าที่ MCU สั่งล่าสุด) ไม่ใช่ค่าที่วัดจากขาจริง ถ้าขาโหลดเกิน/ช็อตกับภายนอกค่าจริงบนขาอาจต่างไป</td>
+    <td>ถ้าต้องการอ่านสถานะจริงของขา (รวมถึงขา output ที่ถูกภายนอกบังคับ) ให้ใช้ <code>GPIO_ReadInputDataBit()</code> แทน — register <code>INDR</code> อ่านสถานะไฟฟ้าจริงบนขาเสมอ ไม่ว่าโหมดจะเป็น input หรือ output</td>
+</tr>
+<tr>
+    <td>ใช้ <code>GPIO_EXTILineConfig()</code> กับหลายพอร์ตแล้ว interrupt ตัวหนึ่งหายไปเงียบ ๆ</td>
+    <td>EXTI Line ผูกกับ<strong>เลขขา ไม่ใช่พอร์ต</strong> — <code>GPIO_EXTILineConfig(GPIO_PortSourceGPIOC, GPIO_PinSource1)</code> กับ <code>GPIO_EXTILineConfig(GPIO_PortSourceGPIOD, GPIO_PinSource1)</code> ใช้ <strong>EXTI Line 1 เดียวกัน</strong> — เรียกครั้งหลังจะทับครั้งแรก</td>
+    <td>เลือกใช้ pin source ที่เลขต่างกันสำหรับแต่ละ interrupt เช่น PC1 (Line1) กับ PD2 (Line2)</td>
+</tr>
+<tr>
+    <td><code>GPIO_Write()</code> ทำให้ขาอื่นในพอร์ตเปลี่ยนสถานะโดยไม่ตั้งใจ</td>
+    <td><code>GPIO_Write()</code> เขียนทับ <code>OUTDR</code> ทั้ง 16 บิตในครั้งเดียว ไม่ใช่แก้เฉพาะขาที่ต้องการ</td>
+    <td>ใช้ <code>GPIO_SetBits()</code>/<code>GPIO_ResetBits()</code>/<code>GPIO_WriteBit()</code> แทนเมื่อต้องการแก้แค่บางขา เพราะเป็น atomic bit operation ผ่าน <code>BSHR</code>/<code>BCR</code></td>
+</tr>
+</tbody>
+</table>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="exti.html">EXTI →</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
