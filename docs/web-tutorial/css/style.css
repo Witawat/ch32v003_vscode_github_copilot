@@ -81,9 +81,10 @@ p { margin: 0.6rem 0; }
 pre.ascii-circuit {
     background: #f1f5f9; color: #1e293b;
     font-size: 0.82em; font-family: 'Courier New', 'Consolas', 'Liberation Mono', monospace;
-    border: 1px solid var(--border); text-align: center;
+    border: 1px solid var(--border); text-align: left;
     line-height: 1.2; padding: 1rem 0.6rem;
     overflow-x: auto; white-space: pre; font-weight: 600;
+    max-width: 100%; margin: 0.6rem 0;
 }
 
 /* Tables */
@@ -134,11 +135,14 @@ table.wiring-table td:nth-child(2) { text-align: center; font-weight: 700; color
     padding: 1.5rem 0.5rem;
     max-width: 100%;
 }
-.flowchart svg { background: #fff !important; max-width: 100%; height: auto; }
+.flowchart svg { background: #fff !important; max-width: 100% !important; height: auto; }
 .flowchart svg rect { fill: #fff !important; }
 .flowchart svg g rect { fill: #fff !important; }
 .flowchart svg text { font-size: 22px !important; }
 .flowchart svg g.edgeLabel text { font-size: 19px !important; }
+
+/* Mermaid diagrams outside .flowchart (per-example ผังการทำงาน) still need width containment */
+pre.mermaid svg { max-width: 100% !important; height: auto; }
 
 /* Index page */
 #toc { list-style: none; }
