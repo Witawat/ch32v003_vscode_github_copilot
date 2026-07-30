@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SimpleScheduler — Cooperative Task Scheduler | SimpleHAL API Reference</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+</head>
+<body>
+
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="onewire.html">← Simple1Wire</a>
+</nav>
+
+<h1>SimpleScheduler — Cooperative Task Scheduler</h1>
+<span class="level level-expert">ระดับผู้เชี่ยวชาญ</span>
+
+<div class="callout callout-warn">
+    <strong>ไม่ใช่ส่วนหนึ่งของ SimpleHAL.h:</strong> ต่างจากโมดูลอื่นในเอกสารนี้ — SimpleScheduler อยู่ที่ <code>User/Lib/SimpleScheduler/</code> (ไม่ใช่ <code>User/SimpleHAL/</code>) ต้อง <code>#include "SimpleScheduler.h"</code> เอง และเพิ่มไฟล์ <code>SimpleScheduler.c</code> เข้าโปรเจกต์ (เพิ่มใน Makefile/IDE) ก่อนคอมไพล์
+</div>
+
+<section>
+<h2>ภาพรวม</h2>
+<p>SimpleScheduler เป็นตัวจัดตารางงานแบบ <strong>cooperative (non-preemptive) round-robin</strong> — ใช้ทำงานหลายๆ งานบน single-core โดยไม่ต้องใช้ RTOS แต่ละ task มี interval (ms) เป็นอิสระของตัวเอง Scheduler จะเรียก task เมื่อถึงเวลาที่กำหนดโดยใช้ <code>Get_CurrentMs()</code> เป็น time base</p>
+<ul>
+    <li><strong>สูงสุด 8 tasks</strong> — ปรับได้ผ่าน <code>#define SCHEDULER_MAX_TASKS</code> ก่อน include</li>
+    <li><strong>แต่ละ task มี interval เป็นอิสระ</strong> — ตั้งเวลาแยกกันได้</li>
+    <li><strong>Enable/Disable ได้</strong> — หยุด task ชั่วคราวโดยไม่ต้อง remove</li>
+    <li><strong>เปลี่ยน interval ขณะรันได้</strong> — ไม่ต้อง remove แล้ว add ใหม่</li>
+</ul>
+
+<div class="callout callout-err">
+    <strong>Cooperative ไม่ใช่ preemptive:</strong> Task ต้อง<strong>ไม่บล็อกนานเกิน interval ของตัวเอง</strong> (ห้ามใช้ <code>Delay_Ms</code> ยาวๆ หรือ loop รอนานในฟังก์ชัน task) เพราะจะทำให้ task อื่นทั้งหมดช้าตามไปด้วย — task ต้อง return โดยเร็วเสมอ
+</div>
+</section>
+
+<section class="flowchart">
+<h2>ผังการทำงาน</h2>
+<pre class="mermaid">
+flowchart LR
+    T["Timer_Init()<br>ต้องเรียกก่อนเสมอ"] --> SI["Scheduler_Init()"]
+    SI --> AT["Scheduler_AddTask(func, interval_ms)<br>เรียกซ้ำได้สูงสุด 8 ครั้ง"]
+    AT --> LOOP["while(1) { Scheduler_Run(); }"]
+    LOOP -->|"ถึงเวลาของ task ไหน"| RUN["เรียก task นั้น"]
+    RUN --> LOOP
+</pre>
+</section>
+
+<section>
+<h2>ตารางอ้างอิงฟังก์ชัน</h2>
+<table>
+<thead>
+<tr><th>ฟังก์ชัน</th><th>พารามิเตอร์</th><th>คืนค่า</th><th>คำอธิบาย</th><th>ใช้ร่วมกับ</th></tr>
+</thead>
+<tbody>
+<tr>
+    <td><code>Scheduler_Init()</code></td>
+    <td>ไม่มี</td>
+    <td><code>void</code></td>
+    <td>เคลียร์ตาราง task ทั้งหมด</td>
+    <td><strong>ต้องเรียกก่อน <code>Scheduler_AddTask()</code> ทุกครั้ง</strong> — ต้องมี <code>Timer_Init()</code> เรียกไปก่อนแล้วด้วย เพราะ scheduler ใช้ <code>Get_CurrentMs()</code> เป็น time base</td>
+</tr>
+<tr>
+    <td><code>Scheduler_AddTask(func, interval_ms)</code></td>
+    <td><code>func</code>: <code>void (*)(void)</code><br><code>interval_ms</code>: uint32_t (ต้อง &gt; 0)</td>
+    <td><code>Scheduler_Status</code></td>
+    <td>เพิ่ม task ใหม่เข้าตาราง</td>
+    <td>คืน <code>SCHEDULER_ERROR_PARAM</code> ถ้า <code>func</code>=NULL หรือ <code>interval_ms</code>=0; คืน <code>SCHEDULER_ERROR_FULL</code> ถ้าเต็ม 8 tasks — เช็ค return value ก่อนใช้งานจริง</td>
+</tr>
+<tr>
+    <td><code>Scheduler_Run()</code></td>
+    <td>ไม่มี</td>
+    <td><code>void</code></td>
+    <td>ตรวจสอบและเรียก task ที่ถึงเวลา</td>
+    <td><strong>เรียกซ้ำใน <code>while(1)</code> ของ main loop</strong> — ห้ามใส่ <code>Delay_Ms</code> ใน loop เดียวกัน เพราะจะทำให้ทุก task ถูก delay ไปด้วย</td>
+</tr>
+<tr>
+    <td><code>Scheduler_RemoveTask(id)</code></td>
+    <td><code>id</code>: uint8_t (index ตอน add)</td>
+    <td><code>Scheduler_Status</code></td>
+    <td>ลบ task ออกจากตาราง — index ของ task ที่เหลือจะเลื่อนขึ้นมาแทนที่</td>
+    <td>คืน <code>SCHEDULER_ERROR_PARAM</code> ถ้า <code>id</code> เกินจำนวน task ปัจจุบัน — <strong>ระวัง</strong>: id ของ task ตัวถัดไปจะเปลี่ยนหลัง remove เพราะ array เลื่อนขึ้นมาเติมช่องว่าง</td>
+</tr>
+<tr>
+    <td><code>Scheduler_SetInterval(id, interval_ms)</code></td>
+    <td><code>id</code>: uint8_t<br><code>interval_ms</code>: uint32_t</td>
+    <td><code>Scheduler_Status</code></td>
+    <td>เปลี่ยน interval ของ task ที่รันอยู่แล้วโดยไม่ต้อง remove/add ใหม่</td>
+    <td>คืน <code>SCHEDULER_ERROR_PARAM</code> ถ้า <code>id</code> ไม่มีอยู่จริง</td>
+</tr>
+<tr>
+    <td><code>Scheduler_EnableTask(id)</code></td>
+    <td><code>id</code>: uint8_t</td>
+    <td><code>Scheduler_Status</code></td>
+    <td>เปิดใช้งาน task ที่เคยถูก disable — รีเซ็ต <code>last_run_ms</code> เป็นเวลาปัจจุบันด้วย (นับ interval ใหม่)</td>
+    <td>ใช้คู่กับ <code>Scheduler_DisableTask()</code> เพื่อหยุด/เริ่ม task ชั่วคราวโดยไม่เสีย slot</td>
+</tr>
+<tr>
+    <td><code>Scheduler_DisableTask(id)</code></td>
+    <td><code>id</code>: uint8_t</td>
+    <td><code>Scheduler_Status</code></td>
+    <td>ปิดใช้งาน task ชั่วคราว — <code>Scheduler_Run()</code> จะข้าม task นี้ไป</td>
+    <td>task ยังอยู่ในตาราง (ไม่เสีย slot จาก 8 ตัว) ต่างจาก <code>RemoveTask()</code> ที่ลบทิ้งจริง</td>
+</tr>
+<tr>
+    <td><code>Scheduler_GetTaskCount()</code></td>
+    <td>ไม่มี</td>
+    <td><code>uint8_t</code></td>
+    <td>จำนวน task ทั้งหมดที่ add ไว้ (รวมทั้งที่ disable)</td>
+    <td>ใช้เช็คว่าเหลือ slot ว่างกี่ตัวก่อนเรียก <code>AddTask()</code> เพิ่ม (สูงสุด <code>SCHEDULER_MAX_TASKS</code> = 8)</td>
+</tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>Scheduler_Status (ค่าคืนกลับ)</h2>
+<table>
+<thead><tr><th>ค่าคงที่</th><th>ค่า</th><th>ความหมาย</th></tr></thead>
+<tbody>
+<tr><td><code>SCHEDULER_OK</code></td><td>0</td><td>สำเร็จ</td></tr>
+<tr><td><code>SCHEDULER_ERROR_FULL</code></td><td>1</td><td>ตารางเต็ม (ครบ <code>SCHEDULER_MAX_TASKS</code> แล้ว)</td></tr>
+<tr><td><code>SCHEDULER_ERROR_PARAM</code></td><td>2</td><td>พารามิเตอร์ผิด (func=NULL, interval=0, หรือ id ไม่มีอยู่จริง)</td></tr>
+<tr><td><code>SCHEDULER_ERROR_NOTASK</code></td><td>3</td><td>ไม่มี task ในตาราง</td></tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>ปรับจำนวน Task สูงสุด</h2>
+<p>ค่า default คือ 8 tasks สามารถเปลี่ยนได้โดย <code>#define</code> <strong>ก่อน</strong> <code>#include</code>:</p>
+<pre><code class="language-c">#define SCHEDULER_MAX_TASKS  4
+#include "SimpleScheduler.h"
+</code></pre>
+<div class="callout callout-warn">
+<strong>ข้อควรระวัง:</strong> CH32V003 มี RAM เพียง 2KB — แต่ละ task ใช้ <code>sizeof(Scheduler_Task)</code> ≈ 13-16 byte เพิ่มจำนวน task มากเกินไปอาจกิน RAM โดยไม่จำเป็นถ้าไม่ได้ใช้ครบ
+</div>
+</section>
+
+<section>
+<h2>ข้อผิดพลาดที่พบบ่อย</h2>
+
+<div class="callout callout-err">
+<strong>Task บล็อกนานเกิน interval</strong> — เช่นใช้ <code>Delay_Ms(2000)</code> ในฟังก์ชัน task ที่ตั้ง interval 500ms
+<p>เพราะเป็น cooperative scheduler ไม่ preempt — task ที่บล็อกนานจะทำให้ <strong>ทุก task อื่นค้างตามไปด้วย</strong> ต้องออกแบบ task ให้ return เร็วเสมอ ใช้ non-blocking state machine แทนถ้าต้องรอ</p>
+</div>
+
+<div class="callout callout-err">
+<strong>ลืมเรียก <code>Timer_Init()</code> ก่อน <code>Scheduler_Init()</code></strong> — Scheduler ใช้ <code>Get_CurrentMs()</code> เป็น time base ซึ่งต้องพึ่ง Timer ที่ init แล้ว
+<p>ถ้าลืม interval ทั้งหมดจะคำนวณผิดตั้งแต่ต้น (เวลาไม่เดินหรือเดินผิด)</p>
+</div>
+
+<div class="callout callout-warn">
+<strong>ไม่เช็ค return value ของ <code>Scheduler_AddTask()</code></strong> — ถ้าตารางเต็ม (เกิน 8 tasks) ฟังก์ชันจะคืน <code>SCHEDULER_ERROR_FULL</code> เงียบๆ โดย task นั้นจะไม่ถูกเพิ่มเข้าไปเลย
+<p>ควรเช็คค่าที่คืนกลับเสมอ โดยเฉพาะเวลา add หลาย task ติดกัน</p>
+</div>
+
+<div class="callout callout-warn">
+<strong>ใช้ id ผิดหลัง <code>RemoveTask()</code></strong> — <code>Scheduler_RemoveTask()</code> เลื่อน array ทำให้ id ของ task ตัวถัดไปเปลี่ยน
+<p>ถ้าเก็บ id ของ task อื่นไว้ใช้ภายหลัง ต้องเรียก <code>RemoveTask()</code> ด้วยความระมัดระวัง หรือหลีกเลี่ยงการ remove ถ้าใช้ <code>DisableTask()</code> แทนได้</p>
+</div>
+</section>
+
+<section>
+<h2>ตัวอย่างโค้ด</h2>
+
+<h3>Multi-Task พื้นฐาน (LED + Sensor)</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+#include "SimpleScheduler.h"
+
+void led_task(void) {
+    digitalToggle(PC0);  // กระพริบทุก 500ms
+}
+
+void sensor_task(void) {
+    // อ่านเซนเซอร์ทุก 1000ms — ต้องไม่บล็อกนาน
+    uint16_t val = analogRead(PA1);
+    (void)val;
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();               // ต้อง init ก่อน Scheduler
+    pinMode(PC0, PIN_MODE_OUTPUT);
+
+    Scheduler_Init();
+    Scheduler_AddTask(led_task, 500);
+    Scheduler_AddTask(sensor_task, 1000);
+
+    while (1) {
+        Scheduler_Run();        // ห้ามใส่ Delay_Ms ใน loop นี้
+    }
+}</code></pre>
+
+<h3>Enable/Disable Task ขณะรัน</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+#include "SimpleScheduler.h"
+
+void blink_task(void) { digitalToggle(PC0); }
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    pinMode(PC0, PIN_MODE_OUTPUT);
+    pinMode(PC1, PIN_MODE_INPUT_PULLUP);  // ปุ่มเปิด/ปิดกระพริบ
+
+    Scheduler_Init();
+    Scheduler_Status st = Scheduler_AddTask(blink_task, 300);
+    if (st != SCHEDULER_OK) while (1);  // เช็ค error เสมอ
+
+    uint8_t enabled = 1;
+    while (1) {
+        Scheduler_Run();
+
+        if (digitalRead(PC1) == LOW) {
+            if (enabled) { Scheduler_DisableTask(0); enabled = 0; }
+            else         { Scheduler_EnableTask(0);  enabled = 1; }
+            Delay_Ms(200);  // กันปุ่มเด้ง — ใช้นอก scheduler loop เป็นครั้งคราวได้
+        }
+    }
+}</code></pre>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="onewire.html">← Simple1Wire</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

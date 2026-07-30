@@ -146,29 +146,50 @@ flowchart LR
 </tbody>
 </table>
 
-<h3>4. Option Bytes / Protection / Status</h3>
+<h3>4. Option Bytes</h3>
 <table>
 <thead><tr><th>ฟังก์ชัน</th><th>พารามิเตอร์</th><th>คืนค่า</th><th>คำอธิบาย</th></tr></thead>
 <tbody>
 <tr><td><code>FLASH_ProgramOptionByteData(Address, Data)</code></td><td><code>Address</code>: address ของ option byte<br><code>Data</code>: ค่า 8-bit</td><td><code>FLASH_Status</code></td><td>เขียนค่าลง option byte data ตำแหน่งที่ระบุ</td></tr>
-<tr><td><code>FLASH_EnableWriteProtection(FLASH_Pages)</code></td><td><code>FLASH_Pages</code>: OR ของ <code>FLASH_WRProt_Pages*</code></td><td><code>FLASH_Status</code></td><td>ตั้งค่า write-protect ให้กลุ่มหน้าที่ระบุ — ต้อง power-cycle เพื่อให้มีผล</td></tr>
-<tr><td><code>FLASH_ReadOutProtection(NewState)</code></td><td><code>NewState</code>: <code>ENABLE</code>/<code>DISABLE</code></td><td><code>FLASH_Status</code></td><td>เปิด/ปิดการป้องกันอ่านทั้งชิป (readout protection) — เปิดแล้วจะ<strong>ลบทั้งชิป</strong>ตอนปิดกลับ</td></tr>
 <tr><td><code>FLASH_UserOptionByteConfig(OB_IWDG, OB_STDBY, OB_RST, OB_PowerON_Start_Mode)</code></td><td>ค่าคงที่ <code>OB_*</code> ทั้ง 4 กลุ่มด้านบน</td><td><code>FLASH_Status</code></td><td>ตั้งค่า user option byte ทั้งหมดในครั้งเดียว</td></tr>
 <tr><td><code>FLASH_GetUserOptionByte(void)</code></td><td>—</td><td><code>uint32_t</code></td><td>อ่านค่า user option byte ปัจจุบัน (IWDG_SW=bit0, RST_STOP=bit1, RST_STDBY=bit2)</td></tr>
+</tbody>
+</table>
+
+<h3>5. Write Protection / Readout Protection</h3>
+<table>
+<thead><tr><th>ฟังก์ชัน</th><th>พารามิเตอร์</th><th>คืนค่า</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>FLASH_EnableWriteProtection(FLASH_Pages)</code></td><td><code>FLASH_Pages</code>: OR ของ <code>FLASH_WRProt_Pages*</code></td><td><code>FLASH_Status</code></td><td>ตั้งค่า write-protect ให้กลุ่มหน้าที่ระบุ — ต้อง power-cycle เพื่อให้มีผล</td></tr>
+<tr><td><code>FLASH_ReadOutProtection(NewState)</code></td><td><code>NewState</code>: <code>ENABLE</code>/<code>DISABLE</code></td><td><code>FLASH_Status</code></td><td>เปิด/ปิดการป้องกันอ่านทั้งชิป (readout protection) — เปิดแล้วจะ<strong>ลบทั้งชิป</strong>ตอนปิดกลับ</td></tr>
 <tr><td><code>FLASH_GetWriteProtectionOptionByte(void)</code></td><td>—</td><td><code>uint32_t</code></td><td>อ่านค่า write-protection option byte register ปัจจุบัน</td></tr>
 <tr><td><code>FLASH_GetReadOutProtectionStatus(void)</code></td><td>—</td><td><code>FlagStatus</code></td><td>ตรวจสอบว่าเปิด readout protection อยู่หรือไม่</td></tr>
+</tbody>
+</table>
+
+<h3>6. Interrupt / Flag / Status</h3>
+<table>
+<thead><tr><th>ฟังก์ชัน</th><th>พารามิเตอร์</th><th>คืนค่า</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
 <tr><td><code>FLASH_ITConfig(FLASH_IT, NewState)</code></td><td><code>FLASH_IT</code>: <code>FLASH_IT_ERROR</code>/<code>FLASH_IT_EOP</code><br><code>NewState</code>: <code>ENABLE</code>/<code>DISABLE</code></td><td><code>void</code></td><td>เปิด/ปิด interrupt ของ FPEC</td></tr>
 <tr><td><code>FLASH_GetFlagStatus(FLASH_FLAG)</code></td><td><code>FLASH_FLAG</code>: ค่า <code>FLASH_FLAG_*</code></td><td><code>FlagStatus</code></td><td>ตรวจสอบ flag ที่ระบุว่า SET หรือ RESET</td></tr>
 <tr><td><code>FLASH_ClearFlag(FLASH_FLAG)</code></td><td><code>FLASH_FLAG</code>: ค่า <code>FLASH_FLAG_*</code></td><td><code>void</code></td><td>เคลียร์ flag ที่ค้างอยู่ (เขียน 1 เพื่อล้าง)</td></tr>
 <tr><td><code>FLASH_GetStatus(void)</code></td><td>—</td><td><code>FLASH_Status</code></td><td>อ่านสถานะ FPEC ปัจจุบัน (BUSY/ERROR_WRP/COMPLETE) จากการอ่าน register โดยตรง ไม่รอ</td></tr>
 <tr><td><code>FLASH_WaitForLastOperation(Timeout)</code></td><td><code>Timeout</code>: จำนวนรอบสูงสุดที่จะรอ</td><td><code>FLASH_Status</code></td><td>วนรออ่านสถานะจนกว่าจะไม่ busy หรือครบ timeout — ฟังก์ชัน erase/program ภายในเรียกใช้ตัวนี้ก่อนเริ่มงานเสมอ</td></tr>
+</tbody>
+</table>
+
+<h3>7. Latency (Clock)</h3>
+<table>
+<thead><tr><th>ฟังก์ชัน</th><th>พารามิเตอร์</th><th>คืนค่า</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
 <tr><td><code>FLASH_SetLatency(FLASH_Latency)</code></td><td><code>FLASH_Latency</code>: <code>FLASH_Latency_0/1/2</code></td><td><code>void</code></td><td>ตั้งค่ารอบหน่วงของการอ่าน Flash ให้เหมาะกับความถี่ system clock ที่ใช้งาน</td></tr>
 </tbody>
 </table>
 
-<h3>5. Fast Program/Erase (เฉพาะตระกูล CH32V003) และ CRC/ROM helper</h3>
+<h3>8. Fast Program/Erase (เฉพาะตระกูล CH32V003)</h3>
 <div class="callout callout-warn">
-    กลุ่มฟังก์ชัน <strong>Fast Program/Erase</strong> (ลงท้าย <code>_Fast</code>) และ <code>FLASH_ROM_ERASE</code>/<code>FLASH_ROM_WRITE</code> เป็นชุดคำสั่งเฉพาะของ CH32V00x ที่เข้าถึง buffer ภายใน FPEC โดยตรง เพื่อเขียนทีละหน้า (64 ไบต์) เร็วกว่าการเขียนทีละ word — <strong>ไม่คืนค่า FLASH_Status ตรวจสอบ error</strong> (ยกเว้น ROM_ERASE/ROM_WRITE) ต้องเรียกตามลำดับที่กำหนดอย่างเคร่งครัด
+    กลุ่มฟังก์ชัน <strong>Fast Program/Erase</strong> (ลงท้าย <code>_Fast</code>) เป็นชุดคำสั่งเฉพาะของ CH32V00x ที่เข้าถึง buffer ภายใน FPEC โดยตรง เพื่อเขียนทีละหน้า (64 ไบต์) เร็วกว่าการเขียนทีละ word — <strong>ไม่คืนค่า FLASH_Status ตรวจสอบ error</strong> ต้องเรียกตามลำดับที่กำหนดอย่างเคร่งครัด
 </div>
 <table>
 <thead><tr><th>ฟังก์ชัน</th><th>พารามิเตอร์</th><th>คืนค่า</th><th>คำอธิบาย</th></tr></thead>
@@ -177,9 +198,16 @@ flowchart LR
 <tr><td><code>FLASH_BufLoad(Address, Data0)</code></td><td><code>Address</code>: address ปลายทาง (ต้องอยู่ในช่วง flash ที่ถูกต้อง)<br><code>Data0</code>: ค่า 32-bit</td><td><code>void</code></td><td>โหลดข้อมูล 4 ไบต์เข้าบัฟเฟอร์ภายใน — เรียกซ้ำสะสมทีละ word จนครบ 1 หน้า (16 ครั้ง = 64 ไบต์) ก่อนเรียก <code>FLASH_ProgramPage_Fast</code></td></tr>
 <tr><td><code>FLASH_ErasePage_Fast(Page_Address)</code></td><td><code>Page_Address</code>: address เริ่มหน้า (1 หน้า = 64 ไบต์)</td><td><code>void</code></td><td>ลบ 1 หน้าแบบเร็ว (64 ไบต์/หน้า ต่างจาก <code>FLASH_ErasePage</code> ที่ลบทีละ 1KB)</td></tr>
 <tr><td><code>FLASH_ProgramPage_Fast(Page_Address)</code></td><td><code>Page_Address</code>: address เริ่มหน้าที่จะเขียนจริง</td><td><code>void</code></td><td>เขียนข้อมูลที่โหลดไว้ด้วย <code>FLASH_BufLoad</code> ลงหน้า Flash จริงในครั้งเดียว</td></tr>
-<tr><td><code>SystemReset_StartMode(Mode)</code></td><td><code>Mode</code>: <code>Start_Mode_USER</code>/<code>Start_Mode_BOOT</code></td><td><code>void</code></td><td>ตั้งค่าโหมดเริ่มทำงานสำหรับการ reset ครั้งถัดไป (unlock → set → lock ให้ภายในฟังก์ชันแล้ว)</td></tr>
+</tbody>
+</table>
+
+<h3>9. ROM Erase/Write & System Reset</h3>
+<table>
+<thead><tr><th>ฟังก์ชัน</th><th>พารามิเตอร์</th><th>คืนค่า</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
 <tr><td><code>FLASH_ROM_ERASE(StartAddr, Length)</code></td><td><code>StartAddr</code>: address เริ่มต้น (ต้องหาร 64 ลงตัว)<br><code>Length</code>: ความยาวไบต์ (ต้องหาร 64 ลงตัว)</td><td><code>FLASH_Status</code></td><td>ลบช่วง Flash ตามความยาวที่ระบุ โดยเลือกใช้ erase แบบ 1KB หรือ 64B อัตโนมัติให้เหมาะกับ alignment — unlock/lock (รวม Fast lock) ให้ภายในฟังก์ชันแล้ว</td></tr>
 <tr><td><code>FLASH_ROM_WRITE(StartAddr, pbuf, Length)</code></td><td><code>StartAddr</code>: address เริ่มต้น (หาร 64 ลงตัว)<br><code>pbuf</code>: pointer ข้อมูล 32-bit<br><code>Length</code>: ความยาวไบต์ (หาร 64 ลงตัว)</td><td><code>FLASH_Status</code></td><td>เขียนข้อมูลทีละหน้า (64 ไบต์) โดยใช้ buffer-load ภายใน — พื้นที่ต้องถูก erase มาก่อน (ฟังก์ชันนี้ไม่ erase ให้)</td></tr>
+<tr><td><code>SystemReset_StartMode(Mode)</code></td><td><code>Mode</code>: <code>Start_Mode_USER</code>/<code>Start_Mode_BOOT</code></td><td><code>void</code></td><td>ตั้งค่าโหมดเริ่มทำงานสำหรับการ reset ครั้งถัดไป (unlock → set → lock ให้ภายในฟังก์ชันแล้ว)</td></tr>
 </tbody>
 </table>
 </section>

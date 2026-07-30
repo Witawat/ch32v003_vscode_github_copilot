@@ -42,25 +42,25 @@
 <thead><tr><th>โหมด</th><th>Gain</th><th>สูตร</th><th>ใช้เมื่อ</th></tr></thead>
 <tbody>
 <tr>
-    <td><code>OPAMP_VOLTAGE_FOLLOWER</code></td>
+    <td><code>OPAMP_MODE_VOLTAGE_FOLLOWER</code></td>
     <td>1</td>
     <td>Vout = Vin</td>
     <td>Buffer สัญญาณ, impedance matching</td>
 </tr>
 <tr>
-    <td><code>OPAMP_NON_INVERTING</code></td>
+    <td><code>OPAMP_MODE_NON_INVERTING</code></td>
     <td>>1</td>
-    <td>Vout = Vin * (1 + R1/R2)</td>
+    <td>Vout = Vin * (1 + R2/R1)</td>
     <td>ขยายสัญญาณเฟสไม่กลับ</td>
 </tr>
 <tr>
-    <td><code>OPAMP_INVERTING</code></td>
+    <td><code>OPAMP_MODE_INVERTING</code></td>
     <td><0</td>
     <td>Vout = -Vin * (R2/R1)</td>
     <td>ขยายสัญญาณกลับเฟส</td>
 </tr>
 <tr>
-    <td><code>OPAMP_COMPARATOR</code></td>
+    <td><code>OPAMP_MODE_COMPARATOR</code></td>
     <td>∞ (digital)</td>
     <td>Vout = HIGH if Vin+ > Vin-</td>
     <td>เปรียบเทียบแรงดันสองสัญญาณ</td>
@@ -89,7 +89,7 @@
 <pre class="ascii-circuit">
     Vin ────────────► CHPx (OPAMP +)
 
-                    R1
+                    R2
               ┌───[====]───┐
               │            │
               │   ┌───┴───┐│
@@ -97,10 +97,10 @@
                   └───┬───┘
                       │
               ┌───[====]───┤ GND
-              │    R2      │
+              │    R1      │
               └──► CHNx ◄──┘
 </pre>
-<p>Gain = 1 + R1/R2 — output ไม่กลับเฟส</p>
+<p>Gain = 1 + R2/R1 — output ไม่กลับเฟส</p>
 
 <h3>Inverting (gain < 0)</h3>
 <pre class="ascii-circuit">
@@ -135,7 +135,7 @@
 <tbody>
 <tr>
     <td><code>OPAMP_SimpleInit(mode)</code></td>
-    <td><code>mode</code>: OPAMP_VOLTAGE_FOLLOWER / OPAMP_COMPARATOR</td>
+    <td><code>mode</code>: OPAMP_MODE_VOLTAGE_FOLLOWER / OPAMP_MODE_COMPARATOR</td>
     <td><code>void</code></td>
     <td>เริ่ม OPAMP แบบง่าย — ใช้ channel 0 ทั้งคู่</td>
     <td><strong>ทางลัดที่รวม Config+Enable ในตัว</strong> — เรียกครั้งเดียวจบ ไม่ต้องเรียก <code>OPAMP_Enable()</code> ซ้ำ; <strong>ห้ามผสมกับ <code>OPAMP_ConfigXxx()</code>/<code>OPAMP_Init()</code></strong> เลือกใช้ทางใดทางหนึ่งเท่านั้น</td>
@@ -207,7 +207,7 @@
     <td><code>OPAMP_CalculateGainNonInv(r1, r2)</code></td>
     <td><code>r1</code>, <code>r2</code>: R ภายนอก (ohm)</td>
     <td><code>float</code></td>
-    <td>คำนวณ gain = 1 + R1/R2</td>
+    <td>คำนวณ gain = 1 + R2/R1</td>
     <td><strong>เป็น calculator ล้วนๆ ไม่ยุ่งกับฮาร์ดแวร์</strong> — ใช้ตรวจสอบ gain จาก R ที่ต่อจริงบนบอร์ดเท่านั้น ไม่ได้ตั้งค่าอะไรให้ OPAMP (ต้องต่อ R จริงเองคู่กับ <code>OPAMP_ConfigNonInverting()</code>)</td>
 </tr>
 <tr>
@@ -239,10 +239,10 @@
     <td>เรียกได้ทุกเมื่อ — ใช้เช็คก่อนเรียก <code>OPAMP_Disable()</code>/<code>Enable()</code> ซ้ำ</td>
 </tr>
 <tr>
-    <td><code>OPAMP_GetConfig()</code></td>
-    <td>—</td>
-    <td><code>uint32_t</code></td>
-    <td>อ่านค่า configuration register ปัจจุบัน</td>
+    <td><code>OPAMP_GetConfig(&pos, &neg)</code></td>
+    <td><code>pos</code>: OPAMP_Channel_Positive*<br><code>neg</code>: OPAMP_Channel_Negative*</td>
+    <td><code>void</code></td>
+    <td>อ่านค่า channel ที่ตั้งไว้ปัจจุบัน ผ่าน pointer</td>
     <td>สำหรับ debug — เรียกได้หลัง Config/Init แล้ว</td>
 </tr>
 </tbody>
@@ -307,8 +307,8 @@ int main(void) {
     // R1 = 10kΩ, R2 = 10kΩ → gain = 1 + 10k/10k = 2
     OPAMP_ConfigNonInverting(OPAMP_CHP0, OPAMP_CHN0);
     OPAMP_Enable();
-    // ต่อ R1=10k ระหว่าง output กับ CHN0
-    // ต่อ R2=10k ระหว่าง CHN0 กับ GND
+    // ต่อ R2=10k ระหว่าง output กับ CHN0 (feedback)
+    // ต่อ R1=10k ระหว่าง CHN0 กับ GND
 
     float gain = OPAMP_CalculateGainNonInv(10000, 10000); // 2.0
     (void)gain;

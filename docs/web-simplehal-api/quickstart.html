@@ -101,12 +101,33 @@ flowchart TD
     <table>
         <tr><th>Timer</th><th>ใช้โดย</th><th>ข้อจำกัด</th></tr>
         <tr><td><strong>SysTick</strong></td><td><code>Timer_Init()</code> → <code>Delay_Ms()</code>, <code>Get_CurrentMs()</code></td><td>ใช้ได้เฉพาะ 1ms resolution, ไม่สามารถใช้ร่วมกับฟังก์ชันอื่น</td></tr>
-        <tr><td><strong>TIM1</strong> (16-bit Advanced)</td><td>PWM, Timer Interrupt</td><td>ใช้กับ PWM หรือ TIM ได้ แต่ต้องเลือกอย่างใดอย่างหนึ่ง — ใช้ Timer Resource Guard ป้องกัน</td></tr>
-        <tr><td><strong>TIM2</strong> (16-bit General)</td><td>PWM, Timer Interrupt, External Clock</td><td>ใช้กับ PWM หรือ TIM หรือ Ext Clock ได้ แต่ต้องเลือกอย่างใดอย่างหนึ่ง</td></tr>
+        <tr><td><strong>TIM1</strong> (16-bit Advanced)</td><td>SimplePWM หรือ SimpleTIM</td><td>ใช้ได้อย่างใดอย่างหนึ่งเท่านั้น — โมดูลที่เรียก <code>*_Init()</code> ก่อนจะ "จอง" (owner) ไว้ อีกโมดูลเรียกตามจะ error</td></tr>
+        <tr><td><strong>TIM2</strong> (16-bit General)</td><td>SimplePWM (PWM2) หรือ SimpleTIM หรือ SimpleTIM_Ext (Stopwatch/Countdown)</td><td>ใช้ได้อย่างใดอย่างหนึ่งเท่านั้นจาก 3 โมดูลนี้ — กลไก ownership เดียวกับ TIM1</td></tr>
     </table>
 
     <div class="callout callout-warn">
-        <strong>ข้อควรระวัง:</strong> TIM1 และ TIM2 ใช้ร่วมกันไม่ได้หากใช้ทั้ง PWM และ TIM พร้อมกัน — ใช้ฟังก์ชัน Timer Resource Guard เพื่อตรวจสอบก่อน
+        <strong>กลไก Ownership (Silent Fail):</strong> ตัวแปรภายใน <code>g_tim1_owner</code> / <code>g_tim2_owner</code> (ค่า <code>TIM_OWNER_NONE</code> / <code>TIM_OWNER_PWM</code> / <code>TIM_OWNER_TIMER</code> / <code>TIM_OWNER_TIMEXT</code>) จะถูกตั้งเมื่อโมดูลแรกเรียก Init สำเร็จ — โมดูลอื่นที่พยายามเรียก Init ตามบน Timer เดียวกันจะถูก<strong>ปฏิเสธแบบเงียบ</strong> (<code>PWM_Init()</code>, <code>TIM_SimpleInit()</code>, <code>TIM_AttachInterrupt()</code> ฯลฯ ล้วนเป็น <code>void</code> — <strong>ไม่มี return value ให้เช็คเลย</strong> ถ้าชนกัน ฟังก์ชันจะ return ออกไปเฉยๆ โดย timer ยังเป็นของเจ้าของเดิม ไม่มีการแจ้งเตือนใดๆ) วิธีเดียวที่ตรวจสอบได้คือดูว่า PWM/Timer ตัวที่เรียกทีหลังทำงานจริงหรือไม่ (เช่น วัดสัญญาณจริงหรือดู duty ที่ได้)
+    </div>
+</section>
+
+<section id="resource-conflict-map">
+    <h2>ตารางสรุปความขัดแย้งของทรัพยากร (Resource Conflict Map)</h2>
+    <p>นอกจาก Timer แล้ว ยังมีทรัพยากรอื่นที่ใช้ร่วมกันไม่ได้ระหว่างโมดูล — สรุปรวมจากทุกโมดูลไว้ที่นี่เพื่อวางแผนก่อนเขียนโค้ดที่ใช้หลายโมดูลพร้อมกัน:</p>
+
+    <table>
+        <thead><tr><th>ทรัพยากร</th><th>ใช้โดย</th><th>ข้อจำกัด</th></tr></thead>
+        <tbody>
+        <tr><td><strong>TIM1_UP IRQ</strong></td><td>SimplePWM (TIM1) / SimpleTIM (TIM1 interrupt mode)</td><td>1 handler ต่อ MCU — ผูกกับ TIM1 ownership ด้านบน</td></tr>
+        <tr><td><strong>TIM2 IRQ</strong></td><td>SimplePWM (TIM2/PWM2) / SimpleTIM / SimpleTIM_Ext</td><td>1 handler ต่อ MCU — ผูกกับ TIM2 ownership ด้านบน</td></tr>
+        <tr><td><strong>USART1 IRQ</strong></td><td>SimpleUSART (RX ring buffer)</td><td>ถ้ามีไลบรารีอื่นที่ตั้ง <code>USART1_IRQHandler</code> เองจะ conflict ตอน link — ใช้ <code>USART_RxByteHook()</code> แทนการเขียน handler เองเสมอ</td></tr>
+        <tr><td><strong>EXTI Line 0-7</strong></td><td>SimpleGPIO — <code>attachInterrupt()</code></td><td><strong>ผูกตามเลขขา ไม่ใช่ port</strong> — PC1 และ PD1 ใช้ EXTI Line 1 ร่วมกัน เรียก <code>attachInterrupt</code> พร้อมกันบน 2 ขาที่เลขท้ายซ้ำกันไม่ได้ (ดูรายละเอียดที่ <a href="gpio.html">SimpleGPIO</a>)</td></tr>
+        <tr><td><strong>DMA1 Channel 1-7</strong></td><td>SimpleDMA — ADC / USART / SPI / I2C / TIM ล้วนขอ channel ผ่าน <code>DMA_Channel</code> ที่ผู้ใช้ระบุเอง</td><td>แต่ละ channel มี IRQ handler แยกกัน (<code>DMA1_Channel1_IRQHandler</code> ... <code>Channel7</code>) — ต้องเลือก channel ไม่ให้ซ้ำกันเองระหว่างการใช้งานพร้อมกันหลายชุด (ดูตัวอย่างที่ <a href="dma.html">SimpleDMA</a>)</td></tr>
+        <tr><td><strong>WWDG IRQ</strong></td><td>SimpleWWDG</td><td>ผู้ใช้ต้องประกาศ <code>WWDG_IRQHandler()</code> เองแล้วเรียก <code>WWDG_IRQHandler_Callback()</code> ข้างใน — ถ้ามีไลบรารีอื่นประกาศ <code>WWDG_IRQHandler</code> ซ้ำจะ link error</td></tr>
+        </tbody>
+    </table>
+
+    <div class="callout callout-note">
+        <strong>วิธีอ่านตาราง:</strong> ถ้าโปรเจกต์ใช้หลายโมดูลพร้อมกัน (เช่น PWM + Stopwatch + Interrupt Button) ให้ไล่เช็คว่าแต่ละโมดูลใช้ทรัพยากรแถวไหนทับกันหรือไม่ก่อนเขียนโค้ดจริง
     </div>
 </section>
 
@@ -157,6 +178,36 @@ int main(void)
 
     <div class="callout callout-good">
         <strong>แนะนำ:</strong> ใช้ Single Include (<code>SimpleHAL.h</code>) ในช่วงพัฒนา — เปลี่ยนเป็น Selective Include เมื่อโปรเจกต์เสร็จและต้องการ optimize ขนาด binary
+    </div>
+</section>
+
+<section>
+    <h2>วิธี Debug เมื่อโค้ดไม่ทำงานตามคาด</h2>
+    <p>เมื่อเจอปัญหาแล้วไล่ตาม "ปัญหาที่พบบ่อย" ในแต่ละหน้าโมดูลแล้วยังไม่เจอ ให้ไล่ตามลำดับนี้:</p>
+
+    <h3>1. ตรวจ 3 ขั้นตอนบังคับก่อนเสมอ</h3>
+    <p>ปัญหาแปลกๆ จำนวนมาก (baud rate ผิด, delay ผิดเวลา, timer ไม่เดิน) มีสาเหตุจากลืม <code>SystemCoreClockUpdate()</code> หรือ <code>Timer_Init()</code> — กลับไปเช็คส่วน "3 ขั้นตอนบังคับ" ด้านบนก่อนเสมอเป็นอันดับแรก</p>
+
+    <h3>2. ยืนยันด้วย USART Debug Print</h3>
+    <p>วิธีเร็วที่สุดในการดูว่าโค้ดเดินถึงจุดไหน — ใช้ <code>USART_Printf_Init()</code> + <code>printf()</code> (หรือ <code>USART_Print()</code>) แทรกใน flow เพื่อยืนยันว่าค่าที่อ่านได้/return value ของแต่ละฟังก์ชันตรงกับที่คาดไว้ ก่อนสงสัยว่าเป็นปัญหาฮาร์ดแวร์</p>
+
+    <h3>3. ใช้ Logic Analyzer / Oscilloscope สำหรับโปรโตคอลสื่อสาร</h3>
+    <p>เมื่อ USART debug print ยืนยันว่าโค้ดเดินถูก แต่อุปกรณ์ภายนอกไม่ตอบสนอง (I2C, SPI, 1-Wire) ให้จับสัญญาณจริงเปรียบเทียบกับ timing ที่ระบุไว้ในเอกสารของแต่ละโมดูล:</p>
+    <table>
+        <thead><tr><th>โปรโตคอล</th><th>สิ่งที่ต้องดู</th><th>อ้างอิง timing</th></tr></thead>
+        <tbody>
+        <tr><td>I2C (Hardware/Soft)</td><td>Start/Stop condition, ACK bit ต่อ byte, ความเร็ว SCL ตรงกับที่ตั้งหรือไม่</td><td><a href="i2c.html">SimpleI2C</a> — ใช้ <code>ignore_ack=1</code> ใน <code>I2C_Soft_Write</code> เพื่อจับสัญญาณโดยไม่ต้องรออุปกรณ์ตอบ ACK จริง</td></tr>
+        <tr><td>1-Wire</td><td>ความกว้าง Reset pulse / Presence pulse / Time slot ตรงช่วงที่กำหนดหรือไม่</td><td><a href="onewire.html">Simple1Wire</a> — ตาราง Timing Constants (Standard vs Overdrive)</td></tr>
+        <tr><td>SPI</td><td>Clock polarity/phase (CPOL/CPHA) ตรงกับอุปกรณ์ปลายทาง, CS timing</td><td><a href="spi.html">SimpleSPI</a></td></tr>
+        <tr><td>USART</td><td>Baud rate ตรงกันทั้งสองฝั่ง, framing (start/stop bit), ground ร่วมกัน</td><td><a href="usart.html">SimpleUSART</a></td></tr>
+        </tbody>
+    </table>
+
+    <h3>4. เช็คทรัพยากรที่ใช้ร่วมกันชนกันหรือไม่</h3>
+    <p>ถ้าโมดูลหนึ่งเคยทำงานได้แต่พอเพิ่มอีกโมดูลแล้วเสีย (เช่น เพิ่ม Stopwatch แล้ว PWM หยุดทำงาน) มักเกิดจาก Timer/IRQ/EXTI Line ชนกัน — ไล่เช็คตาม <a href="#resource-conflict-map">ตารางสรุปความขัดแย้งของทรัพยากร</a> ด้านบน</p>
+
+    <div class="callout callout-note">
+        <strong>ลำดับที่แนะนำ:</strong> Software (ค่า/return value ผ่าน printf) → Timing (logic analyzer) → Resource conflict (ตาราง) — ไล่จากที่ตรวจง่ายสุดไปหายากสุดเสมอ ไม่ต้องเปิด oscilloscope ถ้ายังไม่ยืนยันด้วย printf ก่อน
     </div>
 </section>
 

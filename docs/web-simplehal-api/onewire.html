@@ -11,6 +11,7 @@
 <nav class="top-nav">
     <a href="index.html">← สารบัญ</a>
     <a href="opamp.html">← SimpleOPAMP</a>
+    <a href="scheduler.html">SimpleScheduler →</a>
 </nav>
 
 <h1>Simple1Wire — 1-Wire Protocol</h1>
@@ -54,14 +55,18 @@
 <section>
 <h2>Timing Constants</h2>
 <table>
-<thead><tr><th>พารามิเตอร์</th><th>Standard</th><th>Overdrive</th></tr></thead>
+<thead><tr><th>พารามิเตอร์</th><th>Standard Speed</th></tr></thead>
 <tbody>
-<tr><td>Time Slot</td><td>60-120 µs</td><td>6-16 µs</td></tr>
-<tr><td>Reset Pulse</td><td>480-960 µs</td><td>48-80 µs</td></tr>
-<tr><td>Presence Pulse</td><td>60-240 µs</td><td>8-24 µs</td></tr>
-<tr><td>Recovery Time</td><td>1-2 µs</td><td>1-2 µs</td></tr>
+<tr><td>Time Slot</td><td>60-120 µs</td></tr>
+<tr><td>Reset Pulse</td><td>480-960 µs</td></tr>
+<tr><td>Presence Pulse Timeout</td><td>60-240 µs</td></tr>
+<tr><td>Write Recovery</td><td>1 µs (min)</td></tr>
+<tr><td>Read Recovery</td><td>55 µs</td></tr>
 </tbody>
 </table>
+<div class="callout callout-note">
+    <strong>หมายเหตุ:</strong> ไลบรารีนี้รองรับเฉพาะ Standard Speed เท่านั้น — <strong>ไม่รองรับ Overdrive mode</strong>
+</div>
 </section>
 
 <section>
@@ -138,14 +143,14 @@
 </tr>
 <tr>
     <td><code>OneWire_WriteBytes(bus, data, len)</code></td>
-    <td><code>bus</code>: OneWire_Bus*<br><code>data</code>: uint8_t*<br><code>len</code>: uint16_t</td>
+    <td><code>bus</code>: OneWire_Bus*<br><code>data</code>: uint8_t*<br><code>len</code>: uint8_t</td>
     <td><code>void</code></td>
     <td>เขียนหลาย byte</td>
     <td>ลำดับเดียวกับ <code>WriteByte()</code> แต่ส่งทีเดียวหลายไบต์</td>
 </tr>
 <tr>
     <td><code>OneWire_ReadBytes(bus, data, len)</code></td>
-    <td><code>bus</code>: OneWire_Bus*<br><code>data</code>: uint8_t*<br><code>len</code>: uint16_t</td>
+    <td><code>bus</code>: OneWire_Bus*<br><code>data</code>: uint8_t*<br><code>len</code>: uint8_t</td>
     <td><code>void</code></td>
     <td>อ่านหลาย byte</td>
     <td>ผล data ที่ได้ควรส่งต่อให้ <code>OneWire_VerifyCRC(data, len)</code> ตรวจก่อนใช้งานเสมอ</td>
@@ -376,6 +381,7 @@ int main(void) {
 <nav class="bottom-nav">
     <a href="index.html">← สารบัญ</a>
     <a href="opamp.html">← SimpleOPAMP</a>
+    <a href="scheduler.html">SimpleScheduler →</a>
 </nav>
 
 <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>

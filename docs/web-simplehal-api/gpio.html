@@ -246,6 +246,10 @@ while(1) {
     <strong>Callback interrupt:</strong> ตัวแปรที่ใช้ใน callback <strong>ต้องประกาศเป็น <code>volatile</code></strong> และ<strong>ห้ามเรียก <code>Delay_Ms</code></strong> ใน callback เพราะทำให้ MCU ค้างใน ISR
 </div>
 
+<div class="callout callout-err">
+    <strong>EXTI Line ชนกันข้าม port:</strong> ฮาร์ดแวร์ CH32V003 ผูก interrupt line ตาม<strong>เลขขา ไม่ใช่ port</strong> — <code>attachInterrupt(PC1, ...)</code> กับ <code>attachInterrupt(PD1, ...)</code> ใช้ <strong>EXTI Line 1 เดียวกัน</strong> เรียกพร้อมกันไม่ได้ (ตัวหลังจะทับตัวแรกเงียบๆ) ถ้าต้องใช้ interrupt หลายขา ให้เลือกขาที่ <strong>เลขท้ายต่างกัน</strong> เช่น PC1 กับ PD2 แทน PC1 กับ PD1
+</div>
+
 <h3>4. Pulse Measure: pinMode → pulseIn</h3>
 <pre><code class="language-c">pinMode(PC3, PIN_MODE_INPUT);
 uint32_t duration = pulseIn(PC3, HIGH, 25000);  // timeout 25ms

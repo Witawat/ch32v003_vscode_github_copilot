@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>บทที่ 35: Workshop TJC HMI Display — 8 ตัวอย่างจาก Examples — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch34_arduino_api.html">บทก่อน</a>
+    <a href="chapx_lib_index.html">บทถัดไป →</a>
+</nav>
+
+<h1>บทที่ 35: Workshop TJC HMI Display — 8 ตัวอย่างจาก Examples</h1>
+<span class="level advanced">ระดับสูง</span>
+
+<section class="flowchart">
+    <h2>🧭 เส้นทางเรียนรู้: 8 ตัวอย่าง TJC HMI Display</h2>
+    <pre class="mermaid">
+flowchart LR
+    A["ex01: Basic Command"] --> B["ex02: Touch Event"]
+    B --> C["ex03: Touch Coordinate"]
+    C --> D["ex04: Numeric/String"]
+    D --> E["ex05: System Event"]
+    E --> F["ex06: Custom Command"]
+    F --> G["ex07: Full Features"]
+    G --> H["ex08: Physical Button"]
+    style A fill:#dcfce7
+    style H fill:#fef3c7
+    </pre>
+</section>
+
+<section>
+    <h2>🔌 การต่อวงจรพื้นฐาน (ทุกตัวอย่างใช้ร่วมกัน)</h2>
+    <p><strong>TJC HMI Display</strong> เป็นจอสัมผัส serial ที่คุยกับ MCU ผ่าน UART เท่านั้น — ทุกตัวอย่างในบทนี้ต่อวงจรพื้นฐานแบบเดียวกัน ส่วนอุปกรณ์เสริม (LED/Relay/Sensor/ปุ่มกด) จะระบุแยกในแต่ละตัวอย่าง</p>
+    <pre class="ascii-circuit">
+    CH32V003              TJC HMI Display
+    PD5 (TX) ------------> RX
+    PD6 (RX) <------------ TX
+    VDD ------------------ VCC (5V หรือ 3.3V ตามสเปคจอ)
+    GND ------------------ GND
+    </pre>
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>PD5</td><td>→</td><td>TJC Display</td><td>RX</td><td>MCU TX → จอ RX (USART_PINS_DEFAULT)</td></tr>
+        <tr><td>PD6</td><td>←</td><td>TJC Display</td><td>TX</td><td>จอ TX → MCU RX</td></tr>
+        <tr><td>TJC (VCC)</td><td>←</td><td>5V/3.3V</td><td>—</td><td>เช็คสเปคจอรุ่นที่ใช้ก่อนจ่ายไฟ</td></tr>
+        <tr><td>TJC (GND)</td><td>→</td><td>GND</td><td>—</td><td>ต่อร่วมกับ GND ของ MCU เสมอ</td></tr>
+      </tbody>
+    </table>
+    <div class="callout callout-note">
+        <strong>💡 v2.1 — ไม่ต้องเขียน IRQ Handler เอง:</strong> <code>SimpleUSART.c</code> เป็นเจ้าของ
+        <code>USART1_IRQHandler()</code> อยู่แล้ว และเรียก weak hook <code>USART_RxByteHook()</code>
+        ให้ทุกครั้งที่รับ byte ใหม่ — <code>TJC.c</code> override hook นี้เพื่อรับข้อมูลเข้า
+        <code>rx_buffer</code> ของตัวเองอัตโนมัติ <strong>ห้ามเพิ่ม <code>USART1_IRQHandler()</code>
+        ของตัวเองที่เรียก <code>TJC_UART_IRQHandler()</code></strong> (ตามเอกสารรุ่นเก่า) — จะได้
+        linker error "multiple definition of USART1_IRQHandler" ทันที
+    </div>
+</section>
+
+<section>
+<h2>ex01_Basic_Command — คำสั่งพื้นฐานควบคุมจอ</h2>
+<h3>📖 แนวคิด</h3>
+<p>ส่งคำสั่งพื้นฐานไปยังจอ TJC ผ่าน <code>TJC_SendCommand()</code> — เปลี่ยนหน้า (page), ตั้งข้อความ (t0.txt), ตั้งตัวเลข (n0.val), progress bar (j0.val), ซ่อน/แสดง component (vis), จำลองการกด (click), ปรับความสว่างจอ (dim) — และรับ error response ผ่าน callback</p>
+
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["TJC_Init(BAUD_115200, ...)"] --> B["TJC_RegisterErrorCallback(OnError)"]
+    B --> C["TJC_SendCommand หลายคำสั่ง"]
+    C --> D["while(1)"]
+    D --> E["TJC_ProcessResponse()"]
+    E --> D
+</pre>
+
+<h3>💻 โค้ด + อธิบายทีละบรรทัด</h3>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include &lt;SimpleHAL.h&gt;
+#include "TJC.h"
+
+void OnError(uint8_t error_code) {
+    if (error_code != TJC_ERR_SUCCESS) {
+        USART_Print("TJC Error: ");
+        USART_Print(TJC_GetErrorString(error_code));
+        USART_Print("\r\n");
+    }
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    TJC_Init(BAUD_115200, USART_PINS_DEFAULT);
+    TJC_RegisterErrorCallback(OnError);
+
+    Delay_Ms(100);
+
+    TJC_SendCommand("bkcmd=3");             // เปิด response ทุกคำสั่ง (ต้องตั้งก่อนถึงจะเห็น error)
+    TJC_SendCommand("page 0");              // ไปหน้า 0
+    TJC_SendCommand("t0.txt=\"Hello TJC!\"");  // ตั้งข้อความ component t0
+    TJC_SendCommand("n0.val=42");           // ตั้งตัวเลข component n0
+    TJC_SendCommand("j0.val=75");           // progress bar j0 = 75%
+    TJC_SendCommand("dim=50");              // ความสว่างจอ 50%
+
+    TJC_SendCommand("vis b0,1");            // แสดง component b0
+    Delay_Ms(2000);
+    TJC_SendCommand("vis b0,0");            // ซ่อน component b0
+
+    TJC_SendCommand("click b0,1");          // จำลองกดปุ่ม b0
+    Delay_Ms(100);
+    TJC_SendCommand("click b0,0");          // จำลองปล่อยปุ่ม b0
+
+    while (1) {
+        TJC_ProcessResponse();              // ★ ต้องเรียกทุกรอบ loop — ประมวลผล UART response
+    }
+}</code></pre>
+<ul>
+<li><strong>TJC_Init(baud, pins):</strong> รับ <code>USART_BaudRate</code> enum และ <code>USART_PinConfig</code> enum (ไม่ใช่ค่าตัวเลขตรง หรือ <code>TJC_PINS_*</code>)</li>
+<li><strong>bkcmd=3:</strong> ต้องตั้งก่อนเสมอถ้าอยากได้ error/response กลับมา — ค่า default ของจอมักไม่ตอบกลับ</li>
+<li><strong>TJC_ProcessResponse():</strong> ★ ต้องเรียกใน <code>while(1)</code> เสมอ — ถ้าไม่เรียก callback ทั้งหมดจะไม่ทำงานเลย เพราะข้อมูลค้างอยู่ใน rx_buffer</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>ต้องตั้ง <code>bkcmd=3</code> ก่อนถึงจะได้ response กลับมาให้ <code>OnError</code> เห็น</li>
+<li>ทุกคำสั่งจบด้วย <code>0xFF 0xFF 0xFF</code> อัตโนมัติ — ไม่ต้องเติมเองใน string</li>
+<li>ลืมเรียก <code>TJC_ProcessResponse()</code> ใน loop = จอไม่ตอบสนอง event ใด ๆ เลย</li>
+</ul>
+</section>
+
+<section>
+<h2>ex02_Touch_Event — รับ Touch Event ควบคุม LED จริง</h2>
+<h3>📖 แนวคิด</h3>
+<p>รับ touch event (press/release) จากจอผ่าน callback — เทียบ <code>page_id</code>/<code>component_id</code> เพื่อรู้ว่าใครถูกกด แล้วสั่งเปิด/ปิด LED จริงบน MCU หรือเปลี่ยนหน้าจอ</p>
+
+<h3>🔌 อุปกรณ์เสริม</h3>
+<table class="wiring-table">
+  <thead><tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>หมายเหตุ</th></tr></thead>
+  <tbody><tr><td>PD3</td><td>→</td><td>LED (ผ่าน R 220Ω) → GND</td><td>Active-HIGH</td></tr></tbody>
+</table>
+<p><strong>TJC Editor:</strong> สร้างปุ่ม <code>b0</code> และ <code>b1</code> บน page 0 แล้วเปิด Touch Event สำหรับทั้งคู่</p>
+
+<h3>💻 โค้ด</h3>
+<pre><code class="language-c">#define LED_PIN PD3
+
+void OnTouch(TJC_TouchEvent_t *event) {
+    USART_Print("Touch: page=");
+    USART_PrintNum(event->page_id);
+    USART_Print(" comp=");
+    USART_PrintNum(event->component_id);
+    USART_Print(" type=");
+    USART_PrintNum(event->event_type);
+    USART_Print("\r\n");
+
+    if (event->page_id == 0 && event->component_id == 0) {
+        digitalWrite(LED_PIN, event->event_type == 0x01);  // 0x01=Press, 0x00=Release
+    }
+
+    if (event->page_id == 0 && event->component_id == 1 && event->event_type == 0x01) {
+        TJC_SendCommand("page 1");
+    }
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    pinMode(LED_PIN, PIN_MODE_OUTPUT);
+
+    TJC_Init(BAUD_115200, USART_PINS_DEFAULT);
+    TJC_RegisterTouchEventCallback(OnTouch);
+
+    Delay_Ms(100);
+    TJC_SendCommand("page 0");
+
+    while (1) {
+        TJC_ProcessResponse();
+    }
+}</code></pre>
+<ul>
+<li><strong>TJC_TouchEvent_t:</strong> มี <code>page_id</code>, <code>component_id</code>, <code>event_type</code> (0x01=Press, 0x00=Release)</li>
+<li><strong>TJC_RegisterTouchEventCallback:</strong> ต้องเรียกก่อน loop — callback จะถูกเรียกเองจาก <code>TJC_ProcessResponse()</code></li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>ต้องเปิด "Touch Event" ให้ component นั้น ๆ ใน TJC Editor ก่อน ไม่งั้น callback ไม่ทำงานเลย</li>
+<li>ระวังสลับ event_type — Press=0x01, Release=0x00 (ตรงข้ามกับสัญชาตญาณของหลายคน)</li>
+</ul>
+</section>
+
+<section>
+<h2>ex03_Touch_Coordinate — รับพิกัด X,Y การสัมผัส</h2>
+<h3>📖 แนวคิด</h3>
+<p>เปิดโหมดส่งพิกัด (<code>sendxy=1</code>) แล้วรับค่า X,Y ผ่าน callback — ส่งกลับไปแสดงผลบนจอเองในรูปแบบ <code>(x,y)</code></p>
+
+<h3>💻 โค้ด</h3>
+<pre><code class="language-c">#include &lt;stdio.h&gt;
+
+void OnTouchCoord(TJC_TouchCoord_t *coord) {
+    USART_Print("Touch XY: (");
+    USART_PrintNum(coord->x);
+    USART_Print(", ");
+    USART_PrintNum(coord->y);
+    USART_Print(") ");
+    USART_Print(coord->event_type == 0x01 ? "Press" : "Release");
+    USART_Print("\r\n");
+
+    char buf[32];
+    snprintf(buf, sizeof(buf), "t_coord.txt=\"(%d,%d)\"", coord->x, coord->y);
+    TJC_SendCommand(buf);
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+
+    TJC_Init(BAUD_115200, USART_PINS_DEFAULT);
+    TJC_RegisterTouchCoordCallback(OnTouchCoord);
+
+    Delay_Ms(100);
+    TJC_SendCommand("sendxy=1");    // ★ ต้องเปิดก่อนถึงจะได้พิกัด
+    TJC_SendCommand("page 0");
+
+    while (1) {
+        TJC_ProcessResponse();
+    }
+}</code></pre>
+<ul>
+<li><strong>sendxy=1:</strong> คำสั่งฝั่งจอที่บอกให้ส่งพิกัดทุกครั้งที่สัมผัส — ถ้าไม่ส่ง callback นี้จะไม่ถูกเรียกเลย</li>
+<li><strong>snprintf:</strong> สร้างคำสั่งแบบ dynamic ก่อนส่งด้วย <code>TJC_SendCommand()</code> — buffer ต้องใหญ่พอ</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>ลืมส่ง <code>sendxy=1</code> = ไม่มีพิกัดส่งมาเลย แม้จะสัมผัสจอ</li>
+<li><code>buf[32]</code> พอสำหรับพิกัด 4 หลัก — ถ้าจอความละเอียดสูงกว่านี้ควรขยาย buffer</li>
+</ul>
+</section>
+
+<section>
+<h2>ex04_Numeric_String_Callback — get command + Page ID</h2>
+<h3>📖 แนวคิด</h3>
+<p>ขอค่าจาก component บนจอด้วยคำสั่ง <code>get</code> แล้วรอรับผ่าน callback แบบ async (ไม่ใช่ return ค่าตรง ๆ) — โพลทุก 3 วินาที พร้อมรับ page ID ปัจจุบันด้วย <code>sendme</code></p>
+
+<h3>💻 โค้ด</h3>
+<pre><code class="language-c">#include &lt;string.h&gt;
+
+void OnNumeric(uint32_t value) {
+    USART_Print("Numeric received: ");
+    USART_PrintNum(value);
+    USART_Print("\r\n");
+}
+
+void OnString(const char *str, uint16_t len) {
+    USART_Print("String received (len=");
+    USART_PrintNum(len);
+    USART_Print("): ");
+    USART_Print(str);
+    USART_Print("\r\n");
+
+    if (strcmp(str, "ready") == 0) {
+        USART_Print(">> TJC is ready!\r\n");
+    }
+}
+
+void OnPageId(uint8_t page_id) {
+    USART_Print("Page changed: ");
+    USART_PrintNum(page_id);
+    USART_Print("\r\n");
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+
+    TJC_Init(BAUD_115200, USART_PINS_DEFAULT);
+    TJC_RegisterNumericCallback(OnNumeric);
+    TJC_RegisterStringCallback(OnString);
+    TJC_RegisterPageIdCallback(OnPageId);
+
+    Delay_Ms(100);
+    TJC_SendCommand("page 0");
+
+    uint32_t last_query = 0;
+
+    while (1) {
+        TJC_ProcessResponse();
+
+        uint32_t now = Get_CurrentMs();
+        if (now - last_query >= 3000) {
+            last_query = now;
+            TJC_SendCommand("get n0.val");   // ตอบกลับผ่าน OnNumeric
+            TJC_SendCommand("get t0.txt");   // ตอบกลับผ่าน OnString
+            TJC_SendCommand("sendme");       // ตอบกลับผ่าน OnPageId
+        }
+    }
+}</code></pre>
+<ul>
+<li><strong>get n0.val / get t0.txt:</strong> ขอค่าจาก component — คำตอบมาแบบ async ผ่าน <code>OnNumeric</code>/<code>OnString</code> ไม่ใช่ return ค่าจากฟังก์ชัน</li>
+<li><strong>sendme:</strong> ขอ page ID ปัจจุบัน — ตอบกลับผ่าน <code>OnPageId</code></li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>ส่ง <code>get</code> แล้วผลลัพธ์ไม่มาทันที ต้องรอ callback ในรอบ <code>TJC_ProcessResponse()</code> ถัดไป — อย่าเขียนโค้ดคาดหวัง return ค่าตรง</li>
+<li>ถ้าส่ง <code>get</code> ถี่เกินไปโดยยังไม่ได้รับ response เดิม อาจสับสนว่าค่าไหนตอบคำถามไหน</li>
+</ul>
+</section>
+
+<section>
+<h2>ex05_System_Event — จัดการ Startup/Sleep/Wake + Error</h2>
+<h3>📖 แนวคิด</h3>
+<p>รับ system event จากจอเอง (ไม่ใช่จากผู้ใช้กด) — เมื่อจอ startup / auto sleep (ตาม <code>thsp</code>) / auto wake / SD upgrade — พร้อมแสดง error code เป็น hex ผ่าน <code>OnError</code></p>
+
+<h3>💻 โค้ด</h3>
+<pre><code class="language-c">static uint8_t tjc_is_awake = 1;
+
+void OnSystemEvent(uint8_t event_type) {
+    switch (event_type) {
+        case TJC_RET_STARTUP:
+            tjc_is_awake = 1;
+            TJC_SendCommand("bkcmd=1");
+            TJC_SendCommand("page 0");
+            TJC_SendCommand("t0.txt=\"Ready\"");
+            TJC_SendCommand("dim=100");
+            break;
+        case TJC_RET_AUTO_SLEEP:
+            tjc_is_awake = 0;
+            break;
+        case TJC_RET_AUTO_WAKE:
+            tjc_is_awake = 1;
+            TJC_SendCommand("page 0");
+            TJC_SendCommand("dim=100");
+            break;
+        case TJC_RET_SD_UPGRADE:
+            USART_Print(">> TJC SD Upgrade\r\n");
+            break;
+    }
+}
+
+void OnError(uint8_t error_code) {
+    if (error_code == TJC_ERR_SUCCESS) return;
+    USART_Print("TJC Error 0x");
+    if (error_code < 0x10) USART_Print("0");
+    USART_PrintHex(error_code, 1);
+    USART_Print(": ");
+    USART_Print(TJC_GetErrorString(error_code));
+    USART_Print("\r\n");
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+
+    TJC_Init(BAUD_115200, USART_PINS_DEFAULT);
+    TJC_RegisterSystemEventCallback(OnSystemEvent);
+    TJC_RegisterErrorCallback(OnError);
+
+    Delay_Ms(100);
+    TJC_SendCommand("bkcmd=3");
+    TJC_SendCommand("thsp=30");   // sleep อัตโนมัติหลัง 30 วินาทีไม่มีการสัมผัส
+
+    while (1) {
+        TJC_ProcessResponse();
+        if (!tjc_is_awake) {
+            Delay_Ms(5000);       // ประหยัดพลังงานตอนจอหลับ
+        }
+    }
+}</code></pre>
+<ul>
+<li><strong>TJC_RET_STARTUP / AUTO_SLEEP / AUTO_WAKE / SD_UPGRADE:</strong> enum event ที่จอส่งมาเอง ไม่ต้อง poll</li>
+<li><strong>thsp=30:</strong> ตั้งเวลา auto-sleep ของจอ (วินาที) — ปรับตามการใช้พลังงานของโปรเจกต์</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>header ตัวอย่างต้นฉบับกล่าวถึง buzzer (PD2) สำหรับ beep ตอน startup แต่โค้ดตัวอย่างนี้ยังไม่ได้ใส่ PWM จริง — เป็นจุดต่อเสริมเผื่อขยายเอง ไม่ใช่บั๊ก</li>
+<li><code>OnSystemEvent</code> ถูกเรียกจาก <code>TJC_ProcessResponse()</code> เท่านั้น — ถ้าลืมเรียกจะไม่รู้เลยว่าจอ sleep/wake เมื่อไร</li>
+</ul>
+</section>
+
+<section>
+<h2>ex06_Custom_Command — TJC สั่งกลับมาหา MCU</h2>
+<h3>📖 แนวคิด</h3>
+<p>สลับทิศทาง — ให้ปุ่มบนจอ TJC ส่งคำสั่งกลับมาหา MCU เองด้วย <code>prints "cmd|param;"</code> ที่ตั้งไว้ใน Touch Press Event ของ TJC Editor — MCU parse คำสั่งด้วย <code>TJC_RegisterCommandCallback</code> แล้วสั่งงาน LED/Relay/PWM/เปลี่ยนหน้า/รายงานสถานะ</p>
+
+<h3>🔌 อุปกรณ์เสริม</h3>
+<table class="wiring-table">
+  <thead><tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>หมายเหตุ</th></tr></thead>
+  <tbody>
+    <tr><td>PD3</td><td>→</td><td>LED (ผ่าน R 220Ω)</td><td>Active-HIGH</td></tr>
+    <tr><td>PD4</td><td>→</td><td>Relay (ผ่าน R 1kΩ + ทรานซิสเตอร์)</td><td>ห้ามขับ relay ตรงจาก pin</td></tr>
+    <tr><td>PD2</td><td>→</td><td>Buzzer (PWM)</td><td>PWM1_CH1</td></tr>
+  </tbody>
+</table>
+<p><strong>TJC Editor:</strong> ตั้งปุ่มแต่ละตัวให้ <code>prints "led|1;"</code>, <code>prints "relay|1;"</code>, <code>prints "goto|1;"</code>, <code>prints "status;"</code> — slider ส่ง <code>prints "pwm|"; prints h0.val,0; prints ";"</code></p>
+
+<h3>💻 โค้ด</h3>
+<pre><code class="language-c">#include &lt;string.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;stdio.h&gt;
+
+#define LED_PIN    PD3
+#define RELAY_PIN  PD4
+#define BUZZER_PWM PWM1_CH1
+
+static uint16_t current_pwm_duty = 0;
+
+void OnTJCCommand(TJC_ReceivedCommand_t *cmd) {
+    if (strcmp(cmd->command, "led") == 0 && cmd->param_count >= 1) {
+        uint8_t state = (uint8_t)atoi(cmd->params[0]);
+        digitalWrite(LED_PIN, state);
+        TJC_SendCommand(state ? "t_led.txt=\"ON\"" : "t_led.txt=\"OFF\"");
+    }
+    else if (strcmp(cmd->command, "relay") == 0 && cmd->param_count >= 1) {
+        digitalWrite(RELAY_PIN, (uint8_t)atoi(cmd->params[0]));
+    }
+    else if (strcmp(cmd->command, "pwm") == 0 && cmd->param_count >= 1) {
+        current_pwm_duty = (uint16_t)atoi(cmd->params[0]);
+        if (current_pwm_duty > 100) current_pwm_duty = 100;
+        PWM_SetDutyCycle(BUZZER_PWM, (uint8_t)current_pwm_duty);
+    }
+    else if (strcmp(cmd->command, "goto") == 0 && cmd->param_count >= 1) {
+        char buf[32];
+        snprintf(buf, sizeof(buf), "page %s", cmd->params[0]);
+        TJC_SendCommand(buf);
+    }
+    else if (strcmp(cmd->command, "status") == 0) {
+        char buf[64];
+        snprintf(buf, sizeof(buf), "t_status.txt=\"%s\"",
+                 digitalRead(LED_PIN) ? "LED=ON" : "LED=OFF");
+        TJC_SendCommand(buf);
+    }
+    else {
+        TJC_SendCommand("t_err.txt=\"Unknown CMD\"");
+    }
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+
+    pinMode(LED_PIN, PIN_MODE_OUTPUT);
+    pinMode(RELAY_PIN, PIN_MODE_OUTPUT);
+    PWM_Init(BUZZER_PWM, 1000);
+    PWM_Start(BUZZER_PWM);
+
+    TJC_Init(BAUD_115200, USART_PINS_DEFAULT);
+    TJC_RegisterCommandCallback(OnTJCCommand);
+
+    Delay_Ms(100);
+    TJC_SendCommand("bkcmd=1");
+    TJC_SendCommand("page 0");
+
+    while (1) {
+        TJC_ProcessResponse();
+    }
+}</code></pre>
+<ul>
+<li><strong>TJC_ReceivedCommand_t:</strong> มี <code>command</code> (ชื่อคำสั่ง) และ <code>params[]</code>/<code>param_count</code> (พารามิเตอร์ที่แยกด้วย <code>|</code>)</li>
+<li><strong>atoi:</strong> แปลง string param เป็นตัวเลข — ไม่มี validation ว่าเป็นตัวเลขจริง ต้องระวังถ้า UI ส่งค่าผิดรูปแบบ</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>รูปแบบ <code>"cmd|param;"</code> ต้องตั้งใน TJC Editor เอง — MCU ไม่รู้จักปุ่มไหนสั่งอะไรจนกว่าจะได้รับ string นี้</li>
+<li>ห้ามขับ Relay coil ตรงจาก GPIO pin — ต้องผ่านทรานซิสเตอร์/ULN2003 เสมอ กระแสเกิน 8mA/pin จะทำ MCU เสียหาย</li>
+<li>ไม่มี <code>strcmp</code> ตรงกับคำสั่งใดเลย = ตกไปเคส "Unknown command" เงียบ ๆ ตรวจสอบชื่อคำสั่งให้ตรงกับที่ตั้งใน TJC Editor</li>
+</ul>
+</section>
+
+<section>
+<h2>ex07_Full_Features — รวมทุก Callback + Sensor จริง</h2>
+<h3>📖 แนวคิด</h3>
+<p>ตัวอย่างระดับ production — เปิดใช้ทุก callback พร้อมกัน (System Event, Error, Touch, Command, Numeric, String) ร่วมกับอ่านค่าจริงจาก DHT11 (1-Wire แบบ bit-bang) และ BMP280 (I2C) ทุก 2 วินาที แล้วอัปเดตขึ้นจอ</p>
+
+<h3>🔌 อุปกรณ์เสริม</h3>
+<table class="wiring-table">
+  <thead><tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>หมายเหตุ</th></tr></thead>
+  <tbody>
+    <tr><td>PD3</td><td>→</td><td>LED (ผ่าน R 220Ω)</td><td>—</td></tr>
+    <tr><td>PD4</td><td>→</td><td>Relay</td><td>ผ่านทรานซิสเตอร์</td></tr>
+    <tr><td>PC0</td><td>↔</td><td>DHT11 (DATA)</td><td>1-Wire bit-bang</td></tr>
+    <tr><td>PC1 (SDA) / PC2 (SCL)</td><td>↔</td><td>BMP280</td><td>I2C, R 4.7kΩ pull-up, addr 0x76</td></tr>
+  </tbody>
+</table>
+
+<h3>💻 โครงสร้างหลัก + อธิบาย</h3>
+<p>โค้ดเต็มยาว ~330 บรรทัด (ดูต้นฉบับที่ <code>User/Examples/16_TJC_HMI_Display/ex07_Full_Features.c</code>) — ส่วนสำคัญที่เป็นแก่นของบทเรียนคือการรวม callback ทั้งหมดเข้าด้วยกัน:</p>
+<pre><code class="language-c">/* ต่อ callback ครบทุกประเภทในโปรแกรมเดียว */
+TJC_Init(BAUD_115200, USART_PINS_DEFAULT);
+TJC_RegisterSystemEventCallback(OnSystemEvent);
+TJC_RegisterErrorCallback(OnError);
+TJC_RegisterTouchEventCallback(OnTouch);
+TJC_RegisterCommandCallback(OnTJCCommand);
+TJC_RegisterNumericCallback(OnNumeric);
+TJC_RegisterStringCallback(OnString);
+
+uint32_t last_sensor = 0;
+while (1) {
+    TJC_ProcessResponse();               // ★ ประมวลผล callback ทั้งหมดข้างบน
+
+    uint32_t now = Get_CurrentMs();
+    if (now - last_sensor >= 2000) {     // non-blocking 2s tick — ไม่ใช้ Delay_Ms คั่น loop
+        last_sensor = now;
+        UpdateSensorDisplay();           // อ่าน DHT11 + BMP280 แล้วส่งขึ้นจอ
+    }
+}</code></pre>
+<p><strong>UpdateSensorDisplay()</strong> อ่าน DHT11 (temp/humidity) ด้วย bit-bang 1-Wire แบบเดียวกับที่สอนในบทที่ 14, และอ่าน BMP280 ด้วย I2C แล้วคำนวณผ่านสูตร compensation ตาม datasheet (คนละเรื่องกับ TJC โดยตรง — ดูรายละเอียดเต็มที่ <a href="chapx_lib_bmp280.html">chapx_lib_bmp280.html</a>) ก่อนส่งผลลัพธ์ขึ้นจอด้วย <code>TJC_SendCommand("t0.txt=...")</code></p>
+<pre><code class="language-c">void UpdateSensorDisplay(void) {
+    char buf[48];
+    int16_t dht_temp; uint16_t dht_hum;
+    if (DHT11_Read(&dht_temp, &dht_hum) == 0) {
+        snprintf(buf, sizeof(buf), "t0.txt=\"%d.%dC\"", dht_temp / 10, dht_temp % 10);
+        TJC_SendCommand(buf);
+        snprintf(buf, sizeof(buf), "t1.txt=\"%d%%\"", dht_hum / 10);
+        TJC_SendCommand(buf);
+    }
+    /* ... อ่าน + คำนวณค่าความดันจาก BMP280 (ตัดมาแสดงย่อ) ... */
+    snprintf(buf, sizeof(buf), "t2.txt=\"%d.%dhPa\"", (int)(pressure / 100), (int)(pressure % 100));
+    TJC_SendCommand(buf);
+}</code></pre>
+<ul>
+<li><strong>รวม callback หลายตัว:</strong> ทุก callback ทำงานอิสระจากกัน — <code>TJC_ProcessResponse()</code> ตัวเดียวจัดการ dispatch ให้ครบ</li>
+<li><strong>non-blocking sensor tick:</strong> ใช้ <code>Get_CurrentMs()</code> เทียบ delta แทน <code>Delay_Ms()</code> เพื่อไม่ให้ block การรับ touch event ระหว่างรอ sensor</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>ยิ่งลงทะเบียน callback เยอะ ยิ่งต้องระวังให้แต่ละ callback สั้นและไม่ blocking — ทุกตัวถูกเรียกจาก loop เดียวกัน</li>
+<li>DHT11 bit-bang อ่อนไหวต่อ timing — ถ้ามี interrupt อื่นแทรกระหว่างอ่านอาจได้ค่าผิด (checksum fail คืน error code 3)</li>
+<li>I2C กับ 1-Wire ใช้ pin คนละกลุ่ม (PC0 vs PC1/PC2) — อย่าต่อชนกัน</li>
+</ul>
+</section>
+
+<section>
+<h2>ex08_Physical_Button_Control — ควบคุมจอด้วยปุ่มกด (ไม่ใช้ Touch)</h2>
+<h3>📖 แนวคิด</h3>
+<p>สำหรับโปรเจกต์ที่ไม่ใช้จอสัมผัส หรือต้องการ backup control — ใช้ปุ่มกดภายนอก 4 ปุ่ม (Up/Down/Left/Right) พร้อม debounce + auto-repeat (กดค้าง &gt;500ms แล้ว repeat ทุก 150ms) สั่งเปลี่ยนหน้าและปรับค่าตัวเลขบนจอ TJC</p>
+
+<h3>🔌 อุปกรณ์เสริม</h3>
+<table class="wiring-table">
+  <thead><tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>หมายเหตุ</th></tr></thead>
+  <tbody>
+    <tr><td>PC0</td><td>←</td><td>ปุ่ม UP → GND</td><td>Internal pull-up, Active-LOW</td></tr>
+    <tr><td>PC1</td><td>←</td><td>ปุ่ม DOWN → GND</td><td>Internal pull-up</td></tr>
+    <tr><td>PC2</td><td>←</td><td>ปุ่ม LEFT → GND</td><td>Internal pull-up</td></tr>
+    <tr><td>PC3</td><td>←</td><td>ปุ่ม RIGHT → GND</td><td>Internal pull-up</td></tr>
+    <tr><td>PD3</td><td>→</td><td>LED (ผ่าน R 220Ω)</td><td>feedback — UP+DOWN พร้อมกัน = toggle</td></tr>
+  </tbody>
+</table>
+
+<h3>🧭 ผังการทำงาน</h3>
+<pre class="mermaid">
+flowchart TD
+    A["Button_Update ทุกปุ่ม"] --> B{"UP+DOWN พร้อมกัน?"}
+    B -->|ใช่| C["Toggle LED"]
+    B -->|ไม่| D{"JustPressed / Repeat?"}
+    D -->|UP/DOWN| E["ปรับ counter → UpdateDisplay"]
+    D -->|LEFT/RIGHT| F["GoToPage"]
+    C --> A
+    E --> A
+    F --> A
+</pre>
+
+<h3>💻 โค้ด — Debounce + Repeat State Machine</h3>
+<pre><code class="language-c">#define DEBOUNCE_MS     50
+#define REPEAT_START    500
+#define REPEAT_INTERVAL 150
+
+typedef struct {
+    uint8_t pin, prev_state, curr_state, repeat_triggered;
+    uint32_t last_change_ms, press_start_ms;
+} Button_t;
+
+static uint8_t Button_Update(Button_t *btn) {
+    uint8_t raw = digitalRead(btn->pin);
+    uint32_t now = Get_CurrentMs();
+    btn->prev_state = btn->curr_state;
+
+    if (raw != btn->curr_state && now - btn->last_change_ms >= DEBOUNCE_MS) {
+        btn->curr_state = raw;
+        btn->last_change_ms = now;
+        if (raw == 0) { btn->press_start_ms = now; btn->repeat_triggered = 0; }
+    }
+    return btn->curr_state;
+}
+
+static uint8_t Button_JustPressed(Button_t *btn) {
+    return (btn->prev_state == 1 && btn->curr_state == 0);
+}
+
+static uint8_t Button_Repeat(Button_t *btn) {
+    if (btn->curr_state != 0) return 0;         // ไม่ได้กดอยู่
+    uint32_t held = Get_CurrentMs() - btn->press_start_ms;
+    if (!btn->repeat_triggered && held >= REPEAT_START) {
+        btn->repeat_triggered = 1; btn->press_start_ms = Get_CurrentMs();
+        return 1;
+    }
+    if (btn->repeat_triggered && held >= REPEAT_INTERVAL) {
+        btn->press_start_ms = Get_CurrentMs();
+        return 1;
+    }
+    return 0;
+}</code></pre>
+<pre><code class="language-c">/* main loop (ย่อ) */
+while (1) {
+    TJC_ProcessResponse();
+    Button_Update(&btn_up); Button_Update(&btn_down);
+    Button_Update(&btn_left); Button_Update(&btn_right);
+
+    if (Button_JustPressed(&btn_up) || Button_Repeat(&btn_up)) {
+        counter++; if (counter > 100) counter = 100;
+        UpdateDisplay();
+    }
+    if (Button_JustPressed(&btn_left)) {
+        GoToPage(current_page > 0 ? current_page - 1 : max_page);
+    }
+    Delay_Ms(10);
+}</code></pre>
+<ul>
+<li><strong>Debounce:</strong> เพิกเฉยการเปลี่ยนสถานะภายใน 50ms หลังการเปลี่ยนครั้งก่อน — กันสัญญาณกระเพื่อมจากหน้าสัมผัสปุ่ม</li>
+<li><strong>JustPressed vs Repeat:</strong> แยก edge-detect (กดครั้งแรก) ออกจาก auto-repeat (กดค้าง) — UX เหมือนรีโมททีวี</li>
+<li><strong>UP+DOWN พร้อมกัน:</strong> ใช้เป็น combo พิเศษ (toggle LED) — เช็คก่อนเช็ค individual press เสมอ</li>
+</ul>
+
+<h3>⚠️ จุดควรระวัง</h3>
+<ul>
+<li>ต้องเรียก <code>Button_Update()</code> ทุกปุ่มทุกรอบ loop ก่อนเช็ค <code>JustPressed</code>/<code>Repeat</code> — สลับลำดับจะทำให้ state ค้าง</li>
+<li>combo UP+DOWN ต้องเช็คก่อนเงื่อนไข individual — ไม่งั้นจะเข้า UP action ก่อนที่จะทันเช็ค combo</li>
+<li>ไม่มี touchscreen เกี่ยวข้องเลยในตัวอย่างนี้ — ใช้ TJC เป็นจอแสดงผลอย่างเดียว เหมาะกับ enclosure ที่ปุ่มกดทนทานกว่าจอสัมผัส</li>
+</ul>
+</section>
+
+<section>
+<h2>✏️ สรุป — 8 ตัวอย่าง TJC HMI Display</h2>
+<table>
+<tr><th>ตัวอย่าง</th><th>สอนอะไร</th><th>Callback หลัก</th></tr>
+<tr><td>ex01</td><td>คำสั่งพื้นฐาน (page/text/number/progress/vis/click/dim)</td><td>Error</td></tr>
+<tr><td>ex02</td><td>Touch Event → ควบคุม LED จริง</td><td>Touch Event</td></tr>
+<tr><td>ex03</td><td>รับพิกัด X,Y การสัมผัส</td><td>Touch Coordinate</td></tr>
+<tr><td>ex04</td><td>get command แบบ async (Numeric/String/Page ID)</td><td>Numeric, String, Page ID</td></tr>
+<tr><td>ex05</td><td>Startup/Sleep/Wake + error เป็น hex</td><td>System Event, Error</td></tr>
+<tr><td>ex06</td><td>TJC สั่งกลับมาหา MCU ผ่าน prints "cmd|param;"</td><td>Command</td></tr>
+<tr><td>ex07</td><td>รวมทุก callback + DHT11/BMP280 sensor จริง</td><td>ทั้งหมด</td></tr>
+<tr><td>ex08</td><td>ควบคุมจอด้วยปุ่มกด (debounce + auto-repeat)</td><td>System Event, Error</td></tr>
+</table>
+<p>ดูรายละเอียด API/struct/enum ทั้งหมดของ TJC เพิ่มเติมที่ <a href="chapx_lib_tjc.html">chapx_lib_tjc.html</a></p>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="ch34_arduino_api.html">บทก่อน</a>
+    <a href="chapx_lib_index.html">บทถัดไป →</a>
+</nav>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

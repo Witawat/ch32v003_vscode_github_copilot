@@ -25,7 +25,7 @@
 <tbody>
 <tr><td>พื้นที่</td><td>2 หน้า (page 254 + 255) = 128 bytes</td></tr>
 <tr><td>Page size</td><td>64 bytes ต่อหน้า</td></tr>
-<tr><td>Address</td><td><code>0x0803F80</code> — <code>0x0803FFF</code></td></tr>
+<tr><td>Address</td><td><code>0x08003F80</code> — <code>0x08003FFF</code></td></tr>
 <tr><td>Integrity</td><td>CRC16 checksum</td></tr>
 <tr><td>Write endurance</td><td>~10,000 — 80,000 รอบ</td></tr>
 <tr><td>Header</td><td><code>#include "SimpleFlash.h"</code></td></tr>
@@ -44,8 +44,8 @@
 <table>
 <thead><tr><th>Page</th><th>Address Range</th><th>Size</th><th>แนะนำให้ใช้สำหรับ</th></tr></thead>
 <tbody>
-<tr><td>254 (config)</td><td><code>0x0803F80</code> — <code>0x0803FBF</code></td><td>64 bytes</td><td>Config struct + CRC16</td></tr>
-<tr><td>255 (data)</td><td><code>0x0803FC0</code> — <code>0x0803FFF</code></td><td>64 bytes</td><td>ข้อมูลทั่วไป (string, counter, etc.)</td></tr>
+<tr><td>254 (config)</td><td><code>0x08003F80</code> — <code>0x08003FBF</code></td><td>64 bytes</td><td>Config struct + CRC16</td></tr>
+<tr><td>255 (data)</td><td><code>0x08003FC0</code> — <code>0x08003FFF</code></td><td>64 bytes</td><td>ข้อมูลทั่วไป (string, counter, etc.)</td></tr>
 </tbody>
 </table>
 
@@ -69,7 +69,7 @@
 <tr><td><code>FLASH_ERROR_ERASE</code></td><td>ลบหน้า Flash ล้มเหลว</td></tr>
 <tr><td><code>FLASH_ERROR_VERIFY</code></td><td>ข้อมูลที่เขียนไม่ตรงกับที่อ่าน — verify fail</td></tr>
 <tr><td><code>FLASH_ERROR_ALIGN</code></td><td>Address ไม่ตรง alignment (ต้อง half-word / word align)</td></tr>
-<tr><td><code>FLASH_ERROR_RANGE</code></td><td>Address อยู่นอกช่วง (<code>0x0803F80</code> — <code>0x0803FFF</code>)</td></tr>
+<tr><td><code>FLASH_ERROR_RANGE</code></td><td>Address อยู่นอกช่วง (<code>0x08003F80</code> — <code>0x08003FFF</code>)</td></tr>
 <tr><td><code>FLASH_ERROR_CRC</code></td><td>CRC16 ไม่ตรง — ข้อมูลเสียหาย</td></tr>
 <tr><td><code>FLASH_ERROR_INVALID</code></td><td>ข้อมูลไม่ถูกต้อง (ไม่เคยเขียน หรือ corrupt)</td></tr>
 </tbody>
@@ -102,6 +102,7 @@
 <tr><td><code>Flash_IsConfigValid()</code></td><td>bool</td><td>ตรวจสอบว่า CRC ปัจจุบันถูกต้องหรือไม่</td><td>ใช้เช็คก่อนเรียก <code>Flash_LoadConfig()</code> เต็มรูปแบบ เมื่อแค่ต้องการรู้ผล valid/invalid โดยไม่ต้องคัดลอกข้อมูลออกมา</td></tr>
 <tr><td><code>Flash_CalculateCRC16(data, len)</code></td><td>uint16_t</td><td>คำนวณ CRC16 ของข้อมูล (ใช้ภายใน)</td><td><strong>ถูกเรียกใช้ภายใน <code>Flash_SaveConfig()</code>/<code>Flash_LoadConfig()</code> โดยอัตโนมัติแล้ว</strong> — เรียกเองเฉพาะเมื่อต้องการคำนวณ CRC ของข้อมูลนอกเหนือจาก config struct pattern</td></tr>
 <tr><td><code>Flash_IsAddressValid(addr)</code></td><td>bool</td><td>ตรวจสอบว่า address อยู่ในช่วงที่อนุญาต</td><td><strong>ควรเรียกก่อน</strong> Read/Write ใดๆ ที่ใช้ address จากตัวแปร/คำนวณเอง (ไม่ใช่ constant ที่รู้อยู่แล้วว่าอยู่ในช่วง) เพื่อกัน <code>FLASH_ERROR_RANGE</code></td></tr>
+<tr><td><code>Flash_GetPageAddress(page_num)</code></td><td>uint32_t</td><td>แปลงหมายเลข page (254/255) เป็น address จริง — คืน 0 ถ้า page_num ไม่ถูกต้อง</td><td>ใช้แทนการเขียน address แบบ hardcode เช่น <code>Flash_GetPageAddress(FLASH_CONFIG_PAGE)</code> แทน <code>0x08003F80</code></td></tr>
 </tbody>
 </table>
 </section>
@@ -113,10 +114,11 @@
 <table>
 <thead><tr><th>Macro</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr></thead>
 <tbody>
-<tr><td><code>FLASH_SAVE_CONFIG(type)</code></td><td>บันทึก config struct — คำนวณ CRC อัตโนมัติ</td><td><code>FLASH_SAVE_CONFIG(my_config);</code></td></tr>
-<tr><td><code>FLASH_LOAD_CONFIG(type)</code></td><td>โหลด config struct — ตรวจ CRC</td><td><code>if (FLASH_LOAD_CONFIG(my_config)) { ... }</code></td></tr>
+<tr><td><code>FLASH_SAVE_CONFIG(config_ptr)</code></td><td>บันทึก config struct — คำนวณ CRC อัตโนมัติ (ต้องส่ง pointer)</td><td><code>FLASH_SAVE_CONFIG(&amp;my_config);</code></td></tr>
+<tr><td><code>FLASH_LOAD_CONFIG(config_ptr)</code></td><td>โหลด config struct — ตรวจ CRC (ต้องส่ง pointer)</td><td><code>if (FLASH_LOAD_CONFIG(&amp;my_config)) { ... }</code></td></tr>
 <tr><td><code>FLASH_WRITE_AUTO(addr, value)</code></td><td>เขียน data type ใด ๆ — auto-erase + type inference</td><td><code>FLASH_WRITE_AUTO(addr, 0x5A);</code></td></tr>
-<tr><td><code>FLASH_READ(addr, type)</code></td><td>อ่าน data type ใด ๆ ตามที่ระบุ</td><td><code>uint32_t v = FLASH_READ(addr, uint32_t);</code></td></tr>
+<tr><td><code>FLASH_READ(addr, var_ptr)</code></td><td>อ่านค่าใส่ตัวแปรปลายทาง (auto-detect type จาก sizeof) — ต้องส่ง pointer ของตัวแปร</td><td><code>uint32_t v; FLASH_READ(addr, &amp;v);</code></td></tr>
+<tr><td><code>FLASH_CONFIG_SIZE_NO_CRC(config)</code></td><td>คำนวณขนาด struct โดยไม่รวม field <code>crc</code></td><td><code>Flash_SaveConfig(&amp;config, FLASH_CONFIG_SIZE_NO_CRC(config));</code></td></tr>
 </tbody>
 </table>
 
@@ -190,7 +192,7 @@
 </div>
 
 <div class="callout callout-warn">
-<strong>Linker script ทับพื้นที่</strong> — ต้องกันพื้นที่ <code>0x0803F80</code> — <code>0x0803FFF</code> ไว้ใน linker script
+<strong>Linker script ทับพื้นที่</strong> — ต้องกันพื้นที่ <code>0x08003F80</code> — <code>0x08003FFF</code> ไว้ใน linker script
 <p>ถ้า linker script ไม่กันพื้นที่ไว้ คอมไพเลอร์อาจวางโค้ดโปรแกรมทับพื้นที่ Flash storage — ทำให้ข้อมูลหายหรือโปรแกรมพัง</p>
 </div>
 </section>
@@ -217,20 +219,20 @@ int main(void) {
     Flash_Init();
 
     // ลองโหลด config
-    if (!Flash_LoadConfig(&config, sizeof(config))) {
+    if (!Flash_LoadConfig(&config, sizeof(config) - sizeof(config.crc))) {
         // ไม่มี config — ใช้ค่า default
         config.magic = 0xDEADBEEF;
         config.version = 1;
         config.brightness = 80;
         config.threshold = 500;
-        Flash_SaveConfig(&config, sizeof(config));
+        Flash_SaveConfig(&config, sizeof(config) - sizeof(config.crc));
     }
 
     while (1) {
         // ใช้ config...
         if (user_changed_setting()) {
             config.brightness = new_value;
-            Flash_SaveConfig(&config, sizeof(config));
+            Flash_SaveConfig(&config, sizeof(config) - sizeof(config.crc));
         }
     }
 }
@@ -239,7 +241,7 @@ int main(void) {
 <h3>Write String to Flash</h3>
 <pre><code class="language-c">#include "SimpleHAL.h"
 
-#define STR_ADDR  0x0803FC0  // page 255 start
+#define STR_ADDR  0x08003FC0  // page 255 start
 
 int main(void) {
     SystemCoreClockUpdate();
@@ -260,7 +262,7 @@ int main(void) {
 <h3>Auto-Erase Word — เขียนค่าเดี่ยว</h3>
 <pre><code class="language-c">#include "SimpleHAL.h"
 
-#define DATA_ADDR  0x0803FC4
+#define DATA_ADDR  0x08003FC4
 
 int main(void) {
     SystemCoreClockUpdate();
@@ -320,15 +322,16 @@ int main(void) {
     Timer_Init();
     Flash_Init();
 
-    if (!FLASH_LOAD_CONFIG(config)) {
+    if (!FLASH_LOAD_CONFIG(&config)) {
         config.magic = 0xBEEF0001;
         config.version = 1;
         config.threshold = 750;
-        FLASH_SAVE_CONFIG(config);
+        FLASH_SAVE_CONFIG(&config);
     }
 
-    uint32_t read_back = FLASH_READ(0x0803FC0, uint32_t);
-    FLASH_WRITE_AUTO(0x0803FC4, 0x5AA55AA5);
+    uint32_t read_back;
+    FLASH_READ(0x08003FC0, &read_back);
+    FLASH_WRITE_AUTO(0x08003FC4, 0x5AA55AA5);
 
     while (1) { }
 }
