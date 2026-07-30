@@ -58,6 +58,7 @@ section {
     background: #fff; border: 1px solid var(--border);
     border-radius: var(--radius); padding: 1.5rem;
     margin: 1.5rem 0; box-shadow: var(--shadow);
+    overflow-x: auto;
 }
 section h2 { margin-top: 0; border-bottom: none; font-size: 1.25em; }
 
@@ -155,4 +156,8 @@ table.wiring-table td:nth-child(2) { text-align: center; font-weight: 700; color
     pre { font-size: 0.82em; padding: 0.8rem; }
     section { padding: 1rem; }
     nav.top-nav, nav.bottom-nav { flex-direction: column; gap: 0.3rem; text-align: center; }
+    table { font-size: 0.78em; }
+    th, td { padding: 0.35rem 0.45rem; }
+    table.wiring-table td:first-child,
+    table.wiring-table th { white-space: normal; }
 }
