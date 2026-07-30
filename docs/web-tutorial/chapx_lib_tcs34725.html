@@ -128,7 +128,6 @@ int main(void) {
     <tr><td><code>TCS34725_Init(&sensor, gain, integ)</code></td><td>เริ่มต้น, ตั้ง gain+integration</td><td><code>TCS34725_Init(&sensor, TCS34725_GAIN_1X, TCS34725_INTEG_24MS)</code></td></tr>
     <tr><td><code>TCS34725_ReadRGBC(&sensor, &r,&g,&b,&c)</code></td><td>อ่าน 4 channels</td><td><code>TCS34725_ReadRGBC(&sensor, &r,&g,&b,&c)</code></td></tr>
     <tr><td><code>TCS34725_SetGain(&sensor, gain)</code></td><td>เปลี่ยน gain</td><td><code>TCS34725_SetGain(&sensor, TCS34725_GAIN_16X)</code></td></tr>
-    <tr><td><code>TCS34725_SetLED(&sensor, on)</code></td><td>เปิด/ปิด LED ในตัว</td><td><code>TCS34725_SetLED(&sensor, 1)</code></td></tr>
 </table>
 </section>
 
@@ -157,7 +156,6 @@ int main(void)
 
     TCS34725_Instance sensor;
     TCS34725_Init(&sensor, TCS34725_GAIN_16X, TCS34725_INTEG_100MS);
-    TCS34725_SetLED(&sensor, 1);
 
     while(1)
     {

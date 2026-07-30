@@ -2,7 +2,7 @@
 <html lang="th">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TM1637 — 7-Segment 4 หลัก GPIO — SimpleHAL Tutorial</title>
+<title>TM1637 — SimpleHAL Tutorial</title>
 <link rel="stylesheet" href="css/style.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
 <body>
@@ -11,48 +11,51 @@
     <a href="chapx_lib_p10.html">บทก่อน</a>
     <a href="chapx_lib_tm1650.html">บทถัดไป →</a>
 </nav>
-<h1>TM1637 — 7-Segment 4 หลัก GPIO</h1>
+<h1>TM1637 — 7-Segment 4/6 หลัก (Handle-Based)</h1>
 <span class="level beginner">ระดับเริ่มต้น</span>
 <section class="flowchart">
     <h2>🧭 แผนภาพการทำงาน</h2>
     <pre class="mermaid">
 flowchart TD
-    A["TM1637_Init(CLK, DIO, digits)"] --> B["TM1637_SetBrightness(5)"]
+    A["TM1637_Handle* disp = TM1637_Init(CLK, DIO, digits)"] --> B["TM1637_SetBrightness(disp, 7)"]
     B --> C{"Display Mode"}
-    C -->|"Number"| D["TM1637_DisplayNumber(1234)"]
-    C -->|"Time"| E["TM1637_DisplayTime(12, 30)"]
-    C -->|"Float"| F["TM1637_DisplayFloat(25.5, 1)"]
-    D --> G["while(1) loop"]
-    E --> G
-    F --> G
+    C -->|"Number"| D["TM1637_DisplayNumber(disp, n, leading_zero)"]
+    C -->|"Time"| E["TM1637_DisplayTime(disp, h, m, show_colon)"]
+    C -->|"Float"| F["TM1637_DisplayFloat(disp, 25.5, 1)"]
+    C -->|"Hex"| G["TM1637_DisplayHex(disp, 0xABCD, true)"]
+    D --> H["while(1) loop"]
+    E --> H
+    F --> H
+    G --> H
     </pre>
 </section>
 <section><h2>🔌 การต่อวงจร</h2>
 <pre class="ascii-circuit">
-          TM1637 4-Digit 7-Segment Display
-    ┌────────────────────────────────┐
-    │ MCU                  TM1637    │
-    │ 3.3V ─────────────── VCC      │
-    │ GND  ─────────────── GND      │
-    │ PC0  ─────────────── CLK      │
-    │ PC1  ─────────────── DIO      │
-    └────────────────────────────────┘
+          TM1637 4/6-Digit 7-Segment Display (proprietary 2-wire)
+    ┌──────────────────────────────────────────┐
+    │ MCU                            TM1637     │
+    │ 3.3V ────────────────────────── VCC      │
+    │ GND  ────────────────────────── GND      │
+    │ PC0  ────────────────────────── CLK      │
+    │ PC1  ────────────────────────── DIO      │
+    │ (ไม่ใช่ I2C — proprietary 2-wire)         │
+    └──────────────────────────────────────────┘
     </pre>
     <table class="wiring-table">
       <thead>
         <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
       </thead>
       <tbody>
-        <tr><td>PC0</td><td>→</td><td>TM1637</td><td>CLK</td><td>Proprietary 2-wire protocol</td></tr>
+        <tr><td>PC0</td><td>→</td><td>TM1637</td><td>CLK</td><td>Proprietary 2-wire (ไม่ใช่ I2C)</td></tr>
         <tr><td>PC1</td><td>↔</td><td>TM1637</td><td>DIO</td><td>Data bidirectional</td></tr>
-        <tr><td>3.3V</td><td>→</td><td>TM1637</td><td>VCC</td><td></td></tr>
-        <tr><td>GND</td><td>→</td><td>TM1637</td><td>GND</td><td></td></tr>
+        <tr><td>3.3V</td><td>→</td><td>TM1637</td><td>VCC</td><td>3.3V–5V</td></tr>
+        <tr><td>GND</td><td>→</td><td>TM1637</td><td>GND</td><td>กราวด์ร่วม</td></tr>
       </tbody>
     </table>
-    <p>TM1637 ใช้โปรโตคอล 2 เส้นแบบ proprietary — ไม่ใช่ I2C</p>
+    <p>⚠️ TM1637 ใช้โปรโตคอล 2 เส้นแบบ <strong>proprietary</strong> — <strong>ไม่ใช่ I2C</strong> ไม่มี address ไม่ต้อง pull-up แบบ I2C</p>
     <h3>รู้จักขา</h3>
     <ul>
-      <li><strong>VCC:</strong> ไฟเลี้ยง 3.3V</li>
+      <li><strong>VCC:</strong> ไฟเลี้ยง 3.3V–5V</li>
       <li><strong>GND:</strong> ต่อกราวด์ร่วมกับ MCU</li>
       <li><strong>CLK:</strong> ขาสัญญาณนาฬิกา ต่อกับ PC0</li>
       <li><strong>DIO:</strong> ขาข้อมูล 2 ทิศทาง ต่อกับ PC1</li>
@@ -66,75 +69,103 @@ flowchart TD
     </ol>
 </section>
 <section><h2>📚 หลักการทำงาน</h2>
-<p><strong>TM1637</strong> ใช้โปรโตคอล 2 เส้นแบบ proprietary — ไม่ใช่ I2C — TM1637_Init() รับ CLK, DIO, และจำนวนหลัก — ไม่มี instance (global functions)</p></section>
+<p><strong>TM1637</strong> เป็น IC driver สำหรับ 7-segment display 4 หรือ 6 หลัก ใช้โปรโตคอล 2 เส้นแบบ proprietary คุยกับ MCU ด้วย CLK + DIO — API เป็น <strong>handle-based</strong> เหมือน I2C display ทั่วไป: <code>TM1637_Init</code> คืน <code>TM1637_Handle*</code> (pointer) และทุกฟังก์ชัน display ต้องส่ง handle กลับไปเป็น argument แรกเสมอ — ทำให้ต่อหลายจอในเวลาเดียวกันได้ (แต่ละจอมี handle ของตัวเอง)</p>
+<p>⚠️ ข้อจำกัดจาก LIMITATIONS.md: <code>TM1637_DisplayNumber</code> รองรับ <code>INT16_MIN</code> — ระวัง overflow ถ้าเลขติดลบเกินช่วง int16_t</p>
+</section>
 <section><h2>💻 เขียน Code ทีละขั้น</h2>
-<div class="step"><h3>ขั้นที่ 1: Init + Setup</h3>
+<div class="step"><h3>ขั้นที่ 1: Init + ตั้งค่า handle</h3>
 <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "TM1637.h"
 
 int main(void) {
     SystemCoreClockUpdate();
-    Timer_Init();
+    Timer_Init();                                  // จำเป็น — TM1637 ใช้ Delay
 
-    TM1637_Init(PC0, PC1, 4);   // CLK=PC0, DIO=PC1, 4 digits
-    TM1637_SetBrightness(5);</code></pre>
-<p class="explain">🔍 <code>TM1637_Init(clk, dio, digits)</code> — ไม่มี instance, ระบุจำนวนหลัก — SetBrightness 0-7</p></div>
-<div class="step"><h3>ขั้นที่ 2: แสดงตัวเลขรูปแบบต่างๆ</h3>
-<pre><code class="language-c">    TM1637_DisplayNumber(1234);
-    Delay_Ms(2000);
+    // TM1637_Init คืน POINTER — เก็บไว้ในตัวแปร pointer
+    TM1637_Handle* disp = TM1637_Init(PC0, PC1, 4);
+    // CLK=PC0, DIO=PC1, 4 digits
+    if (disp == NULL) { while (1); }               // init fail guard
 
-    TM1637_DisplayTime(12, 30);     // แสดง 12:30
-    Delay_Ms(2000);
-
-    TM1637_DisplayFloat(25.5f, 1);  // แสดง 25.5
-    Delay_Ms(2000);
-
-    TM1637_DisplayHex(0xAB);
-    Delay_Ms(2000);</code></pre>
-<p class="explain">🔍 DisplayNumber, DisplayTime, DisplayFloat, DisplayHex — API เดิม ไม่ต้องเปลี่ยน</p></div>
-<div class="step"><h3>ขั้นที่ 3: Countdown Timer</h3>
-<pre><code class="language-c">    uint16_t count = 9999;
-
-    while(1) {
-        TM1637_DisplayNumber(count);
-        Delay_Ms(1000);
-
-        if(count > 0) {
-            count--;
-        } else {
-            for(uint8_t i = 0; i < 5; i++) {
-                TM1637_Clear();
-                Delay_Ms(300);
-                TM1637_DisplayNumber(0);
-                Delay_Ms(300);
-            }
-            count = 9999;
-        }
+    TM1637_SetBrightness(disp, 7);   // สว่างสุด (0–7)
+    TM1637_Clear(disp);</code></pre>
+<p class="explain">🔍 <code>TM1637_Init(clk, dio, digits)</code> คืน <code>TM1637_Handle*</code> — เป็น <strong>handle-based</strong> ไม่ใช่ global — ทุกฟังก์ชันต่อไปรับ <code>disp</code> เป็น arg แรก — ต้องเรียก <code>Timer_Init()</code> ก่อน</p></div>
+<div class="step"><h3>ขั้นที่ 2: Counter 0→9999 + leading_zero</h3>
+<pre><code class="language-c">    for (int16_t n = 0; n &lt;= 9999; n++) {
+        // leading_zero=true → "0012", false → "  12"
+        TM1637_DisplayNumber(disp, n, true);
+        Delay_Ms(100);
     }
+    // แสดงด้วย leading_zero=false เปรียบเทียบ
+    TM1637_DisplayNumber(disp, 42, false);   // → "  42"
+    Delay_Ms(2000);
+    TM1637_DisplayNumber(disp, 42, true);    // → "0042"
+    Delay_Ms(2000);
+
+    // ทดสอบเลขติดลบ (รองรับถึง INT16_MIN)
+    TM1637_DisplayNumber(disp, -123, false); // → "-123"
+    Delay_Ms(2000);</code></pre>
+<p class="explain">🔍 <code>TM1637_DisplayNumber(disp, number, leading_zero)</code> — มี 3 args เสมอ — <code>leading_zero=true</code> → แสดง 0 นำหน้า ("0042"), <code>false</code> → ช่องว่าง ("  42") — รองรับเลขติดลบ (int16_t)</p></div>
+<div class="step"><h3>ขั้นที่ 3: Time HH:MM + dim ตอนกลางคืน</h3>
+<pre><code class="language-c">    // แสดงเวลา 12:34 (DisplayTime มี 3 args รวม show_colon)
+    TM1637_DisplayTime(disp, 12, 34, true);   // → "12:34"
+    Delay_Ms(2000);
+    TM1637_DisplayTime(disp, 8, 5, false);    // → "08 5" (ไม่มี colon)
+    Delay_Ms(2000);
+
+    // ปรับความสว่างตามช่วงเวลา (dim ตอนกลางคืน)
+    TM1637_SetBrightness(disp, 7);    // กลางวัน — สว่างสุด
+    Delay_Ms(1000);
+    TM1637_SetBrightness(disp, 1);    // กลางคืน — มืดสุด
+    Delay_Ms(1000);
+    TM1637_DisplayControl(disp, false);  // ปิดจอเลย
+    Delay_Ms(1000);
+    TM1637_DisplayControl(disp, true);   // เปิดใหม่
 }</code></pre>
-</div>
+<p class="explain">🔍 <code>TM1637_DisplayTime(disp, hours, minutes, show_colon)</code> — มี 3 args (ครบทั้ง hours, minutes, show_colon) — <code>SetBrightness</code> รับ 0–7 — <code>DisplayControl(disp, on)</code> เปิด/ปิดจอโดยไม่ล้าง buffer — ทุกฟังก์ชันต้องส่ง <code>disp</code></p></div>
 </section>
-<section><h2>📋 API Reference</h2>
+<section><h2>📋 API Reference (ตรงกับ TM1637.h)</h2>
 <table>
-    <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
-    <tr><td><code>TM1637_Init(clk, dio, digits)</code></td><td>เริ่มต้น TM1637</td><td><code>TM1637_Init(PC0, PC1, 4)</code></td></tr>
-    <tr><td><code>TM1637_SetBrightness(v)</code></td><td>ความสว่าง 0-7</td><td><code>TM1637_SetBrightness(5)</code></td></tr>
-    <tr><td><code>TM1637_DisplayNumber(n)</code></td><td>แสดงเลข 0-9999</td><td><code>TM1637_DisplayNumber(1234)</code></td></tr>
-    <tr><td><code>TM1637_DisplayTime(h, m)</code></td><td>แสดง hh:mm</td><td><code>TM1637_DisplayTime(12, 30)</code></td></tr>
-    <tr><td><code>TM1637_DisplayFloat(f, dec)</code></td><td>แสดงทศนิยม</td><td><code>TM1637_DisplayFloat(25.5f, 1)</code></td></tr>
-    <tr><td><code>TM1637_DisplayHex(v)</code></td><td>แสดงค่า hex</td><td><code>TM1637_DisplayHex(0xAB)</code></td></tr>
-    <tr><td><code>TM1637_Clear()</code></td><td>ล้างหน้าจอ</td><td><code>TM1637_Clear()</code></td></tr>
+    <tr><th>ฟังก์ชัน</th><th>Signature (handle-based)</th><th>หมายเหตุ</th></tr>
+    <tr><td><code>TM1637_Init</code></td><td><code>TM1637_Handle* TM1637_Init(uint8_t clk_pin, uint8_t dio_pin, uint8_t num_digits)</code></td><td><strong>คืน pointer</strong> — 4 หรือ 6 digits</td></tr>
+    <tr><td><code>TM1637_SetBrightness</code></td><td><code>void TM1637_SetBrightness(TM1637_Handle* handle, uint8_t brightness)</code></td><td>0 (มืดสุด) – 7 (สว่างสุด)</td></tr>
+    <tr><td><code>TM1637_DisplayControl</code></td><td><code>void TM1637_DisplayControl(TM1637_Handle* handle, bool on)</code></td><td>true=เปิด, false=ปิด display</td></tr>
+    <tr><td><code>TM1637_Clear</code></td><td><code>void TM1637_Clear(TM1637_Handle* handle)</code></td><td>ล้างทุกหลัก</td></tr>
+    <tr><td><code>TM1637_DisplayNumber</code></td><td><code>void TM1637_DisplayNumber(TM1637_Handle* handle, int16_t number, bool leading_zero)</code></td><td>3 args — true → "0042", false → "  42" — รองรับ INT16_MIN</td></tr>
+    <tr><td><code>TM1637_DisplayFloat</code></td><td><code>void TM1637_DisplayFloat(TM1637_Handle* handle, float number, uint8_t decimal_places)</code></td><td>เช่น <code>DisplayFloat(disp, 25.5f, 1)</code> → "25.5"</td></tr>
+    <tr><td><code>TM1637_DisplayHex</code></td><td><code>void TM1637_DisplayHex(TM1637_Handle* handle, uint16_t number, bool leading_zero)</code></td><td>เช่น <code>DisplayHex(disp, 0xABCD, true)</code></td></tr>
+    <tr><td><code>TM1637_DisplayDigit</code></td><td><code>void TM1637_DisplayDigit(TM1637_Handle* handle, uint8_t position, uint8_t digit, bool show_dp)</code></td><td>แสดง 1 หลักที่ตำแหน่ง 0–5 — show_dp เปิดจุดทศนิยม</td></tr>
+    <tr><td><code>TM1637_DisplayRaw</code></td><td><code>void TM1637_DisplayRaw(TM1637_Handle* handle, uint8_t position, uint8_t segments)</code></td><td>คุม segment ตรง (bit SEG_A..SEG_DP)</td></tr>
+    <tr><td><code>TM1637_DisplayChar</code></td><td><code>void TM1637_DisplayChar(TM1637_Handle* handle, uint8_t position, char ch, bool show_dp)</code></td><td>แสดงตัวอักษร (0-9, A-F, H,L,P,U,-,_,space)</td></tr>
+    <tr><td><code>TM1637_DisplayString</code></td><td><code>void TM1637_DisplayString(TM1637_Handle* handle, const char* text, uint8_t start_pos)</code></td><td>แสดงข้อความเริ่มที่ start_pos</td></tr>
+    <tr><td><code>TM1637_SetColon</code></td><td><code>void TM1637_SetColon(TM1637_Handle* handle, bool show)</code></td><td>เปิด/ปิด colon (display ที่มี colon เท่านั้น)</td></tr>
+    <tr><td><code>TM1637_DisplayTime</code></td><td><code>void TM1637_DisplayTime(TM1637_Handle* handle, uint8_t hours, uint8_t minutes, bool show_colon)</code></td><td>3 args — แสดง HH:MM</td></tr>
+    <tr><td><code>TM1637_SetBlink</code></td><td><code>void TM1637_SetBlink(TM1637_Handle* handle, bool enable, uint16_t blink_rate)</code></td><td>ต้องเรียก <code>TM1637_UpdateBlink(disp)</code> ใน main loop</td></tr>
+    <tr><td><code>TM1637_UpdateBlink</code></td><td><code>void TM1637_UpdateBlink(TM1637_Handle* handle)</code></td><td>อัปเดตสถานะกะพริบใน main loop</td></tr>
+    <tr><td><code>TM1637_ScrollText</code></td><td><code>void TM1637_ScrollText(TM1637_Handle* handle, const char* text, uint16_t scroll_delay)</code></td><td><strong>blocking</strong> — เลื่อนข้อความจนจบ</td></tr>
+    <tr><td><code>TM1637_StartScroll</code></td><td><code>void TM1637_StartScroll(TM1637_Handle* handle, const char* text, uint16_t scroll_delay)</code></td><td>เริ่ม scroll แบบ non-blocking — เรียก <code>UpdateScroll</code> ใน loop</td></tr>
+    <tr><td><code>TM1637_UpdateScroll</code></td><td><code>bool TM1637_UpdateScroll(TM1637_Handle* handle)</code></td><td>true=ยังเลื่อน, false=เลื่อนเสร็จ</td></tr>
+    <tr><td><code>TM1637_StopScroll</code></td><td><code>void TM1637_StopScroll(TM1637_Handle* handle)</code></td><td>หยุด scroll กลางทาง</td></tr>
+    <tr><td><code>TM1637_PlayAnimation</code></td><td><code>void TM1637_PlayAnimation(TM1637_Handle* handle, const uint8_t frames[][6], uint8_t num_frames, uint16_t frame_delay, uint8_t repeat)</code></td><td><strong>blocking</strong> — repeat=0 เล่นไม่จำกัด</td></tr>
+    <tr><td><code>TM1637_Update</code></td><td><code>void TM1637_Update(TM1637_Handle* handle)</code></td><td>ส่ง buffer ไป hardware (auto-call อยู่แล้วในฟังก์ชันอื่น)</td></tr>
+    <tr><td><code>TM1637_DigitToSegment</code></td><td><code>uint8_t TM1637_DigitToSegment(uint8_t digit)</code></td><td>utility — ไม่ต้องส่ง handle</td></tr>
+    <tr><td><code>TM1637_CharToSegment</code></td><td><code>uint8_t TM1637_CharToSegment(char ch)</code></td><td>utility — คืน 0 ถ้าไม่รองรับ</td></tr>
 </table>
+<p class="explain">🔍 ทุกฟังก์ชัน display/control รับ <code>TM1637_Handle* handle</code> เป็น argument แรก (handle-based) — ยกเว้น <code>DigitToSegment</code> และ <code>CharToSegment</code> ที่เป็น utility บริสุทธิ์ — struct <code>TM1637_Handle</code> เก็บ clk_pin, dio_pin, num_digits, brightness, display_on, buffer[6]</p>
 </section>
 <section><h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
 <table>
     <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
-    <tr><td>ตัวเลขกลับหัว</td><td>CLK/DIO กลับข้างกัน</td><td>สลับขา CLK กับ DIO</td></tr>
-    <tr><td>แสดงค่าเกิน 9999 เพี้ยน</td><td>TM1637 รองรับ 4 หลัก</td><td>เช็คค่า input ไม่ให้เกิน 9999</td></tr>
+    <tr><td>Display ปิด / มืด / ไม่ติดเลย</td><td>ลืมเรียก <code>TM1637_SetBrightness(disp, n)</code> หรือเรียก <code>DisplayControl(disp, false)</code> ค้างไว้</td><td>เรียก <code>SetBrightness(disp, 7)</code> หลัง Init เสมอ — เช็คว่าไม่ได้ <code>DisplayControl(false)</code> โดยไม่เปิดกลับ</td></tr>
+    <tr><td>ตัวเลขแสดงผิด / หายหลัก</td><td><code>num_digits</code> ผิดขนาด module (ตั้ง 4 แต่จอเป็น 6 หรือกลับกัน)</td><td>ตั้ง <code>num_digits</code> ให้ตรงกับ module จริง (4 หรือ 6)</td></tr>
+    <tr><td>เลขติดลบแสดงผิด</td><td>เกินช่วง int16_t (<code>-32768</code>–<code>32767</code>)</td><td>เช็คค่าก่อนส่ง — LIMITATIONS.md บอกรองรับถึง INT16_MIN</td></tr>
+    <tr><td>ลืมส่ง handle arg → build fail</td><td>เขียน <code>TM1637_SetBrightness(5)</code> แบบเดิม (global-style)</td><td>ทุกฟังก์ชันต้องส่ง <code>disp</code> เป็น arg แรก — เช่น <code>TM1637_SetBrightness(disp, 5)</code></td></tr>
+    <tr><td>DisplayTime ไม่มี colon</td><td>เขียน 2 args (เดิม) หรือลืม <code>show_colon</code></td><td>ใช้ 3 args: <code>DisplayTime(disp, h, m, true)</code> — ใช้ <code>SetColon(disp, true)</code> แยกถ้าจอมี colon</td></tr>
+    <tr><td>จอพริก / กระพริบเอง</td><td>เรียก <code>SetBlink(disp, true, n)</code> โดยไม่เรียก <code>UpdateBlink(disp)</code> ใน loop</td><td><code>UpdateBlink(disp)</code> ต้องอยู่ใน main loop — มิฉะนั้น state ไม่ sync</td></tr>
+    <tr><td>CLK/DIO กลับด้าน</td><td>สลับขา</td><td>สลับ CLK กับ DIO — ไม่ใช่ I2C ไม่มี address ให้สลับเลย</td></tr>
 </table>
 </section>
-<section><h2>🛠️ สร้าง Product: นาฬิกาจับเวลา</h2>
+<section><h2>🛠️ สร้าง Product: นาฬิกาจับเวลาพร้อม dim ตอนกลางคืน</h2>
 <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "TM1637.h"
@@ -142,36 +173,42 @@ int main(void) {
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    TM1637_Init(PC0, PC1, 4);
-    TM1637_SetBrightness(5);
 
-    uint16_t remaining = 120;
+    TM1637_Handle* disp = TM1637_Init(PC0, PC1, 4);
+    TM1637_SetBrightness(disp, 7);
+    TM1637_Clear(disp);
+
+    uint16_t remaining = 120;       // นาที:วินาที 02:00 → 120 วินาที
     Timer_t tmr;
-    Start_Timer(&tmr, 1000, 1);
+    Start_Timer(&tmr, 1000, 1);     // 1s non-blocking timer
 
-    TM1637_DisplayTime(remaining / 60, remaining % 60);
+    TM1637_DisplayTime(disp, remaining / 60, remaining % 60, true);
 
-    while(1) {
-        if(Is_Timer_Expired(&tmr)) {
-            if(remaining > 0) {
+    while (1) {
+        if (Is_Timer_Expired(&tmr)) {
+            if (remaining > 0) {
                 remaining--;
-                TM1637_DisplayTime(remaining / 60, remaining % 60);
+                // dim ถ้าเหลือ &lt; 30 วินาที (เตือนว่าใกล้หมด)
+                if (remaining &lt; 30) TM1637_SetBrightness(disp, 2);
+                TM1637_DisplayTime(disp, remaining / 60, remaining % 60, true);
             } else {
-                for(int i = 0; i < 3; i++) {
-                    TM1637_Clear(); Delay_Ms(200);
-                    TM1637_DisplayTime(0, 0); Delay_Ms(200);
+                for (int i = 0; i &lt; 3; i++) {
+                    TM1637_Clear(disp);                    Delay_Ms(200);
+                    TM1637_DisplayTime(disp, 0, 0, true);   Delay_Ms(200);
                 }
                 remaining = 120;
+                TM1637_SetBrightness(disp, 7);   // คืนค่าสว่างเดิม
             }
         }
     }
 }</code></pre>
+<p class="explain">🔍 ใช้ <code>TM1637_Handle* disp</code> ครบทุก call — <code>DisplayTime(disp, min, sec, true)</code> สาม args — <code>SetBrightness(disp, n)</code> ลดแสงตอนใกล้หมดเวลา — เปรียบเทียบกับบทเดิมที่เขียน <code>TM1637_SetBrightness(5)</code> ผิด (global-style)</p>
 </section>
 <section><h2>✏️ ลองทำดู</h2>
 <ol>
-    <li>ทำ Countdown 99:59 — รองรับการตั้งเวลามากกว่า 59:59</li>
-    <li>แสดงอุณหภูมิ — อ่าน DHT11 แล้ว DisplayFloat(temp, 1)</li>
-    <li>RPM Counter — ใช้ External Interrupt นับรอบ</li>
+    <li>ทำ Countdown 99:59 — ใช้ <code>DisplayTime(disp, 99, 59, true)</code> และเช็ค colon ที่จอของคุณ</li>
+    <li>แสดงอุณหภูมิจาก DHT11 — อ่านแล้ว <code>TM1637_DisplayFloat(disp, temp, 1)</code></li>
+    <li>RPM Counter — ใช้ external interrupt นับ pulse รอบ แล้ว <code>TM1637_DisplayNumber(disp, rpm, true)</code> หรือ <code>DisplayHex(disp, rpm, true)</code></li>
 </ol>
 </section>
 <nav class="bottom-nav">

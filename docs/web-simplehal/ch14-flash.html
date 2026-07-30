@@ -82,7 +82,7 @@ flowchart TD
         <tr><td><code>Flash_ReadString(addr, buf, maxlen)</code></td><td>อ่าน string จาก Flash</td></tr>
         <tr><td><code>Flash_WriteStruct(addr, ptr, size)</code></td><td>เขียน struct ลง Flash</td></tr>
         <tr><td><code>Flash_ReadStruct(addr, ptr, size)</code></td><td>อ่าน struct จาก Flash</td></tr>
-        <tr><td><code>Flash_IsConfigValid(data, size)</code></td><td>ตรวจสอบ CRC ของ config</td></tr>
+        <tr><td><code>Flash_IsConfigValid()</code></td><td>ตรวจสอบ CRC ของ config</td></tr>
         <tr><td><code>Flash_CalculateCRC16(data, size)</code></td><td>คำนวณ CRC16</td></tr>
         <tr><td><code>FLASH_SAVE_CONFIG(data)</code></td><td>Macro: บันทึก struct config</td></tr>
         <tr><td><code>FLASH_LOAD_CONFIG(data)</code></td><td>Macro: โหลด struct config</td></tr>
@@ -126,7 +126,7 @@ typedef struct {
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    USART_SimpleInit(USART_115200);
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
     Flash_Init();
 
     AppConfig cfg;
@@ -187,7 +187,7 @@ defaults:
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    USART_SimpleInit(USART_115200);
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
     Flash_Init();
 
     AppConfig cfg;
@@ -218,7 +218,7 @@ typedef struct {
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    USART_SimpleInit(USART_115200);
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
     Flash_Init();
 
     PersistentData data;

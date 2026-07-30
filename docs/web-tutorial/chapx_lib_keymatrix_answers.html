@@ -161,19 +161,27 @@ int main(void) {
 
     while(1) {
         if(Is_Timer_Expired(&scan_tmr)) {
-            pcount = KeyMatrix_GetAllPressed(&kp, pressed, 16);
+            // Note: API จริงรองรับ single key เท่านั้น (KeyMatrix_GetCurrentKey)
+            // ghost key detection ต้องการ multi-key scan ซึ่ง library ไม่รองรับ
+            char key = KeyMatrix_GetCurrentKey(&kp);
+            if(key) {
+                pressed[0] = key;
+                pcount = 1;
+            } else {
+                pcount = 0;
+            }
 
             if(ghost_detect(pressed, pcount)) {
                 USART_Println("⚠ GHOST KEY DETECTED — data unreliable!");
             } else {
                 USART_Printf("Keys: %d → ", pcount);
                 for(uint8_t i = 0; i < pcount; i++)
-                    USART_Printf("%c ", KEYMAP[pressed[i] - 1]);
+                    USART_Printf("%c ", pressed[i]);
                 USART_Println("");
             }
         }
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> Ghost key เกิดเมื่อกด ≥ 3 ปุ่มใน matrix ที่ไม่มี diode — วงจรไหลย้อนกลับทำให้อ่านค่าผิด — วิธีตรวจจับ: นับจำนวน row/col ที่ active — ถ้า <code>count < rows_used × cols_used</code> แสดงว่ามีตำแหน่งที่ "ว่าง" แต่ matrix อ่านเจอ — วิธีแก้ ghost จริง: ใส่ diode 1N4148 อนุกรมทุกสวิตช์ หรือใช้ <code>KeyMatrix_ScanWithDiode</code> — ถ้าตรวจพบ ghost ให้ ignore การกดทั้งหมด ป้องกัน false trigger</div></div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> Ghost key เกิดเมื่อกด ≥ 3 ปุ่มใน matrix ที่ไม่มี diode — วงจรไหลย้อนกลับทำให้อ่านค่าผิด — วิธีตรวจจับ: นับจำนวน row/col ที่ active — ถ้า <code>count < rows_used × cols_used</code> แสดงว่ามีตำแหน่งที่ "ว่าง" แต่ matrix อ่านเจอ — วิธีแก้ ghost จริง: ใส่ diode 1N4148 อนุกรมทุกสวิตช์ (hardware fix) — ถ้าตรวจพบ ghost ให้ ignore การกดทั้งหมด ป้องกัน false trigger</div></div>
 <nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_keymatrix.html">กลับบท</a><a href="chapx_lib_rotaryencoder_answers.html">เฉลยถัดไป →</a></nav>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

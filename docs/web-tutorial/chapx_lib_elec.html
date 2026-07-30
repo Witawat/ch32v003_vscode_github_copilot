@@ -54,14 +54,13 @@ INA219_Init(0x40, INA219_32V_2A); // range เลือกตาม shunt
 float voltage = INA219_GetBusVoltage();   // V
 float current = INA219_GetCurrent();       // mA
 float power   = INA219_GetPower();         // mW
-// Calibrate: INA219_SetCalibration(shunt_resistance_ohm, max_current_A);</code></pre>
+// Init ตั้งค่า shunt + max_amps ให้ — คำนวณ Calibration อัตโนมัติ</code></pre>
 <p class="explain">⚠️ 4 I2C addresses (0x40-0x4F via A0,A1 jumpers), shunt R = 0.1Ω (default), max V=32V, max I depends on shunt (0.1Ω → 3.2A), high-side measurement (ต่อ shunt ก่อน GND — อ่านทั้ง V bus และ voltage drop ข้าม shunt), PGA + 12-bit ADC ในตัว — แม่นกว่า ADC ทั่วไป, calibration: <code>current_LSB = max_current / 32768</code>, <code>cal_value = 0.04096 / (current_LSB * Rshunt)</code></p>
 
 <h3>API หลัก</h3>
 <table>
 <tr><td><code>INA219_Init(addr, range)</code></td><td>Init + ตั้ง range</td><td><code>INA219_GetBusVoltage()</code></td><td>อ่านแรงดัน V (bus)</td></tr>
 <tr><td><code>INA219_GetCurrent()</code></td><td>อ่านกระแส mA</td><td><code>INA219_GetPower()</code></td><td>อ่านกำลังไฟฟ้า mW</td></tr>
-<tr><td><code>INA219_ReadShuntVoltage()</code></td><td>Shunt voltage mV</td><td><code>INA219_SetCalibration(r, maxA)</code></td><td>เปลี่ยน shunt/range</td></tr>
 </table>
 
 <h2>ADS1115 — 16-bit ADC 4ch (I2C)</h2>
@@ -198,22 +197,23 @@ CT clamp ⇛ live wire (แค่ 1 เส้น), voltage probe ⤏ socket L-N
   </tbody>
 </table>
 <pre><code class="language-c">#include "PZEM004T.h"
-PZEM004T_Init(USART1);
-float v  = PZEM004T_ReadVoltage();       // V
-float a  = PZEM004T_ReadCurrent();       // A
-float w  = PZEM004T_ReadPower();         // W
-float e  = PZEM004T_ReadEnergy();        // kWh
-float f  = PZEM004T_ReadFrequency();     // Hz
-float pf = PZEM004T_ReadPowerFactor();   // 0-1
-// Set address: PZEM004T_SetAddress(0x01, 0x02); // เปลี่ยนจาก addr 1 → 2</code></pre>
+PZEM004T pzem;
+PZEM004T_Init(&pzem, USART_PINS_DEFAULT);
+float v  = PZEM004T_GetVoltage(&pzem);     // V
+float a  = PZEM004T_GetCurrent(&pzem);     // A
+float w  = PZEM004T_GetPower(&pzem);       // W
+uint32_t e = PZEM004T_GetEnergy(&pzem);    // Wh
+// หรออ่านทุกค่าพร้อมกัน:
+// PZEM004T_Data data;
+// PZEM004T_ReadAll(&pzem, &data);
+// เขต address: PZEM004T_SetAddress(&pzem, (uint8_t[]){0xF8,0x01,0x02,0xB7}); // เปล่ยนจาก 1 → 2</code></pre>
 <p class="explain">⚠️ ⚡ 220VAC อันตราย — ถ้าไม่มั่นใจให้ใช้ USB power meter แทน, Modbus-RTU protocol (baud 9600 8N1), address 1-255 (default 1), CT clamp 100A, อ่านทีละ register (ใช้เวลา ~200ms/register), PZEM004T = TTL output (ต่อตรง CH32V003), PZEM004Tv1 = RS485 (ต้องใช้ MAX485 converter), ต่อผิดขั้ว CT → current = 0, เปิด USART1 → ใช้ร่วมกับ USART_Print ไม่ได้ (ต้องเปลี่ยนเป็น SoftUART print)</p>
 
 <h3>API หลัก</h3>
 <table>
-<tr><td><code>PZEM004T_Init(usart)</code></td><td>Init USART 9600</td><td><code>PZEM004T_ReadVoltage()</code></td><td>อ่าน V (0.1V res)</td></tr>
-<tr><td><code>PZEM004T_ReadCurrent()</code></td><td>อ่าน A (0.001A res)</td><td><code>PZEM004T_ReadPower()</code></td><td>อ่าน W (0.1W res)</td></tr>
-<tr><td><code>PZEM004T_ReadEnergy()</code></td><td>อ่าน kWh (0.001kWh)</td><td><code>PZEM004T_ReadFrequency()</code></td><td>Hz</td></tr>
-<tr><td><code>PZEM004T_ReadPowerFactor()</code></td><td>PF 0-1 (0.01)</td><td><code>PZEM004T_SetAddress(old, new)</code></td><td>เปลี่ยน addr</td></tr>
+<tr><td><code>PZEM004T_Init(&pzem, pin_config)</code></td><td>Init USART instance</td><td><code>PZEM004T_GetVoltage(&pzem)</code></td><td>อ่าน V (0.1V res)</td></tr>
+<tr><td><code>PZEM004T_GetCurrent(&pzem)</code></td><td>อ่าน A (0.001A res)</td><td><code>PZEM004T_GetPower(&pzem)</code></td><td>อ่าน W (0.1W res)</td></tr>
+<tr><td><code>PZEM004T_GetEnergy(&pzem)</code></td><td>อ่าน Wh</td><td><code>PZEM004T_ReadAll(&pzem, &data)</code></td><td>อ่านทุกค่าพร้อมกัน</td></tr>
 </table>
 
 <h2>PZEM004Tv3 — AC Energy Meter v3 (USART)</h2>

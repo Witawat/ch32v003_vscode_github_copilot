@@ -16,7 +16,7 @@
 <span class="level expert">ระดับผู้เชี่ยวชาญ</span>
 
 <section class="flowchart">
-    <h2>🧭 เส้นทางเรียนรู้: 7 ตัวอย่าง OPAMP</h2>
+    <h2>🧭 เส้นทางเรียนรู้: 6 ตัวอย่าง OPAMP</h2>
     <pre class="mermaid">
 flowchart LR
     A["ex01: Voltage Follower"] --> B["ex02: Non-Inverting Amp"]
@@ -24,9 +24,7 @@ flowchart LR
     C --> D["ex04: Comparator"]
     D --> E["ex05: OPAMP+ADC"]
     E --> F["ex06: Advanced Control"]
-    F --> G["ex07: PIR RE200B Amplifier"]
     style A fill:#dcfce7
-    style G fill:#fef3c7
     </pre>
 </section>
 
@@ -458,151 +456,7 @@ int main(void) {
 </section>
 
 <section>
-<h2>ex07_PIR_Amplifier — ขยายสัญญาณ PIR RE200B/D202S ด้วย OPAMP</h2>
-<h3>📖 แนวคิด</h3>
-<p>ใช้ OPAMP1 ขยายสัญญาณเล็กๆ (~0.5–2mV) จาก <strong>RE200B</strong> หรือ <strong>D202S</strong> ให้ใหญ่ขึ้น ~100 เท่า ก่อนส่งเข้า ADC — เซนเซอร์พวกนี้ให้สัญญาณออกมาเป็นแรงดันที่เล็กมาก ต่างจาก HC-SR501 ที่มีวงจรเปรียบเทียบในตัวอยู่แล้ว</p>
-
-<h3>🔌 วงจร — ต่อยังไง</h3>
-
-<h4>รู้จักขา</h4>
-<ul>
-  <li><strong>PD5 (OPAMP_IN+):</strong> ขาเข้าสัญญาณ OPAMP ต่อจาก PIR ผ่าน C 1µF</li>
-  <li><strong>PA5 (OP_OUT):</strong> ขาออก OPAMP ต่อ Rf=1MΩ ไป PA6 และต่อ ADC ภายใน</li>
-  <li><strong>PA6 (OP_IN-):</strong> ขาเข้าลบ OPAMP ต่อ Rf=1MΩ ไป PA5 และ Rg=10kΩ ไป GND</li>
-  <li><strong>RE200B:</strong> 2 ขา — ขา 1 = Drain (GND), ขา 2 = Source (สัญญาณออก)</li>
-  <li><strong>D202S:</strong> 3 ขา — ขา 1 = Drain (GND), ขา 2 = Source (สัญญาณออก), ขา 3 = Ground (ต่อ GND)</li>
-  <li><strong>C 1µF:</strong> ตัวเก็บประจุ AC coupling — กรอง DC offset ทิ้ง</li>
-</ul>
-
-<h4>วิธีต่อทีละขั้น</h4>
-<ol>
-  <li>ต่อ <strong>PIR ขา 1 (Drain)</strong> ไป <strong>GND</strong></li>
-  <li>ต่อ <strong>PIR ขา 2 (Source)</strong> ผ่าน <strong>R 10kΩ</strong> ไป <strong>1.65V</strong> — จ่ายไฟเลี้ยง PIR</li>
-  <li>ต่อ <strong>PIR ขา 2 (Source)</strong> ผ่าน <strong>C 1µF</strong> ไป <strong>PD5 (OPAMP_IN+)</strong> — ส่งสัญญาณ AC เข้า OPAMP</li>
-  <li>ต่อ <strong>PD5</strong> ไป <strong>R 1MΩ</strong> → <strong>GND</strong> — ดึงแรงดันกลับ GND ตอนไม่มีสัญญาณ</li>
-  <li>ต่อ <strong>PA5 (OP_OUT)</strong> ไป <strong>Rf=1MΩ</strong> → <strong>PA6 (OP_IN-)</strong> — ป้อนกลับ</li>
-  <li>ต่อ <strong>PA6 (OP_IN-)</strong> ไป <strong>Rg=10kΩ</strong> → <strong>GND</strong> — กำหนดอัตราขยาย</li>
-  <li>ถ้าใช้ <strong>D202S</strong> ต่อขา 3 ไป <strong>GND</strong> — ลดสัญญาณรบกวน</li>
-  <li>สร้างไฟ <strong>1.65V</strong> จาก R divider: 3.3V → R 10kΩ → จุด 1.65V → R 10kΩ → GND</li>
-</ol>
-
-<p><strong>อัตราขยาย:</strong> 1 + Rf/Rg = 1 + 1MΩ/10kΩ = <strong>101 เท่า</strong> — สัญญาณเข้า 1mV → ออก ~101mV</p>
-
-<table class="wiring-table">
-  <thead>
-    <tr><th>จาก</th><th>→</th><th>ไปที่</th><th>สายอะไร</th><th>ทำไมต้องต่อ</th></tr>
-  </thead>
-  <tbody>
-    <tr><td>PIR ขา 1 (Drain)</td><td>→</td><td>GND</td><td>สายไฟ</td><td>กราวด์</td></tr>
-    <tr><td>PIR ขา 2 (Source)</td><td>→</td><td>R 10kΩ → 1.65V</td><td>สายไฟ</td><td>จ่ายไฟเลี้ยง</td></tr>
-    <tr><td>PIR ขา 2 (Source)</td><td>→</td><td>C 1µF → PD5</td><td>สายไฟ</td><td>ส่งสัญญาณ ตัดไฟนิ่งทิ้ง</td></tr>
-    <tr><td>D202S ขา 3</td><td>→</td><td>GND</td><td>สายไฟ</td><td>ลด noise (RE200B ไม่มี)</td></tr>
-    <tr><td>PD5 (OP_IN+)</td><td>←</td><td>R 1MΩ → GND</td><td>สายไฟ</td><td>ดึงลง GND ตอนไม่มีสัญญาณ</td></tr>
-    <tr><td>PA5 (OP_OUT)</td><td>↔</td><td>Rf=1MΩ → PA6</td><td>สายไฟ</td><td>ป้อนกลับ ตั้งค่าขยาย</td></tr>
-    <tr><td>PA6 (OP_IN-)</td><td>→</td><td>Rg=10kΩ → GND</td><td>สายไฟ</td><td>ขาล่างของวงจรขยาย</td></tr>
-    <tr><td>PA5 (OP_OUT)</td><td>→</td><td>ADC (ภายใน)</td><td>ในชิป</td><td>ส่งค่าที่ขยายแล้วให้ ADC</td></tr>
-    <tr><td>3.3V</td><td>→</td><td>R 10kΩ → จุด 1.65V → R 10kΩ → GND</td><td>สายไฟ</td><td>สร้างไฟกึ่งกลาง</td></tr>
-  </tbody>
-</table>
-
-<h3>🧭 ผังการทำงาน</h3>
-<pre class="mermaid">
-flowchart TD
-    A["OPAMP_SimpleInit(NON_INVERTING)"] --> B["OPAMP_Enable()"]
-    B --> C["ADC_SimpleInit()"]
-    C --> D["Set baseline = ADC_Read()"]
-    D --> E["while(1)"]
-    E --> F["ADC_ReadVoltage(7)"]
-    F --> G["diff = abs(ADC – baseline)"]
-    G --> H{"diff > threshold?"}
-    H -->|"Yes"| I["Print MOTION! 🔥"]
-    H -->|"No"| J["Print idle"]
-    I --> K["Delay_Ms(50)"]
-    J --> K
-    K --> E
-</pre>
-
-<h3>💻 โค้ด + อธิบายทีละบรรทัด</h3>
-<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
-#include &lt;SimpleHAL.h&gt;
-
-// ค่า threshold ตรวจจับการเปลี่ยนแปลง — ปรับตามสภาพแวดล้อม
-#define THRESHOLD_MV  25
-
-int main(void)
-{
-    SystemCoreClockUpdate();
-    Timer_Init();
-    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
-    ADC_SimpleInit();
-
-    // OPAMP1: Non-Inverting, gain ตั้งด้วย R ภายนอก 1MΩ+10kΩ
-    OPAMP_SimpleInit(OPAMP1, OPAMP_MODE_NON_INVERTING);
-    OPAMP_Enable(OPAMP1);
-
-    // DC bias 1.65V — ใช้ R divider หรือ Pin Output PWM+filter
-    pinMode(PC1, PIN_MODE_OUTPUT);
-    digitalWrite(PC1, HIGH);  // ร่วมกับ R divider 10kΩ สร้าง VDD/2
-
-    USART_Print("PIR RE200B Amplifier Ready\r\n");
-
-    // อ่านค่า baseline ครั้งแรก (ไม่มี motion)
-    uint16_t baseline = ADC_Read(7);
-    USART_Print("Baseline: ");
-    USART_PrintNum(baseline);
-    USART_Print("\r\n");
-
-    while(1)
-    {
-        uint16_t adc = ADC_Read(7);
-        float volt = ADC_ReadVoltage(7);
-        uint16_t diff = abs((int16_t)adc - (int16_t)baseline);
-        float diff_mv = diff * 3300.0f / 4095.0f;
-
-        if(diff_mv > THRESHOLD_MV)
-        {
-            USART_Print("🔥 MOTION! (");
-            USART_PrintFloat(diff_mv, 1);
-            USART_Print(" mV change)\r\n");
-        }
-
-        USART_Print("ADC:");
-        USART_PrintNum(adc);
-        USART_Print(" (");
-        USART_PrintFloat(volt * 1000, 1);
-        USART_Print("mV)\r\n");
-
-        Delay_Ms(50);  // sample rate 20Hz — PIR ตอบสนอง <10Hz
-    }
-}</code></pre>
-<ul>
-<li><strong>RE200B</strong> เป็น pyroelectric element แบบ Dual Element — ต้องมีวงจรขยายสัญญาณ ไม่งั้น ADC อ่านไม่ออก</li>
-<li><strong>AC coupling:</strong> C 1µF + R 1MΩ = HPF cutoff ~0.16Hz — กรอง DC offset ของ RE200B ทิ้ง</li>
-<li><strong>Bias VDD/2:</strong> RE200B ต้องการ DC bias ~1.65V — ใช้ R divider 10kΩ+10kΩ หรือ output HIGH + R divider</li>
-<li><strong>Gain 101x:</strong> Rf=1MΩ, Rg=10kΩ — 1mV input → ~100mV output — ไม่ควรเกิน VDD (3.3V / 101 ≈ 32mV input max)</li>
-<li><strong>Threshold:</strong> ปรับ THRESHOLD_MV ตาม noise ในสภาพแวดล้อม — ค่าปกติ 20-50mV ที่ output</li>
-</ul>
-
-<h3>⚠️ จุดควรระวัง</h3>
-<ul>
-<li>RE200B มี impedance สูงมาก — อย่าต่อสายยาวโดยไม่ shield — ใช้สายสั้นและต่อ GND ใกล้ ๆ</li>
-<li>ถ้า output OPAMP คลิปที่ VDD หรือ GND — gain สูงเกิน — ลด gain โดยเพิ่ม Rg หรือลด Rf</li>
-<li>RE200B ไวต่อการสั่นสะเทือนและลม — ต้องติดตั้งใน housing ที่ป้องกัน</li>
-<li>ADC อ่านที่ 50ms (20Hz) ก็เพียงพอ — PIR signal bandwidth <10Hz — sample สูงไปมีแต่ noise</li>
-<li>ใช้ running average (16-32 samples) เพื่อกรอง noise ก่อนเปรียบเทียบ threshold</li>
-</ul>
-
-<h3>✅ ตรวจสอบก่อนรัน</h3>
-<ul>
-<li>Rf=1MΩ และ Rg=10kΩ ต่อถูกต้อง? gain=101x</li>
-<li>Bias VDD/2 (1.65V) จ่ายให้ RE200B + OPAMP input?</li>
-<li>C 1µF อยู่ระหว่าง RE200B → OPAMP_IN+? (DC block)</li>
-<li>RE200B ติดตั้งใน Fresnel lens หรือมี IR window? (ไม่ใช่แค่裸露 element)</li>
-</ul>
-</section>
-
-<section>
-<h2>✏️ สรุป — 7 ตัวอย่าง OPAMP</h2>
+<h2>✏️ สรุป — 6 ตัวอย่าง OPAMP</h2>
 <table>
 <tr><th>ตัวอย่าง</th><th>สอนอะไร</th><th>ฟังก์ชันหลัก</th></tr>
 <tr><td>ex01</td><td>Voltage Follower + ADC</td><td>OPAMP_SimpleInit, OPAMP_Enable, ADC_Read</td></tr>
@@ -611,7 +465,6 @@ int main(void)
 <tr><td>ex04</td><td>Comparator</td><td>OPAMP_ConfigComparator, COMP_HIGH/LOW</td></tr>
 <tr><td>ex05</td><td>OPAMP + ADC</td><td>ADC_ReadVoltage, OPAMP buffer</td></tr>
 <tr><td>ex06</td><td>Advanced Control</td><td>OPAMP_EnablePowerSave, เปลี่ยน channel</td></tr>
-<tr><td>ex07</td><td>PIR RE200B Amplifier</td><td>Non-Inverting gain 101x, AC coupling, threshold detect</td></tr>
 </table>
 </section>
 

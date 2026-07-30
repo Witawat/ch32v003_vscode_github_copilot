@@ -154,8 +154,8 @@ int main(void) {
         <tr><td><code>HCSR04_Init(&s, trig, echo)</code></td><td>เริ่มต้นเซนเซอร์</td><td><code>HCSR04_Init(&s, PC0, PC1)</code></td></tr>
         <tr><td><code>HCSR04_MeasureCm(&s)</code></td><td>วัดระยะทาง (cm)</td><td><code>float d = HCSR04_MeasureCm(&s)</code></td></tr>
         <tr><td><code>HCSR04_MeasureInch(&s)</code></td><td>วัดระยะทาง (inch)</td><td><code>float d = HCSR04_MeasureInch(&s)</code></td></tr>
-        <tr><td><code>HCSR04_ReadRaw(&s)</code></td><td>อ่าน pulse width (µs) ดิบ</td><td><code>uint32_t pw = HCSR04_ReadRaw(&s)</code></td></tr>
-        <tr><td><code>HCSR04_SetTimeout(&s, us)</code></td><td>ตั้ง timeout ใหม่</td><td><code>HCSR04_SetTimeout(&s, 25000)</code></td></tr>
+        <tr><td><code>HCSR04_MeasureAvgCm(&s, samples)</code></td><td>วัดหลายครั้งแล้วเฉลี่ย (ลด noise)</td><td><code>float avg = HCSR04_MeasureAvgCm(&s, 5)</code></td></tr>
+        <tr><td><code>HCSR04_IsObjectNear(&s, threshold)</code></td><td>ตรวจวัตถุใกล้กว่า threshold (cm)</td><td><code>if(HCSR04_IsObjectNear(&s, 30.0f)){...}</code></td></tr>
     </table>
 </section>
 

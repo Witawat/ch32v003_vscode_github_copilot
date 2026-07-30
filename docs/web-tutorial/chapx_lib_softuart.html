@@ -18,11 +18,14 @@
     <h2>🧭 แผนภาพการทำงาน</h2>
     <pre class="mermaid">
 flowchart TD
-    A["SoftUART_Init(&uart, tx, rx, baud)"] --> B["SoftUART_WriteString(&uart, str)"]
-    B --> C["Bit-bang TX: start→8bit→stop"]
-    C --> D["SoftUART_Available(&uart)?"]
-    D -->|"Yes"| E["SoftUART_Read(&uart)"]
-    D -->|"No"| D
+    A["SoftUART_Init(&amp;uart, tx, rx, baud)"] --> B["SoftUART_WriteString/Printf(&amp;uart, ...)"]
+    B --> C["Bit-bang TX: start → 8bit → stop"]
+    C --> D["SoftUART_ReadByte(&amp;uart, &amp;data, timeout_ms)"]
+    D --> E{"Status == SOFTUART_OK?"}
+    E -->|"Yes"| F["ประมวลผล byte"]
+    E -->|"TIMEOUT"| G["ไม่มีข้อมูลในเวลาที่กำหนด"]
+    F --> D
+    G --> D
     </pre>
 </section>
 
@@ -34,7 +37,7 @@ flowchart TD
     │ PC0(TX)──────────RX               ┌─────────┤
     │ PC1(RX)──────────TX               │ e.g.    │
     │ GND──────────────GND              │GPS, BT, │
-    │ ⚡ Baud สูงสุด ~19200              │ESP, PC  │
+    │ ⚡ Baud สูงสุด ~38400              │ESP, PC  │
     └──────────────────────────────────────────────┘
 </pre>
     <table class="wiring-table">
@@ -42,28 +45,37 @@ flowchart TD
         <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
       </thead>
       <tbody>
-        <tr><td>PC0 (TX)</td><td>→</td><td>Device</td><td>RX</td><td>MCU→อุปกรณ์</td></tr>
-        <tr><td>PC1 (RX)</td><td>←</td><td>Device</td><td>TX</td><td>อุปกรณ์→MCU</td></tr>
-        <tr><td>GND</td><td>↔</td><td>Device</td><td>GND</td><td>กราวด์ร่วม</td></tr>
+        <tr><td>PC0 (TX)</td><td>→</td><td>Device</td><td>RX</td><td>MCU ส่ง → อุปกรณ์ — TTL level 3.3V</td></tr>
+        <tr><td>PC1 (RX)</td><td>←</td><td>Device</td><td>TX</td><td>อุปกรณ์ ส่ง → MCU — TTL level 3.3V</td></tr>
+        <tr><td>GND</td><td>↔</td><td>Device</td><td>GND</td><td>กราวด์ร่วม — ขาดไม่ได้</td></tr>
       </tbody>
     </table>
     <h3>รู้จักขา</h3>
     <ul>
       <li><strong>TX:</strong> ส่งข้อมูลจาก MCU ไปอุปกรณ์ — ใช้ขา PC0 (GPIO ธรรมดา)</li>
       <li><strong>RX:</strong> รับข้อมูลจากอุปกรณ์เข้า MCU — ใช้ขา PC1 (GPIO ธรรมดา)</li>
-      <li><strong>GND:</strong> กราวด์ร่วม</li>
+      <li><strong>GND:</strong> กราวด์ร่วม — ต้องต่อทั้งสองฝั่ง</li>
     </ul>
-    <h3>วิธีต่อทีละขั้น</h3>
-    <ol>
-      <li>ต่อ <strong>TX (PC0)</strong> ของ MCU ไป <strong>RX</strong> ของอุปกรณ์</li>
-      <li>ต่อ <strong>RX (PC1)</strong> ของ MCU ไป <strong>TX</strong> ของอุปกรณ์</li>
-      <li>ต่อ <strong>GND</strong> MCU ไป <strong>GND</strong> ของอุปกรณ์</li>
-    </ol>
-    <p>หมายเหตุ: SoftUART ไม่มีขา VCC — จ่ายไฟแยกให้อุปกรณ์ตาม spec ของมัน</p>
+    <p>หมายเหตุ: SoftUART ไม่มีขา VCC — จ่ายไฟแยกให้อุปกรณ์ตาม spec ของมัน — ระดับแรงดัน TTL 3.3V (เช่น GPS NEO-6M, HC-05, เซนเซอร์ที่มี TX/RX TTL)</p>
 </section>
 
 <section><h2>📚 หลักการทำงาน</h2>
-<p><strong>Bit-Bang UART</strong> จำลองการส่ง-รับข้อมูลแบบ asynchronous serial โดยใช้ GPIO + delay แม่นยำ — TX: สร้าง start bit → 8 data bits → stop bit, RX: รอ falling edge → sample ที่กลางบิต</p></section>
+<p><strong>Bit-Bang UART</strong> จำลองการส่ง-รับข้อมูลแบบ asynchronous serial โดยใช้ GPIO + delay แม่นยำ — TX: สร้าง start bit → 8 data bits → stop bit, RX: รอ falling edge แล้ว sample ที่กลางบิต</p>
+<p>เนื่องจาก CH32V003 มี USART ฮาร์ดแวร์แค่ 1 ช่อง SoftUART จึงใช้สร้างพอร์ตอนุกรมเพิ่มบน GPIO ธรรมดา ใช้ได้กับอุปกรณ์ TTL ทุกชนิดที่มีขา TX/RX</p></section>
+
+<section><h2>⚠️ ข้อจำกัดที่ต้องรู้ (อ่านก่อนเขียน code)</h2>
+<div class="approach">
+<p><strong>⚠️ RX interrupt buffering เป็น known issue</strong> — ring buffer ใน instance ไม่ถูกเติมข้อมูลจริง (LIB_AUDIT #10) ทำให้ <code>SoftUART_Available(&amp;uart)</code> คืน 0 เสมอ</p>
+<p>→ <strong>ใช้ <code>SoftUART_ReadByte(&amp;uart, &amp;data, timeout_ms)</code> แบบ blocking-with-timeout เป็น pattern หลัก</strong> — เรียกแล้วรอจนกว่าจะได้ byte หรือหมดเวลา timeout</p>
+<p><strong>ข้อจำกัดเพิ่มเติมจาก LIMITATIONS.md:</strong></p>
+<ul>
+  <li>Baud &gt; 38400 → timing error สะสม ~8% ต่อ 10 bits → ใช้ baud ≤ 38400 (แนะนำ 9600–38400)</li>
+  <li>Baud = 0 → <code>SoftUART_Init</code> คืน <code>SOFTUART_ERROR</code> (ป้องกัน DIV/0)</li>
+  <li>TX/RX เป็น blocking — ปิด interrupt ชั่วคราวระหว่าง bit-bang</li>
+</ul>
+<p><strong>ห้ามใช้</strong> <code>SoftUART_Read()</code> (ไม่มีใน header) หรือคาดหวังว่า <code>Available()</code> จะทำงานเหมือน ring buffer ปกติ</p>
+</div>
+</section>
 
 <section><h2>💻 เขียน Code ทีละขั้น</h2>
 
@@ -76,99 +88,145 @@ SoftUART_Instance uart;
 
 int main(void) {
     SystemCoreClockUpdate();
-    USART_Init(USART1, BAUD_115200);  // debug
+    Timer_Init();                                   // จำเป็น — SoftUART ใช้ Delay_Us
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);  // debug ทาง HW UART
 
-    SoftUART_Init(&uart, PC0, PC1, BAUD_9600);
-    //             inst   TX   RX   baud
+    SoftUART_Status st = SoftUART_Init(&uart, PC0, PC1, 9600);
+    //                                inst   TX   RX   baud
+    if (st != SOFTUART_OK) {
+        USART_Println("SoftUART Init FAILED!");
+        while (1);
+    }
     USART_Println("SoftUART Ready @ 9600bps");</code></pre>
-<p class="explain">🔍 <code>SoftUART_Init(&uart, tx, rx, baud)</code> — instance-based, ใช้ GPIO 2 ขา, บอด ≤ 19200</p></div>
+<p class="explain">🔍 <code>SoftUART_Init(&amp;uart, tx, rx, baud)</code> — instance-based, ใช้ GPIO 2 ขา — คืน <code>SoftUART_Status</code> (SOFTUART_OK/ERROR) — ต้องเรียก <code>Timer_Init()</code> ก่อนเสมอเพราะใช้ <code>Delay_Us</code></p></div>
 
 <div class="step"><h3>ขั้นที่ 2: ส่งข้อมูล (TX)</h3>
-<pre><code class="language-c">    SoftUART_WriteString(&uart, "Hello from SoftUART!\r\n");
-    SoftUART_WriteChar(&uart, 'A');
-    SoftUART_WriteInt(&uart, 12345);
+<pre><code class="language-c">    // ส่ง string
+    SoftUART_WriteString(&uart, "Hello from SoftUART!\r\n");
 
-    // ส่ง buffer
+    // ส่ง 1 byte (เช่นส่ง byte คำสั่งไปเซนเซอร์)
+    SoftUART_WriteByte(&uart, 0xA5);
+
+    // ส่ง byte array
     uint8_t buf[] = {0x01, 0x02, 0x03, 0x04};
-    SoftUART_WriteBuf(&uart, buf, 4);</code></pre>
-<p class="explain">🔍 <code>SoftUART_WriteString(&uart, str)</code> — ส่ง string, <code>WriteChar</code> — ส่ง 1 ตัว, <code>WriteBuf</code> — ส่ง byte array</p></div>
+    SoftUART_Write(&uart, buf, 4);
 
-<div class="step"><h3>ขั้นที่ 3: รับข้อมูล (RX) + Loop</h3>
-<pre><code class="language-c">    char rx_buf[32]; uint8_t idx = 0;
-    while(1) {
-        if(SoftUART_Available(&uart)) {
-            char c = SoftUART_Read(&uart);
-            USART_Write(USART1, c);      // echo to debug
-            rx_buf[idx++] = c;
-            if(c == '\n' || idx >= 31) {
-                rx_buf[idx] = '\0';
-                USART_Print("SoftRX: ");
-                USART_Println(rx_buf);
-                idx = 0;
+    // ส่งแบบ formatted (เหมือน printf)
+    for (uint16_t i = 0; i < 5; i++) {
+        SoftUART_Printf(&uart, "count=%u\r\n", i);
+    }</code></pre>
+<p class="explain">🔍 <code>WriteString</code>, <code>WriteByte</code>, <code>Write(buf, len)</code>, <code>Printf(fmt, ...)</code> — ทุกฟังก์ชันส่ง handle <code>&amp;uart</code> เป็น argument แรกเสมอ — TX blocking สั้นๆ ปิด interrupt ระหว่าง bit-bang</p></div>
+
+<div class="step"><h3>ขั้นที่ 3: รับข้อมูล (RX) — ใช้ ReadByte + timeout เป็น pattern หลัก</h3>
+<pre><code class="language-c">    USART_Println("Waiting for byte (timeout 5s)...");
+    uint8_t data;
+    SoftUART_Status rs = SoftUART_ReadByte(&uart, &data, 5000);
+    //                                       inst  out   timeout_ms
+    if (rs == SOFTUART_OK) {
+        USART_Print("Got byte: 0x");
+        USART_PrintHex(data);
+        USART_Println("");
+    } else if (rs == SOFTUART_TIMEOUT) {
+        USART_Println("ReadByte timeout — ไม่มีข้อมูลเข้าใน 5 วินาที");
+    } else {
+        USART_Println("ReadByte error — parity/timing");
+    }
+
+    while (1) {
+        // echo แบบ blocking-with-timeout 10ms ต่อ byte
+        uint8_t c;
+        if (SoftUART_ReadByte(&uart, &c, 10) == SOFTUART_OK) {
+            SoftUART_WriteByte(&uart, c);   // echo กลับ
+        }
+    }
+}</code></pre>
+<p class="explain">🔍 <strong>ไม่ใช้</strong> <code>SoftUART_Available()</code> เพราะเป็น known issue (คืน 0 ตลอด) — ใช้ <code>SoftUART_ReadByte(&amp;uart, &amp;data, timeout_ms)</code> แทน: รอจนกว่าจะได้ byte หรือหมด timeout — ฟังก์ชันคืน <code>SOFTUART_OK</code> / <code>SOFTUART_TIMEOUT</code> / <code>SOFTUART_ERROR</code> / <code>SOFTUART_PARITY</code></p></div>
+</section>
+
+<section><h2>🛠️ Product: GPS NMEA Reader (อ่านบรรทัดทีละ byte)</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "SoftUART.h"
+
+SoftUART_Instance gps_uart;
+
+// อ่านบรรทัด NMEA หนึ่งบรรทัดด้วย ReadByte loop แบบ blocking-with-timeout
+// คืนความยาวบรรทัด (รวม '\0') หรือ 0 ถ้า timeout
+uint16_t gps_readline(char *buf, uint16_t max_len, uint32_t timeout_ms) {
+    uint16_t idx = 0;
+    uint32_t deadline = Timer_GetMs() + timeout_ms;
+
+    while (idx < max_len - 1) {
+        if (SoftUART_ReadByte(&gps_uart, (uint8_t *)&buf[idx], 50) == SOFTUART_OK) {
+            if (buf[idx] == '\n') {           // จบบรรทัด
+                buf[idx] = '\0';
+                return idx + 1;
+            }
+            if (buf[idx] != '\r') idx++;
+        }
+        if (Timer_GetMs() >= deadline) {       // รวม timeout ทั้งบรรทัด
+            buf[idx] = '\0';
+            return 0;
+        }
+    }
+    buf[max_len - 1] = '\0';
+    return idx;
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+
+    // GPS NEO-6M default 9600  baud — TX ของ GPS ต่อ RX ของ MCU (PC1)
+    SoftUART_Init(&gps_uart, PC0, PC1, 9600);
+    USART_Println("GPS NMEA reader ready @ 9600bps");
+
+    char line[96];
+    while (1) {
+        if (gps_readline(line, sizeof(line), 2000)) {
+            // สนใจเฉพาะ $GPGGA หรือ $GPRMC
+            if (strncmp(line, "$GPGGA", 6) == 0 || strncmp(line, "$GPRMC", 6) == 0) {
+                USART_Println(line);
             }
         }
     }
 }</code></pre>
-<p class="explain">🔍 <code>SoftUART_Available(&uart)</code> — เช็ค RX buffer แบบ non-blocking, <code>SoftUART_Read(&uart)</code> — อ่าน 1 ไบต์</p></div>
+<p class="explain">🔍 อ่านทีละ byte ด้วย <code>SoftUART_ReadByte(&amp;gps_uart, &amp;c, 50)</code> (timeout 50ms ต่อ byte) — สะสมใน buffer จนเจอ <code>'\n'</code> ถือว่าจบบรรทัด — มี deadline รวมทั้งบรรทัด 2 วินาที (เก็บเวลาเริ่มต้น — เมื่อไม่ได้ใช้ <code>Available()</code>) — เป็น pattern มาตรฐานเพราะ RX ring buffer เป็น known issue</p>
 </section>
 
-<section><h2>📋 API Reference</h2>
+<section><h2>📋 API Reference (ตรงกับ SoftUART.h)</h2>
 <table>
-    <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
-    <tr><td><code>SoftUART_Init(&uart, tx, rx, baud)</code></td><td>เริ่ม SoftUART บน GPIO</td><td><code>SoftUART_Init(&uart, PC0, PC1, BAUD_9600)</code></td></tr>
-    <tr><td><code>SoftUART_WriteString(&uart, str)</code></td><td>ส่ง string</td><td><code>SoftUART_WriteString(&uart, "Hello")</code></td></tr>
-    <tr><td><code>SoftUART_WriteChar(&uart, c)</code></td><td>ส่ง 1 ตัวอักษร</td><td><code>SoftUART_WriteChar(&uart, 'A')</code></td></tr>
-    <tr><td><code>SoftUART_WriteInt(&uart, n)</code></td><td>ส่งตัวเลข</td><td><code>SoftUART_WriteInt(&uart, 12345)</code></td></tr>
-    <tr><td><code>SoftUART_WriteBuf(&uart, buf, len)</code></td><td>ส่ง byte array</td><td><code>SoftUART_WriteBuf(&uart, data, 10)</code></td></tr>
-    <tr><td><code>SoftUART_Available(&uart)</code></td><td>เช็คข้อมูลรออ่าน</td><td><code>if(SoftUART_Available(&uart))</code></td></tr>
-    <tr><td><code>SoftUART_Read(&uart)</code></td><td>อ่าน 1 ไบต์</td><td><code>char c = SoftUART_Read(&uart)</code></td></tr>
+    <tr><th>ฟังก์ชัน</th><th>Signature</th><th>คืนค่า / หมายเหตุ</th></tr>
+    <tr><td><code>SoftUART_Init</code></td><td><code>SoftUART_Status SoftUART_Init(SoftUART_Instance* uart, uint8_t tx_pin, uint8_t rx_pin, uint32_t baud)</code></td><td><code>SOFTUART_OK</code> / <code>SOFTUART_ERROR</code> (baud=0) — instance-based, tx/rx เป็น GPIO pin</td></tr>
+    <tr><td><code>SoftUART_SetBaud</code></td><td><code>SoftUART_Status SoftUART_SetBaud(SoftUART_Instance* uart, uint32_t baud)</code></td><td>เปลี่ยน baud rate ระหว่างทำงาน — แนะนำ ≤ 38400</td></tr>
+    <tr><td><code>SoftUART_WriteByte</code></td><td><code>void SoftUART_WriteByte(SoftUART_Instance* uart, uint8_t data)</code></td><td>ส่ง 1 byte — TX blocking สั้นๆ</td></tr>
+    <tr><td><code>SoftUART_Write</code></td><td><code>void SoftUART_Write(SoftUART_Instance* uart, const uint8_t* data, uint16_t len)</code></td><td>ส่ง byte array ยาว <code>len</code> bytes</td></tr>
+    <tr><td><code>SoftUART_WriteString</code></td><td><code>void SoftUART_WriteString(SoftUART_Instance* uart, const char* str)</code></td><td>ส่ง null-terminated string</td></tr>
+    <tr><td><code>SoftUART_Printf</code></td><td><code>void SoftUART_Printf(SoftUART_Instance* uart, const char* format, ...)</code></td><td>ส่งแบบ printf-style — ใช้ <code>stdarg</code></td></tr>
+    <tr><td><code>SoftUART_ReadByte</code></td><td><code>SoftUART_Status SoftUART_ReadByte(SoftUART_Instance* uart, uint8_t* data, uint32_t timeout_ms)</code></td><td><strong>blocking with timeout</strong> — คืน <code>SOFTUART_OK</code>/<code>TIMEOUT</code>/<code>PARITY</code> — data เป็น out-param</td></tr>
+    <tr><td><code>SoftUART_Available</code></td><td><code>uint16_t SoftUART_Available(SoftUART_Instance* uart)</code></td><td>⚠️ <strong>known issue</strong> — คืน 0 เสมอ (ring buffer ไม่ถูกเติม) → ใช้ <code>ReadByte</code> แทน</td></tr>
+    <tr><td><code>SoftUART_Flush</code></td><td><code>SoftUART_Status SoftUART_Flush(SoftUART_Instance* uart)</code></td><td>ล้าง RX buffer</td></tr>
 </table>
+<p class="explain">🔍 <strong>Status enum:</strong> <code>SOFTUART_OK=0</code>, <code>SOFTUART_ERROR=1</code>, <code>SOFTUART_TIMEOUT=2</code>, <code>SOFTUART_PARITY=3</code> — ทุกฟังก์ชันรับ <code>SoftUART_Instance*</code> เป็น argument แรกเสมอ (instance-based)</p>
 </section>
 
 <section><h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
 <table>
     <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
-    <tr><td>ข้อมูลออกมาขยะ</td><td>บอดเรตไม่ตรงกันทั้งสองฝั่ง</td><td>ใช้ค่ามาตรฐาน: 1200-19200</td></tr>
-    <tr><td>ข้อมูลเพี้ยนบางไบต์</td><td>CPU ถูก interrupt ขัดจังหวะ</td><td>ปิด interrupt ช่วง RX critical</td></tr>
+    <tr><td><code>SoftUART_Available()</code> คืน 0 ตลอด</td><td>Known issue — ring buffer ไม่ถูกเติม (LIB_AUDIT #10)</td><td><strong>ใช้ <code>SoftUART_ReadByte(&amp;uart, &amp;data, timeout_ms)</code> แบบ blocking-with-timeout แทน</strong> — อย่าพึ่งพา Available/Read แบบเดิม</td></tr>
+    <tr><td>ได้ขยะทุก byte</td><td>Baudrate ไม่ตรงกัน หรือ timing คลาดเคลื่อน</td><td>ตั้ง baud ให้ตรงกันทั้งสองฝั่ง — ใช้ค่ามาตรฐาน 9600–38400 — baud &gt; 38400 มี error ~8%</td></tr>
+    <tr><td>บาง byte หาย / บิตเพี้ยน</td><td>CPU ถูก interrupt ขัดจังหวะระหว่าง bit-bang</td><td>ปิด interrupt ช่วง RX critical หรือลด baud ลง</td></tr>
+    <tr><td><code>SoftUART_Init</code> คืน ERROR</td><td>baud = 0 (DIV/0 guard)</td><td>ตั้ง baud &gt; 0 — เช็ค return value เสมอก่อนใช้</td></tr>
+    <tr><td>หน่วงช้านานเกินใน loop หลัก</td><td><code>ReadByte</code> block จนกว่าจะได้ byte หรือ timeout</td><td>ตั้ง timeout_ms ให้สั้น (เช่น 10–50ms) แล้ววนเช็คงานอื่นใน loop</td></tr>
 </table>
-</section>
-
-<section><h2>🛠️ สร้าง Product: 3-Port Serial Hub</h2>
-<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
-#include "SimpleHAL.h"
-#include "SoftUART.h"
-
-int main(void)
-{
-    SystemCoreClockUpdate();
-    USART_Init(USART1, BAUD_115200);   // Port 0: Debug
-    USART_Init(USART2, BAUD_9600);     // Port 1: GPS
-
-    SoftUART_Instance uart;
-    SoftUART_Init(&uart, PC0, PC1, BAUD_9600); // Port 2: BT
-
-    while(1)
-    {
-        if(USART_Available(USART2)) {
-            USART_Write(USART1, USART_Read(USART2));
-        }
-
-        if(SoftUART_Available(&uart)) {
-            USART_Write(USART1, SoftUART_Read(&uart));
-        }
-
-        if(USART_Available(USART1)) {
-            char c = USART_Read(USART1);
-            SoftUART_WriteChar(&uart, c);
-        }
-    }
-}</code></pre>
 </section>
 
 <section><h2>✏️ ลองทำดู</h2>
 <ol>
-    <li>ทำ dual GPS tracker — HW UART1=GPS1, SoftUART=GPS2</li>
-    <li>ทำ ESP8266 + GPS บน CH32V003 พร้อมกัน</li>
+    <li>ทำ dual-port debug — HW UART คุยกับ PC, SoftUART ส่ง <code>"AT\r\n"</code> ไป ESP01 แล้วใช้ <code>ReadByte</code> loop อ่าน response ส่งต่อขึ้น PC terminal</li>
+    <li>ทำ GPS data logger — อ่านบรรทัด NMEA <code>$GPRMC</code> ด้วย <code>ReadByte</code> loop, แยก field ด้วย <code>strtok</code> แล้วส่ง timestamp ผ่าน HW UART</li>
+    <li>ทำ packet protocol กับ CRC-8 — ใช้ <code>SoftUART_Write(buf, len)</code> ส่งทั้ง packet, ฝั่งรับใช้ <code>ReadByte</code> เก็บใน buffer จนครบ len แล้วตรวจ CRC</li>
 </ol>
 </section>
 

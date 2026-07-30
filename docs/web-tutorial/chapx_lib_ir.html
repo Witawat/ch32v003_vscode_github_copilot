@@ -21,7 +21,7 @@ flowchart TD
     A["IR_ReceiverInit(PC0)"] --> B["รอ interrupt / polling"]
     B --> C["IR_Process() — ตรวจสอบ Lead Code"]
     C --> D["อ่าน 32 bits NEC"]
-    D --> E["IR_GetCode()"]
+    D --> E["IR_GetData()"]
     E --> F["Switch(code) → ทำงานตามปุ่ม"]
     F --> B
     </pre>
@@ -65,7 +65,7 @@ flowchart TD
 </section>
 
 <section><h2>📚 หลักการทำงาน</h2>
-<p><strong>NEC Protocol</strong> เป็นโปรโตคอล IR remote control — IR_ReceiverInit() ตั้งขารับ, IR_Process() ประมวลผล, IR_GetCode() คืนค่า 32-bit code</p></section>
+<p><strong>NEC Protocol</strong> เป็นโปรโตคอล IR remote control — IR_ReceiverInit() ตั้งขารับ, IR_Process() ประมวลผล, IR_GetData() คืนค่า IR_DecodedData_t (address/command/protocol)</p></section>
 
 <section><h2>💻 เขียน Code ทีละขั้น</h2>
 
@@ -87,14 +87,16 @@ int main(void) {
 <pre><code class="language-c">    while(1) {
         IR_Process();
         if(IR_Available()) {
-            uint32_t code = IR_GetCode();
-            USART_Print("Code: 0x");
-            USART_PrintHex(code);
+            IR_DecodedData_t data = IR_GetData();
+            USART_Print("Addr: 0x");
+            USART_PrintHex(data.address);
+            USART_Print(" Cmd: 0x");
+            USART_PrintHex(data.command);
             USART_Println("");
         }
     }
 }</code></pre>
-<p class="explain">🔍 <code>IR_Process()</code> — ต้องเรียกใน loop ตลอดเวลา, <code>IR_Available()</code> — เช็คว่ามี frame ครบ, <code>IR_GetCode()</code> — คืนค่า 32-bit NEC code</p></div>
+<p class="explain">🔍 <code>IR_Process()</code> — ต้องเรียกใน loop ตลอดเวลา, <code>IR_Available()</code> — เช็คว่ามี frame ครบ, <code>IR_GetData()</code> — คืนค่า IR_DecodedData_t (address/command/protocol)</p></div>
 
 <div class="step"><h3>ขั้นที่ 3: นำไปใช้ — ควบคุม LED ตามปุ่ม</h3>
 <pre><code class="language-c">    pinMode(PC0, PIN_MODE_OUTPUT);  // LED1
@@ -103,8 +105,8 @@ int main(void) {
     while(1) {
         IR_Process();
         if(IR_Available()) {
-            uint32_t code = IR_GetCode();
-            uint8_t cmd = code & 0xFF;  // command byte
+            IR_DecodedData_t data = IR_GetData();
+            uint8_t cmd = data.command;  // command byte
 
             switch(cmd) {
                 case 0x45: digitalWrite(PC0, HIGH); break;
@@ -127,9 +129,9 @@ int main(void) {
     <tr><td><code>IR_ReceiverInit(pin)</code></td><td>เริ่ม IR receiver บน GPIO</td><td><code>IR_ReceiverInit(PC0)</code></td></tr>
     <tr><td><code>IR_Process()</code></td><td>ประมวลผล pulse จาก IR</td><td>เรียกใน loop ตลอดเวลา</td></tr>
     <tr><td><code>IR_Available()</code></td><td>เช็ค frame ใหม่เข้ามาหรือยัง</td><td><code>if(IR_Available())</code></td></tr>
-    <tr><td><code>IR_GetCode()</code></td><td>คืนค่า 32-bit NEC code</td><td><code>uint32_t code = IR_GetCode()</code></td></tr>
-    <tr><td><code>IR_IsRepeat()</code></td><td>เช็คว่าเป็น repeat code</td><td><code>if(IR_IsRepeat())</code></td></tr>
-    <tr><td><code>IR_SendNEC(code)</code></td><td>ส่ง NEC frame</td><td><code>IR_SendNEC(0x00FF45)</code></td></tr>
+    <tr><td><code>IR_GetData()</code></td><td>คืนค่า IR ที่ decode แล้ว (struct IR_DecodedData_t)</td><td><code>IR_DecodedData_t data = IR_GetData()</code></td></tr>
+    <tr><td><code>data.protocol == IR_PROTOCOL_NEC_REPEAT</code></td><td>เช็คว่าเป็น repeat code</td><td><code>if(data.protocol == IR_PROTOCOL_NEC_REPEAT)</code></td></tr>
+    <tr><td><code>IR_Send(protocol, address, command)</code></td><td>ส่ง IR frame ตามโปรโตคอล</td><td><code>IR_Send(IR_PROTOCOL_NEC, 0x00FF, 0x45)</code></td></tr>
 </table>
 </section>
 
@@ -162,8 +164,8 @@ int main(void)
     {
         IR_Process();
         if(IR_Available()) {
-            uint32_t code = IR_GetCode();
-            uint8_t cmd = code & 0xFF;
+            IR_DecodedData_t data = IR_GetData();
+            uint8_t cmd = data.command;
 
             if(cmd == 0x45) { led_state[0] = !led_state[0];
                 digitalWrite(led_pins[0], led_state[0]); }

@@ -1,237 +1,383 @@
 <!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย RC522 — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
 <nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_rc522.html">กลับบท</a><a href="chapx_lib_pca9685_answers.html">เฉลยถัดไป →</a></nav>
-<h1>📝 เฉลย — RC522 RFID/NFC</h1>
+<h1>📝 เฉลย — RC522 RFID (UID Detection เท่านั้น)</h1>
 
 <div class="answer">
-<h2>ข้อ 1: Door Lock — ตรวจ UID whitelist เปิดประตู</h2>
-<pre><code class="language-c">RC522_Instance rfid;
-#define MAX_CARDS   10
-#define RELAY_PIN   PC0
-#define BUZZER_PIN  PC1
+<h2>ข้อ 1: UID Reader + Version Debug — อ่าน UID แสดงเป็น hex และ debug เมื่อ version ผิด</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "RC522.h"
 
-// Whitelist UIDs (4 หรือ 7 bytes)
-uint8_t whitelist[MAX_CARDS][7] = {
-    {0xDE, 0xAD, 0xBE, 0xEF},
-    {0x12, 0x34, 0x56, 0x78},
-    // เพิ่ม card ได้อีก...
-};
-uint8_t whitelist_len[MAX_CARDS] = {4, 4};  // UID length
-uint8_t whitelist_count = 2;
+RC522_Instance rfid;
 
-void rc522_door_lock(void) {
-    RC522_Init(&rfid, PC4, PC3);
-    GPIO_SimpleInit(RELAY_PIN, GPIO_OUT_PP);
-    GPIO_SimpleInit(BUZZER_PIN, GPIO_OUT_PP);
-    GPIO_WriteBit(RELAY_PIN, 0);  // ล็อกเริ่มต้น
+// แปลง version byte เป็น string สำหรับ debug
+const char* rc522_version_str(uint8_t v) {
+    switch (v) {
+        case 0x91: return "MFRC522 v1.0";
+        case 0x92: return "MFRC522 v2.0";
+        case 0x00:
+        case 0xFF: return "⚠️ NOT FOUND (SPI/wiring/power?)";
+        default:   return "Unknown (noise?)";
+    }
+}
 
-    USART_Println("[DOOR] Waiting for card...");
+// โปรแกรมหลัก — อ่าน UID และแสดงเป็น hex
+void rc522_uid_reader(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
 
-    while(1) {
-        if(!RC522_IsCardPresent(&rfid)) {
-            Delay_Ms(200);
+    // ⚠️ SPI ต้อง init ก่อน RC522_Init เสมอ
+    SPI_SimpleInit(SPI_MODE0, SPI_4MHZ, SPI_PINS_DEFAULT);
+
+    RC522_Status st = RC522_Init(&rfid, PC4, PD2);   // CS=PC4, RST=PD2
+    if (st != RC522_OK) {
+        USART_Println("RC522_Init FAIL — ตรวจ CS/RST pin");
+        while (1);
+    }
+
+    // ตรวจ version เป็น heart-beat ของ SPI
+    uint8_t ver = RC522_GetVersion(&rfid);
+    USART_Printf("RC522 version = 0x%02X (%s)\r\n", ver, rc522_version_str(ver));
+
+    if (ver != 0x91 && ver != 0x92) {
+        USART_Println("=== DIAGNOSTIC ===");
+        USART_Println("  1. เช็ค SPI_SimpleInit(SPI_MODE0, SPI_4MHZ, SPI_PINS_DEFAULT) ก่อน RC522_Init");
+        USART_Println("  2. เช็คสาย: PC5=SCK, PC6=MOSI, PC7=MISO, PC4=CS, PD2=RST");
+        USART_Println("  3. เช็คไฟ = 3.3V (ห้าม 5V)");
+        USART_Println("  4. เช็ค CS ลอยหรือไม่ — ต้อง LOW ตอนสื่อสาร");
+
+        // ลอง reset แล้วอ่านใหม่ — บางที power-on ไม่ clean
+        USART_Println("Try RC522_Reset + re-read version...");
+        RC522_Reset(&rfid);
+        Delay_Ms(50);
+        ver = RC522_GetVersion(&rfid);
+        USART_Printf("Version after reset = 0x%02X (%s)\r\n",
+                     ver, rc522_version_str(ver));
+        if (ver != 0x91 && ver != 0x92) {
+            USART_Println("ยังผิด — ลองต่อวงจรใหม่อีกครั้ง");
+            while (1);
+        }
+        USART_Println("✓ OK after reset");
+    }
+
+    USART_Println("Waiting for card...");
+    while (1) {
+        if (!RC522_IsCardPresent(&rfid)) {
+            Delay_Ms(150);
             continue;
         }
 
-        uint8_t uid[10];
-        uint8_t uid_len = RC522_ReadUID(&rfid, uid);
+        // ⚠️ 3 args: rfid, uid buffer, &len (out-param)
+        uint8_t uid[RC522_UID_MAX_LEN];
+        uint8_t len = 0;
+        RC522_Status r = RC522_ReadUID(&rfid, uid, &len);
 
-        if(uid_len == 0) { Delay_Ms(200); continue; }
-
-        // แสดง UID
-        USART_Print("Card: ");
-        for(uint8_t i=0; i<uid_len; i++) {
-            USART_PrintHexByte(uid[i]);
-            USART_Print(" ");
-        }
-        USART_Println("");
-
-        // ตรวจ whitelist
-        uint8_t found = 0;
-        for(uint8_t c=0; c<whitelist_count; c++) {
-            if(uid_len == whitelist_len[c] &&
-               memcmp(uid, whitelist[c], uid_len) == 0) {
-                found = 1;
-                break;
+        if (r == RC522_OK) {
+            USART_Printf("UID(%uB): ", (unsigned)len);
+            for (uint8_t i = 0; i &lt; len; i++) {
+                USART_Printf("%02X ", uid[i]);
+            }
+            USART_Println("");
+        } else {
+            // พิมพ์ error code ตาม RC522_Status enum
+            USART_Printf("ReadUID err=%d (", (int)r);
+            switch (r) {
+                case RC522_ERROR_NOCARD:    USART_Println("NOCARD)"); break;
+                case RC522_ERROR_COLLISION: USART_Println("COLLISION)"); break;
+                case RC522_ERROR_TIMEOUT:   USART_Println("TIMEOUT)"); break;
+                case RC522_ERROR_CRC:       USART_Println("CRC — antenna weak/noise)"); break;
+                default:                    USART_Println("OTHER)"); break;
             }
         }
 
-        if(found) {
-            USART_Println("✓ ACCESS GRANTED");
-            GPIO_WriteBit(RELAY_PIN, 1);  // เปิดล็อก
-
-            // เสียง Beep
-            PWM_SimpleInit(BUZZER_PIN, 1, 1000, 500);
-            Delay_Ms(200);
-            PWM_SetDuty(BUZZER_PIN, 1, 0);
-
-            Delay_Ms(3000);  // เปิด 3 วิ
-            GPIO_WriteBit(RELAY_PIN, 0);  // ล็อก
-        } else {
-            USART_Println("✗ ACCESS DENIED");
-            // เสียงผิดพลาด
-            PWM_SimpleInit(BUZZER_PIN, 1, 500, 500);
-            Delay_Ms(500);
-            PWM_SetDuty(BUZZER_PIN, 1, 0);
-            Delay_Ms(1000);  // หน่วงกัน brute force
-        }
-
-        RC522_Halt(&rfid);
-        Delay_Ms(500);
+        RC522_Halt(&rfid);   // ⚠️ ต้อง Halt ทุกครั้ง กัน UID ซ้ำซ้อน
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> RC522_ReadUID อ่าน UID ของการ์ด (4 ไบต์สำหรับ Mifare Classic, 7 ไบต์สำหรับ Ultralight) — whitelist เก็บ UID ที่อนุญาต — memcmp เทียบ UID — relay ควบคุมล็อกแม่เหล็ก (active HIGH เปิด) — buzzer ให้ feedback เสียง (เสียงสูง=ผ่าน, เสียงต่ำ=ไม่ผ่าน) — หน่วง 1 วิเมื่อผิดพลาดกัน brute force — RC522_Halt สั่งการ์ดหยุดก่อนวนรอบใหม่</div>
-</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong>
+<ul>
+    <li>ลำดับที่ถูก: <code>SPI_SimpleInit(SPI_MODE0, SPI_4MHZ, SPI_PINS_DEFAULT)</code> → <code>RC522_Init(&rfid, CS, RST)</code> → <code>RC522_GetVersion(&rfid)</code> → polling <code>RC522_IsCardPresent</code> → <code>RC522_ReadUID(&rfid, uid, &len)</code> → <code>RC522_Halt(&rfid)</code></li>
+    <li><code>RC522_ReadUID</code> มี <strong>3 args</strong> — <code>&len</code> เป็น <strong>out-param</strong> รับจำนวน bytes จริง — ห้ามเขียนแบบบทเดิมที่มี 2 args</li>
+    <li><code>RC522_GetVersion</code> คืน <code>uint8_t</code> ใช้เป็น heart-beat ตรวจ SPI <strong>โดยไม่ต้องมีการ์ด</strong> — 0x91=v1.0, 0x92=v2.0, 0x00/0xFF = ไม่ได้ต่อ/SPI ผิด/ไฟผิด</li>
+    <li>ถ้า version ผิด → ลอง <code>RC522_Reset(&rfid)</code> + Delay 50ms แล้วอ่านใหม่ — บางที power-on ramp ไม่ clean — ถ้ายังผิด = wiring ผิดจริง</li>
+    <li><strong>ต้อง Halt หลัง ReadUID ทุกครั้ง</strong> — ไม่งั้นการ์ดยังอยู่ในสนามจะถูกวนอ่านซ้ำ</li>
+    <li><strong>ไม่มี</strong> ฟังก์ชัน Self-Test / Select Tag — ใช้ <code>GetVersion</code> แทนฟังก์ชัน self-test แบบบทเดิม, wrapper นี้อ่าน UID ได้อย่างเดียว</li>
+</ul>
+</div></div>
 
 <div class="answer">
-<h2>ข้อ 2: เขียนข้อมูลลงการ์ด Mifare Classic</h2>
-<pre><code class="language-c">RC522_Instance rfid;
-#define MFRC_SECTOR    1     // sector ที่จะเขียน
-#define MFRC_BLOCK     (MFRC_SECTOR * 4)  // block แรกของ sector
-#define MFRC_DEFAULT_KEY  {0xFF,0xFF,0xFF,0xFF,0xFF,0xFF}
+<h2>ข้อ 2: UID Whitelist (5 cards) + Relay + Buzzer Feedback</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "RC522.h"
+#include &lt;string.h&gt;
 
-uint8_t key_a[6] = MFRC_DEFAULT_KEY;
+RC522_Instance rfid;
 
-typedef struct {
-    char    name[16];
-    uint32_t balance;     // หน่วยสตางค์
-    uint16_t issued;      // YYMM
-    uint8_t  checksum;
-} card_data_t;
+#define RELAY_PIN   PC0
+#define BUZZER_PIN  PC1
+#define LED_OK      PC2
+#define LED_DENY    PC3
 
-void rc522_write_card_data(void) {
-    RC522_Init(&rfid, PC4, PC3);
+// Whitelist — 5 การ์ด (เปลี่ยน UID เป็นที่อ่านได้จากข้อ 1)
+#define WHITELIST_COUNT  5
+uint8_t whitelist[WHITELIST_COUNT][RC522_UID_MAX_LEN] = {
+    {0xA1, 0xB2, 0xC3, 0xD4, 0,0,0,0,0,0},   // card 1 (4 bytes — MIFARE Classic)
+    {0xDE, 0xAD, 0xBE, 0xEF, 0x12, 0x34, 0,0,0,0},  // card 2 (7 bytes)
+    {0x12, 0x34, 0x56, 0x78, 0,0,0,0,0,0},   // card 3 (4 bytes)
+    {0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x11,0,0,0}, // card 4 (7 bytes)
+    {0x99, 0x88, 0x77, 0x66, 0,0,0,0,0,0},   // card 5 (4 bytes)
+};
+uint8_t whitelist_len[WHITELIST_COUNT] = {4, 7, 4, 7, 4};
 
-    USART_Println("[RC522] Place card to write...");
+// เล่นเสียง buzzer — frequency + duration
+void buzzer(uint16_t freq, uint16_t ms) {
+    PWM_SimpleInit(BUZZER_PIN, 1, freq, 500);
+    Delay_Ms(ms);
+    PWM_SetDuty(BUZZER_PIN, 1, 0);
+}
 
-    while(1) {
-        if(!RC522_IsCardPresent(&rfid)) {
-            Delay_Ms(200);
+void door_grant(void) {
+    USART_Println("  → ✓ ACCESS GRANTED");
+    GPIO_WriteBit(LED_OK,   1);
+    GPIO_WriteBit(LED_DENY, 0);
+    GPIO_WriteBit(RELAY_PIN, 1);   // เปิดล็อก
+    buzzer(2000, 150);             // เสียงสูง 1 beep = ผ่าน
+    Delay_Ms(3000);                // เปิด 3 วิ
+    GPIO_WriteBit(RELAY_PIN, 0);   // ล็อกกลับ
+    GPIO_WriteBit(LED_OK,   0);
+}
+
+void door_deny(void) {
+    USART_Println("  → ✗ ACCESS DENIED");
+    GPIO_WriteBit(LED_DENY, 1);
+    GPIO_WriteBit(LED_OK,   0);
+    buzzer(500, 400);              // เสียงต่ำ 1 beep = ไม่ผ่าน
+    GPIO_WriteBit(LED_DENY, 0);
+    Delay_Ms(1000);                // หน่วงกัน brute-force
+}
+
+// ค้น whitelist — คืน 1 ถ้า UID อยู่ใน list
+uint8_t whitelist_match(const uint8_t* uid, uint8_t len) {
+    for (uint8_t c = 0; c &lt; WHITELIST_COUNT; c++) {
+        if (len == whitelist_len[c] &&
+            memcmp(uid, whitelist[c], len) == 0) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    SPI_SimpleInit(SPI_MODE0, SPI_4MHZ, SPI_PINS_DEFAULT);
+
+    if (RC522_Init(&rfid, PC4, PD2) != RC522_OK) {
+        USART_Println("RC522 init fail");
+        while (1);
+    }
+
+    // version check — heart-beat ก่อนลงมือ
+    uint8_t ver = RC522_GetVersion(&rfid);
+    if (ver != 0x91 && ver != 0x92) {
+        USART_Println("⚠️ version ผิด — door ทำงานต่อไม่ได้");
+        while (1);
+    }
+    USART_Println("[DOOR] Ready, waiting for card...");
+
+    // ตั้งขา relay/LED เป็น output
+    GPIO_SimpleInit(RELAY_PIN, GPIO_OUT_PP);
+    GPIO_SimpleInit(LED_OK,    GPIO_OUT_PP);
+    GPIO_SimpleInit(LED_DENY,  GPIO_OUT_PP);
+    GPIO_WriteBit(RELAY_PIN, 0);
+
+    while (1) {
+        if (!RC522_IsCardPresent(&rfid)) {
+            Delay_Ms(150);
             continue;
         }
 
-        uint8_t uid[10];
-        uint8_t uid_len = RC522_ReadUID(&rfid, uid);
-        if(uid_len == 0) { Delay_Ms(200); continue; }
-
-        USART_Println("Card detected. Writing...");
-
-        // Authenticate sector ด้วย Key A
-        if(!RC522_Auth(&rfid, MFRC_PICC_AUTHENT1A, MFRC_BLOCK,
-                       key_a, uid)) {
-            USART_Println("Auth FAIL");
+        uint8_t uid[RC522_UID_MAX_LEN];
+        uint8_t len = 0;
+        RC522_Status r = RC522_ReadUID(&rfid, uid, &len);
+        if (r != RC522_OK) {
             RC522_Halt(&rfid);
-            Delay_Ms(500);
             continue;
         }
 
-        // เตรียมข้อมูล
-        card_data_t data;
-        strcpy(data.name, "CH32V003 User");
-        data.balance = 10000;  // 100.00 บาท
-        data.issued = 2406;    // มิ.ย. 2024
-        data.checksum = rc522_calc_checksum((uint8_t *)&data,
-                                            sizeof(data)-1);
+        // พิมพ์ UID ตาม debug
+        USART_Print("Card ");
+        for (uint8_t i = 0; i &lt; len; i++) USART_Printf("%02X ", uid[i]);
 
-        // เขียน block (16 bytes)
-        RC522_WriteBlock(&rfid, MFRC_BLOCK, (uint8_t *)&data);
+        // ค้น whitelist
+        if (whitelist_match(uid, len)) door_grant();
+        else                            door_deny();
 
-        USART_Println("Write OK");
-
-        // Verify: อ่านกลับ
-        uint8_t verify[16];
-        RC522_ReadBlock(&rfid, MFRC_BLOCK, verify);
-        USART_Print("Verify: ");
-        for(uint8_t i=0; i<16; i++) {
-            USART_PrintHexByte(verify[i]);
-            USART_Print(" ");
-        }
-        USART_Println("");
-
-        RC522_Halt(&rfid);
-        Delay_Ms(1000);
+        RC522_Halt(&rfid);    // ⚠️ Halt หลังอ่านทุกครั้ง
+        Delay_Ms(300);
     }
-}
-
-uint8_t rc522_calc_checksum(uint8_t *d, uint8_t len) {
-    uint8_t sum = 0;
-    while(len--) sum ^= *d++;
-    return sum;
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> Mifare Classic 1K มี 16 sectors, แต่ละ sector มี 4 blocks (block0-3) — Block 3 ของแต่ละ sector คือ sector trailer (keyA + access bits + keyB) — ต้อง authenticate ด้วย key ก่อนอ่าน/เขียน — เขียน 16 bytes/block — เขียนข้อมูลผู้ใช้ลง block 0 ของ sector 1 — checksum XOR ง่ายสำหรับตรวจ integrity — อ่านกลับ verify ว่าเขียนถูก — sector trailer ห้ามเขียนทับโดยไม่ระวัง (จะล็อก sector ถาวร)</div>
-</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong>
+<ul>
+    <li>Whitelist เก็บ UID 5 ใบ — ทั้ง UID bytes และความยาวแยก array — เปรียบเทียบ <code>len</code> ก่อน <code>memcmp</code> กัน match ผิดถ้า UID มี padding zeros</li>
+    <li>Relay active HIGH เปิด 3 วิ → ปิดกลับ — ใช้ <code>GPIO_SimpleInit(pin, GPIO_OUT_PP)</code> + <code>GPIO_WriteBit(pin, val)</code></li>
+    <li>Buzzer ใช้ <code>PWM_SimpleInit(pin, ch, freq, duty)</code> — frequency สูง (2000 Hz) = ผ่าน, ต่ำ (500 Hz) = ไม่ผ่าน — เล่นแล้ว <code>PWM_SetDuty(0)</code> ปิดเสียงทันที</li>
+    <li><strong>ทุก call ส่ง <code>&rfid</code></strong> (handle-based) — <code>RC522_ReadUID(&rfid, uid, &len)</code> มี 3 args + out-param — <code>RC522_Halt(&rfid)</code> ทุกครั้งหลังอ่าน</li>
+    <li>หน่วง 1 วิเมื่อ deny กัน brute-force — ตรวจ version ก่อนเปิดบริการ ถ้าผิด = รวงเลย (ไม่เสียความปลอดภัย)</li>
+    <li><strong>Library อ่าน UID ได้อย่างเดียว</strong> — door lock ใช้แค่นี้พอ — ถ้าต้องการเก็บ balance หรือข้อมูลในบัตรต้องใช้ standard peripheral (Auth + ReadBlock/WriteBlock ไม่มีใน wrapper นี้)</li>
+</ul>
+</div></div>
 
 <div class="answer">
-<h2>ข้อ 3: Sector Key Management — เปลี่ยนคีย์ A/B</h2>
-<pre><code class="language-c">RC522_Instance rfid;
-uint8_t new_key_a[6] = {0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5};
-uint8_t new_key_b[6] = {0xB0, 0xB1, 0xB2, 0xB3, 0xB4, 0xB5};
+<h2>ข้อ 3: Card Swap Detector — ตรวจจับการเปลี่ยนการ์ดระหว่างแตะ + ทดสอบ Halt/Reset</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "RC522.h"
+#include &lt;string.h&gt;
 
-void rc522_change_keys(void) {
-    RC522_Init(&rfid, PC4, PC3);
+RC522_Instance rfid;
 
-    USART_Println("[KEY] Place card to change keys...");
+// เก็บ UID ล่าสุดเพื่อเทียบกับ UID ใหม่
+uint8_t last_uid[RC522_UID_MAX_LEN];
+uint8_t last_len = 0;
+uint8_t has_last = 0;
+uint32_t swap_count = 0;
 
-    while(1) {
-        if(!RC522_IsCardPresent(&rfid)) { Delay_Ms(200); continue; }
+// พิมพ์ UID เป็น hex
+void print_uid(const uint8_t* uid, uint8_t len) {
+    for (uint8_t i = 0; i &lt; len; i++) USART_Printf("%02X ", uid[i]);
+}
 
-        uint8_t uid[10];
-        uint8_t uid_len = RC522_ReadUID(&rfid, uid);
-        if(uid_len == 0) continue;
+// เปรียบเทียบ UID สองค่า — คืน 1 ถ้าเหมือนกัน
+uint8_t uid_equal(const uint8_t* a, uint8_t alen,
+                  const uint8_t* b, uint8_t blen) {
+    if (alen != blen) return 0;
+    return (memcmp(a, b, alen) == 0) ? 1 : 0;
+}
 
-        uint8_t sector = 1;
-        uint8_t trailer = sector * 4 + 3;  // block 7
+// ทดสอบพฤติกรรม RC522_Halt vs RC522_Reset
+// mode 0 = Halt เท่านั้น (default) — การ์ด sleep, ออกสนามก่อนค่อยอ่านใหม่
+// mode 1 = Reset — รีเซ็ต MFRC522 ทั้งหมดทุกครั้ง (ช้ากว่า)
+// mode 2 = ไม่ Halt เลย — จะเห็น UID ซ้ำซ้อน (bug demo)
+uint8_t test_mode = 0;
 
-        // 1. Auth ด้วย key เดิม (default: FFFFFF)
-        uint8_t default_key[6] = MFRC_DEFAULT_KEY;
-        if(!RC522_Auth(&rfid, MFRC_PICC_AUTHENT1A, trailer,
-                       default_key, uid)) {
-            USART_Println("Auth FAIL — wrong old key?");
-            RC522_Halt(&rfid); Delay_Ms(500); continue;
+void rc522_card_swap_test(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    SPI_SimpleInit(SPI_MODE0, SPI_4MHZ, SPI_PINS_DEFAULT);
+
+    if (RC522_Init(&rfid, PC4, PD2) != RC522_OK) {
+        USART_Println("RC522 init fail");
+        while (1);
+    }
+
+    uint8_t ver = RC522_GetVersion(&rfid);
+    USART_Printf("RC522 version = 0x%02X\r\n", ver);
+    if (ver != 0x91 && ver != 0x92) {
+        USART_Println("⚠️ version ผิด — เช็ค SPI/wiring ก่อน");
+        while (1);
+    }
+
+    USART_Println("Card Swap Detector ready");
+    USART_Println("mode 0 = Halt, 1 = Reset, 2 = no-Halt (bug demo)");
+    USART_Println("แตะการ์ดสลับกัน → นับจำนวนครั้งที่เปลี่ยนการ์ด");
+    USART_Println("");
+    USART_Println("การทดสอบ: แตะการ์ด A → ยกออก → แตะการ์ด B");
+    USART_Println("           (ถ้าไม่ยกออก = L1 → L2 conflict จะ COLLISION)");
+
+    while (1) {
+        if (!RC522_IsCardPresent(&rfid)) {
+            Delay_Ms(120);
+            continue;
         }
 
-        // 2. สร้าง sector trailer ใหม่
-        uint8_t new_trailer[16];
-        memcpy(new_trailer, new_key_a, 6);           // Key A
-        new_trailer[6] = 0xFF; new_trailer[7] = 0x07;
-        new_trailer[8] = 0x80;  // access bits
-        memcpy(new_trailer + 10, new_key_b, 6);      // Key B
-
-        // 3. เขียน trailer ใหม่
-        RC522_WriteBlock(&rfid, trailer, new_trailer);
-
-        USART_Println("[KEY] Sector 1 keys changed!");
-
-        // 4. Verify ด้วย key ใหม่
-        if(RC522_Auth(&rfid, MFRC_PICC_AUTHENT1A, trailer,
-                      new_key_a, uid)) {
-            USART_Println("✓ New Key A verified OK");
-        }
-        if(RC522_Auth(&rfid, MFRC_PICC_AUTHENT1B, trailer,
-                      new_key_b, uid)) {
-            USART_Println("✓ New Key B verified OK");
+        uint8_t uid[RC522_UID_MAX_LEN];
+        uint8_t len = 0;
+        RC522_Status r = RC522_ReadUID(&rfid, uid, &len);
+        if (r != RC522_OK) {
+            // อาจเป็น COLLISION ถ้าอ่านระหว่างเปลี่ยนการ์ด
+            USART_Printf("ReadUID err=%d", (int)r);
+            if (r == RC522_ERROR_COLLISION)
+                USART_Println(" (เปลี่ยนการ์ดระหว่างอ่าน?)");
+            else if (r == RC522_ERROR_CRC)
+                USART_Println(" (antenna weak?)");
+            RC522_Halt(&rfid);
+            Delay_Ms(200);
+            continue;
         }
 
-        // แสดง access bits
-        uint8_t tr[16];
-        RC522_ReadBlock(&rfid, trailer, tr);
-        USART_Print("New trailer: ");
-        for(uint8_t i=0; i<16; i++) {
-            USART_PrintHexByte(tr[i]);
-            USART_Print(" ");
+        // พิมพ์ UID ปัจจุบัน
+        USART_Print("UID: ");
+        print_uid(uid, len);
+
+        // เทียบกับครั้งก่อน → ตรวจ card swap
+        if (has_last) {
+            if (!uid_equal(last_uid, last_len, uid, len)) {
+                swap_count++;
+                USART_Printf("  → ⚡ CARD SWAP! (count=%lu)",
+                             (unsigned long)swap_count);
+                USART_Print("  prev was: ");
+                print_uid(last_uid, last_len);
+            }
+        } else {
+            USART_Print("  → first card");
         }
+
+        // เก็บ UID ปัจจุบันเป็น last
+        memcpy(last_uid, uid, len);
+        last_len = len;
+        has_last = 1;
         USART_Println("");
 
-        RC522_Halt(&rfid);
-        break;
+        // ทดสอบพฤติกรรม Halt vs Reset ตาม mode
+        switch (test_mode) {
+            case 0:
+                RC522_Halt(&rfid);       // ปกติ — การ์ด Halt, อ่าน UID ครั้งต่อไปได้
+                break;
+            case 1:
+                RC522_Reset(&rfid);      // รีเซ็ต module ทั้งหมด — ช้ากว่า
+                Delay_Ms(50);             // ต้อง Delay หลัง Reset
+                break;
+            case 2:
+                // ไม่ Halt — จะเห็น UID ซ้ำซ้อนทุกรอบ (demo bug)
+                USART_Println("  ⚠️ no-Halt: จะอ่าน UID ซ้ำรอบหน้า");
+                break;
+        }
+
+        Delay_Ms(250);
     }
 }
 
-// Access bits 0x78 → KeyA: read+write, KeyB: read
-// Access bits 0x08 → KeyA: read, KeyB: read+write
-// Access bits 0x0F → transport config (default)
-// คำเตือน: ห้ามตั้ง access bits ผิด → sector ถูกล็อกถาวร!</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> sector trailer = block สุดท้ายของแต่ละ sector — 6 bytes Key A + 4 bytes access bits + 6 bytes Key B — เปลี่ยนคีย์: auth ด้วยคีย์เก่า → เขียน trailer ใหม่ → verify ด้วยคีย์ใหม่ — access bits 0xFF0780 = KeyA ใช้ auth ได้, KeyB อ่าน/เขียนได้ — อันตราย: ตั้ง access bits ผิดทำให้ sector ล็อกถาวร — ทดสอบกับ Mifare Classic 1K blank card ก่อนใช้จริง</div>
-</div>
+// สรุปพฤติกรรมที่สังเกตได้จากการทดสอบ 3 mode:
+//
+// mode 0 (Halt — แนะนำ):
+//   - แตะการ์ด A → อ่าน UID ครั้งเดียว → Halt → การ์ด sleep
+//   - ยกออกแล้วแตะ B → UID ใหม่ → เทียบกับ last → "CARD SWAP!"
+//   - ไม่แตะออกแล้วแตะทับ B → REQA ไม่ได้ (A ยัง Halt อยู่) → ไม่ detect
+//     → ต้องยก A ออกก่อน
+//
+// mode 1 (Reset — ช้ากว่า แต่ brute-force reset):
+//   - เหมาะเวลา module ค้างจากการ์ดไม่ดี
+//   - Delay_Ms(50) หลัง Reset → ทำให้ polling ห่างขึ้น
+//
+// mode 2 (no-Halt — bug demo):
+//   - การ์ด A ยังอยู่ในสนาม → ReadUID ซ้ำได้ UID เดิมทุกรอบ
+//   - ไม่มีการ "detect removal" → ไม่เหมาะสำหรับ card swap detection
+//   - ยืนยันว่า Halt จำเป็นมาก</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong>
+<ul>
+    <li><strong>Card swap detection:</strong> เก็บ UID + ความยาวของครั้งก่อนไว้ใน <code>last_uid/last_len</code> — อ่าน UID ใหม่ → เทียบด้วย <code>memcmp</code> — ถ้าไม่เท่ากัน = "CARD SWAP" → นับ <code>swap_count</code></li>
+    <li><strong>เทียบ UID ต้องเช็คความยาวก่อน <code>memcmp</code></strong> — ถ้า <code>len</code> ไม่เท่ากัน = การ์ดคนละประเภท → swap แน่นอน — <code>memcmp</code> ต้องส่ง <code>len</code> ที่ถูกต้อง ไม่งั้น umcmp bytes padding ที่เป็น zeros</li>
+    <li><strong>พฤติกรรม <code>RC522_Halt(&rfid)</code>:</strong> สั่งการ์ด HLTA → เข้า Halt state → REQA จะไม่ตอบ → "ต้องยกการ์ดออกแล้วแตะใหม่" → เหมาะสำหรับ card swap detection (เพราะต้อง remove/re-insert ก่อน)</li>
+    <li><strong>พฤติกรรม <code>RC522_Reset(&rfid)</code>:</strong> รีเซ็ต MFRC522 module ทั้งหมด (soft reset) — เว้น <code>Delay_Ms(50)</code> หลังเรียก — ช้ากว่า Halt ใช้เฉพาะ module ค้าง</li>
+    <li><strong>bug demo (mode 2):</strong> ถ้าไม่ Halt → การ์ดยัง active → <code>RC522_IsCardPresent</code> + <code>ReadUID</code> จะได้ UID เดิมซ้ำๆ → ไม่ detect removal → ยืนยันว่า Halt จำเป็น</li>
+    <li><strong>COLLISION/CRC error</strong> ระหว่างอ่าน = อาจเปลี่ยนการ์ดระหว่าง REQA → anticollision → handle error ด้วยการ Halt + retry — ไม่ใช่ bug ของ wiring</li>
+    <li>Library wrapper นี้ <strong>อ่าน UID ได้อย่างเดียว</strong> — ใช้ทำ attendance, door lock, card swap ได้ — ถ้าต้องการเก็บข้อมูลหรือเปลี่ยน key ต้องใช้ standard peripheral (ไม่มี SelectTag/Auth/ReadBlock/WriteBlock ใน wrapper)</li>
+</ul>
+</div></div>
 
 <nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_rc522.html">กลับบท</a><a href="chapx_lib_pca9685_answers.html">เฉลยถัดไป →</a></nav>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

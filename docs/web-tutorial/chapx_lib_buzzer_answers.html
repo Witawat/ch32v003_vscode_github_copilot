@@ -11,7 +11,7 @@
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    Buzzer_Init(BUZZER_PIN, BUZZER_PASSIVE);
+    Buzzer_Init(BUZZER_PIN, BUZZER_ACTIVE_HIGH);
 
     uint16_t notes[] = {
         262,262,294,262,349,330,    // Happy birthday to you
@@ -37,7 +37,7 @@ int main(void) {
         Delay_Ms(2000);  // pause ก่อนเล่นซ้ำ
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> ใช้ <strong>Passive Buzzer</strong> — array <code>notes[]</code> เก็บความถี่ Hz (C4=262, D4=294, E4=330, F4=349, G4=392, A4=440, C5=523) — array <code>dur[]</code> เก็บความยาวโน้ตใน ms — <code>Buzzer_Tone(pin, freq, ms)</code> สร้าง PWM ที่ความถี่นั้นตามเวลาที่กำหนด — <code>Delay_Ms(50)</code> เว้นจังหวะระหว่างโน้ต — ต้องต่อ Passive Buzzer (ไม่มี oscillator ในตัว)</div></div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ใช้ <strong>Passive Buzzer</strong> — array <code>notes[]</code> เก็บความถี่ Hz (C4=262, D4=294, E4=330, F4=349, G4=392, A4=440, C5=523) — array <code>dur[]</code> เก็บความยาวโน้ตใน ms — <code>Buzzer_Tone(freq, ms)</code> สร้าง PWM ที่ความถี่นั้นตามเวลาที่กำหนด — <code>Delay_Ms(50)</code> เว้นจังหวะระหว่างโน้ต — ต้องต่อ Passive Buzzer (ไม่มี oscillator ในตัว)</div></div>
 <div class="answer"><h2>ข้อ 2: PWM Frequency Sweep — กวาดความถี่ 100-4000Hz</h2>
 <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
@@ -49,7 +49,7 @@ int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
     USART_Init(115200);
-    Buzzer_Init(BUZZER_PIN, BUZZER_PASSIVE);
+    Buzzer_Init(BUZZER_PIN, BUZZER_ACTIVE_HIGH);
 
     USART_Println("Frequency Sweep: 100Hz → 4000Hz");
 
@@ -81,7 +81,7 @@ int main(void) {
         }
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> <code>for</code> loop เปลี่ยนความถี่ทีละ 50Hz จาก 100→4000 — <code>Buzzer_Tone(pin, freq, 30)</code> เล่นแต่ละความถี่ 30ms — ใช้ Passive Buzzer เพราะ Active มีความถี่คงที่ — sweep loop แรก: เสียงต่ำไปสูง (เหมือน siren ตำรวจ) — sweep loop ที่สอง: กลับทิศ — sweep loop ที่สาม: เฉพาะช่วง 2-4kHz (เสียงแหลม) ให้ผลเหมือน siren ฉุกเฉิน — ดู response frequency ของ Passive buzzer ว่าดังสุดที่ความถี่ไหน</div></div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>for</code> loop เปลี่ยนความถี่ทีละ 50Hz จาก 100→4000 — <code>Buzzer_Tone(freq, 30)</code> เล่นแต่ละความถี่ 30ms — ใช้ Passive Buzzer เพราะ Active มีความถี่คงที่ — sweep loop แรก: เสียงต่ำไปสูง (เหมือน siren ตำรวจ) — sweep loop ที่สอง: กลับทิศ — sweep loop ที่สาม: เฉพาะช่วง 2-4kHz (เสียงแหลม) ให้ผลเหมือน siren ฉุกเฉิน — ดู response frequency ของ Passive buzzer ว่าดังสุดที่ความถี่ไหน</div></div>
 <div class="answer"><h2>ข้อ 3: Dual Buzzer Alarm — Active + Passive สลับแพทเทิร์น</h2>
 <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
@@ -94,8 +94,8 @@ int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
 
-    Buzzer_Init(ACTIVE_PIN, BUZZER_ACTIVE);
-    Buzzer_Init(PASSIVE_PIN, BUZZER_PASSIVE);
+    Buzzer_Init(ACTIVE_PIN, BUZZER_ACTIVE_HIGH);
+    Buzzer_Init(PASSIVE_PIN, BUZZER_ACTIVE_HIGH);
 
     while(1) {
         // ===== ALARM LEVEL 1: Active สั้น =====

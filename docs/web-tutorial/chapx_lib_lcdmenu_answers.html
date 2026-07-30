@@ -39,11 +39,10 @@ int main(void) {
     I2C_LCD_Backlight(1);
 
     LCDMenu_Init(&menu, &lcd, &btn_up, &btn_down, &btn_enter, &btn_back);
-    LCDMenu_AddItem(&menu, "WiFi SSID", LCDMENU_EDIT, ssid_edit_up,
-                    ssid_edit_down, ssid_edit_right, ssid_edit_left);
+    LCDMenu_AddCallback(&menu, menu.root, "WiFi SSID", ssid_edit_up);
 
     while(1) {
-        LCDMenu_Process(&menu);
+        LCDMenu_Update(&menu);
 
         I2C_LCD_SetCursor(0, 0); I2C_LCD_Print("SSID:");
         I2C_LCD_SetCursor(0, 1); I2C_LCD_Print(ssid + max(0, cursor_pos - 15));
@@ -53,7 +52,7 @@ int main(void) {
         Delay_Ms(50);
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> ใช้ <code>charset[]</code> เป็นชุดอักขระที่ยอมรับ — ปุ่ม up/down วนเลือกตัวอักษรใน charset ด้วย modulo — left/right เลื่อน cursor — แสดงผลโดย offset <code>cursor_pos-15</code> ให้ auto-scroll เมื่อชื่อยาวเกิน 16 ตัว — ใช้ <code>0x5F</code> (underscore) แทน cursor กะพริบ — <code>LCDMENU_EDIT</code> บอกว่า menu item นี้เป็น editable — เมื่อบันทึกค่า ควรเขียนลง EEPROM ด้วย <code>AT24Cxx_Write</code> — charset ควรแยกเป็นกลุ่ม (uppercase/lowercase/numbers/symbols) เพื่อให้แก้ไขเร็วขึ้น</div></div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ใช้ <code>charset[]</code> เป็นชุดอักขระที่ยอมรับ — ปุ่ม up/down วนเลือกตัวอักษรใน charset ด้วย modulo — left/right เลื่อน cursor — แสดงผลโดย offset <code>cursor_pos-15</code> ให้ auto-scroll เมื่อชื่อยาวเกิน 16 ตัว — ใช้ <code>0x5F</code> (underscore) แทน cursor กะพริบ — <code>LCDMENU_TYPE_CALLBACK</code> บอกว่า menu item นี้เป็น action (ENTER เรียก callback) — เมื่อบันทึกค่า ควรเขียนลง EEPROM ด้วย <code>AT24Cxx_Write</code> — charset ควรแยกเป็นกลุ่ม (uppercase/lowercase/numbers/symbols) เพื่อให้แก้ไขเร็วขึ้น</div></div>
 <div class="answer"><h2>ข้อ 2: Setpoint Adjust — ปรับค่า setpoint ด้วยปุ่ม up/down</h2>
 <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
@@ -64,15 +63,7 @@ LCD1602_Handle lcd;
 Button_Instance btn_up, btn_down, btn_enter, btn_back;
 LCDMenu_Handle menu;
 
-float setpoint = 40.0f;
-float step = 0.5f;
-float min_val = 10.0f, max_val = 80.0f;
-
-void setpoint_inc(void) { if(setpoint < max_val) setpoint += step; }
-void setpoint_dec(void) { if(setpoint > min_val) setpoint -= step; }
-
-void setpoint_fast_inc(void) { if(setpoint < max_val) setpoint += step * 10; }
-void setpoint_fast_dec(void) { if(setpoint > min_val) setpoint -= step * 10; }
+static int32_t setpoint = 40;
 
 int main(void) {
     SystemCoreClockUpdate();
@@ -81,23 +72,21 @@ int main(void) {
     I2C_LCD_Backlight(1);
 
     LCDMenu_Init(&menu, &lcd, &btn_up, &btn_down, &btn_enter, &btn_back);
-    LCDMenu_AddItem(&menu, "Setpoint", LCDMENU_ADJUST,
-                    setpoint_inc, setpoint_dec,
-                    setpoint_fast_inc, setpoint_fast_dec);
+    LCDMenu_AddValue(&menu, menu.root, "Setpoint", &setpoint, 10, 80, 1, NULL);
 
     char buf[17];
     while(1) {
-        LCDMenu_Process(&menu);
+        LCDMenu_Update(&menu);
 
         I2C_LCD_SetCursor(0, 0); I2C_LCD_Print("TARGET TEMP");
         I2C_LCD_SetCursor(3, 1);
-        snprintf(buf, 17, "%.1f C    ", setpoint);
+        snprintf(buf, 17, "%ld C    ", (long)setpoint);
         I2C_LCD_Print(buf);
 
         Delay_Ms(80);
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> <code>LCDMENU_ADJUST</code> รองรับ up/down + fast increment (long press) — step ปกติ 0.5°C, fast step ×10 — clamp ด้วย <code>min_val</code>/<code>max_val</code> ป้องกันค่าผิดปกติ — แสดงด้วยทศนิยม 1 ตำแหน่ง <code>%.1f</code> — space ท้ายสตริงลบตัวอักษรเก่าที่อาจค้าง — ควรเก็บค่า setpoint ลง EEPROM ทุกครั้งที่เปลี่ยน — สำหรับระบบจริงควรเพิ่ม callback on_exit เพื่อบันทึกค่าเฉพาะเมื่อออกจากเมนู</div></div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>LCDMenu_AddValue</code> รับ <code>int32_t*</code> + min/max/step — ENTER เข้า edit mode, UP/DOWN ปรับ ±step, ENTER ยืนยัน, BACK ยกเลิก — clamp ด้วย min/max ป้องกันค่าผิดปกติ — แสดงด้วย <code>%ld</code> — space ท้ายสตริงลบตัวอักษรเก่าที่อาจค้าง — ควรเก็บค่า setpoint ลง EEPROM ทุกครั้งที่เปลี่ยน — สำหรับระบบจริงควรเพิ่ม callback on_exit เพื่อบันทึกค่าเฉพาะเมื่อออกจากเมนู</div></div>
 <div class="answer"><h2>ข้อ 3: Toggle ON/OFF + Save ลง EEPROM</h2>
 <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
@@ -112,9 +101,9 @@ AT24Cxx_Instance eeprom;
 #define EEPROM_ADDR  0x00
 
 typedef struct {
-    uint8_t power_on;
-    uint8_t backlight;
-    uint8_t buzzer;
+    bool power_on;
+    bool backlight;
+    bool buzzer;
     float   setpoint;
 } Config_t;
 
@@ -146,15 +135,15 @@ int main(void) {
     load_config();
 
     LCDMenu_Init(&menu, &lcd, &btn_up, &btn_down, &btn_enter, &btn_back);
-    LCDMenu_AddItem(&menu, "Power",     LCDMENU_TOGGLE, toggle_power,     NULL, NULL, NULL);
-    LCDMenu_AddItem(&menu, "Backlight", LCDMENU_TOGGLE, toggle_backlight, NULL, NULL, NULL);
-    LCDMenu_AddItem(&menu, "Buzzer",    LCDMENU_TOGGLE, toggle_buzzer,    NULL, NULL, NULL);
+    LCDMenu_AddToggle(&menu, menu.root, "Power", &cfg.power_on, toggle_power);
+    LCDMenu_AddToggle(&menu, menu.root, "Backlight", &cfg.backlight, toggle_backlight);
+    LCDMenu_AddToggle(&menu, menu.root, "Buzzer", &cfg.buzzer, toggle_buzzer);
 
     I2C_LCD_Print("Config Loaded");
     Delay_Ms(1000);
 
     while(1) {
-        LCDMenu_Process(&menu);
+        LCDMenu_Update(&menu);
 
         static Config_t last_cfg;
         if(memcmp(&cfg, &last_cfg, sizeof(Config_t)) != 0) {
@@ -171,6 +160,6 @@ int main(void) {
         Delay_Ms(50);
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> <code>LCDMENU_TOGGLE</code> สำหรับ boolean settings — เก็บ config ใน <code>Config_t</code> struct — <code>save_config()</code> เขียน struct ทั้งหมดลง AT24Cxx EEPROM — <code>load_config()</code> อ่านตอนบูท พร้อม validation: ถ้าค่าผิดปกติ → reset เป็น default แล้ว save — ใช้ <code>memcmp</code> เช็คการเปลี่ยนแปลงก่อน save ลด EEPROM wear — ควรเพิ่ม CRC8/CRC16 ใน struct เพื่อตรวจจับ EEPROM corruption — สำหรับ production ควรมี factory reset (กดปุ่มค้างตอนบูท) เพื่อ restore default</div></div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>LCDMENU_TYPE_TOGGLE</code> สำหรับ boolean settings — เก็บ config ใน <code>Config_t</code> struct — <code>save_config()</code> เขียน struct ทั้งหมดลง AT24Cxx EEPROM — <code>load_config()</code> อ่านตอนบูท พร้อม validation: ถ้าค่าผิดปกติ → reset เป็น default แล้ว save — ใช้ <code>memcmp</code> เช็คการเปลี่ยนแปลงก่อน save ลด EEPROM wear — ควรเพิ่ม CRC8/CRC16 ใน struct เพื่อตรวจจับ EEPROM corruption — สำหรับ production ควรมี factory reset (กดปุ่มค้างตอนบูท) เพื่อ restore default</div></div>
 <nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_lcdmenu.html">กลับบท</a><a href="chapx_lib_circularbuffer_answers.html">เฉลยถัดไป →</a></nav>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

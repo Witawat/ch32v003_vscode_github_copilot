@@ -56,7 +56,7 @@ flowchart TD
 </ol>
 
 <p>ต่อ I2C ปกติ — A0 pin เลือก address (GND=0x60, VDD=0x61) — Output ต่อตรงเข้า Oscilloscope</p></section>
-<section><h2>📚 หลักการทำงาน</h2><p><strong>MCP4725</strong> เป็น DAC 12-bit สื่อสารผ่าน I2C — รับค่า 0-4095 แปลงเป็นแรงดัน 0V ถึง VDD (3.3V) — ความละเอียด 3.3V/4096 ≈ 0.8mV ต่อ step</p><p><strong>MCP4725_SetVoltage(&dac, volt, vref)</strong> ตั้งแรงดันโดยตรง — vref เป็น MCP4725_VREF_VDD หรือค่าแรงดันอ้างอิงภายนอก</p></section>
+<section><h2>📚 หลักการทำงาน</h2><p><strong>MCP4725</strong> เป็น DAC 12-bit สื่อสารผ่าน I2C — รับค่า 0-4095 แปลงเป็นแรงดัน 0V ถึง VDD (3.3V) — ความละเอียด 3.3V/4096 ≈ 0.8mV ต่อ step</p><p><strong>MCP4725_SetVoltage(&dac, volt, vref)</strong> ตั้งแรงดันโดยตรง — vref เป็น float เช่น 3.3f (VDD ของ module)</p></section>
 <section><h2>💻 เขียน Code ทีละขั้น</h2>
 <div class="step"><h3>ขั้นที่ 1: Init MCP4725</h3><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
@@ -73,13 +73,13 @@ int main(void) {
     MCP4725_Init(&dac, 0x60);
     USART_Print("MCP4725 Ready\r\n");</code></pre><p class="explain">🔍 <code>MCP4725_Init(&dac, addr)</code> — ตั้งค่า I2C address — ใช้ I2C Fast Mode (400kHz)</p></div>
 <div class="step"><h3>ขั้นที่ 2: เขียนค่า DAC</h3><pre><code class="language-c">    // ตั้งแรงดัน 1.65V (ครึ่ง VDD)
-    MCP4725_SetVoltage(&dac, 1.65f, MCP4725_VREF_VDD);
+    MCP4725_SetVoltage(&dac, 1.65f, 3.3f);
 
     // ตั้งแรงดัน 0.825V
-    MCP4725_SetVoltage(&dac, 0.825f, MCP4725_VREF_VDD);
+    MCP4725_SetVoltage(&dac, 0.825f, 3.3f);
 
     // Write raw value (0-4095)
-    MCP4725_WriteRaw(&dac, 2048);</code></pre><p class="explain">🔍 <code>MCP4725_SetVoltage(&dac, volt, vref)</code> — ตั้งแรงดันโดยตรง ไม่ต้องคำนวณ raw value เอง — MCP4725_VREF_VDD ใช้ VDD เป็นแรงดันอ้างอิง</p></div>
+    MCP4725_SetRaw(&dac, 2048);</code></pre><p class="explain">🔍 <code>MCP4725_SetVoltage(&dac, volt, vref)</code> — ตั้งแรงดันโดยตรง ไม่ต้องคำนวณ raw value เอง — vref เป็น float เช่น 3.3f (VDD)</p></div>
 <div class="step"><h3>ขั้นที่ 3: สร้าง Waveform Generator</h3><pre><code class="language-c">    const uint16_t sine_table[64] = {
         2048,2248,2447,2642,2831,3013,3185,3346,
         3495,3630,3750,3853,3939,4007,4056,4085,
@@ -93,18 +93,18 @@ int main(void) {
 
     uint8_t idx = 0;
     while(1) {
-        MCP4725_WriteRaw(&dac, sine_table[idx]);
+        MCP4725_SetRaw(&dac, sine_table[idx]);
         idx = (idx + 1) % 64;
         Delay_Us(100); // ~156Hz
     }
-}</code></pre><p class="explain">🔍 ใช้ตาราง sine 64 จุด pre-computed — วนลูปด้วย WriteRaw — 100µs delay = ~156Hz sine wave</p></div>
+}</code></pre><p class="explain">🔍 ใช้ตาราง sine 64 จุด pre-computed — วนลูปด้วย SetRaw — 100µs delay = ~156Hz sine wave</p></div>
 </section>
 <section><h2>📋 API Reference</h2><table><tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
 <tr><td><code>MCP4725_Init(&dac, addr)</code></td><td>เริ่มต้น MCP4725</td><td><code>MCP4725_Init(&dac, 0x60)</code></td></tr>
-<tr><td><code>MCP4725_SetVoltage(&dac, volt, vref)</code></td><td>ตั้งแรงดัน (V)</td><td><code>MCP4725_SetVoltage(&dac, 1.65f, MCP4725_VREF_VDD)</code></td></tr>
-<tr><td><code>MCP4725_WriteRaw(&dac, value)</code></td><td>เขียนค่า raw 0-4095</td><td><code>MCP4725_WriteRaw(&dac, 2048)</code></td></tr>
-<tr><td><code>MCP4725_WriteEEPROM(&dac, value)</code></td><td>เขียน DAC + บันทึก EEPROM</td><td><code>MCP4725_WriteEEPROM(&dac, 1024)</code></td></tr>
-<tr><td><code>MCP4725_ReadEEPROM(&dac)</code></td><td>อ่านค่าใน EEPROM</td><td><code>uint16_t v = MCP4725_ReadEEPROM(&dac)</code></td></tr>
+<tr><td><code>MCP4725_SetVoltage(&dac, volt, vref)</code></td><td>ตั้งแรงดัน (V) — vref เป็น float</td><td><code>MCP4725_SetVoltage(&dac, 1.65f, 3.3f)</code></td></tr>
+<tr><td><code>MCP4725_SetRaw(&dac, value)</code></td><td>เขียนค่า raw 0-4095</td><td><code>MCP4725_SetRaw(&dac, 2048)</code></td></tr>
+<tr><td><code>MCP4725_SetRawEEPROM(&dac, value)</code></td><td>เขียน DAC + บันทึก EEPROM</td><td><code>MCP4725_SetRawEEPROM(&dac, 1024)</code></td></tr>
+<tr><td><code>MCP4725_GetRaw(&dac, &value)</code></td><td>อ่านค่าปัจจุบัน (out-param)</td><td><code>uint16_t v; MCP4725_GetRaw(&dac, &v)</code></td></tr>
 </table></section>
 <section><h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2><table><tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
 <tr><td>Output เป็น 0V ตลอด</td><td>ไม่ได้เรียก Init หรือ address ผิด</td><td>ตรวจสอบ I2C address — 0x60(A0=GND), 0x61(A0=VDD)</td></tr>
@@ -137,7 +137,7 @@ int main(void)
     uint8_t idx = 0;
     while(1)
     {
-        MCP4725_WriteRaw(&dac, sine64[idx]);
+        MCP4725_SetRaw(&dac, sine64[idx]);
         idx = (idx + 1) % 64;
         Delay_Us(100);
     }

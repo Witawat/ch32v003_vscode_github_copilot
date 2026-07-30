@@ -21,7 +21,8 @@
     <pre class="mermaid">
 flowchart TD
     A["MAX31855_Init(&therm, PC4)"] --> B["MAX31855_ReadTemp(&therm)"]
-    B --> C{"MAX31855_GetFault(&therm) != 0?"}
+    B --> GF["MAX31855_GetFault(&therm, &fault)"]
+    GF --> C{"fault != 0?"}
     C -->|"Yes (Fault)"| D["Handle Fault: OC/SCG/SCV"]
     C -->|"No (OK)"| E["MAX31855_ReadInternalTemp(&therm)"]
     D --> B
@@ -85,7 +86,7 @@ flowchart TD
     <p><strong>Thermocouple K-Type</strong>: วัดอุณหภูมิจากแรงดัน mV ที่เกิดขึ้นระหว่างโลหะ 2 ชนิด (Chromel-Alumel) — ช่วงกว้างมาก -270°C ถึง +1372°C</p>
     <p><strong>Cold-Junction Compensation (CJC)</strong>: ฝังในชิป — วัดอุณหภูมิที่ขั้วต่อ PCB แล้วชดเชยอัตโนมัติ</p>
     <p><strong>MAX31855</strong>: 32-bit frame — thermocouple temp (14-bit) + internal/cold-junction temp (12-bit) + fault bits (OC/SCG/SCV)</p>
-    <p><strong>MAX6675</strong>: 16-bit frame — thermocouple temp (12-bit) — range 0°C ถึง 1024°C, API ง่ายกว่า — <code>MAX6675_ReadTemp(PC4)</code></p>
+    <p><strong>MAX6675</strong>: 16-bit frame — thermocouple temp (12-bit) — range 0°C ถึง 1024°C, API ง่ายกว่า — <code>MAX6675_ReadTemp(&therm)</code> (ใช้ <code>MAX31855_Instance</code> เดียวกับ MAX31855)</p>
 </section>
 
 <section>
@@ -109,7 +110,8 @@ int main(void) {
     <div class="step"><h3>ขั้นที่ 2: อ่าน Thermocouple + Cold-Junction + Fault</h3>
     <pre><code class="language-c">    float tc = MAX31855_ReadTemp(&therm);           // thermocouple temp
     float cj = MAX31855_ReadInternalTemp(&therm);    // cold-junction temp
-    int fault = MAX31855_GetFault(&therm);           // 0=OK
+    uint8_t fault;
+    MAX31855_GetFault(&therm, &fault);               // 0=OK
 
     USART_Print("TC: "); USART_PrintFloat(tc, 1);
     USART_Print("C  CJ: "); USART_PrintFloat(cj, 1);
@@ -121,8 +123,8 @@ int main(void) {
     if(fault & 0x04) USART_Println("⚠️ Short to VCC!");
 
     // MAX6675 variant (simpler API):
-    //     // float t = MAX6675_ReadTemp(PC4);  // 0-1024°C, no fault</code></pre>
-    <p class="explain">🔍 <code>MAX31855_ReadTemp()</code> — thermocouple temp — <code>MAX31855_ReadInternalTemp()</code> — CJ temp — <code>MAX31855_GetFault()</code> — 0=OK, bit0=OC, bit1=SCG, bit2=SCV</p></div>
+    //     // float t = MAX6675_ReadTemp(&therm);  // 0-1024°C, no fault</code></pre>
+    <p class="explain">🔍 <code>MAX31855_ReadTemp()</code> — thermocouple temp — <code>MAX31855_ReadInternalTemp()</code> — CJ temp — <code>MAX31855_GetFault(&therm, &fault)</code> — 0=OK, bit0=OC, bit1=SCG, bit2=SCV</p></div>
 
     <div class="step"><h3>ขั้นที่ 3: Loop</h3>
     <pre><code class="language-c">    Timer_t tmr;
@@ -132,7 +134,8 @@ int main(void) {
         if(Is_Timer_Expired(&tmr)) {
             float tc = MAX31855_ReadTemp(&therm);
             float cj = MAX31855_ReadInternalTemp(&therm);
-            int fault = MAX31855_GetFault(&therm);
+            uint8_t fault;
+            MAX31855_GetFault(&therm, &fault);
 
             if(fault == 0) {
                 USART_Print("TC: "); USART_PrintFloat(tc, 1);
@@ -146,7 +149,7 @@ int main(void) {
         IWDG_Feed();
     }
 }</code></pre>
-    <p class="explain">🔍 MAX6675 API ง่ายกว่า — <code>MAX6675_ReadTemp(PC4)</code> — ไม่ต้องใช้ instance — แต่ไม่มี fault detection และ range จำกัด 0-1024°C</p></div>
+    <p class="explain">🔍 MAX6675 API ง่ายกว่า — ใช้ <code>MAX6675_ReadTemp(&therm)</code> (instance เดียวกับ MAX31855) — ไม่มี fault detection และ range จำกัด 0-1024°C</p></div>
 </section>
 
 <section>
@@ -156,8 +159,8 @@ int main(void) {
         <tr><td><code>MAX31855_Init(&therm, cs_pin)</code></td><td>เริ่มต้น MAX31855</td><td><code>MAX31855_Init(&therm, PC4)</code></td></tr>
         <tr><td><code>MAX31855_ReadTemp(&therm)</code></td><td>อ่าน thermocouple temp (°C)</td><td><code>float tc = MAX31855_ReadTemp(&therm)</code></td></tr>
         <tr><td><code>MAX31855_ReadInternalTemp(&therm)</code></td><td>อ่าน cold-junction temp (°C)</td><td><code>float cj = MAX31855_ReadInternalTemp(&therm)</code></td></tr>
-        <tr><td><code>MAX31855_GetFault(&therm)</code></td><td>ตรวจ fault — 0=OK</td><td><code>int f = MAX31855_GetFault(&therm)</code></td></tr>
-        <tr><td><code>MAX6675_ReadTemp(cs_pin)</code></td><td>อ่าน temp (MAX6675, simple)</td><td><code>float t = MAX6675_ReadTemp(PC4)</code></td></tr>
+        <tr><td><code>MAX31855_GetFault(&therm, &fault)</code></td><td>ตรวจ fault — 0=OK</td><td><code>uint8_t f; MAX31855_GetFault(&therm, &f)</code></td></tr>
+        <tr><td><code>MAX6675_ReadTemp(&therm)</code></td><td>อ่าน temp (MAX6675, simple)</td><td><code>float t = MAX6675_ReadTemp(&therm)</code></td></tr>
     </table>
 </section>
 
@@ -199,7 +202,8 @@ int main(void) {
         if(Is_Timer_Expired(&tmr)) {
             float tc = MAX31855_ReadTemp(&therm);
             float cj = MAX31855_ReadInternalTemp(&therm);
-            int fault = MAX31855_GetFault(&therm);
+            uint8_t fault;
+            MAX31855_GetFault(&therm, &fault);
 
             OLED_Clear(&oled);
             if(fault == 0) {

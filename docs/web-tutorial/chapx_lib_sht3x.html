@@ -102,7 +102,7 @@ int main(void) {
     }</code></pre>
 <p class="explain">🔍 <code>SHT3x_Read(&sht, &t, &h)</code> — single-shot measurement (~15ms) — เร็วกว่า AHT10 มาก — คืนค่า TRUE ถ้าสำเร็จ</p></div>
 
-<div class="step"><h3>ขั้นที่ 3: Loop + Heater</h3>
+<div class="step"><h3>ขั้นที่ 3: Loop อ่านค่าต่อเนื่อง</h3>
 <pre><code class="language-c">    Timer_t tmr;
     Start_Timer(&tmr, 1000, 1);
 
@@ -126,8 +126,6 @@ int main(void) {
     <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
     <tr><td><code>SHT3x_Init(&sht, addr)</code></td><td>Init sensor</td><td><code>SHT3x_Init(&sht, 0x44)</code></td></tr>
     <tr><td><code>SHT3x_Read(&sht, &t, &h)</code></td><td>อ่าน temp+hum ครั้งเดียว</td><td><code>SHT3x_Read(&sht, &t, &h)</code></td></tr>
-    <tr><td><code>SHT3x_Heater(&sht, en)</code></td><td>เปิด/ปิด heater</td><td><code>SHT3x_Heater(&sht, 1)</code></td></tr>
-    <tr><td><code>SHT3x_SetAlertTH(&sht, t_hi, t_lo, h_hi, h_lo)</code></td><td>ตั้ง alert threshold</td><td><code>SHT3x_SetAlertTH(&sht, 40, 0, 90, 10)</code></td></tr>
 </table>
 </section>
 
@@ -135,7 +133,6 @@ int main(void) {
 <table>
     <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
     <tr><td>Init fail — SHT3x ไม่ตอบ</td><td>ADDR เลือกผิด</td><td>ADDR=GND → 0x44, ADDR=VCC → 0x45</td></tr>
-    <tr><td>Heater ทำให้ค่าพุ่ง 5-10°C</td><td>Self-heating</td><td>ใช้ heater แค่ 100-500ms ต่อครั้ง</td></tr>
 </table>
 </section>
 

@@ -11,46 +11,63 @@
     <a href="chapx_lib_ds3231.html">บทก่อน</a>
     <a href="chapx_lib_pca9685.html">บทถัดไป →</a>
 </nav>
-<h1>RC522 RFID — SPI, ISO14443A, MIFARE Classic, UID Read</h1>
+<h1>RC522 RFID Reader — SPI, UID Detection, Card Presence, Version Check</h1>
 <span class="level advanced">ระดับสูง</span>
+
+<section>
+    <h2>📋 สิ่งที่ใช้ได้ / สิ่งที่ใช้ไม่ได้</h2>
+    <p>Library นี้เป็น <strong>wrapper แบบ SimpleHAL</strong> สำหรับ MFRC522 — ออกแบบมาเพื่อ <strong>อ่าน UID เท่านั้น</strong> (single-purpose) ไม่ใช่ MIFARE full stack</p>
+    <table>
+        <tr><th>ฟีเจอร์</th><th>รองรับ?</th><th>หมายเหตุ</th></tr>
+        <tr><td>อ่าน UID การ์ด (4 หรือ 7 bytes)</td><td>✅ ได้</td><td><code>RC522_ReadUID(&rfid, uid, &len)</code></td></tr>
+        <tr><td>ตรวจจับการ์ดเข้าใกล้ antenna</td><td>✅ ได้</td><td><code>RC522_IsCardPresent(&rfid)</code></td></tr>
+        <tr><td>อ่าน version register (เช็ค SPI/wiring)</td><td>✅ ได้</td><td><code>RC522_GetVersion(&rfid)</code> → 0x91/0x92</td></tr>
+        <tr><td>Halt/Reset การ์ดและ module</td><td>✅ ได้</td><td><code>RC522_Halt(&rfid)</code> / <code>RC522_Reset(&rfid)</code></td></tr>
+        <tr><td>Select Tag (anticollision → select)</td><td>❌ ไม่ได้</td><td>Library ไม่เปิดฟังก์ชัน Select Tag — ไม่มีใน header</td></tr>
+        <tr><td>MIFARE Classic Authentication (Key A/B)</td><td>❌ ไม่ได้</td><td>ไม่มีฟังก์ชัน Auth Key A/B และไม่มีค่าคงที่ <code>PICC_AUTHENT_1A</code>-style แบบบทเดิม</td></tr>
+        <tr><td>อ่าน/เขียน block ข้อมูล (16 bytes/block)</td><td>❌ ไม่ได้</td><td>ไม่มีฟังก์ชัน Read Block หรือ Write Block</td></tr>
+        <tr><td>Self-test</td><td>❌ ไม่ได้</td><td>ไม่มีฟังก์ชัน Self-Test — ใช้ <code>GetVersion</code> ตรวจ SPI แทน</td></tr>
+    </table>
+    <p class="explain">⚠️ ถ้าต้องการ MIFARE Classic block read/write หรือ authentication ต้องใช้ standard peripheral หรือขยาย library เอง — wrapper นี้ทำได้แค่ UID detection</p>
+</section>
 
 <section class="flowchart">
     <h2>🧭 แผนภาพการทำงาน</h2>
     <pre class="mermaid">
 flowchart TD
-    A["RC522_Init(&rfid, CS, RST)"] --> B["RC522_SelfTest()"]
-    B --> C{"Pass?"}
-    C -->|"Yes"| D["RC522_IsCardPresent(&rfid)"]
-    C -->|"No"| E["Check wiring"]
-    D --> F{"Card Present?"}
-    F -->|"Yes"| G["RC522_ReadUID(&rfid, uid)"]
-    F -->|"No"| D
-    G --> H["RC522_SelectTag(uid)"]
-    H --> I["RC522_Auth(KEY_A, block, key)"]
-    I --> J{"Operation"}
-    J -->|"Read"| K["RC522_Read(block, buf)"]
-    J -->|"Write"| L["RC522_Write(block, data)"]
+    A["SPI_SimpleInit(SPI_MODE0, SPI_4MHZ, SPI_PINS_DEFAULT)"] --> B["RC522_Init(&amp;rfid, CS, RST)"]
+    B --> C["RC522_GetVersion(&amp;rfid)"]
+    C --> D{"ver == 0x91 หรือ 0x92?"}
+    D -->|"No (0x00/0xFF)"| E["ตรวจ SPI / wiring / ไฟ 3.3V"]
+    D -->|"Yes"| F["loop: RC522_IsCardPresent(&amp;rfid)"]
+    F --> G{"มีการ์ด?"}
+    G -->|"No"| F
+    G -->|"Yes"| H["RC522_ReadUID(&amp;rfid, uid, &amp;len)"]
+    H --> I{"Status == RC522_OK?"}
+    I -->|"No (CRC/Timeout)"| J["ตรวจ antenna / noise / ระยะ"]
+    I -->|"Yes"| K["ใช้ uid[0..len-1] (เทียบ whitelist, แสดงผล, ... )"]
+    K --> L["RC522_Halt(&amp;rfid)"]
+    L --> F
     </pre>
 </section>
 
 <section>
     <h2>🔌 การต่อวงจร</h2>
     <pre class="ascii-circuit">
-                 RC522 RFID Module SPI
+                  RC522 RFID Module (SPI, 13.56MHz)
     ┌──────────────────────────────────────────────┐
-    │ CH32V003                          RC522      │
-    │ PC5(SCK)───────SCK               ┌──────────┤
-    │ PC6(MISO)──────MISO              │          │
-    │ PC7(MOSI)──────MOSI              │13.56MHz  │
-    │ PC3────────────SDA(CS)           │ISO14443A │
-    │ PC4────────────RST               │          │
-    │ PC0────────────IRQ (opt)        │MIFARE    │
-    │ 3.3V───────────VCC              │Classic   │
-    │ GND────────────GND              │1K/4K     │
+    │ CH32V003 (Default SPI)            RC522      │
+    │ PC5 (SCK)  ─────────── SCK      ┌──────────┤
+    │ PC6 (MOSI) ─────────── MOSI      │  ISO     │
+    │ PC7 (MISO) ─────────── MISO      │  14443A  │
+    │ PC4         ─────────── SDA(CS)   │   │      │
+    │ PD2         ─────────── RST       │  UID     │
+    │ 3.3V         ────────── VCC       │  reader  │
+    │ GND          ────────── GND       │   │      │
     │                                   └──────────┤
-    │ ⚡ 3.3V ONLY — ห้าม 5V!                    │
-    │ ⚡ SPI Mode 0, ~4MHz max                   │
-    │ ⚡ ทำ SelfTest ก่อนใช้ทุกครั้ง                │
+    │ ⚡ 3.3V ONLY — ห้าม 5V!                       │
+    │ ⚡ SPI Mode 0, ≤ 4 MHz (default)               │
+    │ ⚡ IRQ ไม่ต้องต่อ (lib ไม่ใช้ interrupt)      │
     └──────────────────────────────────────────────┘
     </pre>
     <table class="wiring-table">
@@ -58,59 +75,57 @@ flowchart TD
         <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
       </thead>
       <tbody>
-        <tr><td>PC5</td><td>→</td><td>RC522</td><td>SCK</td><td>SPI Clock</td></tr>
-        <tr><td>PC6</td><td>←</td><td>RC522</td><td>MISO</td><td>SPI Data Out</td></tr>
-        <tr><td>PC7</td><td>→</td><td>RC522</td><td>MOSI</td><td>SPI Data In</td></tr>
-        <tr><td>PC3</td><td>→</td><td>RC522</td><td>SDA (CS)</td><td>Chip Select</td></tr>
-        <tr><td>PC4</td><td>→</td><td>RC522</td><td>RST</td><td>Reset</td></tr>
-        <tr><td>PC0</td><td>←</td><td>RC522</td><td>IRQ</td><td>Interrupt (Optional)</td></tr>
-        <tr><td>3.3V</td><td>↔</td><td>RC522</td><td>VCC</td><td>จ่ายไฟ 3.3V</td></tr>
+        <tr><td>PC5</td><td>→</td><td>RC522</td><td>SCK</td><td>SPI Clock — default SPI pin ของ SimpleHAL</td></tr>
+        <tr><td>PC6</td><td>→</td><td>RC522</td><td>MOSI</td><td>SPI Data → RC522 (MCU ส่ง)</td></tr>
+        <tr><td>PC7</td><td>←</td><td>RC522</td><td>MISO</td><td>SPI Data ← RC522 (MCU รับ)</td></tr>
+        <tr><td>PC4</td><td>→</td><td>RC522</td><td>SDA (CS)</td><td>Chip Select — ส่งเป็น arg ของ <code>RC522_Init</code></td></tr>
+        <tr><td>PD2</td><td>→</td><td>RC522</td><td>RST</td><td>Reset — ส่งเป็น arg ของ <code>RC522_Init</code></td></tr>
+        <tr><td>3.3V</td><td>→</td><td>RC522</td><td>VCC</td><td>⚠️ ไฟ 3.3V เท่านั้น — ห้าม 5V</td></tr>
         <tr><td>GND</td><td>↔</td><td>RC522</td><td>GND</td><td>กราวด์ร่วม</td></tr>
       </tbody>
     </table>
     <h3>รู้จักขา</h3>
     <ul>
-      <li><strong>VCC:</strong> ไฟเลี้ยง 3.3V เท่านั้น — ห้าม 5V!</li>
+      <li><strong>VCC:</strong> ไฟเลี้ยง 3.3V <strong>เท่านั้น</strong> — ห้าม 5V! (RC522 ทำงานที่ 3.3V)</li>
       <li><strong>GND:</strong> กราวด์</li>
       <li><strong>SCK:</strong> สัญญาณนาฬิกา SPI — ต่อขา PC5</li>
-      <li><strong>MISO:</strong> ข้อมูลจาก RC522 ส่งเข้า MCU — ต่อขา PC6</li>
-      <li><strong>MOSI:</strong> ข้อมูลจาก MCU เข้า RC522 — ต่อขา PC7</li>
-      <li><strong>SDA (CS):</strong> เลือกชิป (Chip Select) — ต่อขา PC3</li>
-      <li><strong>RST:</strong> รีเซ็ต — ต่อขา PC4</li>
-      <li><strong>IRQ:</strong> สัญญาณขัดจังหวะ (ไม่ต้องต่อก็ได้) — ต่อขา PC0</li>
+      <li><strong>MOSI:</strong> ข้อมูลจาก MCU เข้า RC522 — ต่อขา PC6</li>
+      <li><strong>MISO:</strong> ข้อมูลจาก RC522 ส่งเข้า MCU — ต่อขา PC7</li>
+      <li><strong>SDA (CS):</strong> เลือกชิป — ต่อขา PC4 (กำหนดได้ใน <code>RC522_Init</code>)</li>
+      <li><strong>RST:</strong> รีเซ็ต hardware — ต่อขา PD2 (กำหนดได้ใน <code>RC522_Init</code>)</li>
+      <li><strong>IRQ:</strong> สัญญาณขัดจังหวะ — <strong>ไม่ต้องต่อ</strong> (library นี้ไม่ใช้ interrupt — polling <code>RC522_IsCardPresent</code> เท่านั้น)</li>
     </ul>
     <h3>วิธีต่อทีละขั้น</h3>
     <ol>
-      <li>ต่อ <strong>VCC</strong> RC522 ไป <strong>3.3V</strong> ของ MCU</li>
+      <li>ต่อ <strong>VCC</strong> RC522 ไป <strong>3.3V</strong> ของ MCU (<strong>ห้าม 5V</strong>)</li>
       <li>ต่อ <strong>GND</strong> RC522 ไป <strong>GND</strong> ของ MCU</li>
-      <li>ต่อ <strong>SCK</strong> RC522 ไปขา <strong>PC5</strong> ของ MCU</li>
-      <li>ต่อ <strong>MISO</strong> RC522 ไปขา <strong>PC6</strong> ของ MCU</li>
-      <li>ต่อ <strong>MOSI</strong> RC522 ไปขา <strong>PC7</strong> ของ MCU</li>
-      <li>ต่อ <strong>SDA (CS)</strong> RC522 ไปขา <strong>PC3</strong> ของ MCU</li>
-      <li>ต่อ <strong>RST</strong> RC522 ไปขา <strong>PC4</strong> ของ MCU</li>
-      <li>(ไม่บังคับ) ต่อ <strong>IRQ</strong> RC522 ไปขา <strong>PC0</strong> ของ MCU</li>
+      <li>ต่อ <strong>SCK</strong> RC522 ไปขา <strong>PC5</strong></li>
+      <li>ต่อ <strong>MOSI</strong> RC522 ไปขา <strong>PC6</strong></li>
+      <li>ต่อ <strong>MISO</strong> RC522 ไปขา <strong>PC7</strong></li>
+      <li>ต่อ <strong>SDA (CS)</strong> RC522 ไปขา <strong>PC4</strong></li>
+      <li>ต่อ <strong>RST</strong> RC522 ไปขา <strong>PD2</strong></li>
+      <li>(ไม่ต้องต่อ) IRQ — library ไม่ใช้</li>
     </ol>
-    <p>RC522 เป็น RFID reader/writer 13.56MHz — อ่านบัตร MIFARE Classic 1K/4K, ISO14443A, รองรับการเข้ารหัส (authentication) ด้วย key A/B, ต้องทำ self-test เพื่อตรวจสอบการเชื่อมต่อ SPI</p>
+    <p>RC522 เป็น RFID reader 13.56MHz อ่านบัตร ISO/IEC 14443 Type A — library นี้ wrapper ทำเฉพาะ <strong>อ่าน UID</strong> จาก REQA + anticollision</p>
 </section>
 
 <section>
     <h2>📚 หลักการทำงาน</h2>
-    <p><strong>MFRC522</strong> เป็น RFID IC ที่สื่อสารผ่าน SPI — รองรับ ISO/IEC 14443A/MIFARE, ระยะอ่าน ~5-8cm กับบัตรมาตรฐาน, ใช้ไฟ 3.3V</p>
-    <p><strong>ขั้นตอนอ่านบัตร MIFARE Classic:</strong></p>
+    <p><strong>MFRC522</strong> เป็น RFID IC สื่อสารผ่าน SPI — ระยะอ่าน ~2-5 cm ขึ้นกับ antenna และการ์ด — ใช้ไฟ 3.3V กิน ~13-26 mA</p>
+    <p><strong>ขั้นตอนที่ library wrapper นี้ทำใน <code>RC522_ReadUID</code>:</strong></p>
     <ul>
-        <li><strong>Request (REQA):</strong> ส่งคำสั่งถามว่ามีบัตรอยู่ในสนามหรือไม่</li>
-        <li><strong>Anticollision (AntiColl):</strong> อ่าน UID (Unique ID) 4 หรือ 7 bytes</li>
-        <li><strong>Select Tag:</strong> เลือกบัตรที่จะสื่อสาร (กรณีหลายใบทับกัน)</li>
-        <li><strong>Authentication:</strong> พิสูจน์ตัวตนด้วย Key A หรือ Key B (default: 0xFFFFFFFFFFFF)</li>
-        <li><strong>Read/Write Block:</strong> อ่านหรือเขียนข้อมูล block ละ 16 bytes</li>
+        <li><strong>REQA (Request Type A):</strong> ถามว่ามีการ์ดเข้าใกล้สนามหรือไม่ — เป็นส่วนหนึ่งของ <code>RC522_IsCardPresent</code></li>
+        <li><strong>Anticollision (SEL CL1/2/3):</strong> อ่าน UID (4 bytes สำหรับ MIFARE Classic, 7/10 bytes สำหรับบางรุ่น) — จัดการ collision ภายในตัว</li>
+        <li><strong>คืน UID + ความยาวจริง</strong> ผ่าน out-param <code>uid_len</code> (จำนวน bytes ของ UID ที่อ่านได้จริง)</li>
     </ul>
-    <p><strong>MIFARE Classic 1K:</strong> 1024 bytes แบ่งเป็น 16 sectors, sector ละ 4 blocks, block สุดท้ายของแต่ละ sector = Sector Trailer (เก็บ key + access bits)</p>
+    <p><strong>สิ่งที่ wrapper นี้ <u>ไม่</u> ทำ:</strong> ไม่มี Select Tag, ไม่มี MIFARE Authentication (Key A/B), ไม่มี Read/Write block — ใครต้องการฟีเจอร์เหล่านี้ต้องใช้ standard peripheral หรือขยาย library เอง</p>
+    <p><strong>รูปแบบ API</strong> (สำคัญ — handle-based เหมือนบท AT24Cxx): ทุกฟังก์ชันรับ <code>RC522_Instance*</code> เป็น arg แรก — <code>RC522_ReadUID</code> มี 3 args (rfid, uid, &uid_len) โดย <code>uid_len</code> เป็น out-param — <code>RC522_ReadUID</code> และ <code>RC522_Init</code> คืน <code>RC522_Status</code></p>
 </section>
 
 <section>
     <h2>💻 เขียน Code ทีละขั้น</h2>
 
-    <div class="step"><h3>ขั้นที่ 1: Init + SelfTest</h3>
+    <div class="step"><h3>ขั้นที่ 1: SPI + Init + Version Check</h3>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "RC522.h"
@@ -119,157 +134,234 @@ RC522_Instance rfid;
 
 int main(void) {
     SystemCoreClockUpdate();
-    SPI_Init(SPI1, SPI_BAUD_4MHZ, SPI_MODE0);
-    RC522_Init(&rfid, PC4, PC3);  // CS=PC4, RST=PC3
-    USART_Init(USART1, BAUD_115200);
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);     // debug
 
-    if(RC522_SelfTest()) {
-        USART_Println("RC522 Ready!");
-    } else {
-        USART_Println("RC522 SelfTest FAILED!");
-        while(1);
+    // ⚠️ ต้องเรียก SPI_SimpleInit ก่อน RC522_Init เสมอ (RC522 ใช้ SPI)
+    SPI_SimpleInit(SPI_MODE0, SPI_4MHZ, SPI_PINS_DEFAULT);  // PC5/PC6/PC7
+
+    // CS=PC4, RST=PD2 — ตามที่ต่อในวงจรด้านบน
+    RC522_Status st = RC522_Init(&rfid, PC4, PD2);
+    if (st != RC522_OK) {
+        USART_Println("RC522_Init FAIL");
+        while (1);
+    }
+
+    // ตรวจ version เพื่อยืนยันการเชื่อมต่อ SPI
+    uint8_t ver = RC522_GetVersion(&rfid);
+    USART_Printf("RC522 version = 0x%02X\r\n", ver);
+    if (ver != 0x91 && ver != 0x92) {
+        USART_Println("⚠️ version ผิด — เช็ค SPI mode/SCK/wiring/ไฟ 3.3V");
+        // ไม่จบ while(1) ก็ได้ — ลองอ่านการ์ดต่อไปเผื่อ version register เกร่อ
     }</code></pre>
-    <p class="explain">🔍 <code>RC522_Init(&rfid, CS, RST)</code> — CS=PC4, RST=PC3, <code>RC522_SelfTest()</code> — ทำ self-test ภายใน RC522 ตรวจสอบ SPI communication และ register response</p></div>
+    <p class="explain">🔍 <strong>ลำดับที่ถูกต้อง:</strong> <code>SPI_SimpleInit</code> → <code>RC522_Init(&rfid, CS, RST)</code> → <code>RC522_GetVersion(&rfid)</code> — version 0x91 = v1.0, 0x92 = v2.0, ค่าอื่น = SPI/wiring/ไฟ ผิด — ต้องส่ง <code>&amp;rfid</code> ทุกครั้ง (handle-based)</p></div>
 
-    <div class="step"><h3>ขั้นที่ 2: ตรวจจับบัตร + อ่าน UID</h3>
-    <pre><code class="language-c">    uint8_t uid[10];
-    while(1) {
-        if(RC522_IsCardPresent(&rfid)) {
-            USART_Println("Card detected!");
-            RC522_ReadUID(&rfid, uid);
+    <div class="step"><h3>ขั้นที่ 2: Polling Card + อ่าน UID</h3>
+    <pre><code class="language-c">    while (1) {
+        // 1. ตรวจว่ามีการ์ดเข้าใกล้ antenna หรือไม่
+        if (RC522_IsCardPresent(&rfid)) {
+            USART_Println("Card detected");
 
-            USART_Print("UID: ");
-            for(uint8_t i=0; i<4; i++) {
-                USART_PrintHex(uid[i]); USART_Print(" ");
+            // 2. อ่าน UID — มี OUT-PARAM &len (3 args)
+            uint8_t uid[RC522_UID_MAX_LEN];
+            uint8_t len = 0;
+            RC522_Status r = RC522_ReadUID(&rfid, uid, &len);
+            //                                       eeprom  uid   &out_len
+
+            if (r == RC522_OK) {
+                USART_Printf("UID (%u bytes): ", len);
+                for (uint8_t i = 0; i &lt; len; i++) {
+                    USART_Printf("%02X ", uid[i]);
+                }
+                USART_Println("");
+            } else {
+                // RC522_ERROR_COLLISION / TIMEOUT / CRC / NOCARD
+                USART_Println("ReadUID FAIL");
             }
-            USART_Println("");
 
-            RC522_SelectTag(uid, 4);
+            // 3. ⚠️ ต้อง Halt หลังอ่าน — ไม่งั้นจะอ่าน UID ซ้ำซ้อนทุกรอบ
+            RC522_Halt(&rfid);
         }
         Delay_Ms(200);
     }
 }</code></pre>
-    <p class="explain">🔍 <code>RC522_IsCardPresent(&rfid)</code> — ตรวจจับบัตร, <code>RC522_ReadUID(&rfid, uid)</code> — อ่าน UID 4-7 byte</p></div>
+    <p class="explain">🔍 <strong>รูปแบบใหม่ที่ถูกต้อง:</strong> <code>RC522_ReadUID(&rfid, uid, &len)</code> มี <strong>3 args</strong> (rfid, uid buffer, &uid_len out-param) และคืน <code>RC522_Status</code> — <strong>ห้าม</strong> เขียน <code>RC522_ReadUID(&rfid, uid)</code> แบบบทเดิม (บทเดิมเขียนผิด ไม่มี out-param) — ต้องเรียก <code>RC522_Halt(&rfid)</code> หลังอ่าน UID ทุกครั้ง ไม่งั้นการ์ดยังอยู่ในสนามจะถูกอ่านซ้ำ</p></div>
 
-    <div class="step"><h3>ขั้นที่ 3: Authenticate + Read/Write Block</h3>
-    <pre><code class="language-c">    // Default Key A for MIFARE Classic (new cards)
-    uint8_t default_key[6] = {0xFF,0xFF,0xFF,0xFF,0xFF,0xFF};
-    uint8_t block = 4;  // sector 1, block 0 (first user block)
-    uint8_t buf[16];
+    <div class="step"><h3>ขั้นที่ 3: SPI Wiring Diagnostic + Reset</h3>
+    <pre><code class="language-c">// ฟังก์ชัน diagnostic เช็ค SPI/wiring — ใช้ GetVersion เป็น heart-beat
+void rc522_diagnose(RC522_Instance* rfid) {
+    USART_Println("=== RC522 Diagnostic ===");
 
-    // Auth with Key A
-    if(RC522_Auth(PICC_AUTHENT1A, block, default_key, uid) == MI_OK) {
-        USART_Println("Auth OK!");
+    uint8_t ver = RC522_GetVersion(rfid);
+    USART_Printf("Version reg = 0x%02X\r\n", ver);
+    switch (ver) {
+        case 0x91: USART_Println("→ MFRC522 v1.0 OK"); break;
+        case 0x92: USART_Println("→ MFRC522 v2.0 OK"); break;
+        case 0x00:
+        case 0xFF:
+            USART_Println("→ ⚠️ 0x00/0xFF = ไม่ได้ต่อ/CS ลอย/SPI ผิด mode/ไฟไม่ถึง");
+            USART_Println("   • เช็ค PC5/PC6/PC7 ตรงสายไหน");
+            USART_Println("   • เช็ค CS=PC4, RST=PD2");
+            USART_Println("   • เช็ค 3.3V ว่าจ่ายจริง (ไม่ใช่ 5V)");
+            USART_Println("   • เช็ค SPI_SimpleInit ก่อน RC522_Init");
+            break;
+        default:
+            USART_Println("→ version ไม่รู้จัก — น่าจะไฟ noise");
+            break;
+    }
 
-        // Read block 4 (16 bytes)
-        uint8_t size = 16;
-        if(RC522_Read(block, buf, &size) == MI_OK) {
-            USART_Print("Block 4: ");
-            for(int i=0; i<16; i++) {
-                USART_PrintHex(buf[i]); USART_Print(" ");
-            }
-        }
-
-        // Write to block 4
-        uint8_t data[16] = "HELLO CH32V003!";
-        if(RC522_Write(block, data) == MI_OK) {
-            USART_Println("Write OK!");
-        }
-
-        RC522_Halt(&rfid);  // put card to sleep
-    }</code></pre>
-    <p class="explain">🔍 <code>RC522_Auth(mode, block, key, uid)</code> — authenticate ด้วย Key A หรือ B ก่อนเขียน/อ่าน, <code>RC522_Read(block, buf, &len)</code> — อ่าน 16 bytes, <code>RC522_Write(block, data)</code> — เขียน 16 bytes, <code>RC522_Halt(&rfid)</code> — สั่งการ์ด sleep</p></div>
+    // ทดสอบ Reset → อ่าน version ใหม่
+    USART_Println("Resetting RC522...");
+    RC522_Reset(rfid);
+    Delay_Ms(50);
+    uint8_t ver2 = RC522_GetVersion(rfid);
+    USART_Printf("Version after reset = 0x%02X\r\n", ver2);
+    if (ver2 != ver) {
+        USART_Println("⚠️ version เปลี่ยนหลัง reset — ไฟไม่ stable");
+    }
+}</code></pre>
+    <p class="explain">🔍 <code>RC522_GetVersion</code> คืน <code>uint8_t</code> (ไม่ใช่ status) — ใช้เป็น heart-beat ตรวจ SPI โดยไม่ต้องมีการ์ด — <code>RC522_Reset(&rfid)</code> รีเซ็ต MFRC522 hardware (soft reset) — ล่าสุดต้องเว้น Delay ~50ms ให้ register กลับค่า</p></div>
 </section>
 
 <section>
-    <h2>📋 API Reference</h2>
-    <table>
-        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
-        <tr><td><code>RC522_Init(&rfid, cs, rst)</code></td><td>เริ่มต้น RC522</td><td><code>RC522_Init(&rfid, PC4, PC3)</code></td></tr>
-        <tr><td><code>RC522_SelfTest()</code></td><td>ทดสอบ SPI + RC522</td><td><code>if(RC522_SelfTest()){...}</code></td></tr>
-        <tr><td><code>RC522_IsCardPresent(&rfid)</code></td><td>ตรวจจับการ์ด</td><td><code>if(RC522_IsCardPresent(&rfid)){...}</code></td></tr>
-        <tr><td><code>RC522_ReadUID(&rfid, uid)</code></td><td>อ่าน UID การ์ด</td><td><code>RC522_ReadUID(&rfid, uid)</code></td></tr>
-        <tr><td><code>RC522_SelectTag(uid, len)</code></td><td>เลือกการ์ด</td><td><code>RC522_SelectTag(uid, 4)</code></td></tr>
-        <tr><td><code>RC522_Auth(mode,blk,key,uid)</code></td><td>ยืนยันตัวตนด้วย key</td><td><code>RC522_Auth(AUTH1A, 4, key, uid)</code></td></tr>
-        <tr><td><code>RC522_Read(block, buf, &len)</code></td><td>อ่าน block 16B</td><td><code>RC522_Read(4, buf, &size)</code></td></tr>
-        <tr><td><code>RC522_Write(block, data)</code></td><td>เขียน block 16B</td><td><code>RC522_Write(4, data)</code></td></tr>
-    </table>
-</section>
-
-<section>
-    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
-    <table>
-        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
-        <tr><td>SelfTest ล้มเหลว</td><td>SPI mode ผิด หรือ CS/RST สลับ</td><td>ต้องใช้ SPI_MODE0 (CPOL=0,CPHA=0), เช็ค SPI clock <10MHz</td></tr>
-        <tr><td>ไม่เจอการ์ดเลย</td><td>ไฟ 3.3V ไม่พอ — RC522 กิน ~100mA</td><td>ใช้ external 3.3V regulator, อย่าจ่ายจาก WCH-Link</td></tr>
-        <tr><td>Auth ล้มเหลว (MI_ERR)</td><td>Key ไม่ถูกต้อง</td><td>การ์ดใหม่ใช้ default key 0xFFFFFFFFFFFF — ถ้าเปลี่ยนแล้วต้องรู้ key</td></tr>
-        <tr><td>เขียนแล้ว block อ่านไม่ได้อีก</td><td>เขียนทับ Sector Trailer โดยไม่ตั้งใจ</td><td>Block 3,7,11,15... = Sector Trailer — ห้ามเขียนทับโดยไม่ตั้งใจ</td></tr>
-        <tr><td>อ่าน UID ได้แต่ Auth ไม่ผ่าน</td><td>ลืม SelectTag ก่อน Auth</td><td>ต้องเรียก RC522_SelectTag() หลังจาก Anticoll และก่อน Auth</td></tr>
-    </table>
-</section>
-
-<section>
-    <h2>🛠️ สร้าง Product: RFID Access Control</h2>
-    <p>อ่าน UID บัตร → เทียบกับ whitelist → เปิด servo (ปลดล็อค) ถ้าตรง</p>
+    <h2>🛠️ Product: UID Whitelist Door Lock</h2>
+    <p>อ่าน UID → เทียบกับ whitelist (array ของ UID ที่อนุญาต) → เปิด relay + buzzer feedback</p>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "RC522.h"
-#include <string.h>
+#include &lt;string.h&gt;
 
-uint8_t whitelist[2][4] = {
-    {0xA1,0xB2,0xC3,0xD4},  // card 1
-    {0xE5,0xF6,0xA7,0xB8}   // card 2
+RC522_Instance rfid;
+
+#define RELAY_PIN   PC0
+#define BUZZER_PIN  PC1
+
+// Whitelist — UID ที่อนุญาต (เปลี่ยนเป็น UID จริงที่อ่านได้จากขั้นที่ 2)
+#define WHITELIST_COUNT  3
+uint8_t whitelist[WHITELIST_COUNT][RC522_UID_MAX_LEN] = {
+    {0xA1, 0xB2, 0xC3, 0xD4, 0,0,0,0,0,0},   // card 1 (4 bytes)
+    {0xDE, 0xAD, 0xBE, 0xEF, 0x12, 0x34, 0,0,0},  // card 2 (7 bytes)
+    {0x12, 0x34, 0x56, 0x78, 0,0,0,0,0,0},   // card 3 (4 bytes)
 };
+uint8_t whitelist_len[WHITELIST_COUNT] = {4, 7, 4};   // UID ยาวเท่าไหร่แต่ละใบ
 
-int main(void)
-{
+// กด relay และเล่น buzzer
+void door_grant(void) {
+    USART_Println("✓ ACCESS GRANTED");
+    GPIO_SimpleInit(RELAY_PIN, GPIO_OUT_PP);
+    GPIO_WriteBit(RELAY_PIN, 1);     // เปิดล็อก
+    PWM_SimpleInit(BUZZER_PIN, 1, 2000, 500);   // เสียงสูง = ผ่าน
+    Delay_Ms(150);
+    PWM_SetDuty(BUZZER_PIN, 1, 0);
+    Delay_Ms(3000);                  // เปิด 3 วิ
+    GPIO_WriteBit(RELAY_PIN, 0);     // ล็อกกลับ
+}
+
+void door_deny(void) {
+    USART_Println("✗ ACCESS DENIED");
+    PWM_SimpleInit(BUZZER_PIN, 1, 500, 500);    // เสียงต่ำ = ไม่ผ่าน
+    Delay_Ms(400);
+    PWM_SetDuty(BUZZER_PIN, 1, 0);
+    Delay_Ms(1000);                  // หน่วงกัน brute-force
+}
+
+int main(void) {
     SystemCoreClockUpdate();
-    SPI_Init(SPI1, SPI_BAUD_4MHZ, SPI_MODE0);
-    RC522_Instance rfid;
-    RC522_Init(&rfid, PC4, PC3);
-    USART_Init(USART1, BAUD_115200);
-    pinMode(PC0, PIN_MODE_OUTPUT);  // lock solenoid
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    SPI_SimpleInit(SPI_MODE0, SPI_4MHZ, SPI_PINS_DEFAULT);
 
-    if(!RC522_SelfTest()) { USART_Println("RC522 FAIL"); while(1); }
+    if (RC522_Init(&rfid, PC4, PD2) != RC522_OK) {
+        USART_Println("RC522 init fail");
+        while (1);
+    }
 
-    uint8_t uid[10];
-    while(1)
-    {
-        if(!RC522_IsCardPresent(&rfid)) {
-            Delay_Ms(100); continue;
+    // version check เป็นการเช็ค wiring ล่วงหน้า
+    uint8_t ver = RC522_GetVersion(&rfid);
+    if (ver != 0x91 && ver != 0x92) {
+        USART_Println("⚠️ Check SPI/wiring — version wrong");
+    }
+
+    USART_Println("[DOOR] Waiting for card...");
+    while (1) {
+        if (!RC522_IsCardPresent(&rfid)) {
+            Delay_Ms(150);
+            continue;
         }
-        RC522_ReadUID(&rfid, uid);
-        RC522_SelectTag(uid, 4);
+
+        uint8_t uid[RC522_UID_MAX_LEN];
+        uint8_t len = 0;
+        if (RC522_ReadUID(&rfid, uid, &len) != RC522_OK) {
+            RC522_Halt(&rfid);
+            continue;
+        }
 
         USART_Print("UID: ");
-        for(int i=0;i<4;i++){ USART_PrintHex(uid[i]); }
+        for (uint8_t i = 0; i &lt; len; i++) USART_Printf("%02X ", uid[i]);
 
-        uint8_t access = 0;
-        for(int i=0;i<2;i++) {
-            if(memcmp(uid, whitelist[i], 4) == 0) {
-                access = 1; break;
+        uint8_t found = 0;
+        for (uint8_t c = 0; c &lt; WHITELIST_COUNT; c++) {
+            if (len == whitelist_len[c] &&
+                memcmp(uid, whitelist[c], len) == 0) {
+                found = 1;
+                break;
             }
         }
-        if(access) {
-            USART_Println(" => ACCESS GRANTED");
-            digitalWrite(PC0, HIGH); Delay_Ms(3000);
-            digitalWrite(PC0, LOW);
-        } else {
-            USART_Println(" => ACCESS DENIED");
-        }
-        RC522_Halt(&rfid);
-        Delay_Ms(500);
+        if (found) door_grant();
+        else        door_deny();
+
+        RC522_Halt(&rfid);    // ⚠️ ต้อง Halt ไม่งั้นอ่าน UID ซ้ำ
+        Delay_Ms(300);
     }
 }</code></pre>
+    <p class="explain">🔍 <strong>Pattern ที่ถูกต้อง:</strong> whitelist เก็บ UID ที่อนุญาต + ความยาวแยก — เปรียบเทียบ <code>len</code> ก่อน <code>memcmp</code> — <code>PWM_SimpleInit</code> ใช้ buzzer ให้ feedback เสียง (สูง = ผ่าน, ต่ำ = ไม่ผ่าน) — <strong>ไม่มี Auth/ReadBlock/WriteBlock</strong> เพราะ library นี้อ่าน UID ได้อย่างเดียว — <code>RC522_Halt(&rfid)</code> หลังอ่านทุกครั้งกัน UID ซ้ำซ้อน</p>
 </section>
 
-<section>
-    <h2>✏️ ลองทำดู</h2>
-    <ol>
-        <li>ทำ RFID wallet — อ่าน balance จาก block 4 (เก็บเป็น uint32) → ลดค่าเมื่อแตะ → เขียนกลับ</li>
-        <li>ทำ multi-card reader — วนอ่าน UID ทุก 200ms → แสดง UID การ์ดล่าสุดบน OLED</li>
-        <li>ทำ key changer — เปลี่ยน default key ของ sector 1 เป็น custom key → ใช้ new key auth ครั้งต่อไป</li>
-    </ol>
+<section><h2>📋 API Reference (ตรงกับ RC522.h)</h2>
+<table>
+    <tr><th>ฟังก์ชัน</th><th>Signature</th><th>คืนค่า / หมายเหตุ</th></tr>
+    <tr><td><code>RC522_Init</code></td><td><code>RC522_Status RC522_Init(RC522_Instance* rfid, uint8_t pin_cs, uint8_t pin_rst)</code></td><td>คืน <code>RC522_OK</code> หรือ <code>RC522_ERROR_PARAM</code> — <strong>ต้องเรียก <code>SPI_SimpleInit(SPI_MODE0, SPI_4MHZ, SPI_PINS_DEFAULT)</code> ก่อน</strong> — CS/RST เป็น GPIO pin ที่ต่อ (เช่น <code>PC4</code>, <code>PD2</code>)</td></tr>
+    <tr><td><code>RC522_IsCardPresent</code></td><td><code>uint8_t RC522_IsCardPresent(RC522_Instance* rfid)</code></td><td>คืน <code>1</code> = มีการ์ดในสนาม, <code>0</code> = ไม่มี — polling ใช้ใน loop</td></tr>
+    <tr><td><code>RC522_ReadUID</code></td><td><code>RC522_Status RC522_ReadUID(RC522_Instance* rfid, uint8_t* uid, uint8_t* uid_len)</code></td><td><strong>3 args</strong> — <code>uid</code> = buffer ขนาด <code>RC522_UID_MAX_LEN</code> (10) — <code>uid_len</code> = <strong>out-param</strong> รับจำนวน bytes จริง — คืน <code>RC522_OK</code> หรือ error code (NOCARD/COLLISION/TIMEOUT/CRC)</td></tr>
+    <tr><td><code>RC522_Halt</code></td><td><code>void RC522_Halt(RC522_Instance* rfid)</code></td><td>สั่งการ์ดเข้า Halt state — <strong>ต้องเรียนหลัง ReadUID ทุกครั้ง</strong> กัน UID ซ้ำซ้อน</td></tr>
+    <tr><td><code>RC522_Reset</code></td><td><code>void RC522_Reset(RC522_Instance* rfid)</code></td><td>รีเซ็ต MFRC522 hardware (soft reset) — เว้น Delay ~50ms หลังเรียก</td></tr>
+    <tr><td><code>RC522_GetVersion</code></td><td><code>uint8_t RC522_GetVersion(RC522_Instance* rfid)</code></td><td>คืน version byte — <code>0x91</code> = v1.0, <code>0x92</code> = v2.0, <code>0x00</code>/<code>0xFF</code> = ไม่ได้ต่อ/SPI ผิด — ใช้เป็น heart-beat ตรวจ SPI โดยไม่ต้องมีการ์ด</td></tr>
+</table>
+<p class="explain">🔍 <strong>Status enum:</strong> <code>RC522_OK=0</code>, <code>RC522_ERROR_PARAM=1</code>, <code>RC522_ERROR_NOCARD=2</code>, <code>RC522_ERROR_COLLISION=3</code>, <code>RC522_ERROR_TIMEOUT=4</code>, <code>RC522_ERROR_CRC=5</code>, <code>RC522_ERROR_GENERAL=6</code> — <strong>ทุกฟังก์ชันรับ <code>RC522_Instance*</code> เป็น arg แรก (handle-based)</strong> — <strong>ไม่มี</strong> ฟังก์ชัน Self-Test / Select Tag / Auth / Read Block / Write Block (ชื่อบทเดิมผิด — ไม่มีใน header จริง) — <strong>ไม่มี</strong>ค่าคงที่สไตล์ <code>MI-OK</code> หรือ <code>PICC_AUTHENT_1A</code> หรือ prefix <code>MFRC</code><code>_</code> ใดๆ (ชื่อบทเดิมผิด)</p>
+</section>
+
+<section><h2>⚠️ ข้อจำกัดของ Library</h2>
+<p><strong>Library นี้ทำได้แค่ UID detection</strong> (single-purpose wrapper) — ออกแบบเพื่อกรณีใช้งานง่ายๆ เช่น door lock, attendance, card swap detection, NFC tag presence — ไม่ใช่ MIFARE full stack</p>
+<p><strong>ฟีเจอร์ที่ขาดหายไป (ตั้งใจไม่ใส่):</strong></p>
+<ul>
+    <li><strong>ไม่มี Select Tag</strong> — อ่าน UID ได้แต่ไม่ได้ active-select เพื่อสื่อสารต่อ</li>
+    <li><strong>ไม่มี MIFARE Authentication</strong> — ไม่มีคำสั่ง Auth Key A/B ใดๆ</li>
+    <li><strong>ไม่มี Read/Write block</strong> — ไม่อ่าน/เขียนข้อมูล 16-byte block ของ MIFARE Classic</li>
+    <li><strong>ไม่มี Self-Test</strong> — ใช้ <code>RC522_GetVersion</code> ตรวจการเชื่อมต่อแทน (อ่าน version register)</li>
+    <li><strong>ไม่มี interrupt support</strong> — ใช้ polling <code>RC522_IsCardPresent</code> เท่านั้น (ไม่ใช้ขา IRQ)</li>
+</ul>
+<p><strong>ถ้าต้องการฟีเจอร์เหล่านี้:</strong> ใช้ <code>standard peripheral</code> library ของ MFRC522 ทั่วไป, หรือขยาย wrapper นี้เองโดยเพิ่มฟังก์ชัน Select Tag + Auth + Read Block + Write Block ด้วยตนเอง — อ้างอิง MFRC522 datasheet และ register map ใน <code>RC522.h</code> (มี <code>RC522_REG_*</code> และ <code>PICC_CMD_*</code> ครบ)</p>
+</section>
+
+<section><h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+<table>
+    <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+    <tr><td><code>GetVersion</code> ได้ <code>0x00</code> หรือ <code>0xFF</code></td><td>SPI mode ผิด / ไม่ได้ต่อ / CS ลอย / ไฟไม่ถึง</td><td>โครงสร้าง: <code>SPI_SimpleInit(SPI_MODE0, SPI_4MHZ, ...)</code> ก่อน <code>RC522_Init</code> — เช็คสาย PC5/PC6/PC7, CS=PC4, RST=PD2 — เช็คไฟ <strong>3.3V</strong> (ห้าม 5V) — เช็ค CS/RST สลับกัน</td></tr>
+    <tr><td><code>ReadUID</code> คืน <code>RC522_ERROR_CRC</code></td><td>antenna อ่น / noise / ระยะไกลเกิน</td><td>เปลี่ยนบัตรมาใกล้ antenna (2-5 cm) — ลด noise รอบๆ — ลดระยะห่าง metal — ลองเบรกออกอ่านบัตรใหม่รอบ</td></tr>
+    <tr><td>อ่าน UID <strong>ซ้ำซ้อน</strong>ทุกรอบ (การ์ดยังอยู่)</td><td>ลืม <code>RC522_Halt(&rfid)</code> หลังอ่าน</td><td><strong>ต้องเรียก <code>RC522_Halt(&rfid)</code> หลัง <code>RC522_ReadUID</code> ทุกครั้ง</strong> — ไม่งั้นการ์ดยังอยู่ในสนามจะถูกอ่านซ้ำ</td></tr>
+    <tr><td><code>ReadUID</code> คืน <code>RC522_ERROR_NOCARD</code> ทั้งที่ <code>IsCardPresent</code> บอกมี</td><td>การ์ดออกจากสนามเร็วเกินระหว่างสองคำสั่ง</td><td>เรียก <code>RC522_ReadUID</code> ทันทีหลัง <code>IsCardPresent</code> ไม่มี Delay คั่น — เพิ่มรอบ polling ให้ถี่ขึ้น</td></tr>
+    <tr><td>Build fail: <code>RC522_ReadUID(&rfid, uid)</code> ไม่พอ args</td><td>เขียนผิด: ลืม out-param <code>&uid_len</code></td><td>ใช้ 3 args: <code>RC522_ReadUID(&rfid, uid, &len)</code> — <code>len</code> เป็น out-param รับจำนวน bytes — คืน <code>RC522_Status</code> ไม่ใช่ UID length</td></tr>
+    <tr><td>Build fail: ฟังก์ชัน Self-Test / Select Tag / Auth ไม่มี</td><td>ใช้ API บทเดิมที่ fabricated</td><td>ฟังก์ชันเหล่านี้ <strong>ไม่มี</strong> ใน header — wrapper ทำ UID detection เท่านั้น — ใช้ <code>GetVersion</code> แทนฟังก์ชัน self-test แบบเดิม</td></tr>
+    <tr><td>ไม่เจอการ์ดเลยแม้วงจรถูก</td><td>ไฟ 3.3V ตก / antenna เสีย / บัตรไม่ใช่ Type A</td><td>วัด VCC ที่ RC522 ต้อง ~3.3V — ลองบัตรใบอื่น — ตรวจบัตรเป็น ISO14443A (MIFARE/NTAG) ไม่ใช่ ISO15693</td></tr>
+</table>
+</section>
+
+<section><h2>✏️ ลองทำดู</h2>
+<ol>
+    <li>ทำ <strong>UID reader debug</strong> — แสดง UID เป็น hex ทุกครั้งที่แตะ — ถ้า <code>RC522_GetVersion(&rfid)</code> ไม่ใช่ 0x91/0x92 ให้ print diagnostic (เช็คระบุว่า SPI ผิด, สายหลวม, หรือไฟ)</li>
+    <li>ทำ <strong>multi-card whitelist</strong> — เก็บ 5 UID ที่อนุญาต → เปิด relay + เล่น buzzer feedback (เสียงสูง = ผ่าน, เสียงต่ำ = ไม่ผ่าน) — อ่าน UID แล้ว Halt เสมอ</li>
+    <li>ทำ <strong>card swap detector</strong> — ตรวจจับการเปลี่ยนการ์ดระหว่างแตะ (เปรียบเทียบ UID กับครั้งก่อน) → print "card swapped" — ทดสอบพฤติกรรม <code>RC522_Halt</code> vs <code>RC522_Reset</code></li>
+</ol>
 </section>
 
 <nav class="bottom-nav">

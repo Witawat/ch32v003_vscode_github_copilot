@@ -93,10 +93,21 @@ flowchart TD
     <h2>AWU Prescalers</h2>
     <table>
         <tr><th>Prescaler</th><th>Divider</th><th>Max Timeout (window=63)</th></tr>
-        <tr><td>/1</td><td>1</td><td>~80ms</td></tr>
-        <tr><td>/160</td><td>160</td><td>~2s</td></tr>
-        <tr><td>/1600</td><td>1600</td><td>~20s</td></tr>
-        <tr><td>/61440</td><td>61440</td><td>~5s+</td></tr>
+        <tr><td>/1</td><td>1</td><td>~1.9ms</td></tr>
+        <tr><td>/2</td><td>2</td><td>~3.8ms</td></tr>
+        <tr><td>/4</td><td>4</td><td>~7.7ms</td></tr>
+        <tr><td>/8</td><td>8</td><td>~15.4ms</td></tr>
+        <tr><td>/16</td><td>16</td><td>~30.8ms</td></tr>
+        <tr><td>/32</td><td>32</td><td>~61.5ms</td></tr>
+        <tr><td>/64</td><td>64</td><td>~123ms</td></tr>
+        <tr><td>/128</td><td>128</td><td>~246ms</td></tr>
+        <tr><td>/256</td><td>256</td><td>~492ms</td></tr>
+        <tr><td>/512</td><td>512</td><td>~984ms</td></tr>
+        <tr><td>/1024</td><td>1024</td><td>~1.97s</td></tr>
+        <tr><td>/2048</td><td>2048</td><td>~3.94s</td></tr>
+        <tr><td>/4096</td><td>4096</td><td>~7.88s</td></tr>
+        <tr><td>/10240</td><td>10240</td><td>~19.7s</td></tr>
+        <tr><td>/61440</td><td>61440</td><td>~118s</td></tr>
     </table>
 </section>
 
@@ -104,10 +115,10 @@ flowchart TD
     <h2>PVD Levels (ตรวจจับแรงดันแบตต่ำ)</h2>
     <table>
         <tr><th>Level</th><th>แรงดัน</th><th>การใช้งาน</th></tr>
-        <tr><td>PVD_2_9V</td><td>2.9V</td><td>แบตใกล้หมด</td></tr>
-        <tr><td>PVD_3_3V</td><td>3.3V</td><td>แรงดันปกติ</td></tr>
-        <tr><td>PVD_3_7V</td><td>3.7V</td><td>Li-Po เต็ม</td></tr>
-        <tr><td>PVD_4_4V</td><td>4.4V</td><td>USB 5V</td></tr>
+        <tr><td>PWR_PVD_2V9</td><td>2.9V</td><td>แบตใกล้หมด</td></tr>
+        <tr><td>PWR_PVD_3V3</td><td>3.3V</td><td>แรงดันปกติ</td></tr>
+        <tr><td>PWR_PVD_3V7</td><td>3.7V</td><td>Li-Po เต็ม</td></tr>
+        <tr><td>PWR_PVD_4V4</td><td>4.4V</td><td>USB 5V</td></tr>
     </table>
 </section>
 
@@ -138,7 +149,7 @@ flowchart TD
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    USART_SimpleInit(USART_115200);
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
 
     // ตั้ง TIM1 interrupt ทุก 1 วินาทีเป็น wakeup source
     TIM_SimpleInit(TIM1, 1000); // 1Hz
@@ -181,7 +192,7 @@ int main(void) {
     state.boot_count++;
     state.adc_samples++;
 
-    uint16_t adc_val = ADC_Read();
+    uint16_t adc_val = ADC_Read(ADC_CH_PA2);
     printf("ADC: %d, Samples: %lu\r\n", adc_val, state.adc_samples);
 
     // บันทึกก่อนเข้า Standby
@@ -215,7 +226,7 @@ int main(void) {
 
     while (1) {
         // ทำงานปกติ — สั้นมาก
-        uint16_t adc = ADC_Read();
+        uint16_t adc = ADC_Read(ADC_CH_PA2);
         printf("ADC: %d\r\n", adc);
 
         idle_start = Get_CurrentMs();
@@ -244,12 +255,12 @@ int main(void) {
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    USART_SimpleInit(USART_115200);
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
 
     // 1000mAh, 1% active, 5mA active, 5uA standby
-    float days = PWR_CalculateBatteryLife(1000, 1, 5, 5);
-    printf("Battery life: ~%.0f days\r\n", days);
-    // ~200 days
+    uint32_t hours = PWR_CalculateBatteryLife(1000, 1, 5, 5);
+    printf("Battery life: ~%lu hours (~%.1f days)\r\n", hours, hours / 24.0f);
+    // ~1000 hours (~41.7 days) — ค่า return เป็นชั่วโมงเสมอ ไม่ใช่วัน
 
     while (1);
 }</code></pre>

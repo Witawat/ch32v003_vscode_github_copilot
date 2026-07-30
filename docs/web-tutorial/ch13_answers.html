@@ -15,7 +15,7 @@
 <h1>📝 เฉลย — บทที่ 13: OPAMP</h1>
 
 <div class="answer">
-<h2>ข้อ 1: Voltage Follower อ่านสัญญาณ input</h2>
+<h2>ข้อ 1: Voltage Follower บัฟเฟอร์เซ็นเซอร์ + อ่าน ADC</h2>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 
@@ -23,45 +23,35 @@ int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
     USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
-    ADC_SimpleInit();
+    ADC_SimpleInit();  // เปิด ADC (no-arg)
 
     pinMode(PC0, PIN_MODE_OUTPUT);  // LED status
 
-    // Voltage Follower — PA4=Input, PA5=Output
-    // Impedance input สูงมาก (~100MΩ) — ไม่ดึงกระแสจากแหล่งสัญญาณ
-    OPAMP_SimpleInit(OPAMP_CH1, OPAMP_MODE_FOLLOWER);
-    OPAMP_Enable(OPAMP_CH1);
+    // Voltage Follower — buffer สัญญาณเซ็นเซอร์ high-Z
+    // SimpleInit รับ mode เดียว (ไม่มี channel enum ปลอม)
+    OPAMP_SimpleInit(OPAMP_MODE_VOLTAGE_FOLLOWER);
+    OPAMP_Enable();  // no-arg
 
-    USART_Print("OPAMP Voltage Follower\r\n");
-    USART_Print("PA4(input) → OPAMP Buffer → PA5(output) → ADC\r\n");
-    USART_Print("Ready — connect sensor to PA4\r\n\r\n");
+    USART_Print("OPAMP Voltage Follower Ready\r\n");
+    USART_Print("Connect high-Z sensor to CHP0 input\r\n\r\n");
 
-    // รอ OPAMP settle
-    Delay_Ms(10);
+    Delay_Ms(10);  // รอ OPAMP settle
 
     while (1) {
         digitalWrite(PC0, HIGH);
 
-        // วิธีที่ 1: อ่าน ADC จาก OPAMP output byตรง
-        uint16_t adc_raw = ADC_Read(ADC_CH_PA5);
-        float v_out = ADC_ToVoltage(adc_raw, 3.3f);
+        // อ่าน OPAMP output ผ่าน ADC ch7 (ต่อภายในอยู่แล้ว)
+        // ใช้ ADC_ReadAverage ลด noise จากสัญญาณเซ็นเซอร์
+        uint16_t raw = ADC_ReadAverage(ADC_CH_7, 8);
+        float v_out = ADC_ToVoltage(raw, 3.3f);
 
-        // วิธีที่ 2: OPAMP_GetOutputVoltage (wrapper)
-        float v_opamp = OPAMP_GetOutputVoltage(OPAMP_CH1);
-
-        USART_Print("ADC=");
-        USART_PrintNum(adc_raw);
-        USART_Print(" V_out=");
+        USART_Print("Vout=");
         USART_PrintNum((int32_t)(v_out * 1000));
-        USART_Print("mV");
-
-        USART_Print("  OPAMP_Get=");
-        USART_PrintNum((int32_t)(v_opamp * 1000));
-        USART_Print("mV");
+        USART_Print(" mV  (raw=");
+        USART_PrintNum(raw);
+        USART_Print(")");
 
         // Follower: Vout ≈ Vin (Gain = 1)
-        // ข้อควรรู้: output offset ~5mV typ, output swing: 0.1V ~ VDD-0.1V
-
         if (v_out > 2.5f) {
             USART_Print(" [HIGH]");
         } else if (v_out < 0.5f) {
@@ -69,18 +59,17 @@ int main(void) {
         } else {
             USART_Print(" [MID]");
         }
-
         USART_Print("\r\n");
 
         digitalWrite(PC0, LOW);
         Delay_Ms(500);
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> Voltage Follower (Buffer) มี Gain = 1 — จุดประสงค์หลักคือ Impedance Matching — อินพุต impedance สูง ~100MΩ → ไม่ดึงกระแสจากเซ็นเซอร์ (เช่น pH probe, piezo, high-Z sensor) — เอาต์พุต impedance ต่ำ → ขับ ADC sample/hold ได้ดี — <code>OPAMP_SimpleInit(OPAMP_CH1, OPAMP_MODE_FOLLOWER)</code> ต่อวงจรภายใน — <code>OPAMP_Enable()</code> จ่ายไฟ — ต้องรอ settle ~10µs-10ms — <strong>Pin mapping:</strong> PA4=OP_IN+, PA5=OP_OUT, PA6=OP_IN- — ADC อ่าน PA5 — offset voltage ~5mV typ → calibration อาจจำเป็น — OPAMP bandwidth ~1MHz — ไม่ใช่ rail-to-rail: output 0.1V ถึง VDD-0.1V</ul></div>
-</ul></div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> Voltage Follower (Buffer) มี Gain = 1 — จุดประสงค์หลักคือ <strong>Impedance Matching</strong> — อินพุต impedance สูงมาก (~100MΩ) → ไม่ดึงกระแสจากเซ็นเซอร์ (เช่น pH probe, piezo, high-Z sensor) —  เอาต์พุต impedance ต่ำ → ขับ ADC sample/hold ได้ดีโดยไม่ทำให้แรงดันตก — <code>OPAMP_SimpleInit(OPAMP_MODE_VOLTAGE_FOLLOWER)</code> รับ mode เดียว (ห้ามส่ง channel ปลอมเข้าไป) — <code>OPAMP_Enable()</code> เป็น no-arg ใช้จ่ายไฟ — OPAMP output ต่อภายในกับ ADC ch7 จึงอ่านด้วย <code>ADC_ReadAverage(ADC_CH_7, 8)</code> เพื่อลด noise — ข้อควรระวัง: OPAMP ไม่ใช่ rail-to-rail output swing คือ 0.1V ถึง VDD−0.1V และมี offset ~5mV typ อาจต้อง calibrate ใน software สำหรับการวัดละเอียด</div>
+</div>
 
 <div class="answer">
-<h2>ข้อ 2: Comparator เปรียบเทียบแรงดัน 2 ค่า</h2>
+<h2>ข้อ 2: Comparator สั่ง LED ที่ PC0</h2>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 
@@ -90,67 +79,48 @@ int main(void) {
     USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
     ADC_SimpleInit();
 
-    pinMode(PC0, PIN_MODE_OUTPUT);  // LED: V_A > V_B → ON
-    pinMode(PC1, PIN_MODE_OUTPUT);  // LED: V_A < V_B → ON
+    pinMode(PC0, PIN_MODE_OUTPUT);  // LED: V+ > V- → ON
 
     USART_Print("=== OPAMP Comparator ===\r\n");
-    USART_Print("PA4 = V_A (non-inverting)\r\n");
-    USART_Print("PA6 = V_B (inverting, via R divider)\r\n");
-    USART_Print("V_A > V_B → PC0=ON,  V_A < V_B → PC1=ON\r\n");
-    USART_Print("V_A = PD2 (potentiometer), V_B = fixed ref\r\n\r\n");
+    USART_Print("Signal     → CHP0 (+)\r\n");
+    USART_Print("Threshold  → CHN0 (-)\r\n");
+    USART_Print("V+ > V-  → PC0=ON (LED)\r\n\r\n");
 
-    // OPAMP ในโหมด Open-loop = Comparator
-    // ไม่มีโหมด comparator โดยตรงใน SimpleHAL — ใช้ ADC เปรียบเทียบแทน
-    // หรือใช้ OPAMP ใน follower + อ่าน ADC แล้วเปรียบเทียบใน software
-
-    // Software Comparator ผ่าน ADC + OPAMP Buffer:
-    OPAMP_SimpleInit(OPAMP_CH1, OPAMP_MODE_FOLLOWER);
-    OPAMP_Enable(OPAMP_CH1);
+    // Comparator: ทำงานแบบ open-loop → output swing เกือบเต็ม rail
+    OPAMP_ConfigComparator(OPAMP_CHP0, OPAMP_CHN0);
+    OPAMP_Enable();  // no-arg
     Delay_Ms(10);
 
-    // อ่านแรงดันอ้างอิงจาก PA6 (หรือใช้ ADC_CH_PA4 เทียบ)
-    // สมมติ V_B = 1.65V (VDD/2)
-
     while (1) {
-        // อ่าน V_A ผ่าน OPAMP buffer (PA4 → PA5)
-        uint16_t raw_a = ADC_Read(ADC_CH_PA5);
-        float v_a = ADC_ToVoltage(raw_a, 3.3f);
+        // Comparator output อ่านผ่าน ADC ch7:
+        //   ~0V    (raw ใกล้ 0)   = V+ < V-  → LOW
+        //   ~VDD  (raw ใกล้ 1023) = V+ > V-  → HIGH
+        uint16_t raw = ADC_Read(ADC_CH_7);
+        uint8_t  high = (raw > 512);
 
-        // อ่าน V_B โดยตรง (สมมติต่อ voltage divider ที่ PD2)
-        uint16_t raw_b = ADC_Read(ADC_CH_PD2);
-        float v_b = ADC_ToVoltage(raw_b, 3.3f);
-
-        // Comparator logic
-        if (v_a > v_b) {
+        if (high) {
             digitalWrite(PC0, HIGH);
-            digitalWrite(PC1, LOW);
-            USART_Print("V_A > V_B  ");
-        } else if (v_a < v_b) {
-            digitalWrite(PC0, LOW);
-            digitalWrite(PC1, HIGH);
-            USART_Print("V_A < V_B  ");
+            USART_Print("V+ > V-  (HIGH)  raw=");
         } else {
             digitalWrite(PC0, LOW);
-            digitalWrite(PC1, LOW);
-            USART_Print("V_A = V_B  ");
+            USART_Print("V+ < V-  (LOW)   raw=");
         }
+        USART_PrintNum(raw);
+        USART_Print("\r\n");
 
-        USART_Print("V_A=");
-        USART_PrintNum((int32_t)(v_a * 1000));
-        USART_Print("mV  V_B=");
-        USART_PrintNum((int32_t)(v_b * 1000));
-        USART_Print("mV\r\n");
-
-        Delay_Ms(300);
+        Delay_Ms(200);
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> CH32V003 OPAMP ไม่มีโหมด comparator โดยตรง — ใช้ "Software Comparator" แทน: ADC อ่าน 2 ช่อง → เปรียบเทียบใน software — หรือใช้ hardware: ต่อ OPAMP เป็น open-loop → output จะ swing ไป rail ถ้า input ต่างกัน > offset — <strong>ข้อดีของ software comparator:</strong> ตั้ง hysteresis ได้, ตั้ง threshold ได้ง่าย, ไม่ต้องต่อวงจรภายนอก — <strong>ข้อเสีย:</strong> ช้ากว่า hardware comparator (ADC ใช้ ~10µs/sample) — <strong>Application:</strong> ตรวจจับแรงดันเกิน/ต่ำ, window detector, brown-out warning ก่อน VDD ตกถึง reset level — OPAMP ใช้เป็น buffer ให้ ADC เพื่อลด loading effect เมื่อเทียบแรงดันจาก high-impedance source</ul></div>
-</ul></div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> โหมด Comparator ทำงานแบบ open-loop (ไม่มี feedback) → ความขยายสูงมาก → output จะ swing ไปแถบ 0V หรือ VDD ทันทีที่ V+ ต่างจาก V− — จึงอ่านเป็น digital ผ่าน ADC ch7 ได้โดยใช้ threshold กึ่งกลาง (<code>raw &gt; 512</code>) — <strong>ข้อดีของ Comparator ในชิป:</strong> ไม่ต้องต่อ IC comparator ภายนอก, ตอบสนองเร็วกว่า software comparator (ที่ต้อง sample 2 ช่อง) — <strong>การประยุกต์:</strong> ตรวจจับแรงดันเกิน/ต่ำ (over-voltage / brown-out warning), zero-crossing detection, ประตูทริกเกอร์จาก LDR หรือเซ็นเซอร์ threshold — <strong>หมายเหตุ:</strong> เนื่องจาก OPAMP ตัวเดียว ถ้าต้องการ hysteresis ให้ต่อ R feedback ขนาดใหญ่จาก output ไปยัง CHP เพื่อสร้าง positive feedback หรือทำ hysteresis ใน software แทน</div>
+</div>
 
 <div class="answer">
-<h2>ข้อ 3: Non-Inverting Amp gain=2</h2>
+<h2>ข้อ 3: Non-Inverting ขยายสัญญาณเสียง/noise จาก mic</h2>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include "SimpleHAL.h"
+
+// สมมติ mic/noise ให้สัญญาณประมาณ 0–50 mV ต้องขยาย ~50 เท่า
+// → ใช้ Non-Inverting: Gain = 1 + R2/R1
 
 int main(void) {
     SystemCoreClockUpdate();
@@ -158,105 +128,98 @@ int main(void) {
     USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
     ADC_SimpleInit();
 
-    USART_Print("=== Non-Inverting Amplifier Gain=2 ===\r\n");
-    USART_Print("Vout = Vin * (1 + Rf/Rg) = Vin * 2\r\n");
-    USART_Print("Requires external Rf, Rg resistors\r\n");
-    USART_Print("PA4 = Vin, PA6 = feedback node (Rf/Rg), PA5 = Vout\r\n");
-    USART_Print("Rf = 10k, Rg = 10k → Gain = 1 + 10k/10k = 2\r\n\r\n");
+    // ค่า R ภายนอกที่เลือก: R1 = 1 kΩ (to GND)
+    // ต้องการ gain ~50 → คำนวณ R2 อัตโนมัติ
+    uint32_t r1 = 1000;           // 1 kΩ
+    float    desired_gain = 50.0f;
+    uint32_t r2 = OPAMP_CalculateR2NonInv(r1, desired_gain);  // คืน ~49 kΩ
 
-    // Non-Inverting Amplifier:
-    // ต่อวงจรภายนอก:
-    // Vin → PA4 (OP_IN+)
-    // PA6 (OP_IN-) ← Rf → PA5 (OP_OUT)
-    // PA6 ← Rg → GND
-    // Gain = 1 + Rf/Rg
+    // ตรวจสอบ gain จาก R ที่จะต่อจริง
+    float gain = OPAMP_CalculateGainNonInv(r1, r2);
 
-    OPAMP_SimpleInit(OPAMP_CH1, OPAMP_MODE_NON_INVERTING);
-    OPAMP_Enable(OPAMP_CH1);
+    USART_Print("Mic amplifier: gain target = ");
+    USART_PrintNum((int32_t)desired_gain);
+    USART_Print("  R1=");
+    USART_PrintNum(r1);
+    USART_Print("  R2(calc)=");
+    USART_PrintNum(r2);
+    USART_Print("  gain(real)=");
+    USART_PrintNum((int32_t)gain);
+    USART_Print("\r\n\r\n");
+
+    // วงจร: mic → CHP0(+),  CHN0(−) ← R2 ← Output,  CHN0 ← R1 ← GND
+    OPAMP_ConfigNonInverting(OPAMP_CHP0, OPAMP_CHN0);
+    OPAMP_Enable();  // no-arg
     Delay_Ms(10);
 
-    // สมมติ Vin จาก PD2 (pot divider) — ต่อ PA4 โดยตรง
-    // PA5 output ขยาย 2x → อ่านด้วย ADC
+    uint16_t baseline = 0;
+    uint8_t  cal = 0;
 
     while (1) {
-        // อ่าน Vout (PA5 — ขยายแล้ว)
-        uint16_t raw_out = ADC_Read(ADC_CH_PA5);
-        float v_out = ADC_ToVoltage(raw_out, 3.3f);
+        // อ่าน output ที่ขยายแล้ว
+        float v_out = ADC_ReadVoltage(ADC_CH_7, 3.3f);
 
-        // อ่าน Vin (PD2 — ก่อนขยาย)
-        uint16_t raw_in = ADC_Read(ADC_CH_PD2);
-        float v_in = ADC_ToVoltage(raw_in, 3.3f);
-
-        // คำนวณ gain จริง
-        float gain_measured = (v_in > 0.01f) ? (v_out / v_in) : 0.0f;
-
-        USART_Print("Vin=");
-        USART_PrintNum((int32_t)(v_in * 1000));
-        USART_Print("mV  Vout=");
-        USART_PrintNum((int32_t)(v_out * 1000));
-        USART_Print("mV  Gain=");
-        USART_PrintNum((int32_t)(gain_measured * 100));
-        USART_Print(".");
-
-        int16_t dec = (int16_t)((gain_measured - (int32_t)gain_measured) * 100);
-        if (dec < 0) dec = -dec;
-        USART_PrintNum(dec);
-
-        // ตรวจสอบ: Gain ควร ≈ 2.0 (±0.1 จาก resistor tolerance)
-        if (gain_measured > 1.9f && gain_measured < 2.1f) {
-            USART_Print(" [OK]");
-        } else if (gain_measured > 0.05f) {
-            USART_Print(" [CHECK Rf,Rg!]");
-        } else {
-            USART_Print(" [Vin too low]");
+        // First run: เก็บ baseline (offset จาก opamp + bias)
+        if (!cal) {
+            baseline = (uint16_t)(v_out * 1000);  // mV
+            cal = 1;
         }
 
-        USART_Print("\r\n");
+        int32_t delta_mv = (int32_t)(v_out * 1000) - baseline;
 
-        // ตรวจสอบ saturation
+        // Clipping check: ถ้า output ชิดเพดาน → gain สูงเกิน
         if (v_out > 3.2f) {
-            USART_Print("  WARNING: Output saturated (close to VDD)\r\n");
-            USART_Print("  Reduce Vin or lower gain\r\n");
+            USART_Print("CLIP-high ");
+        } else if (v_out < 0.1f) {
+            USART_Print("CLIP-low ");
         }
 
-        Delay_Ms(500);
+        USART_Print("Vout=");
+        USART_PrintNum((int32_t)(v_out * 1000));
+        USART_Print(" mV  d=");
+        USART_PrintNum(delta_mv);
+        USART_Print(" mV\r\n");
+
+        Delay_Ms(50);  // sample 20 Hz
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> Non-Inverting Amp ใช้ R ภายนอก 2 ตัว: Rf (feedback) และ Rg (to GND) — สูตร: Vout = Vin × (1 + Rf/Rg) — Rf = Rg = 10kΩ → Gain = 2 — <strong>ต่อวงจร:</strong> PA4 (+), PA6 (−) เชื่อมระหว่าง Rf กับ Rg, PA5 (out) — <code>OPAMP_MODE_NON_INVERTING</code> ตั้งวงจรภายในให้พร้อมรับ R ภายนอก — <strong>ข้อควรระวัง:</strong> output swing ไม่เกิน VDD-0.1V → ถ้า Vin = 2V, Gain=2 → Vout = 4V → saturated ที่ ~3.2V — ถ้าต้องการขยายมากกว่า VDD → ใช้ PGA แทน (Gain สูงสุด 16x) — <strong>ข้อดี:</strong> Non-inverting → input impedance สูง, เฟสไม่กลับ — <strong>Resistor tolerance:</strong> 1% R → Gain error ~2% — Calibrate ใน software ได้</ul></div>
-</ul></div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> Non-Inverting Amp ใช้ R ภายนอก 2 ตัว R1 (to GND) และ R2 (feedback) — สูตร <code>Gain = 1 + (R2/R1)</code> — เฟสเอาต์พุตตรงกับอินพุต (ไม่กลับ) — input impedance สูงเหมาะกับ mic ที่สัญญาณเล็ก — <code>OPAMP_CalculateR2NonInv(r1, desired_gain)</code> คำนวณค่า R2 ที่ต้องการจาก gain เป้าหมาย (สูตร R2 = R1 × (gain − 1)) — หลังต่อ R จริงแล้วใช้ <code>OPAMP_CalculateGainNonInv(r1, r2)</code> เพื่อยืนยัน gain จริงอีกครั้ง — <strong>ข้อควรระวัง:</strong> สัญญาณ mic มักต้อง bias ที่ VDD/2 ก่อนเข้า OPAMP เพื่อให้อยู่กลาง range ไม่งั้น output ติด rail — ถ้า output ชิดเพดาน (clipping) ให้ลด gain (เช่นเปลี่ยนเป็น gain ~20) โดยลด <code>desired_gain</code> หรือเพิ่ม R1 — <strong>ขั้นตอนปรับปรุง:</strong> ใช้ running average ลด noise และใช้ HPF ใน software ตัดส่วน DC ออกก่อนวัด amplitude จริง — <strong>ไม่ใช้</strong> ชื่อโหมด/ฟังก์ชันปลอมแบบ <code>MODE_PGA</code> หรือ <code>ConfigPGA</code> (เมื่อเติม prefix <code>OPAMP_</code> ข้างหน้าจะเป็นชื่อปลอมที่ไม่มีใน header จริง) เพราะไม่มีใน API จริง gain ตั้งด้วย R ภายนอกเท่านั้น</div>
+</div>
 
 <div class="answer">
-<h2>🔌 วงจรประกอบ — OPAMP Non-Inverting (Gain=2)</h2>
+<h2>🔌 วงจรประกอบ — OPAMP Non-Inverting (Gain = N)</h2>
 <pre class="ascii-circuit">
-        CH32V003
+        CH32V003 (OPAMP ตัวเดียว)
         ┌────────────────────────────┐
         │                            │
-        │  Input ── PA2(CHP0) ──┐    │
-        │                       │    │
-        │                    ┌──┴──┐ │
-        │                    │ OPA │─┼── Output (ผ่าน ADC)
-        │                    └──┬──┘ │
-        │                       │    │
-        │            PA1(CHN0)──┤    │
-        │            (feedback) │    │
-        │                    ┌──┤    │
-        │                    │R2│    │
-        │                    │10k│   │
-        │                    └──┤    │
-        │                       │    │
-        │                    ┌──┤    │
-        │                    │R1│    │
-        │                    │10k│   │
-        │                    └──┤    │
-        │                      GND   │
+        │  Input (mic/signal)         │
+        │       │                    │
+        │       ▼                    │
+        │  ┌─────────┐               │
+        │  │ CHP0 (+) │  ← signal in │
+        │  └────┬────┘               │
+        │       │                    │
+        │    ┌──┴──┐                 │
+        │    │ OPA │─────→ Output ───┼──→ ADC ch7 (ภายใน)
+        │    └──┬──┘                 │
+        │       │                    │
+        │  ┌────┴────┐               │
+        │  │ CHN0 (−) │              │
+        │  └────┬────┘               │
+        │       │                    │
+        │       ├──── R2 (feedback) ─┘  (จาก Output กลับมา)
+        │       │
+        │       └──── R1 ──── GND
+        │
+        │  Gain = 1 + R2/R1
+        │  ตัวอย่าง: R1=1kΩ, R2=49kΩ → Gain = 50
+        │
+        │  ⚠️ R1, R2 คือตัวต้านทานภายนอก — ต้องต่อเพิ่ม!
+        │     gain จริงขึ้นกับ R ที่ต่อ ไม่ใช่ register setting
         └────────────────────────────┘
-        
-        Gain = 1 + R2/R1 = 1 + 10k/10k = 2
-        
-        ⚠️ R1, R2 เป็นตัวต้านทานภายนอก — ต้องต่อเพิ่ม!
 </pre>
-<div class="approach"><strong>💡 หลักการ OPAMP:</strong> Non-Inverting — input เข้าขาบวก ชิปขยายสัญญาณผ่าน feedback resistor — output = input × (1+R2/R1)</ul></div>
-</ul></div>
+<div class="approach"><strong>💡 หลักการ OPAMP:</strong> Non-Inverting — input เข้าขาบวก (CHP0) — ตัวต้านทาน R2 ป้อนกลับจาก output เข้าขาลบ (CHN0), R1 ดึงขาลบลง GND — สูตร <code>Vout = Vin × (1 + R2/R1)</code> — ใช้ <code>OPAMP_CalculateR2NonInv(r1, desired_gain)</code> เพื่อหาค่า R2 ที่เหมาะสมก่อนต่อวงจรจริง</div>
+</div>
 
 <nav class="bottom-nav">
     <a href="index.html">← สารบัญ</a>

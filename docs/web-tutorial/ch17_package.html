@@ -139,7 +139,7 @@ flowchart LR
         <tr><th>Macro</th><th>คำอธิบาย</th></tr>
         <tr><td><code>IS_VALID_PIN(pin)</code></td><td>true ถ้า pin มีในแพ็กเกจที่เลือก</td></tr>
         <tr><td><code>IS_ADC_PIN(pin)</code></td><td>true ถ้า pin เป็น ADC input</td></tr>
-        <tr><td><code>IS_PWM_VALID_PACKAGE(pin, pkg)</code></td><td>true ถ้า pin มี PWM output ในแพ็กเกจ</td></tr>
+        <tr><td><code>IS_PWM_VALID_PACKAGE(ch)</code></td><td>true ถ้า PWM channel ใช้ได้ในแพ็กเกจปัจจุบัน</td></tr>
         <tr><td><code>PACKAGE_SOP8</code></td><td>1 — SOP-8 (CH32V003J4M6)</td></tr>
         <tr><td><code>PACKAGE_SOP16</code></td><td>2 — SOP-16 (CH32V003F4P6)</td></tr>
         <tr><td><code>PACKAGE_TSSOP20</code></td><td>3 — TSSOP-20 (CH32V003A4M6)</td></tr>
@@ -192,19 +192,19 @@ int main(void) {
     <pre><code class="language-c">    // PWM บน PC4 — มีแค่บน TSSOP20/SOP16/QFN20
     // บน SOP8: PC4 เป็น I2C เท่านั้น
 
-    #if IS_PWM_VALID_PACKAGE(PC4, CH32V003_PACKAGE)
-        PWM_SimpleInit(2, PC4);
-        PWM_SetDuty(2, 50);
+    #if IS_PWM_VALID_PACKAGE(PWM1_CH4)
+        PWM_Init(PWM1_CH4, 1000);
+        PWM_SetDutyCycle(PWM1_CH4, 50);
         USART_Print("PWM on PC4 OK\r\n");
     #else
-        // SOP8 fallback — ใช้ PA1 หรือ PA2 แทน
-        #if IS_VALID_PIN(PA1)
-            PWM_SimpleInit(2, PA1);
-            PWM_SetDuty(2, 50);
+        // SOP8 fallback — ใช้ PA1 (PWM1_CH2) แทน
+        #if IS_PWM_VALID_PACKAGE(PWM1_CH2)
+            PWM_Init(PWM1_CH2, 1000);
+            PWM_SetDutyCycle(PWM1_CH2, 50);
             USART_Print("PWM on PA1 (SOP8 fallback)\r\n");
         #endif
     #endif</code></pre>
-    <p class="explain">🔍 <code>IS_PWM_VALID_PACKAGE(pin, pkg)</code> — ต้องระบุ package — แต่ละแพ็กเกจมี PWM pin ต่างกัน — SOP8: PA1,PA2,PD1,PD4,PD6 — TSSOP20: PC4,PC5,PC6,PA1,PA2,PD3</p></div>
+    <p class="explain">🔍 <code>IS_PWM_VALID_PACKAGE(ch)</code> — รับ PWM channel enum (PWM1_CH1...PWM2_CH4) ไม่ใช่ pin — เช็คกับแพ็กเกจปัจจุบันอัตโนมัติ — SOP8: ใช้ได้แค่ PWM1_CH2 (PA1) และ PWM1_CH4 (PC4 แต่เป็น I2C-only บน SOP8) — TSSOP20/SOP16/QFN20: ทุก channel ใช้ได้ (ดู <code>SimplePWM.h:101-106</code>)</p></div>
 
     <div class="step"><h3>ขั้นที่ 4: Multi-Package Code — Fallback Chain</h3>
     <pre><code class="language-c">    // เลือก pin LED อัตโนมัติตามแพ็กเกจ
@@ -259,7 +259,7 @@ int main(void) {
         <tr><td><code>PACKAGE_QFN20</code></td><td>QFN-20 (20 pads)</td><td>CH32V003A4M6-QFN</td></tr>
         <tr><td><code>IS_VALID_PIN(pin)</code></td><td>Compile-time: pin มีในแพ็กเกจ?</td><td><code>#if IS_VALID_PIN(PC0)</code></td></tr>
         <tr><td><code>IS_ADC_PIN(pin)</code></td><td>Compile-time: pin เป็น ADC ได้?</td><td><code>#if IS_ADC_PIN(PD2)</code></td></tr>
-        <tr><td><code>IS_PWM_VALID_PACKAGE(pin, pkg)</code></td><td>Compile-time: pin มี PWM ในแพ็กเกจ?</td><td><code>IS_PWM_VALID_PACKAGE(PC4, PACKAGE_SOP8)</code></td></tr>
+        <tr><td><code>IS_PWM_VALID_PACKAGE(ch)</code></td><td>Compile-time: PWM channel ใช้ได้ในแพ็กเกจ?</td><td><code>IS_PWM_VALID_PACKAGE(PWM1_CH4)</code></td></tr>
     </table>
 
     <h3>Quick Reference: Pin Availability</h3>
@@ -293,7 +293,7 @@ int main(void) {
         <tr><td>"PD2 not available" compile error</td><td>ใช้ PACKAGE_SOP8 หรือ SOP16 — PD2 ไม่มี</td><td>ใช้ PA1, PA2, PC4, PD1, PD4, PD6 แทน — หรือเปลี่ยนเป็น TSSOP20</td></tr>
         <tr><td>"SPI not available" compile error</td><td>SOP8 ไม่มี SPI (ไม่มี SCK pin)</td><td>ใช้ <code>shiftOut()</code>/<code>shiftIn()</code> software SPI — หรือเปลี่ยนเป็น SOP16+</td></tr>
         <tr><td>USART ไม่ทำงานบน SOP8</td><td>Default USART pins (PD5/PD6) ไม่มีบน SOP8</td><td>ใช้ <code>USART_PINS_SOP8</code> (PD1=TX, PA2=RX)</td></tr>
-        <tr><td>PWM เฉพาะบาง pin ไม่ทำงาน</td><td>PWM pin ต่างกันตามแพ็กเกจ</td><td>ใช้ <code>IS_PWM_VALID_PACKAGE(pin, CH32V003_PACKAGE)</code> เช็คก่อน</td></tr>
+        <tr><td>PWM เฉพาะบาง pin ไม่ทำงาน</td><td>PWM pin ต่างกันตามแพ็กเกจ</td><td>ใช้ <code>IS_PWM_VALID_PACKAGE(ch)</code> เช็คก่อน (ch = PWM1_CH1...PWM2_CH4)</td></tr>
         <tr><td>เปลี่ยนแพ็กเกจแต่โค้ดไม่เปลี่ยน</td><td>ลืมแก้ <code>#define CH32V003_PACKAGE</code></td><td>อยู่บรรทัดแรกสุด — ก่อน <code>#include "SimpleHAL.h"</code> เสมอ</td></tr>
     </table>
 </section>

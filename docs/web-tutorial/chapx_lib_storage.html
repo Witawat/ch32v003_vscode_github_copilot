@@ -47,19 +47,23 @@ A0/A1/A2 = GND → I2C addr 0x50 (ต่อ VCC/VCC/VCC = 0x57)</pre>
   </tbody>
 </table>
 <pre><code class="language-c">#include "AT24Cxx.h"
-AT24Cxx_Init(0x50, AT24C32); // addr, size (AT24C32=32Kbit/4KB)
-AT24Cxx_WriteByte(0x50, 0, 42); // addr=0x50, mem_addr=0, data=42
-uint8_t val = AT24Cxx_ReadByte(0x50, 0);
-AT24Cxx_WritePage(0x50, 0, buffer, 32); // write 32 bytes (หาเขียนข้าม page!)
-AT24Cxx_ReadPage(0x50, 0, buffer, 32);</code></pre>
+AT24Cxx_Instance eeprom;
+AT24Cxx_Init(&eeprom, AT24C32, 0x50);   // instance, type, i2c_addr (0x50)
+AT24Cxx_WriteByte(&eeprom, 0, 42);     // return AT24Cxx_Status
+uint8_t val;
+AT24Cxx_ReadByte(&eeprom, 0, &val);    // data via out-param, return status
+AT24Cxx_WriteArray(&eeprom, 0, buffer, 32);   // write 32 bytes (ข้าม page boundary ให้เอง)
+AT24Cxx_ReadArray(&eeprom, 0, buffer, 32);
+uint32_t cap = AT24Cxx_GetCapacity(&eeprom);   // คืน bytes</code></pre>
 <p class="explain">⚠️ I2C addr 0x50-0x57 (เลือกด้วย A0/A1/A2 pins), page size: AT24C01=8B / AT24C02=8B / AT24C32=32B / AT24C256=64B, write cycle time ~5ms (ต้องรอ — ห้ามอ่าน/เขียนต่อทันที), endurance ~1M writes, page boundary: อย่าเขียนข้าม page (เช่น AT24C32 page 32B → เขียนที่ addr 30 ได้แค่ 2 byte ก่อนตีกลับ), ต่อได้หลายตัวผ่าน A0-A2</p>
 
 <h3>API หลัก</h3>
 <table>
-<tr><td><code>AT24Cxx_Init(addr, type)</code></td><td>Init I2C + detect chip</td><td><code>AT24Cxx_WriteByte(addr, mem, val)</code></td><td>เขียน 1 byte</td></tr>
-<tr><td><code>AT24Cxx_ReadByte(addr, mem)</code></td><td>อ่าน 1 byte</td><td><code>AT24Cxx_WritePage(addr, mem, buf, len)</code></td><td>เขียน page (≤page_size)</td></tr>
-<tr><td><code>AT24Cxx_ReadPage(addr, mem, buf, len)</code></td><td>อ่านยาวตามต้องการ</td><td><code>AT24Cxx_EraseAll(addr)</code></td><td>ลบทั้ง chip</td></tr>
-<tr><td><code>AT24Cxx_WriteString(addr, mem, str)</code></td><td>เขียนข้อความ</td><td><code>AT24Cxx_ReadString(addr, mem, buf, max)</code></td><td>อ่านข้อความ</td></tr>
+<tr><td><code>AT24Cxx_Init(&amp;e, type, addr)</code></td><td>Init instance + type + I2C addr</td><td><code>AT24Cxx_WriteByte(&amp;e, mem, val)</code></td><td>เขียน 1 byte (return status)</td></tr>
+<tr><td><code>AT24Cxx_ReadByte(&amp;e, mem, &amp;val)</code></td><td>อ่าน 1 byte (out-param)</td><td><code>AT24Cxx_WriteArray(&amp;e, mem, buf, len)</code></td><td>เขียน array (ข้าม page)</td></tr>
+<tr><td><code>AT24Cxx_ReadArray(&amp;e, mem, buf, len)</code></td><td>อ่านยาวตามต้องการ</td><td><code>AT24Cxx_EraseAll(&amp;e)</code></td><td>ลบทั้ง chip</td></tr>
+<tr><td><code>AT24Cxx_GetCapacity(&amp;e)</code></td><td>อ่านขนาด (bytes)</td><td><code>AT24Cxx_WriteString(&amp;e, mem, str)</code></td><td>เขียนข้อความ (เก็บ '\0')</td></tr>
+<tr><td><code>AT24Cxx_ReadString(&amp;e, mem, buf, max)</code></td><td>อ่านข้อความ (ถึง '\0' หรือ max)</td><td></td><td></td></tr>
 </table>
 
 <h2>W25Qxx — SPI Flash</h2>

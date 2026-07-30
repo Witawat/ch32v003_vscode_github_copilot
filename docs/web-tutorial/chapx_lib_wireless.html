@@ -284,8 +284,8 @@ while(1) {
 <h3>API หลัก</h3>
 <table>
 <tr><td><code>IR_Init(&h, pin)</code></td><td>Init GPIO + interrupt</td><td><code>IR_Available(&h)</code></td><td>เช็คมี code รอ</td></tr>
-<tr><td><code>IR_Read(&h)</code></td><td>อ่าน IR code (32-bit)</td><td><code>IR_GetCommand(code)</code></td><td>แยก command byte</td></tr>
-<tr><td><code>IR_GetAddress(code)</code></td><td>แยก address byte</td><td><code>IR_IsRepeat(code)</code></td><td>เช็คว่าเป็น repeat code</td></tr>
+<tr><td><code>IR_Read(&h)</code></td><td>อ่าน IR code (32-bit)</td><td><code>IR_GetData()</code></td><td>อ่าน decoded data struct</td></tr>
+<tr><td><code>IR_Send(proto, addr, cmd)</code></td><td>ส่ง IR code</td><td><code>IR_SendRepeat()</code></td><td>ส่ง repeat code</td></tr>
 </table>
 
 <h2>SoftUART — Software Serial (GPIO)</h2>
@@ -315,23 +315,23 @@ PC0─TX(soft)  PC1─RX(soft)  (pin ไหนก็ได้ — software bit-b
 <pre><code class="language-c">#include "SoftUART.h"
 SoftUART_Handle suart;
 SoftUART_Init(&suart, PC0, PC1, BAUD_9600); // TX, RX, baud
-SoftUART_Print(&suart, "Hello from soft UART!\r\n");
-SoftUART_PrintNum(&suart, 42);
-// Receive:
+SoftUART_WriteString(&suart, "Hello from soft UART!\r\n");
+SoftUART_Printf(&suart, "%d\r\n", 42);
+// Receive (blocking with timeout — RX buffer เป็น known limitation):
+uint8_t c;
 while(1) {
-    if(SoftUART_Available(&suart)) {
-        char c = SoftUART_Read(&suart);
-        SoftUART_Write(&suart, c); // echo
+    if(SoftUART_ReadByte(&suart, &c, 1000) == SOFTUART_OK) {  // timeout 1s
+        SoftUART_WriteByte(&suart, c); // echo
     }
 }</code></pre>
 <p class="explain">⚠️ software bit-bang → CPU intensive (ใช้ CPU 100% ขณะ send/receive), baud limit ~19200, ห้ามมี interrupt ขัดจังหวะตอน send/receive (เช่น TIM interrupt), ใช้เมื่อ USART1 ถูกใช้แล้ว, timing depends on SystemCoreClock accuracy, TX pin idle = LOW → HIGH, 1 USART HW + 1 SoftUART = 2 UART ports บน CH32V003, เหมาะกับ debug print ระหว่างที่ USART1 คุยกับ ESP01/HC05</p>
 
 <h3>API หลัก</h3>
 <table>
-<tr><td><code>SoftUART_Init(&h, tx, rx, baud)</code></td><td>Init GPIO + timer</td><td><code>SoftUART_Print(&h, str)</code></td><td>ส่ง string</td></tr>
-<tr><td><code>SoftUART_PrintNum(&h, n)</code></td><td>ส่งตัวเลข (decimal)</td><td><code>SoftUART_PrintHex(&h, n, d)</code></td><td>ส่งเลขฐาน 16</td></tr>
-<tr><td><code>SoftUART_Available(&h)</code></td><td>เช็คข้อมูลรอรับ</td><td><code>SoftUART_Read(&h)</code></td><td>อ่าน 1 byte</td></tr>
-<tr><td><code>SoftUART_Write(&h, c)</code></td><td>ส่ง 1 byte</td><td><code>SoftUART_SetBaud(&h, baud)</code></td><td>เปลี่ยน baud</td></tr>
+<tr><td><code>SoftUART_Init(&amp;h, tx, rx, baud)</code></td><td>Init GPIO + timer</td><td><code>SoftUART_WriteString(&amp;h, str)</code></td><td>ส่ง string</td></tr>
+<tr><td><code>SoftUART_Printf(&amp;h, fmt, ...)</code></td><td>ส่ง formatted (เลข ฯลฯ)</td><td><code>SoftUART_WriteByte(&amp;h, c)</code></td><td>ส่ง 1 byte</td></tr>
+<tr><td><code>SoftUART_ReadByte(&amp;h, &amp;data, timeout_ms)</code></td><td>อ่าน 1 byte (blocking+timeout)</td><td><code>SoftUART_Available(&amp;h)</code></td><td>เช็คข้อมูลรอรับ (⚠️ known limit)</td></tr>
+<tr><td><code>SoftUART_Flush(&amp;h)</code></td><td>ล้าง buffer</td><td></td><td></td></tr>
 </table>
 </section>
 

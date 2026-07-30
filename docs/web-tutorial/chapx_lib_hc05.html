@@ -98,7 +98,7 @@ int main(void) {
     uint8_t idx = 0;
     while(1) {
         if(HC05_Available(&bt)) {
-            char c = HC05_Read(&bt);
+            uint8_t c; HC05_ReadByte(&bt, &c);
             USART_Write(USART1, c);     // echo to debug
             rx_buf[idx++] = c;
             if(c == '\n' || idx >= 63) {
@@ -118,7 +118,7 @@ int main(void) {
     <tr><td><code>HC05_Init(&bt, baud)</code></td><td>เริ่มต้น HC-05</td><td><code>HC05_Init(&bt, BAUD_38400)</code></td></tr>
     <tr><td><code>HC05_SendString(&bt, str)</code></td><td>ส่ง string</td><td><code>HC05_SendString(&bt, "AT\r\n")</code></td></tr>
     <tr><td><code>HC05_Available(&bt)</code></td><td>เช็คข้อมูลรออ่าน</td><td><code>if(HC05_Available(&bt))</code></td></tr>
-    <tr><td><code>HC05_Read(&bt)</code></td><td>อ่าน 1 ตัวอักษร</td><td><code>char c = HC05_Read(&bt)</code></td></tr>
+    <tr><td><code>HC05_ReadByte(&bt, &c)</code></td><td>อ่าน 1 ตัวอักษร</td><td><code>HC05_ReadByte(&bt, &c)</code></td></tr>
 </table>
 </section>
 
@@ -153,7 +153,7 @@ int main(void)
     while(1)
     {
         if(HC05_Available(&bt)) {
-            char c = HC05_Read(&bt);
+            uint8_t c; HC05_ReadByte(&bt, &c);
             if(c == '\n' || c == '\r') {
                 buf[idx] = '\0';
                 if(strstr(buf, "LED1 ON"))  digitalWrite(PC0, HIGH);

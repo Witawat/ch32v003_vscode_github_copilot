@@ -100,7 +100,7 @@ int main(void)
 <ul>
 <li>addr อยู่ในพื้นที่ Flash เปล่า? ใช้ linker script แยกพื้นที่ user data หรือเลือก addr หลัง code</li>
 <li>Flash_Init() เรียกก่อน Write/Erase ทุกครั้ง?</li>
-<li>ไม่มี interrupt ขัดจังหวะระหว่าง Write/Erase? — ต้อง disable interrupt ชั่วคราว</li>
+<li>Interrupt ปลอดภัย — <code>SimpleFlash.c</code> ปิด IRQ ให้อัตโนมัติรอบทุก erase/program แล้ว (หลัง commit 5293ae3) ไม่ต้อง disable interrupt เอง</li>
 </ul>
 </section>
 

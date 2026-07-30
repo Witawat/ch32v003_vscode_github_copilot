@@ -114,11 +114,11 @@ MAX7219_StartScrollText("สวัสดี", 100);  // 100ms/frame
 
 <h2>TM1637 — 7-Segment 4 หลัก (GPIO)</h2>
 <pre><code class="language-c">#include "TM1637.h"
-TM1637_Init(PC0, PC1);           // CLK, DIO — pin ไหนก็ได้
-TM1637_SetBrightness(7);         // 0-7
-TM1637_DisplayNumber(1234);      // "1234"
-TM1637_DisplayTime(12, 30);      // "12:30"
-TM1637_DisplayFloat(25.5f, 1);   // "25.5"</code></pre>
+TM1637_Handle* disp = TM1637_Init(PC0, PC1, 4);  // CLK, DIO, num_digits — return handle
+TM1637_SetBrightness(disp, 7);         // 0-7 (รับ handle)
+TM1637_DisplayNumber(disp, 1234, true); // handle, number, leading_zero (true="1234" false=" 1234")
+TM1637_DisplayTime(disp, 12, 30);      // "12:30"
+TM1637_DisplayFloat(disp, 25.5f, 1);   // "25.5"</code></pre>
 <p class="explain">⚠️ GPIO bit-bang, เลือก pin อะไรก็ได้, 4-digit เท่านั้น, no colon control — colon ติดตลอดเวลา</p>
 
 <h2>TM1650 — 7-Segment I2C</h2>
@@ -254,19 +254,18 @@ PD5(TX)─RX(TJC)  PD6(RX)─TX(TJC)  5V─VCC  GND─GND
   </tbody>
 </table>
 <pre><code class="language-c">#include "TJC.h"
-TJC_Handle hmi;
-TJC_Init(&hmi, USART1, BAUD_9600);
-TJC_SendCommand(&hmi, "page 0");  // switch page
-TJC_SetText(&hmi, "t0", "Hello");  // set text widget
-TJC_SetValue(&hmi, "n0", 42);      // set number widget
+TJC_Init(BAUD_9600, USART_PINS_DEFAULT);
+TJC_SendCommand("page 0");  // switch page
+TJC_SendCommandParams("t0.txt", (const char*[]){"Hello"}, 1, 0);  // set text widget
+TJC_SendCommandParams("n0.val", (const char*[]){"42"}, 1, 0);    // set number widget
 // Callback:
-void on_btn_press(TJC_Handle *h, const char *page, const char *id) {
-    if(strcmp(id, "b0") == 0) { USART_Println("OK pressed!"); }
+void on_btn_press(uint8_t page_id, uint8_t component_id, uint8_t event_type) {
+    if(component_id == 0) { USART_Println("OK pressed!"); }
 }
-TJC_RegisterTouchCallback(&hmi, on_btn_press);
+TJC_RegisterTouchEventCallback(on_btn_press);
 // In loop:
-TJC_ProcessResponse(&hmi);  // ★ ต้องเรียกบ่อย — process RX buffer</code></pre>
-<p class="explain">⚠️ ใช้ USART 1 เดียวของ CH32V003 → แชร์กับ USART_Print ไม่ได้, ต้องออกแบบ UI ใน TJC Editor ก่อน (PC software), callback 5 แบบ: touch, numeric, command, page, error, ข้อความภาษาไทย → ใช้ font ใน TJC ไม่เกี่ยวกับ CH32V003</p>
+TJC_Update();  // ★ ต้องเรียกบ่อย — process RX buffer</code></pre>
+<p class="explain">⚠️ ใช้ USART 1 เดียวของ CH32V003 → แชร์กับ USART_Print ไม่ได้, ต้องออกแบบ UI ใน TJC Editor ก่อน (PC software), callback 3 แบบ: TouchEvent, TouchCoord, Numeric, ข้อความภาษาไทย → ใช้ font ใน TJC ไม่เกี่ยวกับ CH32V003</p>
 
 <h2>ShiftReg595 — 74HC595 (GPIO)</h2>
 <pre class="ascii-circuit">

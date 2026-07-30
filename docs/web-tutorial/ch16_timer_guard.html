@@ -17,13 +17,13 @@
 <span class="level expert">ระดับผู้เชี่ยวชาญ</span>
 
 <section class="flowchart">
-    <h2>🧭 1. การอ้างสิทธิ์ Timer (First-Come-First-Served)</h2>
+    <h2>🧭 1. ผังการทำงาน — PWM อ้างสิทธิ์ TIM1</h2>
     <pre class="mermaid">
 flowchart LR
-    A["PWM_Init(TIM1)"] --> B{"g_tim1_owner == 0?"}
-    B -->|"✅ ว่าง"| C["Claim → g_tim1_owner = 1"]
-    B -->|"❌ ไม่ว่าง"| D["Return — ไม่เริ่ม"]
-    C --> E["🎯 PWM ทำงาน"]
+    A["PWM_Init(PWM1_CH4, 1000)"] --> B{"g_tim1_owner เป็น NONE หรือ PWM ?"}
+    B -->|"ใช่ ว่าง หรือ ตัวเอง"| C["จอง → g_tim1_owner = TIM_OWNER_PWM"]
+    B -->|"ไม่ใช่ คนอื่นจองอยู่"| D["คืนเงียบ ไม่แตะ register"]
+    C --> E["🎯 PWM ทำงานที่ TIM1/PC4"]
     style C fill:#dcfce7,stroke:#22c55e
     style D fill:#fee2e2,stroke:#ef4444
     style E fill:#dcfce7,stroke:#22c55e
@@ -31,24 +31,24 @@ flowchart LR
 </section>
 
 <section class="flowchart">
-    <h2>🧭 2. การตรวจจับ Conflict</h2>
+    <h2>🧭 2. ผังการทำงาน — SimpleTIM ชนกับ PWM</h2>
     <pre class="mermaid">
 flowchart LR
-    F["TIM_SimpleInit(TIM1)"] --> G{"g_tim1_owner == 0?"}
-    G -->|"❌ PWM ใช้อยู่"| H["Return — ไม่เขียนทับ"]
-    G -->|"✅ ว่าง"| I["Claim + ทำงาน"]
+    F["TIM_SimpleInit(TIM_1, 100)"] --> G{"g_tim1_owner เป็น NONE หรือ TIMER ?"}
+    G -->|"ไม่ใช่ เป็น PWM"| H["คืนเงียบ ไม่เขียนทับ PWM"]
+    G -->|"ใช่ ว่าง หรือ ตัวเอง"| I["จอง → g_tim1_owner = TIM_OWNER_TIMER แล้วตั้งค่า timer"]
     style H fill:#fee2e2,stroke:#ef4444
     style I fill:#dcfce7,stroke:#22c55e
     </pre>
 </section>
 
 <section class="flowchart">
-    <h2>🧭 3. Safe Path — ใช้คนละ Timer</h2>
+    <h2>🧭 3. ผังการทำงาน — Safe Path ใช้คนละ Timer</h2>
     <pre class="mermaid">
 flowchart LR
-    J["PWM1_CH1 → TIM1"] --> L["✅ ไม่ชนกัน"]
-    K["Stopwatch → TIM2"] --> L
-    M["Timer_SimpleInit → TIM1"] --> N["❌ ชนกับ PWM"]
+    J["PWM1_CH1..CH4 → TIM1"] --> L["✅ ไม่ชนกัน"]
+    K["Stopwatch / Countdown → TIM2"] --> L
+    M["TIM_SimpleInit(TIM_1) หลัง PWM"] --> N["❌ ชน เพราะ TIM1 เป็นของ PWM"]
     style L fill:#dcfce7,stroke:#22c55e
     style N fill:#fee2e2,stroke:#ef4444
     </pre>
@@ -56,193 +56,236 @@ flowchart LR
 
 <section>
     <h2>🔌 การต่อวงจร</h2>
+    <h3>🔌 วงจร</h3>
     <pre class="ascii-circuit">
-    Timer Resource Guard — กลไกภายใน ไม่ต้องต่อวงจร
+    Timer Resource Guard — กลไกภายในตัวชิป ไม่ต้องต่อวงจรเพิ่ม
 
-    CH32V003 Timer Mapping:
-    ┌────────────────────────────────────────────┐
-    │  Timer  │  Channels  │  ใช้กับอะไรได้        │
-    │─────────┼────────────┼──────────────────────│
-    │  TIM1   │  4 CH      │  PWM, Encoder,       │
-    │         │            │  Input Capture,      │
-    │         │            │  Output Compare,     │
-    │         │            │  One-Pulse           │
-    │─────────┼────────────┼──────────────────────│
-    │  TIM2   │  4 CH      │  PWM, Encoder,       │
-    │         │            │  Input Capture,      │
-    │         │            │  Servo               │
-    │─────────┼────────────┼──────────────────────│
-    │  TIM3   │  -         │  (reserved/IR)       │
-    │─────────┼────────────┼──────────────────────│
-    │  SYSTICK│  -         │  Delay, millis()     │
-    └────────────────────────────────────────────┘
+    CH32V003 Timer Resource Map (SimpleHAL)
+    ┌───────────────────────────────────────────────────────────┐
+    │  Timer   │  โมดูลที่ใช้ได้                       │  Channels │
+    │──────────┼─────────────────────────────────────┼───────────│
+    │  SysTick │  SimpleDelay (Delay_Ms, Timer_Init)  │  —        │
+    │  TIM1    │  SimplePWM  (PWM1_CH1..CH4)          │  4 CH     │
+    │          │  หรือ SimpleTIM (TIM_1)            │           │
+    │  TIM2    │  SimplePWM  (PWM2_CH1..CH4)          │  4 CH     │
+    │          │  หรือ SimpleTIM (TIM_2)            │           │
+    │          │  หรือ Stopwatch / Countdown         │           │
+    └───────────────────────────────────────────────────────────┘
 
-    ปัญหา: TIM1 มีแค่ 1 ตัว — ถ้า Library A กับ B ใช้ TIM1
-    โดยไม่รู้ว่าอีกฝ่ายใช้ → ค่าตั้งเสียหาย → PWM เพี้ยน, Encoder ผิด
+    ⚠️ TIM1 กับ TIM2 มีตัวเดียว — ถ้า PWM จอง TIM1 ไปแล้ว
+       SimpleTIM จะใช้ TIM1 ไม่ได้ และจะคืนค่าเงียบ (silent return)
 
-    Guard System:
-    ┌────────────────────────────────────────────┐
-    │  global variable:                          │
-    │  volatile uint8_t g_tim1_owner = NONE;     │
-    │  volatile uint8_t g_tim2_owner = NONE;     │
-    │                                            │
-    │  Ownership Flag Values:                    │
-    │  ├─ TIMER_OWNER_NONE     = 0               │
-    │  ├─ TIMER_OWNER_PWM      = 1 (Servo, LED)  │
-    │  ├─ TIMER_OWNER_ENCODER  = 2               │
-    │  ├─ TIMER_OWNER_FREQ     = 3               │
-    │  ├─ TIMER_OWNER_CAPTURE  = 4               │
-    │  ├─ TIMER_OWNER_IR       = 5 (IR Remote)   │
-    │  └─ TIMER_OWNER_CUSTOM   = 99 (ผู้ใช้)      │
-    └────────────────────────────────────────────┘
+    Ownership Globals (กำหนดที่ SimpleTIM.c, อ่าน/เขียนโดยตรงได้):
+    ┌───────────────────────────────────────────────────────────┐
+    │  extern uint8_t g_tim1_owner;   // เจ้าของ TIM1 ปัจจุบัน    │
+    │  extern uint8_t g_tim2_owner;   // เจ้าของ TIM2 ปัจจุบัน    │
+    │                                                           │
+    │  Ownership Values (SimpleTIM.h):                          │
+    │  ├─ TIM_OWNER_NONE    = 0  // ว่าง ใครจองได้               │
+    │  ├─ TIM_OWNER_PWM     = 1  // ถูก SimplePWM จอง            │
+    │  ├─ TIM_OWNER_TIMER   = 2  // ถูก SimpleTIM จอง           │
+    │  └─ TIM_OWNER_TIMEXT  = 3  // สำรอง Stopwatch / Countdown │
+    └───────────────────────────────────────────────────────────┘
+
+    PWM Channels (SimplePWM.h):
+    ├─ TIM1: PWM1_CH1=PD2  PWM1_CH2=PA1  PWM1_CH3=PC3  PWM1_CH4=PC4
+    └─ TIM2: PWM2_CH1=PD4  PWM2_CH2=PD3  PWM2_CH3=PC0  PWM2_CH4=PD7
     </pre>
-    <p><strong>CH32V003 มีแค่ 2 hardware timers (TIM1, TIM2)!</strong> — ต้องใช้ guard system มิฉะนั้น library จะแย่ง timer กัน</p>
+    <p class="explain">🔍 CH32V003 มี hardware timer แค่ <code>TIM1</code> กับ <code>TIM2</code> ตัวเดียวต่อตัว — <code>SysTick</code> ถูก <code>SimpleDelay</code> ครอบครองอยู่แล้ว — สามโมดูล <code>SimplePWM</code> / <code>SimpleTIM</code> / <code>Stopwatch&nbsp;/&nbsp;Countdown</code> ต้องแย่ง <code>TIM1</code>/<code>TIM2</code> กันผ่าน global <code>g_tim1_owner</code> และ <code>g_tim2_owner</code> — ไม่มี accessor แยก อ่าน/เขียนตัวแปร global โดยตรงได้เลย</p>
 </section>
 
 <section>
     <h2>📚 หลักการทำงาน</h2>
-    <p><strong>Timer Resource Guard</strong> — ระบบจัดการกรรมสิทธิ์ timer แบบ cooperative — ป้องกันไม่ให้หลาย library ใช้ timer ตัวเดียวกันพร้อมกัน</p>
+    <h3>📖 แนวคิด</h3>
+    <p><strong>Timer Resource Guard</strong> คือระบบจัดการกรรมสิทธิ์ timer แบบ cooperative ผ่าน global <code>g_tim1_owner</code> / <code>g_tim2_owner</code> — ทุกโมดูลเช็คค่านี้ก่อนตั้งค่า timer ถ้ามีคนจองอยู่ก็จะ <em>คืนค่าเงียบ</em> ไม่ throw error ไม่ return bool — ผู้ใช้ต้องอ่าน <code>g_timX_owner</code> เพื่อ debug</p>
 
-    <h3>ทำไมต้องมี Resource Guard?</h3>
-    <p>CH32V003 มี hardware timer จำกัด (TIM1, TIM2) — แต่ SimpleHAL มี library หลายตัวที่ต้องการ timer: PWM, Servo, Encoder, Frequency measurement, IR Remote, Input Capture — ถ้าแต่ละ library ตั้งค่า timer โดยไม่เช็คว่าคนอื่นใช้อยู่หรือไม่ → ค่า timer register จะถูกเขียนทับ → ระบบพัง</p>
+    <h3>ทำไมต้องมี Guard</h3>
+    <p>CH32V003 มี hardware timer แค่ <code>TIM1</code> และ <code>TIM2</code> — แต่ SimpleHAL มีหลายโมดูลที่ต้องการ timer: SimplePWM (PWM), SimpleTIM (interrupt tick), Stopwatch/Countdown (จับเวลา) — ถ้าแต่ละโมดูลตั้งค่า timer โดยไม่เช็คว่าคนอื่นใช้อยู่ → register ของ timer จะถูกเขียนทับ → PWM ออกเพี้ยน callback หาย หรือ Stopwatch นับผิด</p>
 
-    <h3>หลักการ</h3>
+    <h3>กลไกจริงใน SimpleTIM.c</h3>
     <ol>
-        <li>ทุกครั้งที่ library จะใช้ timer — ต้องเช็ค <code>g_timX_owner</code></li>
-        <li>ถ้า <code>owner == TIMER_OWNER_NONE</code> → จอง timer (ตั้ง owner = ตัวเอง)</li>
-        <li>ถ้า <code>owner != TIMER_OWNER_NONE</code> → คนอื่นใช้อยู่ → คืน error</li>
-        <li>เมื่อเลิกใช้ → คืน timer (ตั้ง owner = <code>TIMER_OWNER_NONE</code>)</li>
+        <li>ก่อน init — ทุกโมดูลอ่าน <code>g_timX_owner</code> ถ้าค่า <code>!= TIM_OWNER_NONE</code> และ <code>!= ตัวเอง</code> → <code>return;</code> เงียบ ไม่แตะ register (SimpleTIM.c:119, SimplePWM.c:218)</li>
+        <li>ถ้าเป็น <code>TIM_OWNER_NONE</code> หรือเป็นชื่อตัวเอง → ดำเนินการต่อ แล้วตั้ง <code>*owner = ชื่อตัวเอง</code> (SimpleTIM.c:122, SimplePWM.c:221)</li>
+        <li>ปล่อย: <code>TIM_DetachInterrupt(timer)</code> จะคืน owner กลับเป็น <code>TIM_OWNER_NONE</code> อัตโนมัติ <strong>ถ้า</strong> ปัจจุบันเป็น <code>TIM_OWNER_TIMER</code> (SimpleTIM.c:280-282)</li>
+        <li>PWM <strong>ไม่มี</strong> API ปล่อย owner — ต้อง <code>PWM_Stop(channel)</code> แล้วตั้ง <code>g_timX_owner = TIM_OWNER_NONE</code> ด้วยมือ</li>
+        <li>ทุกการ block เป็น <code>silent return</code> — ไม่มี error code คืน → ต้องอ่าน <code>g_timX_owner</code> เพื่อตรวจสอบสาเหตุ</li>
     </ol>
 
+    <h3>Stopwatch กับ ownership</h3>
+    <p><code>Stopwatch_Init()</code> ภายในเรียก <code>TIM_SimpleInit(TIMEXT_DEFAULT_TIMER, 1000)</code> + <code>TIM_AttachInterrupt(...)</code> + <code>TIM_Start(...)</code> — จึงจอง TIM2 ผ่านกลไกเดียวกับ SimpleTIM — <code>g_tim2_owner</code> จะกลายเป็น <code>TIM_OWNER_TIMER</code> (=2) ในการทำงานจริง ส่วน <code>TIM_OWNER_TIMEXT</code> (=3) เป็นค่าที่ header เตรียมไว้สำหรับ SimpleTIM_Ext ตาม docstring</p>
+
     <h3>TIMEXT_DEFAULT_TIMER</h3>
-    <p>Global config ที่เลือก timer เริ่มต้นสำหรับฟังก์ชันต่างๆ — ถ้าต้องการให้ฟังก์ชันใช้ TIM2 แทน TIM1 → เปลี่ยน <code>TIMEXT_DEFAULT_TIMER</code> ก่อนเรียก init</p>
+    <p>macro ที่เลือก timer เริ่มต้นสำหรับ Stopwatch/Countdown — default เป็น <code>TIM_2</code> (SimpleTIM_Ext.c) — ถ้าต้องการให้ Stopwatch ใช้ TIM1 แทน (เช่นต้องการ TIM2 สำหรับ PWM2) → <code>#define TIMEXT_DEFAULT_TIMER TIM_1</code> ก่อน <code>#include "SimpleHAL.h"</code></p>
 
     <h3>ผลลัพธ์</h3>
     <ul>
-        <li>ถ้ามี conflict — compile-time หรือ runtime error — ไม่ใช่ silent corruption</li>
-        <li>ผู้ใช้รู้ทันทีว่าต้องใช้ timer คนละตัว — หรือ disable feature ที่ไม่จำเป็น</li>
+        <li>Timer register ไม่ถูกเขียนทับโดยโมดูลที่มาทีหลัง → PWM ไม่เพี้ยน callback ไม่หาย</li>
+        <li>ผู้ใช้รู้ทันที (จากการอ่าน <code>g_timX_owner</code>) ว่า timer ตัวไหนถูกใครจอง → เลือกใช้ timer คนละตัวได้</li>
         <li>ระบบ fail-safe — ไม่มีทางที่ timer จะถูกแย่งโดยไม่รู้ตัว</li>
     </ul>
 </section>
 
 <section>
     <h2>💻 เขียน Code ทีละขั้น</h2>
+    <h3>💻 โค้ด</h3>
 
-    <div class="step"><h3>ขั้นที่ 1: ดูตัวอย่าง — TIM1 ถูกใช้โดย PWM</h3>
+    <div class="step"><h3>ขั้นที่ 1 — PWM จอง TIM1 จริง</h3>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
+
+void my_tick(void) { }
 
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
 
-    // เริ่ม PWM บน PC4 — ใช้ TIM1
-    PWM_SimpleInit(2, PC4);  // success
-    // ตอนนี้ g_tim1_owner = TIMER_OWNER_PWM</code></pre>
-    <p class="explain">🔍 เมื่อ <code>PWM_SimpleInit()</code> ถูกเรียก — มันเช็ค <code>g_tim1_owner</code> — ถ้าเป็น NONE → จอง — ตอนนี้ TIM1 เป็นของ PWM</p></div>
+    // เปิด PWM บน PC4 = PWM1_CH4 (ใช้ TIM1)
+    PWM_Init(PWM1_CH4, 1000);       // SimplePWM.c ตั้ง g_tim1_owner = TIM_OWNER_PWM
+    PWM_SetDutyCycle(PWM1_CH4, 50);
+    PWM_Start(PWM1_CH4);
 
-    <div class="step"><h3>ขั้นที่ 2: Conflict — Encoder พยายามใช้ TIM1</h3>
-    <pre><code class="language-c">    // พยายามใช้ Encoder บน TIM1
-    uint8_t ok = Encoder_Init(TIM1, PA1, PA2);
-    if(!ok) {
-        // Conflict! TIM1 ถูกใช้โดย PWM แล้ว
-        USART_Print("ERROR: TIM1 already used by PWM!\r\n");
-        USART_Print("Use TIM2 instead\r\n");
+    USART_Print("g_tim1_owner = ");
+    USART_PrintNum(g_tim1_owner);   // อ่าน global โดยตรง → 1
+    USART_Print(" (PWM=");
+    USART_PrintNum(TIM_OWNER_PWM); // 1
+    USART_Print(")\r\n");</code></pre>
+    <p class="explain">🔍 เมื่อ <code>PWM_Init()</code> ถูกเรียก — SimplePWM.c เช็ค <code>g_tim1_owner</code> ถ้าเป็น <code>TIM_OWNER_NONE</code> → จอง → ตอนนี้ TIM1 เป็นของ PWM — อ่านค่า global โดยตรงยืนยันได้</p></div>
 
-        // ลองใช้ TIM2 แทน
-        ok = Encoder_Init(TIM2, PC4, PC5);
-        if(ok) {
-            USART_Print("Encoder on TIM2 OK\r\n");
-        }
-    }</code></pre>
-    <p class="explain">🔍 <code>Encoder_Init(TIM1, ...)</code> — จะเช็ค <code>g_tim1_owner</code> — พบว่า != NONE (เป็น PWM) → คืน 0 — ผู้ใช้รู้ทันทีว่ามี conflict — ไม่ใช่เงียบแล้ว PWM เพี้ยน</p></div>
+    <div class="step"><h3>ขั้นที่ 2 — Conflict: SimpleTIM พยายามใช้ TIM1 → เงียบ</h3>
+    <pre><code class="language-c">    // พยายามตั้ง TIM1 เป็น timer 1 Hz — จะ silent return เพราะ TIM1 เป็นของ PWM
+    TIM_SimpleInit(TIM_1, 1);
+    TIM_AttachInterrupt(TIM_1, my_tick);   // ก็เงียบเช่นกัน
 
-    <div class="step"><h3>ขั้นที่ 3: Release Timer — เปลี่ยนเจ้าของ</h3>
-    <pre><code class="language-c">    // คืน TIM1 (PWM เลิกใช้)
-    PWM_DeInit(2);  // หรือ Timer_Release(TIM1)
-    // ตอนนี้ g_tim1_owner = TIMER_OWNER_NONE
+    USART_Print("After TIM_SimpleInit(TIM_1): g_tim1_owner = ");
+    USART_PrintNum(g_tim1_owner);          // ยังเป็น 1 (PWM) SimpleTIM ไม่แตะ register
+    USART_Print(" → PWM still safe\r\n");</code></pre>
+    <p class="explain">🔍 <code>TIM_SimpleInit(TIM_1, ...)</code> เช็ค <code>g_tim1_owner</code> พบว่าเป็น <code>TIM_OWNER_PWM</code> (ไม่ใช่ NONE หรือ TIMER) → <code>return;</code> เงียบ — register ของ PWM ไม่ถูกแตะ ผู้ใช้ตรวจสอบได้จากการที่ <code>g_tim1_owner</code> ยังเป็น 1</p></div>
 
-    // ใช้ Encoder บน TIM1 ได้แล้ว
-    Encoder_Init(TIM1, PA1, PA2);  // success
-    // g_tim1_owner = TIMER_OWNER_ENCODER</code></pre>
-    <p class="explain">🔍 <code>PWM_DeInit()</code> — คืนกรรมสิทธิ์ TIM1 — หลังจากนี้ library อื่นใช้ TIM1 ได้ — หรือใช้ <code>Timer_Release(TIM1)</code> โดยตรง</p></div>
+    <div class="step"><h3>ขั้นที่ 3 — ใช้ TIM2 แทน → ทำงานได้</h3>
+    <pre><code class="language-c">    // TIM2 ยังว่าง → SimpleTIM ใช้ได้
+    TIM_SimpleInit(TIM_2, 2);              // 2 Hz = interrupt ทุก 500ms
+    TIM_AttachInterrupt(TIM_2, my_tick);
+    TIM_Start(TIM_2);
 
-    <div class="step"><h3>ขั้นที่ 4: TIMEXT_DEFAULT_TIMER — เปลี่ยน Timer เริ่มต้น</h3>
-    <pre><code class="language-c">    // กำหนดให้ library ทั้งหมดใช้ TIM2 เป็น default
-    // (ไม่ต้องระบุ timer ทุกครั้ง)
-    #define TIMEXT_DEFAULT_TIMER TIM2
-
-    // ก่อน include SimpleHAL.h หรือหลัง include ก็ได้
-    // ขึ้นอยู่กับการออกแบบ
-
-    // ต่อจากนี้ — PWM, Servo, Encoder จะพยายามใช้ TIM2
-    // โดยอัตโนมัติ — ยกเว้นระบุ timer เอง
-
-    Servo_SimpleInit(1);  // ใช้ TIM2 (default)
-    Encoder_Init(TIM1, PA1, PA2);  // ใช้ TIM1 (ระบุเอง)</code></pre>
-    <p class="explain">🔍 <code>TIMEXT_DEFAULT_TIMER</code> — กำหนด timer เริ่มต้น — แต่ละ library เคารพค่านี้ — แต่ถ้าระบุ timer เองในการเรียกฟังก์ชัน → ใช้ที่ระบุ</p></div>
-
-    <div class="step"><h3>ขั้นที่ 5: เช็คสถานะ Timer ทั้งระบบ</h3>
-    <pre><code class="language-c">    // ดูว่าใครใช้ timer อะไรอยู่
-    USART_Print("TIM1 owner: ");
-    switch(g_tim1_owner) {
-        case TIMER_OWNER_NONE:    USART_Print("FREE\r\n"); break;
-        case TIMER_OWNER_PWM:     USART_Print("PWM\r\n"); break;
-        case TIMER_OWNER_ENCODER: USART_Print("Encoder\r\n"); break;
-        case TIMER_OWNER_SERVO:   USART_Print("Servo\r\n"); break;
-        case TIMER_OWNER_FREQ:    USART_Print("Frequency\r\n"); break;
-        case TIMER_OWNER_CAPTURE: USART_Print("Capture\r\n"); break;
-        case TIMER_OWNER_IR:      USART_Print("IR Remote\r\n"); break;
-        default:                  USART_Print("Custom\r\n"); break;
-    }
-
-    // หรือใช้ helper
-    uint8_t t1 = Timer_GetOwner(TIM1);
-    uint8_t t2 = Timer_GetOwner(TIM2);
-    USART_Print("TIM1=");
-    USART_PrintNum(t1);
-    USART_Print(" TIM2=");
-    USART_PrintNum(t2);
+    USART_Print("g_tim2_owner = ");
+    USART_PrintNum(g_tim2_owner);          // 2 = TIM_OWNER_TIMER
     USART_Print("\r\n");</code></pre>
-    <p class="explain">🔍 <code>Timer_GetOwner(timer)</code> — อ่านค่า owner — ใช้ debug หรือ runtime check — <code>g_timX_owner</code> เป็น global — อ่านได้จากทุกที่</p></div>
+    <p class="explain">🔍 หลักแก้ conflict ง่ายๆ คือเลือก timer คนละตัว — TIM1 เป็นของ PWM ก็ใช้ TIM2 สำหรับ SimpleTIM — print ยืนยันว่า owner เปลี่ยนเป็น <code>TIM_OWNER_TIMER</code></p></div>
+
+    <div class="step"><h3>ขั้นที่ 4 — SimpleTIM ปล่อย owner อัตโนมัติ</h3>
+    <pre><code class="language-c">    // TIM_DetachInterrupt จะคืน owner กลับเป็น NONE ถ้าปัจจุบันเป็น TIMER
+    TIM_DetachInterrupt(TIM_2);
+    USART_Print("After detach TIM_2: g_tim2_owner = ");
+    USART_PrintNum(g_tim2_owner);          // 0 = TIM_OWNER_NONE (คืนให้อัตโนมัติ)
+    USART_Print("\r\n");</code></pre>
+    <p class="explain">🔍 สังเกตว่า <code>TIM_DetachInterrupt()</code> ไม่เพียงปิด interrupt แต่ยังคืน <code>g_tim2_owner</code> กลับเป็น <code>TIM_OWNER_NONE</code> ให้อัตโนมัติ (SimpleTIM.c:280-282) — เป็นวิธีปล่อย timer ที่ถูกต้องสำหรับ SimpleTIM</p></div>
+
+    <div class="step"><h3>ขั้นที่ 5 — ปล่อย TIM1 จาก PWM (ต้องทำเอง)</h3>
+    <pre><code class="language-c">    // PWM ไม่มี API ปล่อย owner → ต้อง Stop แล้วตั้งค่า global เอง
+    PWM_Stop(PWM1_CH4);
+    g_tim1_owner = TIM_OWNER_NONE;        // คืนกรรมสิทธิ์ TIM1 ด้วยมือ
+
+    USART_Print("After manual release: g_tim1_owner = ");
+    USART_PrintNum(g_tim1_owner);          // 0 = NONE
+    USART_Print("\r\n");
+
+    // ตอนนี้ SimpleTIM ใช้ TIM1 ได้แล้ว
+    TIM_SimpleInit(TIM_1, 10);            // 10 Hz
+    TIM_AttachInterrupt(TIM_1, my_tick);
+    TIM_Start(TIM_1);
+    USART_Print("TIM_1 reclaimed: g_tim1_owner = ");
+    USART_PrintNum(g_tim1_owner);         // 2 = TIM_OWNER_TIMER
+    USART_Print("\r\n");</code></pre>
+    <p class="explain">🔍 เพราะ SimplePWM ไม่มี <code>PWM_Release()</code> → วิธีปล่อยคือ <code>PWM_Stop()</code> แล้วเขียน <code>g_tim1_owner = TIM_OWNER_NONE</code> ด้วยตนเอง — หลังจากนี้ SimpleTIM จอง TIM1 ได้ตามปกติ</p></div>
+
+    <div class="step"><h3>ขั้นที่ 6 — อ่าน g_timX_owner เพื่อ debug ทั้งระบบ</h3>
+    <pre><code class="language-c">// helper แปลงค่า owner เป็นชื่อ (วางนอก main)
+static const char* tim_owner_name(uint8_t o) {
+    switch (o) {
+        case TIM_OWNER_NONE:    return "NONE";
+        case TIM_OWNER_PWM:     return "PWM";
+        case TIM_OWNER_TIMER:   return "TIMER";
+        case TIM_OWNER_TIMEXT:  return "TIMEXT";
+        default:                return "UNKNOWN";
+    }
+}
+
+// ใน main — พิมพ์สถานะ owner ทั้งคู่:
+USART_Print("TIM1 owner: "); USART_Print(tim_owner_name(g_tim1_owner)); USART_Print("\r\n");
+USART_Print("TIM2 owner: "); USART_Print(tim_owner_name(g_tim2_owner)); USART_Print("\r\n");
+}</code></pre>
+    <p class="explain">🔍 ไม่มี accessor แยก — อ่าน <code>g_tim1_owner</code> / <code>g_tim2_owner</code> โดยตรงได้จากทุกที่เพราะเป็น <code>extern uint8_t</code> — เป็นวิธีหลักในการตรวจสอบว่า timer ตัวไหนถูกใครจองอยู่</p></div>
 </section>
 
 <section>
     <h2>📋 API Reference</h2>
     <table>
-        <tr><th>ฟังก์ชัน/ตัวแปร</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
-        <tr><td><code>g_tim1_owner</code></td><td>เจ้าของ TIM1 (global)</td><td><code>if(g_tim1_owner == TIMER_OWNER_NONE)</code></td></tr>
-        <tr><td><code>g_tim2_owner</code></td><td>เจ้าของ TIM2 (global)</td><td><code>if(g_tim2_owner == TIMER_OWNER_NONE)</code></td></tr>
-        <tr><td><code>TIMEXT_DEFAULT_TIMER</code></td><td>Timer default สำหรับ library</td><td><code>#define TIMEXT_DEFAULT_TIMER TIM2</code></td></tr>
-        <tr><td><code>Timer_GetOwner(timer)</code></td><td>อ่าน owner ของ timer</td><td><code>uint8_t o = Timer_GetOwner(TIM1)</code></td></tr>
-        <tr><td><code>Timer_Release(timer)</code></td><td>คืนกรรมสิทธิ์ timer</td><td><code>Timer_Release(TIM1)</code></td></tr>
-        <tr><td><code>Timer_SetOwner(timer, owner)</code></td><td>ตั้ง owner (ถ้าว่าง)</td><td><code>Timer_SetOwner(TIM2, TIMER_OWNER_CUSTOM)</code></td></tr>
-        <tr><td><code>TIMER_OWNER_NONE</code></td><td>ว่าง (0)</td><td>ค่าเริ่มต้นของทุก timer</td></tr>
-        <tr><td><code>TIMER_OWNER_PWM</code></td><td>ใช้โดย PWM/Servo (1)</td><td></td></tr>
-        <tr><td><code>TIMER_OWNER_ENCODER</code></td><td>ใช้โดย Encoder (2)</td><td></td></tr>
-        <tr><td><code>TIMER_OWNER_FREQ</code></td><td>ใช้โดย Frequency measure (3)</td><td></td></tr>
-        <tr><td><code>TIMER_OWNER_CAPTURE</code></td><td>ใช้โดย Input Capture (4)</td><td></td></tr>
-        <tr><td><code>TIMER_OWNER_CUSTOM</code></td><td>ผู้ใช้กำหนดเอง (99)</td><td></td></tr>
+        <tr><th>ฟังก์ชัน / ตัวแปร</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+        <tr><td><code>g_tim1_owner</code></td><td>global เจ้าของ TIM1 (extern	uint8_t)</td><td><code>if (g_tim1_owner == TIM_OWNER_NONE)</code></td></tr>
+        <tr><td><code>g_tim2_owner</code></td><td>global เจ้าของ TIM2 (extern	uint8_t)</td><td><code>if (g_tim2_owner == TIM_OWNER_PWM)</code></td></tr>
+        <tr><td><code>TIM_OWNER_NONE</code></td><td>ค่า 0 — timer ว่าง</td><td>ค่าเริ่มต้นของทุก timer</td></tr>
+        <tr><td><code>TIM_OWNER_PWM</code></td><td>ค่า 1 — SimplePWM จอง</td><td>ตั้งโดย SimplePWM.c</td></tr>
+        <tr><td><code>TIM_OWNER_TIMER</code></td><td>ค่า 2 — SimpleTIM จอง</td><td>ตั้งโดย SimpleTIM.c</td></tr>
+        <tr><td><code>TIM_OWNER_TIMEXT</code></td><td>ค่า 3 — สำรอง Stopwatch / Countdown</td><td>ตาม docstring ใน SimpleTIM.h</td></tr>
+        <tr><td><code>TIM_1</code> / <code>TIM_2</code></td><td>enum <code>TIM_Instance</code></td><td><code>TIM_SimpleInit(TIM_2, 100)</code></td></tr>
+        <tr><td><code>TIM_MODE_UP</code> / <code>TIM_MODE_DOWN</code></td><td>enum <code>TIM_Mode</code></td><td><code>TIM_AdvancedInit(TIM_1, 47, 999, TIM_MODE_UP)</code></td></tr>
+        <tr><td><code>TIM_SimpleInit(timer, freq_hz)</code></td><td>เริ่ม timer — เช็ค owner แล้วจอง ถ้าโดน block จะ silent return</td><td><code>TIM_SimpleInit(TIM_1, 1000)</code></td></tr>
+        <tr><td><code>TIM_Start(timer)</code> / <code>TIM_Stop(timer)</code></td><td>เริ่ม / หยุดการนับ</td><td><code>TIM_Start(TIM_1)</code></td></tr>
+        <tr><td><code>TIM_SetFrequency(timer, freq)</code></td><td>เปลี่ยนความถี่ — เช็ค owner ก่อน</td><td><code>TIM_SetFrequency(TIM_2, 500)</code></td></tr>
+        <tr><td><code>TIM_AttachInterrupt(timer, cb)</code></td><td>แนบ update callback — เช็คและจอง owner</td><td><code>TIM_AttachInterrupt(TIM_1, my_tick)</code></td></tr>
+        <tr><td><code>TIM_DetachInterrupt(timer)</code></td><td>ถอด callback และคืน owner เป็น <code>NONE</code> ถ้าปัจจุบันเป็น <code>TIMER</code></td><td><code>TIM_DetachInterrupt(TIM_1)</code></td></tr>
+        <tr><td><code>TIM_AdvancedInit(timer, psc, per, mode)</code></td><td>ตั้งค่า timer แบบละเอียด เช็ค owner เหมือน SimpleInit</td><td><code>TIM_AdvancedInit(TIM_1, 47, 999, TIM_MODE_UP)</code></td></tr>
+        <tr><td><code>Simple_TIM_GetCounter(timer)</code> / <code>Simple_TIM_SetCounter(timer, v)</code></td><td>อ่าน / ตั้งค่า counter</td><td><code>Simple_TIM_SetCounter(TIM_1, 0)</code></td></tr>
+        <tr><td><code>TIM_GetPeriod(timer)</code> / <code>Simple_TIM_GetPrescaler(timer)</code></td><td>อ่าน period / prescaler</td><td><code>TIM_GetPeriod(TIM_1)</code></td></tr>
+        <tr><td><code>TIM_SetPrescaler(timer, psc)</code> / <code>TIM_SetMode(timer, mode)</code> / <code>TIM_GenerateUpdate(timer)</code></td><td>ฟังก์ชันปรับ timer ระดับละเอียด</td><td><code>TIM_SetMode(TIM_1, TIM_MODE_DOWN)</code></td></tr>
+        <tr><td><code>PWM_Init(channel, freq_hz)</code></td><td>เริ่ม PWM — เช็ค owner แล้วจองเป็น <code>TIM_OWNER_PWM</code></td><td><code>PWM_Init(PWM1_CH4, 1000)</code></td></tr>
+        <tr><td><code>PWM_InitRemap(channel, freq, remap)</code></td><td>เริ่ม PWM พร้อม remap pin</td><td><code>PWM_InitRemap(PWM1_CH1, 1000, PWM_REMAP_NONE)</code></td></tr>
+        <tr><td><code>PWM_Start(channel)</code> / <code>PWM_Stop(channel)</code></td><td>เริ่ม / หยุด PWM output</td><td><code>PWM_Stop(PWM1_CH4)</code></td></tr>
+        <tr><td><code>PWM_SetDutyCycle(channel, percent)</code></td><td>ตั้ง duty 0-100%</td><td><code>PWM_SetDutyCycle(PWM1_CH4, 50)</code></td></tr>
+        <tr><td><code>PWM_SetDutyCycleRaw(channel, v)</code> / <code>PWM_SetFrequency(channel, f)</code></td><td>ตั้ง duty แบบ raw / เปลี่ยนความถี่</td><td><code>PWM_SetDutyCycleRaw(PWM1_CH4, 500)</code></td></tr>
+        <tr><td><code>PWM_GetPeriod(channel)</code> / <code>PWM_GetDutyCycle(channel)</code> / <code>PWM_GetDutyCycleRaw(channel)</code></td><td>อ่าน period / duty (%) / duty (raw)</td><td><code>PWM_GetDutyCycle(PWM1_CH4)</code></td></tr>
+        <tr><td><code>PWM_AdvancedInit(channel, psc, per, duty)</code> / <code>PWM_SetPolarity(channel, inv)</code></td><td>ตั้ง PWM ละเอียด / สลับ polarity</td><td><code>PWM_SetPolarity(PWM1_CH4, 1)</code></td></tr>
+        <tr><td><code>PWM1_CH1..CH4</code> / <code>PWM2_CH1..CH4</code></td><td>enum <code>PWM_Channel</code> (PWM1→TIM1, PWM2→TIM2)</td><td><code>PWM_Init(PWM2_CH3, 1000)</code></td></tr>
+        <tr><td><code>IS_PWM_VALID_PACKAGE(ch)</code></td><td>ตรวจ channel ใช้ได้กับ package ปัจจุบัน (รับ 1 arg)</td><td><code>if (IS_PWM_VALID_PACKAGE(PWM1_CH4))</code></td></tr>
+        <tr><td><code>Stopwatch_Init()</code> / <code>Stopwatch_Start()</code> / <code>Stopwatch_Stop()</code> / <code>Stopwatch_Reset()</code></td><td>Stopwatch API (ใช้ TIM2)</td><td><code>Stopwatch_Start()</code></td></tr>
+        <tr><td><code>Stopwatch_GetTime(Time_t*)</code> / <code>Stopwatch_GetTimeString(buf, fmt, mode)</code></td><td>อ่านเวลา stopwatch</td><td><code>Stopwatch_GetTimeString(buf, TIME_FORMAT_HHMMSS, TIME_DISPLAY_NORMALIZED)</code></td></tr>
+        <tr><td><code>Countdown_Init(h, m, s)</code> / <code>Countdown_Start()</code> / <code>Countdown_SetAlarmCallback(cb)</code></td><td>Countdown API</td><td><code>Countdown_SetAlarmCallback(alarm)</code></td></tr>
+        <tr><td><code>TIMEXT_DEFAULT_TIMER</code></td><td>macro timer เริ่มต้นสำหรับ Stopwatch/Countdown (default TIM_2)</td><td><code>#define TIMEXT_DEFAULT_TIMER TIM_1</code></td></tr>
     </table>
 </section>
 
 <section>
-    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+    <h2>⚠️ จุดควรระวัง</h2>
+    <h3>⚠️ จุดควรระวัง</h3>
     <table>
         <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
-        <tr><td>Encoder_Init() คืน 0 ตลอด</td><td>TIM1 ถูกใช้โดย library อื่น</td><td>เช็ค <code>g_tim1_owner</code> — ใช้ TIM2 แทน หรือ release TIM1 ก่อน</td></tr>
-        <tr><td>PWM เพี้ยนหลังเรียก Encoder</td><td>ลืมเปิด Timer Guard — library แข่งกันใช้ timer</td><td>Timer Guard ทำงานอัตโนมัติใน SimpleHAL — ไม่ได้เปิด Guard = ใช้ library นอก SimpleHAL</td></tr>
-        <tr><td>Servo กระตุก, LED กระพริบไม่ตรง</td><td>ใช้ TIM1 กับหลาย feature พร้อมกันโดยไม่รู้ตัว</td><td>แยกเป็น TIM1 และ TIM2 — หรือใช้ software PWM แทน hardware PWM</td></tr>
-        <tr><td>ไม่รู้ว่าใครใช้ TIM1 อยู่</td><td>ไม่ได้เช็ค <code>g_tim1_owner</code></td><td>เรียก <code>Timer_GetOwner(TIM1)</code> หรืออ่าน <code>g_tim1_owner</code> โดยตรง</td></tr>
-        <tr><td>Timer ถูกจองแต่ไม่เคยคืน</td><td>ไม่ได้เรียก DeInit เมื่อเลิกใช้</td><td>เรียก <code>PWM_DeInit()</code> / <code>Encoder_DeInit()</code> / <code>Timer_Release()</code></td></tr>
+        <tr><td><code>TIM_SimpleInit()</code> ไม่ทำงาน</td><td>timer ตัวนั้นถูก PWM หรือ Stopwatch จองอยู่</td><td>อ่าน <code>g_timX_owner</code> ถ้าเป็น <code>TIM_OWNER_PWM</code>(1) หรือ <code>TIM_OWNER_TIMER</code>(2) ให้ใช้ timer อีกตัว หรือปล่อยก่อน</td></tr>
+        <tr><td>PWM ออกเพี้ยนหลังเรียก SimpleTIM</td><td>ใช้ timer ตัวเดียวกัน แต่จริงๆ SimpleTIM จะถูก block → ปัญหาน่าจะมาจากที่อื่น</td><td>ตรวจ <code>g_timX_owner</code> — ถ้า SimpleTIM ถูก block จริง PWM ต้องไม่เพี้ยน — กลับไปดู config อื่น</td></tr>
+        <tr><td>อยากใช้ TIM1 หลังเลิก PWM</td><td>PWM ไม่มี API ปล่อย owner</td><td><code>PWM_Stop(channel);</code> แล้วตั้ง <code>g_tim1_owner = TIM_OWNER_NONE;</code> ด้วยตนเอง</td></tr>
+        <tr><td>เลิก SimpleTIM แล้ว owner ยังถูกจอง</td><td>เรียกแค่ <code>TIM_Stop()</code> ไม่ได้ปล่อย owner</td><td>ใช้ <code>TIM_DetachInterrupt(timer)</code> จะคืน owner เป็น <code>TIM_OWNER_NONE</code> อัตโนมัติถ้าปัจจุบันเป็น <code>TIM_OWNER_TIMER</code></td></tr>
+        <tr><td>Stopwatch ไม่นับเวลา</td><td>TIM2 ถูก SimpleTIM หรือ PWM2 จองอยู่ → <code>Stopwatch_Init</code> เรียก <code>TIM_SimpleInit(TIM_2)</code> จึง silent return</td><td>ปล่อย TIM2 ก่อน หรือ <code>#define TIMEXT_DEFAULT_TIMER TIM_1</code> เพื่อให้ Stopwatch ใช้ TIM1</td></tr>
+        <tr><td>ใช้ PWM2 และ Stopwatch พร้อมกันไม่ได้</td><td>ทั้งคู่ใช้ TIM2</td><td>ย้าย PWM ไป TIM1 (PWM1_CHx) แล้วให้ Stopwatch ใช้ TIM2 อย่างเดียว</td></tr>
+        <tr><td>นึกว่า timer พัง เพราะ init แล้ว callback ไม่ทำงาน</td><td>จริงๆ คือ <code>TIM_AttachInterrupt</code> ถูก block เงียบ</td><td>เช็ค <code>g_timX_owner</code> — ถ้าไม่ใช่ <code>TIM_OWNER_TIMER</code> แปลว่า attach ไม่สำเร็จ</td></tr>
     </table>
 </section>
 
 <section>
-    <h2>🛠️ สร้าง Product: ระบบหลาย Timer ไม่เคยชน</h2>
-    <p>ระบบที่ใช้ PWM (TIM1) + Encoder (TIM2) + Servo (TIM2 แชร์กับ Encoder) — Guard ป้องกัน conflict</p>
+    <h2>🛠️ สร้าง Product: PWM fade + Stopwatch uptime ไม่ชนกัน</h2>
+    <p>ระบบที่ใช้ PWM ปั่นไฟ LED บน <strong>TIM1</strong> ไปด้วย พร้อมกับ Stopwatch จับเวลา uptime บน <strong>TIM2</strong> — คนละ timer จึงไม่ชนกัน มี diagnostic พิมพ์ค่า <code>g_tim1_owner</code> / <code>g_tim2_owner</code> ผ่าน USART</p>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
+
+static volatile uint8_t g_duty = 0;
+static volatile int8_t  g_dir  = 1;
+
+// fade ทีละขั้น (เรียกจากลูปหลัก ไม่ต้องใช้ timer เพิ่ม)
+static void fade_step(void) {
+    g_duty = (uint8_t)((int16_t)g_duty + g_dir);
+    if (g_duty >= 100) { g_duty = 100; g_dir = -1; }
+    else if (g_duty == 0 && g_dir == -1) { g_dir = 1; }
+    PWM_SetDutyCycle(PWM1_CH4, g_duty);
+}
 
 int main(void)
 {
@@ -250,66 +293,64 @@ int main(void)
     Timer_Init();
     USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
 
-    // ==== Allocate TIM1: PWM LED ====
-    uint8_t pwm_ok = PWM_SimpleInit(2, PC4);
-    if(pwm_ok) {
-        USART_Print("TIM1: PWM on PC4 OK\r\n");
-        PWM_SetDuty(2, 50);  // 50%
-    } else {
-        USART_Print("TIM1: PWM FAILED (in use)\r\n");
-    }
-
-    // ==== Allocate TIM2: Encoder ====
-    uint8_t enc_ok = Encoder_Init(TIM2, PC5, PC6);
-    if(enc_ok) {
-        USART_Print("TIM2: Encoder on PC5/PC6 OK\r\n");
-    } else {
-        USART_Print("TIM2: Encoder FAILED (in use)\r\n");
-    }
-
-    // ==== Try: Servo (default TIM1) — จะชนกับ PWM ====
-    uint8_t servo_ok = Servo_SimpleInit(1);
-    if(!servo_ok) {
-        USART_Print("Servo FAILED: TIM1 owned by PWM\r\n");
-        USART_Print("    Fix: Use Servo_SimpleInitEx(TIM2, 1)\r\n");
-        // ใช้ TIM2 โดยตรง
-        servo_ok = Servo_SimpleInitEx(TIM2, 1);
-        if(servo_ok) {
-            USART_Print("    Servo on TIM2 OK!\r\n");
-        }
-    }
-
-    // ==== Report Timer Status ====
-    USART_Print("--- Timer Status ---\r\n");
-    USART_Print("TIM1 owner: ");
-    USART_PrintNum(Timer_GetOwner(TIM1));
-    USART_Print(" (PWM=");
-    USART_PrintNum(TIMER_OWNER_PWM);
-    USART_Print(")\r\n");
-    USART_Print("TIM2 owner: ");
-    USART_PrintNum(Timer_GetOwner(TIM2));
+    // ==== TIM1: PWM fade บน PC4 (PWM1_CH4) ====
+    PWM_Init(PWM1_CH4, 1000);
+    PWM_Start(PWM1_CH4);
+    USART_Print("PWM on TIM1/PC4   — g_tim1_owner = ");
+    USART_PrintNum(g_tim1_owner);          // 1 = TIM_OWNER_PWM
     USART_Print("\r\n");
 
-    while(1)
-    {
-        if(enc_ok) {
-            int32_t pos = Encoder_GetCount();
-            USART_Print("Enc: ");
-            USART_PrintNum((int32_t)pos);
-            USART_Print("\r\n");
-        }
-        Delay_Ms(500);
+    // ==== TIM2: Stopwatch (default TIMEXT_DEFAULT_TIMER = TIM_2) ====
+    Stopwatch_Init();
+    Stopwatch_Start();
+    USART_Print("Stopwatch on TIM2 — g_tim2_owner = ");
+    USART_PrintNum(g_tim2_owner);          // 2 = TIM_OWNER_TIMER
+    USART_Print("\r\n");
+
+    // ==== ทดสอบ conflict: พยายามใช้ SimpleTIM บน TIM1 → ต้องเงียบ ====
+    TIM_SimpleInit(TIM_1, 2);
+    USART_Print("After TIM_SimpleInit(TIM_1): g_tim1_owner = ");
+    USART_PrintNum(g_tim1_owner);          // ยังเป็น 1 (PWM ไม่ถูกเขียนทับ)
+    USART_Print(" → conflict blocked, PWM safe\r\n");
+
+    // ==== ลูปหลัก: fade + พิมพ์ uptime ====
+    char buf[TIME_BUFFER_SIZE_HHMMSS];
+    while (1) {
+        fade_step();
+        Stopwatch_GetTimeString(buf, TIME_FORMAT_HHMMSS, TIME_DISPLAY_NORMALIZED);
+        USART_Print("duty=");
+        USART_PrintNum(g_duty);
+        USART_Print("  uptime: ");
+        USART_Print(buf);
+        USART_Print("\r\n");
+        Delay_Ms(30);
     }
 }</code></pre>
+    <p class="explain">🔍 บทสรุป: การแยก timer ให้แต่ละโมดูลใช้คนละตัวคือวิธีที่ปลอดภัยที่สุด — PWM ที่ TIM1 + Stopwatch ที่ TIM2 → <code>g_tim1_owner</code> อ่านได้ 1 และ <code>g_tim2_owner</code> อ่านได้ 2 — ถ้าพยายามแย่ง TIM1 กลับ SimpleTIM จะ silent return โดยอัตโนมัติ</p>
+</section>
+
+<section>
+    <h2>✅ ตรวจสอบก่อนรัน</h2>
+    <h3>✅ ตรวจสอบก่อนรัน</h3>
+    <ul>
+        <li>เช็คว่า PWM และ SimpleTIM ไปคนละ timer (TIM1 กับ TIM2) — อย่าใช้พร้อมกันบนตัวเดียว</li>
+        <li>หลัง init ทุกครั้ง ให้อ่าน <code>g_tim1_owner</code> / <code>g_tim2_owner</code> เพื่อยืนยันว่าโมดูลที่ต้องการได้จองถูกตัวจริงๆ</li>
+        <li>ถ้า <code>TIM_SimpleInit()</code> หรือ <code>TIM_AttachInterrupt()</code> ไม่ทำงาน — อย่าสรุปว่า hardware พัง ให้อ่าน <code>g_timX_owner</code> ก่อนเสมอ</li>
+        <li>ก่อนเรียก <code>Stopwatch_Init()</code> ตรวจว่า TIM2 ไม่ได้ถูก SimpleTIM หรือ PWM2 จองอยู่ (ไม่งั้น Stopwatch จะ silent)</li>
+        <li>เลิก SimpleTIM ต้องเรียก <code>TIM_DetachInterrupt(timer)</code> ไม่ใช่แค่ <code>TIM_Stop()</code> — เพื่อคืน owner ให้ timer ว่างอีกครั้ง</li>
+        <li>เลิก PWM ต้อง <code>PWM_Stop(channel)</code> แล้วตั้ง <code>g_timX_owner = TIM_OWNER_NONE</code> ด้วยมือ เพราะไม่มี API ปล่อย owner</li>
+        <li>ถ้า project ใช้ PWM2 และ Stopwatch พร้อมกัน — ย้าย Stopwatch ไป TIM1 ผ่าน <code>#define TIMEXT_DEFAULT_TIMER TIM_1</code></li>
+    </ul>
 </section>
 
 <section>
     <h2>✏️ ลองทำดู</h2>
     <ol>
-        <li>เปิด PWM บน TIM1 แล้วเรียก <code>Servo_SimpleInit()</code> — ดูว่า Servo init ล้มเหลว — เช็ค <code>g_tim1_owner</code> ว่าเป็น PWM</li>
-        <li>เปลี่ยน <code>TIMEXT_DEFAULT_TIMER</code> เป็น TIM2 — สังเกตว่า library ทั้งหมดเปลี่ยนไปใช้ TIM2 โดยอัตโนมัติ</li>
-        <li>เขียน library ของตัวเองที่ใช้ TIM1 — ตั้ง owner ด้วย <code>Timer_SetOwner(TIM1, TIMER_OWNER_CUSTOM)</code> — เช็คว่า library อื่นใช้ TIM1 ไม่ได้</li>
+        <li>เปิด PWM บน <code>PWM1_CH4</code> (TIM1) แล้วเรียก <code>TIM_SimpleInit(TIM_1, 1)</code> — เช็ค <code>g_tim1_owner</code> ก่อนและหลัง — สังเกตว่า SimpleTIM ถูก block และค่า owner ยังเป็น <code>TIM_OWNER_PWM</code></li>
+        <li>เลิก PWM ด้วย <code>PWM_Stop(PWM1_CH4)</code> + <code>g_tim1_owner = TIM_OWNER_NONE</code> แล้วเรียก <code>TIM_SimpleInit(TIM_1, 1)</code> อีกครั้ง — คราวนี้ต้องทำงานและ owner เปลี่ยนเป็น <code>TIM_OWNER_TIMER</code></li>
+        <li>เรียก <code>TIM_SimpleInit(TIM_2, 2)</code> แล้วเรียก <code>Stopwatch_Init()</code> — สังเกตว่า Stopwatch จะ silent เพราะ TIM2 ถูก SimpleTIM จอง — แล้วลอง <code>TIM_DetachInterrupt(TIM_2)</code> ก่อนเรียก Stopwatch_Init อีกครั้ง</li>
     </ol>
+    <p>ดูเฉลยได้ที่ <a href="ch16_answers.html">เฉลย บทที่ 16</a></p>
 </section>
 
 <nav class="bottom-nav">

@@ -43,7 +43,7 @@ int main(void) {
         IWDG_Feed();
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> ISR (<code>USART1_IRQHandler</code>) รับ byte จาก USART แล้วเขียนลง circular buffer ทันที — เร็ว ไม่บล็อก — main loop ใช้ <code>while(Available > 0)</code> อ่านทีละ byte ประมวลผล — โค้ดนี้ echo กลับแบบ non-blocking — <code>CircularBuffer_Write</code> thread-safe เมื่อใช้จาก ISR เพียงที่เดียว — buffer 128 bytes เพียงพอสำหรับ burst ข้อมูล — <code>IWDG_Feed()</code> ใน main loop กัน watchdog reset — สำหรับ high-speed UART (≥115200) เพิ่ม buffer เป็น 256 หรือใช้ DMA</div></div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ISR (<code>USART1_IRQHandler</code>) รับ byte จาก USART แล้วเขียนลง circular buffer ทันที — เร็ว ไม่บล็อก — main loop ใช้ <code>while(Available > 0)</code> อ่านทีละ byte ประมวลผล — โค้ดนี้ echo กลับแบบ non-blocking — <code>CircularBuffer_Push</code> thread-safe เมื่อใช้จาก ISR เพียงที่เดียว — buffer 128 bytes เพียงพอสำหรับ burst ข้อมูล — <code>IWDG_Feed()</code> ใน main loop กัน watchdog reset — สำหรับ high-speed UART (≥115200) เพิ่ม buffer เป็น 256 หรือใช้ DMA</div></div>
 <div class="answer"><h2>ข้อ 2: Command Parser — แยกคำสั่งจาก buffer แบบ line-delimited</h2>
 <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
@@ -124,7 +124,7 @@ void USART1_IRQHandler(void) __attribute__((interrupt("WCH-Interrupt-fast")));
 void USART1_IRQHandler(void) {
     if(USART_GetITStatus(USART1, USART_IT_RXNE)) {
         uint8_t b = USART_ReceiveData(USART1);
-        if(!CircularBuffer_Push(&rx, b)) {
+        if(CircularBuffer_Push(&rx, b) != CIRCULAR_BUFFER_OK) {
             overflow_cnt++;              // นับครั้งที่ buffer เต็ม
             dropped_bytes++;             // นับ byte ที่หายไป
         }
@@ -166,7 +166,7 @@ int main(void) {
         // ประมวลผลเฉพาะเมื่อ buffer ไม่เกิน 50%
         if(avail <= BUF_SIZE / 2) {
             uint8_t b;
-            while(CircularBuffer_Pop(&rx, &b)) {
+            while(CircularBuffer_Pop(&rx, &b) == CIRCULAR_BUFFER_OK) {
                 USART_SendData(USART1, b);
                 while(!USART_GetFlagStatus(USART1, USART_FLAG_TC));
             }
@@ -175,6 +175,6 @@ int main(void) {
         IWDG_Feed();
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> <code>CircularBuffer_Write</code> return false เมื่อ buffer เต็ม → นับ <code>overflow_cnt</code> และ <code>dropped_bytes</code> — ตรวจจับ buffer >80% → flush ทิ้งทั้งก้อน ป้องกันข้อมูล stale — แสดงสถิติทุก 2 วิ: used/total, overflow count, dropped — ประมวลผลเฉพาะเมื่อ buffer ≤50% (flow control) — ดีกว่าใช้ delay เพราะยังทำงานอื่นได้ — วิธีแก้ overflow จริง: เพิ่ม hardware flow control (RTS/CTS) หรือลด baud rate — สำหรับข้อมูลสำคัญ ให้ใช้ protocol checksum แล้ว request retransmit แทนการ flush</div></div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>CircularBuffer_Push</code> คืน != CIRCULAR_BUFFER_OK เมื่อ buffer เต็ม → นับ <code>overflow_cnt</code> และ <code>dropped_bytes</code> — ตรวจจับ buffer >80% → flush ทิ้งทั้งก้อน ป้องกันข้อมูล stale — แสดงสถิติทุก 2 วิ: used/total, overflow count, dropped — ประมวลผลเฉพาะเมื่อ buffer ≤50% (flow control) — ดีกว่าใช้ delay เพราะยังทำงานอื่นได้ — วิธีแก้ overflow จริง: เพิ่ม hardware flow control (RTS/CTS) หรือลด baud rate — สำหรับข้อมูลสำคัญ ให้ใช้ protocol checksum แล้ว request retransmit แทนการ flush</div></div>
 <nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_circularbuffer.html">กลับบท</a><a href="chapx_lib_simplescheduler_answers.html">เฉลยถัดไป →</a></nav>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

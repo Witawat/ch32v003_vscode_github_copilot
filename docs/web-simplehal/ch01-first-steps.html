@@ -61,7 +61,7 @@
 </section>
 
 <section>
-    <h2>3 วิธี Include SimpleHAL</h2>
+    <h2>2 วิธี Include SimpleHAL</h2>
 
     <h3>วิธีที่ 1: All-in-one (แนะนำ)</h3>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
@@ -70,14 +70,9 @@
 
     <h3>วิธีที่ 2: Specific Modules</h3>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
-#include "SimpleHAL/SimpleGPIO.h"
-#include "SimpleHAL/SimpleADC.h"</code></pre>
-    <p>Include เฉพาะโมดูลที่ใช้ — ประหยัด Flash และ compile เร็ว เหมาะสำหรับโปรเจกต์ที่มีข้อจำกัดด้านหน่วยความจำ</p>
-
-    <h3>วิธีที่ 3: All Together</h3>
-    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
-#include "SimpleHAL/SimpleHAL.h"</code></pre>
-    <p>เหมือนวิธีที่ 1 แต่ใช้ path แบบมีโฟลเดอร์ — ใช้เมื่อ Library อยู่ใน <code>User/SimpleHAL/</code></p>
+#include "SimpleGPIO.h"
+#include "SimpleADC.h"</code></pre>
+    <p>Include เฉพาะโมดูลที่ใช้ — ประหยัด Flash และ compile เร็ว เหมาะสำหรับโปรเจกต์ที่มีข้อจำกัดด้านหน่วยความจำ (ไม่ต้องใส่ path นำหน้าด้วย <code>SimpleHAL/</code> — โฟลเดอร์ <code>User/SimpleHAL/</code> อยู่ใน include path อยู่แล้ว)</p>
 </section>
 
 <section>
@@ -123,7 +118,7 @@ int main(void)
 
     // ③ ตั้งค่า peripherals
     pinMode(PC0, PIN_MODE_OUTPUT);              // LED output
-    USART_SimpleInit(USART_BAUD_115200);        // Serial 115200 bps
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);  // Serial 115200 bps
 
     uint32_t counter = 0;                       // ตัวนับรอบ
 
@@ -164,7 +159,7 @@ Counter: 3
 
     <p><strong>วิธีใช้:</strong></p>
     <ol>
-        <li>เปิด Serial ด้วย <code>USART_SimpleInit(USART_BAUD_115200)</code></li>
+        <li>เปิด Serial ด้วย <code>USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT)</code></li>
         <li>ส่งข้อความด้วย <code>USART_Print("รูปแบบ %d\r\n", ตัวแปร)</code></li>
         <li>ดูผลใน Serial Monitor (Baud rate ต้องตรงกับที่ตั้งไว้)</li>
     </ol>

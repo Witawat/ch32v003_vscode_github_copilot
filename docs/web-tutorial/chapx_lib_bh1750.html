@@ -93,20 +93,20 @@ int main(void) {
 <p class="explain">🔍 <code>BH1750_Init(&bh, addr)</code> — instance-based, address 0x23 หรือ 0x5C</p></div>
 
 <div class="step"><h3>ขั้นที่ 2: อ่านค่า lux</h3>
-<pre><code class="language-c">    uint16_t lux = BH1750_ReadLux(&bh);
-    if(lux == 0xFFFF) {
+<pre><code class="language-c">    float lux = BH1750_ReadLux(&bh);
+    if(lux < 0.0f) {
         USART_Println("Sensor error!");
     } else {
         USART_Print("Light: ");
-        USART_PrintInt(lux);
+        USART_PrintFloat(lux, 1);
         USART_Println(" lux");
     }</code></pre>
-<p class="explain">🔍 <code>BH1750_ReadLux(&bh)</code> — คืนค่า 1–65535 lux — 0xFFFF = I2C error</p></div>
+<p class="explain">🔍 <code>BH1750_ReadLux(&bh)</code> — คืนค่า float lux — 0.0 = I2C error</p></div>
 
 <div class="step"><h3>ขั้นที่ 3: Loop — ไฟอัตโนมัติ</h3>
 <pre><code class="language-c">    while(1) {
-        uint16_t lux = BH1750_ReadLux(&bh);
-        if(lux != 0xFFFF) {
+        float lux = BH1750_ReadLux(&bh);
+        if(lux >= 0.0f) {
             uint8_t duty = (uint8_t)((uint32_t)lux * 255 / 1000);
             if(duty > 255) duty = 255;
             PWM_SetDuty(TIM2_CH1, duty);
@@ -121,9 +121,9 @@ int main(void) {
 <table>
     <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
     <tr><td><code>BH1750_Init(&bh, addr)</code></td><td>เริ่มต้นเซนเซอร์</td><td><code>BH1750_Init(&bh, 0x23)</code></td></tr>
-    <tr><td><code>BH1750_ReadLux(&bh)</code></td><td>อ่านค่า lux</td><td><code>uint16_t lux = BH1750_ReadLux(&bh)</code></td></tr>
+    <tr><td><code>BH1750_ReadLux(&bh)</code></td><td>อ่านค่า lux</td><td><code>float lux = BH1750_ReadLux(&bh)</code></td></tr>
     <tr><td><code>BH1750_PowerDown(&bh)</code></td><td>เข้า sleep โหมด</td><td><code>BH1750_PowerDown(&bh)</code></td></tr>
-    <tr><td><code>BH1750_PowerOn(&bh)</code></td><td>ปลุกจาก sleep</td><td><code>BH1750_PowerOn(&bh)</code></td></tr>
+    <tr><td><code>BH1750_PowerUp(&bh)</code></td><td>ปลุกจาก sleep</td><td><code>BH1750_PowerUp(&bh)</code></td></tr>
 </table>
 </section>
 
@@ -152,8 +152,8 @@ int main(void)
 
     while(1)
     {
-        uint16_t lux = BH1750_ReadLux(&bh);
-        if(lux == 0xFFFF) { Delay_Ms(1000); continue; }
+        float lux = BH1750_ReadLux(&bh);
+        if(lux < 0.0f) { Delay_Ms(1000); continue; }
 
         uint8_t duty;
         if(lux <= 50)      duty = 255;
@@ -162,7 +162,7 @@ int main(void)
 
         PWM_SetDuty(TIM2_CH1, duty);
 
-        USART_Print("Lux: "); USART_PrintInt(lux);
+        USART_Print("Lux: "); USART_PrintFloat(lux, 1);
         USART_Print(" | PWM: "); USART_PrintInt(duty); USART_Println("");
         Delay_Ms(200);
     }

@@ -53,7 +53,7 @@ flowchart TD
 
     Pin Configurations:
     DEFAULT        : SCL=PC2, SDA=PC1  (ทุกแพ็กเกจ)
-    PARTIAL_REMAP  : SCL=PD2, SDA=PD1  (SOP-8 compatible)
+    PARTIAL_REMAP  : SCL=PD2, SDA=PD1  (ไม่รองรับ SOP-8 — ไม่มี PD2, I2C_SimpleInit() จะ no-op)
     FULL_REMAP     : SCL=PD0, SDA=PD1  (เฉพาะ TSSOP-20/QFN-20)
     </pre>
 
@@ -84,7 +84,7 @@ flowchart TD
       <li>ต่อ <strong>GND</strong> ร่วมกันทุกตัว</li>
     </ol>
 
-    <p><strong>Pull-up 4.7kΩ จำเป็น!</strong> — I2C เป็น open-drain ต้องมี pull-up ถึงจะทำงาน — SOP-8 ใช้ PC1/PC2 หรือ PARTIAL_REMAP (PD1/PD2)<br>
+    <p><strong>Pull-up 4.7kΩ จำเป็น!</strong> — I2C เป็น open-drain ต้องมี pull-up ถึงจะทำงาน — SOP-8 ใช้ PC1/PC2 (DEFAULT) เท่านั้น — PARTIAL_REMAP และ FULL_REMAP ไม่รองรับ SOP-8 (ไม่มี PD0/PD2)<br>
     สามารถต่อหลายอุปกรณ์บนบัสเดียวกันได้ (แต่ละตัวมี address ไม่ซ้ำกัน)</p>
 </section>
 
@@ -167,7 +167,7 @@ int main(void) {
         <tr><td>Scan ไม่เจอ device ใดๆ</td><td>สายสลับ SDA/SCL, หรือ address ผิด</td><td>ตรวจสอบ pin SDA=PC1, SCL=PC2 — ลอง <code>I2C_Scan()</code></td></tr>
         <tr><td>เขียน/อ่าน Error ตลอด</td><td>ความเร็วไม่ตรง หรือสายยาวเกิน</td><td>ใช้ 100kHz, สาย < 20cm, pull-up ไม่เกิน 10kΩ</td></tr>
         <tr><td>อ่านค่าได้ 0xFF ตลอด</td><td><code>I2C_ReadReg()</code> คืน 0xFF เมื่อ error</td><td>ตรวจสอบว่าอุปกรณ์ต่ออยู่ ใช้ <code>I2C_IsDeviceReady()</code></td></tr>
-        <tr><td>SOP-8: I2C ใช้ pin อื่นได้ไหม</td><td>Hardware I2C fixed ที่ PC1/PC2 (หรือ PD1/PD2 remap)</td><td>SOP-8 ใช้ PARTIAL_REMAP (SCL=PD2,SDA=PD1) หรือใช้ Software I2C</td></tr>
+        <tr><td>SOP-8: I2C ใช้ pin อื่นได้ไหม</td><td>Hardware I2C fixed ที่ PC1/PC2 เท่านั้น</td><td>PD0/PD2 ไม่มีบน SOP-8 → PARTIAL_REMAP/FULL_REMAP ไม่รองรับ — ใช้ Software I2C แทน</td></tr>
     </table>
 </section>
 
@@ -216,7 +216,7 @@ int main(void)
 <section>
     <h2>✏️ ลองทำดู</h2>
     <ol>
-        <li>เปลี่ยนไปใช้ <code>I2C_PINS_PARTIAL_REMAP</code> (SCL=PD2,SDA=PD1) — ทดสอบกับ SOP-8</li>
+        <li>เปลี่ยนไปใช้ <code>I2C_PINS_PARTIAL_REMAP</code> (SCL=PD2,SDA=PD1) — ใช้ได้เฉพาะ TSSOP-20/SOP-16/QFN-20 (SOP-8 ไม่รองรับ — I2C_SimpleInit() จะ no-op)</li>
         <li>ใช้ <code>I2C_Scan()</code> ฟังก์ชันแทนการวน loop เอง</li>
         <li>เพิ่ม AHT10 sensor (0x38) — อ่านอุณหภูมิและความชื้น</li>
     </ol>

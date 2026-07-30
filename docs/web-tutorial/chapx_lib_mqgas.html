@@ -19,7 +19,7 @@
     <pre class="mermaid">
 flowchart TD
     A["Preheat 24-48h"] --> B["MQGas_Init(&mq, ch, type, VCC, VREF)"]
-    B --> C["MQGas_Calibrate(&mq)"]
+    B --> C["MQGas_Calibrate(&mq, 50)"]
     C --> D["MQGas_GetPPM(&mq)"]
     D --> E["เทียบค่ากับ threshold"]
     E -->|"เกิน"| F["Alarm!"]
@@ -79,20 +79,20 @@ int main(void) {
     USART_Init(USART1, BAUD_115200);
     ADC_Init(ADC1);
 
-    MQGas_Init(&mq, ADC_CH_PC4, MQ2, 5.0f, 3.3f);
-    //         inst  adc_ch    type VCC  VREF
+    MQGas_Init(&mq, ADC_CH_PC4, MQ_TYPE_MQ2, 5.0f, 3.3f);
+    //         inst  adc_ch    type        VCC  VREF
     USART_Println("MQGas Ready!");</code></pre>
-<p class="explain">🔍 <code>MQGas_Init(&mq, adc_ch, type, VCC, VREF)</code> — instance-based, adc_ch คือช่อง ADC, type=MQ2/MQ3/MQ4/MQ7/MQ135, VCC=แรงดัน heater (5V), VREF=แรงดันอ้างอิง ADC (3.3V)</p></div>
+<p class="explain">🔍 <code>MQGas_Init(&mq, adc_ch, type, VCC, VREF)</code> — instance-based, adc_ch คือช่อง ADC, type=MQ_TYPE_MQ2/MQ_TYPE_MQ3/MQ_TYPE_MQ4/MQ_TYPE_MQ7/MQ_TYPE_MQ135, VCC=แรงดัน heater (5V), VREF=แรงดันอ้างอิง ADC (3.3V)</p></div>
 
 <div class="step"><h3>ขั้นที่ 2: Calibrate + อ่านค่า</h3>
 <pre><code class="language-c">    // Calibrate ในอากาศสะอาด (ต้อง preheat ≥24 ชม.)
-    MQGas_Calibrate(&mq);
+    MQGas_Calibrate(&mq, 50);
 
     float ppm = MQGas_GetPPM(&mq);
     USART_Print("Gas PPM: ");
     USART_PrintFloat(ppm, 2);
     USART_Println("");</code></pre>
-<p class="explain">🔍 <code>MQGas_Calibrate(&mq)</code> — calibrate Ro ในอากาศสะอาด, <code>MQGas_GetPPM(&mq)</code> — คืนค่า PPM</p></div>
+<p class="explain">🔍 <code>MQGas_Calibrate(&mq, samples)</code> — calibrate Ro ในอากาศสะอาด, <code>MQGas_GetPPM(&mq)</code> — คืนค่า PPM</p></div>
 
 <div class="step"><h3>ขั้นที่ 3: Loop + Alarm</h3>
 <pre><code class="language-c">    while(1) {
@@ -116,10 +116,10 @@ int main(void) {
 <section><h2>📋 API Reference</h2>
 <table>
     <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
-    <tr><td><code>MQGas_Init(&mq, ch, type, VCC, VREF)</code></td><td>เริ่มต้นเซนเซอร์</td><td><code>MQGas_Init(&mq, ADC_CH_PC4, MQ2, 5.0f, 3.3f)</code></td></tr>
-    <tr><td><code>MQGas_Calibrate(&mq)</code></td><td>Calibrate Ro ในอากาศสะอาด</td><td><code>MQGas_Calibrate(&mq)</code></td></tr>
+    <tr><td><code>MQGas_Init(&mq, ch, type, VCC, VREF)</code></td><td>เริ่มต้นเซนเซอร์</td><td><code>MQGas_Init(&mq, ADC_CH_PC4, MQ_TYPE_MQ2, 5.0f, 3.3f)</code></td></tr>
+    <tr><td><code>MQGas_Calibrate(&mq, samples)</code></td><td>Calibrate Ro ในอากาศสะอาด</td><td><code>MQGas_Calibrate(&mq, 50)</code></td></tr>
     <tr><td><code>MQGas_GetPPM(&mq)</code></td><td>อ่านค่า PPM ของแก๊ส</td><td><code>float ppm = MQGas_GetPPM(&mq)</code></td></tr>
-    <tr><td><code>MQGas_GetRatio(&mq)</code></td><td>อ่านอัตราส่วน Rs/Ro</td><td><code>float r = MQGas_GetRatio(&mq)</code></td></tr>
+    <tr><td><code>MQGas_GetRs(&mq)</code></td><td>อ่านค่า Rs (kΩ)</td><td><code>float rs = MQGas_GetRs(&mq)</code></td></tr>
     <tr><td><code>MQGas_SetRo(&mq, ro)</code></td><td>ตั้งค่า Ro ด้วยตนเอง</td><td><code>MQGas_SetRo(&mq, 12.5f)</code></td></tr>
 </table>
 </section>
@@ -148,8 +148,8 @@ int main(void)
     pinMode(PC1, PIN_MODE_OUTPUT);  // LED Alarm
 
     MQGas_Instance mq;
-    MQGas_Init(&mq, ADC_CH_PC4, MQ2, 5.0f, 3.3f);
-    MQGas_Calibrate(&mq);
+    MQGas_Init(&mq, ADC_CH_PC4, MQ_TYPE_MQ2, 5.0f, 3.3f);
+    MQGas_Calibrate(&mq, 50);
 
     while(1)
     {

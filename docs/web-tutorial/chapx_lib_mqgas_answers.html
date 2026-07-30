@@ -11,8 +11,8 @@ void mq2_smoke_alarm(void) {
     pinMode(BUZZER_PIN, PIN_MODE_OUTPUT);
 
     MQGas_Instance mq;
-    MQGas_Init(&mq, MQ2_ADC_CH, MQ2, 5.0f, 3.3f);
-    MQGas_Calibrate(&mq);
+    MQGas_Init(&mq, MQ2_ADC_CH, MQ_TYPE_MQ2, 5.0f, 3.3f);
+    MQGas_Calibrate(&mq, 50);
 
     while(1) {
         float ppm = MQGas_GetPPM(&mq);
@@ -33,13 +33,13 @@ void mq2_smoke_alarm(void) {
         Delay_Ms(500);
     }
 }
-</code></pre><div class="approach"><strong>🧠 แนวคิด:</strong> อ่าน ADC → คำนวณ Rs (ความต้านทานเซนเซอร์) ผ่าน voltage divider RL=10k — <code>MQGAS_CalcPPM</code> แปลง Rs→PPM — Buzzer+LED เตือนแบบกระพริบเมื่อเกิน threshold — ค่า PPM สูง = ควันมาก = อันตราย</div></div>
+</code></pre><div class="approach"><strong>🧠 แนวคิด:</strong> อ่าน ADC → คำนวณ Rs (ความต้านทานเซนเซอร์) ผ่าน voltage divider RL=10k — <code>MQGas_GetPPM</code> แปลง Rs→PPM — Buzzer+LED เตือนแบบกระพริบเมื่อเกิน threshold — ค่า PPM สูง = ควันมาก = อันตราย</div></div>
 <div class="answer"><h2>ข้อ 2: Calibrate Ro ในอากาศสะอาด</h2><pre><code class="language-c">float mq2_calibrate_ro(void) {
     USART_Println("Calibrating Ro in clean air...");
     USART_Println("Wait 60s for sensor warm-up");
 
     MQGas_Instance mq;
-    MQGas_Init(&mq, ADC_CH_PC4, MQ2, 5.0f, 3.3f);
+    MQGas_Init(&mq, ADC_CH_PC4, MQ_TYPE_MQ2, 5.0f, 3.3f);
 
     // รอเซนเซอร์อุ่น 1 นาที
     for(int i = 0; i < 60; i++) {
@@ -49,9 +49,9 @@ void mq2_smoke_alarm(void) {
     }
 
     // Calibrate โดยใช้ฟังก์ชันของไลบรารี
-    MQGas_Calibrate(&mq);
+    MQGas_Calibrate(&mq, 50);
 
-    float ro = MQGas_GetRo(&mq);
+    float ro = mq.ro;
     USART_Print("Ro = ");
     USART_PrintFloat(ro, 1);
     USART_Println(" Ohm — saved");

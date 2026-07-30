@@ -43,7 +43,7 @@ flowchart LR
                  4.7kΩ    |
     GND                   +-- GND
 
-    ใช้ I2C_PINS_PARTIAL_REMAP → PD2=SCL, PD1=SDA (SOP-8 compatible)
+    ใช้ I2C_PINS_PARTIAL_REMAP → PD2=SCL, PD1=SDA (TSSOP-20/SOP-16/QFN-20 — ไม่รองรับ SOP-8)
 </pre>
 
 <table class="wiring-table">
@@ -122,7 +122,7 @@ int main(void)
 <ul>
 <li><strong>I2C_SimpleInit(speed, pinConfig):</strong> ตั้งค่า I2C hardware — 100kHz/400kHz — กำหนด pin mapping ตามแพ็กเกจ</li>
 <li><strong>I2C_IsDeviceReady(addr):</strong> ส่ง START + address bit 7-bit + รอ ACK — คืน 1 ถ้ามี device อยู่</li>
-<li><strong>I2C_PINS_PARTIAL_REMAP:</strong> SCL=PD2, SDA=PD1 — เหมาะกับ SOP-8 (ที่ไม่มี PC1/PC2)</li>
+<li><strong>I2C_PINS_PARTIAL_REMAP:</strong> SCL=PD2, SDA=PD1 — ใช้ได้เฉพาะ TSSOP-20/SOP-16/QFN-20 (SOP-8 ไม่รองรับเพราะไม่มี PD2 — I2C_SimpleInit() จะ no-op)</li>
 </ul>
 
 <h3>⚠️ จุดควรระวัง</h3>

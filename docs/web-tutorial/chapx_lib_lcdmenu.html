@@ -8,17 +8,17 @@
 flowchart TD
     A["LCDMenu_Init(&menu, &lcd, &btn_up, &btn_down, &btn_enter, &btn_back)"] --> B["LCDMenu_CreateRoot(&menu, 'Main Menu')"]
     B --> C["User presses UP/DOWN/ENTER/BACK"]
-    C --> D{"Action Type?"}
-    D -->|"SUBMENU"| E["Navigate into submenu"]
-    D -->|"EDIT"| F["Edit numeric value"]
-    D -->|"TOGGLE"| G["Toggle ON/OFF → cb(val)"]
-    D -->|"ACTION"| H["Execute callback"]
-    D -->|"BACK"| I["Return to parent"]
+    C --> D{"Item Type?"}
+    D -->|"TYPE_SUBMENU"| E["Navigate into submenu"]
+    D -->|"TYPE_VALUE"| F["Edit int32_t value (ENTER=edit, UP/DOWN=±, ENTER=confirm, BACK=cancel)"]
+    D -->|"TYPE_TOGGLE"| G["Toggle ON/OFF → cb()"]
+    D -->|"TYPE_CALLBACK"| H["Execute callback"]
+    BACK["BACK button"] -->|"always"| P["Return to parent / exit edit mode"]
     E --> C
     F --> C
     G --> C
     H --> C
-    I --> C
+    P --> C
 </pre></section>
 
 <section><h2>🔌 การต่อวงจร</h2><pre class="ascii-circuit">
@@ -81,15 +81,15 @@ flowchart TD
 
 <section><h2>📚 หลักการทำงาน</h2>
 <p><strong>LCDMenu</strong>: ไลบรารีเมนูแบบลำดับชั้น (hierarchical) สำหรับ LCD1602 16×2 — ใช้ร่วมกับ LCD1602_I2C และ Button — ออกแบบมาสำหรับ MCU หน่วยความจำจำกัดด้วย static memory pool</p>
-<p><strong>Menu Tree</strong>: สร้างเมนูเป็นลำดับชั้น — เพิ่ม item ด้วย <code>LCDMenu_AddItem()</code> — แต่ละ item มีชื่อ, ประเภท, และ callback — เปลี่ยนหน้าโดย UP/DOWN, เข้าด้วย ENTER, กลับด้วย BACK</p>
-<p><strong>4 Callback Types:</strong></p>
+<p><strong>Menu Tree</strong>: สร้างเมนูเป็นลำดับชั้น — เพิ่ม item ด้วย <code>LCDMenu_AddSubMenu/AddCallback/AddToggle/AddValue()</code> — ระบุ parent เพื่อสร้าง hierarchy — เปลี่ยนหน้าโดย UP/DOWN, เข้าด้วย ENTER, กลับด้วย BACK</p>
+<p><strong>4 Item Types (LCDMenu_ItemType):</strong></p>
 <ul>
-<li><strong>SUBMENU</strong> — เข้าไปยังเมนูย่อย — เหมือน folder — ไม่มี callback แทนที่ด้วยการเปลี่ยนหน้า</li>
-<li><strong>EDIT</strong> — แก้ไขค่าตัวเลข (int/float) — UP/DOWN เปลี่ยนค่า, ENTER ยืนยัน — callback จะได้รับค่าใหม่</li>
-<li><strong>TOGGLE</strong> — เปิด/ปิด — ENTER สลับสถานะ — callback ได้รับ 0 หรือ 1</li>
-<li><strong>ACTION</strong> — เรียก callback ทันทีที่กด ENTER — เหมือนปุ่ม execute</li>
-<li><strong>BACK</strong> — กลับไปเมนูก่อนหน้า — ไม่ต้องมี callback</li>
+<li><strong>LCDMENU_TYPE_SUBMENU</strong> — เข้าไปยังเมนูย่อย — เหมือน folder — มี children — ใช้ <code>LCDMenu_AddSubMenu()</code></li>
+<li><strong>LCDMENU_TYPE_VALUE</strong> — แก้ไขค่าตัวเลข (int32_t) — ENTER เข้า edit mode, UP/DOWN เปลี่ยนค่า, ENTER ยืนยัน, BACK ยกเลิก — ใช้ <code>LCDMenu_AddValue()</code></li>
+<li><strong>LCDMENU_TYPE_TOGGLE</strong> — เปิด/ปิด (bool) — ENTER สลับสถานะทันที — ใช้ <code>LCDMenu_AddToggle()</code></li>
+<li><strong>LCDMENU_TYPE_CALLBACK</strong> — เรียก callback ทันทีที่กด ENTER — เหมือนปุ่ม execute — ใช้ <code>LCDMenu_AddCallback()</code></li>
 </ul>
+<p><strong>BACK button</strong> — กลับไปเมนูก่อนหน้า (หรือออกจาก edit mode) — จัดการอัตโนมัติโดย library</p>
 <p><strong>Static Memory Pool</strong>: ทุกอย่างจัดสรรตอน compile — ไม่มี malloc — ปลอดภัยสำหรับ MCU RAM 2KB — กำหนดจำนวน item สูงสุดใน header</p>
 </section>
 
@@ -129,18 +129,28 @@ int main(void) {
 <p class="explain">🔍 <code>LCDMenu_Init(&menu, &lcd, &btn_up, &btn_down, &btn_enter, &btn_back)</code> — ต้อง Init LCD และ Button_Instance ก่อน — <code>LCDMenu_CreateRoot(&menu, "Main Menu")</code> สร้าง root menu</p></div>
 
 <div class="step"><h3>ขั้นที่ 2: สร้าง Menu Tree + Callbacks</h3>
-<pre><code class="language-c">    LCDMenu_AddItem(&menu, "Temperature",   LCDMENU_SUBMENU, NULL);
-    LCDMenu_AddItem(&menu, "  Set Max",     LCDMENU_EDIT,    on_setpoint);
-    LCDMenu_AddItem(&menu, "  Set Min",     LCDMENU_EDIT,    NULL);
-    LCDMenu_AddItem(&menu, "  Back",        LCDMENU_BACK,    NULL);
-    LCDMenu_AddItem(&menu, "WiFi Control",  LCDMENU_TOGGLE,  NULL);
-    LCDMenu_AddItem(&menu, "PID Tuning",    LCDMENU_SUBMENU, NULL);
-    LCDMenu_AddItem(&menu, "  Kp=",         LCDMENU_EDIT,    NULL);
-    LCDMenu_AddItem(&menu, "  Ki=",         LCDMENU_EDIT,    NULL);
-    LCDMenu_AddItem(&menu, "  Back",        LCDMENU_BACK,    NULL);
-    LCDMenu_AddItem(&menu, "Save & Exit",   LCDMENU_ACTION,  NULL);
+<pre><code class="language-c">    // ตัวแปรที่ menu items จะใช้ (ต้องเป็น static/global)
+    static int32_t set_max = 80, set_min = 10;
+    static bool wifi_on = false;
+    static int32_t kp = 20, ki = 5;
+
+    // Sub-menu: Temperature (items ลูกอยู่ใต้ temp)
+    LCDMenu_Item* temp = LCDMenu_AddSubMenu(&menu, menu.root, "Temperature", NULL);
+    LCDMenu_AddValue(&menu, temp, "Set Max", &set_max, -50, 200, 1, on_setpoint);
+    LCDMenu_AddValue(&menu, temp, "Set Min", &set_min, -50, 200, 1, NULL);
+
+    // Toggle: WiFi Control (ที่ root)
+    LCDMenu_AddToggle(&menu, menu.root, "WiFi Control", &wifi_on, NULL);
+
+    // Sub-menu: PID Tuning
+    LCDMenu_Item* pid = LCDMenu_AddSubMenu(&menu, menu.root, "PID Tuning", NULL);
+    LCDMenu_AddValue(&menu, pid, "Kp", &kp, 0, 100, 1, NULL);
+    LCDMenu_AddValue(&menu, pid, "Ki", &ki, 0, 100, 1, NULL);
+
+    // Callback action: Save & Exit
+    LCDMenu_AddCallback(&menu, menu.root, "Save & Exit", NULL);
     USART_Println("Menu Ready!");</code></pre>
-<p class="explain">🔍 <code>LCDMenu_AddItem(&menu, name, type, callback)</code> — ชื่อที่มีเว้นวรรคนำหน้า ("  ") คือ item ใน submenu — ต้องมี BACK ทุก submenu — callback เป็น optional สำหรับ SUBMENU/BACK</p></div>
+<p class="explain">🔍 ใช้ <code>LCDMenu_AddSubMenu/AddCallback/AddToggle/AddValue(&menu, parent, name, ...)</code> — ระบุ <code>parent</code> เพื่อสร้าง hierarchy (ไม่ใช้การเว้นวรรคนำหน้า) — BACK จัดการอัตโนมัติโดยปุ่ม BACK</p></div>
 
 <div class="step"><h3>ขั้นที่ 3: Loop — Update Menu</h3>
 <pre><code class="language-c">    while(1) {
@@ -155,17 +165,20 @@ int main(void) {
 <section><h2>📋 API Reference</h2><table><tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
 <tr><td><code>LCDMenu_Init(&menu, &lcd, &up, &dn, &en, &back)</code></td><td>เริ่มต้นระบบเมนู</td><td><code>LCDMenu_Init(&menu, &lcd, &btn_up, &btn_down, &btn_enter, &btn_back)</code></td></tr>
 <tr><td><code>LCDMenu_CreateRoot(&menu, name)</code></td><td>สร้าง root menu</td><td><code>LCDMenu_CreateRoot(&menu, "Main Menu")</code></td></tr>
-<tr><td><code>LCDMenu_AddItem(&menu, name, type, cb)</code></td><td>เพิ่ม item — SUBMENU/EDIT/TOGGLE/ACTION/BACK</td><td><code>LCDMenu_AddItem(&menu, "LED", LCDMENU_TOGGLE, cb)</code></td></tr>
+<tr><td><code>LCDMenu_AddSubMenu(&menu, parent, name, cb)</code></td><td>เพิ่ม sub-menu (มี children)</td><td><code>LCDMenu_Item* s = LCDMenu_AddSubMenu(&menu, menu.root, "Set", NULL)</code></td></tr>
+<tr><td><code>LCDMenu_AddCallback(&menu, parent, name, cb)</code></td><td>เพิ่ม action item (ENTER → cb)</td><td><code>LCDMenu_AddCallback(&menu, menu.root, "Save", on_save)</code></td></tr>
+<tr><td><code>LCDMenu_AddToggle(&menu, parent, name, &val, cb)</code></td><td>เพิ่ม ON/OFF toggle (bool)</td><td><code>LCDMenu_AddToggle(&menu, menu.root, "LED", &led_on, NULL)</code></td></tr>
+<tr><td><code>LCDMenu_AddValue(&menu, parent, name, &val, min, max, step, cb)</code></td><td>เพิ่มตัวเลขปรับได้ (int32_t)</td><td><code>LCDMenu_AddValue(&menu, menu.root, "Speed", &spd, 0, 100, 5, NULL)</code></td></tr>
 <tr><td><code>LCDMenu_Update(&menu)</code></td><td>อัปเดตเมนู — เรียกใน loop</td><td><code>LCDMenu_Update(&menu)</code></td></tr>
-<tr><td><code>LCDMenu_GoHome(&menu)</code></td><td>กลับไปเมนูหลัก (root)</td><td><code>LCDMenu_GoHome(&menu)</code></td></tr>
+<tr><td><code>LCDMenu_Reset(&menu)</code></td><td>กลับไปเมนูหลัก (root)</td><td><code>LCDMenu_Reset(&menu)</code></td></tr>
 </table></section>
 
 <section><h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2><table><tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
 <tr><td>จอไม่แสดงอะไรเลย</td><td>ลืม <code>LCD_Init()</code> ก่อน <code>LCDMenu_Init()</code></td><td>ต้อง Init LCD ก่อน — <code>LCD_Init(&lcd, 0x27, 16, 2)</code> แล้วตามด้วย <code>LCDMenu_Init()</code></td></tr>
 <tr><td>กด UP/DOWN แล้วกระโดดหลายช่อง</td><td>Refresh rate เร็วเกินไป + ไม่มี debounce</td><td>เพิ่ม Delay_Ms เป็น 80-100ms — Button_Instance มี debounce ในตัว</td></tr>
-<tr><td>SUBMENU ไม่ยอมเข้า</td><td>ลืม BACK item — หรือลูกศรไม่ตรงกับ ENTER</td><td>ทุก SUBMENU ต้องมี BACK เป็น item สุดท้าย — เช็ค pin mapping ปุ่ม</td></tr>
-<tr><td>TOGGLE ค่าไม่เปลี่ยน</td><td>Callback signature ไม่ตรง</td><td>Callback TOGGLE ต้องเป็น <code>void cb(uint8_t val)</code></td></tr>
-<tr><td>EDIT item ไม่เซฟค่า</td><td>ไม่ได้ใช้ค่าที่แก้ไขใน callback</td><td>ใน callback ของ EDIT ให้ดึงค่าที่แก้ไขมาใช้</td></tr>
+<tr><td>SUBMENU ไม่ยอมเข้า</td><td>ลืม BACK item — หรือลูกศรไม่ตรงกับ ENTER</td><td>BACK จัดการอัตโนมัติโดยปุ่ม BACK — เช็ค pin mapping ปุ่ม</td></tr>
+<tr><td>TOGGLE ค่าไม่เปลี่ยน</td><td>Callback signature ไม่ตรง</td><td>Callback ต้องเป็น <code>void cb(void)</code> — อ่านค่าจาก <code>bool*</code> ที่ส่งให้ AddToggle</td></tr>
+<tr><td>VALUE item ไม่เซฟค่า</td><td>ไม่ได้ใช้ค่าที่แก้ไขใน callback</td><td>ใน callback ของ VALUE ให้ดึงค่าจาก <code>int32_t*</code> ที่ส่งให้ AddValue</td></tr>
 <tr><td>RAM หมด — menu item หาย</td><td>เกิน MAX_ITEMS ที่ตั้งใน header</td><td>เพิ่ม <code>#define LCDMENU_MAX_ITEMS 32</code> ก่อน include — หรือลดจำนวน item</td></tr>
 </table></section>
 
@@ -178,13 +191,12 @@ int main(void) {
 LCD1602_Handle lcd;
 Button_Instance btn_up, btn_down, btn_enter, btn_back;
 LCDMenu_Handle menu;
-uint8_t setpoint = 40;
-uint8_t fan_on = 0;
+int32_t setpoint = 40;
+bool fan_on = false;
 
-void on_setpoint(void) { /* get value from menu */ }
-void on_fan(uint8_t val) {
-    fan_on = val;
-    pinMode(PC0, PIN_MODE_OUTPUT); digitalWrite(PC0, val);
+void on_setpoint(void) { USART_Print("Setpoint: "); USART_PrintNum(setpoint); }
+void on_fan(void) {
+    pinMode(PC0, PIN_MODE_OUTPUT); digitalWrite(PC0, fan_on);
 }
 void on_save(void) {
     Flash_Unlock();
@@ -208,11 +220,13 @@ int main(void) {
     LCDMenu_Init(&menu, &lcd, &btn_up, &btn_down, &btn_enter, &btn_back);
     LCDMenu_CreateRoot(&menu, "Settings");
 
-    LCDMenu_AddItem(&menu, "Temperature",  LCDMENU_SUBMENU, NULL);
-    LCDMenu_AddItem(&menu, "  Setpoint",   LCDMENU_EDIT,    on_setpoint);
-    LCDMenu_AddItem(&menu, "  Back",       LCDMENU_BACK,    NULL);
-    LCDMenu_AddItem(&menu, "Fan Control",  LCDMENU_TOGGLE,  on_fan);
-    LCDMenu_AddItem(&menu, "Save & Exit",  LCDMENU_ACTION,  on_save);
+    // Sub-menu: Temperature
+    LCDMenu_Item* temp = LCDMenu_AddSubMenu(&menu, menu.root, "Temperature", NULL);
+    LCDMenu_AddValue(&menu, temp, "Setpoint", &setpoint, 0, 200, 1, on_setpoint);
+    // Toggle: Fan Control (ที่ root)
+    LCDMenu_AddToggle(&menu, menu.root, "Fan Control", &fan_on, on_fan);
+    // Callback action: Save & Exit
+    LCDMenu_AddCallback(&menu, menu.root, "Save & Exit", on_save);
 
     while(1) {
         LCDMenu_Update(&menu);

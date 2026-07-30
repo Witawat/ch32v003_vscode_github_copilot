@@ -129,7 +129,7 @@ int main(void) {
     <tr><td><code>PMS5003_Init(&sensor, pins)</code></td><td>เริ่มต้นเซนเซอร์</td><td><code>PMS5003_Init(&sensor, USART_PINS_DEFAULT)</code></td></tr>
     <tr><td><code>PMS5003_GetData(&sensor, &data)</code></td><td>อ่าน frame + verify checksum</td><td><code>if(PMS5003_GetData(&sensor, &d))</code></td></tr>
     <tr><td><code>PMS5003_Sleep(&sensor)</code></td><td>เข้า sleep mode</td><td><code>PMS5003_Sleep(&sensor)</code></td></tr>
-    <tr><td><code>PMS5003_WakeUp(&sensor)</code></td><td>ปลุกจาก sleep</td><td><code>PMS5003_WakeUp(&sensor)</code></td></tr>
+    <tr><td><code>PMS5003_Wakeup(&sensor)</code></td><td>ปลุกจาก sleep</td><td><code>PMS5003_Wakeup(&sensor)</code></td></tr>
 </table>
 </section>
 

@@ -107,7 +107,7 @@ flowchart TD
         <li><strong>Mode 3:</strong> CPOL=1, CPHA=1 — Clock idle HIGH, sample rising edge</li>
     </ul>
     <p><strong>CS (Chip Select)</strong> — แต่ละอุปกรณ์ต้องมี CS แยก — HIGH = ไม่เลือก, LOW = เลือก — ต้องควบคุมเอง</p>
-    <p><strong>SPI vs I2C:</strong> SPI เร็วกว่า (สูงสุด 12MHz vs 400kHz) ใช้ 4 สาย, full-duplex, ไม่มี addressing ในโปรโตคอล</p>
+    <p><strong>SPI vs I2C:</strong> SPI เร็วกว่า (สูงสุด 24MHz vs 400kHz) ใช้ 4 สาย, full-duplex, ไม่มี addressing ในโปรโตคอล — หมายเหตุ: enum <code>SPI_12MHZ</code> ใน <code>SimpleSPI.h</code> อิงจากสมมติฐาน PCLK2=24MHz แต่จริง PCLK2=48MHz (HSI+PLL) ทำให้ความเร็วจริงเป็น 2 เท่าของชื่อ enum (ดู <code>SimpleSPI.h:64-79</code>)</p>
     <p><strong>Full-Duplex:</strong> ทุกครั้งที่ส่ง 1 byte จะได้รับกลับมา 1 byte พร้อมกัน — <code>SPI_Transfer()</code> ทำทั้งส่งและรับ</p>
 </section>
 

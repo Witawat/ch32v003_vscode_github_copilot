@@ -140,17 +140,17 @@ flowchart TD
             <tr><td><code>OPAMP_Disable()</code></td><td>ปิด OPAMP (ประหยัดพลังงาน)</td><td><code>OPAMP_Disable();</code></td></tr>
             <tr><td><code>OPAMP_IsEnabled()</code></td><td>ตรวจสอบว่า OPAMP เปิดอยู่หรือไม่</td><td><code>if (OPAMP_IsEnabled()) { ... }</code></td></tr>
             <tr><td><code>OPAMP_SetMode(mode)</code></td><td>เปลี่ยนโหมด OPAMP ระหว่างทำงาน</td><td><code>OPAMP_SetMode(OPAMP_MODE_COMPARATOR);</code></td></tr>
-            <tr><td><code>OPAMP_GetConfig()</code></td><td>อ่านค่า config ปัจจุบัน</td><td><code>uint32_t cfg = OPAMP_GetConfig();</code></td></tr>
-            <tr><td><code>OPAMP_Init(chp, chn, mode)</code></td><td>เริ่มต้นด้วยการเลือก channel เอง</td><td><code>OPAMP_Init(CHP0, CHN0, OPAMP_MODE_NON_INVERTING);</code></td></tr>
-            <tr><td><code>OPAMP_SetChannels(chp, chn)</code></td><td>เปลี่ยน channel input</td><td><code>OPAMP_SetChannels(CHP0, CHN0);</code></td></tr>
-            <tr><td><code>OPAMP_ConfigVoltageFollower()</code></td><td>ตั้งค่าเป็น Voltage Follower สำเร็จรูป</td><td><code>OPAMP_ConfigVoltageFollower();</code></td></tr>
-            <tr><td><code>OPAMP_ConfigNonInverting()</code></td><td>ตั้งค่าโหมด Non-Inverting</td><td><code>OPAMP_ConfigNonInverting();</code></td></tr>
-            <tr><td><code>OPAMP_ConfigInverting()</code></td><td>ตั้งค่าโหมด Inverting</td><td><code>OPAMP_ConfigInverting();</code></td></tr>
-            <tr><td><code>OPAMP_ConfigComparator()</code></td><td>ตั้งค่าโหมด Comparator</td><td><code>OPAMP_ConfigComparator();</code></td></tr>
+            <tr><td><code>OPAMP_GetConfig(pos*, neg*)</code></td><td>อ่านค่า channel config ปัจจุบัน (out-parameter, ไม่ return ค่า)</td><td><code>OPAMP_Channel_Positive pos; OPAMP_Channel_Negative neg;<br>OPAMP_GetConfig(&pos, &neg);</code></td></tr>
+            <tr><td><code>OPAMP_Init(pos_ch, neg_ch)</code></td><td>เริ่มต้นด้วยการเลือก channel เอง (ไม่มี mode param)</td><td><code>OPAMP_Init(OPAMP_CHP0, OPAMP_CHN0);</code></td></tr>
+            <tr><td><code>OPAMP_SetChannels(chp, chn)</code></td><td>เปลี่ยน channel input</td><td><code>OPAMP_SetChannels(OPAMP_CHP0, OPAMP_CHN0);</code></td></tr>
+            <tr><td><code>OPAMP_ConfigVoltageFollower(pos_ch)</code></td><td>ตั้งค่าเป็น Voltage Follower สำเร็จรูป</td><td><code>OPAMP_ConfigVoltageFollower(OPAMP_CHP0);</code></td></tr>
+            <tr><td><code>OPAMP_ConfigNonInverting(pos_ch, neg_ch)</code></td><td>ตั้งค่าโหมด Non-Inverting</td><td><code>OPAMP_ConfigNonInverting(OPAMP_CHP0, OPAMP_CHN0);</code></td></tr>
+            <tr><td><code>OPAMP_ConfigInverting(pos_ch, neg_ch)</code></td><td>ตั้งค่าโหมด Inverting</td><td><code>OPAMP_ConfigInverting(OPAMP_CHP0, OPAMP_CHN0);</code></td></tr>
+            <tr><td><code>OPAMP_ConfigComparator(pos_ch, neg_ch)</code></td><td>ตั้งค่าโหมด Comparator</td><td><code>OPAMP_ConfigComparator(OPAMP_CHP0, OPAMP_CHN0);</code></td></tr>
             <tr><td><code>OPAMP_CalculateGainNonInv(Rf, Rin)</code></td><td>คำนวณ gain ของวงจร Non-Inverting</td><td><code>float g = OPAMP_CalculateGainNonInv(10000, 10000); // 2.0</code></td></tr>
             <tr><td><code>OPAMP_CalculateGainInv(Rf, Rin)</code></td><td>คำนวณ gain ของวงจร Inverting</td><td><code>float g = OPAMP_CalculateGainInv(10000, 10000); // 1.0</code></td></tr>
-            <tr><td><code>OPAMP_CalculateR2NonInv(gain, R1)</code></td><td>คำนวณค่า Rf เมื่อทราบ gain และ Rin</td><td><code>float rf = OPAMP_CalculateR2NonInv(2.0, 10000); // 10000</code></td></tr>
-            <tr><td><code>OPAMP_CalculateR2Inv(gain, R1)</code></td><td>คำนวณค่า Rf สำหรับ Inverting</td><td><code>float rf = OPAMP_CalculateR2Inv(2.0, 10000); // 20000</code></td></tr>
+            <tr><td><code>OPAMP_CalculateR2NonInv(R1, gain)</code></td><td>คำนวณค่า R2 (Rf) เมื่อทราบ R1 และ gain ที่ต้องการ</td><td><code>uint32_t r2 = OPAMP_CalculateR2NonInv(10000, 2.0); // 10000</code></td></tr>
+            <tr><td><code>OPAMP_CalculateR2Inv(R1, gain)</code></td><td>คำนวณค่า R2 (Rf) สำหรับ Inverting</td><td><code>uint32_t r2 = OPAMP_CalculateR2Inv(10000, 2.0); // 20000</code></td></tr>
         </tbody>
     </table>
 
@@ -164,7 +164,7 @@ flowchart TD
 
     <div class="step">
         <h3>ขั้นที่ 1: Include Header + ตั้งค่าระบบ</h3>
-        <pre><code class="language-c">#include "simplehal.h"
+        <pre><code class="language-c">#include "SimpleHAL.h"
 
 int main(void) {
     SystemCoreClockUpdate();
@@ -176,7 +176,7 @@ int main(void) {
         // main loop
     }
 }</code></pre>
-        <p class="explain">🔍 เริ่มต้นด้วยการ include simplehal.h และตั้งค่าระบบพื้นฐานเสมอ</p>
+        <p class="explain">🔍 เริ่มต้นด้วยการ include SimpleHAL.h และตั้งค่าระบบพื้นฐานเสมอ</p>
     </div>
 
     <div class="step">
@@ -195,7 +195,7 @@ int main(void) {
     <div class="step">
         <h3>ขั้นที่ 3: อ่านสัญญาณผ่าน ADC</h3>
         <pre><code class="language-c">    while (1) {
-        uint16_t raw = ADC_Read(PA2);  // อ่าน output จากช่องเดียวกับ OPAMP
+        uint16_t raw = ADC_Read(ADC_CH_PA2);  // อ่าน output จากช่องเดียวกับ OPAMP
         float voltage = raw * 3.3f / 4095.0f;
         printf("Vout = %.3f V\r\n", voltage);
         Delay_Ms(500);
@@ -217,19 +217,19 @@ int main(void) {
 <section>
     <h2>🟢 ตัวอย่างขั้นต้น</h2>
     <p>Voltage Follower — Buffer สัญญาณเพื่อ read ผ่าน ADC ได้อย่างแม่นยำโดยไม่ดึงกระแสจากแหล่งสัญญาณ</p>
-    <pre><code class="language-c">#include "simplehal.h"
+    <pre><code class="language-c">#include "SimpleHAL.h"
 
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    USART_SimpleInit(USART_115200);
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
 
     OPAMP_SimpleInit(OPAMP_MODE_VOLTAGE_FOLLOWER);
     OPAMP_Enable();
     ADC_SimpleInit();
 
     while (1) {
-        uint16_t raw = ADC_Read(PA2);
+        uint16_t raw = ADC_Read(ADC_CH_PA2);
         float voltage = raw * 3.3f / 4095.0f;
         printf("Vout = %.3f V\r\n", voltage);
         Delay_Ms(500);
@@ -242,7 +242,7 @@ int main(void) {
     <div class="approach">
         <strong>แนวคิด:</strong> ใช้ OPAMP เป็น Comparator — เปรียบเทียบแรงดัน PA2 (V+) กับ PA1 (V−) ถ้า V+ > V− ให้ output HIGH
     </div>
-    <pre><code class="language-c">#include "simplehal.h"
+    <pre><code class="language-c">#include "SimpleHAL.h"
 
 int main(void) {
     SystemCoreClockUpdate();
@@ -256,8 +256,8 @@ int main(void) {
     while (1) {
         if (OPAMP_IsEnabled()) {
             // V+ (PA2) > V− (PA1) = output goes high
-            uint16_t vp = ADC_Read(PA2);
-            uint16_t vn = ADC_Read(PA1);
+            uint16_t vp = ADC_Read(ADC_CH_PA2);
+            uint16_t vn = ADC_Read(ADC_CH_PA1);
 
             if (vp > vn) {
                 digitalWrite(PC0, HIGH);  // LED ติด
@@ -275,12 +275,12 @@ int main(void) {
     <div class="approach">
         <strong>แนวคิด:</strong> Non-Inverting Amplifier Gain = 2 — ขยายสัญญาณ 2 เท่า ด้วย R1 = R2 = 10kΩ ภายนอก
     </div>
-    <pre><code class="language-c">#include "simplehal.h"
+    <pre><code class="language-c">#include "SimpleHAL.h"
 
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    USART_SimpleInit(USART_115200);
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
     ADC_SimpleInit();
 
     // คำนวณ gain ตอน init (float OK — เรียกครั้งเดียว)
@@ -291,7 +291,7 @@ int main(void) {
     OPAMP_Enable();
 
     while (1) {
-        uint16_t raw = ADC_Read(PA2);
+        uint16_t raw = ADC_Read(ADC_CH_PA2);
         float vout = raw * 3.3f / 4095.0f;
 
         // Vin = Vout / Gain (คำนวณย้อนกลับ)

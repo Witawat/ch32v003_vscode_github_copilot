@@ -97,15 +97,15 @@ flowchart TD
 <section>
     <h2>USART Print Extensions (Optional)</h2>
     <div class="callout callout-note">
-        <strong>ต้องเปิดใช้งานด้วย define:</strong> <code>#define USART_PRINT_EXTENSIONS</code>
+        <strong>ต้องเปิดใช้งานด้วย define:</strong> <code>#define ENABLE_USART_PRINTLN</code> และ <code>#define ENABLE_USART_PRINTFLOAT</code>
     </div>
     <table>
         <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th></tr>
         <tr><td><code>USART_Println(str)</code></td><td>พิมพ์ string + ขึ้นบรรทัดใหม่</td></tr>
         <tr><td><code>USART_PrintlnNum(num)</code></td><td>พิมพ์เลข + ขึ้นบรรทัดใหม่</td></tr>
-        <tr><td><code>USART_PrintlnHex(num)</code></td><td>พิมพ์เลขฐาน 16 + ขึ้นบรรทัดใหม่</td></tr>
-        <tr><td><code>USART_PrintFloat(num)</code></td><td>พิมพ์ float</td></tr>
-        <tr><td><code>USART_PrintlnFloat(num)</code></td><td>พิมพ์ float + ขึ้นบรรทัดใหม่</td></tr>
+        <tr><td><code>USART_PrintlnHex(num, uppercase)</code></td><td>พิมพ์เลขฐาน 16 + ขึ้นบรรทัดใหม่ (uppercase: 1=ตัวใหญ่, 0=ตัวเล็ก)</td></tr>
+        <tr><td><code>USART_PrintFloat(val, decimal_places)</code></td><td>พิมพ์ float ตามจำนวนทศนิยมที่กำหนด</td></tr>
+        <tr><td><code>USART_PrintlnFloat(val, decimal_places)</code></td><td>พิมพ์ float + ขึ้นบรรทัดใหม่</td></tr>
     </table>
 </section>
 
@@ -121,7 +121,7 @@ flowchart TD
     </div>
     <div class="step">
         <h3>3. randomSeed ก่อนใช้ random</h3>
-        <p><code>randomSeed(ADC_Read())</code> — ใช้ค่า noise จาก ADC เป็น seed</p>
+        <p><code>randomSeed(ADC_Read(ADC_CH_PA2))</code> — ใช้ค่า noise จาก ADC เป็น seed</p>
     </div>
     <div class="step">
         <h3>4. dtostrf — บัฟเฟอร์ต้องใหญ่พอ</h3>
@@ -167,10 +167,10 @@ int main(void) {
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    USART_SimpleInit(USART_115200);
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
     GPIO_Init(GPIOC, GPIO_Pin_0, GPIO_Mode_Out_PP);
 
-    randomSeed(ADC_Read()); // seed จาก ADC noise
+    randomSeed(ADC_Read(ADC_CH_PA2)); // seed จาก ADC noise
 
     while (1) {
         uint8_t dice = _randomRange(1, 7); // 1-6
@@ -216,7 +216,7 @@ void task_print_ms(void) {
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    USART_SimpleInit(USART_115200);
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
     GPIO_Init(GPIOC, GPIO_Pin_0, GPIO_Mode_Out_PP);
 
     IWDG_SimpleInit(2000); // เปิด watchdog

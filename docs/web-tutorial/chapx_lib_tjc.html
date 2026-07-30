@@ -17,8 +17,8 @@
     <h2>🧭 แผนภาพการทำงาน</h2>
     <pre class="mermaid">
 flowchart TD
-    A["TJC_Init(BAUD_9600, TJC_PINS_DEFAULT)"] --> B["TJC_SendCommand(cmd)"]
-    B --> C["TJC_SetText / SetValue"]
+    A["TJC_Init(BAUD_9600, USART_PINS_DEFAULT)"] --> B["TJC_SendCommand(cmd)"]
+    B --> C["TJC_SendCommand(t0.txt / n0.val)"]
     C --> D["while(1): TJC_ProcessResponse()"]
     D --> E{"Event?"}
     E -->|"Touch"| F["Callback(page,id,event)"]
@@ -72,8 +72,8 @@ flowchart TD
 #include "SimpleHAL.h"
 #include "TJC.h"
 
-void OnTouch(uint8_t page, uint8_t id, uint8_t event) {
-    if(page == 0 && id == 1) TJC_SendCommand("page 1");
+void OnTouch(TJC_TouchEvent_t *event) {
+    if(event->page_id == 0 && event->component_id == 1) TJC_SendCommand("page 1");
 }
 
 int main(void) {
@@ -81,16 +81,16 @@ int main(void) {
     Timer_Init();
     USART_Init(USART1, BAUD_9600);
 
-    TJC_Init(BAUD_9600, TJC_PINS_DEFAULT);
-    TJC_RegisterTouchCallback(OnTouch);
+    TJC_Init(BAUD_9600, USART_PINS_DEFAULT);
+    TJC_RegisterTouchEventCallback(OnTouch);
     TJC_SendCommand("page 0");</code></pre>
-<p class="explain">🔍 <code>TJC_Init(baud, pins)</code> — ไม่มี instance, ใช้ global functions — TJC_PINS_DEFAULT</p></div>
+<p class="explain">🔍 <code>TJC_Init(baud, pins)</code> — ไม่มี instance, ใช้ global functions — USART_PINS_DEFAULT</p></div>
 <div class="step"><h3>ขั้นที่ 2: ส่งข้อมูล + อ่านค่า</h3>
-<pre><code class="language-c">    TJC_SetText("t0", "Hello");
-    TJC_SetValue("n0", 123);
-    int32_t val = TJC_GetValue("n0");
+<pre><code class="language-c">    TJC_SendCommand("t0.txt=\"Hello\"");
+    TJC_SendCommand("n0.val=123");
+    TJC_RegisterNumericCallback(on_numeric);
     TJC_SendCommand("page 1");</code></pre>
-<p class="explain">🔍 <code>TJC_SetText(obj, txt)</code> — ไม่มี handle, <code>TJC_SendCommand(cmd)</code> — ส่งคำสั่งโดยตรง</p></div>
+<p class="explain">🔍 <code>TJC_SendCommand(cmd)</code> — ส่ง raw command เช่น <code>t0.txt="Hi"</code> หรือ <code>n0.val=123</code> — อ่านค่าจาก HMI ใช้ callback-based (RegisterNumericCallback) ไม่มี sync getValue — ต้อง register callback แล้วรอ event</p></div>
 <div class="step"><h3>ขั้นที่ 3: Loop + ProcessResponse</h3>
 <pre><code class="language-c">    while(1) {
         TJC_ProcessResponse();
@@ -102,12 +102,12 @@ int main(void) {
 <section><h2>📋 API Reference</h2>
 <table>
     <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
-    <tr><td><code>TJC_Init(baud, pins)</code></td><td>เริ่มต้น TJC HMI</td><td><code>TJC_Init(BAUD_9600, TJC_PINS_DEFAULT)</code></td></tr>
+    <tr><td><code>TJC_Init(baud, pins)</code></td><td>เริ่มต้น TJC HMI</td><td><code>TJC_Init(BAUD_9600, USART_PINS_DEFAULT)</code></td></tr>
     <tr><td><code>TJC_SendCommand(cmd)</code></td><td>ส่งคำสั่งไปจอ</td><td><code>TJC_SendCommand("page 0")</code></td></tr>
-    <tr><td><code>TJC_SetText(obj, txt)</code></td><td>เขียนข้อความบน object</td><td><code>TJC_SetText("t0", "Hello")</code></td></tr>
-    <tr><td><code>TJC_SetValue(obj, val)</code></td><td>ตั้งค่าตัวเลข</td><td><code>TJC_SetValue("n0", 123)</code></td></tr>
-    <tr><td><code>TJC_GetValue(obj)</code></td><td>อ่านค่าจาก widget</td><td><code>int v = TJC_GetValue("n0")</code></td></tr>
-    <tr><td><code>TJC_RegisterTouchCallback(fn)</code></td><td>ลงทะเบียน callback</td><td><code>TJC_RegisterTouchCallback(OnTouch)</code></td></tr>
+    <tr><td><code>TJC_SendCommand(cmd)</code></td><td>เขียนข้อความบน object</td><td><code>TJC_SendCommand("t0.txt=\"Hello\"")</code></td></tr>
+    <tr><td><code>TJC_SendCommand(cmd)</code></td><td>ตั้งค่าตัวเลข</td><td><code>TJC_SendCommand("n0.val=123")</code></td></tr>
+    <tr><td><code>TJC_RegisterNumericCallback(fn)</code></td><td>รับค่าจาก widget (callback)</td><td><code>TJC_RegisterNumericCallback(on_numeric)</code></td></tr>
+    <tr><td><code>TJC_RegisterTouchEventCallback(fn)</code></td><td>ลงทะเบียน callback</td><td><code>TJC_RegisterTouchEventCallback(OnTouch)</code></td></tr>
     <tr><td><code>TJC_ProcessResponse()</code></td><td>ประมวลผล RX buffer</td><td><code>TJC_ProcessResponse()</code></td></tr>
 </table>
 </section>
@@ -123,10 +123,10 @@ int main(void) {
 #include "SimpleHAL.h"
 #include "TJC.h"
 
-void OnTouch(uint8_t page, uint8_t id, uint8_t event) {
-    if(event == 1) {
-        if(page == 0 && id == 1) TJC_SendCommand("page 1");
-        if(page == 1 && id == 0) TJC_SendCommand("page 0");
+void OnTouch(TJC_TouchEvent_t *event) {
+    if(event->event_type == 1) {
+        if(event->page_id == 0 && event->component_id == 1) TJC_SendCommand("page 1");
+        if(event->page_id == 1 && event->component_id == 0) TJC_SendCommand("page 0");
     }
 }
 
@@ -135,8 +135,8 @@ int main(void) {
     Timer_Init();
     USART_Init(USART1, BAUD_9600);
 
-    TJC_Init(BAUD_9600, TJC_PINS_DEFAULT);
-    TJC_RegisterTouchCallback(OnTouch);
+    TJC_Init(BAUD_9600, USART_PINS_DEFAULT);
+    TJC_RegisterTouchEventCallback(OnTouch);
     TJC_SendCommand("page 0");
 
     while(1) {

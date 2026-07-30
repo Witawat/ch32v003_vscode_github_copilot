@@ -78,12 +78,12 @@ flowchart TD
     <table>
         <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th></tr>
         <tr><td><code>WWDG_SimpleInit(counter, window)</code></td><td>เริ่มต้น WWDG แบบง่าย</td></tr>
-        <tr><td><code>WWDG_Refresh()</code></td><td>ต่ออายุ watchdog (reload counter)</td></tr>
-        <tr><td><code>WWDG_CalcTimeout(counter, prescaler)</code></td><td>คำนวณ timeout เป็น ms</td></tr>
+        <tr><td><code>WWDG_Refresh(counter)</code></td><td>ต่ออายุ watchdog (reload counter)</td></tr>
+        <tr><td><code>WWDG_CalcTimeout(prescaler, counter)</code></td><td>คำนวณ timeout เป็น ms</td></tr>
         <tr><td><code>WWDG_GetInterruptFlag()</code></td><td>อ่าน flag Early Warning interrupt</td></tr>
         <tr><td><code>WWDG_ClearInterruptFlag()</code></td><td>ล้าง flag Early Warning interrupt</td></tr>
-        <tr><td><code>WWDG_Disable()</code></td><td>ปิด WWDG (ใช้ได้ก่อน WDGA=1 เท่านั้น)</td></tr>
-        <tr><td><code>WWDG_InitWithInterrupt(counter, window)</code></td><td>เริ่มต้น WWDG พร้อม Early Warning interrupt</td></tr>
+        <tr><td><code>WWDG_Disable()</code></td><td>รีเซ็ต configuration registers เท่านั้น — WDGA bit หยุดไม่ได้!</td></tr>
+        <tr><td><code>WWDG_InitWithInterrupt(counter, window, prescaler)</code></td><td>เริ่มต้น WWDG พร้อม Early Warning interrupt</td></tr>
         <tr><td><code>WWDG_SetCallback(fn)</code></td><td>ตั้ง callback สำหรับ Early Warning interrupt</td></tr>
         <tr><td><code>WWDG_Init(counter, window, prescaler)</code></td><td>เริ่มต้น WWDG แบบกำหนดค่าครบ</td></tr>
     </table>
@@ -125,7 +125,7 @@ flowchart TD
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    USART_SimpleInit(USART_115200);
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
 
     // counter=0x7F, window=0x5F (ต้อง refresh ระหว่าง 0x5F-0x40)
     WWDG_SimpleInit(0x7F, 0x5F);
@@ -134,7 +134,7 @@ int main(void) {
 
     while (1) {
         Delay_Ms(20); // รอให้ counter อยู่ในช่วง window
-        WWDG_Refresh();
+        WWDG_Refresh(0x7F);
         printf("Refresh ok\r\n");
     }
 }</code></pre>
@@ -155,17 +155,17 @@ void wwdg_warning_callback(void) {
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    USART_SimpleInit(USART_115200);
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
 
     // ต้องตั้ง callback ก่อน InitWithInterrupt
     WWDG_SetCallback(wwdg_warning_callback);
-    WWDG_InitWithInterrupt(0x7F, 0x5F);
+    WWDG_InitWithInterrupt(0x7F, 0x5F, WWDG_PRESCALER_8);
 
     printf("WWDG with Early Warning started\r\n");
 
     while (1) {
         Delay_Ms(15);
-        WWDG_Refresh();
+        WWDG_Refresh(0x7F);
         printf("Running...\r\n");
     }
 }</code></pre>
@@ -191,7 +191,7 @@ void realtime_task(void) {
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    USART_SimpleInit(USART_115200);
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
 
     // counter=0x7F, window=0x5F (refresh window: ~10-40ms)
     WWDG_SimpleInit(0x7F, 0x5F);
@@ -203,7 +203,7 @@ int main(void) {
         realtime_task();
 
         if (task_done) {
-            WWDG_Refresh(); // OK — เสร็จในเวลาที่กำหนด
+            WWDG_Refresh(0x7F); // OK — เสร็จในเวลาที่กำหนด
         }
         // ถ้าไม่ refresh → WWDG reset → timing violation!
     }

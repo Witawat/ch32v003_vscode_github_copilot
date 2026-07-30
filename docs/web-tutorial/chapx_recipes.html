@@ -31,7 +31,7 @@
     <pre><code class="language-c">#include "OLED.h"
 OLED_t oled;
 
-OLED_Init(&oled, 0x3C, OLED_128x64);  // I2C addr 0x3C
+OLED_Init(&oled, OLED_128x64, 0x3C);  // I2C addr 0x3C
 OLED_Clear(&oled);
 OLED_SetCursor(&oled, 0, 0);
 OLED_Print(&oled, "Hello CH32V003!");
@@ -42,13 +42,14 @@ OLED_Display(&oled);  // ตอ้งเรียก — push buffer</code></pre
     <p class="explain">⚠️ OLED มี 2 address: 0x3C กับ 0x3D — เช็คที่บอร์ด, ต้องมี pull-up 4.7kΩ ที่ SDA/SCL (บางบอร์ดมีในตัว)</p></div>
 
     <div class="step"><h3>LCD1602 I2C — จอตัวอักษร 16x2</h3>
-    <pre><code class="language-c">#include "LCD1602_I2C.h"
+    <pre><code class="language-c">#include "lcd1602_i2c.h"
 
-LCD1602_I2C_Init(0x27);  // I2C addr (0x27 หรือ 0x3F)
-LCD1602_I2C_SetCursor(0, 0);
-LCD1602_I2C_Print("Temp: 25.5C");
-LCD1602_I2C_SetCursor(1, 0);
-LCD1602_I2C_Print("Hum:  65%%");</code></pre>
+LCD1602_Handle lcd;
+LCD_Init(&lcd, 0x27, LCD_16x2);  // I2C addr (0x27 หรือ 0x3F)
+LCD_SetCursor(&lcd, 0, 0);
+LCD_Print(&lcd, "Temp: 25.5C");
+LCD_SetCursor(&lcd, 1, 0);
+LCD_Print(&lcd, "Hum:  65%%");</code></pre>
     <p class="explain">⚠️ address 0x27 vs 0x3F — ใช้ I2C Scanner ตรวจสอบก่อน</p></div>
 
     <div class="step"><h3>MAX7219 LED Matrix 8x8 — แสดงตัวอักษรวิ่ง</h3>
@@ -58,14 +59,15 @@ LCD1602_I2C_Print("Hum:  65%%");</code></pre>
     </pre>
     <pre><code class="language-c">#include "MAX7219.h"
 
-MAX7219_Init(1, PC4);  // 1 module, CS=PC4
-MAX7219_SetIntensity(5);
-MAX7219_Clear();
+MAX7219_Handle* display = MAX7219_Init(PC5, PC6, PC4, 1);  // CLK, MOSI, CS, 1 module
+MAX7219_SetIntensity(display, 5);
+MAX7219_Clear(display, 1);
 
 // Scroll text
-MAX7219_ScrollText("สวัสดี", 100);  // 100ms/frame
-// หรือแสดง static:
-MAX7219_PrintChar('A');</code></pre>
+MAX7219_StartScrollText(display, "Hello", 100);  // 100ms/frame
+// หรือแสดง sprite:
+MAX7219_DrawBitmap(display, 0, 0, my_bitmap, 8, 8);
+MAX7219_Update(display);</code></pre>
     <p class="explain">⚠️ MAX7219 ใช้ SPI: SCK=PC5(SPI_SCK), DIN=PC6(SPI_MOSI) — ห้ามใช้ pin อื่นยกเว้น CS</p></div>
 
     <div class="step"><h3>TM1637 — 7-Segment 4 หลัก</h3>
@@ -74,10 +76,10 @@ MAX7219_PrintChar('A');</code></pre>
     </pre>
     <pre><code class="language-c">#include "TM1637.h"
 
-TM1637_Init(PC0, PC1);   // CLK, DIO
-TM1637_SetBrightness(7);
-TM1637_DisplayNumber(1234);   // "1234"
-TM1637_DisplayTime(12, 30);   // "12:30"</code></pre>
+TM1637_Handle* display = TM1637_Init(PC0, PC1, 4);   // CLK, DIO, 4 digits
+TM1637_SetBrightness(display, 7);
+TM1637_DisplayNumber(display, 1234, 1);   // "1234" with leading zero
+TM1637_DisplayTime(display, 12, 30);      // "12:30"</code></pre>
     <p class="explain">⚠️ TM1637 ใช้ GPIO bit-bang — เลือก pin ไหนก็ได้</p></div>
 </section>
 
@@ -91,13 +93,14 @@ TM1637_DisplayTime(12, 30);   // "12:30"</code></pre>
     </pre>
     <pre><code class="language-c">#include "DHT.h"
 
-DHT_Init(PC0, DHT11);  // หรือ DHT22
-float temp, hum;
-if(DHT_Read(&temp, &hum) == DHT_OK) {
+DHT_Instance dht;
+
+DHT_Init(&dht, PC0, DHT_TYPE_DHT11);  // หรือ DHT_TYPE_DHT22
+if(DHT_Read(&dht) == DHT_OK) {
     USART_Print("Temp: ");
-    USART_PrintFloat(temp, 1);
+    USART_PrintFloat(dht.temperature, 1);
     USART_Print("C  Hum: ");
-    USART_PrintFloat(hum, 1);
+    USART_PrintFloat(dht.humidity, 1);
     USART_Println("%%");
 }</code></pre>
     <p class="explain">⚠️ DHT11 อ่านได้ทุก 1 วิ, DHT22 ทุก 2 วิ — อ่านถี่กว่านั้นค่าผิด — ต้องมี pull-up 4.7kΩ เสมอ</p></div>
@@ -105,8 +108,9 @@ if(DHT_Read(&temp, &hum) == DHT_OK) {
     <div class="step"><h3>BH1750 — เซนเซอร์วัดแสง</h3>
     <pre><code class="language-c">#include "BH1750.h"
 
-BH1750_Init(0x23, BH1750_CONT_HIRES);  // I2C addr 0x23 or 0x5C
-uint16_t lux = BH1750_ReadLux();
+BH1750_Instance light;
+BH1750_Init(&light, 0x23);  // I2C addr 0x23 or 0x5C
+uint16_t lux = BH1750_ReadLux(&light);
 USART_Print("Light: ");
 USART_PrintNum(lux);
 USART_Println(" lux");</code></pre>
@@ -119,8 +123,10 @@ USART_Println(" lux");</code></pre>
     </pre>
     <pre><code class="language-c">#include "HCSR04.h"
 
-HCSR04_Init(PC0, PC1);  // TRIG, ECHO
-float dist = HCSR04_ReadCm();
+HCSR04_Instance sonar;
+
+HCSR04_Init(&sonar, PC0, PC1);  // TRIG, ECHO
+float dist = HCSR04_MeasureCm(&sonar);
 if(dist > 0) {
     USART_Print("Distance: ");
     USART_PrintFloat(dist, 1);
@@ -131,9 +137,11 @@ if(dist > 0) {
     <div class="step"><h3>MPU6050 — IMU Gyro + Accelerometer</h3>
     <pre><code class="language-c">#include "MPU6050.h"
 
-MPU6050_Init(0x68);  // I2C addr 0x68 (AD0=GND)
+MPU6050_Instance imu;
+
+MPU6050_Init(&imu, 0x68);  // I2C addr 0x68 (AD0=GND)
 MPU6050_Data_t data;
-MPU6050_ReadAll(&data);
+MPU6050_ReadAll(&imu, &data);
 
 USART_Print("Accel: ");
 USART_PrintNum(data.ax); USART_Print(", ");
@@ -175,19 +183,18 @@ while(1) {
     <pre class="ascii-circuit">
     PD2 ── Signal (PWM)    5V ภายนอก ── VCC    GND ร่วมกัน
     </pre>
-    <pre><code class="language-c">PWM_SimpleInit(1, PD2, 50);  // TIM1 CH1, 50Hz
-PWM_Start(1);
-
+    <pre><code class="language-c">PWM_Init(PWM1_CH1, 50);  // TIM1 CH1 (PD2), 50Hz
+PWM_SetDutyCycle(PWM1_CH1, 5);   // 0° (pulse ~1ms = 5% at 50Hz)
 // 0 องศา (pulse 1ms)
-PWM_SetDuty(1, 5);
+PWM_SetDutyCycle(PWM1_CH1, 5);   // 0° (pulse ~1ms = 5% at 50Hz)
 Delay_Ms(1000);
 
 // 90 องศา (pulse 1.5ms)
-PWM_SetDuty(1, 7.5);
+PWM_SetDutyCycle(PWM1_CH1, 7.5);
 Delay_Ms(1000);
 
 // 180 องศา (pulse 2ms)
-PWM_SetDuty(1, 10);
+PWM_SetDutyCycle(PWM1_CH1, 10);
 Delay_Ms(1000);
 
 // Duty cycle: 0°=5%, 90°=7.5%, 180°=10% (for 50Hz)
@@ -201,11 +208,12 @@ Delay_Ms(1000);
     </pre>
     <pre><code class="language-c">#include "StepperMotor.h"
 
-Stepper_Init(PC0, PC1, PC2, PC3);  // IN1-IN4
-Stepper_SetSpeed(5);  // RPM
-Stepper_Rotate(2048); // 2048 steps = 1 รอบ (full-step)
+StepperMotor_Instance motor;
+StepperMotor_InitULN2003(&motor, PC0, PC1, PC2, PC3, STEPPER_HALF_STEP);
+StepperMotor_SetSpeed(&motor, 5);  // RPM
+StepperMotor_Move(&motor, 2048);   // 2048 half-steps = 1 รอบ
 // หรือ:
-Stepper_RotateDegrees(90);  // หมุน 90 องศา</code></pre>
+StepperMotor_MoveDegrees(&motor, 90);  // หมุน 90 องศา</code></pre>
     <p class="explain">⚠️ 28BYJ-48 = 2048 steps/รอบ (full-step) หรือ 4096 (half-step) — เกียร์ทด 1:64 — ULN2003 รับ 5V logic แต่ 3.3V ก็ใช้ได้ (marginal)</p></div>
 
     <div class="step"><h3>L298N — DC Motor Driver</h3>
@@ -215,12 +223,11 @@ Stepper_RotateDegrees(90);  // หมุน 90 องศา</code></pre>
     </pre>
     <pre><code class="language-c">pinMode(PC0, PIN_MODE_OUTPUT);  // IN1
 pinMode(PC1, PIN_MODE_OUTPUT);  // IN2
-PWM_SimpleInit(1, PC4, 1000);   // ENA
-PWM_Start(1);
+PWM_Init(PWM1_CH4, 1000);   // PC4, 1kHz
 
 // Forward
 digitalWrite(PC0, HIGH); digitalWrite(PC1, LOW);
-PWM_SetDuty(1, 75);   // speed 75%
+PWM_SetDutyCycle(PWM1_CH4, 75);   // speed 75%
 
 // Reverse
 digitalWrite(PC0, LOW); digitalWrite(PC1, HIGH);
@@ -240,21 +247,23 @@ digitalWrite(PC0, LOW); digitalWrite(PC1, LOW);</code></pre>
     </pre>
     <pre><code class="language-c">#include "nRF24L01.h"
 
+nRF24_Instance radio;
 uint8_t tx_addr[] = {0xE7, 0xE7, 0xE7, 0xE7, 0xE7};
 uint8_t rx_addr[] = {0xC2, 0xC2, 0xC2, 0xC2, 0xC2};
 
 // --- Transmitter ---
-nRF24_Init(PC4, PC3);  // CSN, CE
-nRF24_TXMode(tx_addr, 0x60);
+nRF24_Init(&radio, PC4, PC3);  // CSN, CE
+nRF24_SetTxAddr(&radio, tx_addr);
 char msg[] = "Hello";
-nRF24_Send((uint8_t*)msg, sizeof(msg));
+nRF24_Transmit(&radio, (uint8_t*)msg, sizeof(msg));
 
 // --- Receiver ---
-nRF24_Init(PC4, PC3);
-nRF24_RXMode(rx_addr, 0x60);
-if(nRF24_Available()) {
+nRF24_Init(&radio, PC4, PC3);
+nRF24_SetRxAddr(&radio, rx_addr);
+nRF24_StartListening(&radio);
+if(nRF24_Available(&radio)) {
     char buf[32];
-    nRF24_Read((uint8_t*)buf, 32);
+    nRF24_Receive(&radio, (uint8_t*)buf);
     USART_Println(buf);
 }</code></pre>
     <p class="explain">⚠️ nRF24L01 ใช้ไฟ 3.3V เท่านั้น — 5V จะพัง — address 5 bytes — pipe 0-5 channel ต้องตรงกันทั้ง sender/receiver — ต่อ decoupling 100nF ใกล้ VCC</p></div>
@@ -294,12 +303,13 @@ while(1) {
     </pre>
     <pre><code class="language-c">#include "Relay.h"
 
-Relay_Init(PC0, RELAY_ACTIVE_HIGH);
+Relay_Instance relay;
+Relay_Init(&relay, PC0, RELAY_ACTIVE_HIGH);
 
-Relay_On(PC0);   // เปิด
+Relay_On(&relay);   // เปิด
 Delay_Ms(5000);
-Relay_Off(PC0);  // ปิด
-Relay_Toggle(PC0);  // สลับ</code></pre>
+Relay_Off(&relay);  // ปิด
+Relay_Toggle(&relay);  // สลับ</code></pre>
     <p class="explain">⚠️ ห้ามต่อ relay coil ตรงกับ pin MCU — กระแสสูงเกิน — ต้องใช้ทรานซิสเตอร์ + flyback diode เสมอ — ระวัง 220VAC!</p></div>
 
     <div class="step"><h3>Buzzer — สร้างเสียง</h3>
@@ -310,19 +320,19 @@ Relay_Toggle(PC0);  // สลับ</code></pre>
     <pre><code class="language-c">#include "Buzzer.h"
 
 // Active buzzer — เปิดปิดด้วย GPIO
-Buzzer_Init(PC0, BUZZER_ACTIVE);
-Buzzer_Beep(PC0, 200);   // บี๊บ 200ms
+Buzzer_Init(PC0, BUZZER_ACTIVE_HIGH);
+Buzzer_Beep(200);   // บี๊บ 200ms
 
 // Passive buzzer — ใช้ PWM ทำ tone
-Buzzer_Init(PC4, BUZZER_PASSIVE);
-Buzzer_Tone(PC4, 1000, 500);  // 1000Hz, 500ms
+Buzzer_Init(PC4, BUZZER_ACTIVE_HIGH);
+Buzzer_Tone(1000, 500);  // 1000Hz, 500ms
 Delay_Ms(200);
-Buzzer_Tone(PC4, 2000, 500);  // 2000Hz
+Buzzer_Tone(2000, 500);  // 2000Hz
 
 // เล่นเพลง
 const uint16_t notes[] = {262, 294, 330, 349, 392, 440, 494, 523};
 for(int i = 0; i < 8; i++) {
-    Buzzer_Tone(PC4, notes[i], 200);
+    Buzzer_Tone(notes[i], 200);
     Delay_Ms(50);
 }</code></pre>
     <p class="explain">⚠️ Active buzzer มีวงจร oscillator ในตัว → แค่จ่ายไฟก็ดัง — Passive buzzer ต้องใช้ PWM/Tone — Active ง่ายกว่า</p></div>
@@ -330,16 +340,15 @@ for(int i = 0; i < 8; i++) {
     <div class="step"><h3>DS3231 RTC — นาฬิกาจริง</h3>
     <pre><code class="language-c">#include "DS3231.h"
 
-DS3231_DateTime_t dt;
+DS3231_Instance rtc;
+DS3231_Init(&rtc);
+DS3231_DateTime dt;
 
 // Set time
-dt.year = 26; dt.month = 6; dt.day = 29;
-dt.hour = 14; dt.minute = 30; dt.second = 0;
-dt.weekday = 1;
-DS3231_SetDateTime(&dt);
+DS3231_SetDateTime(&rtc, 2026, 6, 29, 14, 30, 0, DS3231_MONDAY);
 
 // Read time
-DS3231_GetDateTime(&dt);
+DS3231_GetDateTime(&rtc, &dt);
 USART_Print("Time: ");
 USART_PrintNum(dt.hour);
 USART_Print(":");
@@ -350,12 +359,13 @@ USART_Print("  Date: ");
 USART_PrintNum(dt.day);
 USART_Print("/");
 USART_PrintNum(dt.month);
-USART_Print("/20");
+USART_Print("/");
 USART_PrintNum(dt.year);
 USART_Println("");
 
 // Read temperature (built-in)
-float temp = DS3231_GetTemperature();
+float temp;
+DS3231_GetTemperature(&rtc, &temp);
 USART_Print("RTC Temp: ");
 USART_PrintFloat(temp, 1);
 USART_Println("C");</code></pre>
@@ -368,10 +378,11 @@ USART_Println("C");</code></pre>
     </pre>
     <pre><code class="language-c">#include "RotaryEncoder.h"
 
+RotaryEncoder encoder;
 int32_t position = 0;
 
-void on_rotate(int8_t dir) {
-    position += dir;
+void on_rotate(int32_t pos, RotaryDirection dir) {
+    position = pos;
     USART_Print("Position: ");
     USART_PrintNum(position);
     USART_Println("");
@@ -379,18 +390,17 @@ void on_rotate(int8_t dir) {
 
 void on_button(void) {
     USART_Println("Button pressed!");
-    position = 0;  // reset
+    Rotary_SetPosition(&encoder, 0);  // reset
 }
 
 int main(void) {
     // ... init ...
-    RotaryEncoder_Init(PC0, PC1, PC2);
-    RotaryEncoder_OnRotate(on_rotate);
-    RotaryEncoder_OnButton(on_button);
+    Rotary_Init(&encoder, PC0, PC1, PC2);
+    Rotary_OnRotate(&encoder, on_rotate);
+    Rotary_OnButtonPress(&encoder, on_button);
 
     while(1) {
-        RotaryEncoder_Update();  // poll
-        // หรือใช้ interrupt: RotaryEncoder_InitInt()
+        Rotary_Update(&encoder);  // poll
     }
 }</code></pre>
     <p class="explain">⚠️ Rotary encoder ต้อง poll บ่อย — ถ้าใช้ใน SimpleScheduler ตั้ง interval ~1-5ms — ถ้าขาด rotation → เพิ่มความถี่ poll</p></div>

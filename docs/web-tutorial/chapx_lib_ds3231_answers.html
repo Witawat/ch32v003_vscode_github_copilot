@@ -19,9 +19,9 @@ void ds3231_alarm_init(void) {
     PWM_SimpleInit(BUZZER_PIN, 1, 2000, 0);
 
     // ตั้ง Alarm1: เมื่อชั่วโมง+นาทีตรง
-    DS3231_ClearAlarm(&rtc, 1);
-    DS3231_SetAlarm1(&rtc, alarm_h, alarm_m, 0,
-                     DS3231_ALARM1_MATCH_HOUR_MIN);
+    DS3231_ClearAlarmFlag(&rtc, 1);
+    DS3231_SetAlarm1(&rtc, DS3231_A1_MATCH_HR_MIN_SEC, 0,
+                     alarm_h, alarm_m, 0);
 
     USART_Print("Alarm set: ");
     USART_PrintNum(alarm_h); USART_Print(":");
@@ -32,14 +32,17 @@ void ds3231_snooze(void) {
     if(!alarm_active) return;
 
     // SNOOZE: เลื่อน alarm ไปอีก 5 นาที
-    DS3231_GetDateTime(&rtc, NULL, NULL, NULL, &alarm_h, &alarm_m, NULL);
+    DS3231_DateTime dt;
+    DS3231_GetDateTime(&rtc, &dt);
+    alarm_h = dt.hour;
+    alarm_m = dt.minute;
 
     alarm_m += SNOOZE_MINUTES;
     if(alarm_m >= 60) { alarm_m -= 60; alarm_h++; }
     if(alarm_h >= 24) alarm_h = 0;
 
-    DS3231_SetAlarm1(&rtc, alarm_h, alarm_m, 0,
-                     DS3231_ALARM1_MATCH_HOUR_MIN);
+    DS3231_SetAlarm1(&rtc, DS3231_A1_MATCH_HR_MIN_SEC, 0,
+                     alarm_h, alarm_m, 0);
 
     // ปิด buzzer
     PWM_SetDuty(BUZZER_PIN, 1, 0);
@@ -55,7 +58,7 @@ void ds3231_alarm_loop(void) {
 
     while(1) {
         // เช็ค alarm flag
-        if(DS3231_IsAlarm1(&rtc)) {
+        if(DS3231_IsAlarm1Fired(&rtc)) {
             alarm_active = 1;
             PWM_SetDuty(BUZZER_PIN, 1, 1000);
             USART_Println("⏰ ALARM!");
@@ -68,14 +71,16 @@ void ds3231_alarm_loop(void) {
                 }
                 Delay_Ms(50);
             }
-            DS3231_ClearAlarm(&rtc, 1);
+            DS3231_ClearAlarmFlag(&rtc, 1);
         }
 
         // แสดงเวลาปัจจุบัน
         static uint32_t last = 0;
         if(Timer_GetMs() - last > 1000) {
             uint8_t h, m, s;
-            DS3231_GetDateTime(&rtc, NULL, NULL, NULL, &h, &m, &s);
+            DS3231_DateTime dt;
+            DS3231_GetDateTime(&rtc, &dt);
+            h = dt.hour; m = dt.minute; s = dt.second;
             USART_PrintNum(h);   USART_Print(":");
             USART_PrintNum(m/10); USART_PrintNum(m%10);
             USART_Print(":");
@@ -86,7 +91,7 @@ void ds3231_alarm_loop(void) {
         Delay_Ms(100);
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> DS3231 มี 2 alarms ในตัว — Alarm1 match ชั่วโมง+นาที — Snooze: อ่านเวลาปัจจุบัน +5 นาที, ตั้ง alarm ใหม่ — alarm_active flag กัน buzzer เปิดซ้ำ — DS3231_IsAlarm1 เช็ค flag โดยไม่ต้อง polling บ่อย — ใช้ PWM buzzer สร้างเสียง — ปุ่ม PD2 กดเพื่อ snooze, ระหว่าง alarm active รอจนกว่าจะกด</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> DS3231 มี 2 alarms ในตัว — Alarm1 match ชั่วโมง+นาที — Snooze: อ่านเวลาปัจจุบัน +5 นาที, ตั้ง alarm ใหม่ — alarm_active flag กัน buzzer เปิดซ้ำ — DS3231_IsAlarm1Fired เช็ค flag โดยไม่ต้อง polling บ่อย — ใช้ PWM buzzer สร้างเสียง — ปุ่ม PD2 กดเพื่อ snooze, ระหว่าง alarm active รอจนกว่าจะกด</div>
 </div>
 
 <div class="answer">
@@ -100,7 +105,8 @@ void ds3231_temp_compensate(void) {
     DS3231_Init(&rtc);
 
     // อ่านอุณหภูมิ DS3231
-    float temp = DS3231_GetTemperature(&rtc);
+    float temp;
+    DS3231_GetTemperature(&rtc, &temp);
 
     USART_Print("DS3231 Temp: ");
     USART_PrintFloat(temp, 2);
@@ -207,7 +213,9 @@ void ds3231_ultra_low_power_clock(void) {
             // อ่านเวลาจาก DS3231 ทุก 60 วิ
             if(rtc_ticks % 60 == 0) {
                 uint8_t h, m, s;
-                DS3231_GetDateTime(&rtc, NULL, NULL, NULL, &h, &m, &s);
+                DS3231_DateTime dt;
+                DS3231_GetDateTime(&rtc, &dt);
+                h = dt.hour; m = dt.minute; s = dt.second;
                 USART_PrintNum(h);  USART_Print(":");
                 USART_PrintNum(m/10); USART_PrintNum(m%10);
                 USART_Print(":");

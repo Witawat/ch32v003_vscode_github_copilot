@@ -3,180 +3,170 @@
 <h1>📝 เฉลย — AT24Cxx EEPROM</h1>
 
 <div class="answer">
-<h2>ข้อ 1: Config Store — เก็บ WiFi SSID/PASS ใน EEPROM</h2>
-<pre><code class="language-c">#define EE_CONFIG_ADDR   0x0000
-#define EE_MAGIC         0xA55A
-#define SSID_MAX_LEN     32
-#define PASS_MAX_LEN     32
+<h2>ข้อ 1: Config Store — เก็บ WiFi SSID/PASS ใน EEPROM (WriteArray + CRC16 + out-param)</h2>
+<pre><code class="language-c">#define EE_CFG_ADDR   0x0000
+#define EE_MAGIC      0xA55A
+#define SSID_MAX_LEN  32
+#define PASS_MAX_LEN  32
 
 typedef struct {
     uint16_t magic;
     uint16_t crc;
-    char ssid[SSID_MAX_LEN];
-    char pass[PASS_MAX_LEN];
-    uint8_t  reserved[28];  // เผื่ออนาคต
-} ee_config_t;  // รวม 96 bytes
+    char     ssid[SSID_MAX_LEN];
+    char     pass[PASS_MAX_LEN];
+    uint8_t  brightness;
+    uint8_t  reserved[15];   // รวม 96 bytes
+} ee_config_t;
 
-ee_config_t ee_config;
+ee_config_t cfg;
+AT24Cxx_Instance eeprom;
 
-uint16_t ee_crc16(const uint8_t *data, uint16_t len) {
+uint16_t crc16(const uint8_t *data, uint16_t len) {
     uint16_t crc = 0xFFFF;
-    while(len--) {
-        crc ^= (uint16_t)*data++ << 8;
-        for(uint8_t i=0; i<8; i++)
-            crc = (crc & 0x8000) ? (crc<<1)^0x1021 : crc<<1;
+    while (len--) {
+        crc ^= (uint16_t)(*data++) &lt;&lt; 8;
+        for (uint8_t i = 0; i &lt; 8; i++)
+            crc = (crc &amp; 0x8000) ? (crc &lt;&lt; 1) ^ 0x1021 : crc &lt;&lt; 1;
     }
     return crc;
 }
 
-AT24Cxx_Instance eeprom;
+// บันทึก: WriteArray คืน AT24Cxx_Status — เช็ค error
+AT24Cxx_Status cfg_save(void) {
+    cfg.magic = EE_MAGIC;
+    cfg.crc   = crc16((uint8_t *)&cfg + 4, sizeof(cfg) - 4);
 
-void ee_config_save(void) {
-    ee_config.magic = EE_MAGIC;
-    ee_config.crc = ee_crc16((uint8_t *)&ee_config + 4,
-                             sizeof(ee_config) - 4);
-
-    AT24Cxx_Write(&eeprom, EE_CONFIG_ADDR, (uint8_t *)&ee_config,
-                  sizeof(ee_config));
-    USART_Println("[EEPROM] Config saved");
+    return AT24Cxx_WriteArray(&eeprom, EE_CFG_ADDR,
+                              (uint8_t *)&cfg, sizeof(cfg));
+    //  library รอ write cycle 5ms/segment ให้ภายใน (AT24CXX_WRITE_CYCLE_MS)
 }
 
-uint8_t ee_config_load(void) {
-    AT24Cxx_Read(&eeprom, EE_CONFIG_ADDR, (uint8_t *)&ee_config,
-                 sizeof(ee_config));
-
-    if(ee_config.magic != EE_MAGIC) {
-        USART_Println("[EEPROM] No valid config — use defaults");
-        memset(&ee_config, 0, sizeof(ee_config));
-        strcpy(ee_config.ssid, "DEFAULT_SSID");
-        strcpy(ee_config.pass, "DEFAULT_PASS");
+// โหลด: ReadArray คืน status + data ผ่าน OUT-PARAM
+uint8_t cfg_load(void) {
+    AT24Cxx_Status r = AT24Cxx_ReadArray(&eeprom, EE_CFG_ADDR,
+                                         (uint8_t *)&cfg, sizeof(cfg));
+    if (r != AT24CXX_OK) {
+        USART_Print("Load fail: ");
+        USART_Println(AT24Cxx_StatusStr(r));
         return 0;
     }
 
-    uint16_t calc = ee_crc16((uint8_t *)&ee_config + 4,
-                             sizeof(ee_config) - 4);
-    if(calc != ee_config.crc) {
-        USART_Println("[EEPROM] CRC error — config corrupt");
-        return 0;
+    if (cfg.magic == EE_MAGIC) {
+        uint16_t calc = crc16((uint8_t *)&cfg + 4, sizeof(cfg) - 4);
+        if (calc == cfg.crc) return 1;          // valid
+        USART_Println("[EEPROM] CRC mismatch");
     }
-
-    USART_Print("SSID: ");
-    USART_Println(ee_config.ssid);
-    return 1;
+    // fallback defaults
+    memset(&cfg, 0, sizeof(cfg));
+    strcpy(cfg.ssid, "DEFAULT_SSID");
+    strcpy(cfg.pass, "DEFAULT_PASS");
+    cfg.brightness = 128;
+    return 0;
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> ใช้ struct เก็บ config มี magic number ตรวจว่าเคยเขียนหรือยัง — CRC-16 ตรวจ integrity (CCITT polynomial 0x1021) — AT24C_Write/Read เขียน/อ่านทั้ง struct ในครั้งเดียว — magic=0xA55A ป้องกันการอ่านค่า random ตอน EEPROM ว่าง — reserved bytes เผื่อขยาย struct ในอนาคตโดยไม่ต้องย้าย address — AT24C02 มี 256 bytes ใช้ 96 bytes ต่อ config เหลืออีก 160 bytes</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> struct เก็บ config มี magic + CRC-16 ตรวจ integrity — <strong>ทุก call ใช้รูปแบบ status + out-param ที่ถูกต้อง</strong>: <code>AT24Cxx_WriteArray</code> และ <code>AT24Cxx_ReadArray</code> คืน <code>AT24Cxx_Status</code> — data ผ่าน out-param pointer ไม่ใช่ return value — CRC ครอบข้อมูลตั้งแต่หลัง magic+crc เพื่อกันข้ามฟิลด์ — magic=0xA55A กันอ่านค่า random ตอน EEPROM ว่าง — library รอ write cycle 5ms ให้ภายในตัวไม่ต้อง <code>Delay_Ms(5)</code> เอง — <strong>ไม่มี</strong> <code>AT24Cxx_Write/Read</code> แบบบทเดิม (ชื่อผิด) — ใช้ <code>WriteArray/ReadArray</code> เท่านั้น</div>
 </div>
 
 <div class="answer">
-<h2>ข้อ 2: Wear Leveling — กระจายการเขียนข้ามหลายหน้า</h2>
-<pre><code class="language-c">#define EE_WEAR_PAGES    8     // ใช้ 8 หน้า
-#define EE_PAGE_SIZE     16    // AT24Cxx: 16 bytes/page
-#define EE_WEAR_START    0x00
-#define EE_SLOT_SIZE     16
+<h2>ข้อ 2: Wear Leveling — กระจายการเขียนข้ามหลาย slot</h2>
+<pre><code class="language-c">#define EE_WEAR_SLOTS   8
+#define EE_SLOT_SIZE    16    // เท่ากับ page size AT24C32+ แนะหน่อย
+#define EE_WEAR_START   0x40
 
 typedef struct {
     uint32_t write_count;
     uint8_t  data[8];
-    uint8_t  valid;   // 0xFF = ว่าง, 0x00 = ใช้แล้ว
+    uint8_t  valid;   // 0xFF = ว่าง(erased), 0x00 = ใช้แล้ว
 } ee_slot_t;
 
 AT24Cxx_Instance eeprom;
 
-uint8_t ee_find_next_slot(void) {
+// หา slot ว่างถัดไป — ใช้ ReadArray อ่านทุก slot
+int8_t ee_find_free_slot(void) {
     ee_slot_t slot;
-
-    for(uint8_t i=0; i<EE_WEAR_PAGES; i++) {
-        AT24Cxx_Read(&eeprom, EE_WEAR_START + i * EE_SLOT_SIZE,
-                     (uint8_t *)&slot, sizeof(slot));
-
-        if(slot.valid == 0xFF) {
-            USART_Print("Slot ");
-            USART_PrintNum(i);
-            USART_Println(" FREE");
-            return i;
-        }
+    for (uint8_t i = 0; i &lt; EE_WEAR_SLOTS; i++) {
+        AT24Cxx_Status r = AT24Cxx_ReadArray(&eeprom,
+            EE_WEAR_START + i * EE_SLOT_SIZE,
+            (uint8_t *)&slot, sizeof(slot));
+        if (r != AT24CXX_OK) continue;
+        if (slot.valid == 0xFF) return (int8_t)i;   // erased → free
     }
 
-    // ทุก slot เต็ม — หาตัวเก่าสุดมา reuse
+    // ทุก slot เต็ม → หาเก่าสุด reuse
     uint32_t oldest = 0xFFFFFFFF;
-    uint8_t  oldest_idx = 0;
-    for(uint8_t i=0; i<EE_WEAR_PAGES; i++) {
-        AT24Cxx_Read(&eeprom, EE_WEAR_START + i * EE_SLOT_SIZE,
-                     (uint8_t *)&slot, sizeof(slot));
-        if(slot.write_count < oldest) {
+    int8_t   oldest_idx = 0;
+    for (uint8_t i = 0; i &lt; EE_WEAR_SLOTS; i++) {
+        AT24Cxx_ReadArray(&eeprom, EE_WEAR_START + i * EE_SLOT_SIZE,
+                          (uint8_t *)&slot, sizeof(slot));
+        if (slot.write_count &lt; oldest) {
             oldest = slot.write_count;
-            oldest_idx = i;
+            oldest_idx = (int8_t)i;
         }
     }
-    USART_Print("Reuse slot ");
-    USART_PrintNum(oldest_idx);
-    USART_Println("");
     return oldest_idx;
 }
 
-void ee_wear_write(uint8_t *data, uint8_t len) {
-    uint8_t idx = ee_find_next_slot();
-    ee_slot_t slot;
+void ee_wear_write(const uint8_t *data, uint8_t len) {
+    int8_t idx = ee_find_free_slot();
+    ee_slot_t slot = {0};
 
-    // อ่าน write_count เก่า (ใช้ seed)
-    AT24Cxx_Read(&eeprom, EE_WEAR_START + idx * EE_SLOT_SIZE,
-                 (uint8_t *)&slot, sizeof(slot));
-
-    slot.write_count = (slot.valid == 0xFF)
-                     ? 1 : slot.write_count + 1;
+    AT24Cxx_ReadArray(&eeprom, EE_WEAR_START + idx * EE_SLOT_SIZE,
+                      (uint8_t *)&slot, sizeof(slot));
+    slot.write_count = (slot.valid == 0xFF) ? 1 : slot.write_count + 1;
     slot.valid = 0x00;
-    memcpy(slot.data, data, len < 8 ? len : 8);
+    memcpy(slot.data, data, len &lt; 8 ? len : 8);
 
-    AT24Cxx_Write(&eeprom, EE_WEAR_START + idx * EE_SLOT_SIZE,
-                  (uint8_t *)&slot, sizeof(slot));
+    // ใช้ WriteArray ข้าม page boundary ได้ และคืน status ให้เช็ค
+    AT24Cxx_Status w = AT24Cxx_WriteArray(&eeprom,
+        EE_WEAR_START + idx * EE_SLOT_SIZE,
+        (uint8_t *)&slot, sizeof(slot));
+    if (w != AT24CXX_OK) USART_Println(AT24Cxx_StatusStr(w));
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> Wear leveling กระจายการเขียนไป 8 slots แทนเขียนที่เดิมซ้ำ — แต่ละ slot มี write_count และ valid flag — 0xFF = EEPROM erased state (ว่าง) — เมื่อทุก slot เต็ม เลือก slot ที่ write_count ต่ำสุด reuse — AT24Cxx ทนเขียน ~1 ล้านครั้งต่อ cell, wear leveling 8 ช่อง เพิ่มอายุเป็น ~8 เท่า — เหมาะกับข้อมูลที่อัปเดตบ่อย (counter, sensor log)</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> Wear leveling กระจายการเขียนไป 8 slots แทนเขียนที่เดิมซ้ำ เพิ่มอายุ EEPROM ~8 เท่า (LIMITATIONS.md: endurance ~1M cycles/cell) — แต่ละ slot มี <code>write_count</code> และ <code>valid</code> flag — 0xFF = erased state (EEPROM ใหม่) — เมื่อทุก slot เต็มเลือก write_count ต่ำสุด reuse — <strong>ใช้ <code>ReadArray/WriteArray</code> ที่คืน status + out-param เท่านั้น</strong> — ไม่ต้อง <code>Delay_Ms(5)</code> ระหว่างเขียนเพราะ library รอ write cycle ให้ภายในตัว</div>
 </div>
 
 <div class="answer">
-<h2>ข้อ 3: Byte Write vs Page Write — เปรียบเทียบความเร็ว</h2>
+<h2>ข้อ 3: Byte Write vs Array Write — เปรียบเทียบความเร็ว</h2>
 <pre><code class="language-c">AT24Cxx_Instance eeprom;
 
 void ee_speed_compare(void) {
     uint8_t data[16];
+    for (uint8_t i = 0; i &lt; 16; i++) data[i] = i;
+
     uint32_t t_start, t_elapsed;
 
-    // เตรียม test data
-    for(uint8_t i=0; i<16; i++) data[i] = i;
-
-    // === Byte Write: เขียนทีละ 1 byte 16 ครั้ง ===
-    t_start = Timer_GetUs();
-    for(uint8_t i=0; i<16; i++) {
-        AT24Cxx_WriteByte(&eeprom, 0x00 + i, data[i]);
-        Delay_Ms(5);  // AT24Cxx write cycle ~5ms
+    // === WriteByte 16 ครั้ง (แต่ละครั้ง library รอ write cycle 5ms ให้ภายใน) ===
+    t_start = Timer_GetMs();
+    for (uint8_t i = 0; i &lt; 16; i++) {
+        AT24Cxx_Status w = AT24Cxx_WriteByte(&eeprom, 0x00 + i, data[i]);
+        if (w != AT24CXX_OK) USART_Println(AT24Cxx_StatusStr(w));
     }
-    t_elapsed = Timer_GetUs() - t_start;
+    t_elapsed = Timer_GetMs() - t_start;
+    USART_Printf("WriteByte x16: %lu ms\r\n", t_elapsed);
 
-    USART_Print("Byte Write (16x): ");
-    USART_PrintNum((uint16_t)(t_elapsed / 1000));
-    USART_Println(" ms");
+    // === WriteArray 1 ครั้ง (16 bytes ในคำสั่งเดียว — ข้าม page boundary) ===
+    t_start = Timer_GetMs();
+    AT24Cxx_Status w = AT24Cxx_WriteArray(&eeprom, 0x20, data, 16);
+    if (w != AT24CXX_OK) USART_Println(AT24Cxx_StatusStr(w));
+    t_elapsed = Timer_GetMs() - t_start;
+    USART_Printf("WriteArray x1: %lu ms\r\n", t_elapsed);
 
-    // === Page Write: เขียน 16 bytes ในครั้งเดียว ===
-    t_start = Timer_GetUs();
-    AT24Cxx_WritePage(&eeprom, 0x10, data, 16);
-    Delay_Ms(5);
-    t_elapsed = Timer_GetUs() - t_start;
+    // === อ่านกลับด้วย ReadArray (out-param) เพื่อยืนยัน ===
+    uint8_t rb[16] = {0};
+    AT24Cxx_Status r = AT24Cxx_ReadArray(&eeprom, 0x20, rb, 16);
+    if (r == AT24CXX_OK &amp;&amp; memcmp(data, rb, 16) == 0)
+        USART_Println("Verify OK");
+    else
+        USART_Println(AT24Cxx_StatusStr(r));
 
-    USART_Print("Page Write (1x):  ");
-    USART_PrintNum((uint16_t)(t_elapsed / 1000));
-    USART_Println(" ms");
-
-    // สรุป
     USART_Println("---");
-    USART_Println("Page write เร็วกว่า ~16 เท่า");
-    USART_Println("เพราะ wait 5ms ครั้งเดียว vs 16 ครั้ง");
+    USART_Printf("Capacity=%lu bytes\r\n", AT24Cxx_GetCapacity(&eeprom));
+    USART_Println("WriteArray เร็วกว่าเพราารวม write cycle ในคำสั่งเดียว");
 }
 
-// AT24C02 page size = 8 bytes
-// AT24C08 page size = 16 bytes
-// AT24C16 page size = 16 bytes
-// AT24C32 page size = 32 bytes</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> AT24Cxx มี write cycle time ~5ms ต่อรอบ — Byte write: 16 ครั้ง × 5ms = 80ms — Page write: 1 ครั้ง × 5ms = 5ms — เร็วกว่า ~16 เท่า — ข้อจำกัด: เขียนข้าม page boundary ไม่ได้ (ต้องเขียนภายใน page เดียว) — page size ขึ้นกับรุ่น: AT24C02=8B, AT24C04/08/16=16B, AT24C32+=32B — ถ้าข้อมูลอยู่ข้าม page ต้องแบ่งเขียนทีละ page</div>
+// page size ตามรุ่น (จาก	enum AT24Cxx_Type ใน header):
+//   AT24C01/02 = 8B, AT24C04/08/16 = 16B, AT24C32/64 = 32B,
+//   AT24C128/256 = 64B, AT24C512 = 128B</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ทุก EEPROM byte write ต้องรอ write cycle 5ms (tWR) — <code>WriteByte</code> 16 ครั้ง = 16 × overhead, <code>WriteArray</code> 16 bytes = ครั้งเดียว (library แบ่ง page boundary และรอ write cycle ให้ภายในตัว) — <strong>ทุก call เช็ค <code>AT24Cxx_Status</code> ที่คืนมา</strong> เพราะ I2C/timeout error เกิดขึ้นได้ — <code>AT24Cxx_GetCapacity(&amp;eeprom)</code> คืน bytes ไม่ใช่ enum — page size ขึ้นกับรุ่น (ดู enum) — <strong>ไม่ใช้</strong> <code>AT24Cxx_WritePage</code> (ชื่อบทเดิมผิด ไม่มีใน header) — ใช้ <code>WriteArray</code> แทนเพราะข้าม page boundary ให้เอง</div>
 </div>
 
 <nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_at24cxx.html">กลับบท</a><a href="chapx_lib_w25qxx_answers.html">เฉลยถัดไป →</a></nav>

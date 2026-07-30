@@ -35,7 +35,7 @@ int main(void) {
         }
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> <code>MAX31855_ReadCelsius()</code> อ่านอุณหภูมิ thermocouple (14-bit) — <code>MAX31855_ReadInternal()</code> อ่านอุณหภูมิ cold-junction ภายในชิป (12-bit) — ส่ง CSV 2 ค่า — Timer 500ms ให้ sampling rate 2Hz — ใช้ Arduino Serial Plotter ดูกราฟ real-time — หัวแร้งบัดกรีจะเห็น response เร็วมากในไม่กี่วิ</div></div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>MAX31855_ReadTemp()</code> อ่านอุณหภูมิ thermocouple (14-bit) — <code>MAX31855_ReadInternalTemp()</code> อ่านอุณหภูมิ cold-junction ภายในชิป (12-bit) — ส่ง CSV 2 ค่า — Timer 500ms ให้ sampling rate 2Hz — ใช้ Arduino Serial Plotter ดูกราฟ real-time — หัวแร้งบัดกรีจะเห็น response เร็วมากในไม่กี่วิ</div></div>
 <div class="answer"><h2>ข้อ 2: Fault Detection — ตรวจจับ thermocouple หลุด/ขาด/ลัดวงจร</h2>
 <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
@@ -70,7 +70,8 @@ int main(void) {
 
     while(1) {
         if(Is_Timer_Expired(&tmr)) {
-            uint8_t fault = MAX31855_ReadFault(&therm);
+            uint8_t fault;
+            MAX31855_GetFault(&therm, &fault);
             float tc = MAX31855_ReadTemp(&therm);
             float cj = MAX31855_ReadInternalTemp(&therm);
 
@@ -90,7 +91,7 @@ int main(void) {
         }
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> <code>MAX31855_ReadFault()</code> อ่าน 3 fault bits — <strong>OC</strong> = Open Circuit (สายขาด/หลุด) — <strong>SCG</strong> = Short to GND — <strong>SCV</strong> = Short to VCC — เช็ค fault ทุกรอบ — LED แดงติดเมื่อมี fault — กรณี OC (สาย thermocouple หลุด) พบบ่อยที่สุด — fault detection นี้ MAX6675 ไม่มี (เป็นข้อได้เปรียบของ MAX31855)</div></div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>MAX31855_GetFault(&therm, &fault)</code> อ่าน 3 fault bits — <strong>OC</strong> = Open Circuit (สายขาด/หลุด) — <strong>SCG</strong> = Short to GND — <strong>SCV</strong> = Short to VCC — เช็ค fault ทุกรอบ — LED แดงติดเมื่อมี fault — กรณี OC (สาย thermocouple หลุด) พบบ่อยที่สุด — fault detection นี้ MAX6675 ไม่มี (เป็นข้อได้เปรียบของ MAX31855)</div></div>
 <div class="answer"><h2>ข้อ 3: เทียบ MAX31855 vs MAX6675 บน SPI บัสเดียวกัน</h2>
 <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
@@ -101,9 +102,10 @@ int main(void) {
     Timer_Init();
     USART_Init(115200);
 
-    MAX31855_Instance therm;
-    MAX31855_Init(&therm, PC4);   // CS1 = PC4
-    MAX6675_Init(PC3);    // CS2 = PC3 (คนละ CS, SPI bus เดียวกัน: SCK=PC5, MISO=PC7)
+    MAX31855_Instance therm;       // MAX31855
+    MAX31855_Init(&therm, PC4);     // CS1 = PC4
+    MAX31855_Instance therm6675;    // MAX6675 (ใช้ MAX31855_Instance เดียวกันได้ — เป็น alias ของ instance เดียวกันใน hardware จริงอาจต้องแยก)
+    MAX31855_Init(&therm6675, PC3); // CS2 = PC3 (คนละ CS, SPI bus เดียวกัน: SCK=PC5, MISO=PC7)
 
     USART_Println("31855_TC,31855_CJ,31855_F,6675_TC,dT");
 
@@ -114,9 +116,10 @@ int main(void) {
         if(Is_Timer_Expired(&tmr)) {
             float tc31855 = MAX31855_ReadTemp(&therm);
             float cj31855 = MAX31855_ReadInternalTemp(&therm);
-            uint8_t f31855 = MAX31855_ReadFault(&therm);
+            uint8_t f31855;
+            MAX31855_GetFault(&therm, &f31855);
 
-            float tc6675 = MAX6675_ReadCelsius();
+            float tc6675 = MAX6675_ReadTemp(&therm6675);
 
             USART_PrintFloat(tc31855, 1); USART_Print(",");
             USART_PrintFloat(cj31855, 1); USART_Print(",");

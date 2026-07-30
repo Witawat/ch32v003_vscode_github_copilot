@@ -89,7 +89,7 @@ int main(void) {
 <p class="explain">🔍 <code>GPS_Init(&gps, baud, pins)</code> — instance-based, baud 9600 default, pins=USART_PINS_DEFAULT</p></div>
 
 <div class="step"><h3>ขั้นที่ 2: รอ Fix + อ่านพิกัด</h3>
-<pre><code class="language-c">    while(!GPS_HasFix(&gps)) {
+<pre><code class="language-c">    while(!GPS_IsFixValid(&gps)) {
         GPS_Update(&gps);
         USART_Println("Waiting for GPS fix...");
         Delay_Ms(1000);
@@ -107,7 +107,7 @@ int main(void) {
 <pre><code class="language-c">    while(1) {
         GPS_Update(&gps);
 
-        if(GPS_HasFix(&gps)) {
+        if(GPS_IsFixValid(&gps)) {
             float lat = GPS_GetLatitude(&gps);
             float lon = GPS_GetLongitude(&gps);
             float spd = GPS_GetSpeed(&gps);
@@ -122,7 +122,7 @@ int main(void) {
         Delay_Ms(500);
     }
 }</code></pre>
-<p class="explain">🔍 <code>GPS_Update()</code> ต้องถูกเรียกตลอดเวลาเพื่อ parse NMEA — <code>GPS_HasFix()</code> เช็คว่ามี GPS fix หรือยัง</p></div>
+<p class="explain">🔍 <code>GPS_Update()</code> ต้องถูกเรียกตลอดเวลาเพื่อ parse NMEA — <code>GPS_IsFixValid()</code> เช็คว่ามี GPS fix หรือยัง</p></div>
 </section>
 
 <section><h2>📋 API Reference</h2>
@@ -130,7 +130,7 @@ int main(void) {
     <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
     <tr><td><code>GPS_Init(&gps, baud, pins)</code></td><td>เริ่มต้น GPS</td><td><code>GPS_Init(&gps, BAUD_9600, USART_PINS_DEFAULT)</code></td></tr>
     <tr><td><code>GPS_Update(&gps)</code></td><td>ประมวลผล NMEA</td><td>เรียกใน loop ตลอดเวลา</td></tr>
-    <tr><td><code>GPS_HasFix(&gps)</code></td><td>เช็คว่ามี GPS fix หรือยัง</td><td><code>if(GPS_HasFix(&gps))</code></td></tr>
+    <tr><td><code>GPS_IsFixValid(&gps)</code></td><td>เช็คว่ามี GPS fix หรือยัง</td><td><code>if(GPS_IsFixValid(&gps))</code></td></tr>
     <tr><td><code>GPS_GetLatitude(&gps)</code></td><td>อ่าน latitude (decimal)</td><td><code>float lat = GPS_GetLatitude(&gps)</code></td></tr>
     <tr><td><code>GPS_GetLongitude(&gps)</code></td><td>อ่าน longitude (decimal)</td><td><code>float lon = GPS_GetLongitude(&gps)</code></td></tr>
     <tr><td><code>GPS_GetSpeed(&gps)</code></td><td>อ่านความเร็ว km/h</td><td><code>float spd = GPS_GetSpeed(&gps)</code></td></tr>
@@ -160,12 +160,12 @@ int main(void)
     GPS_Instance gps;
     GPS_Init(&gps, BAUD_9600, USART_PINS_DEFAULT);
 
-    while(!GPS_HasFix(&gps)) { GPS_Update(&gps); Delay_Ms(500); }
+    while(!GPS_IsFixValid(&gps)) { GPS_Update(&gps); Delay_Ms(500); }
 
     while(1)
     {
         GPS_Update(&gps);
-        if(GPS_HasFix(&gps)) {
+        if(GPS_IsFixValid(&gps)) {
             float lat = GPS_GetLatitude(&gps);
             float lon = GPS_GetLongitude(&gps);
             float spd = GPS_GetSpeed(&gps);

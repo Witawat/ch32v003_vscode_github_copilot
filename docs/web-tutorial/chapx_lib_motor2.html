@@ -207,7 +207,7 @@ int main(void) {
 
     while(1) { IWDG_Feed(); }
 }</code></pre>
-<p class="explain">⚠️ stealthChop = เงียบมาก (เหมาะ 3D printer), spreadCycle = torque สูงสุด, UART 1-wire (TX ต่อ PDN_UART pin), address 0-3 via MS1/MS2, current: Vref = RMS_current * 1.44V/A, registers: GCONF, IHOLD_IRUN, CHOPCONF, TPOWERDOWN (hold current reduction), TMC2209 มี sensorless homing (stallGuard) — ต่างจาก TMC2208</p>
+<p class="explain">⚠️ stealthChop = เงียบมาก (เหมาะ 3D printer), spreadCycle = torque สูงสุด, UART 1-wire (TX ต่อ PDN_UART pin), address 0-3 via MS1/MS2, current: Vref = RMS_current * 1.44V/A, registers: GCONF, IHOLD_IRUN, CHOPCONF, TPOWERDOWN (hold current reduction), wrapper ไม่รองรับ sensorless homing — ใช้ limit switch ภายนอกที่ GPIO</p>
 </section>
 
 <section>
@@ -256,7 +256,6 @@ int main(void) {
     TMC5160_SetCurrent(1500);   // 1.5A RMS
     TMC5160_SetMicrostep(64);   // 1/64
     TMC5160_EnableCoolStep(1);  // adaptive current save 30-75% energy
-    TMC5160_SetStallThreshold(100); // stallGuard trigger level
 
     // Motion via internal ramp controller (no STEP pin needed!)
     TMC5160_MoveTo(10000, 50000); // target=10000 steps, v=50000 µsteps/s
@@ -265,12 +264,6 @@ int main(void) {
     while(1) {
         TMC5160_Update(); // check position status
 
-        uint32_t stall = TMC5160_ReadRegister(TMC5160_STALLGUARD_RESULT);
-        if(stall > 100) {
-            TMC5160_Stop();
-            USART_Println("Stall detected! Sensorless homing.");
-        }
-
         if(TMC5160_IsDone()) {
             USART_Println("Position reached");
         }
@@ -278,7 +271,7 @@ int main(void) {
         IWDG_Feed();
     }
 }</code></pre>
-<p class="explain">⚠️ ต่างจาก TMC220x: SPI = full register R/W, มี internal motion controller (ไม่ต้องใช้ STEP pin – SPI command control โดยตรง), coolStep = adaptive current (วัด load, reduce current เมื่อโหลดน้อย ประหยัด 30-75% energy), stallGuard2 = sensorless stall detection (ใช้เป็น limit switch ได้), DCstep = stall prevention (เพิ่ม current อัตโนมัติเมื่อเกือบ stall), 6-point ramp: A1,V1,AMAX,VMAX,DMAX,D1, max VMOT=60V, SPI daisy chain ได้หลายตัว</p>
+<p class="explain">⚠️ ต่างจาก TMC220x: SPI = full register R/W, มี internal motion controller (ไม่ต้องใช้ STEP pin – SPI command control โดยตรง), coolStep = adaptive current (วัด load, reduce current เมื่อโหลดน้อย ประหยัด 30-75% energy), DCstep = stall prevention (เพิ่ม current อัตโนมัติเมื่อเกือบ stall), 6-point ramp: A1,V1,AMAX,VMAX,DMAX,D1, max VMOT=60V, SPI daisy chain ได้หลายตัว, homing ใช้ limit switch ภายนอกที่ GPIO (wrapper ไม่รองรับ sensorless stall detection)</p>
 </section>
 
 <section>
@@ -300,7 +293,7 @@ int main(void) {
 <ol>
     <li>ServoCluster robot arm — 3 servos, pick-and-place sequence with easing</li>
     <li>ESC thrust test — ramp 0→100→0, measure with INA219</li>
-    <li>TMC2209 silent homing — use stallGuard as limit switch (move until stall → set zero)</li>
+    <li>TMC2209 homing — ใช้ limit switch ภายนอกที่ GPIO (wrapper ไม่รองรับ sensorless stall detection)</li>
     <li>TMC5160 absolute position — multi-axis coordinated move (X=10000, Y=5000 simultaneously)</li>
 </ol>
 </section>

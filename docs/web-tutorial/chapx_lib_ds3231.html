@@ -18,12 +18,12 @@
     <h2>🧭 แผนภาพการทำงาน</h2>
     <pre class="mermaid">
 flowchart TD
-    A["DS3231_Init(&rtc)"] --> B["DS3231_SetDateTime(&rtc, &dt)"]
+    A["DS3231_Init(&rtc)"] --> B["DS3231_SetDateTime(&rtc, y,m,d,h,min,s,dow)"]
     B --> C["DS3231_GetDateTime(&rtc, &dt)"]
     C --> D{"Check Alarm?"}
     D -->|"Yes"| E["DS3231_SetAlarm1(...)"]
     D -->|"No"| F["Display Time"]
-    E --> H["DS3231_AlarmFired(&rtc, n)?"]
+    E --> H["DS3231_IsAlarm1Fired(&rtc)?"]
     H -->|"Yes"| I["Trigger Event"]
     H -->|"No"| C
     F --> C
@@ -100,7 +100,7 @@ int main(void) {
 <p class="explain">🔍 <code>DS3231_Init(&rtc)</code> — instance-based, I2C address 0x68 fixed</p></div>
 
 <div class="step"><h3>ขั้นที่ 2: อ่านเวลา + ตั้ง Alarm</h3>
-<pre><code class="language-c">    RTC_DateTime_t dt;
+<pre><code class="language-c">    DS3231_DateTime dt;
     DS3231_GetDateTime(&rtc, &dt);
 
     USART_Print("Time: ");
@@ -114,7 +114,7 @@ int main(void) {
     USART_PrintInt(dt.year); USART_Println("");
 
     // ตั้ง Alarm 1: ทุกวัน 08:00:00
-    DS3231_SetAlarm1(&rtc, DS3231_ALARM1_EVERYDAY, 8, 0, 0);</code></pre>
+    DS3231_SetAlarm1(&rtc, DS3231_A1_MATCH_HR_MIN_SEC, 0, 8, 0, 0);</code></pre>
 <p class="explain">🔍 <code>DS3231_GetDateTime(&rtc, &dt)</code> — อ่านวัน/เวลาเป็น struct, <code>DS3231_SetAlarm1()</code> — ตั้ง alarm</p></div>
 
 <div class="step"><h3>ขั้นที่ 3: Loop — แสดงผล + ตรวจสอบ Alarm</h3>
@@ -127,20 +127,21 @@ int main(void) {
         USART_PrintInt(dt.month); USART_Print("/");
         USART_PrintInt(dt.year); USART_Println("");
 
-        if(DS3231_AlarmFired(&rtc, 1)) {
+        if(DS3231_IsAlarm1Fired(&rtc)) {
             USART_Println("ALARM 1 FIRED!");
             digitalToggle(PC0);
-            DS3231_ClearAlarm(&rtc, 1);
+            DS3231_ClearAlarmFlag(&rtc, 1);
         }
 
-        float temp = DS3231_GetTemperature(&rtc);
+        float temp;
+        DS3231_GetTemperature(&rtc, &temp);
         USART_Print("Temp: "); USART_PrintFloat(temp, 1);
         USART_Println(" C");
 
         Delay_Ms(1000);
     }
 }</code></pre>
-<p class="explain">🔍 <code>DS3231_GetTemperature(&rtc)</code> — อ่านอุณหภูมิภายในชิป, <code>DS3231_AlarmFired(&rtc, n)</code> — เช็ค flag alarm</p></div>
+<p class="explain">🔍 <code>DS3231_GetTemperature(&rtc, &temp)</code> — อ่านอุณหภูมิภายในชิป, <code>DS3231_IsAlarm1Fired(&rtc)</code> — เช็ค flag alarm</p></div>
 </section>
 
 <section><h2>📋 API Reference</h2>
@@ -148,10 +149,10 @@ int main(void) {
     <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
     <tr><td><code>DS3231_Init(&rtc)</code></td><td>เริ่มต้น RTC (addr 0x68)</td><td><code>DS3231_Init(&rtc)</code></td></tr>
     <tr><td><code>DS3231_GetDateTime(&rtc, &dt)</code></td><td>อ่านวัน/เวลา</td><td><code>DS3231_GetDateTime(&rtc, &dt)</code></td></tr>
-    <tr><td><code>DS3231_SetDateTime(&rtc, &dt)</code></td><td>ตั้งวัน/เวลา</td><td><code>DS3231_SetDateTime(&rtc, &dt)</code></td></tr>
-    <tr><td><code>DS3231_GetTemperature(&rtc)</code></td><td>อ่านอุณหภูมิ (°C)</td><td><code>float t = DS3231_GetTemperature(&rtc)</code></td></tr>
-    <tr><td><code>DS3231_SetAlarm1(&rtc, mode, h, m, s)</code></td><td>ตั้ง Alarm 1</td><td><code>DS3231_SetAlarm1(&rtc, EVERYDAY, 8, 0, 0)</code></td></tr>
-    <tr><td><code>DS3231_AlarmFired(&rtc, n)</code></td><td>เช็ค alarm 1/2</td><td><code>if(DS3231_AlarmFired(&rtc, 1))</code></td></tr>
+    <tr><td><code>DS3231_SetDateTime(&rtc, y, m, d, h, min, s, dow)</code></td><td>ตั้งวัน/เวลา</td><td><code>DS3231_SetDateTime(&rtc, 2026, 4, 29, 14, 30, 0, DS3231_WEDNESDAY)</code></td></tr>
+    <tr><td><code>DS3231_GetTemperature(&rtc, &temp)</code></td><td>อ่านอุณหภูมิ (°C)</td><td><code>float t; DS3231_GetTemperature(&rtc, &t)</code></td></tr>
+    <tr><td><code>DS3231_SetAlarm1(&rtc, mode, day, h, m, s)</code></td><td>ตั้ง Alarm 1</td><td><code>DS3231_SetAlarm1(&rtc, DS3231_A1_MATCH_HR_MIN_SEC, 0, 8, 0, 0)</code></td></tr>
+    <tr><td><code>DS3231_IsAlarm1Fired(&rtc) / IsAlarm2Fired(&rtc)</code></td><td>เช็ค alarm 1/2</td><td><code>if(DS3231_IsAlarm1Fired(&rtc))</code></td></tr>
 </table>
 </section>
 
@@ -159,7 +160,7 @@ int main(void) {
 <table>
     <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
     <tr><td>เวลารีเซ็ตทุกครั้งที่เปิดไฟ</td><td>ไม่มี battery backup หรือ battery หมด</td><td>ต่อ CR2032 ที่ขา BAT</td></tr>
-    <tr><td>Alarm ไม่เคยดัง</td><td>Alarm flag ไม่ได้เคลียร์</td><td>ต้อง DS3231_ClearAlarm() หลัง alarm fired</td></tr>
+    <tr><td>Alarm ไม่เคยดัง</td><td>Alarm flag ไม่ได้เคลียร์</td><td>ต้อง DS3231_ClearAlarmFlag() หลัง alarm fired</td></tr>
 </table>
 </section>
 
@@ -178,9 +179,9 @@ int main(void)
     DS3231_Instance rtc;
     DS3231_Init(&rtc);
 
-    RTC_DateTime_t dt = {12, 0, 0, 1, 1, 2025};
-    DS3231_SetDateTime(&rtc, &dt);
-    DS3231_SetAlarm1(&rtc, DS3231_ALARM1_EVERYDAY, 8, 0, 0);
+    DS3231_DateTime dt = {2025, 1, 1, 12, 0, 0, DS3231_WEDNESDAY, 0};
+    DS3231_SetDateTime(&rtc, dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second, dt.day_of_week);
+    DS3231_SetAlarm1(&rtc, DS3231_A1_MATCH_HR_MIN_SEC, 0, 8, 0, 0);
 
     Timer_t tmr;
     Start_Timer(&tmr, 1000, 1);
@@ -192,16 +193,17 @@ int main(void)
             USART_PrintInt(dt.hour); USART_Print(":");
             USART_PrintInt(dt.minute); USART_Print(":");
             USART_PrintInt(dt.second); USART_Print(" | ");
-            float temp = DS3231_GetTemperature(&rtc);
+            float temp;
+            DS3231_GetTemperature(&rtc, &temp);
             USART_PrintFloat(temp, 1); USART_Println(" C");
         }
 
-        if(DS3231_AlarmFired(&rtc, 1)) {
+        if(DS3231_IsAlarm1Fired(&rtc)) {
             digitalWrite(PC0, HIGH);
             USART_Println("*** ALARM ***");
             Delay_Ms(10000);
             digitalWrite(PC0, LOW);
-            DS3231_ClearAlarm(&rtc, 1);
+            DS3231_ClearAlarmFlag(&rtc, 1);
         }
     }
 }</code></pre>

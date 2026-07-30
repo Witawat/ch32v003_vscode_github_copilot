@@ -89,42 +89,49 @@ flowchart TD
     <h2>API Reference</h2>
     <table>
         <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th></tr>
-        <tr><td><code>OneWire_Init(pin)</code></td><td>เริ่มต้น 1-Wire bus บน pin ที่กำหนด</td></tr>
-        <tr><td><code>OneWire_Reset()</code></td><td>ส่ง reset pulse ตรวจ presence</td></tr>
-        <tr><td><code>OneWire_WriteByte(data)</code></td><td>เขียน 1 ไบต์ไปยัง bus</td></tr>
-        <tr><td><code>OneWire_ReadByte()</code></td><td>อ่าน 1 ไบต์จาก bus</td></tr>
-        <tr><td><code>OneWire_SkipROM()</code></td><td>SkipROM — ส่งคำสั่งถึงทุก device</td></tr>
-        <tr><td><code>OneWire_ReadROM()</code></td><td>อ่าน 64-bit ROM address</td></tr>
-        <tr><td><code>OneWire_MatchROM(addr)</code></td><td>เลือก device ตาม ROM address</td></tr>
-        <tr><td><code>OneWire_Select(addr)</code></td><td>เลือก device (Reset + MatchROM)</td></tr>
-        <tr><td><code>OneWire_ResetSearch()</code></td><td>เริ่มค้นหา device ทั้งหมดบน bus</td></tr>
-        <tr><td><code>OneWire_Search(addr)</code></td><td>ค้นหา device ถัดไป (คืน 1 เมื่อพบ)</td></tr>
-        <tr><td><code>OneWire_AlarmSearch(addr)</code></td><td>ค้นหา device ที่มี alarm ตั้งไว้</td></tr>
-        <tr><td><code>OneWire_GetAddress(idx)</code></td><td>ดึง ROM address ของ device ลำดับที่ idx</td></tr>
-        <tr><td><code>OneWire_WriteBit(bit)</code></td><td>เขียน 1 bit</td></tr>
-        <tr><td><code>OneWire_ReadBit()</code></td><td>อ่าน 1 bit</td></tr>
-        <tr><td><code>OneWire_WriteBytes(data, len)</code></td><td>เขียนหลายไบต์</td></tr>
-        <tr><td><code>OneWire_ReadBytes(buf, len)</code></td><td>อ่านหลายไบต์</td></tr>
-        <tr><td><code>OneWire_CRC8(data, len)</code></td><td>คำนวณ CRC8</td></tr>
-        <tr><td><code>OneWire_VerifyCRC(data, len)</code></td><td>ตรวจสอบ CRC8 ของข้อมูล</td></tr>
-        <tr><td><code>OneWire_Depower()</code></td><td>ปล่อย bus (parasite power mode)</td></tr>
-        <tr><td><code>OneWire_GetBusByPin(pin)</code></td><td>ดึง bus struct จาก pin</td></tr>
+        <tr><td><code>OneWire_Init(pin)</code></td><td>เริ่มต้น 1-Wire bus บน pin ที่กำหนด — <strong>คืนค่า <code>OneWire_Bus*</code> handle ที่ต้องเก็บไว้ส่งให้ทุกฟังก์ชันด้านล่าง</strong></td></tr>
+        <tr><td><code>OneWire_Reset(bus)</code></td><td>ส่ง reset pulse ตรวจ presence</td></tr>
+        <tr><td><code>OneWire_WriteByte(bus, data)</code></td><td>เขียน 1 ไบต์ไปยัง bus</td></tr>
+        <tr><td><code>OneWire_ReadByte(bus)</code></td><td>อ่าน 1 ไบต์จาก bus</td></tr>
+        <tr><td><code>OneWire_SkipROM(bus)</code></td><td>SkipROM — ส่งคำสั่งถึงทุก device</td></tr>
+        <tr><td><code>OneWire_ReadROM(bus, rom)</code></td><td>อ่าน 64-bit ROM address (เฉพาะ single device)</td></tr>
+        <tr><td><code>OneWire_MatchROM(bus, rom)</code></td><td>เลือก device ตาม ROM address</td></tr>
+        <tr><td><code>OneWire_Select(bus, rom)</code></td><td>เลือก device (Reset + MatchROM รวมกัน)</td></tr>
+        <tr><td><code>OneWire_ResetSearch(bus)</code></td><td>เริ่มค้นหา device ทั้งหมดบน bus</td></tr>
+        <tr><td><code>OneWire_Search(bus)</code></td><td>ค้นหา device ถัดไป (คืน true เมื่อพบ, ผลอยู่ใน <code>bus-&gt;rom</code> — ดึงด้วย <code>OneWire_GetAddress</code>)</td></tr>
+        <tr><td><code>OneWire_AlarmSearch(bus)</code></td><td>ค้นหา device ที่มี alarm ตั้งไว้ (เหมือน Search แต่ใช้ alarm command)</td></tr>
+        <tr><td><code>OneWire_GetAddress(bus, rom)</code></td><td>ดึง ROM address ที่พบล่าสุดจาก <code>OneWire_Search</code>/<code>AlarmSearch</code> — <strong>ไม่ได้รับ index</strong></td></tr>
+        <tr><td><code>OneWire_WriteBit(bus, bit)</code></td><td>เขียน 1 bit</td></tr>
+        <tr><td><code>OneWire_ReadBit(bus)</code></td><td>อ่าน 1 bit</td></tr>
+        <tr><td><code>OneWire_WriteBytes(bus, data, len)</code></td><td>เขียนหลายไบต์</td></tr>
+        <tr><td><code>OneWire_ReadBytes(bus, buf, len)</code></td><td>อ่านหลายไบต์</td></tr>
+        <tr><td><code>OneWire_CRC8(data, len)</code></td><td>คำนวณ CRC8 (ไม่ต้องใช้ bus — คำนวณจาก buffer ล้วนๆ)</td></tr>
+        <tr><td><code>OneWire_VerifyCRC(data, len)</code></td><td>ตรวจสอบ CRC8 ของข้อมูล (ไม่ต้องใช้ bus)</td></tr>
+        <tr><td><code>OneWire_Depower(bus)</code></td><td>ปล่อย bus (parasite power mode)</td></tr>
+        <tr><td><code>OneWire_GetBusByPin(pin)</code></td><td>ดึง bus handle ที่เคย Init ไว้แล้ว จาก pin (ไม่ต้อง Init ซ้ำ)</td></tr>
     </table>
+    <div class="callout callout-warn">
+        <strong>สำคัญ:</strong> ทุกฟังก์ชันข้างบน (ยกเว้น <code>OneWire_CRC8</code>/<code>OneWire_VerifyCRC</code>) ต้องรับ <code>bus</code> (ค่าที่ได้จาก <code>OneWire_Init()</code>) เป็น argument แรกเสมอ — เก็บค่านี้ไว้เป็นตัวแปรตั้งแต่ต้น main
+    </div>
 </section>
 
 <section>
     <h2>ขั้นตอนอ่าน DS18B20 (Step by Step)</h2>
     <div class="step">
+        <h3>0. เริ่มต้น bus (ทำครั้งเดียวตอนต้น)</h3>
+        <p><code>OneWire_Bus* bus = OneWire_Init(PA1);</code> — เก็บ <code>bus</code> ไว้ ต้องส่งให้ทุกฟังก์ชันด้านล่าง</p>
+    </div>
+    <div class="step">
         <h3>1. Reset + Presence Check</h3>
-        <p><code>OneWire_Reset()</code> — ตรวจสอบว่ามี device ต่ออยู่หรือไม่</p>
+        <p><code>OneWire_Reset(bus)</code> — ตรวจสอบว่ามี device ต่ออยู่หรือไม่</p>
     </div>
     <div class="step">
         <h3>2. SkipROM / MatchROM</h3>
-        <p><code>OneWire_SkipROM()</code> (อุปกรณ์ตัวเดียว) หรือ <code>OneWire_MatchROM(addr)</code> (หลายตัว)</p>
+        <p><code>OneWire_SkipROM(bus)</code> (อุปกรณ์ตัวเดียว) หรือ <code>OneWire_MatchROM(bus, rom)</code> (หลายตัว)</p>
     </div>
     <div class="step">
         <h3>3. Convert T (0x44)</h3>
-        <p><code>OneWire_WriteByte(0x44)</code> — สั่งให้เซนเซอร์วัดอุณหภูมิ</p>
+        <p><code>OneWire_WriteByte(bus, 0x44)</code> — สั่งให้เซนเซอร์วัดอุณหภูมิ</p>
     </div>
     <div class="step">
         <h3>4. รอ 750ms</h3>
@@ -136,7 +143,7 @@ flowchart TD
     </div>
     <div class="step">
         <h3>6. CRC Verify</h3>
-        <p><code>OneWire_VerifyCRC(buf, 9)</code> — ตรวจสอบความถูกต้อง</p>
+        <p><code>OneWire_VerifyCRC(buf, 9)</code> — ตรวจสอบความถูกต้อง (ฟังก์ชันนี้ไม่ต้องใช้ bus)</p>
     </div>
     <div class="step">
         <h3>7. แปลงค่า</h3>
@@ -151,32 +158,32 @@ flowchart TD
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    USART_SimpleInit(USART_115200);
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
 
-    OneWire_Init(GPIOA, GPIO_Pin_1);
+    OneWire_Bus* bus = OneWire_Init(PA1);  // OneWire_Init รับ SimpleGPIO pin เดียว ไม่ใช่ (port, pin)
 
     while (1) {
-        if (!OneWire_Reset()) {
+        if (!OneWire_Reset(bus)) {
             printf("No DS18B20 found!\r\n");
             Delay_Ms(1000);
             continue;
         }
 
-        OneWire_SkipROM();
-        OneWire_WriteByte(0x44); // Convert T
+        OneWire_SkipROM(bus);
+        OneWire_WriteByte(bus, 0x44); // Convert T
         Delay_Ms(750);
 
-        if (!OneWire_Reset()) {
+        if (!OneWire_Reset(bus)) {
             printf("Device lost!\r\n");
             continue;
         }
 
-        OneWire_SkipROM();
-        OneWire_WriteByte(0xBE); // Read Scratchpad
+        OneWire_SkipROM(bus);
+        OneWire_WriteByte(bus, 0xBE); // Read Scratchpad
 
         uint8_t raw[9];
         for (uint8_t i = 0; i < 9; i++) {
-            raw[i] = OneWire_ReadByte();
+            raw[i] = OneWire_ReadByte(bus);
         }
 
         if (!OneWire_VerifyCRC(raw, 9)) {
@@ -204,14 +211,15 @@ int main(void) {
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    USART_SimpleInit(USART_115200);
-    OneWire_Init(GPIOA, GPIO_Pin_1);
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    OneWire_Bus* bus = OneWire_Init(PA1);
 
     uint8_t roms[MAX_DEVICES][8];
     uint8_t count = 0;
 
-    OneWire_ResetSearch();
-    while (count < MAX_DEVICES && OneWire_Search(roms[count])) {
+    OneWire_ResetSearch(bus);
+    while (count < MAX_DEVICES && OneWire_Search(bus)) {
+        OneWire_GetAddress(bus, roms[count]);  // OneWire_Search ไม่คืน ROM ตรงๆ ต้องดึงด้วย GetAddress
         printf("Device %d: ", count + 1);
         for (uint8_t i = 0; i < 8; i++) {
             printf("%02X", roms[count][i]);
@@ -223,17 +231,17 @@ int main(void) {
 
     while (1) {
         for (uint8_t i = 0; i < count; i++) {
-            OneWire_Select(roms[i]);
-            OneWire_WriteByte(0x44); // Convert T
+            OneWire_Select(bus, roms[i]);
+            OneWire_WriteByte(bus, 0x44); // Convert T
 
             Delay_Ms(750);
 
-            OneWire_Select(roms[i]);
-            OneWire_WriteByte(0xBE);
+            OneWire_Select(bus, roms[i]);
+            OneWire_WriteByte(bus, 0xBE);
 
             uint8_t raw[9];
             for (uint8_t j = 0; j < 9; j++) {
-                raw[j] = OneWire_ReadByte();
+                raw[j] = OneWire_ReadByte(bus);
             }
 
             if (OneWire_VerifyCRC(raw, 9)) {
@@ -258,34 +266,37 @@ int main(void) {
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    USART_SimpleInit(USART_115200);
-    OneWire_Init(GPIOA, GPIO_Pin_1);
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    OneWire_Bus* bus = OneWire_Init(PA1);
 
     uint8_t roms[MAX_DEVICES][8];
     uint8_t count = 0;
 
-    OneWire_ResetSearch();
-    while (count < MAX_DEVICES && OneWire_Search(roms[count])) count++;
+    OneWire_ResetSearch(bus);
+    while (count < MAX_DEVICES && OneWire_Search(bus)) {
+        OneWire_GetAddress(bus, roms[count]);
+        count++;
+    }
 
     printf("Found %d devices\r\n", count);
 
     while (1) {
         // Broadcast Convert T to ALL devices
-        OneWire_Reset();
-        OneWire_SkipROM();
-        OneWire_WriteByte(0x44);
+        OneWire_Reset(bus);
+        OneWire_SkipROM(bus);
+        OneWire_WriteByte(bus, 0x44);
 
         // รอครั้งเดียว! (แทน N×750ms)
         Delay_Ms(750);
 
         // อ่านแต่ละตัว
         for (uint8_t i = 0; i < count; i++) {
-            OneWire_Select(roms[i]);
-            OneWire_WriteByte(0xBE);
+            OneWire_Select(bus, roms[i]);
+            OneWire_WriteByte(bus, 0xBE);
 
             uint8_t raw[9];
             for (uint8_t j = 0; j < 9; j++) {
-                raw[j] = OneWire_ReadByte();
+                raw[j] = OneWire_ReadByte(bus);
             }
 
             if (OneWire_VerifyCRC(raw, 9)) {

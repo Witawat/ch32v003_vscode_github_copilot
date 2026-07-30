@@ -39,11 +39,14 @@ int main(void) {
     HX711_Tare(&hx, 15);
     USART_Print("Tare done. Place 100g calibration weight.\r\n");
     Delay_Ms(3000);
-    HX711_Calibrate(&hx, 100.0f, 10);
+    int32_t raw100;
+    HX711_Read(&hx, &raw100);  // อ่านค่า raw ที่มีตุ้ม 100g วางอยู่
+    HX711_SetCalibration(&hx, (float)raw100 / 100.0f);
     USART_Print("Calibration done!\r\n");
 
     while(1) {
-        float weight_g = HX711_GetWeight(&hx, 8);
+        float weight_g;
+        HX711_GetWeightAvg(&hx, 8, &weight_g);
 
         if(GPIO_Read(TARE_BTN) == 0) {
             Delay_Ms(100);
@@ -87,7 +90,7 @@ int main(void) {
         Delay_Ms(200);
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> ฟังก์ชันครบของเครื่องชั่ง: Tare (ลบน้ำหนักภาชนะ), Calibrate (ตุ้ม 100g), สลับหน่วย g/oz — ปุ่ม TARE (PC0) เรียก HX711_Tare — ปุ่ม UNIT (PC1) สลับ gram ↔ ounce (×0.035274) — แสดงผล: <0.5g = "0.0", >1000g = kg, ปกติ = g — OLED แสดงผล 2 บรรทัด — averaging 8 samples ให้ค่าคงที่ — calibration factor เก็บใน scale.cal_factor หลัง Calibrate</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ฟังก์ชันครบของเครื่องชั่ง: Tare (ลบน้ำหนักภาชนะ), Calibrate (ตุ้ม 100g ผ่าน HX711_Read + SetCalibration), สลับหน่วย g/oz — ปุ่ม TARE (PC0) เรียก HX711_Tare — ปุ่ม UNIT (PC1) สลับ gram ↔ ounce (×0.035274) — แสดงผล: <0.5g = "0.0", >1000g = kg, ปกติ = g — OLED แสดงผล 2 บรรทัด — averaging 8 samples ผ่าน HX711_GetWeightAvg ให้ค่าคงที่ — calibration factor เก็บใน hx.calibration_factor หลัง SetCalibration</div>
 </div>
 
 <div class="answer">
@@ -116,7 +119,7 @@ int main(void) {
     HX711_Instance hx;
     HX711_Init(&hx, DT_PIN, SCK_PIN);
     HX711_SetGain(&hx, HX711_GAIN_128);
-    HX711_SetScale(&hx, 420.5f);
+    HX711_SetCalibration(&hx, 420.5f);
 
     W25Qxx_Init();
     W25Qxx_EraseSector(0);
@@ -136,7 +139,8 @@ int main(void) {
     uint8_t logging = 0;
 
     while(1) {
-        float weight = HX711_GetWeight(&hx, 8);
+        float weight;
+        HX711_GetWeightAvg(&hx, 8, &weight);
 
         if(GPIO_Read(LOG_BTN) == 0) {
             Delay_Ms(100);
@@ -191,7 +195,7 @@ int main(void) {
         Delay_Ms(100);
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> กดปุ่มเริ่ม/หยุด logging — บันทึกทุก 1 วิ เฉพาะเมื่อน้ำหนักเปลี่ยน >1g (delta compression) — เก็บ timestamp + weight ใน struct — เขียน W25Qxx Flash แบบ sequential — MAX_LOGS=200 ป้องกัน overflow — เมื่อหยุด logging → dump ข้อมูลทั้งหมดออก USART — ใช้ SetScale เพื่อตั้ง calibration factor แบบ manual (ไม่ต้อง calibrate ใหม่ทุกครั้ง) — เหมาะกับงานชั่งน้ำหนักเป็นชุด หรือ monitoring น้ำหนักสัตว์เลี้ยง</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> กดปุ่มเริ่ม/หยุด logging — บันทึกทุก 1 วิ เฉพาะเมื่อน้ำหนักเปลี่ยน >1g (delta compression) — เก็บ timestamp + weight ใน struct — เขียน W25Qxx Flash แบบ sequential — MAX_LOGS=200 ป้องกัน overflow — เมื่อหยุด logging → dump ข้อมูลทั้งหมดออก USART — ใช้ SetCalibration เพื่อตั้ง calibration factor แบบ manual (ไม่ต้อง calibrate ใหม่ทุกครั้ง) — เหมาะกับงานชั่งน้ำหนักเป็นชุด หรือ monitoring น้ำหนักสัตว์เลี้ยง</div>
 </div>
 
 <div class="answer">
@@ -214,7 +218,7 @@ int main(void) {
     HX711_Instance hx;
     HX711_Init(&hx, DT_PIN, SCK_PIN);
     HX711_SetGain(&hx, HX711_GAIN_128);
-    HX711_SetScale(&hx, 415.0f);
+    HX711_SetCalibration(&hx, 415.0f);
     HX711_Tare(&hx, 15);
 
     OLED_Handle oled;
@@ -230,7 +234,8 @@ int main(void) {
     USART_Print("Auto-Zero Scale Ready\r\n");
 
     while(1) {
-        float weight = HX711_GetWeight(&hx, 10);
+        float weight;
+        HX711_GetWeightAvg(&hx, 10, &weight);
         float diff = fabs(weight - stable_weight);
 
         if(diff < 0.5f && fabs(weight) < 2.0f && !auto_zero_done) {

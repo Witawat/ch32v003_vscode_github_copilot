@@ -12,130 +12,86 @@
     <a href="index.html">← สารบัญ</a>
     <a href="ch10_power.html">กลับบทที่ 10</a>
 </nav>
-<h1>📝 เฉลย — บทที่ 10: Power Management</h1>
+<h1>📝 เฉลย — บทที่ 10: Power Management (Sleep / Standby / AWU / PVD)</h1>
+
+<p class="explain">หมายเหตุ: SimpleHAL และ standard peripheral (<code>ch32v00x_pwr.h</code>/<code>ch32v00x_rcc.h</code>) <strong>ไม่มี BKP register wrapper</strong> — เก็บข้อมูลข้าม reset ใน Flash เท่านั้น (ดูบทที่ 11)</p>
 
 <div class="answer">
-<h2>ข้อ 1: Sleep mode + ตื่นด้วย interrupt ปุ่มกด</h2>
+<h2>ข้อ 1: Standby + AWU 10 วินาที + reset counter (เก็บใน Flash)</h2>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 
-volatile uint8_t g_btn_wake = 0;
-
-void btn_isr(void) {
-    g_btn_wake = 1;  // ISR: แค่ตั้ง flag
-}
-
-int main(void) {
-    SystemCoreClockUpdate();
-    Timer_Init();
-    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
-
-    pinMode(PC0, PIN_MODE_OUTPUT);   // LED
-    pinMode(PA1, PIN_MODE_INPUT_PULLUP);  // Button
-
-    attachInterrupt(digitalPinToInterrupt(PA1), btn_isr, FALLING);
-
-    USART_Print("Sleep + Button Wake Demo\r\n");
-    USART_Print("Press PA1 to wake CPU\r\n");
-
-    while (1) {
-        // ทำงานปกติ — LED ติด 200ms
-        digitalWrite(PC0, HIGH);
-        Delay_Ms(200);
-        digitalWrite(PC0, LOW);
-
-        USART_Print("Going to SLEEP... (press PA1 to wake)\r\n");
-
-        // เข้า Sleep — CPU หยุด, Peripheral ยังทำงาน
-        // SysTick ยังทำงาน → นาฬิกาเดินต่อ
-        // Interrupt PA1 → ตื่นทันที
-        PWR_Sleep();
-
-        // ตื่นแล้ว! — เช็คว่าตื่นจาก button หรือ SysTick
-        if (g_btn_wake) {
-            g_btn_wake = 0;
-            USART_Print(">> Woke by BUTTON!\r\n");
-            // LED ติดนานขึ้น
-            digitalWrite(PC0, HIGH);
-            Delay_Ms(500);
-            digitalWrite(PC0, LOW);
-        } else {
-            USART_Print(">> Woke by SysTick\r\n");
-        }
-
-        Delay_Ms(100);
-    }
-}</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> <code>PWR_Sleep()</code> หยุดเฉพาะ CPU — SysTick, GPIO interrupt, USART ยังทำงาน — ใน Sleep กระแส ~0.5mA (เทียบกับ Active ~4mA) — <code>attachInterrupt(PA1, btn_isr, FALLING)</code> ผูก interrupt — เมื่อกดปุ่ม → PA1 LOW → interrupt → CPU ตื่น → <code>btn_isr()</code> ตั้ง flag — main loop เช็ค flag แยกสาเหตุการตื่น — ถ้าไม่มี interrupt → ตื่นด้วย SysTick (1ms) — วนกลับมา Sleep ใหม่ — <strong>ข้อควรระวัง:</strong> delay() ใน Sleep ยังทำงานเพราะใช้ SysTick — แต่อาจไม่แม่นเท่าเดิมเพราะบางรอบ CPU หลับ</ul></div>
-</ul></div>
-
-<div class="answer">
-<h2>ข้อ 2: PWR_Standby 10 วิ + ตรวจจับ wakeup source</h2>
-<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
-#include "SimpleHAL.h"
+// state ที่จะเก็บข้าม reset — ใช้ Flash เพราะไม่มี BKP register
+typedef struct {
+    uint32_t magic;
+    uint32_t wake_count;
+    uint16_t crc;
+} PersistState;
 
 int main(void) {
     SystemCoreClockUpdate();
+
+    // โหลด state จาก flash ที่เก็บไว้
+    PersistState st;
+    uint8_t loaded = Flash_LoadConfig(&amp;st, sizeof(st));
 
     if (PWR_WasStandbyWakeup()) {
-        // ——— ตื่นจาก Standby ———
+        // ——— ตื่นจาก Standby (AWU ที่ตั้งไว้ 10ms → 10s) ———
         Timer_Init();
         USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
         pinMode(PC0, PIN_MODE_OUTPUT);
+        PWR_ClearStandbyFlag();
 
-        // อ่าน wake count จาก BKP register
-        uint32_t count = PWR_ReadBackup(0) + 1;
+        if (!loaded || st.magic != 0xBEEF1234) {
+            st.magic = 0xBEEF1234;
+            st.wake_count = 0;
+        }
+        st.wake_count++;
 
         USART_Print("=== Wake #");
-        USART_PrintNum((int32_t)count);
-        USART_Print(" from STANDBY ===\r\n");
+        USART_PrintNum((int32_t)st.wake_count);
+        USART_Print(" from STANDBY (AWU 10s) ===\r\n");
 
-        // LED blink ตามจำนวน wake count
-        for (uint32_t i = 0; i < (count % 10); i++) {
+        // LED blink ตาม wake_count mod 10
+        for (uint32_t i = 0; i &lt; (st.wake_count % 10); i++) {
             digitalWrite(PC0, HIGH);
             Delay_Ms(100);
             digitalWrite(PC0, LOW);
             Delay_Ms(100);
         }
 
-        // บันทึก wake count ลง BKP
-        PWR_WriteBackup(0, count);
-        PWR_WriteBackup(1, Get_CurrentMs() / 1000);  // timestamp
+        // บันทึก counter กลับลง flash (ระวัง wear — ทน ~10,000-80,000 รอบ/page)
+        Flash_SaveConfig(&amp;st, sizeof(st));
 
-        USART_Print("Wake source: AWU (auto wake-up)\r\n");
+        USART_Print("Wake source: AWU (auto wake-up 10s)\r\n");
         USART_Print("Sleeping 10s...\r\n");
-        Delay_Ms(50);  // รอ USART ส่งเสร็จ
-
+        Delay_Ms(50);  // รอ USART ส่งเสร็จก่อนเข้า Standby
     } else {
         // ——— Power-on ครั้งแรก ———
         Timer_Init();
         USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
-
         USART_Print("=== COLD BOOT ===\r\n");
         USART_Print("Wake source: POWER-ON\r\n");
-        PWR_WriteBackup(0, 0);  // รีเซ็ต counter
-        PWR_WriteBackup(1, 0);
+        st.magic = 0xBEEF1234;
+        st.wake_count = 0;
+        Flash_SaveConfig(&amp;st, sizeof(st));
         Delay_Ms(50);
     }
 
-    // ตั้ง AWU 10 วินาที → เข้า Standby
-    PWR_ConfigureAWU(AWU_4S);
-    // AWU สูงสุด 30S — ใช้ 4S + 4S + 2S = 10S ไม่ได้เพราะ Standby = reset
-    // ใช้ AWU_8S (~8 วิ) หรือ AWU_4S สำหรับทดสอบ
-    // สำหรับ 10 วิที่แน่นอน: ใช้ AWU_8S + delay 2S ก่อนเข้า Standby
-    // หรือใช้ AWU_4S แล้วนับ 3 รอบด้วย BKP
-    USART_Print("Entering Standby (AWU ~8s)...\r\n");
+    // ตั้ง AWU 10 วินาที → เข้า Standby (auto prescaler ให้)
+    // 10 วินาทีน้อยกว่า max 30s → PWR_Standby(timeout_ms) จัดการให้เอง
+    USART_Print("Entering Standby for 10s...\r\n");
     Delay_Ms(30);
-    PWR_Standby();
+    PWR_Standby(10000);
 
     // ไม่มีทางมาถึง — Standby = reset
     while (1);
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> <code>PWR_Standby()</code> หยุดทุกอย่าง — RAM สูญหาย! — ตื่นด้วย AWU หรือ reset pin เท่านั้น — <code>PWR_WasStandbyWakeup()</code> เช็ค flag ว่า reset ครั้งนี้เกิดจาก Standby หรือ Power-on — <strong>BKP registers</strong> (10 × 32-bit) เป็นหน่วยความจำเดียวที่คงค่าผ่าน Standby — ใช้เก็บ wake counter — AWU period: AWU_16MS, AWU_128MS, AWU_1S, AWU_2S, AWU_4S, AWU_8S, AWU_16S, AWU_30S — เพื่อให้ได้ 10 วิ: ใช้ AWU_8S + รอ 2S (Delay_Ms(2000)) ก่อนเข้า Standby — หรือใช้ AWU_4S แล้วนับ 3 รอบ — <strong>สำคัญ:</strong> ต้อง Delay รอ USART ส่งเสร็จก่อนเข้า Standby มิฉะนั้นข้อมูลค้างใน buffer</ul></div>
-</ul></div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>PWR_Standby(uint32_t timeout_ms)</code> รับ timeout 1-30000ms (สูงสุด 30s) — 10 วินาทีใช้สั้นกว่า max → SimpleHAL auto-select prescaler+window ที่เหมาะสมให้ ไม่ต้องเลือกเอง — <strong>RAM สูญหาย!</strong> ทุกครั้งที่ตื่น = reset → <code>main()</code> เริ่มใหม่ — <code>PWR_WasStandbyWakeup()</code> แยก reset จาก standby vs power-on — <strong>ไม่มี BKP register</strong> ใน SimpleHAL → เก็บ counter ใน Flash ผ่าน <code>Flash_LoadConfig()/Flash_SaveConfig()</code> — <strong>ระวัง Flash wear:</strong> ทนได้ ~10,000-80,000 รอบ/page — ถ้า wake ทุกนาทีต้องใช้ wear leveling หรือ external EEPROM — <strong>ถ้าต้องการ AWU แม่น</strong> ใช้ <code>PWR_AWU_CALC_WINDOW(PWR_AWU_PRESCALER_10240, 10000)</code> + <code>PWR_ConfigureAWU()</code> + <code>PWR_EnterStandbyMode()</code> แทน</div>
+</div>
 
 <div class="answer">
-<h2>ข้อ 3: คำนวณอายุแบตเตอรี่ 1000mAh</h2>
+<h2>ข้อ 2: คำนวณอายุแบต CR2032 ด้วย PWR_CalculateBatteryLife (4 args) + LDO quiescent</h2>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 
@@ -146,88 +102,140 @@ int main(void) {
     ADC_SimpleInit();
     pinMode(PC0, PIN_MODE_OUTPUT);
 
-    // พารามิเตอร์แบตเตอรี่
-    const float batt_capacity_mah = 1000.0f;   // 1000mAh
-    const float v_min = 2.7f;                  // cut-off voltage
-    const float v_max = 4.2f;                  // full charge (Li-Ion)
-    // CH32V003 max VDD ≈ 3.6V — ถ้าใช้ Li-Ion ต้องมี LDO 3.3V
-    // v_max = 3.3f สำหรับ LDO output
+    // ——— Scenario: CR2032 + LDO 3.3V (quiescent ~1µA) ———
+    // CR2032 capacity ≈ 220mAh (typical)
+    // MCU active 50ms @ 4mA ทุก 10s → active_time_percent ≈ 0.5%
+    // MCU standby rest → ~5µA (AWU on) + LDO quiescent ~1µA = ~6µA
 
-    uint32_t wake_count = PWR_ReadBackup(0);
-    float total_energy_mah = wake_count * 0.015f;  // ~15µAh per cycle (estimate)
+    const uint16_t battery_mah       = 220;   // CR2032 220mAh
+    const uint8_t  active_time_pct   = 1;     // ประมาณ 1% (over-estimate เผื่อ)
+    const uint16_t active_current_ma = 4;     // active 4mA @ 24MHz
+    const uint16_t standby_current_ua = 6;   // 5µA AWU + 1µA LDO quiescent
+
+    // คำนวณอายุแบตเป็นชั่วโมง — signature จริง 4 args
+    uint32_t hours = PWR_CalculateBatteryLife(
+        battery_mah, active_time_pct,
+        active_current_ma, standby_current_ua);
+
+    USART_Print("Battery (CR2032 ");
+    USART_PrintNum(battery_mah);
+    USART_Print("mAh) life = ");
+    USART_PrintNum((int32_t)hours);
+    USART_Print(" hours = ");
+    USART_PrintNum((int32_t)(hours / 24));
+    USART_Print(" days = ");
+    USART_PrintNum((int32_t)(hours / 24 / 30));
+    USART_Print(" months\r\n");
+
+    // เทียบแบบ manual (ตรวจสูตรเดียวกัน):
+    //   weighted_current_uA = active_pct * active_mA * 1000
+    //                       + (100 - active_pct) * standby_uA
+    //   = 1 * 4000 + 99 * 6 = 4000 + 594 = 4594 uA
+    //   hours = (battery_mah * 1000) / weighted_current_uA
+    //        = (220 * 1000) / 4594 ≈ 47.9 ชม.
+
+    // เปรียบเทียบ 3 กรณี: ไม่ sleep / Sleep / Standby
+    uint32_t h_nosleep = PWR_CalculateBatteryLife(220, 100, 4, 0);   // active ตลอด → ~55 ชม.
+    uint32_t h_sleep    = PWR_CalculateBatteryLife(220, 10, 4, 2000); // sleep 90%, 2mA
+    uint32_t h_standby  = PWR_CalculateBatteryLife(220, 1,  4, 6);     // standby 99%, 6µA
+
+    USART_Print("No-sleep:  ");  USART_PrintNum((int32_t)h_nosleep);  USART_Print(" h\r\n");
+    USART_Print("Sleep:     ");   USART_PrintNum((int32_t)h_sleep);    USART_Print(" h\r\n");
+    USART_Print("Standby:   ");  USART_PrintNum((int32_t)h_standby);  USART_Print(" h\r\n");
+
+    // ประมาณ standby current ด้วย API (PVD on/off × AWU on/off)
+    uint32_t sb_awu  = PWR_EstimateStandbyCurrent(0, 1);  // AWU only ≈ 5µA
+    uint32_t sb_pvd  = PWR_EstimateStandbyCurrent(1, 1);  // AWU+PVD  ≈ 10µA
+    USART_Print("Est standby (AWU only): ");
+    USART_PrintNum((int32_t)sb_awu); USART_Print(" uA\r\n");
+    USART_Print("Est standby (AWU+PVD): ");
+    USART_PrintNum((int32_t)sb_pvd); USART_Print(" uA\r\n");
+
+    // วัดแบตจริงผ่าน ADC (VREFINT) → % แบต
+    float vdd = ADC_GetVDD();
+    float batt_pct = ADC_GetBatteryPercent(vdd, 2.0f, 3.0f);  // CR2032 range
+    USART_Print("VDD = ");
+    USART_PrintNum((int32_t)(vdd * 1000));
+    USART_Print(" mV  Batt = ");
+    USART_PrintNum((int32_t)batt_pct);
+    USART_Print("%\r\n");
 
     while (1) {
-        // เหตุการณ์จำลอง: ตื่น — ทำงาน — หลับ
-        wake_count++;
-        PWR_WriteBackup(0, wake_count);
-
-        // วัด VDD
-        float vdd = ADC_GetVDD();
-        uint32_t batt_pct = (uint32_t)PWR_CalculateBatteryLife(vdd, v_min, v_max);
-
-        // คำนวณอายุแบตจากกระแส
-        // Active: 50ms @ 4mA = 0.2mAs
-        // Sleep:  10s @ 0.5mA = 5.0mAs (sleep mode)
-        // Standby: 10s @ 5µA = 0.05mAs
-        // รวมต่อรอบ = 0.2 + 0.05 = 0.25mAs (Standby)
-        // ต่อวัน: 8640 รอบ × 0.25mAs = 2160mAs = 0.6mAh/day
-        // CR2032 225mAh → 225/0.6 = 375 วัน
-
-        const float active_ms = 50.0f;
-        const float sleep_ms = 10000.0f;
-        const float i_active_ma = 4.0f;
-        const float i_sleep_ua = 5.0f;   // Standby
-
-        // พลังงานต่อรอบ (mAs)
-        float e_active_mas = (active_ms / 1000.0f) * i_active_ma;
-        float e_sleep_mas = (sleep_ms / 1000.0f) * (i_sleep_ua / 1000.0f);
-        float e_per_cycle_mas = e_active_mas + e_sleep_mas;
-
-        // รอบต่อ mAh
-        float cycles_per_mah = 3600.0f / e_per_cycle_mas;  // 1mAh = 3600mAs
-        float total_cycles = cycles_per_mah * batt_capacity_mah;
-        float days = total_cycles / (86400.0f / (active_ms + sleep_ms));
-
-        USART_Print("Wake #");
-        USART_PrintNum((int32_t)wake_count);
-        USART_Print("  VDD=");
-        USART_PrintNum((int32_t)(vdd * 1000));
-        USART_Print("mV  Batt=");
-        USART_PrintNum((int32_t)batt_pct);
-        USART_Print("%\r\n");
-
-        USART_Print("  Energy/cycle=");
-        USART_PrintNum((int32_t)(e_per_cycle_mas * 1000));
-        USART_Print("uAs  Cycles/mAh=");
-        USART_PrintNum((int32_t)cycles_per_mah);
-
-        USART_Print("  Est.days=");
-        USART_PrintNum((int32_t)days);
-        USART_Print("\r\n");
-
-        USART_Print("  ");
-        USART_PrintNum((int32_t)(days / 30));
-        USART_Print(" months — ");
-        USART_PrintNum((int32_t)(days / 365));
-        USART_Print(" years\r\n");
-
-        // LED blink — active phase
-        digitalWrite(PC0, HIGH);
-        Delay_Ms(25);
-        digitalWrite(PC0, LOW);
-
-        Delay_Ms(25);  // รวม active = 50ms
-
-        // เข้า Standby จำลอง
-        USART_Print("  Entering Standby...\r\n\r\n");
-        Delay_Ms(30);
-
-        PWR_ConfigureAWU(AWU_4S);
-        PWR_Standby();
+        digitalWrite(PC0, !digitalRead(PC0));
+        Delay_Ms(500);
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> การคำนวณอายุแบตเตอรี่อาศัย 3 ปัจจัย: (1) กระแส Active × เวลา + กระแส Sleep/Standby × เวลา = พลังงานต่อรอบ (2) ความจุแบตจริงลดลงตามแรงดัน — <code>PWR_CalculateBatteryLife()</code> คำนวณ % โดยประมาณ (3) Self-discharge + quiescent current ของ LDO มีผลในทางปฏิบัติ — สูตร: <code>อายุ(วัน) = (ความจุ(mAh) / พลังงานต่อรอบ(mAs)) × (เวลาต่อรอบ(s) / 86400)</code> — Standby 5µA ต่ำกว่า Sleep 0.5mA ถึง 100 เท่า — CR2032 225mAh: Sleep mode → ~20 วัน, Standby mode → ~2 ปี — Self-discharge ของ CR2032 ~1% ต่อปี — รวม quiescent ของ LDO (~1-2µA) — อายุจริง ~1-2 ปี</ul></div>
-</ul></div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>PWR_CalculateBatteryLife(battery_mah, active_time_percent, active_current_ma, standby_current_ua)</code> รับ <strong>4 arguments</strong> และคืน <strong>ชั่วโมง</strong> — สูตรภายในคือค่าเฉลี่ยถ่วงน้ำหนัก: <code>hours = (battery_mah × 1000) / (active_pct × active_mA × 1000 + (100 − active_pct) × standby_uA)</code> — <strong>ไม่ใช่ signature 3 args <code>(vdd, vmin, vmax)</code></strong> และไม่ใช่ % แบต — % แบตใช้ <code>ADC_GetBatteryPercent()</code> ของ SimpleADC แทน — <strong>อย่าลืม LDO quiescent current</strong> (~1-2µA) บวกเข้า standby_current_ua ไม่งั้นประเมินอายุเกินจริง — ในทางปฏิบัติ CR2032 self-discharge ~1-3% ต่อปี ทำให้อายุจริง ~1-2 ปี แม้ทฤษฎีจะคำนวณได้หลายปี — <code>PWR_EstimateStandbyCurrent(pvd, awu)</code> ประมาณกระแส standby ใช้เป็นค่าประมาณก่อนเขียน code จริง</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: PVD low-voltage detect + safe shutdown + Standby</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+typedef struct {
+    uint32_t magic;
+    uint32_t unsafe_count;   // นับครั้งที่ VDD ต่ำกว่า threshold
+    uint32_t last_vdd_mv;
+    uint16_t crc;
+} PersistState;
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    ADC_SimpleInit();
+    pinMode(PC0, PIN_MODE_OUTPUT);
+
+    // เปิด PVD ที่ 3.3V — ถ้า VDD ต่ำกว่า 3.3V flag จะติด
+    PWR_EnablePVD(PWR_PVD_3V3);
+
+    PersistState st;
+    if (!Flash_LoadConfig(&amp;st, sizeof(st)) || st.magic != 0xCAFE1234) {
+        st.magic = 0xCAFE1234;
+        st.unsafe_count = 0;
+        st.last_vdd_mv = 0;
+    }
+
+    USART_Print("PVD Safe-Shutdown demo — monitoring VDD...\r\n");
+
+    while (1) {
+        float vdd = ADC_GetVDD();
+
+        if (PWR_GetPVDStatus()) {
+            // ——— LOW VOLTAGE DETECTED — safe shutdown ———
+            USART_Print("!!! LOW VOLTAGE — VDD=");
+            USART_PrintNum((int32_t)(vdd * 1000));
+            USART_Print("mV &lt; 3.3V threshold\r\n");
+
+            // บันทึก state ลง flash ก่อน shutdown
+            st.unsafe_count++;
+            st.last_vdd_mv = (uint32_t)(vdd * 1000);
+            Flash_SaveConfig(&amp;st, sizeof(st));
+            USART_Print("State saved to flash. Safe shutdown...\r\n");
+
+            // กระพริบ LED เตือน 5 รอบ
+            for (int i = 0; i &lt; 5; i++) {
+                digitalWrite(PC0, HIGH); Delay_Ms(80);
+                digitalWrite(PC0, LOW);  Delay_Ms(80);
+            }
+
+            // เข้า Standby จนกว่าจะมีคนจ่ายไฟใหม่/กด RESET
+            // ใช้ StandbyUntilInterrupt เพราะไม่ต้องการ wake อัตโนมัติ
+            PWR_StandbyUntilInterrupt();
+            // ตื่นแล้ว = reset → main() เริ่มใหม่ → เช็คว่ายัง low อยู่ไหม
+        }
+
+        // สถานะปกติ — กระพริบ LED ช้าๆ และวัด VDD ทุก 1s
+        digitalWrite(PC0, !digitalRead(PC0));
+        USART_Print("VDD = ");
+        USART_PrintNum((int32_t)(vdd * 1000));
+        USART_Print(" mV  OK\r\n");
+        Delay_Ms(1000);
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>PWR_EnablePVD(level)</code> เปิด voltage detector ที่ threshold 8 ระดับ (2.9V-4.4V) — <code>PWR_GetPVDStatus()</code> คืน 1 ถ้า VDD ต่ำกว่า threshold — ในตัวอย่างนี้ใช้ทำ <strong>safe shutdown</strong>: บันทึก state ลง Flash → กระพริบ LED เตือน → เข้า <code>PWR_StandbyUntilInterrupt()</code> (ปลุกด้วย EXTI หรือกด RESET เท่านั้น ไม่ใช่ AWU) เพื่อป้องกันการ wake อัตโนมัติซ้ำจนแบตหมด — เมื่อจ่ายไฟใหม่/กด RESET จะ reset → <code>main()</code> เริ่มใหม่ → เช็ค <code>PWR_GetPVDStatus()</code> อีกครั้ง ถ้า VDD ยังต่ำอยู่จะกลับเข้า Standby ทันที — <strong>สำคัญ:</strong> เช็ค PVD ใน loop เปิด PVD ที่ระดับที่เหมาะกับแบตของคุณ — สำหรับ Li-Ion 1-cell ใช้ <code>PWR_PVD_3V3</code> หรือ <code>PWR_PVD_3V5</code> — สำหรับ CR2032 ใช้ <code>PWR_PVD_2V9</code> — <code>PWR_EstimateStandbyCurrent(1, 0)</code> ประมาณกระแส standby เมื่อเปิด PVD (อาจ ~10µA)</div>
+</div>
 
 <nav class="bottom-nav">
     <a href="index.html">← สารบัญ</a>

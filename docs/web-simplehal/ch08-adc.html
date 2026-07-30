@@ -115,12 +115,12 @@ flowchart TD
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    USART_SimpleInit(USART_115200);
-    ADC_SimpleInit(ADC_CH0); // PA2
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    ADC_SimpleInit(); // เปิดทุก channel
 
     while (1) {
-        uint16_t raw = ADC_Read(0);              // 0-1023
-        float voltage = ADC_ToVoltage(raw);      // 0-3.3V
+        uint16_t raw = ADC_Read(ADC_CH_0);            // 0-1023, PA2
+        float voltage = ADC_ToVoltage(raw, 3.3);      // 0-3.3V
         printf("Raw=%d Voltage=%.2fV\r\n", raw, voltage);
         Delay_Ms(500);
     }
@@ -134,13 +134,13 @@ int main(void) {
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    USART_SimpleInit(USART_115200);
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
 
     while (1) {
         float vdd = ADC_GetVDD();
-        uint8_t pct = ADC_GetBatteryPercent(LIION_42V);
+        float pct = ADC_GetBatteryPercent(vdd, 3.0, 4.2);  // Li-ion: 3.0V (หมด) - 4.2V (เต็ม)
 
-        printf("VDD=%.3fV Battery=%d%%\r\n", vdd, pct);
+        printf("VDD=%.3fV Battery=%.0f%%\r\n", vdd, pct);
         Delay_Ms(2000);
     }
 }</code></pre>
@@ -153,9 +153,9 @@ int main(void) {
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    USART_SimpleInit(USART_115200);
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
 
-    uint8_t channels[] = {ADC_CH0, ADC_CH3, ADC_CH7};
+    uint8_t channels[] = {ADC_CH_0, ADC_CH_3, ADC_CH_7};
     ADC_SimpleInitChannels(channels, 3);
 
     while (1) {
@@ -190,7 +190,7 @@ int main(void) {
     <h3>ทำไมอ่านค่าผิด?</h3>
     <p>อาจยังไม่ได้เรียก <code>ADC_SimpleInit()</code> — ต้องเรียกก่อนอ่านทุกครั้ง</p>
     <h3>analogReadMilliVolts?</h3>
-    <p>เป็น macro ที่เรียก <code>ADC_ReadVoltage()</code> และคูณ 1000 — อ่านค่าเป็น mV ทันที</p>
+    <p>เป็น macro ที่คำนวณตรงจาก <code>analogRead(pin)</code>: <code>(analogRead(pin) * 3300) / 1023</code> — อ่านค่าเป็น mV ทันทีโดยอิง Vref 3.3V ตายตัว (ไม่ได้เรียก <code>ADC_ReadVoltage()</code>)</p>
 </section>
 
 <section>

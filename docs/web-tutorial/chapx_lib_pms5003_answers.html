@@ -65,7 +65,7 @@ void pms_aqi_dashboard(void) {
 
     USART_Println("=== Passive Mode ===");
     for(int i = 0; i < 5; i++) {
-        PMS5003_WakeUp(&s);
+        PMS5003_Wakeup(&s);
         Delay_Ms(50);
         PMS5003_RequestRead(&s);
         Delay_Ms(1000);

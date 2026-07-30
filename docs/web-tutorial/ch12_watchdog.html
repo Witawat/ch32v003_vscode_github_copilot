@@ -20,18 +20,32 @@
     <h2>🧭 แผนภาพการทำงาน</h2>
     <pre class="mermaid">
 flowchart TD
-    A["IWDG_SimpleInit(timeout_ms)"] --> B["Main Loop"]
-    B --> C["ทำงานปกติ"]
-    C --> D["IWDG_Feed()"]
-    D --> B
-    B --> E{ระบบค้าง?}
-    E -->|"ค้าง (ไม่ Feed)"| F["Watchdog Timeout!"]
-    F --> G["MCU Reset"]
-    G --> H["IWDG_CheckReset()"]
-    H -->|"Reset by IWDG"| I["แสดงข้อความแจ้งเตือน"]
-    I --> A
-    H -->|"Power-on"| B
+    subgraph IWDG["IWDG — Independent Watchdog (LSI 40kHz)"]
+        IA["IWDG_SimpleInit(timeout_ms)"] --> IB["Main Loop"]
+        IB --> IC["ทำงานปกติ"]
+        IC --> ID["IWDG_Feed()"]
+        ID --> IB
+        IB --> IE{ระบบค้าง?}
+        IE -->|"ค้าง (ไม่ Feed)"| IF["IWDG Timeout!"]
+        IF --> IG["MCU Reset"]
+        IG --> IH["IWDG_WasResetCause()"]
+        IH -->|"คืน 1 = reset จาก IWDG"| II["แจ้งเตือน / log"]
+        II --> IA
+        IH -->|"power-on/IWDG_ClearResetFlag()"| IB
+    end
+    subgraph WWDG["WWDG — Window Watchdog (PCLK1)"]
+        WA["WWDG_SimpleInit(counter, window)"] --> WB["counter นับถอยหลัง"]
+        WB --> WC{counter ตกใน window หรือไม่?}
+        WC -->|"อยู่ใน window &lt; c &lt; 0x40"| WD["WWDG_Refresh(counter) → คืนค่า counter"]
+        WD --> WB
+        WC -->|"feed เร็วเกิน (c &gt; window)"| WE["RESET (loop เร็วผิดปกติ)"]
+        WC -->|"ถึง 0x3F ไม่มี feed"| WF["RESET (loop ค้าง)"]
+        WA --> WG["ตั้ง callback (ถ้ามี)"]
+        WG --> WH["EWI ตอน c=0x40"]
+        WH --> WI["WWDG_GetInterruptFlag() / Clear"]
+    end
     </pre>
+    <p class="explain">🔍 IWDG เน้น "ปลอดภัยสูง" (อิสระจาก system clock, timeout ยาว 1ms-32s) — WWDG เน้น "แม่นยำ + ตรวจจับ loop เร็ว/ช้า" (PCLK1, timeout สั้น ~170µs-87ms + window + EWI)</p>
 </section>
 
 <section>
@@ -47,161 +61,369 @@ flowchart TD
     │  ┌──────────────────────────────────────┐  │
     │  │  IWDG (Independent Watchdog)          │  │
     │  │  ├─ Clock: LSI 40kHz (อิสระจากระบบ)    │  │
-    │  │  ├─ Timeout: 4ms ~ 26s                │  │
-    │  │  ├─ Feed: IWDG_Feed()                 │  │
+    │  │  ├─ Timeout: 0.1ms ~ 32.7s            │  │
+    │  │  ├─ Feed: IWDG_Feed() (no-arg)        │  │
+    │  │  ├─ Reset detect: IWDG_WasResetCause()│  │
     │  │  └─ Action: MCU Reset                 │  │
     │  └──────────────────────────────────────┘  │
     │                                            │
     │  ┌──────────────────────────────────────┐  │
     │  │  WWDG (Window Watchdog)               │  │
     │  │  ├─ Clock: PCLK1 (system clock)       │  │
-    │  │  ├─ Timeout: ~51µs ~ 28ms             │  │
-    │  │  ├─ Feed window: ต้อง feed ในช่วงที่กำหนด│  │
-    │  │  ├─ Early Interrupt (EWI): เตือนก่อน   │  │
+    │  │  ├─ Timeout: ~170µs ~ 87ms            │  │
+    │  │  ├─ Feed: WWDG_Refresh(counter)        │  │
+    │  │  ├─ Window: ต้อง feed ในช่วงที่กำหนด   │  │
+    │  │  ├─ EWI: Early Wakeup Interrupt       │  │
     │  │  └─ Action: MCU Reset                 │  │
     │  └──────────────────────────────────────┘  │
     │                                            │
     │  IWDG vs WWDG:                             │
     │  ├─ IWDG: อิสระ ใช้ LSI — ปลอดภัยกว่า       │
     │  ├─ WWDG: แม่นยำกว่า ตรวจจับ loop เร็ว/ช้า   │
-    │  └─ IWDG เปิดครั้งเดียวปิดไม่ได้ (by design) │
+    │  └─ ทั้งคู่เปิดครั้งเดียว "ปิดไม่ได้จริง" (by design) │
     └────────────────────────────────────────────┘
     </pre>
-    <p><strong>สำคัญ:</strong> IWDG เมื่อเปิดแล้ว <strong>ปิดไม่ได้</strong> จนกว่าจะ reset — การออกแบบนี้ป้องกัน bug ที่อาจปิด watchdog โดยไม่ตั้งใจ</p>
+    <p><strong>สำคัญ:</strong> IWDG เมื่อเปิดแล้ว <strong>ปิดไม่ได้</strong> จนกว่าจะ reset — ส่วน <code>WWDG_Disable()</code> ก็ <strong>ไม่ใช่ disable จริง</strong> (ดูคำเตือนใน ex05) การออกแบบนี้ป้องกัน bug ที่อาจปิด watchdog โดยไม่ตั้งใจ</p>
 </section>
 
 <section>
     <h2>📚 หลักการทำงาน</h2>
-    <p><strong>Watchdog</strong> — ตัวจับเวลาถอยหลัง — ถ้าไม่ "feed" (รีเซ็ต timer) ภายในเวลาที่กำหนด → MCU จะถูกรีเซ็ต — ป้องกันระบบค้างจาก bug</p>
+    <p><strong>Watchdog</strong> — ตัวจับเวลาถอยหลัง — ถ้าไม่ "feed" (รีเซ็ต counter) ภายในเวลาที่กำหนด → MCU จะถูกรีเซ็ต — ป้องกันระบบค้างจาก bug</p>
 
-    <h3>IWDG (Independent Watchdog)</h3>
+    <h3>IWDG (Independent Watchdog — LSI 40kHz)</h3>
     <ul>
         <li>ใช้ LSI (40kHz) เป็น clock — <strong>อิสระจาก system clock</strong> — ทำงานแม้ HSI หยุด</li>
-        <li>Timebase: prescaler ÷ LSI = timeout — เลือกได้ 4ms ถึง 26 วินาที</li>
+        <li>Timebase: <code>IWDG_TIMEOUT_MS(prescaler, reload)</code> = (prescaler × reload × 1000) / 40000 — เลือกได้ 0.1ms ถึง 32.7 วินาที</li>
+        <li><code>IWDG_SimpleInit(timeout_ms)</code> จะ auto-pick prescaler ที่พอดีกับ timeout ที่ขอ (1-32768ms)</li>
         <li>เมื่อเปิดแล้ว <strong>ปิดไม่ได้</strong> — hardware fuse — ออกแบบมาเพื่อความปลอดภัยสูงสุด</li>
+        <li>ตรวจ reset source ด้วย <code>IWDG_WasResetCause()</code> (คืน 1 = reset ล่าสุดเกิดจาก IWDG)</li>
         <li>ถ้า main loop ค้าง → ไม่มีการ feed → IWDG timeout → reset → ระบบกลับมาทำงานใหม่</li>
     </ul>
 
-    <h3>WWDG (Window Watchdog)</h3>
+    <h3>WWDG (Window Watchdog — PCLK1)</h3>
     <ul>
-        <li>ใช้ PCLK1 เป็น clock — แม่นยำกว่า IWDG</li>
-        <li><strong>Window concept:</strong> ต้อง feed ในช่วงเวลาที่กำหนดเท่านั้น — feed เร็วเกินก็ reset, feed ช้าเกินก็ reset</li>
-        <li>มี <strong>EWI (Early Wakeup Interrupt)</strong> — เตือนก่อน timeout — ให้โอกาสบันทึกข้อมูลสำคัญก่อน reset</li>
-        <li>Timeout: ~51µs ถึง ~28ms — เหมาะกับระบบ real-time</li>
+        <li>ใช้ PCLK1 (= SystemCoreClock, APB1 prescaler = 1 โดย default) เป็น clock — แม่นยำกว่า IWDG</li>
+        <li>Counter เป็น raw register value <strong>0x40-0x7F</strong> (6 บิต usable) — นับถอยจากค่าที่ตั้ง</li>
+        <li>Timeout: <code>WWDG_TIMEOUT_US(prescaler, counter) = (4096 × prescaler × (counter - 0x3F) × 1000000) / SystemCoreClock</code> — ที่ PCLK1=24MHz prescaler 8 ได้ ~1.37ms ถึง ~87.4ms</li>
+        <li><strong>Window concept:</strong> ต้อง feed เมื่อ <code>window &lt; counter &lt; 0x40</code> — feed ตอน <code>counter &gt; window</code> (เร็วเกิน) → reset — ปล่อยจนถึง 0x3F (ช้าเกิน) → reset</li>
+        <li>มี <strong>EWI (Early Wakeup Interrupt)</strong> — ตอน counter = 0x40 — ให้โอกาสบันทึกข้อมูลสำคัญก่อน reset</li>
+        <li><code>WWDG_Refresh(counter)</code> <strong>ต้องส่ง counter</strong> ทุกครั้ง (ไม่ใช่ no-arg)</li>
+        <li>⚠️ <strong>Window-clamp (silent):</strong> ถ้า <code>window &gt; counter</code> จะถูก clamp ลงเท่ากับ <code>counter</code> โดยไม่แจ้งเตือน — ไม่งั้นจะไม่มีทาง feed ผ่านได้และ WWDG จะ reset ไม่รู้จบ (อธิบายใน ex03)</li>
     </ul>
 
-    <p><strong>Watchdog Strategy:</strong> วาง IWDG_Feed() จุดเดียวใน main loop — ห้าม feed ใน ISR — ถ้า loop ทำงานถูกต้อง จะ feed ทันเวลา — ถ้าค้าง = reset</p>
+    <p><strong>Watchdog Strategy:</strong> วาง feed จุดเดียวใน main loop — ห้าม feed ใน ISR — ถ้า loop ทำงานถูกต้อง จะ feed ทันเวลา — ถ้าค้าง = reset</p>
 </section>
 
 <section>
     <h2>💻 เขียน Code ทีละขั้น</h2>
 
-    <div class="step"><h3>ขั้นที่ 1: IWDG พื้นฐาน — Feed ใน Main Loop</h3>
+    <div class="step"><h3>ex01 — IWDG พื้นฐาน: SimpleInit + Feed + reset detection</h3>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 
 int main(void) {
     SystemCoreClockUpdate();
 
-    // เช็คว่าตื่นจาก IWDG reset หรือไม่
-    if(IWDG_CheckReset()) {
+    // เช็คว่าตื่นจาก IWDG reset หรือไม่ (ต้องเช็คก่อน init อะไร)
+    if (IWDG_WasResetCause()) {
         // ตื่นเพราะ Watchdog timeout!
-        // ระบบค้างมาก่อน — log หรือแจ้งเตือน
         Timer_Init();
         USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
-        USART_Print("WARNING: Woke from Watchdog reset!\r\n");
         pinMode(PC0, PIN_MODE_OUTPUT);
+        USART_Print("WARNING: Woke from IWDG reset!\r\n");
         // กระพริบ LED เร็ว 3 ครั้ง แสดงว่าเกิด reset
-        for(int i=0; i<3; i++) {
+        for (int i = 0; i < 3; i++) {
             digitalWrite(PC0, HIGH); Delay_Ms(100);
             digitalWrite(PC0, LOW);  Delay_Ms(100);
         }
+        // เคลียร์ flag หลังใช้งานเสร็จ (ดูคำเตือนใน ex02)
+        IWDG_ClearResetFlag();
     }
 
     Timer_Init();
     USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
 
-    // เริ่ม IWDG — timeout 2 วินาที
+    // เริ่ม IWDG — timeout 2 วินาที (auto-pick prescaler)
     IWDG_SimpleInit(2000);
 
     USART_Print("System running with IWDG (2s timeout)\r\n");
-    pinMode(PC0, PIN_MODE_OUTPUT);</code></pre>
-    <p class="explain">🔍 <code>IWDG_CheckReset()</code> — เช็ค flag ว่า reset ครั้งนี้เกิดจาก IWDG timeout หรือไม่ — <code>IWDG_SimpleInit(2000)</code> — เริ่ม IWDG timeout 2000ms — <strong>หลังจากนี้ต้อง feed ภายใน 2s มิฉะนั้น reset!</strong></p></div>
+    pinMode(PC0, PIN_MODE_OUTPUT);
 
-    <div class="step"><h3>ขั้นที่ 2: Feed ใน Main Loop</h3>
-    <pre><code class="language-c">    uint32_t counter = 0;
-
-    while(1) {
-        // ทำงานปกติ ...
+    uint32_t counter = 0;
+    while (1) {
         digitalWrite(PC0, !digitalRead(PC0));  // Toggle LED
         Delay_Ms(500);
-
         counter++;
         USART_Print("Loop #");
         USART_PrintNum((int32_t)counter);
         USART_Print(" — feeding watchdog\r\n");
 
-        // Feed watchdog — รีเซ็ต timer กลับไป 2s
+        // Feed watchdog — รีเซ็ต counter กลับไป 2s (no-arg)
         IWDG_Feed();
-
         // ถ้า loop ใช้เวลาน้อยกว่า 2s — OK
         // ถ้ามี bug ทำให้ loop ค้าง → ไม่ feed → 2s → reset
-    }</code></pre>
-    <p class="explain">🔍 <code>IWDG_Feed()</code> — รีเซ็ต IWDG counter กลับไปค่า timeout — ต้องเรียกก่อน timeout — <strong>กฎสำคัญ:</strong> feed ใน main loop เท่านั้น — ห้าม feed ใน ISR (เพราะ ISR อาจยังทำงานแม้ main loop ค้าง)</p></div>
+    }
+}</code></pre>
+    <p class="explain">🔍 <code>IWDG_WasResetCause()</code> คืน 1 ถ้า reset ล่าสุดเกิดจาก IWDG — เช็คตั้งแต่ต้น main() ก่อนเริ่ม IWDG ใหม่ — <code>IWDG_SimpleInit(2000)</code> auto-pick prescaler ที่พอดี 2000ms — <code>IWDG_Feed()</code> เป็น no-arg รีเซ็ต counter — <strong>กฎเหล็ก:</strong> feed ใน main loop เท่านั้น ห้าม feed ใน ISR (เพราะ ISR อาจยังทำงานแม้ main loop ค้าง)</p></div>
 
-    <div class="step"><h3>ขั้นที่ 3: WWDG — Window Watchdog</h3>
-    <pre><code class="language-c">    // WWDG — ต้อง feed ใน window 50%-100% ของ timeout
-    // ถ้า feed เร็วเกิน (ก่อน 50%) → reset
-    // ถ้า feed ช้าเกิน (เกิน 100%) → reset
+    <div class="step"><h3>ex02 — IWDG ขั้นสูง: manual prescaler + busy + gettimeout + clearflag</h3>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
 
-    WWDG_SimpleInit(
-        WWDG_TIMEOUT_28MS,  // timeout
-        50                   // window: 50% (14ms-28ms)
-    );
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    pinMode(PC0, PIN_MODE_OUTPUT);
 
-    while(1) {
-        // ... ทำงานอื่น ...
-        Delay_Ms(20);  // ให้เวลาเลย 50% window
+    // ——— อ่าน reset cause ทุกตัว "ก่อน" เคลียร์ ———
+    if (IWDG_WasResetCause()) {
+        USART_Print("Last reset: IWDG (main loop ค้างมาก่อน)\r\n");
+    }
+    // ⚠ IWDG_ClearResetFlag() เคลียร์ flag "ทุกตัวพร้อมกัน"
+    //   (POR, PIN, Software, IWDG, WWDG, LowPower) ตาม CH32V003 hardware
+    //   ถ้าจะอ่าน flag อื่นด้วย (เช่น RCC_GetFlagStatus) ต้องอ่าน "ก่อน" เรียกฟังก์ชันนี้
+    IWDG_ClearResetFlag();
 
-        WWDG_Refresh();  // feed ใน window 14-28ms
-    }</code></pre>
-    <p class="explain">🔍 <code>WWDG_SimpleInit(timeout, window_pct)</code> — เริ่ม WWDG — <strong>Window:</strong> ต้อง refresh ในช่วง window_pct%-100% ของ timeout — ป้องกัน loop เร็วเกิน (bug infinite loop แบบไม่ทำอะไร) และช้าเกิน (loop ค้าง)</p></div>
+    // ———.manual init: ต้องการ 500ms timeout พอดีๆ ด้วย prescaler 32 ———
+    uint16_t reload = IWDG_CALC_RELOAD(32, 500);      // = (500*40000)/(32*1000) = 625
+    IWDG_Init(IWDG_PRESCALER_32, reload);              // manual prescaler + reload
 
-    <div class="step"><h3>ขั้นที่ 4: ทดสอบ Watchdog (จงใจทำให้ค้าง)</h3>
-    <pre><code class="language-c">    // จงใจทำให้ระบบค้าง — Watchdog ควร reset
-    if(counter == 5) {
-        USART_Print("Intentionally freezing... Watchdog should reset!\r\n");
-        Delay_Ms(100);  // รอ USART ส่งเสร็จ
-        while(1) {
-            // ค้าง! — ไม่มี IWDG_Feed()
-            // 2 วินาทีต่อมา → RESET
+    // รอจน register sync เสร็จ (IWDG always-on clock ต้องรอ 5 LSI cycles)
+    while (IWDG_IsBusy()) { }
+
+    // ตรวจ timeout จริงที่จะได้ (อาจต่างจากที่กำหนดเล็กน้อย)
+    uint32_t actual_ms = IWDG_GetTimeout(32, reload);  // = (32*625*1000)/40000 = 500
+    USART_Print("IWDG actual timeout = ");
+    USART_PrintNum((int32_t)actual_ms);
+    USART_Print(" ms\r\n");
+
+    while (1) {
+        digitalWrite(PC0, !digitalRead(PC0));
+        Delay_Ms(400);
+        IWDG_Feed();  // ก่อน timeout 500ms
+    }
+}</code></pre>
+    <p class="explain">🔍 <code>IWDG_CALC_RELOAD(prescaler, timeout_ms)</code> คำนวณ reload จาก timeout ที่ต้องการ — <code>IWDG_Init(IWDG_PRESCALER_32, reload)</code> ตั้ง manual — <code>IWDG_IsBusy()</code> ใช้รอ register sync (5 LSI cycles) — <code>IWDG_GetTimeout(prescaler, reload)</code> คืน timeout จริงเป็น ms — <strong>⚠ IWDG_ClearResetFlag():</strong> ฮาร์ดแวร์ CH32V003 ไม่รองรับการเคลียร์ flag เฉพาะตัว — <code>RCC_ClearFlag()</code> เคลียร์ reset flag <strong>ทุกตัวพร้อมกัน</strong> (POR, PIN, Software, IWDG, WWDG, LowPower) — ถ้าต้องการอ่านสาเหตุ reset อื่นด้วย ให้เรียก <code>RCC_GetFlagStatus()</code> ของ flag อื่น <strong>ก่อน</strong> เรียกฟังก์ชันนี้</p></div>
+
+    <div class="step"><h3>ex03 — WWDG พื้นฐาน: counter + window + refresh(counter) + window-clamp</h3>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    pinMode(PC0, PIN_MODE_OUTPUT);
+    pinMode(PC1, PIN_MODE_OUTPUT);
+
+    // ——— คำนวณ timing ก่อน (PCLK1 = 24MHz, prescaler 8) ———
+    // Max timeout: counter = 0x7F (127)  → (4096*8*(127-63)) / 24M ≈ 87.4 ms
+    // Window boundary: counter = 0x50 (80) → (4096*8*( 80-63)) / 24M ≈ 23.2 ms
+    // ดังนั้น "refresh ได้ตอน counter อยู่ระหว่าง 0x50 - 0x40" ≈ ช่วงเวลา 23.2..87.4 ms
+    uint32_t us_max = WWDG_TIMEOUT_US(8, 0x7F);  // ≈ 87381 µs
+    uint32_t us_win = WWDG_TIMEOUT_US(8, 0x50);  // ≈ 23211 µs
+    USART_Print("WWDG timeout: ~");
+    USART_PrintNum((int32_t)(us_max / 1000));
+    USART_Print(" ms, window opens at ~");
+    USART_PrintNum((int32_t)(us_win / 1000));
+    USART_Print(" ms\r\n");
+
+    // ——— init: counter=127, window=80 (raw register values 0x40-0x7F) ———
+    // WWDG_SimpleInit รับ raw counter และ window — ไม่ใช่ (timeout_constant, percentage)
+    WWDG_SimpleInit(0x7F, 0x50);  // default prescaler 8
+
+    // ⚠ window-clamp แบบ silent (commit 5293ae3):
+    //   ถ้าส่ง window > counter เช่น WWDG_SimpleInit(0x60, 0x70)
+    //   → window จะถูก clamp ลงเท่ากับ counter (0x60) โดยไม่แจ้งเตือน
+    //   เหตุผล: ถ้า window > counter จะไม่มีช่วงที่ "window < counter" เลย
+    //   → feed ผ่านไม่ได้ → WWDG reset ไม่รู้จบ
+    //   ป้องกันโดยการ clamp ให้มีอย่างน้อย 1 tick ที่ feed ได้
+
+    uint32_t counter = 0;
+    while (1) {
+        counter++;
+        digitalWrite(PC0, !digitalRead(PC0));
+
+        // หน่วงให้เลย window (เวลาต้อง > ~23ms)
+        Delay_Ms(30);   // อยู่ใน window แล้ว (23-30ms), ก่อน timeout 87ms
+
+        // ——— refresh ต้องส่ง counter เสมอ ———
+        digitalWrite(PC1, HIGH);
+        WWDG_Refresh(0x7F);   // คืน counter กลับไป 127
+        digitalWrite(PC1, LOW);
+
+        if (counter % 20 == 0) {
+            USART_Print("WWDG feed #");
+            USART_PrintNum((int32_t)counter);
+            USART_Print(" OK (30ms in window)\r\n");
         }
-    }</code></pre>
-    <p class="explain">🔍 จงใจค้างเพื่อทดสอบ watchdog — หลังจาก counter=5 — เข้า infinite loop โดยไม่มี feed — 2 วินาทีต่อมา MCU จะ reset — ดู LED กระพริบเร็ว 3 ครั้งจากการตรวจจับ IWDG reset</p></div>
+    }
+}</code></pre>
+    <p class="explain">🔍 <code>WWDG_SimpleInit(0x7F, 0x50)</code> รับ raw register values (counter=127, window=80) — <strong>ไม่ใช่</strong> (timeout constant, percentage) — <code>WWDG_Refresh(0x7F)</code> ต้องส่ง counter ทุกครั้ง (ไม่ใช่ no-arg) — <strong>refresh ได้เมื่อ</strong> <code>window &lt; counter &lt; 0x40</code> นับจากตอน init/refresh ครั้งก่อน — <strong>⚠ window-clamp silent:</strong> ถ้า <code>window &gt; counter</code> จะถูกลดลงเท่า <code>counter</code> โดยไม่แจ้ง — ทำให้มีอย่างน้อย 1 tick ที่ feed ผ่านได้ ป้องกัน reset loop ไม่รู้จบ — ก่อนใช้งานจริงให้คำนวณ timing ด้วย <code>WWDG_TIMEOUT_US(prescaler, counter)</code></p></div>
+
+    <div class="step"><h3>ex04 — WWDG + Early Wakeup Interrupt (EWI)</h3>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+// ——— callback สำหรับ EWI: ตอน counter = 0x40 (ก่อน reset 1 tick) ———
+void EarlyWarning(void) {
+    // โอกาสสุดท้ายก่อน reset — บันทึก debug info, ปิด output, เป็นต้น
+    USART_Print(">>> WWDG EWI: about to reset in 1 tick — save state!\r\n");
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+
+    // เช็ค reset cause ก่อน (เปลี่ยนจากชื่อเดิม)
+    if (IWDG_WasResetCause()) {
+        // (อาจเกิดจาก WWDG ครั้งก่อน — ดู ex05 สำหรับการแยก IWDG/WWDG ละเอียดกว่านี้)
+        USART_Print("Reset by watchdog (IWDG/WWDG)\r\n");
+    }
+
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    pinMode(PC0, PIN_MODE_OUTPUT);
+
+    // ตั้ง callback EWI ก่อนเปิด interrupt
+    WWDG_SetCallback(EarlyWarning);
+
+    // เปิด WWDG พร้อม EWI: counter=127, window=80, prescaler 8
+    WWDG_InitWithInterrupt(0x7F, 0x50, WWDG_PRESCALER_8);
+
+    USART_Print("WWDG + EWI active (87ms timeout)\r\n");
+
+    uint32_t tick = 0;
+    while (1) {
+        digitalWrite(PC0, !digitalRead(PC0));
+        Delay_Ms(30);          // อยู่ใน window
+        WWDG_Refresh(0x7F);   // ต้องส่ง counter
+        if (++tick % 50 == 0) {
+            USART_Print("WWDG tick OK\r\n");
+        }
+    }
+}</code></pre>
+    <p class="explain">🔍 <code>WWDG_SetCallback(cb)</code> ตั้ง callback สำหรับ EWI — <code>WWDG_InitWithInterrupt(counter, window, prescaler)</code> เปิด WWDG พร้อม Early Wakeup Interrupt — interrupt จะ firing ตอน counter = 0x40 (ก่อน reset 1 tick) — เป็นโอกาสสุดท้ายในการ log/state-save — ในเฉลยนี้ใช้ <code>IWDG_WasResetCause()</code> ตาม API จริงของ SimpleHAL — <strong>คำเตือน:</strong> ต้องเพิ่ม <code>WWDG_IRQHandler</code> ใน <code>ch32v00x_it.c</code> ตามตัวอย่างใน header (จะเรียก <code>WWDG_IRQHandler_Callback()</code> ให้อัตโนมัติ)</p></div>
+
+    <div class="step"><h3>ex05 — WWDG ขั้นสูง: manual init + flag + WWDG_Disable limitation</h3>
+    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+
+void OnEarlyWarning(void) {
+    // ตรวจ/clear flag ภายใน callback ก็ได้ — หรือทำใน main loop
+    if (WWDG_GetInterruptFlag()) {
+        USART_Print("EWI flag set — preparing reset\r\n");
+        WWDG_ClearInterruptFlag();  // เคลียร์ EWI flag
+    }
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    pinMode(PC0, PIN_MODE_OUTPUT);
+
+    WWDG_SetCallback(OnEarlyWarning);
+
+    // ——— manual init พร้อมเลือก prescaler เอง ———
+    // WWDG_Init(counter, window, prescaler) — ไม่มี preset timeout constant
+    // ตัวอย่าง: prescaler 4, counter 0x7F, window 0x50
+    //   timeout  = WWDG_TIMEOUT_MS(4, 0x7F) ≈ 43.7 ms (PCLK1=24MHz)
+    //   window   = ~11.6 ms (counter=0x50)
+    uint32_t timeout_ms = WWDG_CalcTimeout(4, 0x7F);  // คืน ms ≈ 43
+    USART_Print("WWDG timeout (prc=4, c=0x7F) = ");
+    USART_PrintNum((int32_t)timeout_ms);
+    USART_Print(" ms\r\n");
+
+    WWDG_Init(0x7F, 0x50, WWDG_PRESCALER_4);
+
+    uint32_t tick = 0;
+    while (1) {
+        // ตรวจ EWI ใน main loop ก็ได้ ไม่จำเป็นต้องอยู่ใน callback เท่านั้น
+        if (WWDG_GetInterruptFlag()) {
+            USART_Print("EWI detected in main loop\r\n");
+            WWDG_ClearInterruptFlag();
+        }
+
+        digitalWrite(PC0, !digitalRead(PC0));
+        Delay_Ms(15);          // อยู่ใน window (counter 0x50-0x40)
+        WWDG_Refresh(0x7F);
+
+        if (++tick == 100) {
+            // ⚠ ทดลองเรียก WWDG_Disable() — "ไม่ใช่ disable จริง"
+            //   (Header บรรทัด 173-184) — เมื่อ WDGA set แล้ว WWDG
+            //   จะนับถอยต่อไปและยัง reset ได้ถ้าไม่ refresh
+            //   ฟังก์ชันนี้แค่รีเซ็ต config registers
+            WWDG_Disable();
+            USART_Print("WWDG_Disable() called — but countdown still active!\r\n");
+            USART_Print("Must keep calling WWDG_Refresh(counter) or MCU will reset.\r\n");
+        }
+
+        if (tick == 120) {
+            // ถ้าหยุด refresh จริงๆ → MCU reset ในอีก ~43ms
+            USART_Print("Stopping refresh intentionally → RESET\r\n");
+            while (1) { }
+        }
+    }
+}</code></pre>
+    <p class="explain">🔍 <code>WWDG_Init(counter, window, prescaler)</code> เปิด manual — <code>WWDG_CalcTimeout(prescaler, counter)</code> คืน timeout เป็น ms — <code>WWDG_GetInterruptFlag()</code> / <code>WWDG_ClearInterruptFlag()</code> จัดการ EWI flag — <strong>⚠ WWDG_Disable() ไม่ใช่ disable จริง</strong> (header บรรทัด 173-184) — "once WDGA is set, WWDG cannot be disabled by software" — มันยังคง countdown อยู่ และจะ reset ถ้าไม่ refresh — ฟังก์ชันนี้แค่รีเซ็ต config registers — ฉะนั้น <strong>ห้าม</strong> คาดหวังว่าเรียกแล้วจะหยุด watchdog ได้ — ถ้าจะหยุดจริงต้องปล่อย MCU reset เท่านั้น</p></div>
 </section>
 
 <section>
     <h2>📋 API Reference</h2>
+    <h3>SimpleIWDG (7 ฟังก์ชัน)</h3>
     <table>
         <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
-        <tr><td><code>IWDG_SimpleInit(timeout_ms)</code></td><td>เริ่ม IWDG (timeout เป็น ms)</td><td><code>IWDG_SimpleInit(2000)</code></td></tr>
-        <tr><td><code>IWDG_Feed()</code></td><td>Feed IWDG — รีเซ็ต counter</td><td><code>IWDG_Feed()</code></td></tr>
-        <tr><td><code>IWDG_CheckReset()</code></td><td>เช็คว่า reset ครั้งนี้เกิดจาก IWDG</td><td><code>if(IWDG_CheckReset())...</code></td></tr>
-        <tr><td><code>WWDG_SimpleInit(timeout, window)</code></td><td>เริ่ม WWDG (window watchdog)</td><td><code>WWDG_SimpleInit(WWDG_TIMEOUT_28MS, 50)</code></td></tr>
-        <tr><td><code>WWDG_Refresh()</code></td><td>Refresh WWDG</td><td><code>WWDG_Refresh()</code></td></tr>
+        <tr><td><code>IWDG_SimpleInit(timeout_ms)</code></td><td>เริ่ม IWDG auto-pick prescaler (1-32768ms)</td><td><code>IWDG_SimpleInit(2000)</code></td></tr>
+        <tr><td><code>IWDG_Feed(void)</code></td><td>Feed IWDG — no-arg รีเซ็ต counter</td><td><code>IWDG_Feed()</code></td></tr>
+        <tr><td><code>IWDG_Init(prescaler, reload)</code></td><td>เริ่ม IWDG manual (prescaler + reload 0x0000-0x0FFF)</td><td><code>IWDG_Init(IWDG_PRESCALER_32, 625)</code></td></tr>
+        <tr><td><code>IWDG_IsBusy(void)</code></td><td>เช็คว่า register กำลัง sync อยู่ (คืน 1=busy)</td><td><code>while(IWDG_IsBusy());</code></td></tr>
+        <tr><td><code>IWDG_GetTimeout(prescaler, reload)</code></td><td>คำนวณ timeout จริงคืนเป็น ms</td><td><code>IWDG_GetTimeout(32, 625)</code> → 500</td></tr>
+        <tr><td><code>IWDG_WasResetCause(void)</code></td><td>เช็คว่า reset ล่าสุดเกิดจาก IWDG (คืน 1=ใช่)</td><td><code>if(IWDG_WasResetCause())...</code></td></tr>
+        <tr><td><code>IWDG_ClearResetFlag(void)</code></td><td>⚠ เคลียร์ reset flag <strong>ทุกตัวพร้อมกัน</strong> (POR/PIN/IWDG/WWDG/SW/LP)</td><td><code>IWDG_ClearResetFlag()</code></td></tr>
     </table>
-    <p><strong>IWDG Timeout ค่าที่ใช้ได้:</strong> 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 26208 (ms)</p>
+    <h3>SimpleWWDG (8 ฟังก์ชัน)</h3>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+        <tr><td><code>WWDG_SimpleInit(counter, window)</code></td><td>เริ่ม WWDG ด้วย raw register values 0x40-0x7F (prescaler default 8)</td><td><code>WWDG_SimpleInit(0x7F, 0x50)</code></td></tr>
+        <tr><td><code>WWDG_Refresh(counter)</code></td><td>Refresh WWDG — <strong>ต้องส่ง counter</strong></td><td><code>WWDG_Refresh(0x7F)</code></td></tr>
+        <tr><td><code>WWDG_Init(counter, window, prescaler)</code></td><td>เริ่ม WWDG manual พร้อมเลือก prescaler</td><td><code>WWDG_Init(0x7F, 0x50, WWDG_PRESCALER_4)</code></td></tr>
+        <tr><td><code>WWDG_InitWithInterrupt(counter, window, prescaler)</code></td><td>เปิด WWDG พร้อม Early Wakeup Interrupt</td><td><code>WWDG_InitWithInterrupt(0x7F, 0x50, WWDG_PRESCALER_8)</code></td></tr>
+        <tr><td><code>WWDG_SetCallback(callback)</code></td><td>ตั้ง callback สำหรับ EWI</td><td><code>WWDG_SetCallback(MyCB)</code></td></tr>
+        <tr><td><code>WWDG_CalcTimeout(prescaler, counter)</code></td><td>คำนวณ timeout คืนเป็น ms</td><td><code>WWDG_CalcTimeout(8, 0x7F)</code> → 87</td></tr>
+        <tr><td><code>WWDG_GetInterruptFlag(void)</code> / <code>WWDG_ClearInterruptFlag(void)</code></td><td>อ่าน/เคลียร์ EWI flag</td><td><code>if(WWDG_GetInterruptFlag())...</code></td></tr>
+        <tr><td><code>WWDG_Disable(void)</code></td><td>⚠ <strong>ไม่ใช่ disable จริง</strong> — แค่รีเซ็ต config registers (WWDG ยัง countdown อยู่)</td><td><code>WWDG_Disable()</code></td></tr>
+    </table>
+    <h3>Macros</h3>
+    <table>
+        <tr><th>Macro</th><th>คำอธิบาย</th></tr>
+        <tr><td><code>IWDG_PRESCALER_4/8/16/32/64/128/256</code></td><td>IWDG prescaler constants (timeout 0.1ms-32.8s)</td></tr>
+        <tr><td><code>IWDG_TIMEOUT_MS(prc, reload)</code></td><td>คำนวณ timeout เป็น ms = (prc × reload × 1000)/40000</td></tr>
+        <tr><td><code>IWDG_CALC_RELOAD(prc, timeout_ms)</code></td><td>คำนวณ reload จาก timeout = (timeout × 40000)/(prc × 1000)</td></tr>
+        <tr><td><code>IWDG_MAX_RELOAD</code> = 0x0FFF</td><td>ค่า reload สูงสุด (12-bit)</td></tr>
+        <tr><td><code>IWDG_LSI_FREQ</code> = 40000</td><td>LSI frequency ใน Hz</td></tr>
+        <tr><td><code>WWDG_PRESCALER_1/2/4/8</code></td><td>WWDG prescaler constants</td></tr>
+        <tr><td><code>WWDG_TIMEOUT_US(prc, counter)</code></td><td>คำนวณ timeout เป็น µs = (4096 × prc × (c - 0x3F) × 1000000)/SystemCoreClock</td></tr>
+        <tr><td><code>WWDG_TIMEOUT_MS(prc, counter)</code></td><td>คำนวณ timeout เป็น ms</td></tr>
+        <tr><td><code>WWDG_COUNTER_MIN/MAX</code> = 0x40/0x7F</td><td>ขอบเขต counter</td></tr>
+        <tr><td><code>WWDG_WINDOW_MIN/MAX</code> = 0x40/0x7F</td><td>ขอบเขต window</td></tr>
+    </table>
+    <p><strong>IWDG timeout (LSI=40kHz):</strong> prc 4 → 0.1-512ms, 8 → 0.2-1024ms, 16 → 0.4-2048ms, 32 → 0.8-4096ms, 64 → 1.6-8192ms, 128 → 3.2-16384ms, 256 → 6.4-32768ms (32.8s) — ±25% tolerance</p>
+    <p><strong>WWDG timeout (PCLK1=24MHz):</strong> prc 1 → 170µs-10.9ms, 2 → 341µs-21.8ms, 4 → 683µs-43.7ms, 8 → 1.37ms-87.4ms</p>
 </section>
 
 <section>
     <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
     <table>
         <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
-        <tr><td>MCU รีเซ็ตตลอดเวลา</td><td>IWDG timeout สั้นเกินไป — loop ใช้เวลาเกิน timeout</td><td>เพิ่ม timeout หรือลดงานใน loop — เช็คด้วย <code>IWDG_CheckReset()</code></td></tr>
-        <tr><td>IWDG ไม่ทำงาน</td><td>Debugger หยุด IWDG อัตโนมัติใน debug mode</td><td>ทดสอบโดยไม่ใช้ debugger — IWDG จะทำงานเฉพาะรันจริง</td></tr>
-        <tr><td>Feed IWDG แล้วก็ยัง reset</td><td>ลืม feed หลังจาก <code>Delay_Ms()</code> ยาว</td><td>ถ้า delay นานกว่า timeout — ต้อง feed ก่อน delay หรือแยก delay เป็นช่วงสั้นๆ</td></tr>
-        <tr><td>WWDG reset ตั้งแต่เริ่ม</td><td>Feed ก่อนถึง window (เร็วเกิน)</td><td>WWDG ต้อง feed ใน window — ถ้า feed เร็วเกิน = reset — หน่วงเวลาให้เลย window ก่อน feed แรก</td></tr>
-        <tr><td>IWDG_CheckReset() เป็นจริงแต่ไม่ได้ค้าง</td><td>Power glitch หรือ noise trigger IWDG</td><td>เช็คแหล่งจ่ายไฟ — IWDG อาจ reset จากไฟตกชั่วขณะ</td></tr>
+        <tr><td>MCU รีเซ็ตตลอดเวลา</td><td>IWDG timeout สั้นเกินไป — main loop ใช้เวลาเกิน timeout</td><td>เพิ่ม timeout หรือลดงานใน loop — เช็คสาเหตุที่ต้น main() ด้วย <code>if(IWDG_WasResetCause()) {...}</code> แล้ว log ดูจำนวนครั้ง</td></tr>
+        <tr><td>IWDG ไม่ทำงานตอน debug</td><td>Debugger หยุด IWDG อัตโนมัติใน debug mode</td><td>ทดสอบโดยไม่ใช้ debugger — IWDG ทำงานเฉพาะรันจริง</td></tr>
+        <tr><td>Feed แล้วก็ยัง reset</td><td>ลืม feed หลังจาก <code>Delay_Ms()</code> ยาวเกิน timeout</td><td>ถ้า delay นานกว่า timeout — ต้อง feed ก่อน delay หรือแยก delay เป็นช่วงสั้นๆ</td></tr>
+        <tr><td>WWDG reset ไม่รู้จบหลังตั้ง window &gt; counter</td><td>window-clamp ใหม่ (commit 5293ae3) ลด window ลงเท่า counter แบบ silent — ทำให้ feed ได้แค่ช่วงแคบมาก</td><td>อย่าตั้ง <code>window &gt; counter</code> — ถ้าเกิดแล้วให้ <strong>refresh ตั้งแต่ต้น</strong> (หลัง init เลย) และใช้ prescaler สั้นจนกว่าจะแก้ code — คำนวณ timing ก่อนด้วย <code>WWDG_TIMEOUT_US(prescaler, counter)</code></td></tr>
+        <tr><td><code>IWDG_WasResetCause()</code> เป็นจริงตลอดทุกครั้ง boot</td><td>ลืมเคลียร์ flag — ครั้งถัดไปยังเจอ flag ค้างอยู่</td><td>เรียก <code>IWDG_ClearResetFlag()</code> หลังจากใช้งานเสร็จ — <strong>⚠ แต่</strong> ฟังก์ชันนี้เคลียร์ reset flag <strong>ทุกตัวพร้อมกัน</strong> (POR/PIN/IWDG/WWDG/SW/LP) — ถ้าจะอ่านสาเหตุ reset อื่น ให้อ่านด้วย <code>RCC_GetFlagStatus()</code> ก่อนเรียกฟังก์ชันนี้</td></tr>
+        <tr><td><code>WWDG_Refresh</code> แบบไม่ส่ง counter ไม่ทำงาน</td><td>API จริงต้องส่ง counter (ไม่ใช่ no-arg)</td><td>ใช้ <code>WWDG_Refresh(0x7F)</code> — ส่งค่า counter ที่ตั้งไว้ใน init</td></tr>
+        <tr><td>ไม่มี timeout constant แบบเสร็จสรรค์ใน header</td><td>SimpleWWDG ไม่มี macro timeout สำเร็จ ต้องคำนวณเอง</td><td>คำนวณจาก <code>WWDG_TIMEOUT_MS(prescaler, counter)</code> เอง — เช่น <code>WWDG_TIMEOUT_MS(8, 0x7F)</code> ≈ 87ms</td></tr>
+        <tr><td>โค้ดเรียก <code>WWDG_Disable()</code> แล้ว watchdog ยัง reset</td><td>ฟังก์ชันนี้ <strong>ไม่ใช่ disable จริง</strong> (header 173-184) — WWDG ยัง countdown อยู่หลัง WDGA set</td><td>ต้องเรียก <code>WWDG_Refresh(counter)</code> ต่อไปจนกว่าจะ reset MCU เอง — หยุด watchdog จริงไม่ได้ by design</td></tr>
     </table>
 </section>
 
@@ -217,31 +439,35 @@ int main(void)
 {
     SystemCoreClockUpdate();
 
-    // เช็คสาเหตุ reset
-    if(IWDG_CheckReset())
+    // เช็คสาเหตุ reset — ใช้ API จริง IWDG_WasResetCause()
+    if (IWDG_WasResetCause())
     {
         // ตื่นจาก Watchdog — เกิดการค้าง!
         // หน่วงเวลาเล็กน้อยก่อน init — ป้องกัน infinite reset loop
-        for(volatile uint32_t i=0; i<100000; i++);
+        for (volatile uint32_t i = 0; i < 100000; i++);
 
         g_wdg_reset_count++;
+
+        // อ่าน flag อื่นที่ต้องการ "ก่อน" เคลียร์ เพราะ IWDG_ClearResetFlag()
+        // เคลียร์ reset flag ทุกตัวพร้อมกัน (POR/PIN/IWDG/WWDG/SW/LP)
     }
 
     Timer_Init();
     USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
     pinMode(PC0, PIN_MODE_OUTPUT);
 
-    if(g_wdg_reset_count > 0)
+    if (g_wdg_reset_count > 0)
     {
         USART_Print("!!! WATCHDOG RESET #");
         USART_PrintNum((int32_t)g_wdg_reset_count);
         USART_Print(" !!!\r\n");
 
         // ถ้ารีเซ็ตติดกันเกิน 5 ครั้ง — safe mode
-        if(g_wdg_reset_count >= 5)
+        if (g_wdg_reset_count >= 5)
         {
             USART_Print("Entering SAFE MODE\r\n");
-            while(1)
+            IWDG_ClearResetFlag();  // เคลียร์หลังใช้งาน reset cause ครบแล้ว
+            while (1)
             {
                 digitalWrite(PC0, HIGH);
                 Delay_Ms(200);
@@ -253,12 +479,14 @@ int main(void)
         }
     }
 
+    IWDG_ClearResetFlag();  // เคลียร์ flag ให้ครั้งถัดไปอ่านได้สะอาด
+
     // เริ่ม IWDG — 4 วินาที
     IWDG_SimpleInit(4000);
     USART_Print("System running (IWDG 4s)\r\n");
 
     uint32_t tick = 0;
-    while(1)
+    while (1)
     {
         // งานที่อาจค้าง... (ตัวอย่าง: เช็ค I2C device)
         digitalWrite(PC0, !digitalRead(PC0));
@@ -277,9 +505,11 @@ int main(void)
 <section>
     <h2>✏️ ลองทำดู</h2>
     <ol>
-        <li>ลด IWDG timeout เป็น 500ms — เพิ่ม <code>Delay_Ms(2000)</code> ใน loop — สังเกตการ reset</li>
-        <li>ใช้ WWDG แทน IWDG — ตั้ง window 60% — ทดสอบ feed เร็วเกิน (30%) และ feed ช้าเกิน (110%) — ดูผลต่าง</li>
-        <li>สร้างระบบที่ใช้ทั้ง IWDG + WWDG พร้อมกัน — IWDG เป็น safety net (4s) — WWDG ตรวจจับ loop anomaly (28ms window)</li>
+        <li>ลด IWDG timeout เป็น 500ms (ด้วย <code>IWDG_SimpleInit(500)</code> หรือ <code>IWDG_Init(IWDG_PRESCALER_64, IWDG_CALC_RELOAD(64, 500))</code>) — เพิ่ม <code>Delay_Ms(2000)</code> ใน loop — สังเกตการ reset แล้ว log ที่ <code>IWDG_WasResetCause()</code> ที่ต้น main()</li>
+        <li>ใช้ WWDG แทน IWDG — <code>WWDG_SimpleInit(0x7F, 0x50)</code> prescaler default 8 — ทดสอบ feed เร็วเกิน (<code>WWDG_Refresh(0x7F)</code> ทันทีหลัง init) และ feed ช้าเกิน (<code>Delay_Ms(100)</code>) — ดูผลต่าง — คำนวณ window จริงด้วย <code>WWDG_TIMEOUT_US(8, 0x50)</code></li>
+        <li>สร้างระบบที่ใช้ทั้ง IWDG + WWDG พร้อมกัน — IWDG เป็น safety net (4s) — WWDG ตรวจจับ loop anomaly (prescaler 8, counter 0x7F ≈ 87ms window) — เพิ่ม EWI callback ด้วย <code>WWDG_SetCallback()</code> + <code>WWDG_InitWithInterrupt()</code></li>
+        <li>ทดลองเรียก <code>WWDG_Disable()</code> แล้วหยุด refresh — สังเกตว่า MCU ยัง reset อยู่ (พิสูจน์ว่าไม่ใช่ disable จริง) — จดบันทึกหากใช้ตอน production</li>
+        <li>ตั้ง <code>WWDG_SimpleInit(0x60, 0x70)</code> (window &gt; counter) — สังเกต window-clamp silent ที่ลด window ลงเท่า counter — ใช้ <code>WWDG_Refresh(0x60)</code> ตั้งแต่ต้นเพื่อรอดจาก reset loop</li>
     </ol>
 </section>
 

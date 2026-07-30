@@ -116,8 +116,6 @@ int main(void) {
 <tr><td><code>INA219_GetShuntVoltage(&ina)</code></td><td>อ่านแรงดันตกคร่อม shunt (V)</td><td><code>float sv = INA219_GetShuntVoltage(&ina)</code></td></tr>
 <tr><td><code>INA219_GetCurrent(&ina)</code></td><td>อ่านกระแสที่คำนวณ (A)</td><td><code>float a = INA219_GetCurrent(&ina)</code></td></tr>
 <tr><td><code>INA219_GetPower(&ina)</code></td><td>อ่านกำลังไฟฟ้า (W)</td><td><code>float w = INA219_GetPower(&ina)</code></td></tr>
-<tr><td><code>INA219_SetCalibration(&ina, cal)</code></td><td>ตั้งค่า Calibration Register เอง</td><td><code>INA219_SetCalibration(&ina, 4096)</code></td></tr>
-<tr><td><code>INA219_Reset(&ina)</code></td><td>Reset INA219 ทั้งหมด</td><td><code>INA219_Reset(&ina)</code></td></tr>
 </table></section>
 <section><h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2><table><tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
 <tr><td>อ่านค่าได้ 0 ตลอด</td><td>Shunt ต่อผิดขั้ว หรือ Vin+ Vin- สลับ</td><td>ตรวจสอบ Vin+ ต่อด้าน VCC, Vin- ต่อด้าน Load</td></tr>

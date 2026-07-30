@@ -17,23 +17,27 @@
 <span class="level expert">ระดับผู้เชี่ยวชาญ</span>
 
 <section class="flowchart">
-    <h2>🧭 แผนภาพการทำงาน</h2>
+    <h2>🧭 แผนภาพการทำงานทั่วไป</h2>
     <pre class="mermaid">
-flowchart TD
-    A["OneWire_Init(pin)"] --> B["OneWire_Reset()"]
-    B -->|"Presence=1 (มีอุปกรณ์)"| C["OneWire_SkipROM()"]
-    B -->|"Presence=0 (ไม่มี)"| D["OneWire_SearchROM()"]
-    C --> E["OneWire_Write(0x44)  // Convert T"]
-    E --> F["Delay 750ms"]
-    F --> G["OneWire_Reset()"]
-    G --> H["OneWire_SkipROM()"]
-    H --> I["OneWire_Write(0xBE)  // Read Scratchpad"]
-    I --> J["temp = OneWire_ReadByte() | (OneWire_ReadByte() << 8)"]
-    J --> K["float c = temp / 16.0f"]
-    K --> L["แสดงผล / วน"]
-    L --> B
-    D --> M["แสดง ROM IDs ทั้งหมด"]
-    M --> B
+    flowchart TD
+    A["OneWire_Bus* bus = OneWire_Init(pin)"] --> B["OneWire_Reset(bus)"]
+    B -->|"true = มีอุปกรณ์ (presence)"| C["ROM Command"]
+    B -->|"false = ไม่มี"| Z["เช็ค pull-up 4.7kΩ / สาย"]
+    C -->|"ตัวเดียว"| D["OneWire_SkipROM(bus)  // 0xCC"]
+    C -->|"หลายตัว - เลือกเฉพาะ"| E["OneWire_MatchROM(bus, rom)  // 0x55"]
+    C -->|"ยังไม่รู้มีกี่ตัว"| F["Triad: ResetSearch → Search → GetAddress"]
+    D --> G["OneWire_WriteByte(bus, 0x44)  // Convert T"]
+    E --> G
+    F --> E
+    G --> H["Delay_Ms(750)  // รอ conversion"]
+    H --> I["OneWire_Reset(bus) → SkipROM/MatchROM"]
+    I --> J["OneWire_WriteByte(bus, 0xBE)  // Read Scratchpad"]
+    J --> K["OneWire_ReadBytes(bus, sp, 9)"]
+    K --> N["OneWire_VerifyCRC(sp, 9)  // รวม CRC byte"]
+    N -->|"true"| L["temp = (sp[0] | (sp[1]<<8)) / 16.0f"]
+    N -->|"false"| M["CRC error — อ่านใหม่"]
+    L --> O["แสดงผล / วน"]
+    O --> B
     </pre>
 </section>
 
@@ -113,6 +117,9 @@ flowchart TD
     <h2>📚 หลักการทำงาน</h2>
     <p><strong>1-Wire</strong> — โปรโตคอลสื่อสารผ่าน 1 สาย data (+GND) — คิดค้นโดย Dallas Semiconductor (ปัจจุบันเป็นของ Maxim/Analog Devices)</p>
 
+    <h3>SimpleHAL API รูปแบบ Bus Handle (ไม่ใช่ global)</h3>
+    <p>ทุกฟังก์ชันใน <code>Simple1Wire.h</code> รับ <code>OneWire_Bus* bus</code> เป็นอาร์กิวเมนต์แรก — ไม่มี global state — ทำให้รองรับได้สูงสุด <code>ONEWIRE_MAX_BUSES</code> = 4 บัสพร้อมกัน ผู้ใช้ต้องเก็บ handle ที่ได้จาก <code>OneWire_Init(pin)</code> แล้วส่งต่อไปยังทุกฟังก์ชัน</p>
+
     <h3>Timing สำคัญ</h3>
     <ul>
         <li><strong>Reset Pulse:</strong> Master ลาก LOW 480µs → ปล่อย → รอ 15-60µs → Slave ลาก LOW 60-240µs (Presence Pulse)</li>
@@ -127,16 +134,16 @@ flowchart TD
         <li>Reset → Presence</li>
         <li>ROM Command: Skip ROM (0xCC) — ถ้ามีตัวเดียว — หรือ Match ROM (0x55) — เลือกตัวใดตัวหนึ่ง</li>
         <li>Function Command: Convert T (0x44) — เริ่มวัด — หรือ Read Scratchpad (0xBE) — อ่านผล</li>
-        <li>Data: อ่าน 9 bytes scratchpad — byte 0-1 = temperature</li>
+        <li>Data: อ่าน 9 bytes scratchpad — byte 0-1 = temperature, byte 8 = CRC8</li>
     </ol>
 
-    <p><strong>CH32V003 ต้องใช้ Software Bit-Banging</strong> — ไม่มี hardware 1-Wire — ใช้ <code>Delay_Us()</code> ให้ตรง timing — SimpleHAL จัดการให้</p>
+    <p><strong>CH32V003 ต้องใช้ Software Bit-Banging</strong> — ไม่มี hardware 1-Wire — ใช้ <code>Delay_Us()</code> ให้ตรง timing — SimpleHAL จัดการให้ภายในตัวฟังก์ชัน — และปิด interrupt ใน critical section เพื่อให้ timing ตรง</p>
 </section>
 
 <section>
     <h2>💻 เขียน Code ทีละขั้น</h2>
 
-    <div class="step"><h3>ขั้นที่ 1: Init OneWire</h3>
+    <div class="step"><h3>ขั้นที่ 1: Init OneWire — รับ Bus Handle</h3>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 
@@ -147,163 +154,157 @@ int main(void) {
     Timer_Init();
     USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
 
-    // เริ่มต้น OneWire — กำหนด pin
-    OneWire_Init(OW_PIN);</code></pre>
-    <p class="explain">🔍 <code>OneWire_Init(pin)</code> — ตั้ง pin เป็น open-drain + เปิด internal pull-up — แต่แนะนำให้ต่อ external 4.7kΩ pull-up ด้วยเพื่อความน่าเชื่อถือ</p></div>
+    // เริ่มต้น OneWire — รับ handle กลับมา (factory pattern)
+    OneWire_Bus* bus = OneWire_Init(OW_PIN);
+    if (bus == NULL) {
+        USART_Print("ERROR: bus เต็ม (max 4) หรือ pin ผิด\r\n");
+        while (1);
+    }</code></pre>
+    <p class="explain">🔍 <code>OneWire_Init(pin)</code> — คืน <code>OneWire_Bus*</code> (handle ของ bus instance) หรือ <code>NULL</code> ถ้า slot เต็ม (สูงสุด <code>ONEWIRE_MAX_BUSES</code> = 4) — <strong>ต้องเก็บ pointer นี้ไว้</strong> แล้วส่งให้ทุกฟังก์ชัน OneWire_* ถัดไป — ภายในตั้ง pin เป็น open-drain พร้อม internal pull-up — แต่แนะนำให้ต่อ external 4.7kΩ pull-up ด้วยเพื่อความน่าเชื่อถือ</p></div>
 
     <div class="step"><h3>ขั้นที่ 2: ตรวจจับ DS18B20</h3>
-    <pre><code class="language-c">    // ตรวจจับอุปกรณ์บนบัส
-    uint8_t presence = OneWire_Reset();
+    <pre><code class="language-c">    // ตรวจจับอุปกรณ์บนบัส — ต้องส่ง bus arg
+    bool presence = OneWire_Reset(bus);
 
-    if(presence) {
+    if (presence) {
         USART_Print("DS18B20 detected!\r\n");
     } else {
         USART_Print("No device found on 1-Wire bus\r\n");
         USART_Print("Check wiring & pull-up resistor\r\n");
-        while(1);  // หยุด — ไม่มีอะไรให้อ่าน
+        while (1);  // หยุด — ไม่มีอะไรให้อ่าน
     }</code></pre>
-    <p class="explain">🔍 <code>OneWire_Reset()</code> — ส่ง reset pulse — คืนค่า 1 ถ้ามีอุปกรณ์ตอบ presence pulse — คืนค่า 0 ถ้าบัสว่างเปล่า — <strong>ควรเรียกก่อนทุก transaction</strong></p></div>
+    <p class="explain">🔍 <code>OneWire_Reset(bus)</code> — ส่ง reset pulse — คืน <code>true</code> ถ้ามีอุปกรณ์ตอบ presence pulse — คืน <code>false</code> ถ้าบัสว่างเปล่าหรือ short — <strong>ควรเรียกก่อนทุก transaction</strong> (ก่อนส่ง ROM command ทุกครั้ง)</p></div>
 
-    <div class="step"><h3>ขั้นที่ 3: อ่านอุณหภูมิ (Single Device)</h3>
-    <pre><code class="language-c">    while(1) {
+    <div class="step"><h3>ขั้นที่ 3: อ่านอุณหภูมิ (Single Device — ใช้ SkipROM)</h3>
+    <pre><code class="language-c">    while (1) {
         // ——— Step 1: Start Conversion ———
-        OneWire_Reset();
-        OneWire_SkipROM();              // ข้าม ROM — มีตัวเดียว
-        OneWire_WriteByte(0x44);        // Convert T command
+        OneWire_Reset(bus);
+        OneWire_SkipROM(bus);              // 0xCC — ข้าม ROM (มีตัวเดียว)
+        OneWire_WriteByte(bus, 0x44);      // Convert T command
 
         // รอ conversion (~750ms for 12-bit)
         Delay_Ms(750);
 
         // ——— Step 2: Read Scratchpad ———
-        OneWire_Reset();
-        OneWire_SkipROM();
-        OneWire_WriteByte(0xBE);        // Read Scratchpad
+        OneWire_Reset(bus);
+        OneWire_SkipROM(bus);
+        OneWire_WriteByte(bus, 0xBE);      // Read Scratchpad
 
-        // อ่าน 9 bytes scratchpad
+        // อ่าน 9 bytes scratchpad ทีเดียว
         uint8_t sp[9];
-        for(int i=0; i<9; i++) {
-            sp[i] = OneWire_ReadByte();
+        OneWire_ReadBytes(bus, sp, 9);
+
+        // ——— Step 3: ตรวจ CRC ก่อนใช้ ———
+        if (!OneWire_VerifyCRC(sp, 9)) {
+            USART_Print("CRC ERROR — data corrupt\r\n");
+            continue;
         }
 
-        // Temperature = byte0 | (byte1 << 8) — signed 16-bit
-        int16_t temp_raw = sp[0] | (sp[1] << 8);
+        // Temperature = byte0 | (byte1 << 8) — signed 16-bit, LSB = 1/16 C
+        int16_t temp_raw = (int16_t)(sp[0] | (sp[1] << 8));
         float temp_c = temp_raw / 16.0f;
 
         USART_Print("Temperature: ");
         USART_PrintNum((int32_t)temp_c);
         USART_Print(".");
-        // แสดงทศนิยม 1 ตำแหน่ง
         int16_t dec = (int16_t)((temp_c - (int32_t)temp_c) * 10);
-        if(dec < 0) dec = -dec;
+        if (dec < 0) dec = -dec;
         USART_PrintNum(dec);
-        USART_Print(" °C\r\n");
+        USART_Print(" C\r\n");
 
         Delay_Ms(1000);
     }</code></pre>
-    <p class="explain">🔍 <code>OneWire_SkipROM()</code> — ข้ามการระบุ ROM ID — ใช้เมื่อมีอุปกรณ์ตัวเดียวบนบัส — <strong>ถ้ามีหลายตัว — ห้ามใช้ SkipROM!</strong> — <code>OneWire_WriteByte()</code> — ส่ง 1 byte — <code>OneWire_ReadByte()</code> — อ่าน 1 byte — ต้องอ่าน 9 bytes (scratchpad)</p></div>
+    <p class="explain">🔍 ทุกฟังก์ชันต้องส่ง <code>bus</code> เป็น arg แรก — <code>OneWire_SkipROM(bus)</code> ข้ามการระบุ ROM ID — ใช้เมื่อมีอุปกรณ์ตัวเดียวบนบัส — <strong>ถ้ามีหลายตัว — ห้ามใช้ SkipROM ตอนอ่าน!</strong> — <code>OneWire_WriteByte(bus, data)</code> ส่ง 1 byte — <code>OneWire_ReadBytes(bus, buf, 9)</code> อ่าน 9 bytes scratchpad ทีเดียว — <code>OneWire_VerifyCRC(sp, 9)</code> ตรวจ CRC ทั้ง 9 bytes (รวม CRC byte ท้ายสุด) — คืน <code>true</code> = CRC ถูก</p></div>
 
-    <div class="step"><h3>ขั้นที่ 4: CRC Check</h3>
-    <pre><code class="language-c">        // เช็ค CRC (byte 8 ของ scratchpad)
-        uint8_t crc = OneWire_CRC8(sp, 8);
-        if(crc == sp[8]) {
-            USART_Print("CRC OK: ");
-        } else {
-            USART_Print("CRC ERROR — data corrupt: ");
-        }</code></pre>
-    <p class="explain">🔍 <code>OneWire_CRC8(data, len)</code> — คำนวณ CRC8 (Dallas 1-Wire CRC) — เทียบกับ byte 8 ของ scratchpad — ถ้าไม่ตรง = สัญญาณรบกวนหรือ timing ผิด — ควรอ่านใหม่</p></div>
+    <div class="step"><h3>ขั้นที่ 4: CRC สองทาง — VerifyCRC หรือ CRC8</h3>
+    <pre><code class="language-c">    // ทางที่ 1: VerifyCRC — สะดวกสุด — len รวม CRC byte ท้ายสุด
+    if (OneWire_VerifyCRC(sp, 9)) {
+        // CRC ถูกต้อง
+    }
 
-    <div class="step"><h3>ขั้นที่ 5: ROM Search — หลายอุปกรณ์</h3>
-    <pre><code class="language-c">    // ค้นหา ROM ID ทั้งหมดบนบัส
-    uint64_t roms[10];
-    uint8_t count = OneWire_SearchROM(roms, 10);
+    // ทางที่ 2: CRC8 — คำนวณ CRC ของ 8 bytes แรก แล้วเทียบกับ byte ที่ 9 (sp[8])
+    uint8_t crc = OneWire_CRC8(sp, 8);  // ไม่ต้องส่ง bus (pure function)
+    if (crc == sp[8]) {
+        // CRC ถูกต้อง
+    }
+
+    // ตรวจ ROM ID ที่ได้จาก ReadROM ก็ได้เหมือนกัน — ROM มี 8 bytes (7 data + 1 CRC)
+    uint8_t rom[8];
+    if (OneWire_ReadROM(bus, rom) && OneWire_VerifyCRC(rom, 8)) {
+        USART_Print("Family: 0x%02X\r\n", rom[0]);
+    }</code></pre>
+    <p class="explain">🔍 <code>OneWire_CRC8(data, len)</code> และ <code>OneWire_VerifyCRC(data, len)</code> เป็น pure function — <strong>ไม่รับ bus arg</strong> — polynomial Dallas/Maxim 0x8C — VerifyCRC คำนวณ CRC ของ <code>len-1</code> bytes แรกแล้วเทียบกับ byte สุดท้าย — ใช้งานง่ายกว่า — CRC8 เหมาะตอนต้องการค่า CRC ดิบไปใช้ต่อ</p></div>
+
+    <div class="step"><h3>ขั้นที่ 5: ROM Search Triad — หลายอุปกรณ์</h3>
+    <p>Simple1Wire.h <strong>ไม่มี</strong> ฟังก์ชัน search ROM สำเร็จรูปที่คืน array ทีเดียว — ให้ใช้ triad ของสามฟังก์ชันแทน:</p>
+    <pre><code class="language-c">    // เก็บ ROM IDs แต่ละตัวเป็น uint8_t[8] — ไม่ใช่ uint64_t
+    uint8_t roms[8][8];
+    uint8_t count = 0;
+
+    OneWire_ResetSearch(bus);                    // (1) เริ่ม search ใหม่
+    while (OneWire_Search(bus) && count < 8) {    // (2) วนหาจนครบ
+        OneWire_GetAddress(bus, roms[count]);     // (3) ดึง ROM 8 bytes ออกมา
+        count++;
+    }
 
     USART_Print("Found ");
     USART_PrintNum(count);
     USART_Print(" device(s)\r\n");
 
-    for(uint8_t d=0; d<count; d++) {
+    for (uint8_t d = 0; d < count; d++) {
         USART_Print("Device ");
         USART_PrintNum(d);
         USART_Print(" ROM: ");
-        for(int i=0; i<8; i++) {
-            USART_PrintHex((roms[d] >> (i*8)) & 0xFF, 1);
+        for (int i = 0; i < 8; i++) {
+            USART_PrintHex(roms[d][i], 1);
         }
         USART_Print("\r\n");
     }</code></pre>
-    <p class="explain">🔍 <code>OneWire_SearchROM(roms, max)</code> — ค้นหา ROM ID ทุกตัวบนบัส — คืนค่าจำนวนที่พบ — แต่ละตัวมี 64-bit ROM ID เฉพาะ — ใช้ระบุเซ็นเซอร์แต่ละตัว</p></div>
+    <p class="explain">🔍 triad ทำงานคู่กัน — <code>OneWire_ResetSearch(bus)</code> รีเซ็ต state การค้น — <code>OneWire_Search(bus)</code> ค้น device ถัดไป (คืน <code>true</code> = พบ, <code>false</code> = ครบ) และเก็บ ROM ไว้ใน <code>bus->rom</code> ภายใน — <code>OneWire_GetAddress(bus, rom)</code> ดึง ROM 8 bytes ออกมาเก็บใน buffer ของเรา — <strong>อย่าใช้ <code>uint64_t</code></strong> เพราะ API จัดเก็บ ROM เป็น <code>uint8_t[8]</code> และส่งผ่านเป็น pointer เสมอ</p></div>
 </section>
 
-<section>
-    <h2>📋 API Reference</h2>
-    <table>
-        <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
-        <tr><td><code>OneWire_Init(pin)</code></td><td>เริ่มต้น 1-Wire บน pin</td><td><code>OneWire_Init(PC0)</code></td></tr>
-        <tr><td><code>OneWire_Reset()</code></td><td>ส่ง reset pulse — เช็ค presence</td><td><code>uint8_t p = OneWire_Reset()</code></td></tr>
-        <tr><td><code>OneWire_SkipROM()</code></td><td>ข้าม ROM — ใช้กับ device เดียว</td><td><code>OneWire_SkipROM()</code></td></tr>
-        <tr><td><code>OneWire_WriteByte(data)</code></td><td>ส่ง 1 byte</td><td><code>OneWire_WriteByte(0x44)</code></td></tr>
-        <tr><td><code>OneWire_ReadByte()</code></td><td>อ่าน 1 byte</td><td><code>uint8_t b = OneWire_ReadByte()</code></td></tr>
-        <tr><td><code>OneWire_SearchROM(roms, max)</code></td><td>ค้นหา ROM ID ทั้งหมด</td><td><code>uint8_t n = OneWire_SearchROM(roms, 10)</code></td></tr>
-        <tr><td><code>OneWire_MatchROM(rom)</code></td><td>เลือกอุปกรณ์ตาม ROM</td><td><code>OneWire_MatchROM(0x28FF...)</code></td></tr>
-        <tr><td><code>OneWire_CRC8(data, len)</code></td><td>คำนวณ Dallas CRC8</td><td><code>uint8_t c = OneWire_CRC8(sp, 8)</code></td></tr>
-        <tr><td><code>OneWire_ReadTemperature()</code></td><td>อ่านอุณหภูมิ (single device)</td><td><code>float t = OneWire_ReadTemperature()</code></td></tr>
-    </table>
-</section>
-
-<section>
-    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
-    <table>
-        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
-        <tr><td>OneWire_Reset() ได้ 0 ตลอด</td><td>ไม่มี pull-up resistor หรือสายยาวเกิน</td><td>ต่อ 4.7kΩ ระหว่าง DQ กับ 3.3V — ใช้สายสั้น < 2m</td></tr>
-        <tr><td>อุณหภูมิอ่านได้ 85°C ตลอด</td><td>DS18B20 ยัง convert ไม่เสร็จ (default power-on = 85°C)</td><td>รออย่างน้อย 750ms หลังจาก Convert T (0x44) — เช็ค busy flag</td></tr>
-        <tr><td>CRC Error บ่อย</td><td>Timing ไม่ตรง — interrupt รบกวน</td><td>Disable interrupt ชั่วคราวระหว่าง 1-Wire transaction</td></tr>
-        <tr><td>หลายตัว — อ่านค่าผิดหมด</td><td>ใช้ SkipROM กับหลายอุปกรณ์</td><td>ใช้ <code>OneWire_SearchROM()</code> หา ROM IDs — แล้วใช้ <code>OneWire_MatchROM()</code> ทีละตัว</td></tr>
-        <tr><td>DS18B20 ร้อนมาก</td><td>ต่อ VDD กลับขั้ว หรือ parasitic power ไม่พอ</td><td>เช็คขา 1=GND, 2=DQ, 3=VDD — ใช้ external power ถ้าเป็นไปได้</td></tr>
-    </table>
+<section class="flowchart">
+    <h2>🔎 Flowchart: Search Pattern Triad</h2>
+    <pre class="mermaid">
+    flowchart TD
+    T0["เริ่มต้นค้นหาอุปกรณ์บน 1-Wire bus"] --> T1["OneWire_ResetSearch(bus)<br/>รีเซ็ต state การค้น"]
+    T1 --> T2{"OneWire_Search(bus)"}
+    T2 -->|"true = พบ device ถัดไป<br/>(ROM อยู่ใน bus->rom)"| T3["OneWire_GetAddress(bus, rom)<br/>ดึง ROM 8 bytes ออกมา"]
+    T3 --> T4["เก็บ rom ลง array<br/>count++"]
+    T4 --> T2
+    T2 -->|"false = ครบ / ไม่มี device แล้ว"| T5["Search เสร็จ → ใช้ MatchROM<br/>กับ roms[i] ทีละตัว"]
+    </pre>
 </section>
 
 <section>
     <h2>🛠️ สร้าง Product: เทอร์โมมิเตอร์หลายจุด</h2>
-    <p>อ่านอุณหภูมิจาก DS18B20 3 ตัวบนบัสเดียวกัน — แสดง ROM ID + อุณหภูมิ</p>
+    <p>อ่านอุณหภูมิจาก DS18B20 3 ตัวบนบัสเดียวกัน — แสดง ROM ID + อุณหภูมิ — ใช้เทคนิค <strong>Jump Temp</strong>: สั่ง Convert T ทุกตัวพร้อมกันด้วย SkipROM → รอ 750ms ครั้งเดียว → MatchROM + Read Scratchpad ทีละตัว</p>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 
 #define OW_PIN      PC0
 #define MAX_DEVICES 8
 
-uint64_t g_roms[MAX_DEVICES];
-uint8_t  g_count = 0;
+// ROM IDs เก็บเป็น uint8_t[8] — ตาม API จริง
+uint8_t g_roms[MAX_DEVICES][8];
+uint8_t g_count = 0;
 
-float read_ds18b20(uint64_t rom)
+// อ่าน scratchpad ของ device เฉพาะ (รอ Convert มาก่อนแล้ว)
+// คืน true สำเร็จ, false = CRC error หรือไม่มี device
+bool read_scratchpad(OneWire_Bus* bus, const uint8_t* rom, uint8_t* sp)
 {
-    OneWire_Reset();
-    OneWire_MatchROM(rom);
-    OneWire_WriteByte(0x44);  // Convert T
+    if (!OneWire_Reset(bus)) return false;
+    OneWire_MatchROM(bus, rom);    // 0x55 + 8 bytes ROM
+    OneWire_WriteByte(bus, 0xBE);  // Read Scratchpad
 
-    // รอ conversion (poll busy)
-    Delay_Ms(750);
-
-    OneWire_Reset();
-    OneWire_MatchROM(rom);
-    OneWire_WriteByte(0xBE);  // Read Scratchpad
-
-    uint8_t sp[9];
-    for(int i=0; i<9; i++) sp[i] = OneWire_ReadByte();
-
-    // CRC check
-    if(OneWire_CRC8(sp, 8) != sp[8]) {
-        return -999.0f;  // Error
-    }
-
-    int16_t raw = sp[0] | (sp[1] << 8);
-    if(raw == 0x0550) return -999.0f;  // 85°C = power-on default
-
-    return raw / 16.0f;
+    OneWire_ReadBytes(bus, sp, 9);
+    return OneWire_VerifyCRC(sp, 9);
 }
 
-void print_rom(uint64_t rom)
+void print_rom(const uint8_t* rom)
 {
-    for(int i=0; i<8; i++) {
-        USART_PrintHex((rom >> (i*8)) & 0xFF, 1);
+    for (int i = 0; i < 8; i++) {
+        USART_PrintHex(rom[i], 1);
     }
 }
 
@@ -312,22 +313,40 @@ int main(void)
     SystemCoreClockUpdate();
     Timer_Init();
     USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
-    OneWire_Init(OW_PIN);
 
-    // ค้นหาอุปกรณ์
-    g_count = OneWire_SearchROM(g_roms, MAX_DEVICES);
+    OneWire_Bus* bus = OneWire_Init(OW_PIN);
+    if (bus == NULL) {
+        USART_Print("Bus init failed\r\n");
+        while (1);
+    }
+
+    // ค้นหาอุปกรณ์ด้วย triad
+    OneWire_ResetSearch(bus);
+    while (OneWire_Search(bus) && g_count < MAX_DEVICES) {
+        OneWire_GetAddress(bus, g_roms[g_count]);
+        g_count++;
+    }
+
     USART_Print("Found ");
     USART_PrintNum(g_count);
     USART_Print(" DS18B20(s)\r\n");
 
-    if(g_count == 0) {
-        USART_Print("No sensors — check wiring\r\n");
-        while(1);
+    if (g_count == 0) {
+        USART_Print("No sensors — check wiring & pull-up\r\n");
+        while (1);
     }
 
-    while(1)
+    while (1)
     {
-        for(uint8_t i=0; i<g_count; i++)
+        // === Jump Temp: สั่ง Convert T ทุกตัวพร้อมกัน ===
+        OneWire_Reset(bus);
+        OneWire_SkipROM(bus);           // สั่งทุกตัวในครั้งเดียว
+        OneWire_WriteByte(bus, 0x44);   // Convert T (all devices)
+
+        Delay_Ms(750);                  // รอครั้งเดียว (ไม่ใช่ N × 750)
+
+        // === อ่านทีละตัวด้วย MatchROM ===
+        for (uint8_t i = 0; i < g_count; i++)
         {
             USART_Print("[");
             USART_PrintNum(i);
@@ -335,31 +354,84 @@ int main(void)
             print_rom(g_roms[i]);
             USART_Print("  Temp: ");
 
-            float temp = read_ds18b20(g_roms[i]);
-            if(temp > -100.0f) {
-                USART_PrintNum((int32_t)temp);
-                USART_Print(".");
-                int16_t dec = (int16_t)((temp - (int32_t)temp) * 10);
-                if(dec < 0) dec = -dec;
-                USART_PrintNum(dec);
-                USART_Print(" C\r\n");
-            } else {
-                USART_Print("ERROR\r\n");
+            uint8_t sp[9];
+            if (!read_scratchpad(bus, g_roms[i], sp)) {
+                USART_Print("ERROR (CRC / no device)\r\n");
+                continue;
             }
+
+            // 85°C = power-on default — skip (0x0550)
+            int16_t raw = (int16_t)(sp[0] | (sp[1] << 8));
+            if (raw == 0x0550) {
+                USART_Print("(still powering up)\r\n");
+                continue;
+            }
+
+            float temp = raw / 16.0f;
+            USART_PrintNum((int32_t)temp);
+            USART_Print(".");
+            int16_t dec = (int16_t)((temp - (int32_t)temp) * 10);
+            if (dec < 0) dec = -dec;
+            USART_PrintNum(dec);
+            USART_Print(" C\r\n");
         }
         USART_Print("---\r\n");
         Delay_Ms(2000);
     }
 }</code></pre>
-    <p><strong>เทคนิคเร่งความเร็ว:</strong> ส่ง Convert T (0x44) แบบ SkipROM เพื่อเริ่มวัดทุกตัวพร้อมกัน → รอ 750ms → อ่านทีละตัวด้วย MatchROM → ลดเวลารอรวม</p>
+    <p><strong>เทคนิค Jump Temp (เร่งความเร็ว):</strong> สั่ง Convert T (0x44) แบบ SkipROM → เริ่มวัดทุกตัวพร้อมกัน → รอ 750ms ครั้งเดียว → อ่านทีละตัวด้วย MatchROM → ลดเวลารวมจาก N × 750ms เหลือ 750ms + N × เวลาอ่าน scratchpad (ราว 5ms ต่อตัว)</p>
+    <p class="explain">🔍 <code>OneWire_MatchROM(bus, rom)</code> รับ <code>const uint8_t* rom</code> (pointer ไปยัง 8 bytes) — ส่ง 0x55 ตามด้วย ROM 8 bytes — เฉพาะ device ที่ ROM ตรงเท่านั้นที่ตอบ — ทำให้แยกอุปกรณ์บนบัสเดียวกันได้ — <code>read_scratchad()</code> ห่อ Reset+MatchROM+0xBE+Read9Bytes+CRC เป็น helper ลดความซ้ำซาน</p>
+</section>
+
+<section>
+    <h2>📋 API Reference (จาก Simple1Wire.h)</h2>
+    <table>
+        <tr><th>ฟังก์ชัน</th><th>Signature</th><th>คำอธิบาย</th></tr>
+        <tr><td><code>OneWire_Init</code></td><td><code>(uint8_t pin) → OneWire_Bus*</code></td><td>เริ่มต้น bus บน pin — คืน handle หรือ NULL (เต็ม 4 slot) — <em>ไม่รับ bus</em></td></tr>
+        <tr><td><code>OneWire_Reset</code></td><td><code>(bus) → bool</code></td><td>ส่ง reset pulse — คืน true ถ้ามี device ตอบ presence</td></tr>
+        <tr><td><code>OneWire_WriteBit</code></td><td><code>(bus, bit) → void</code></td><td>เขียน 1 bit</td></tr>
+        <tr><td><code>OneWire_ReadBit</code></td><td><code>(bus) → uint8_t</code></td><td>อ่าน 1 bit</td></tr>
+        <tr><td><code>OneWire_WriteByte</code></td><td><code>(bus, data) → void</code></td><td>ส่ง 1 byte (LSB first)</td></tr>
+        <tr><td><code>OneWire_ReadByte</code></td><td><code>(bus) → uint8_t</code></td><td>อ่าน 1 byte</td></tr>
+        <tr><td><code>OneWire_WriteBytes</code></td><td><code>(bus, data, len) → void</code></td><td>ส่งหลาย bytes</td></tr>
+        <tr><td><code>OneWire_ReadBytes</code></td><td><code>(bus, buffer, len) → void</code></td><td>อ่านหลาย bytes</td></tr>
+        <tr><td><code>OneWire_SkipROM</code></td><td><code>(bus) → void</code></td><td>0xCC — ข้าม ROM — ใช้กับตัวเดียว หรือสั่ง broadcast</td></tr>
+        <tr><td><code>OneWire_ReadROM</code></td><td><code>(bus, rom) → bool</code></td><td>0x33 — อ่าน ROM ตัวเดียวเท่านั้น — คืน false ถ้ามีหลายตัว</td></tr>
+        <tr><td><code>OneWire_MatchROM</code></td><td><code>(bus, rom) → void</code></td><td>0x55 — เลือก device ตาม ROM 8 bytes</td></tr>
+        <tr><td><code>OneWire_Select</code></td><td><code>(bus, rom) → bool</code></td><td>convenience: Reset + MatchROM รวม — คืน false ถ้าไม่มี device</td></tr>
+        <tr><td><code>OneWire_ResetSearch</code></td><td><code>(bus) → void</code></td><td>รีเซ็ต state การค้น — เรียกก่อนเริ่ม search</td></tr>
+        <tr><td><code>OneWire_Search</code></td><td><code>(bus) → bool</code></td><td>ค้น device ถัดไป (0xF0) — ROM เก็บใน <code>bus->rom</code> — คืน true = พบ</td></tr>
+        <tr><td><code>OneWire_GetAddress</code></td><td><code>(bus, rom) → void</code></td><td>ดึง ROM 8 bytes ที่พบออกจาก <code>bus->rom</code></td></tr>
+        <tr><td><code>OneWire_AlarmSearch</code></td><td><code>(bus) → bool</code></td><td>0xEC — ค้นเฉพาะ device ที่มี alarm</td></tr>
+        <tr><td><code>OneWire_CRC8</code></td><td><code>(data, len) → uint8_t</code></td><td>คำนวณ CRC8 (poly 0x8C) — pure function — <em>ไม่รับ bus</em></td></tr>
+        <tr><td><code>OneWire_VerifyCRC</code></td><td><code>(data, len) → bool</code></td><td>ตรวจ CRC — len รวม CRC byte ท้ายสุด — <em>ไม่รับ bus</em></td></tr>
+        <tr><td><code>OneWire_Depower</code></td><td><code>(bus) → void</code></td><td>ปิด strong pull-up (parasitic power)</td></tr>
+        <tr><td><code>OneWire_GetBusByPin</code></td><td><code>(pin) → OneWire_Bus*</code></td><td>หา bus instance จาก pin — คืน NULL ถ้าไม่พบ — <em>ไม่รับ bus</em></td></tr>
+    </table>
+    <p class="explain">🔍 ดูครบทุกฟังก์ชันใน <code>User/SimpleHAL/Simple1Wire.h</code> (429 บรรทัด) — <strong>ไม่มี</strong> ฟังก์ชัน search ROM แบบคืน array ทีเดียว — <strong>ไม่มี</strong> ฟังก์ชันอ่านอุณหภูมิสำเร็จรูป — ต้องอ่าน scratchpad manual เสมอ</p>
+</section>
+
+<section>
+    <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
+    <table>
+        <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+        <tr><td><code>OneWire_Reset(bus)</code> คืน false ตลอด</td><td>ไม่มี pull-up resistor, สายยาวเกิน, หรือ pin ผิด</td><td>ต่อ 4.7kΩ ระหว่าง DQ กับ 3.3V — ใช้สายสั้น &lt; 2m — ตรวจ <code>OneWire_Init</code> ไม่คืน NULL</td></tr>
+        <tr><td><code>OneWire_Init</code> คืน NULL</td><td>bus slot เต็ม (สูงสุด 4) หรือ pin เป็น pin ที่ไม่รองรับ</td><td>ลดจำนวน bus — ใช้ <code>OneWire_GetBusByPin(pin)</code> เรียกซ้ำ หรือตรวจ <code>ONEWIRE_MAX_BUSES</code></td></tr>
+        <tr><td>อุณหภูมิอ่านได้ 85°C ตลอด</td><td>DS18B20 ยัง convert ไม่เสร็จ (default power-on = 85°C = 0x0550)</td><td>รออย่างน้อย 750ms หลัง Convert T (0x44) — ตรวจค่า raw == 0x0550 เพื่อ skip</td></tr>
+        <tr><td>CRC Error บ่อย <code>OneWire_VerifyCRC(sp, 9)</code> คืน false</td><td>Timing ไม่ตรง — interrupt รบกวน — สายยาว</td><td>SimpleHAL ปิด interrupt ใน critical section แล้ว — ลองสายสั้นขึ้น — ตรวจ pull-up</td></tr>
+        <tr><td>หลายตัว — อ่านค่าผิดหมด / ค่าเดียวกันซ้ำ</td><td>ใช้ <code>OneWire_SkipROM(bus)</code> ตอนอ่าน scratchpad ทั้งที่มีหลายอุปกรณ์ — ทุกตัวตอบพร้อมกันทำให้ข้อมูลชนกัน</td><td>ใช้ triad ResetSearch/Search/GetAddress หา ROM IDs — แล้วใช้ <code>OneWire_MatchROM(bus, roms[i])</code> อ่านทีละตัว</td></tr>
+        <tr><td>คอมไพล์ผ่านแต่ link error — undefined reference ฟังก์ชัน search ROM แบบ array</td><td>ใช้ API ปลอมจากเอกสารเก่า</td><td>เปลี่ยนเป็น triad: <code>ResetSearch</code> → <code>Search</code> → <code>GetAddress</code> — ดู Simple1Wire.h</td></tr>
+        <tr><td>DS18B20 ร้อนมาก</td><td>ต่อ VDD กลับขั้ว หรือ parasitic power ไม่พอ</td><td>เช็คขา 1=GND, 2=DQ, 3=VDD — ใช้ external power ถ้าเป็นไปได้</td></tr>
+    </table>
 </section>
 
 <section>
     <h2>✏️ ลองทำดู</h2>
     <ol>
-        <li>ใช้ <code>OneWire_SkipROM()</code> + Convert T (0x44) เพื่อเริ่มวัดทุกตัวพร้อมกัน — แล้วอ่านทีละตัว — วัดเวลารวมเทียบกับแบบอ่านทีละตัว</li>
-        <li>เปลี่ยน DS18B20 resolution จาก 12-bit เป็น 9-bit (เขียน config register — byte 4 ของ scratchpad) — สังเกตความเร็ว (93ms vs 750ms)</li>
-        <li>เพิ่ม DS18B20 ตัวที่ 2 — ใช้ <code>OneWire_SearchROM()</code> — เปรียบเทียบอุณหภูมิระหว่าง 2 ตัว</li>
+        <li>ใช้ triad ResetSearch/Search/GetAddress หา DS18B20 หลายตัว — เก็บ ROM ใน <code>uint8_t roms[N][8]</code> — แล้วใช้ <code>OneWire_MatchROM(bus, roms[i])</code> + 0x44 อ่านทีละตัว — วัดเวลารวมเทียบกับแบบ SkipROM broadcast + อ่านทีละตัว (Jump Temp)</li>
+        <li>เปลี่ยน DS18B20 resolution จาก 12-bit เป็น 9-bit (เขียน scratchpad ด้วย 0x4E + 3 bytes ของ config) — สังเกตความเร็ว (93ms vs 750ms)</li>
+        <li>ใช้ <code>OneWire_AlarmSearch(bus)</code> แทน <code>OneWire_Search(bus)</code> — วนหาเฉพาะ device ที่ตั้ง alarm flag (เช่น temp เกินขีด) โดยไม่ต้องอ่านทุกตัว</li>
+        <li>เปรียบเทียบ <code>OneWire_Select(bus, rom)</code> (Reset+MatchROM รวม) กับการเรียก <code>OneWire_Reset(bus)</code> + <code>OneWire_MatchROM(bus, rom)</code> แยก — อะไรสั้นกว่า?</li>
     </ol>
 </section>
 

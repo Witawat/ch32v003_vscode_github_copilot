@@ -113,8 +113,8 @@ flowchart TD
             <tr><td><code>USART_Print(str)</code></td><td>ส่งสตริง (null-terminated) ออกทาง TX</td><td><code>USART_Print("Hello\r\n");</code></td></tr>
             <tr><td><code>USART_WriteByte(byte)</code></td><td>ส่ง 1 ไบต์ออกทาง TX (binary data)</td><td><code>USART_WriteByte(0xAA);</code></td></tr>
             <tr><td><code>USART_PrintNum(num)</code></td><td>ส่งตัวเลขแบบ decimal (int32_t) ออกทาง TX</td><td><code>USART_PrintNum(12345);</code></td></tr>
-            <tr><td><code>USART_PrintHex(num, digits)</code></td><td>ส่งตัวเลขแบบ hex (0x...) ออกทาง TX</td><td><code>USART_PrintHex(0xAB, 2);</code></td></tr>
-            <tr><td><code>USART_Available()</code></td><td>ตรวจสอบว่ามีข้อมูลรออ่านใน RX buffer หรือไม่ — คืนจำนวน byte</td><td><code>if (USART_Available()) { ... }</code></td></tr>
+            <tr><td><code>USART_PrintHex(num, uppercase)</code></td><td>ส่งตัวเลขแบบ hex (0x...) ออกทาง TX — <code>uppercase</code>: 1 = ตัวพิมพ์ใหญ่ (A-F), 0 = ตัวพิมพ์เล็ก (a-f)</td><td><code>USART_PrintHex(0xAB, 1);  // "0xAB"</code></td></tr>
+            <tr><td><code>USART_Available()</code></td><td>ตรวจสอบว่ามีข้อมูลรออ่านใน RX buffer หรือไม่ — คืน 1 (มีข้อมูล) หรือ 0 (ไม่มี) เท่านั้น ไม่ใช่จำนวน byte</td><td><code>if (USART_Available()) { ... }</code></td></tr>
             <tr><td><code>USART_Read()</code></td><td>อ่าน 1 ไบต์จาก RX buffer — ต้องมั่นใจว่ามีข้อมูลก่อน (เช็ค Available ก่อน)</td><td><code>uint8_t c = USART_Read();</code></td></tr>
             <tr><td><code>USART_ReadBytes(buf, len)</code></td><td>อ่านหลายไบต์จาก RX buffer เข้า array</td><td><code>USART_ReadBytes(buf, 10);</code></td></tr>
             <tr><td><code>USART_Flush()</code></td><td>ล้าง RX buffer ทิ้งทั้งหมด (เริ่มรับใหม่)</td><td><code>USART_Flush();</code></td></tr>
@@ -128,7 +128,7 @@ flowchart TD
 
     <div class="step">
         <h3>ขั้นที่ 1: ตั้งค่าระบบ + Init USART</h3>
-        <pre><code class="language-c">#include "simplehal.h"
+        <pre><code class="language-c">#include "SimpleHAL.h"
 
 int main(void) {
     SystemCoreClockUpdate();
@@ -211,7 +211,7 @@ void ProcessCommand(char* cmd) {
 <section>
     <h2>🟢 ตัวอย่างขั้นต้น</h2>
     <p>Debug Print — นับเลขทุก 1 วินาทีและพิมพ์ค่า counter</p>
-    <pre><code class="language-c">#include "simplehal.h"
+    <pre><code class="language-c">#include "SimpleHAL.h"
 
 int main(void) {
     SystemCoreClockUpdate();
@@ -236,7 +236,7 @@ int main(void) {
 <section>
     <h2>🟡 ตัวอย่างขั้นกลาง</h2>
     <p>Command Line Receiver — รับคำสั่ง "LON" / "LOFF" จาก Serial Monitor มาควบคุม LED</p>
-    <pre><code class="language-c">#include "simplehal.h"
+    <pre><code class="language-c">#include "SimpleHAL.h"
 #include &lt;string.h&gt;
 
 char rx_buffer[32];
@@ -291,7 +291,7 @@ int main(void) {
 <section>
     <h2>🔴 ตัวอย่างขั้นสูง</h2>
     <p>Binary Protocol with Checksum — ส่ง/รับข้อมูลเป็นเฟรมที่มี header 0xAA 0x55 + length + payload + XOR checksum เหมาะกับระบบที่ต้องการความน่าเชื่อถือสูง (หุ่นยนต์, โดรน)</p>
-    <pre><code class="language-c">#include "simplehal.h"
+    <pre><code class="language-c">#include "SimpleHAL.h"
 
 #define FRAME_HEADER1  0xAA
 #define FRAME_HEADER2  0x55

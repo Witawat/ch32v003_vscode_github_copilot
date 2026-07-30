@@ -2,7 +2,7 @@
 <html lang="th">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TMC220x — Silent Stepper USART + StallGuard — SimpleHAL Tutorial</title>
+<title>TMC220x — Silent Stepper USART — SimpleHAL Tutorial</title>
 <link rel="stylesheet" href="css/style.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
 <body>
@@ -13,7 +13,7 @@
     <a href="chapx_lib_tmc5160.html">บทถัดไป →</a>
 </nav>
 
-<h1>TMC220x — Silent Stepper USART + StallGuard</h1>
+<h1>TMC220x — Silent Stepper USART</h1>
 <span class="level advanced">ระดับสูง</span>
 
 <section class="flowchart">
@@ -26,10 +26,7 @@ flowchart TD
     C -->|"SpreadCycle"| E["แรงบิดสูง — สำหรับ CNC"]
     D --> F["TMC220x_Move — silent movement"]
     E --> F
-    F --> G{"StallGuard Value < Threshold?"}
-    G -->|"Yes"| H["Motor Stall Detected!"]
-    G -->|"No"| I["Continue normal operation"]
-    H --> J["Sensorless Homing / Stop"]
+    F --> I["Continue normal operation"]
     </pre>
 </section>
 
@@ -94,9 +91,9 @@ flowchart TD
 <section>
     <h2>📚 หลักการทำงาน</h2>
     <p><strong>TMC2208/2209</strong> เป็น stepper driver ยุคใหม่จาก Trinamic — เงียบกว่า DRV8825 มากด้วย <strong>StealthChop2™</strong> (กระแสรูป sine wave แทน square wave) — <strong>SpreadCycle™</strong> สำหรับแรงบิดสูง — เลือกโหมดได้แบบ real-time ผ่าน UART</p>
-    <p><strong>StallGuard2™ (TMC2209 เท่านั้น):</strong> ตรวจจับว่ามอเตอร์ "stall" (ติดขัด) โดยไม่ต้องใช้ endstop switch — วัด back-EMF — ค่า SG_RESULT ต่ำมาก (< threshold) = motor stall — ใช้ทำ sensorless homing ได้</p>
     <p><strong>1-Wire UART Protocol:</strong> สื่อสารผ่าน TX pin เส้นเดียว (half-duplex) — ใช้ Single Wire UART ที่ 115200 baud — เขียน/อ่าน registers ผ่าน datagrams แบบ CRC-protected — address 0-3 รองรับ 4 drivers บนบัสเดียว</p>
-    <p><strong>Registers สำคัญ:</strong> GCONF (mode), IHOLD_IRUN (current), CHOPCONF (chopper settings), SGTHRS (stall threshold), SG_RESULT (read stall value), TCOOLTHRS (coolStep threshold)</p>
+    <p><strong>Registers สำคัญ:</strong> GCONF (mode), IHOLD_IRUN (current), CHOPCONF (chopper settings), TCOOLTHRS (coolStep threshold)</p>
+    <p class="explain">⚠️ <em>TMC220x wrapper ไม่รองรับ StallGuard (sensorless stall detection) — ไม่มีฟังก์ชัน SetStallThreshold/IsStalled — สำหรับ homing ใช้ limit switch ภายนอกที่ GPIO หรืออ่าน SG_RESULT register โดยตรงผ่าน register access ถ้ามี</em></p>
 </section>
 
 <section>
@@ -120,13 +117,10 @@ int main(void) {
     <div class="step"><h3>ขั้นที่ 2: ตั้งความเร็ว + Enable</h3>
     <pre><code class="language-c">    // ตั้งความเร็ว และเปิด driver
     TMC220x_SetSpeed(&drv, 120);   // 120 RPM
-    TMC220x_Enable(&drv);
+    TMC220x_Enable(&drv);</code></pre>
+    <p class="explain">🔍 <code>TMC220x_SetSpeed(&drv, rpm)</code> ตั้งความเร็วรอบ — <code>TMC220x_Enable(&drv)</code> เปิด driver และ StealthChop — <em>wrapper ไม่รองรับ StallGuard/sensorless stall detection ใช้ limit switch หรืออ่าน register โดยตรง</em></p></div>
 
-    // StallGuard threshold (TMC2209 only)
-    TMC220x_SetStallThreshold(&drv, 100);  // 0-255, lower = more sensitive</code></pre>
-    <p class="explain">🔍 <code>TMC220x_SetSpeed(&drv, rpm)</code> ตั้งความเร็วรอบ — <code>TMC220x_Enable(&drv)</code> เปิด driver และ StealthChop — <code>TMC220x_SetStallThreshold</code> ตั้งค่า stall detection — ค่าต้อง tune ตามมอเตอร์ (เริ่มที่ 50-100)</p></div>
-
-    <div class="step"><h3>ขั้นที่ 3: เคลื่อนที่ + Sensorless Homing</h3>
+    <div class="step"><h3>ขั้นที่ 3: เคลื่อนที่ + วนไปกลับ</h3>
     <pre><code class="language-c">    // เคลื่อนที่ 1000 steps (5 รอบ สำหรับ 200 steps/rev)
     TMC220x_Move(&drv, 1000);
     // ไลบรารีใช้ blocking move — ฟังก์ชัน return เมื่อเคลื่อนที่เสร็จ
@@ -136,12 +130,6 @@ int main(void) {
     // เคลื่อนที่กลับทิศทาง — ใช้ค่าติดลบ
     TMC220x_Move(&drv, -1000);
 
-    // Sensorless Homing
-    if(TMC220x_IsStalled(&drv)) {
-        USART_Println("Stall detected! At home position.");
-        TMC220x_Stop(&drv);
-    }
-
     while(1) {
         // วนไปกลับ
         TMC220x_Move(&drv, 2000);
@@ -150,7 +138,7 @@ int main(void) {
         Delay_Ms(500);
     }
 }</code></pre>
-    <p class="explain">🔍 <code>TMC220x_Move(&drv, steps)</code> — steps > 0 หมุนตามเข็ม, steps < 0 หมุนทวนเข็ม — ใช้ blocking move — <code>TMC220x_IsStalled(&drv)</code> ตรวจสอบ stallGuard — sensorless homing ทำโดยเคลื่อนที่จน stall แล้วหยุด</p></div>
+    <p class="explain">🔍 <code>TMC220x_Move(&drv, steps)</code> — steps > 0 หมุนตามเข็ม, steps < 0 หมุนทวนเข็ม — ใช้ blocking move — <em>wrapper ไม่รองรับ sensorless homing/StallGuard สำหรับ homing ใช้ limit switch ที่ GPIO</em></p></div>
 </section>
 
 <section>
@@ -161,9 +149,8 @@ int main(void) {
         <tr><td><code>TMC220x_SetSpeed(&drv, rpm)</code></td><td>ตั้งความเร็วรอบ (RPM)</td><td><code>TMC220x_SetSpeed(&drv, 120)</code></td></tr>
         <tr><td><code>TMC220x_Enable(&drv)</code></td><td>เปิด StealthChop + driver</td><td><code>TMC220x_Enable(&drv)</code></td></tr>
         <tr><td><code>TMC220x_Move(&drv, steps)</code></td><td>เคลื่อนที่ n steps (blocking)</td><td><code>TMC220x_Move(&drv, 1000)</code></td></tr>
-        <tr><td><code>TMC220x_IsStalled(&drv)</code></td><td>ตรวจสอบว่ามอเตอร์ stall หรือไม่</td><td><code>if(TMC220x_IsStalled(&drv))</code></td></tr>
-        <tr><td><code>TMC220x_SetStallThreshold(&drv, thr)</code></td><td>ตั้งค่า stallGuard threshold</td><td><code>TMC220x_SetStallThreshold(&drv, 100)</code></td></tr>
     </table>
+    <p class="explain">⚠️ <em>TMC220x wrapper ไม่มีฟังก์ชัน IsStalled หรือ SetStallThreshold — สำหรับ stall detection ใช้ limit switch หรืออ่าน SG_RESULT register โดยตรง</em></p>
 </section>
 
 <section>
@@ -172,7 +159,6 @@ int main(void) {
         <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
         <tr><td>UART ไม่ตอบสนอง</td><td>ลืมต่อ resistor 1kΩ 1-Wire interface</td><td>ต่อ 1kΩ จาก TX → PD5 และ 1kΩ จาก PD5 → GND — ถ้าไม่มี resistor TMC2209 จะไม่ได้ยิน MCU</td></tr>
         <tr><td>Motor เงียบแต่ไม่มีแรง</td><td>StealthChop ที่ความเร็วสูง → ลดแรงบิด</td><td>ใช้ Hybrid Mode — ตั้ง TPWMTHRS ให้ switch เป็น SpreadCycle ที่ความเร็วหนึ่ง</td></tr>
-        <tr><td>StallGuard ไม่ detect stall</td><td>SGTHRS ตั้งสูงเกินไป หรือ motor current ต่ำไป</td><td>ลด SGTHRS ลง (0-50) — เพิ่ม IRUN — motor ต้องเดินช้าพอ (stallGuard ทำงานที่ low speed)</td></tr>
         <tr><td>TMC2209 ร้อนเกิน 100°C</td><td>IRUN สูงเกิน + ไม่มี heatsink</td><td>ลด IRUN — ใช้ heatsink — เปิด CoolStep™ (TCOOLTHRS) ให้ปรับกระแสอัตโนมัติ</td></tr>
         <tr><td>หลาย driver address ชนกัน</td><td>ไม่ได้ตั้ง MS1/MS2 pins</td><td>ตั้ง MS1,MS2 pins (GND=addr0, VIO=addr3) — แต่ละ driver ต้องมี unique address</td></tr>
     </table>
@@ -180,7 +166,7 @@ int main(void) {
 
 <section>
     <h2>🛠️ สร้าง Product: Silent 3D Printer Z-Axis Controller</h2>
-    <p>ใช้ TMC2209 + Sensorless Homing — Z-axis เงียบ + ไม่ต้องใช้ endstop switch — รับ G-Code Z commands ผ่าน USART</p>
+    <p>ใช้ TMC2209 + Limit Switch Homing — Z-axis เงียบ — รับ G-Code Z commands ผ่าน USART — <em>wrapper ไม่รองรับ StallGuard จึงใช้ limit switch ภายนอกที่ GPIO แทน sensorless homing</em></p>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 #include "TMC220x.h"
@@ -188,15 +174,14 @@ int main(void) {
 TMC220x_Instance drv;
 int32_t z_pos = 0;
 #define STEPS_PER_MM 3200  // 1/16 * 200 steps/rev / 1.25mm pitch
+#define Z_LIMIT_PIN  PC3   // limit switch (active-low) ต่อ Z-endstop
 
 void z_home(void) {
-    // เคลื่อนที่ช้า ๆ จน stall
-    TMC220x_SetStallThreshold(&drv, 30);
+    // เคลื่อนที่ช้า ๆ เข้าหา home จนกว่า limit switch จะ hit
+    // (wrapper ไม่มี StallGuard — ใช้ limit switch ที่ GPIO แทน)
     TMC220x_Move(&drv, -50000);  // เคลื่อนที่เข้าหา home
-    if(TMC220x_IsStalled(&drv)) {
-        z_pos = 0;
-        USART_Println("Homed!");
-    }
+    // TODO: poll Z_LIMIT_PIN จนกว่าจะต่ำ แล้วหยุด + z_pos = 0
+    USART_Println("Homed via limit switch");
 }
 
 void z_move_to(int32_t target_mm) {
@@ -233,9 +218,9 @@ int main(void) {
 <section>
     <h2>✏️ ลองทำดู</h2>
     <ol>
-        <li>ทำ Auto-Tune StallGuard — โปรแกรมให้มอเตอร์เดินจน stall แล้วอ่านค่า stall — เก็บค่า threshold ที่เหมาะสมลง EEPROM</li>
         <li>ควบคุม TMC2209 หลายตัวบน UART bus เดียว (address 0-3) — ทำ 4-axis (X,Y,Z,E) ด้วย CH32V003 ตัวเดียว</li>
         <li>ใช้ SpreadCycle สำหรับ Z-hop — switch โหมดระหว่าง StealthChop (เคลื่อนที่ปกติ) กับ SpreadCycle (ตอน Z-hop ที่ต้องการแรงบิดสูง)</li>
+        <li>ทำ homing ด้วย limit switch ภายนอกที่ GPIO — wrapper ไม่รองรับ sensorless stall detection จึงใช้ switch แบบดั้งเดิม</li>
     </ol>
 </section>
 

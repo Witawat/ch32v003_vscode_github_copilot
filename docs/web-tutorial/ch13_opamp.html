@@ -19,12 +19,12 @@
 <section class="flowchart">
     <h2>🧭 แผนภาพการทำงาน</h2>
     <pre class="mermaid">
-flowchart TD
-    A["OPAMP_SimpleInit(channel, mode)"] --> B["OPAMP_Enable(channel)"]
-    B --> C["สัญญาณเข้า → OPAMP → ขยาย/บัฟเฟอร์ → ADC"]
-    C --> D["ADC_Read() / ADC_ReadVoltage()"]
+    flowchart TD
+    A["OPAMP_SimpleInit(mode)"] --> B["OPAMP_Enable()"]
+    B --> C["สัญญาณเข้า → OPAMP ขยาย / บัฟเฟอร์ / เปรียบเทียบ"]
+    C --> D["อ่านค่า output ผ่าน ADC ch7: ADC_Read(7) / ADC_ReadVoltage(7)"]
     D --> E["ประมวลผลสัญญาณ"]
-    E --> F["แสดงผล"]
+    E --> F["แสดงผล / ควบคุม"]
     F --> C
     </pre>
 </section>
@@ -33,86 +33,82 @@ flowchart TD
     <h2>🔌 การต่อวงจร</h2>
     <pre class="ascii-circuit">
     OPAMP ภายใน CH32V003 — ไม่ต้องใช้ IC OPAMP ภายนอก
-    (เฉพาะ CH32V003 บางรุ่น — เช็ค datasheet ก่อน)
+    (CH32V003 มี OPAMP 1 ตัว — เช็ค datasheet ว่ารุ่นที่ใช้มี OPAMP หรือไม่)
 
-    Voltage Follower (Buffer) — Impedance สูงเข้า, ต่ำออก
-    ┌────────────────────────────────────────────┐
-    │  CH32V003                                   │
-    │                                             │
-    │  Sensor (high-Z)─── PA4(OP_IN+) ──┐         │
-    │                                   │         │
-    │                            ┌──────▼──────┐  │
-    │                            │   OPAMP     │  │
-    │                            │   Follower  │  │
-    │                            └──────┬──────┘  │
-    │                                   │         │
-    │                       PA5(OP_OUT)─┘         │
-    │                          │                  │
-    │                          └──→ PA2(ADC_CH0)  │
-    │                                             │
-    │  ตัวอย่าง: pH Probe (high impedance)         │
-    │  ┌──────────┐                               │
-    │  │ pH Probe │─── PA4 ──→ [OPAMP Buffer]     │
-    │  │ (100MΩ!) │                    │          │
-    │  └──────────┘         PA5 ──→ ADC_CH0       │
-    │                                             │
-    │  OPAMP Configurations:                      │
-    │  ├─ Follower (Gain=1): PA4 → PA5            │
-    │  ├─ PGA (Gain=2/4/8/16): PA4 → PA5          │
-    │  ├─ Non-Inverting: PA6(-), PA4(+), PA5(OUT) │
-    │  └─ Inverting: PA6(-), PA4(+), PA5(OUT)     │
-    └────────────────────────────────────────────┘
+    OPAMP มี input channels แบ่งเป็นฝั่งบวก (Positive) และฝั่งลบ (Negative)
+    ┌────────────────────────────────────────────────┐
+    │  CH32V003 (OPAMP เดียว)                         │
+    │                                                │
+    │   สัญญาณเข้า ─→  CHP0/CHP1 (+) ──┐             │
+    │                                  │             │
+    │                           ┌──────▼──────┐      │
+    │                           │   OPAMP     │      │
+    │                           │  (1 ตัว)     │      │
+    │                           └──────┬──────┘      │
+    │                                  │             │
+    │   CHN0/CHN1 (−) ─── feedback ────┘             │
+    │                                  │             │
+    │                                  └──→ ADC ch7  │
+    │                                       (ภายใน)  │
+    │                                                │
+    │  โหมดการใช้งาน 4 แบบ (เลือกผ่าน mode enum):      │
+    │  ├─ Voltage Follower (Gain = 1) : CHP0 → OUT   │
+    │  ├─ Non-Inverting (Gain = 1+R2/R1) : + R ภายนอก│
+    │  ├─ Inverting (Gain = -R2/R1) : + R ภายนอก      │
+    │  └─ Comparator : output HIGH เมื่อ V+ > V−      │
+    └────────────────────────────────────────────────┘
     </pre>
 
     <table class="wiring-table">
       <thead>
-        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+        <tr><th>OPAMP Channel</th><th>→</th><th>อุปกรณ์</th><th>หมายเหตุ</th></tr>
       </thead>
       <tbody>
-        <tr><td>PA4 (OP_IN+)</td><td>←</td><td>Sensor (high-Z)</td><td>Output</td><td>เช่น pH Probe 100MΩ</td></tr>
-        <tr><td>PA5 (OP_OUT)</td><td>→</td><td>PA2 (ADC_CH0)</td><td>ADC Input</td><td>OPAMP Buffer → ADC</td></tr>
-        <tr><td>PA6 (OP_IN-)</td><td>—</td><td>(ภายใน)</td><td>—</td><td>ใช้สำหรับ PGA / Non-Inverting / Inverting mode</td></tr>
+        <tr><td>OPAMP_CHP0 (Positive 0)</td><td>←</td><td>สัญญาณเข้าฝั่งบวก</td><td>เช่น sensor high-Z, Vin (Non-Inverting)</td></tr>
+        <tr><td>OPAMP_CHP1 (Positive 1)</td><td>←</td><td>สัญญาณเข้าฝั่งบวก (สำรอง)</td><td>เลือก input อีกช่องได้</td></tr>
+        <tr><td>OPAMP_CHN0 (Negative 0)</td><td>—</td><td>ขาลบ / feedback</td><td>ใช้กับ Non-Inverting / Inverting / Comparator</td></tr>
+        <tr><td>OPAMP_CHN1 (Negative 1)</td><td>—</td><td>ขาลบ (สำรอง)</td><td>เช่น reference ในโหมด Comparator</td></tr>
+        <tr><td>OPAMP Output → ADC ch7</td><td>→</td><td>ADC ภายใน</td><td>ต่อภายในอัตโนมัติ — ไม่ต้องต่อสาย — อ่านด้วย ADC_Read(ADC_CH_7)</td></tr>
       </tbody>
     </table>
 
-    <h3>รู้จักขา</h3>
+    <h3>รู้จักขา / Channel</h3>
     <ul>
-      <li><strong>PA4 (OP_IN+):</strong> ขาเข้าบวกของ OPAMP — รับสัญญาณจากเซ็นเซอร์</li>
-      <li><strong>PA5 (OP_OUT):</strong> ขาออกของ OPAMP — ต่อภายในกับ ADC ไม่ต้องต่อสาย</li>
-      <li><strong>PA6 (OP_IN-):</strong> ขาเข้าลบของ OPAMP — ใช้กับโหมด PGA หรือ Inverting</li>
+      <li><strong>OPAMP_CHP0 / OPAMP_CHP1 (Positive):</strong> ขาเข้าฝั่งบวกของ OPAMP — รับสัญญาณหลัก (เช่นเซ็นเซอร์)</li>
+      <li><strong>OPAMP_CHN0 / OPAMP_CHN1 (Negative):</strong> ขาเข้าฝั่งลบ — ใช้เป็น feedback ในโหมดขยาย หรือเป็น reference ในโหมด Comparator</li>
+      <li><strong>OPAMP Output:</strong> ขาออกของ OPAMP — ต่อภายในกับ ADC ch7 อยู่แล้ว — ไม่ต้องต่อสายเพิ่ม</li>
     </ul>
+    <p><strong>หมายเหตุ:</strong> mapping ของแต่ละ channel ไปยังขา GPIO จริงขึ้นกับรุ่น/package ของชิป — ให้เช็ค CH32V003 datasheet ของรุ่นที่ใช้ก่อนต่อวงจรจริง</p>
 
     <h3>วิธีต่อทีละขั้น</h3>
     <ol>
-      <li>ต่อ <strong>สัญญาณเซ็นเซอร์</strong> ไป <strong>PA4 (OP_IN+)</strong> — สัญญาณเข้า OPAMP</li>
-      <li><strong>PA5 (OP_OUT)</strong> ต่อกับ <strong>ADC ภายใน</strong> อยู่แล้ว — ไม่ต้องต่อสายเพิ่ม</li>
-      <li>(ถ้าใช้ PGA) ต่อ <strong>PA6 (OP_IN-)</strong> กับ <strong>R ภายนอก</strong> ตามสูตรขยาย — ไม่ต้องต่อถ้าใช้ Follower</li>
-      <li>เรียก <strong>OPAMP_Enable()</strong> ในโค้ดก่อนอ่าน ADC</li>
+      <li>ต่อ <strong>สัญญาณเซ็นเซอร์</strong> เข้าขาที่แมปกับ <strong>OPAMP_CHP0</strong> — สัญญาณเข้าฝั่งบวก</li>
+      <li><strong>OPAMP Output</strong> ต่อกับ <strong>ADC ch7 ภายใน</strong> อยู่แล้ว — ไม่ต้องต่อสายเพิ่ม</li>
+      <li>(ถ้าใช้ Non-Inverting/Inverting) ต่อ <strong>R ภายนอก R1/R2</strong> ที่ขา CHN0 เพื่อกำหนด gain — Voltage Follower ไม่ต้องใช้ R ภายนอก</li>
+      <li>เรียก <strong><code>OPAMP_Enable()</code></strong> ในโค้ดหลัง init เสมอ ก่อนอ่าน ADC</li>
     </ol>
-
-    <p><strong>CH32V003 OPAMP pins:</strong> PA4 = OP_IN+, PA5 = OP_OUT, PA6 = OP_IN- — เช็ค datasheet ว่ารุ่นที่ใช้มี OPAMP หรือไม่</p>
 </section>
 
 <section>
     <h2>📚 หลักการทำงาน</h2>
-    <p><strong>OPAMP (Operational Amplifier)</strong> — วงจรขยายสัญญาณอนาล็อก — CH32V003 บางรุ่นมี OPAMP ในตัว — ไม่ต้องต่อ IC ภายนอก</p>
+    <p><strong>OPAMP (Operational Amplifier)</strong> — วงจรขยายสัญญาณอนาล็อก — CH32V003 มี OPAMP ในตัว 1 ตัว — ไม่ต้องต่อ IC ภายนอก</p>
 
-    <h3>Mode การทำงาน</h3>
+    <h3>Mode การทำงาน (4 แบบ)</h3>
     <ul>
-        <li><strong>Voltage Follower (Buffer):</strong> Gain = 1 — อินพุต impedance สูงมาก (~100MΩ) — เอาต์พุต impedance ต่ำ — ใช้กับเซ็นเซอร์ที่มี output impedance สูง (pH probe, piezo)</li>
-        <li><strong>PGA (Programmable Gain Amplifier):</strong> Gain = 2, 4, 8, 16 — ขยายสัญญาณเล็กให้ ADC อ่านได้ — เช่น Thermocouple (mV) → ขยาย 16x → ADC อ่านได้แม่น</li>
-        <li><strong>Non-Inverting Amplifier:</strong> ใช้ R ภายนอกตั้ง gain — Gain = 1 + Rf/Rg</li>
-        <li><strong>Inverting Amplifier:</strong> ใช้ R ภายนอก — Gain = -Rf/Rin — กลับเฟสสัญญาณ</li>
+      <li><strong>Voltage Follower (Buffer):</strong> Gain = 1 — อินพุต impedance สูงมาก — เอาต์พุต impedance ต่ำ — ใช้กับเซ็นเซอร์ที่มี output impedance สูง (pH probe, piezo) เพื่อ buffer สัญญาณก่อนเข้า ADC</li>
+      <li><strong>Non-Inverting Amplifier:</strong> ใช้ R ภายนอก <code>R1, R2</code> ตั้ง gain — Gain = 1 + (R2/R1) — เฟสออกตรงกับเข้า — ใช้ขยายสัญญาณเล็กให้ ADC อ่านได้แม่น</li>
+      <li><strong>Inverting Amplifier:</strong> ใช้ R ภายนอก <code>R1, R2</code> — Gain = -(R2/R1) — กลับเฟสสัญญาณ และขยาย</li>
+      <li><strong>Comparator:</strong> ทำงานแบบ open-loop — output เป็น HIGH เมื่อ V+ > V− และ LOW เมื่อ V+ &lt; V− — ใช้ตรวจจับ threshold</li>
     </ul>
-
-    <p><strong>ข้อควรระวัง:</strong> OPAMP ภายใน CH32V003 มี bandwidth ~1MHz, input common-mode range 0-VDD, output range ~0.1V ถึง VDD-0.1V — ไม่ใช่ rail-to-rail</p>
-    <p><strong>Power:</strong> OPAMP กินกระแส ~200µA เมื่อเปิด — ถ้าไม่ใช้ควรปิด (<code>OPAMP_Disable()</code>)</p>
+    <p><strong>Gain preset helper:</strong> <code>OPAMP_GAIN_1X/2X/4X/8X/16X</code> เป็น enum helper สำหรับคำนวณ/เลือกค่า R — <strong>ไม่ใช่</strong> register setting — gain จริงขึ้นกับค่า R ภายนอกที่ต่อจริง</p>
+    <p><strong>ข้อควรระวัง:</strong> OPAMP ภายใน CH32V003 มี input common-mode range 0–VDD, output range ~0.1V ถึง VDD−0.1V (ไม่ใช่ rail-to-rail) — ถ้า gain สูงเกิน จะเกิด clipping ที่ output</p>
+    <p><strong>Power:</strong> OPAMP กินกระแส ~200µA เมื่อเปิด — ถ้าไม่ใช้ควรปิดด้วย <code>OPAMP_Disable()</code> เพื่อประหยัดไฟ</p>
 </section>
 
 <section>
     <h2>💻 เขียน Code ทีละขั้น</h2>
 
-    <div class="step"><h3>ขั้นที่ 1: OPAMP Voltage Follower พื้นฐาน</h3>
+    <div class="step"><h3>ขั้นที่ 1: Voltage Follower + อ่าน ADC</h3>
     <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 
@@ -120,355 +116,259 @@ int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
     USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
-    ADC_SimpleInit();
+    ADC_SimpleInit();  // เปิด ADC ก่อนอ่าน OPAMP output
 
-    // Voltage Follower: PA4(input) → PA5(output)
-    OPAMP_SimpleInit(OPAMP_CH1, OPAMP_MODE_FOLLOWER);
+    // Voltage Follower: CHP0 เข้า → output → ADC ch7
+    OPAMP_SimpleInit(OPAMP_MODE_VOLTAGE_FOLLOWER);
 
-    // เปิด OPAMP
-    OPAMP_Enable(OPAMP_CH1);</code></pre>
-    <p class="explain">🔍 <code>OPAMP_SimpleInit(ch, mode)</code> — ตั้งค่า OPAMP — <code>OPAMP_MODE_FOLLOWER</code> — ทำหน้าที่เป็น buffer — <code>OPAMP_Enable()</code> — จ่ายไฟให้ OPAMP</p></div>
+    // เปิดใช้งาน OPAMP (no-arg)
+    OPAMP_Enable();
 
-    <div class="step"><h3>ขั้นที่ 2: อ่านค่าผ่าน OPAMP Buffer</h3>
-    <pre><code class="language-c">    while(1) {
-        // อ่าน ADC จาก OPAMP output (PA5)
-        // PA5 = ADC_CH5 (เช็ค datasheet)
-        uint16_t raw = ADC_Read(ADC_CH_PA5);
+    while(1) {
+        // อ่าน OPAMP output ผ่าน ADC ch7 (ต่อภายในอยู่แล้ว)
+        uint16_t raw = ADC_Read(ADC_CH_7);
         float voltage = ADC_ToVoltage(raw, 3.3f);
 
-        USART_Print("OPAMP output: ");
+        USART_Print("Vout=");
         USART_PrintNum((int32_t)(voltage * 1000));
         USART_Print(" mV\r\n");
 
         Delay_Ms(500);
-    }</code></pre>
-    <p class="explain">🔍 OPAMP buffer ทำให้ ADC อ่านค่าได้แม่นยำขึ้น — โดยเฉพาะเมื่อเซ็นเซอร์มี output impedance สูง — ถ้าไม่มี buffer, ADC sample/hold capacitor จะดึงกระแสจากเซ็นเซอร์ทำให้แรงดันตก</p></div>
+    }
+}</code></pre>
+    <p class="explain">🔍 <code>OPAMP_SimpleInit(OPAMP_MODE_VOLTAGE_FOLLOWER)</code> รับ mode เดียว — ตั้งวงจรเป็น buffer — <code>OPAMP_Enable()</code> เป็น no-arg จ่ายไฟให้ OPAMP — output ต่อกับ ADC ch7 ภายใน จึงอ่านด้วย <code>ADC_Read(ADC_CH_7)</code> ได้เลย</p>
+    </div>
 
-    <div class="step"><h3>ขั้นที่ 3: PGA — ขยายสัญญาณเล็ก</h3>
-    <pre><code class="language-c">    // ตัวอย่าง: Thermocouple ให้สัญญาณ ~0-50mV
-    // ขยาย 16x → 0-800mV → ADC อ่านได้
+    <div class="step"><h3>ขั้นที่ 2: Non-Inverting Amplifier + คำนวณ gain</h3>
+    <pre><code class="language-c">// วงจร: Input → CHP0(+),  CHN0(−) ← R2 ← Output, CHN0 ← R1 ← GND
+//       Gain = 1 + (R2/R1)
 
-    OPAMP_SimpleInit(OPAMP_CH1, OPAMP_MODE_PGA);
-    OPAMP_ConfigPGA(OPAMP_CH1, OPAMP_PGA_16);   // Gain = 16x
-    OPAMP_Enable(OPAMP_CH1);
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    ADC_SimpleInit();
+
+    // ตั้งค่า Non-Inverting ระบุ channel เอง
+    OPAMP_ConfigNonInverting(OPAMP_CHP0, OPAMP_CHN0);
+    OPAMP_Enable();
+
+    // ค่า R ภายนอกที่ต่อจริง
+    uint32_t r1 = 10000;  // 10 kΩ (to GND)
+    uint32_t r2 = 10000;  // 10 kΩ (feedback)
+    float gain = OPAMP_CalculateGainNonInv(r1, r2);  // คืน 1 + R2/R1 = 2.0
+
+    USART_Print("Non-Inverting gain = ");
+    USART_PrintNum((int32_t)(gain * 10));
+    USART_Print("\r\n");
 
     while(1) {
-        uint16_t raw = ADC_Read(ADC_CH_PA5);
-        // actual voltage = (raw * Vref / 1024) / 16
-        float v_input = ADC_ToVoltage(raw, 3.3f) / 16.0f;
-        USART_Print("Input: ");
-        USART_PrintNum((int32_t)(v_input * 1000000));
-        USART_Print(" uV\r\n");
+        float v_out = ADC_ReadVoltage(ADC_CH_7, 3.3f);
+        float v_in  = v_out / gain;  // คืนกลับเป็น voltage เข้าจริง
+
+        USART_Print("Vout=");
+        USART_PrintNum((int32_t)(v_out * 1000));
+        USART_Print(" mV  Vin~");
+        USART_PrintNum((int32_t)(v_in * 1000));
+        USART_Print(" mV\r\n");
+
         Delay_Ms(500);
-    }</code></pre>
-    <p class="explain">🔍 <code>OPAMP_ConfigPGA(ch, gain)</code> — ตั้ง gain 2/4/8/16 — <strong>ข้อควรระวัง:</strong> output ต้องไม่เกิน VDD — Input 50mV × 16 = 800mV ยังปลอดภัย</p></div>
+    }
+}</code></pre>
+    <p class="explain">🔍 <code>OPAMP_ConfigNonInverting(pos, neg)</code> ระบุ channel เอง — gain ตั้งด้วย R ภายนอก (ไม่ใช่ register) — <code>OPAMP_CalculateGainNonInv(r1, r2)</code> คืนค่า <code>1 + R2/R1</code> ใช้ในโค้ดเพื่อคิด voltage เข้าจริงจาก output</p>
+    </div>
 
-    <div class="step"><h3>ขั้นที่ 4: เปิด/ปิด OPAMP เพื่อประหยัดไฟ</h3>
-    <pre><code class="language-c">    // OPAMP กินไฟ ~200µA — ปิดเมื่อไม่ใช้
-    OPAMP_Enable(OPAMP_CH1);
-    Delay_Ms(10);  // รอ OPAMP settle
+    <div class="step"><h3>ขั้นที่ 3: Inverting Amplifier</h3>
+    <pre><code class="language-c">// วงจร: Output → R2 → CHN0(−),  Input → R1 → CHN0(−),  CHP0(+) → reference
+//       Gain = -(R2/R1)
 
-    // อ่านค่า...
-    uint16_t val = ADC_Read(ADC_CH_PA5);
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    ADC_SimpleInit();
 
-    // ปิด OPAMP เพื่อประหยัดไฟ
-    OPAMP_Disable(OPAMP_CH1);
+    OPAMP_ConfigInverting(OPAMP_CHP0, OPAMP_CHN0);
+    OPAMP_Enable();
 
-    // Sleep หรืองานอื่น...
-    Delay_Ms(5000);</code></pre>
-    <p class="explain">🔍 <code>OPAMP_Disable(ch)</code> — ปิด OPAMP — ลดกระแส — เหมาะกับระบบ battery-powered ที่อ่านค่าเป็นช่วงๆ</p></div>
+    uint32_t r1 = 10000;  // 10 kΩ (input)
+    uint32_t r2 = 20000;  // 20 kΩ (feedback)
+    float gain = OPAMP_CalculateGainInv(r1, r2);  // คืน -(R2/R1) = -2.0
+
+    while(1) {
+        float v_out = ADC_ReadVoltage(ADC_CH_7, 3.3f);
+        // Inverting: v_out = -gain_mag * v_in  → ต้อง bias ที่ reference ก่อน
+        USART_Print("Vout=");
+        USART_PrintNum((int32_t)(v_out * 1000));
+        USART_Print(" mV (gain ");
+        USART_PrintNum((int32_t)(gain * 10));
+        USART_Print(")\r\n");
+
+        Delay_Ms(500);
+    }
+}</code></pre>
+    <p class="explain">🔍 <code>OPAMP_ConfigInverting(pos, neg)</code> กลับเฟสสัญญาณ — <code>OPAMP_CalculateGainInv(r1, r2)</code> คืนค่าติดลบ <code>-(R2/R1)</code> — ในทางปฏิบัติต้อง bias ที่ขา CHP0 ให้อยู่กลาง range (เช่น VDD/2) เพื่อให้ output ไม่ติดลบ rail</p>
+    </div>
+
+    <div class="step"><h3>ขั้นที่ 4: Comparator</h3>
+    <pre><code class="language-c">// วงจร: สัญญาณ → CHP0(+),  threshold → CHN0(−)
+//       output = HIGH เมื่อ V+ > V−,  LOW เมื่อ V+ < V−
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    pinMode(PC0, PIN_MODE_OUTPUT);  // LED status
+
+    OPAMP_ConfigComparator(OPAMP_CHP0, OPAMP_CHN0);
+    OPAMP_Enable();
+
+    while(1) {
+        // Comparator output อ่านผ่าน ADC ch7: ~0V = LOW, ~VDD = HIGH
+        uint16_t raw = ADC_Read(ADC_CH_7);
+        uint8_t  high = (raw > 512);
+
+        digitalWrite(PC0, high ? HIGH : LOW);
+
+        USART_Print(high ? "V+ > V-  (HIGH)\r\n" : "V+ < V-  (LOW)\r\n");
+        Delay_Ms(100);
+    }
+}</code></pre>
+    <p class="explain">🔍 <code>OPAMP_ConfigComparator(pos, neg)</code> ทำงานแบบ open-loop — output swing เกือบเต็ม rail ทำให้สามารถอ่านผ่าน ADC ได้แบบ digital (ค่าใกล้ 0 หรือใกล้ 1023)</p>
+    </div>
+
+    <div class="step"><h3>ขั้นที่ 5: OPAMP + SimpleADC (อ่าน output)</h3>
+    <pre><code class="language-c">// รวม OPAMP กับ SimpleADC เป็น signal chain เดียว
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    ADC_SimpleInit();          // เปิด ADC (no-arg)
+
+    OPAMP_SimpleInit(OPAMP_MODE_VOLTAGE_FOLLOWER);
+    OPAMP_Enable();
+
+    while(1) {
+        // วิธีที่ 1: อ่าน raw แล้วแปลงเอง
+        uint16_t raw = ADC_Read(ADC_CH_7);
+        float v1 = ADC_ToVoltage(raw, 3.3f);
+
+        // วิธีที่ 2: อ่านและแปลงเป็น voltage ทีเดียว
+        float v2 = ADC_ReadVoltage(ADC_CH_7, 3.3f);
+
+        // วิธีที่ 3: อ่านแบบเฉลี่ยเพื่อลด noise
+        uint16_t avg = ADC_ReadAverage(ADC_CH_7, 8);
+
+        USART_Print("raw=");
+        USART_PrintNum(raw);
+        USART_Print(" avg=");
+        USART_PrintNum(avg);
+        USART_Print(" V=");
+        USART_PrintNum((int32_t)(v2 * 1000));
+        USART_Print(" mV\r\n");
+
+        Delay_Ms(500);
+    }
+}</code></pre>
+    <p class="explain">🔍 OPAMP output ต่อภายในกับ ADC ch7 — ใช้ SimpleADC API ทั้ง <code>ADC_SimpleInit()</code>, <code>ADC_Read()</code>, <code>ADC_ReadVoltage()</code> และ <code>ADC_ReadAverage()</code> ได้เลย โดยไม่ต้องตั้งค่า pin เพิ่ม</p>
+    </div>
+
+    <div class="step"><h3>ขั้นที่ 6: สลับโหมด + ประหยัดไฟ + ตรวจสถานะ</h3>
+    <pre><code class="language-c">// Advanced Control: เปลี่ยน mode ขณะทำงาน + ปิดเพื่อประหยัดไฟ
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    ADC_SimpleInit();
+
+    // เริ่มต้นด้วย Voltage Follower
+    OPAMP_SimpleInit(OPAMP_MODE_VOLTAGE_FOLLOWER);
+    OPAMP_Enable();
+
+    uint8_t stage = 0;
+
+    while(1) {
+        if (OPAMP_IsEnabled()) {
+            float v = ADC_ReadVoltage(ADC_CH_7, 3.3f);
+            USART_Print("stage ");
+            USART_PrintNum(stage);
+            USART_Print("  V=");
+            USART_PrintNum((int32_t)(v * 1000));
+            USART_Print(" mV\r\n");
+        }
+
+        Delay_Ms(2000);
+        stage++;
+
+        // สลับโหมดระหว่างทำงาน (OPAMP จะถูก disable ชั่วคราวระหว่างเปลี่ยน)
+        if (stage == 1) {
+            OPAMP_SetMode(OPAMP_MODE_NON_INVERTING);
+        } else if (stage == 2) {
+            OPAMP_SetMode(OPAMP_MODE_COMPARATOR);
+        } else {
+            // เสร็จงาน → ปิดประหยัดไฟ
+            OPAMP_Disable();
+            USART_Print("OPAMP disabled (sleep)\r\n");
+            while(1) { Delay_Ms(1000); }
+        }
+    }
+}</code></pre>
+    <p class="explain">🔍 <code>OPAMP_SetMode(mode)</code> เปลี่ยน mode ขณะทำงาน — <code>OPAMP_IsEnabled()</code> คืน 1/0 ใช้ตรวจสถานะก่อนอ่าน ADC — <code>OPAMP_Disable()</code> (no-arg) ปิด OPAMP เพื่อประหยัดไฟในระบบ battery-powered</p>
+    </div>
 </section>
 
 <section>
     <h2>📋 API Reference</h2>
+    <p>รายการฟังก์ชันทั้งหมดใน <code>SimpleOPAMP.h</code> (Basic + Advanced + Utility):</p>
     <table>
         <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
-        <tr><td><code>OPAMP_SimpleInit(ch, mode)</code></td><td>เริ่มต้น OPAMP</td><td><code>OPAMP_SimpleInit(OPAMP_CH1, OPAMP_MODE_FOLLOWER)</code></td></tr>
-        <tr><td><code>OPAMP_Enable(ch)</code></td><td>เปิด OPAMP (จ่ายไฟ)</td><td><code>OPAMP_Enable(OPAMP_CH1)</code></td></tr>
-        <tr><td><code>OPAMP_Disable(ch)</code></td><td>ปิด OPAMP (ประหยัดไฟ)</td><td><code>OPAMP_Disable(OPAMP_CH1)</code></td></tr>
-        <tr><td><code>OPAMP_ConfigVoltageFollower(ch)</code></td><td>ตั้งเป็น Voltage Follower</td><td><code>OPAMP_ConfigVoltageFollower(OPAMP_CH1)</code></td></tr>
-        <tr><td><code>OPAMP_ConfigPGA(ch, gain)</code></td><td>ตั้ง PGA gain</td><td><code>OPAMP_ConfigPGA(OPAMP_CH1, OPAMP_PGA_8)</code></td></tr>
-        <tr><td><code>OPAMP_GetOutputVoltage(ch)</code></td><td>อ่านแรงดัน output โดยตรง</td><td><code>float v = OPAMP_GetOutputVoltage(OPAMP_CH1)</code></td></tr>
+        <tr><td><code>OPAMP_SimpleInit(mode)</code></td><td>เริ่มต้น OPAMP ตาม mode (ใช้ default channel)</td><td><code>OPAMP_SimpleInit(OPAMP_MODE_VOLTAGE_FOLLOWER)</code></td></tr>
+        <tr><td><code>OPAMP_Enable()</code></td><td>เปิด OPAMP (no-arg)</td><td><code>OPAMP_Enable()</code></td></tr>
+        <tr><td><code>OPAMP_Disable()</code></td><td>ปิด OPAMP เพื่อประหยัดไฟ (no-arg)</td><td><code>OPAMP_Disable()</code></td></tr>
+        <tr><td><code>OPAMP_SetMode(mode)</code></td><td>เปลี่ยน mode ขณะทำงาน</td><td><code>OPAMP_SetMode(OPAMP_MODE_INVERTING)</code></td></tr>
+        <tr><td><code>OPAMP_Init(pos, neg)</code></td><td>init แบบระบุ channel เอง (Advanced)</td><td><code>OPAMP_Init(OPAMP_CHP0, OPAMP_CHN0)</code></td></tr>
+        <tr><td><code>OPAMP_ConfigVoltageFollower(pos)</code></td><td>ตั้งเป็น Voltage Follower (Buffer)</td><td><code>OPAMP_ConfigVoltageFollower(OPAMP_CHP0)</code></td></tr>
+        <tr><td><code>OPAMP_ConfigNonInverting(pos, neg)</code></td><td>ตั้งเป็น Non-Inverting (gain จาก R ภายนอก)</td><td><code>OPAMP_ConfigNonInverting(OPAMP_CHP0, OPAMP_CHN0)</code></td></tr>
+        <tr><td><code>OPAMP_ConfigInverting(pos, neg)</code></td><td>ตั้งเป็น Inverting (gain จาก R ภายนอก)</td><td><code>OPAMP_ConfigInverting(OPAMP_CHP0, OPAMP_CHN0)</code></td></tr>
+        <tr><td><code>OPAMP_ConfigComparator(pos, neg)</code></td><td>ตั้งเป็น Comparator</td><td><code>OPAMP_ConfigComparator(OPAMP_CHP0, OPAMP_CHN0)</code></td></tr>
+        <tr><td><code>OPAMP_SetChannels(pos, neg)</code></td><td>เปลี่ยน input channel ถ้าต้องการ</td><td><code>OPAMP_SetChannels(OPAMP_CHP1, OPAMP_CHN1)</code></td></tr>
+        <tr><td><code>OPAMP_CalculateGainNonInv(r1, r2)</code></td><td>คำนวณ gain Non-Inverting (คืน 1 + R2/R1)</td><td><code>float g = OPAMP_CalculateGainNonInv(10000, 10000)</code></td></tr>
+        <tr><td><code>OPAMP_CalculateGainInv(r1, r2)</code></td><td>คำนวณ gain Inverting (คืน -(R2/R1))</td><td><code>float g = OPAMP_CalculateGainInv(10000, 20000)</code></td></tr>
+        <tr><td><code>OPAMP_CalculateR2NonInv(r1, gain)</code></td><td>คำนวณค่า R2 ที่ต้องการสำหรับ Non-Inverting</td><td><code>OPAMP_CalculateR2NonInv(10000, 5)</code></td></tr>
+        <tr><td><code>OPAMP_CalculateR2Inv(r1, gain)</code></td><td>คำนวณค่า R2 สำหรับ Inverting</td><td><code>OPAMP_CalculateR2Inv(10000, 3)</code></td></tr>
+        <tr><td><code>OPAMP_IsEnabled()</code></td><td>ตรวจสถานะ OPAMP (คืน 1 = เปิด, 0 = ปิด)</td><td><code>if (OPAMP_IsEnabled()) { ... }</code></td></tr>
+        <tr><td><code>OPAMP_GetConfig(&amp;pos, &amp;neg)</code></td><td>อ่านค่า channel ปัจจุบัน</td><td><code>OPAMP_GetConfig(&amp;pos, &amp;neg)</code></td></tr>
     </table>
-    <p><strong>OPAMP Modes:</strong> <code>OPAMP_MODE_FOLLOWER</code>, <code>OPAMP_MODE_PGA</code>, <code>OPAMP_MODE_NON_INVERTING</code>, <code>OPAMP_MODE_INVERTING</code></p>
-    <p><strong>PGA Gains:</strong> <code>OPAMP_PGA_2</code>, <code>OPAMP_PGA_4</code>, <code>OPAMP_PGA_8</code>, <code>OPAMP_PGA_16</code></p>
+    <p><strong>OPAMP Modes จริง:</strong> <code>OPAMP_MODE_VOLTAGE_FOLLOWER</code>, <code>OPAMP_MODE_NON_INVERTING</code>, <code>OPAMP_MODE_INVERTING</code>, <code>OPAMP_MODE_COMPARATOR</code></p>
+    <p><strong>Channel enums จริง:</strong> <code>OPAMP_CHP0</code>, <code>OPAMP_CHP1</code> (positive) / <code>OPAMP_CHN0</code>, <code>OPAMP_CHN1</code> (negative)</p>
+    <p><strong>Gain preset helper:</strong> <code>OPAMP_GAIN_1X</code>, <code>OPAMP_GAIN_2X</code>, <code>OPAMP_GAIN_4X</code>, <code>OPAMP_GAIN_8X</code>, <code>OPAMP_GAIN_16X</code> — ใช้เป็นตัวช่วยคำนวณเท่านั้น (gain จริงขึ้นกับ R ภายนอก)</p>
+    <p><strong>ไม่มีใน API จริง (ห้ามใช้):</strong> ชื่อ channel ปลอม <code>CH1</code> / <code>CH2</code> (จริงคือ <code>CHP0/CHP1/CHN0/CHN1</code>) — ชื่อ mode ปลอม <code>MODE_FOLLOWER</code> (จริงคือ <code>MODE_VOLTAGE_FOLLOWER</code>) และ <code>MODE_PGA</code> — ฟังก์ชันปลอม <code>ConfigPGA</code>, <code>PGA_*</code>, <code>GetOutputVoltage</code> — ทั้งหมดนี้เมื่อเติม prefix <code>OPAMP_</code> ข้างหน้าจะเป็นชื่อปลอมที่ไม่มีใน header จริง</p>
 </section>
 
 <section>
     <h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
     <table>
         <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
-        <tr><td>OPAMP output เป็น 0V ตลอด</td><td>ลืมเรียก <code>OPAMP_Enable()</code></td><td>ต้องเปิด OPAMP ด้วย <code>OPAMP_Enable()</code> หลังจาก init</td></tr>
-        <tr><td>Output ติดเพดาน VDD</td><td>Input voltage เกิน common-mode range หรือ gain สูงเกิน</td><td>เช็ค input voltage — output = input × gain — ต้องไม่เกิน VDD-0.1V</td></tr>
-        <tr><td>Compile error: OPAMP ไม่มี</td><td>CH32V003 รุ่นนั้นไม่มี OPAMP</td><td>เช็ค datasheet — OPAMP มีเฉพาะบางรุ่น — ใช้ภายนอกแทน</td></tr>
-        <tr><td>สัญญาณ noise มาก</td><td>ไม่ได้ต่อ decoupling cap หรือ PCB layout ไม่ดี</td><td>ต่อ 100nF cap ใกล้ VDD pin — แยก analog ground</td></tr>
-        <tr><td>PGA output ไม่ตรง gain</td><td>Input offset voltage (~5mV typ)</td><td>หักล้าง offset ใน software — วัด output เมื่อ input = 0V</td></tr>
+        <tr><td>OPAMP output เป็น 0V ตลอด</td><td>ลืมเรียก <code>OPAMP_Enable()</code> หลัง init</td><td>ต้องเรียก <code>OPAMP_Enable()</code> (no-arg) เสมอหลัง <code>OPAMP_SimpleInit()</code> หรือ <code>OPAMP_ConfigXXX()</code></td></tr>
+        <tr><td>Output ติดเพดาน (clipping ที่ VDD หรือ 0V)</td><td>gain สูงเกิน ทำให้ output เกิน swing range</td><td>ลด gain R2/R1 ให้ <code>Vin × gain</code> ไม่เกิน VDD−0.1V — ใช้ <code>OPAMP_CalculateGainNonInv()</code> ช่วยคำนวณก่อน</td></tr>
+        <tr><td>Compile error: undeclared identifier (ชื่อ channel/mode ปลอม เช่น <code>CH1</code>, <code>MODE_FOLLOWER</code>, <code>MODE_PGA</code>)</td><td>ใช้ชื่อ enum ปลอมที่ไม่มีใน header จริง</td><td>เปลี่ยนเป็นชื่อจริง: <code>OPAMP_MODE_VOLTAGE_FOLLOWER</code> + channel <code>OPAMP_CHP0/CHN0</code></td></tr>
+        <tr><td>Compile error: too many arguments to <code>OPAMP_Enable()</code></td><td>เรียก <code>OPAMP_Enable(ch)</code> ทั้งที่จริงเป็น no-arg</td><td>เรียก <code>OPAMP_Enable()</code> ไม่ต้องส่ง channel (OPAMP มีตัวเดียว)</td></tr>
+        <tr><td>Compile error: <code>OPAMP_SimpleInit</code> รับ 2 args</td><td>เรียก <code>OPAMP_SimpleInit(ch, mode)</code> ทั้งที่จริงรับ mode เดียว</td><td>เรียก <code>OPAMP_SimpleInit(mode)</code> — ถ้าต้องการเลือก channel ใช้ <code>OPAMP_Init(pos, neg)</code> แทน</td></tr>
+        <tr><td>สัญญาณ noise มาก</td><td>ไม่ได้ต่อ decoupling cap หรือ PCB layout ไม่ดี</td><td>ต่อ 100nF cap ใกล้ VDD pin — แยก analog ground — ใช้ <code>ADC_ReadAverage()</code> เฉลี่ยค่าหลายครั้ง</td></tr>
+        <tr><td>Non-Inverting output ไม่ตรง gain</td><td>โหลด R ภายนอกไม่ตรงค่า / หรือ offset voltage (~5mV typ)</td><td>ใช้ <code>OPAMP_CalculateGainNonInv(r1, r2)</code> ตรวจค่า R — calibrate offset ใน software โดยวัด output เมื่อ input = 0V</td></tr>
     </table>
-</section>
-
-<section>
-    <h2>🛠️ สร้าง Product: เครื่องวัด pH</h2>
-    <p>ใช้ OPAMP Buffer + ADC อ่านค่า pH probe — แสดงผลผ่าน USART</p>
-    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
-#include "SimpleHAL.h"
-
-// pH Calibration Constants
-#define PH_SLOPE     (-59.16f)   // mV/pH @25°C (Nernst)
-#define PH7_MV       0.0f        // Offset at pH 7 (calibrated)
-#define ADC_VREF     3.3f
-
-int main(void)
-{
-    SystemCoreClockUpdate();
-    Timer_Init();
-    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
-    ADC_SimpleInit();
-
-    // pH probe มี impedance สูงมาก (~100MΩ)
-    // ต้องใช้ Voltage Follower เพื่อ impedance matching
-    OPAMP_SimpleInit(OPAMP_CH1, OPAMP_MODE_FOLLOWER);
-    OPAMP_Enable(OPAMP_CH1);
-
-    USART_Print("pH Meter Ready\r\n");
-    USART_Print("Connect pH probe to PA4\r\n");
-
-    while(1)
-    {
-        // อ่าน ADC จาก OPAMP output
-        uint16_t raw = ADC_Read(ADC_CH_PA5);
-        float voltage = ADC_ToVoltage(raw, ADC_VREF);
-
-        // pH probe output: ~ -414mV ถึง +414mV (pH 0-14 @ 25°C)
-        // ค่าเป็นลบ — ต้อง bias เข้า range 0-3.3V ด้วย R divider
-
-        // คำนวณ pH จากแรงดัน
-        // pH = 7.0 + (voltage_mv - PH7_MV) / PH_SLOPE
-        float mv = (voltage * 1000.0f) - 1650.0f;  // Remove 1.65V bias
-        float ph = 7.0f + (mv - PH7_MV) / PH_SLOPE;
-
-        USART_Print("pH: ");
-        USART_PrintNum((int32_t)ph);
-        USART_Print(".");
-        USART_PrintNum((int32_t)((ph - (int32_t)ph) * 100));
-        USART_Print("  ADC: ");
-        USART_PrintNum(raw);
-        USART_Print("\r\n");
-
-        Delay_Ms(2000);
-    }
-}</code></pre>
-    <p><strong>หมายเหตุ:</strong> pH probe ให้สัญญาณ bipolar (±414mV) — ต้องใช้ voltage divider bias ให้เป็น 0-3.3V — ตัวอย่างนี้สมมติว่ามีวงจร bias ภายนอก</p>
-</section>
-
-<section>
-    <h2>🛠️ สร้าง Product: ขยายสัญญาณ PIR Motion Sensor (RE200B / D202S)</h2>
-    <p>ใช้ OPAMP ขยายสัญญาณเล็กๆ จากเซนเซอร์ตรวจจับความร้อน <strong>RE200B</strong> หรือ <strong>D202S</strong> (~0.5–2mV เวลามีคนเดินผ่าน) ให้ใหญ่ขึ้น ~100 เท่า ก่อนส่งเข้า ADC</p>
-
-    <h3>รู้จัก RE200B / D202S ก่อน</h3>
-    <p>เซนเซอร์ PIR แบบนี้เป็น <strong>element ตรวจจับความร้อนล้วนๆ</strong> — ต่างจากโมดูล HC-SR501 ที่มีวงจรเปรียบเทียบในตัว — RE200B/D202S ให้สัญญาณออกมาเป็นแรงดันไฟฟ้าที่ <strong>เล็กมาก</strong> (~0.5–2mV) ถ้าไม่ขยาย ADC จะอ่านไม่ออก</p>
-    <ul>
-      <li><strong>RE200B:</strong> มี 2 ขา (Drain=ขา1, Source=ขา2) — ใช้คู่กับ Fresnel lens</li>
-      <li><strong>D202S/D203S (Murata):</strong> มี 3 ขา (Drain=ขา1, Source=ขา2, Ground=ขา3) — เหมือน RE200B แต่เพิ่มขา Ground ป้องกันสัญญาณรบกวน</li>
-    </ul>
-
-    <h3>ภาพรวมการต่อวงจร</h3>
-    <pre class="ascii-circuit">
-         ┌─────────────────────────────────────────────┐
-         │                                             │
-         │  RE200B/D202S           CH32V003             │
-         │  ┌─────────┐            ┌───────────────┐    │
-         │  │ Pin1 ────┼──── GND   │ PD5(OP_IN+) ──┼──┐ │
-         │  │(Drain)  │            │              │  │ │
-         │  │         │            │ PA6(OP_IN-) ─┼─┐│ │ │
-         │  │ Pin2 ───┼┐           │              │ ││ │ │
-         │  │(Source) ││           │ PA5(OP_OUT) ─┼─┼┘ │ │
-         │  └─────────┘│           │              │ │  │ │
-         │             │ 10kΩ      │ ADC(ภายใน)  ←┘ │  │ │
-         │             ├──/\/\/──── VDD/2 (1.65V)   │  │ │
-         │             │                            │  │ │
-         │             │    1µF    ┌─────┐          │  │ │
-         │             ├────||────┤ 1MΩ ├──── GND   │  │ │
-         │             │          └─────┘           │  │ │
-         │             └────────────────────────────┘  │ │
-         │                                │            │ │
-         │             Rf=1MΩ             │            │ │
-         │      PA6 ──/\/\/───────────────┘ PA5       │ │
-         │                                             │ │
-         │      Rg=10kΩ                               │ │
-         │      PA6 ──/\/\/──── GND                   │ │
-         │                                             │ │
-         │  D202S ขา3(Ground) ──── GND                │ │
-         └─────────────────────────────────────────────┘ │
-           ↑ สัญญาณ PIR                                      │
-           จากการเคลื่อนไหว                              │ OPAMP ขยาย
-           (~0.5-2mV, เปลี่ยนช้าๆ)                         │ ~101 เท่า
-                                                           │
-         หมายเหตุ: Rf=1MΩ, Rg=10kΩ คือตัวต้านทานที่                     │
-         กำหนดอัตราขยาย = 1 + 1MΩ/10kΩ = 101 เท่า          │
-         └─────────────────────────────────────────────┘
-    </pre>
-
-    <h3>วิธีต่อทีละขั้น</h3>
-    <ol>
-      <li><strong>ต่อไฟเลี้ยง PIR:</strong> ขา Source (ขา 2) ของ RE200B/D202S ต่อ R 10kΩ → ไปหาไฟกึ่งกลาง 1.65V (VDD/2)</li>
-      <li><strong>ต่อกราวด์ PIR:</strong> ขา Drain (ขา 1) ต่อ GND — ถ้าเป็น D202S ให้ต่อขา 3 (Ground) ไป GND ด้วย เพื่อลดสัญญาณรบกวน</li>
-      <li><strong>ตัดไฟกระแสตรง (DC block):</strong> ต่อ C 1µF (ตัวเก็บประจุ) ระหว่างขา Source กับขา PD5 ของ MCU — ตัวเก็บประจุนี้ทำหน้าที่ <strong>กั้นไฟกระแสตรงไม่ให้เข้า OPAMP</strong> แต่ยอมให้สัญญาณเคลื่อนไหวผ่านไปได้ เหมือนประตูที่เปิดให้เฉพาะคนขาเข้าเท่านั้น</li>
-      <li><strong>ตั้งจุดอ้างอิง:</strong> ต่อ R 1MΩ จาก PD5 ลง GND — ทำหน้าที่ดึงแรงดันที่ PD5 ให้กลับมาที่ 0V เวลาไม่มีสัญญาณ</li>
-      <li><strong>ตั้งอัตราขยาย:</strong>
-        <ul>
-          <li>ต่อ R 1MΩ (Rf) ระหว่าง PA5 (OPAMP output) ↔ PA6 (OPAMP input ลบ)</li>
-          <li>ต่อ R 10kΩ (Rg) จาก PA6 ลง GND</li>
-          <li>Rf+Rg นี้กำหนดว่า OPAMP จะขยายสัญญาณกี่เท่า — สูตร: ขยาย = 1 + Rf/Rg = 1 + 1MΩ/10kΩ = <strong>101 เท่า</strong></li>
-          <li>เช่น สัญญาณเข้า 1mV → ได้ออกมา ~101mV</li>
-        </ul>
-      </li>
-      <li><strong>ต่อไฟกึ่งกลาง 1.65V (VDD/2):</strong>
-        <ul>
-          <li>ใช้ R 10kΩ ต่อจาก 3.3V ต่อกับ R 10kΩ อีกตัว ต่อลง GND — จุดต่อระหว่าง R สองตัวนี้จะได้ไฟ ~1.65V</li>
-          <li>ไฟ 1.65V นี้ใช้จ่ายให้ R_load ของ PIR (ข้อ 1)</li>
-        </ul>
-      </li>
-      <li><strong>อ่านค่าด้วย ADC:</strong> PA5 (OPAMP output) ต่อภายในกับ ADC อยู่แล้ว — ไม่ต้องต่อสาย — เขียนโค้ดอ่าน ADC_Read() ได้เลย</li>
-    </ol>
-
-    <h3>ทำไมต้องมีอุปกรณ์พวกนี้?</h3>
-    <table>
-      <tr><th>อุปกรณ์</th><th>หน้าที่ (ภาษาชาวบ้าน)</th><th>ถ้าไม่มีจะเกิดอะไรขึ้น</th></tr>
-      <tr><td><strong>C 1µF</strong></td><td>กันไฟกระแสตรง — ให้เฉพาะสัญญาณ "การเคลื่อนไหว" ผ่าน</td><td>OPAMP จะขยายไฟนิ่ง 1.65V ไปด้วย → output ติดเพดาน 3.3V ตลอด</td></tr>
-      <tr><td><strong>R 1MΩ</strong></td><td>ดึงแรงดันที่ขา OPAMP กลับลง GND เวลาไม่มีสัญญาณ</td><td>แรงดันที่ขา OPAMP จะลอย ไม่แน่นอน</td></tr>
-      <tr><td><strong>Rf=1MΩ, Rg=10kΩ</strong></td><td>กำหนดอัตราขยาย 101 เท่า</td><td>สัญญาณเล็กเกินไป → ADC อ่านไม่ออก</td></tr>
-      <tr><td><strong>ไฟ 1.65V</strong></td><td>จ่ายไฟเลี้ยงให้ PIR element ทำงานที่จุดกึ่งกลาง</td><td>PIR element ไม่มีไฟเลี้ยง → ไม่ทำงาน</td></tr>
-    </table>
-
-    <h3>ตารางต่อขา</h3>
-    <table class="wiring-table">
-      <thead>
-        <tr><th>จาก</th><th>→</th><th>ไปที่</th><th>สายอะไร</th><th>ทำไมต้องต่อ</th></tr>
-      </thead>
-      <tbody>
-        <tr><td>RE200B/D202S ขา 1 (Drain)</td><td>→</td><td>GND</td><td>สายไฟ</td><td>กราวด์ให้ PIR element</td></tr>
-        <tr><td>RE200B/D202S ขา 2 (Source)</td><td>→</td><td>R 10kΩ → ไฟ 1.65V</td><td>สายไฟ</td><td>จ่ายไฟเลี้ยงให้ PIR</td></tr>
-        <tr><td>RE200B/D202S ขา 2 (Source)</td><td>→</td><td>C 1µF → R 1MΩ → PD5(OP_IN+)</td><td>สายไฟ</td><td>ส่งสัญญาณ PIR เข้า OPAMP</td></tr>
-        <tr><td>D202S ขา 3 (Ground)</td><td>→</td><td>GND</td><td>สายไฟ</td><td>ลดสัญญาณรบกวน (RE200B 2 ขาไม่มี)</td></tr>
-        <tr><td>PD5 (OPAMP_IN+)</td><td>←</td><td>สัญญาณ PIR (ผ่าน C+R)</td><td>ภายใน</td><td>ขาเข้าบวกของ OPAMP</td></tr>
-        <tr><td>PA6 (OPAMP_IN-)</td><td>↔</td><td>Rf=1MΩ → PA5, Rg=10kΩ → GND</td><td>สาย + breadboard</td><td>วงจรป้อนกลับ กำหนดอัตราขยาย</td></tr>
-        <tr><td>PA5 (OPAMP_OUT)</td><td>→</td><td>ADC ภายใน MCU</td><td>ภายใน (ไม่ต้องต่อสาย)</td><td>OPAMP ต่อกับ ADC อัตโนมัติ</td></tr>
-        <tr><td>3.3V</td><td>→</td><td>R 10kΩ + R 10kΩ → GND (จ่ายไฟ 1.65V)</td><td>สาย + breadboard</td><td>สร้างไฟกึ่งกลาง 1.65V จาก 3.3V</td></tr>
-      </tbody>
-    </table>
-
-    <h3>สรุปภาพรวม</h3>
-    <p>สัญญาณจากการเคลื่อนไหว (~1mV) → C 1µF ตัดไฟนิ่งทิ้ง → OPAMP ขยาย 101 เท่า → ได้ ~100mV → ADC อ่านค่า → ถ้าค่าเปลี่ยนไปเรื่อยๆ แปลว่ามีการเคลื่อนไหว</p>
-    <p><strong>RE200B</strong> (2 ขา) และ <strong>D202S</strong> (3 ขา) ใช้แทนกันได้ — D202S มีขา Ground เพิ่มมาป้องกันสัญญาณรบกวน — วงจรเดียวกัน ต่อขา 3 เพิ่มลง GND</p>
-
-    <h3>💻 โค้ดอ่านสัญญาณ PIR ผ่าน OPAMP</h3>
-    <pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
-#include "SimpleHAL.h"
-
-// ค่า threshold สำหรับตรวจจับ motion
-// RE200B + OPAMP gain 101x → output ~50-200mV peak
-#define MOTION_THRESHOLD_MV  30   // mV เปลี่ยนแปลง
-
-void setup_bias(void) {
-    // สร้าง VDD/2 = 1.65V สำหรับ bias RE200B
-    // ใช้ PWM + RC filter หรือ R divider ภายนอก
-    pinMode(PC1, PIN_MODE_OUTPUT);
-    digitalWrite(PC1, HIGH);  // ใช้ digital output + R divider
-}
-
-int main(void) {
-    SystemCoreClockUpdate();
-    Timer_Init();
-    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
-    ADC_SimpleInit();
-
-    // OPAMP Non-Inverting — gain = 1 + Rf/Rg
-    OPAMP_SimpleInit(OPAMP1, OPAMP_MODE_NON_INVERTING);
-    OPAMP_Enable(OPAMP1);
-
-    USART_Print("PIR RE200B Amplifier Ready\r\n");
-
-    uint16_t last_raw = 0;
-    uint16_t baseline = 2048;  // ADC 12-bit, VDD/2 ≈ 2048
-    uint8_t motion = 0;
-
-    while(1) {
-        // อ่าน ADC จาก OPAMP output
-        uint16_t raw = ADC_Read(ADC_CH_PA5);
-        float mv = (float)raw * 3300.0f / 4095.0f;
-
-        if(last_raw > 0) {
-            int16_t diff = (int16_t)raw - (int16_t)last_raw;
-            int16_t diff_mv = (int16_t)(mv - (last_raw * 3300.0f / 4095.0f));
-
-            if(abs(diff) > (MOTION_THRESHOLD_MV * 4095 / 3300)) {
-                if(!motion) {
-                    motion = 1;
-                    USART_Print("🔥 Motion detected! (");
-                    USART_PrintNum(diff_mv);
-                    USART_Print(" mV change)\r\n");
-                }
-            } else {
-                motion = 0;
-            }
-        }
-
-        USART_Print("ADC: ");
-        USART_PrintNum(raw);
-        USART_Print(" (");
-        USART_PrintFloat(mv, 1);
-        USART_Print(" mV)");
-        USART_Print(motion ? " 🔥\r\n" : "\r\n");
-
-        last_raw = raw;
-        Delay_Ms(50);  // sample 20Hz
-    }
-}</code></pre>
-    <p><strong>หลักการ:</strong> ADC อ่านค่า amplified signal ทุก 50ms — เปรียบเทียบกับค่าก่อนหน้า — ถ้าเปลี่ยนแปลงเกิน threshold → มี motion — RE200B ให้สัญญาณ AC เมื่อมีการเคลื่อนไหวเท่านั้น (ถ้านั่งนิ่ง output จะกลับมาที่ baseline)</p>
-    <p><strong>ปรับปรุงเพิ่มเติม:</strong> ใช้ค่าเฉลี่ย running average ลด noise — ใช้ HPF digital cutoff 0.5Hz — ปรับ threshold ตามสภาพแวดล้อมอัตโนมัติ (adaptive threshold)</p>
-</section>
-
-<section>
-    <h2>🛠️ สร้าง Product: เครื่องวัดอุณหภูมิแบบไม่สัมผัสด้วย Thermopile + OPAMP</h2>
-    <p>ใช้ OPAMP PGA + thermopile sensor (เช่น <strong>MLX90614</strong> หรือ <strong>TPS-334</strong>) — ขยายสัญญาณ voltage ขนาดเล็ก (~µV/°C) ก่อนเข้า ADC — วัดอุณหภูมิวัตถุระยะไกล</p>
-
-    <pre class="ascii-circuit">
-    Thermopile + OPAMP PGA
-    ┌──────────────────────────────────┐
-    │  Thermopile (TPS-334)            │
-    │  ┌──────────┐                    │
-    │  │ +OUT ────┤─── OPAMP_IN+ (PD5) │
-    │  │ -OUT ────┤─── GND             │
-    │  │ VCC ─────┤─── 3.3V            │
-    │  └──────────┘                    │
-    │                                  │
-    │  OPAMP = PGA Gain 16x            │
-    │  Output → ADC                    │
-    │                                  │
-    │  Resolution: ~2.5µV/step         │
-    │  (3.3V / 4095 / 16)              │
-    └──────────────────────────────────┘
-    </pre>
-
-    <table class="wiring-table">
-      <thead>
-        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
-      </thead>
-      <tbody>
-        <tr><td>PD5 (OPAMP1_IN+)</td><td>←</td><td>Thermopile +OUT</td><td>—</td><td>สัญญาณ ~10-50µV/°C</td></tr>
-        <tr><td>PA5 (OPAMP1_OUT)</td><td>→</td><td>ADC ภายใน</td><td>—</td><td>PGA gain=16 → ~0.16-0.8mV/°C</td></tr>
-      </tbody>
-    </table>
-    <p><strong>Thermopile</strong> วัดความแตกต่างของอุณหภูมิระหว่างวัตถุกับ ambient — สร้างแรงดันตามความต่างอุณหภูมิ (Seebeck effect) — สัญญาณเล็กมาก (~10-50µV/°C) — OPAMP PGA ขยาย 16x → ADC อ่านค่าความต่างได้ละเอียดถึง ~2.5µV/step — ใช้สำหรับวัดอุณหภูมิแบบไม่สัมผัส (ear thermometer, temperature gun)</p>
 </section>
 
 <section>
     <h2>✏️ ลองทำดู</h2>
     <ol>
-        <li>เปลี่ยนจาก Follower เป็น PGA gain 8x — ใช้กับเซ็นเซอร์ที่ให้สัญญาณอ่อน (เช่น Thermocouple type-K ~40µV/°C)</li>
-        <li>ใช้ OPAMP_CH1 เป็น Follower + OPAMP_CH2 เป็น PGA (ถ้ามี 2 channels) — สร้าง signal chain 2 stage</li>
-        <li>วัด offset voltage ของ OPAMP — input = GND — อ่าน ADC — offset ควรน้อยกว่า 10mV — ถ้าเกินให้ calibrate ใน software</li>
+        <li><strong>Buffer เซ็นเซอร์ + อ่าน ADC:</strong> ใช้ OPAMP เป็น Voltage Follower ให้เซ็นเซอร์ที่มี output impedance สูง (เช่น piezo, pH probe) แล้วอ่านค่าด้วย <code>ADC_ReadVoltage(ADC_CH_7, 3.3f)</code> แสดงเป็น mV ผ่าน USART</li>
+        <li><strong>Comparator สั่ง LED:</strong> ใช้ <code>OPAMP_ConfigComparator(OPAMP_CHP0, OPAMP_CHN0)</code> เปรียบเทียบสัญญาณกับ threshold — อ่าน output ที่ ADC ch7 — ถ้าค่าเกินกึ่งกลางให้ติด LED ที่ PC0 ดับถ้าต่ำกว่า</li>
+        <li><strong>ขยายสัญญาณเสียง/noise เล็ก:</strong> ใช้ <code>OPAMP_ConfigNonInverting(OPAMP_CHP0, OPAMP_CHN0)</code> ขยายสัญญาณจาก mic หรือ noise ที่ประมาณไว้ — คำนวณ R1/R2 ด้วย <code>OPAMP_CalculateR2NonInv(r1, desired_gain)</code> ให้ได้ gain ที่เหมาะสม แล้วอ่านค่า ADC แสดงผล</li>
     </ol>
+    <p>📝 <a href="ch13_answers.html">ดูเฉลย →</a></p>
 </section>
 
 <nav class="bottom-nav">

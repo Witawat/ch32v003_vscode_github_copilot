@@ -108,8 +108,8 @@ int main(void) {
     PCF8574_WritePort(&pcf, state);
 
     // ตั้งทีละบิต
-    PCF8574_WritePin(&pcf, 0, 0);  // P0=LOW (LED1 ON)
-    PCF8574_WritePin(&pcf, 1, 1);  // P1=HIGH (LED2 OFF)</code></pre>
+    PCF8574_Write(&pcf, 0, 0);  // P0=LOW (LED1 ON)
+    PCF8574_Write(&pcf, 1, 1);  // P1=HIGH (LED2 OFF)</code></pre>
 <p class="explain">🔍 <code>PCF8574_WritePort(&pcf, value)</code> — เขียน 8-bit พร้อมกัน (1 byte = 8 pins)</p></div>
 
 <div class="step"><h3>ขั้นที่ 3: Input — อ่านปุ่ม + Interrupt</h3>
@@ -122,19 +122,19 @@ int main(void) {
         if(!digitalRead(PC3)) {
             uint8_t pins = PCF8574_ReadPort(&pcf);
 
-            if(PCF8574_ReadPin(&pcf, 2) == 0) {
+            if(PCF8574_Read(&pcf, 2) == 0) {
                 USART_Println("Button 1 pressed!");
-                PCF8574_WritePin(&pcf, 0, 0);
+                PCF8574_Write(&pcf, 0, 0);
             }
-            if(PCF8574_ReadPin(&pcf, 3) == 0) {
+            if(PCF8574_Read(&pcf, 3) == 0) {
                 USART_Println("Button 2 pressed!");
-                PCF8574_WritePin(&pcf, 0, 1);
+                PCF8574_Write(&pcf, 0, 1);
             }
         }
         Delay_Ms(10);
     }
 }</code></pre>
-<p class="explain">🔍 <code>PCF8574_ReadPort(&pcf)</code> — อ่านสถานะ 8-bit, <code>PCF8574_ReadPin(&pcf, n)</code> — อ่านทีละ pin</p></div>
+<p class="explain">🔍 <code>PCF8574_ReadPort(&pcf)</code> — อ่านสถานะ 8-bit, <code>PCF8574_Read(&pcf, n)</code> — อ่านทีละ pin</p></div>
 </section>
 
 <section><h2>📋 API Reference</h2>
@@ -143,9 +143,9 @@ int main(void) {
     <tr><td><code>PCF8574_Init(&pcf, addr)</code></td><td>เริ่มต้น IO expander</td><td><code>PCF8574_Init(&pcf, 0x20)</code></td></tr>
     <tr><td><code>PCF8574_WritePort(&pcf, value)</code></td><td>เขียน output 8-bit</td><td><code>PCF8574_WritePort(&pcf, 0x55)</code></td></tr>
     <tr><td><code>PCF8574_ReadPort(&pcf)</code></td><td>อ่าน input 8-bit</td><td><code>uint8_t v = PCF8574_ReadPort(&pcf)</code></td></tr>
-    <tr><td><code>PCF8574_WritePin(&pcf, pin, val)</code></td><td>ตั้ง output 1 pin</td><td><code>PCF8574_WritePin(&pcf, 3, 1)</code></td></tr>
-    <tr><td><code>PCF8574_ReadPin(&pcf, pin)</code></td><td>อ่าน input 1 pin</td><td><code>if(PCF8574_ReadPin(&pcf, 2) == 0)</code></td></tr>
-    <tr><td><code>PCF8574_TogglePin(&pcf, pin)</code></td><td>สลับสถานะ pin</td><td><code>PCF8574_TogglePin(&pcf, 0)</code></td></tr>
+    <tr><td><code>PCF8574_Write(&pcf, pin, val)</code></td><td>ตั้ง output 1 pin</td><td><code>PCF8574_Write(&pcf, 3, 1)</code></td></tr>
+    <tr><td><code>PCF8574_Read(&pcf, pin)</code></td><td>อ่าน input 1 pin</td><td><code>if(PCF8574_Read(&pcf, 2) == 0)</code></td></tr>
+    <tr><td><code>PCF8574_Toggle(&pcf, pin)</code></td><td>สลับสถานะ pin</td><td><code>PCF8574_Toggle(&pcf, 0)</code></td></tr>
 </table>
 </section>
 

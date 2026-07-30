@@ -62,32 +62,34 @@ RAM:    1892  / 2048  bytes  (92%)  [Free: 156  bytes]
 
 <section>
     <h2>📚 2. Read-Out Protection (ROP) — ล็อกเฟิร์มแวร์</h2>
-    <p>ป้องกันไม่ให้ใครอ่านเฟิร์มแวร์จากชิปผ่าน WCH-Link — CH32V003 มี 3 ระดับ:</p>
+    <p>ป้องกันไม่ให้ใครอ่านเฟิร์มแวร์จากชิปผ่าน WCH-Link — CH32V003 ROP เป็น binary (ENABLE/DISABLE):</p>
     <table>
         <tr><th>ระดับ</th><th>อ่าน Flash</th><th>เขียน Flash</th><th>Debug (GDB)</th><th>ใช้ตอน</th></tr>
-        <tr><td>ROP=0 (default)</td><td>✅ ได้</td><td>✅ ได้</td><td>✅ ได้</td><td>Development</td></tr>
-        <tr><td>ROP=1</td><td>❌ ไม่ได้</td><td>✅ ได้ (ผ่าน user code)</td><td>❌ ไม่ได้</td><td>Pre-production</td></tr>
-        <tr><td>ROP=2</td><td>❌ ไม่ได้</td><td>❌ ไม่ได้</td><td>❌ ไม่ได้</td><td>⚠️ เปลี่ยนไม่ได้อีก!</td></tr>
+        <tr><td>ROP=DISABLE (default)</td><td>✅ ได้</td><td>✅ ได้</td><td>✅ ได้</td><td>Development</td></tr>
+        <tr><td>ROP=ENABLE</td><td>❌ ไม่ได้</td><td>❌ ไม่ได้</td><td>❌ ไม่ได้</td><td>Production</td></tr>
     </table>
 
-    <pre><code class="language-c">#include "SimpleFlash.h"
+    <pre><code class="language-c">#include "ch32v00x_flash.h"
 
 void enable_readout_protection(void) {
     FLASH_Unlock();
     FLASH_EraseOptionBytes();
-    FLASH_EnableROP();       // ROP=1
-    // FLASH_EnableROP2();   // ROP=2 — ระวัง! เปลี่ยนกลับไม่ได้
+    FLASH_ReadOutProtection(ENABLE);   // ล็อกชิป อ่าน Flash ไม่ได้
     FLASH_Lock();
     // ต้อง reset ถึงจะมีผล
     NVIC_SystemReset();
 }
 
-// เรียกครั้งเดียวตอน production programming
-// หลังล็อก → WCH-Link อ่านเฟิร์มแวร์ไม่ได้
-// แต่ยังอัปเดตเฟิร์มแวร์ได้ผ่าน bootloader (ถ้ามี)</code></pre>
+void disable_readout_protection(void) {
+    FLASH_Unlock();
+    FLASH_EraseOptionBytes();
+    FLASH_ReadOutProtection(DISABLE);  // ปลดล็อก (ล้าง Flash ทั้งหมด!)
+    FLASH_Lock();
+    NVIC_SystemReset();
+}</code></pre>
 
     <div class="callout callout-err">
-        <strong>⚠️ ROP=2:</strong> เมื่อตั้งแล้ว แฟลชผ่าน WCH-Link ไม่ได้อีก — ใช้เมื่อสินค้าพร้อมขายเท่านั้น — ถ้าต้องอัปเดตเฟิร์มแวร์ภายหลัง ต้องมี bootloader ตั้งแต่แรก
+        <strong>⚠️ ข้อควรระวัง:</strong> การปลดล็อก ROP จะล้าง Flash ทั้งหมด — ใช้เมื่อต้องการ reprogram เท่านั้น — ฟังก์ชันมีเพียง <code>FLASH_ReadOutProtection(ENABLE/DISABLE)</code> แบบ binary ไม่มี multi-level
     </div>
 </section>
 
@@ -254,7 +256,7 @@ NVIC_EnableIRQ(PVD_IRQn);</code></pre>
     <h2>⚠️ ข้อผิดพลาดที่พบบ่อยในการผลิต</h2>
     <table>
         <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
-        <tr><td>ล็อก ROP=2 แล้วอัปเดตเฟิร์มแวร์ไม่ได้</td><td>ไม่มี bootloader</td><td>ต้องมี bootloader ก่อนตั้ง ROP=2 — มิฉะนั้นชิปใช้ได้แค่ครั้งเดียว</td></tr>
+        <tr><td>ล็อก ROP แล้วอัปเดตเฟิร์มแวร์ไม่ได้</td><td>ไม่มี bootloader</td><td>ต้องมี bootloader ก่อนตั้ง ROP — มิฉะนั้นต้องปลดล็อก (ล้าง Flash ทั้งหมด) แล้ว reprogram</td></tr>
         <tr><td>10% ของบอร์ดไม่ทำงาน</td><td>Batch PCB มี defect, solder joint ไม่ดี</td><td>เพิ่ม production test ทุกบอร์ดก่อนส่ง</td></tr>
         <tr><td>ลูกค้าคืนสินค้า — "เปิดไม่ติด"</td><td>ไฟแบตหมดตั้งแต่ในโกดัง</td><td>ใช้ Deep Sleep ระหว่าง shipping, ใส่ battery tab</td></tr>
         <tr><td>Flash config อ่านค่าเริ่มต้นทุกครั้ง</td><td>ลืม init Flash หรือ .data section ทับ config</td><td>จอง page สุดท้ายใน linker script</td></tr>
@@ -289,7 +291,7 @@ USART_Println(firmware_version);</code></pre>
     <ol>
         <li>สร้าง release build — ปิดทุก print macro → เช็ค Flash/RAM ที่ประหยัดได้</li>
         <li>เขียน production test firmware — รันบนบอร์ด 3 บอร์ด → เทียบค่า ADC ว่าต่างกันไม่เกิน ±5%</li>
-        <li>ตั้ง ROP=1 — ทดสอบว่ายังแฟลชเฟิร์มแวร์ใหม่ได้ แต่ WCH-Link อ่านกลับไม่ได้</li>
+        <li>ตั้ง ROP — ทดสอบว่าปลดล็อกแล้วล้าง Flash แล้วแฟลชใหม่ได้ตามปกติ</li>
         <li>ออกแบบ bootloader แบบง่าย — รับเฟิร์มแวร์ผ่าน USART (binary) → เขียนที่ address 0x800 → jump</li>
     </ol>
 </section>

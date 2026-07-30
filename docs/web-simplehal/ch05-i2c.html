@@ -60,8 +60,8 @@ flowchart TD
     <table>
         <tr><th>ชื่อ Config</th><th>SCL</th><th>SDA</th></tr>
         <tr><td>I2C_PINS_DEFAULT</td><td>PC2</td><td>PC1</td></tr>
+        <tr><td>I2C_PINS_PARTIAL_REMAP</td><td>PD2</td><td>PD1</td></tr>
         <tr><td>I2C_PINS_REMAP</td><td>PD0</td><td>PD1</td></tr>
-        <tr><td>I2C_PINS_PARTIAL_REMAP</td><td>PD0</td><td>PD1</td></tr>
     </table>
     <div class="callout callout-warn">
         <strong>สำคัญ:</strong> SOP-8 ใช้ได้เฉพาะ DEFAULT เท่านั้น ต้องต่อตัวต้านทาน pull-up 4.7k&Omega; ภายนอก
@@ -128,7 +128,7 @@ flowchart TD
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    USART_SimpleInit(USART_115200);
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
     I2C_SimpleInit(I2C_100KHZ, I2C_PINS_DEFAULT);
 
     uint8_t write_data = 0x42;
@@ -155,7 +155,7 @@ int main(void) {
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    USART_SimpleInit(USART_115200);
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
     I2C_SimpleInit(I2C_100KHZ, I2C_PINS_DEFAULT);
 
     // ปลุก MPU6050 จาก sleep
@@ -200,7 +200,7 @@ void safe_read(uint8_t addr, uint8_t reg, uint8_t retries) {
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    USART_SimpleInit(USART_115200);
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
     I2C_SimpleInit(I2C_100KHZ, I2C_PINS_DEFAULT);
 
     printf("--- I2C Bus Scan ---\r\n");

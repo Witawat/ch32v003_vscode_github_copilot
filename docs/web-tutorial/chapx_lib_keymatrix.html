@@ -6,13 +6,13 @@
 
 <section class="flowchart"><h2>🧭 แผนภาพการทำงาน</h2><pre class="mermaid">
 flowchart TD
-    A["KeyMatrix_Init(&kp, rows, nR, cols, nC, map)"] --> B["KeyMatrix_Update(&kp)"]
+    A["KeyMatrix_Init(&kp, rows, nR, cols, nC, map)"] --> B["KeyMatrix_GetKey(&kp)"]
     B --> C["Row Scan: activate row=LOW"]
     C --> D["Read all columns"]
     D --> E{"HasColumnLOW?"}
     E -->|"Yes"| F["Debounce 20ms"]
     F --> G["Match key map[row][col]"]
-    G --> H["KeyMatrix_GetKey(&kp)"]
+    G --> H["return char (rising edge)"]
     E -->|"No"| I["Next row"]
     I --> C
     H --> B
@@ -110,12 +110,11 @@ int main(void) {
     USART_Println("Keypad 4x4 Ready!");</code></pre>
 <p class="explain">🔍 <code>KeyMatrix_Init(&kp, rows, numRows, cols, numCols, keyMap)</code> — ใช้ GPIO_Pin array — rows/cols ละ 4 pin รองรับสูงสุด 8×8 — ใช้ internal pull-up อัตโนมัติ</p></div>
 
-<div class="step"><h3>ขั้นที่ 2: Update + GetKey ใน Loop</h3>
+<div class="step"><h3>ขั้นที่ 2: GetKey ใน Loop (สแกนอัตโนมัติ)</h3>
 <pre><code class="language-c">    char last_key = 0;
 
     while(1) {
-        KeyMatrix_Update(&kp);
-        char key = KeyMatrix_GetKey(&kp);
+        char key = KeyMatrix_GetKey(&kp);  // สแกน + debounce ภายใน
         if(key && key != last_key) {
             USART_WriteByte(key);
             USART_Println("");
@@ -125,13 +124,12 @@ int main(void) {
         Delay_Ms(20);  // scan rate ~50Hz
     }
 }</code></pre>
-<p class="explain">🔍 <code>KeyMatrix_GetKey(&kp)</code> คืนอักขระที่กดล่าสุด หรือ 0 ถ้าไม่มี — ใช้ <code>last_key</code> ป้องกันการส่งซ้ำ — scan rate 20ms (~50Hz) เร็วพอสำหรับการพิมพ์ปกติ</p></div>
+<p class="explain">🔍 <code>KeyMatrix_GetKey(&kp)</code> สแกน + debounce ภายใน — คืนอักขระเฉพาะ rising edge (กดใหม่) หรือ 0 ถ้าไม่มี — ใช้ <code>last_key</code> ป้องกันการส่งซ้ำ — scan rate 20ms (~50Hz) เร็วพอสำหรับการพิมพ์ปกติ</p></div>
 
 <div class="step"><h3>ขั้นที่ 3: Multi-Key + State Machine</h3>
 <pre><code class="language-c">    char buf[16]; uint8_t idx = 0;
 
     while(1) {
-        KeyMatrix_Update(&kp);
         char key = KeyMatrix_GetKey(&kp);
         if(key) {
             if(key == '#') {  // Enter
@@ -155,11 +153,10 @@ int main(void) {
 
 <section><h2>📋 API Reference</h2><table><tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
 <tr><td><code>KeyMatrix_Init(&kp, rows, nR, cols, nC, map)</code></td><td>เริ่มต้น keypad — กำหนด pin และ key map</td><td><code>KeyMatrix_Init(&kp, rows, 4, cols, 4, map)</code></td></tr>
-<tr><td><code>KeyMatrix_Update(&kp)</code></td><td>Scan matrix + debounce — เรียกใน loop</td><td><code>while(1){KeyMatrix_Update(&kp);}</code></td></tr>
-<tr><td><code>KeyMatrix_GetKey(&kp)</code></td><td>คืนอักขระที่กดล่าสุด หรือ 0 ถ้าไม่มี</td><td><code>char c = KeyMatrix_GetKey(&kp)</code></td></tr>
-<tr><td><code>KeyMatrix_GetRawKey(&kp)</code></td><td>คืน raw index (0-15) แทนอักขระ</td><td><code>uint8_t idx = KeyMatrix_GetRawKey(&kp)</code></td></tr>
-<tr><td><code>KeyMatrix_SetDebounce(&kp, ms)</code></td><td>ปรับค่า debounce (default 20ms)</td><td><code>KeyMatrix_SetDebounce(&kp, 30)</code></td></tr>
-<tr><td><code>KeyMatrix_IsKeyDown(&kp, row, col)</code></td><td>เช็คปุ่มเฉพาะตำแหน่งว่ากดอยู่หรือไม่</td><td><code>if(KeyMatrix_IsKeyDown(&kp,0,0)){...}</code></td></tr>
+<tr><td><code>KeyMatrix_GetKey(&kp)</code></td><td>สแกน + debounce — คืน rising edge หรือ 0</td><td><code>char c = KeyMatrix_GetKey(&kp)</code></td></tr>
+<tr><td><code>KeyMatrix_GetCurrentKey(&kp)</code></td><td>คืนปุ่มที่กดอยู่ (ไม่ debounce) — คืนตลอดขณะกด</td><td><code>char c = KeyMatrix_GetCurrentKey(&kp)</code></td></tr>
+<tr><td><code>KeyMatrix_GetLongPress(&kp)</code></td><td>คืนปุ่มที่ long press (≥800ms)</td><td><code>char c = KeyMatrix_GetLongPress(&kp)</code></td></tr>
+<tr><td><code>KeyMatrix_WaitKey(&kp)</code></td><td>blocking รอจนมีปุ่มถูกกด</td><td><code>char c = KeyMatrix_WaitKey(&kp)</code></td></tr>
 </table></section>
 
 <section><h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2><table><tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
@@ -191,7 +188,6 @@ int main(void) {
     KeyMatrix_Init(&kp, rows, 4, cols, 4, map);
     LCD_SetCursor(0,0); LCD_Print("Calc Ready!");
     while(1) {
-        KeyMatrix_Update(&kp);
         char key = KeyMatrix_GetKey(&kp);
         if(key) {
             if(key>='0' && key<='9') {

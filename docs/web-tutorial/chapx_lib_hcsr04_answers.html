@@ -47,7 +47,7 @@ void hcsr04_parking_sensor(void) {
         Delay_Ms(60);
     }
 }
-</code></pre><div class="approach"><strong>🧠 แนวคิด:</strong> 3 โซน: SAFE (>100cm เขียว) / WARN (50–100cm เหลือง) / STOP (<50cm แดง) — Buzzer กระพริบถี่ขึ้นเมื่อใกล้ — ใช้ค่า dist map เป็น delay: dist×5 ms — กรอง invalid reading (dist < 0 หรือ > 4m) — <code>HCSR04_ReadDistance</code> คืน cm โดยตรง</div></div>
+</code></pre><div class="approach"><strong>🧠 แนวคิด:</strong> 3 โซน: SAFE (>100cm เขียว) / WARN (50–100cm เหลือง) / STOP (<50cm แดง) — Buzzer กระพริบถี่ขึ้นเมื่อใกล้ — ใช้ค่า dist map เป็น delay: dist×5 ms — กรอง invalid reading (dist < 0 หรือ > 4m) — <code>HCSR04_MeasureCm</code> คืน cm โดยตรง</div></div>
 <div class="answer"><h2>ข้อ 2: Average Multiple Readings Filter</h2><pre><code class="language-c">#define FILTER_SAMPLES 8
 
 float hcsr04_read_filtered(HCSR04_Instance *s) {

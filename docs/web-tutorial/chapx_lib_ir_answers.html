@@ -59,10 +59,13 @@ void ir_learner_main(void) {
         }
 
         // Normal decode mode
-        if(IR_Process()) {
-            uint32_t code = IR_GetCode();
-            USART_Print("IR NEC: 0x");
-            USART_PrintHex(code);
+        IR_Process();
+        if(IR_Available()) {
+            IR_DecodedData_t data = IR_GetData();
+            USART_Print("IR NEC Addr: 0x");
+            USART_PrintHex(data.address);
+            USART_Print(" Cmd: 0x");
+            USART_PrintHex(data.command);
             USART_Println("");
         }
         Delay_Ms(20);
@@ -110,13 +113,8 @@ void ir_universal_send(void) {
     ir_device_t *dev = &ir_db[ir_dev_idx];
     ir_button_t *btn = &dev->buttons[ir_btn_idx];
 
-    // NEC format: 32-bit = addr(8) + ~addr(8) + cmd(8) + ~cmd(8)
-    uint32_t code = ((uint32_t)btn->addr) << 24
-                  | ((uint32_t)(~btn->addr & 0xFF)) << 16
-                  | ((uint32_t)btn->cmd) << 8
-                  | ((uint32_t)(~btn->cmd & 0xFF));
-
-    IR_SendNEC(code);
+    // NEC protocol: ส่ง address + command (library จัดการ framing เอง)
+    IR_Send(IR_PROTOCOL_NEC, btn->addr, btn->cmd);
     USART_Print("Send: ");
     USART_Print(dev->brand);
     USART_Print(" → ");
@@ -150,7 +148,7 @@ void ir_cycle_devices(void) {
         Delay_Ms(20);
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> สร้างฐานข้อมูลอุปกรณ์เป็น array of struct — แต่ละอุปกรณ์มี name และ array of button (addr+cmd) — NEC 32-bit = address(8) + inverted_address(8) + command(8) + inverted_command(8) — ปุ่ม 3 ปุ่ม: เปลี่ยนอุปกรณ์, เปลี่ยนฟังก์ชัน, ส่ง — IR_SendNEC ส่ง NEC protocol 38kHz — เพิ่มอุปกรณ์ได้โดยเพิ่ม entry ใน ir_db</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> สร้างฐานข้อมูลอุปกรณ์เป็น array of struct — แต่ละอุปกรณ์มี name และ array of button (addr+cmd) — NEC 32-bit = address(8) + inverted_address(8) + command(8) + inverted_command(8) — ปุ่ม 3 ปุ่ม: เปลี่ยนอุปกรณ์, เปลี่ยนฟังก์ชัน, ส่ง — IR_Send(IR_PROTOCOL_NEC, addr, cmd) ส่ง NEC protocol 38kHz — เพิ่มอุปกรณ์ได้โดยเพิ่ม entry ใน ir_db</div>
 </div>
 
 <div class="answer">
@@ -164,13 +162,15 @@ void ir_repeat_handler(void) {
     IR_ReceiverInit(PC0);
 
     while(1) {
-        if(!IR_Process()) { Delay_Ms(10); continue; }
+        IR_Process();
+        if(!IR_Available()) { Delay_Ms(10); continue; }
 
         uint32_t now = Timer_GetMs();
-        uint32_t code = IR_GetCode();
+        IR_DecodedData_t data = IR_GetData();
+        uint32_t code = ((uint32_t)data.address) << 16 | data.command;
 
-        // NEC repeat code = 0xFFFFFFFF
-        if(code == 0xFFFFFFFF && ir_last_code != 0) {
+        // NEC repeat code ระบุด้วย protocol == IR_PROTOCOL_NEC_REPEAT
+        if(data.protocol == IR_PROTOCOL_NEC_REPEAT && ir_last_code != 0) {
             // เป็น repeat code
             uint32_t dt = now - ir_last_time;
 
@@ -190,7 +190,7 @@ void ir_repeat_handler(void) {
                 }
             }
         }
-        else if(code != 0xFFFFFFFF) {
+        else if(data.protocol != IR_PROTOCOL_NEC_REPEAT) {
             // ปกติ: กดครั้งแรก
             ir_last_code = code;
             ir_repeat_count = 0;

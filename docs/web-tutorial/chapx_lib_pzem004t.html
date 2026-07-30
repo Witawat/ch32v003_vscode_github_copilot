@@ -99,9 +99,9 @@ int main(void) {
 <section><h2>📋 API Reference</h2><table><tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
 <tr><td><code>PZEM004T_Init(&pzem, pins)</code></td><td>เริ่มต้น PZEM</td><td><code>PZEM004T_Init(&pzem, USART_PINS_DEFAULT)</code></td></tr>
 <tr><td><code>PZEM004T_ReadAll(&pzem)</code></td><td>อ่านทุกค่าในครั้งเดียว</td><td><code>if(PZEM004T_ReadAll(&pzem))</code></td></tr>
-<tr><td><code>PZEM004T_ReadVoltage(&pzem)</code></td><td>อ่านแรงดัน AC (V) แยก</td><td><code>float v = PZEM004T_ReadVoltage(&pzem)</code></td></tr>
-<tr><td><code>PZEM004T_ReadCurrent(&pzem)</code></td><td>อ่านกระแส (A) แยก</td><td><code>float a = PZEM004T_ReadCurrent(&pzem)</code></td></tr>
-<tr><td><code>PZEM004T_ReadPower(&pzem)</code></td><td>อ่านกำลังไฟฟ้า (W) แยก</td><td><code>float w = PZEM004T_ReadPower(&pzem)</code></td></tr>
+<tr><td><code>PZEM004T_GetVoltage(&pzem)</code></td><td>อ่านแรงดัน AC (V) แยก</td><td><code>float v = PZEM004T_GetVoltage(&pzem)</code></td></tr>
+<tr><td><code>PZEM004T_GetCurrent(&pzem)</code></td><td>อ่านกระแส (A) แยก</td><td><code>float a = PZEM004T_GetCurrent(&pzem)</code></td></tr>
+<tr><td><code>PZEM004T_GetPower(&pzem)</code></td><td>อ่านกำลังไฟฟ้า (W) แยก</td><td><code>float w = PZEM004T_GetPower(&pzem)</code></td></tr>
 </table></section>
 <section><h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2><table><tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
 <tr><td>อ่านค่าได้ 0 ทุกตัว</td><td>CT Clamp หนีบผิด / ไม่มีโหลด</td><td>CT ต้องหนีบสาย L เส้นเดียว</td></tr>

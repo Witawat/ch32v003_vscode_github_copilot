@@ -5,7 +5,7 @@
 flowchart TD
     A["HX711_Init(&hx, PC1, PC0)"] --> B["HX711_SetGain(HX711_GAIN_128)"]
     B --> C["HX711_Tare(&hx, 10)"]
-    C --> D["HX711_GetWeight(&hx)"]
+    C --> D["HX711_GetWeight(&hx, &w)"]
     D --> E["Weight = (Raw - Offset) / Scale"]
     E --> F["แสดงน้ำหนัก (kg)"]
     F --> G{"น้ำหนักคงที่?"}
@@ -91,23 +91,25 @@ int main(void) {
     USART_Println("Place weight...");
     Delay_Ms(3000);
 
-    float kg = HX711_GetWeight(&hx);
+    float g;
+    HX711_GetWeight(&hx, &g);
     USART_Print("Weight: ");
-    USART_PrintFloat(kg, 3);
-    USART_Println(" kg");
+    USART_PrintFloat(g, 1);
+    USART_Println(" g");
 
-    // Calibrate: ใช้ scale factor
-    // HX711_SetScale(&hx, 420.5f);</code></pre>
-<p class="explain">🔍 <code>HX711_Tare(&hx, samples)</code> — อ่านค่าเฉลี่ย samples ครั้ง → เก็บเป็น offset — <code>HX711_GetWeight(&hx)</code> คืนน้ำหนักเป็นกิโลกรัม</p></div>
+    // Calibrate: ใช้ calibration factor
+    // HX711_SetCalibration(&hx, 420.5f);</code></pre>
+<p class="explain">🔍 <code>HX711_Tare(&hx, samples)</code> — อ่านค่าเฉลี่ย samples ครั้ง → เก็บเป็น offset — <code>HX711_GetWeight(&hx, &w)</code> คืนน้ำหนักเป็นกรัม (ผ่าน out-param)</p></div>
 <div class="step"><h3>ขั้นที่ 3: Loop + ปุ่ม Tare</h3>
 <pre><code class="language-c">    pinMode(PC2, PIN_MODE_INPUT_PULLUP); // ปุ่ม Tare
 
     while(1) {
-        float kg = HX711_GetWeight(&hx);
+        float g;
+        HX711_GetWeight(&hx, &g);
 
         USART_Print("Weight: ");
-        USART_PrintFloat(kg, 3);
-        USART_Println(" kg");
+        USART_PrintFloat(g, 1);
+        USART_Println(" g");
 
         if(GPIO_Read(PC2) == 0) {
             Delay_Ms(50);
@@ -118,14 +120,14 @@ int main(void) {
         Delay_Ms(200);
     }
 }</code></pre>
-<p class="explain">🔍 <code>HX711_GetWeight(&hx)</code> — อ่านน้ำหนักหน่วย kg — กดปุ่ม Tare เพื่อลบน้ำหนักภาชนะ — อ่านทุก 200ms</p></div>
+<p class="explain">🔍 <code>HX711_GetWeight(&hx, &g)</code> — อ่านน้ำหนักหน่วย g (ผ่าน out-param) — กดปุ่ม Tare เพื่อลบน้ำหนักภาชนะ — อ่านทุก 200ms</p></div>
 </section>
 <section><h2>📋 API Reference</h2><table><tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
 <tr><td><code>HX711_Init(&hx, dt, sck)</code></td><td>เริ่มต้น HX711</td><td><code>HX711_Init(&hx, PC1, PC0)</code></td></tr>
 <tr><td><code>HX711_SetGain(&hx, gain)</code></td><td>ตั้ง Gain (128/64/32)</td><td><code>HX711_SetGain(&hx, HX711_GAIN_128)</code></td></tr>
 <tr><td><code>HX711_Tare(&hx, samples)</code></td><td>บันทึกค่าน้ำหนักเปล่า</td><td><code>HX711_Tare(&hx, 10)</code></td></tr>
-<tr><td><code>HX711_GetWeight(&hx)</code></td><td>อ่านน้ำหนัก (kg)</td><td><code>float kg = HX711_GetWeight(&hx)</code></td></tr>
-<tr><td><code>HX711_SetScale(&hx, factor)</code></td><td>ตั้ง calibration factor</td><td><code>HX711_SetScale(&hx, 420.5f)</code></td></tr>
+<tr><td><code>HX711_GetWeight(&hx, &w)</code></td><td>อ่านน้ำหนัก (g)</td><td><code>float w; HX711_GetWeight(&hx, &w)</code></td></tr>
+<tr><td><code>HX711_SetCalibration(&hx, factor)</code></td><td>ตั้ง calibration factor</td><td><code>HX711_SetCalibration(&hx, 420.5f)</code></td></tr>
 </table></section>
 <section><h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2><table><tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
 <tr><td>อ่านค่าได้ 0 ตลอด</td><td>ต่อสายผิด / Load Cell ไม่ต่อ / DT/SCK สลับ</td><td>ตรวจสอบสีสาย (Red=E+, Black=E-, Green=A+, White=A-) — DT=Data, SCK=Clock</td></tr>
@@ -166,7 +168,9 @@ int main(void)
     char buf[64];
     while(1)
     {
-        float kg = HX711_GetWeight(&hx);
+        float g;
+        HX711_GetWeight(&hx, &g);
+        float kg = g / 1000.0f;
 
         OLED_Clear(&oled);
         snprintf(buf, sizeof(buf), "Weight:");

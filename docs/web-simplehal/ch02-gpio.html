@@ -125,10 +125,10 @@ flowchart TD
             <tr><td><code>digitalToggle(pin)</code></td><td>สลับสถานะ pin HIGH↔LOW</td><td><code>digitalToggle(PA1);</code></td></tr>
             <tr><td><code>attachInterrupt(pin, callback, mode)</code></td><td>ผูก ISR กับ pin (RISING/FALLING/CHANGE)</td><td><code>attachInterrupt(PC1, onBtn, FALLING);</code></td></tr>
             <tr><td><code>detachInterrupt(pin)</code></td><td>ยกเลิก interrupt ที่ผูกไว้</td><td><code>detachInterrupt(PC1);</code></td></tr>
-            <tr><td><code>pinModeMultiple(mask, mode)</code></td><td>ตั้งโหมดหลาย pin ของพอร์ตเดียวกันพร้อมกัน</td><td><code>pinModeMultiple(PORT_C, 0x0F, PIN_MODE_OUTPUT);</code></td></tr>
-            <tr><td><code>digitalWriteMultiple(mask, value)</code></td><td>เขียนค่าหลาย pin ของพอร์ตเดียวกัน</td><td><code>digitalWriteMultiple(PORT_C, 0x0F, 0x05);</code></td></tr>
-            <tr><td><code>portWrite(port, value)</code></td><td>เขียนครบ 8-bit ไปที่พอร์ต</td><td><code>portWrite(PORT_C, 0xAA);</code></td></tr>
-            <tr><td><code>portRead(port)</code></td><td>อ่านครบ 8-bit จากพอร์ต</td><td><code>uint8_t v = portRead(PORT_C);</code></td></tr>
+            <tr><td><code>pinModeMultiple(pins_array, mode)</code></td><td>ตั้งโหมดหลาย pin (ข้าม port ได้) พร้อมกันจาก array</td><td><code>const uint8_t leds[] = {PC0, PC1, PC2};<br>pinModeMultiple(leds, PIN_MODE_OUTPUT);</code></td></tr>
+            <tr><td><code>digitalWriteMultiple(pins_array, values_array)</code></td><td>เขียนค่าหลาย pin พร้อมกันจาก array คู่ (pin/value)</td><td><code>const uint8_t leds[] = {PC0, PC1, PC2};<br>const uint8_t vals[] = {HIGH, LOW, HIGH};<br>digitalWriteMultiple(leds, vals);</code></td></tr>
+            <tr><td><code>portWrite(port, value)</code></td><td>เขียนครบ 8-bit ไปที่พอร์ต (ใช้ <code>GPIO_TypeDef*</code> เช่น <code>GPIOC</code>)</td><td><code>portWrite(GPIOC, 0xAA);</code></td></tr>
+            <tr><td><code>portRead(port)</code></td><td>อ่านครบ 8-bit จากพอร์ต (ใช้ <code>GPIO_TypeDef*</code> เช่น <code>GPIOC</code>)</td><td><code>uint8_t v = portRead(GPIOC);</code></td></tr>
             <tr><td><code>pulseIn(pin, state, timeout)</code></td><td>วัดความกว้างพัลส์ (μs)</td><td><code>uint32_t w = pulseIn(PC1, HIGH, 10000);</code></td></tr>
             <tr><td><code>shiftOut(dataPin, clockPin, order, data)</code></td><td>ส่งข้อมูลแบบ Serial Shift (8-bit)</td><td><code>shiftOut(PA1, PA2, LSBFIRST, 0x55);</code></td></tr>
             <tr><td><code>shiftIn(dataPin, clockPin, order)</code></td><td>รับข้อมูลแบบ Serial Shift (8-bit)</td><td><code>uint8_t v = shiftIn(PA2, PA1, MSBFIRST);</code></td></tr>
@@ -141,7 +141,7 @@ flowchart TD
 
     <div class="step">
         <h3>ขั้นที่ 1: Include Header + ตั้งค่าระบบ</h3>
-        <pre><code class="language-c">#include "simplehal.h"
+        <pre><code class="language-c">#include "SimpleHAL.h"
 
 int main(void) {
     SystemCoreClockUpdate();
@@ -226,7 +226,7 @@ int main(void) {
 <section>
     <h2>🟢 ตัวอย่างขั้นต้น</h2>
     <p>LED กระพริบ 1 ดวง — ใช้ <code>digitalToggle()</code> + <code>Delay_Ms()</code></p>
-    <pre><code class="language-c">#include "simplehal.h"
+    <pre><code class="language-c">#include "SimpleHAL.h"
 
 int main(void) {
     SystemCoreClockUpdate();
@@ -244,7 +244,7 @@ int main(void) {
 <section>
     <h2>🟡 ตัวอย่างขั้นกลาง</h2>
     <p>กดปุ่มเปิด-ปิด LED — ใช้ <code>digitalRead()</code> + <code>digitalWrite()</code> แบบ polling</p>
-    <pre><code class="language-c">#include "simplehal.h"
+    <pre><code class="language-c">#include "SimpleHAL.h"
 
 int main(void) {
     SystemCoreClockUpdate();
@@ -272,7 +272,7 @@ int main(void) {
 <section>
     <h2>🔴 ตัวอย่างขั้นสูง</h2>
     <p>Interrupt-driven push button พร้อม software debounce ด้วย <code>Get_CurrentMs()</code> + ISR flag — โปรแกรมไม่ติดขัดตอนกดปุ่ม</p>
-    <pre><code class="language-c">#include "simplehal.h"
+    <pre><code class="language-c">#include "SimpleHAL.h"
 
 volatile uint8_t btn1_flag = 0;
 volatile uint8_t btn2_flag = 0;

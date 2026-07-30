@@ -73,20 +73,20 @@ flowchart TD
         <tr><td>Mode 3</td><td>1</td><td>1</td></tr>
     </table>
     <h3>ความเร็ว</h3>
-    <p>125kHz ถึง 12MHz (enum) — หมายเหตุ: ความเร็วจริงที่ PCLK 48MHz = 2&times; ชื่อ enum เช่น SPI_CLOCK_DIV_4 = ~12MHz</p>
+    <p>ชื่อ enum: SPI_1MHZ / SPI_2MHZ / SPI_4MHZ / SPI_8MHZ / SPI_12MHZ — หมายเหตุ: ความเร็วจริงที่ PCLK2 48MHz = 2&times; ชื่อ enum เช่น SPI_12MHZ = ~24MHz จริง (สูงสุด)</p>
 </section>
 
 <section>
     <h2>API Reference</h2>
     <table>
         <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th></tr>
-        <tr><td><code>SPI_SimpleInit()</code></td><td>เริ่มต้น SPI hardware</td></tr>
+        <tr><td><code>SPI_SimpleInit(mode, speed, pins)</code></td><td>เริ่มต้น SPI hardware</td></tr>
         <tr><td><code>SPI_Transfer()</code></td><td>ส่งและรับ 1 ไบต์</td></tr>
         <tr><td><code>SPI_TransferBuffer()</code></td><td>ส่งและรับ buffer</td></tr>
         <tr><td><code>SPI_Write()</code></td><td>เขียนข้อมูล</td></tr>
         <tr><td><code>SPI_Read()</code></td><td>อ่านข้อมูล</td></tr>
         <tr><td><code>SPI_SetCS()</code></td><td>ควบคุม CS pin</td></tr>
-        <tr><td><code>SPI_SetCSPin()</code></td><td>กำหนด CS pin</td></tr>
+        <tr><td><code>SPI_SetCSPin(port, pin)</code></td><td>กำหนด CS pin (port เช่น GPIOC, pin เช่น GPIO_Pin_0)</td></tr>
         <tr><td><code>SPI_SetSpeed()</code></td><td>เปลี่ยนความเร็ว</td></tr>
         <tr><td><code>SPI_SetBitOrder()</code></td><td>กำหนดลำดับบิต (MSB/LSB first)</td></tr>
     </table>
@@ -111,8 +111,8 @@ void max7219_write(uint8_t reg, uint8_t data) {
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    SPI_SimpleInit(SPI_CLOCK_DIV_16, SPI_PINS_DEFAULT);
-    SPI_SetCSPin(MAX7219_CS);
+    SPI_SimpleInit(SPI_MODE0, SPI_1MHZ, SPI_PINS_DEFAULT);
+    SPI_SetCSPin(GPIOC, GPIO_Pin_0);  // MAX7219_CS = PC0 (SPI_SetCSPin ใช้ GPIO_Pin_x mask ไม่ใช่ SimpleGPIO pin enum)
 
     // Initialize MAX7219
     max7219_write(0x09, 0x00); // No decode
@@ -150,9 +150,9 @@ uint32_t w25q_read_jedec(void) {
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    USART_SimpleInit(USART_115200);
-    SPI_SimpleInit(SPI_CLOCK_DIV_4, SPI_PINS_DEFAULT);
-    SPI_SetCSPin(W25Q_CS);
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+    SPI_SimpleInit(SPI_MODE0, SPI_8MHZ, SPI_PINS_DEFAULT);
+    SPI_SetCSPin(GPIOC, GPIO_Pin_0);  // W25Q_CS = PC0 (SPI_SetCSPin ใช้ GPIO_Pin_x mask ไม่ใช่ SimpleGPIO pin enum)
     digitalWrite(W25Q_CS, HIGH);
 
     uint32_t jedec = w25q_read_jedec();
@@ -172,10 +172,10 @@ int main(void) {
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    SPI_SimpleInit(SPI_CLOCK_DIV_2, SPI_PINS_DEFAULT);
+    SPI_SimpleInit(SPI_MODE0, SPI_12MHZ, SPI_PINS_DEFAULT);
 
     // ดูบทที่ 13 DMA สำหรับรายละเอียดการใช้งาน SPI + DMA
-    // SPI_DMA_Init() + SPI_DMA_Send(buffer, size)
+    // DMA_SPI_Init(tx_channel, rx_channel) + DMA_SPI_TransferBuffer(tx_ch, rx_ch, tx_data, rx_data, length)
     // ทำให้ส่งข้อมูล display buffer ได้โดย CPU แทบไม่ได้ใช้
 
     while (1);

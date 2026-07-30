@@ -120,7 +120,7 @@ int main(void) {
         }
     }
 }</code></pre>
-  <div class="approach"><strong>&#129504; แนวคิด:</strong> <code>Timer_t</code> 100ms non-blocking &#8594; แต่ละ tick อ่าน <code>ADC_Read(PD2)</code> + คำนวณ <code>mV = raw &#215; 3300 / 1023</code> &#8594; <code>USART_PrintNum</code> แสดงผล — พิมพ์ header ตารางก่อนเข้า loop — ใช้ <code>uint32_t</code> คูณก่อนหารป้องกัน overflow — <code>sample</code> counter (ไว้สำหรับ debug) — main loop ไม่อั้น CPU ว่างทำงานอื่น</div>
+  <div class="approach"><strong>&#129504; แนวคิด:</strong> <code>Timer_t</code> 100ms non-blocking &#8594; แต่ละ tick อ่าน <code>ADC_Read(ADC_CH_PD2)</code> + คำนวณ <code>mV = raw &#215; 3300 / 1023</code> &#8594; <code>USART_PrintNum</code> แสดงผล — พิมพ์ header ตารางก่อนเข้า loop — ใช้ <code>uint32_t</code> คูณก่อนหารป้องกัน overflow — <code>sample</code> counter (ไว้สำหรับ debug) — main loop ไม่อั้น CPU ว่างทำงานอื่น</div>
 </div>
 
 <nav class="bottom-nav">

@@ -11,29 +11,35 @@
     <a href="chapx_lib_softuart.html">บทก่อน</a>
     <a href="chapx_lib_w25qxx.html">บทถัดไป →</a>
 </nav>
-<h1>AT24Cxx EEPROM — I2C, Page Boundary, Wear Leveling</h1>
+<h1>AT24Cxx EEPROM — I2C, Status Return, Out-Param, Wear Leveling</h1>
 <span class="level advanced">ระดับสูง</span>
 
 <section class="flowchart">
     <h2>🧭 แผนภาพการทำงาน</h2>
     <pre class="mermaid">
 flowchart TD
-    A["AT24Cxx_Init(&eeprom, type, addr)"] --> B{"Operation"}
-    B -->|"Write"| C["AT24Cxx_WriteByte(&eeprom, addr, val)"]
-    B -->|"Read"| D["AT24Cxx_ReadByte(&eeprom, addr)"]
-    C --> F["Wait 5ms (write cycle)"]
-    F --> G{"Done"}
-    D --> G
+    A["AT24Cxx_Init(&amp;eeprom, type, i2c_addr)"] --> B["AT24Cxx_GetCapacity(&amp;eeprom)"]
+    B --> C{"Operation"}
+    C -->|"Write"| D["AT24Cxx_WriteByte/Array(&amp;eeprom, addr, data)"]
+    C -->|"Read"| E["AT24Cxx_ReadByte(&amp;eeprom, addr, &amp;out) / ReadArray"]
+    D --> F{"Status == AT24CXX_OK?"}
+    F -->|"Yes"| G["อัปเดตค่า / ไปต่อ"]
+    F -->|"No"| H["ตรวจ StatusStr แล้ว handle"]
+    E --> I{"Status == AT24CXX_OK?"}
+    I -->|"Yes"| J["ใช้ค่าจาก out-param"]
+    I -->|"No"| H
+    G --> C
+    J --> C
     </pre>
 </section>
 
 <section><h2>🔌 การต่อวงจร</h2>
 <pre class="ascii-circuit">
-               AT24Cxx EEPROM I2C
+                AT24Cxx EEPROM I2C
     ┌──────────────────────────────────────────────┐
-    │ CH32V003                        AT24C02/256  │
-    │ PC1(SDA)────────SDA    ┌────────────────────┤
-    │ PC2(SCL)────────SCL    │                    │
+    │ CH32V003                       AT24C02/256   │
+    │ PC1(SDA)────────SDA   ┌────────────────────┤
+    │ PC2(SCL)────────SCL   │                    │
     │ 3.3V───────────VCC    │ Size   Address      │
     │ GND────────────GND    │ AT24C02  256B   0x50│
     │ WP─GND = write enable  │ AT24C32  4KB   0x50│
@@ -50,7 +56,7 @@ flowchart TD
     <tr><td>3.3V</td><td>→</td><td>VCC</td><td>-</td><td>ไฟเลี้ยง 3.3V</td></tr>
     <tr><td>GND</td><td>→</td><td>GND</td><td>-</td><td>กราวด์ร่วม</td></tr>
     <tr><td>GND</td><td>→</td><td>WP</td><td>-</td><td>ต่อ GND = เปิดใช้งานการเขียน</td></tr>
-    <tr><td>GND</td><td>→</td><td>A0/A1/A2</td><td>-</td><td>ต่อ GND = ตั้งค่า I2C address เป็น 0x50</td></tr>
+    <tr><td>GND</td><td>→</td><td>A0/A1/A2</td><td>-</td><td>ต่อ GND ทั้งหมด = I2C address 0x50 — สลับค่าเพื่อใช้หลายชิปบนบัสเดียวกัน</td></tr>
   </tbody>
  </table>
 <h3>รู้จักขา</h3>
@@ -60,7 +66,7 @@ flowchart TD
   <li><strong>SDA (PC1):</strong> สายข้อมูล I2C</li>
   <li><strong>SCL (PC2):</strong> สายนาฬิกา I2C</li>
   <li><strong>WP:</strong> ต่อ GND = เปิดเขียน (write enable)</li>
-  <li><strong>A0/A1/A2:</strong> เลือก I2C address — ต่อ GND ทั้งหมด = 0x50</li>
+  <li><strong>A0/A1/A2:</strong> เลือก I2C address — ต่อ GND ทั้งหมด = 0x50 — สูตร addr = 0x50 | (A2&lt;&lt;2) | (A1&lt;&lt;1) | A0</li>
   <li><strong>pull-up 4.7kΩ:</strong> ต่อระหว่าง SDA→3.3V และ SCL→3.3V (โมดูลส่วนมากมีในตัว)</li>
 </ul>
 
@@ -78,7 +84,9 @@ flowchart TD
 </section>
 
 <section><h2>📚 หลักการทำงาน</h2>
-<p><strong>AT24Cxx</strong> เป็น EEPROM แบบ I2C — เก็บข้อมูลได้แม้ไม่มีไฟ, endurance 1,000,000 write cycles, data retention >100 ปี</p></section>
+<p><strong>AT24Cxx</strong> เป็น EEPROM แบบ I2C — เก็บข้อมูลได้แม้ไม่มีไฟ, endurance ~1,000,000 write cycles ตาม LIMITATIONS.md, data retention &gt;100 ปี — เหมาะกับการเก็บ config / calibration ที่เขียนนานๆ ครั้ง (ไม่ใช่ log ที่เขียนบ่อย)</p>
+<p><strong>รูปแบบ API</strong> (สำคัญ — ต่างจากบทเดิม): ทุกฟังก์ชันรับ <code>AT24Cxx_Instance*</code> เป็น arg แรก (instance-based) และทุกฟังก์ชันคืน <strong><code>AT24Cxx_Status</code></strong> (ไม่ใช่ค่าที่อ่านได้ตรงๆ) — ค่าที่อ่านได้ส่งกลับผ่าน <strong>out-param</strong> ด้วย pointer</p>
+<p>รองรับตั้งแต่ AT24C01 (128B) ถึง AT24C512 (64KB) — เลือก type ใน <code>AT24Cxx_Init</code> แล้ว library จะคำนวณ capacity, page_size, addr_bytes ให้เอง</p></section>
 
 <section><h2>💻 เขียน Code ทีละขั้น</h2>
 
@@ -91,99 +99,199 @@ AT24Cxx_Instance eeprom;
 
 int main(void) {
     SystemCoreClockUpdate();
-    I2C_Init(I2C1, I2C_SPEED_STANDARD);
-    USART_Init(USART1, BAUD_115200);
+    Timer_Init();                                              // จำเป็น
+    I2C_SimpleInit(I2C_100KHZ, I2C_PINS_DEFAULT);             // PC1=SDA, PC2=SCL
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);        // debug
 
-    AT24Cxx_Init(&eeprom, AT24C32, 0x50);
-    USART_Println("AT24C32 Ready (4096 bytes)");</code></pre>
-<p class="explain">🔍 <code>AT24Cxx_Init(&eeprom, type, addr)</code> — instance-based, เลือกเบอร์ชิปและ I2C address</p></div>
-
-<div class="step"><h3>ขั้นที่ 2: เขียน/อ่าน ไบต์</h3>
-<pre><code class="language-c">    AT24Cxx_WriteByte(&eeprom, 0, 42);  // เขียน 42 ที่ addr 0
-    Delay_Ms(5);
-
-    uint8_t val = AT24Cxx_ReadByte(&eeprom, 0);
-    USART_Print("Value at addr 0: ");
-    USART_PrintInt(val);
-    USART_Println("");  // → 42</code></pre>
-<p class="explain">🔍 <code>AT24Cxx_WriteByte(&eeprom, addr, val)</code> — เขียน 1 ไบต์, <code>AT24Cxx_ReadByte(&eeprom, addr)</code> — อ่าน 1 ไบต์</p></div>
-
-<div class="step"><h3>ขั้นที่ 3: Sequential Read + Wear Leveling</h3>
-<pre><code class="language-c">    // Sequential Read
-    uint8_t rbuf[32];
-    AT24Cxx_ReadSeq(&eeprom, 0, rbuf, 32);
-
-    // Wear Leveling — เขียนวนไปเรื่อยๆ
-    uint16_t write_addr = 0;
-    uint16_t eeprom_size = AT24Cxx_GetSize(&eeprom);
-    while(1) {
-        uint8_t data = (uint8_t)(write_addr & 0xFF);
-        AT24Cxx_WriteByte(&eeprom, write_addr, data);
-        Delay_Ms(5);
-
-        write_addr = (write_addr + 1) % eeprom_size;
-        Delay_Ms(1000);
+    // type เป็น enum: AT24C01..AT24C512, i2c_addr 7-bit (default 0x50)
+    AT24Cxx_Status st = AT24Cxx_Init(&eeprom, AT24C32, 0x50);
+    if (st != AT24CXX_OK) {
+        USART_Println("AT24Cxx Init FAILED!");
+        USART_Println(AT24Cxx_StatusStr(st));
+        while (1);
     }
+    USART_Printf("AT24C32 ready, capacity=%lu bytes\r\n",
+                 AT24Cxx_GetCapacity(&eeprom));</code></pre>
+<p class="explain">🔍 <code>AT24Cxx_Init(&amp;eeprom, type, i2c_addr)</code> — คืน <code>AT24Cxx_Status</code> (ไม่ใช่ instance pointer) — type เป็น enum <code>AT24C32</code> ไม่ใช่ int — ต้องเรียก <code>Timer_Init()</code> และ <code>I2C_SimpleInit()</code> ก่อน</p></div>
+
+<div class="step"><h3>ขั้นที่ 2: Write/Read Single Byte — เน้น status + out-param</h3>
+<pre><code class="language-c">    // WriteByte คืน status (ไม่ใช่ void) — ต้องเช็ค
+    AT24Cxx_Status w = AT24Cxx_WriteByte(&eeprom, 0x00, 0xAB);
+    //                                          eeprom  addr  data
+    if (w != AT24CXX_OK) {
+        USART_Print("Write fail: ");
+        USART_Println(AT24Cxx_StatusStr(w));
+    }
+    // library จัดการ write cycle 5ms ให้ภายในตัว (AT24CXX_WRITE_CYCLE_MS)
+
+    // ReadByte — data กลับมาเป็น OUT-PARAM ผ่าน pointer ไม่ใช่ return value
+    uint8_t val = 0;   // เตรียม buffer ก่อน
+    AT24Cxx_Status r = AT24Cxx_ReadByte(&eeprom, 0x00, &val);
+    //                                          eeprom  addr &amp;out
+    if (r == AT24CXX_OK) {
+        USART_Printf("Read addr 0x00 = 0x%02X\r\n", val);   // → 0xAB
+    } else {
+        USART_Println("Read fail");
+    }</code></pre>
+<p class="explain">🔍 <strong>รูปแบบใหม่ที่ถูกต้อง:</strong> <code>ReadByte</code> คืน <code>AT24Cxx_Status</code> ส่วนค่าที่อ่านได้อยู่ใน <strong>out-param</strong> <code>&amp;val</code> — ห้ามเขียน <code>uint8_t v = AT24Cxx_ReadByte(&amp;eeprom, 0)</code> แบบเดิม (บทเดิมเขียนผิด — return เป็น status ไม่ใช่ byte) — ต้องเช็ค return ทุกครั้ง ไม่งั้นจะไม่รู้ว่า I2C fail หรือ address out of range</p></div>
+
+<div class="step"><h3>ขั้นที่ 3: Read Capacity + ทดสอบเขียน pattern</h3>
+<pre><code class="language-c">    uint32_t cap = AT24Cxx_GetCapacity(&eeprom);   // คืน bytes (ไม่ใช่ size enum)
+    USART_Printf("Capacity = %lu bytes\r\n", cap);    // AT24C32 → 4096
+
+    // เขียน test pattern แล้วอ่านกลับด้วย ReadArray (มี out-param)
+    uint8_t pat[8] = {0xAA, 0x55, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06};
+    AT24Cxx_Status wp = AT24Cxx_WriteArray(&eeprom, 0x10, pat, 8);
+    //                                       eeprom  addr  data len
+    if (wp == AT24CXX_OK) {
+        uint8_t rb[8] = {0};
+        AT24Cxx_Status rp = AT24Cxx_ReadArray(&eeprom, 0x10, rb, 8);
+        //                                        eeprom  addr &amp;out len
+        if (rp == AT24CXX_OK &amp;&amp; memcmp(pat, rb, 8) == 0) {
+            USART_Println("Pattern round-trip OK");
+        }
+    }
+
+    while (1);
 }</code></pre>
-<p class="explain">🔍 <code>AT24Cxx_ReadSeq(&eeprom, addr, buf, len)</code> — อ่านต่อเนื่องหลายไบต์, wear leveling: เขียนวนไปเรื่อยๆ ทั่วพื้นที่</p></div>
+<p class="explain">🔍 <code>GetCapacity(&amp;eeprom)</code> คืน <code>uint32_t</code> bytes ไม่ใช่ขนาด enum — <code>WriteArray</code> / <code>ReadArray</code> คืน status เหมือนกัน — ทั้งคู่ข้าม page boundary อัตโนมัติ — buffer รับ (<code>rb</code>) เป็น out-param</p></div>
 </section>
 
-<section><h2>📋 API Reference</h2>
+<section><h2>🛠️ Product: Save Config Struct พร้อม CRC16</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "AT24Cxx.h"
+
+#define EE_CFG_ADDR   0x0000
+#define EE_MAGIC      0xA55A
+#define SSID_MAX_LEN  32
+#define PASS_MAX_LEN  32
+
+typedef struct {
+    uint16_t magic;
+    uint16_t crc;
+    char     ssid[SSID_MAX_LEN];
+    char     pass[PASS_MAX_LEN];
+    uint8_t  brightness;
+    uint8_t  reserved[15];   // align รวม 96 bytes (เผื่อขยาย)
+} ee_config_t;
+
+ee_config_t cfg;
+AT24Cxx_Instance eeprom;
+
+uint16_t crc16(const uint8_t *data, uint16_t len) {
+    uint16_t crc = 0xFFFF;
+    while (len--) {
+        crc ^= (uint16_t)(*data++) &lt;&lt; 8;
+        for (uint8_t i = 0; i &lt; 8; i++)
+            crc = (crc &amp; 0x8000) ? (crc &lt;&lt; 1) ^ 0x1021 : crc &lt;&lt; 1;
+    }
+    return crc;
+}
+
+// บันทึก config → เขียนทั้ง struct ในครั้งเดียว (WriteArray ข้าม page boundary ให้)
+AT24Cxx_Status cfg_save(void) {
+    cfg.magic = EE_MAGIC;
+    cfg.crc   = crc16((uint8_t *)&cfg + 4, sizeof(cfg) - 4);  // CRC ตัด magic+crc ออก
+
+    return AT24Cxx_WriteArray(&eeprom, EE_CFG_ADDR,
+                              (uint8_t *)&cfg, sizeof(cfg));
+    //                               eeprom  addr   data   len
+    // library รอ write cycle 5ms/segment ให้ภายในตัว
+}
+
+// โหลด config — คืน 1 = OK, 0 = ไม่ valid (ใช้ default)
+uint8_t cfg_load(void) {
+    uint8_t ok = 0;
+    AT24Cxx_Status r = AT24Cxx_ReadArray(&eeprom, EE_CFG_ADDR,
+                                         (uint8_t *)&cfg, sizeof(cfg));
+    if (r != AT24CXX_OK) {
+        USART_Println(AT24Cxx_StatusStr(r));
+        return 0;
+    }
+
+    if (cfg.magic == EE_MAGIC) {
+        uint16_t calc = crc16((uint8_t *)&cfg + 4, sizeof(cfg) - 4);
+        if (calc == cfg.crc) {
+            ok = 1;          // config valid
+        } else {
+            USART_Println("[EEPROM] CRC mismatch — config corrupt");
+        }
+    }
+    if (!ok) {
+        memset(&cfg, 0, sizeof(cfg));
+        strcpy(cfg.ssid, "DEFAULT_SSID");
+        strcpy(cfg.pass, "DEFAULT_PASS");
+        cfg.brightness = 128;
+    }
+    return ok;
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+    I2C_SimpleInit(I2C_100KHZ, I2C_PINS_DEFAULT);
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
+
+    if (AT24Cxx_Init(&eeprom, AT24C32, 0x50) != AT24CXX_OK) {
+        USART_Println("EEPROM init fail");
+        while (1);
+    }
+
+    uint8_t loaded = cfg_load();
+    USART_Println(loaded ? "Config loaded from EEPROM" : "Default config loaded");
+    USART_Print("SSID = "); USART_Println(cfg.ssid);
+    USART_Printf("Brightness = %u\r\n", cfg.brightness);
+
+    // สมมติผู้ใช้เปลี่ยนค่าจาก UI → บันทึก
+    cfg.brightness = 200;
+    strcpy(cfg.ssid, "MyHome");
+    AT24Cxx_Status w = cfg_save();
+    if (w == AT24CXX_OK) USART_Println("Config saved");
+    else                 USART_Println(AT24Cxx_StatusStr(w));
+
+    while (1);
+}</code></pre>
+<p class="explain">🔍 <strong>เน้น pattern ที่ถูกต้อง:</strong> <code>WriteArray</code> และ <code>ReadArray</code> คืน <code>AT24Cxx_Status</code> — buffer เป็น out-param — magic+CRC16 ตรวจ integrity — WriteArray จัดการ write cycle 5ms/segment ภายในตัวให้ (จาก <code>AT24CXX_WRITE_CYCLE_MS</code>) — ไม่ต้อง <code>Delay_Ms(5)</code> เอง — อย่าเขียน <code>AT24Cxx_Write(&amp;eeprom, ...)</code> แบบบทเดิม (ฟังก์ชันชื่อนั้นไม่มีใน header)</p>
+</section>
+
+<section><h2>📋 API Reference (ตรงกับ AT24Cxx.h)</h2>
 <table>
-    <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
-    <tr><td><code>AT24Cxx_Init(&eeprom, type, addr)</code></td><td>เริ่มต้น EEPROM</td><td><code>AT24Cxx_Init(&eeprom, AT24C32, 0x50)</code></td></tr>
-    <tr><td><code>AT24Cxx_WriteByte(&eeprom, addr, val)</code></td><td>เขียน 1 ไบต์</td><td><code>AT24Cxx_WriteByte(&eeprom, 0, 42)</code></td></tr>
-    <tr><td><code>AT24Cxx_ReadByte(&eeprom, addr)</code></td><td>อ่าน 1 ไบต์</td><td><code>uint8_t v = AT24Cxx_ReadByte(&eeprom, 0)</code></td></tr>
-    <tr><td><code>AT24Cxx_WritePage(&eeprom, addr, buf, len)</code></td><td>เขียนแบบ page</td><td><code>AT24Cxx_WritePage(&eeprom, 0, buf, 8)</code></td></tr>
-    <tr><td><code>AT24Cxx_ReadSeq(&eeprom, addr, buf, len)</code></td><td>อ่านต่อเนื่อง</td><td><code>AT24Cxx_ReadSeq(&eeprom, 0, buf, 256)</code></td></tr>
-    <tr><td><code>AT24Cxx_GetSize(&eeprom)</code></td><td>อ่านขนาด EEPROM</td><td><code>uint16_t sz = AT24Cxx_GetSize(&eeprom)</code></td></tr>
+    <tr><th>ฟังก์ชัน</th><th>Signature</th><th>คืนค่า / หมายเหตุ</th></tr>
+    <tr><td><code>AT24Cxx_Init</code></td><td><code>AT24Cxx_Status AT24Cxx_Init(AT24Cxx_Instance* eeprom, AT24Cxx_Type type, uint8_t i2c_addr)</code></td><td>คืน status — type เป็น enum <code>AT24C01..AT24C512</code> — i2c_addr 7-bit (default 0x50)</td></tr>
+    <tr><td><code>AT24Cxx_WriteByte</code></td><td><code>AT24Cxx_Status AT24Cxx_WriteByte(AT24Cxx_Instance* eeprom, uint32_t address, uint8_t data)</code></td><td>คืน status — library จัดการ write cycle 5ms (<code>AT24CXX_WRITE_CYCLE_MS</code>) ให้ภายในตัว</td></tr>
+    <tr><td><code>AT24Cxx_ReadByte</code></td><td><code>AT24Cxx_Status AT24Cxx_ReadByte(AT24Cxx_Instance* eeprom, uint32_t address, uint8_t* data)</code></td><td><strong>data เป็น out-param</strong> — คืน status ไม่ใช่ byte — ต้องสร้างตัวแปรก่อนแล้วส่ง <code>&amp;var</code></td></tr>
+    <tr><td><code>AT24Cxx_WriteArray</code></td><td><code>AT24Cxx_Status AT24Cxx_WriteArray(AT24Cxx_Instance* eeprom, uint32_t address, const uint8_t* data, uint16_t len)</code></td><td>เขียนหลาย byte ข้าม page boundary อัตโนมัติ</td></tr>
+    <tr><td><code>AT24Cxx_ReadArray</code></td><td><code>AT24Cxx_Status AT24Cxx_ReadArray(AT24Cxx_Instance* eeprom, uint32_t address, uint8_t* data, uint16_t len)</code></td><td>sequential read — buffer รับเป็น out-param</td></tr>
+    <tr><td><code>AT24Cxx_WriteString</code></td><td><code>AT24Cxx_Status AT24Cxx_WriteString(AT24Cxx_Instance* eeprom, uint32_t address, const char* str)</code></td><td>เขียน null-terminated string (เก็บ <code>'\0'</code> ด้วย)</td></tr>
+    <tr><td><code>AT24Cxx_ReadString</code></td><td><code>AT24Cxx_Status AT24Cxx_ReadString(AT24Cxx_Instance* eeprom, uint32_t address, char* buf, uint16_t max_len)</code></td><td>อ่านจนเจอ <code>'\0'</code> หรือเต็ม max_len — มี out-param</td></tr>
+    <tr><td><code>AT24Cxx_WriteUint32</code></td><td><code>AT24Cxx_Status AT24Cxx_WriteUint32(AT24Cxx_Instance* eeprom, uint32_t address, uint32_t value)</code></td><td>เขียน 4 bytes Little Endian — เผื่อ address 4 bytes</td></tr>
+    <tr><td><code>AT24Cxx_ReadUint32</code></td><td><code>AT24Cxx_Status AT24Cxx_ReadUint32(AT24Cxx_Instance* eeprom, uint32_t address, uint32_t* value)</code></td><td>อ่าน 4 bytes LE — value เป็น out-param</td></tr>
+    <tr><td><code>AT24Cxx_EraseAll</code></td><td><code>AT24Cxx_Status AT24Cxx_EraseAll(AT24Cxx_Instance* eeprom)</code></td><td>เขียน 0xFF ทุก address — ใช้เวลานานขึ้นกับขนาด</td></tr>
+    <tr><td><code>AT24Cxx_GetCapacity</code></td><td><code>uint32_t AT24Cxx_GetCapacity(AT24Cxx_Instance* eeprom)</code></td><td>คืน bytes หรือ 0 ถ้าไม่ได้ init — <strong>ไม่ใช่</strong> <code>GetSize</code></td></tr>
+    <tr><td><code>AT24Cxx_StatusStr</code></td><td><code>const char* AT24Cxx_StatusStr(AT24Cxx_Status status)</code></td><td>แปลง status เป็น string สำหรับ debug</td></tr>
 </table>
+<p class="explain">🔍 <strong>Status enum:</strong> <code>AT24CXX_OK=0</code>, <code>AT24CXX_ERROR_PARAM=1</code>, <code>AT24CXX_ERROR_I2C=2</code>, <code>AT24CXX_ERROR_ADDR_OOB=3</code> (address เกิน capacity), <code>AT24CXX_ERROR_TIMEOUT=4</code> — <strong>ทุกฟังก์ชัน read/write คืน status และส่ง data กลับทาง out-param</strong> — <strong>ไม่มี</strong> <code>AT24Cxx_GetSize/ReadSeq/WritePage</code> (ชื่อบทเดิมผิด)</p>
 </section>
 
 <section><h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2>
 <table>
     <tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
-    <tr><td>อ่านค่าผิด/0xFF ตลอด</td><td>ลืม delay หลัง write</td><td>ต้อง Delay_Ms(5) หลังเขียนทุกครั้ง</td></tr>
-    <tr><td>เขียนแล้วค่าที่ต้น page หาย</td><td>เขียนข้าม page boundary</td><td>เช็ค page size ก่อนเขียน</td></tr>
-    <tr><td>EEPROM พังเร็ว</td><td>เขียนที่ address เดิมซ้ำๆ</td><td>ใช้ wear leveling กระจายการเขียน</td></tr>
+    <tr><td><code>ReadByte</code> ได้ 0xFF ตลอด</td><td>ลืมเช็ค <code>status</code> หรือชิปว่าง/ผิด address</td><td>เช็ค return ทุกครั้ง: <code>if (AT24Cxx_ReadByte(&amp;eeprom, addr, &amp;v) != AT24CXX_OK)</code> — ชิปใหม่อ่านได้ 0xFF เป็นค่า erased ปกติ — ยืนยัน address ตรง (A0/A1/A2 + type)</td></tr>
+    <tr><td>Write แล้วค่าไม่คง</td><td>เช็ค <code>AT24CXX_WRITE_CYCLE_MS</code> = 5ms — เขียนซ้อนเร็วเกิน tWR</td><td>Library รอ write cycle ให้ภายในตัวอยู่แล้ว — ถ้าเขียนซ้อนเองหลังเรียก API ต้องเว้นช่วง — หรือเช็ค status = <code>AT24CXX_ERROR_TIMEOUT</code></td></tr>
+    <tr><td>ค่าที่อ่านผิดเพี้ยน</td><td>เขียนผิด type (เช่น <code>AT24C02</code> จริงแต่ตั้ง <code>AT24C32</code>)</td><td>เช็ค enum type ให้ตรงรุ่นชิป — type ผิด → capacity/addr_bytes/page_size ผิด → I2C address sequence ผิด → อ่านตำแหน่งผิด</td></tr>
+    <tr><td>I2C error ตลอด (<code>AT24CXX_ERROR_I2C</code>)</td><td>pull-up ขาด / SDA-SCL สลับ / WP ต่อ VCC</td><td>เพิ่ม R 4.7kΩ pull-up — สลับสาย — ต่อ WP ไป GND เพื่อเปิดเขียน</td></tr>
+    <tr><td>Address out of bounds (<code>AT24CXX_ERROR_ADDR_OOB</code>)</td><td>เขียนเลข address เกิน capacity</td><td>ใช้ <code>AT24Cxx_GetCapacity(&amp;eeprom)</code> เช็คขนาดก่อนเขียน</td></tr>
+    <tr><td>EEPROM พังเร็ว</td><td>เขียนที่ address เดิมซ้ำๆ (endurance ~1M cycles)</td><td>ใช้ wear leveling กระจาบการเขียน — อย่าเขียนใน loop แน่นอน — เขียนเฉพาะตอน config เปลี่ยน</td></tr>
+    <tr><td>Build fail: <code>AT24Cxx_ReadByte</code> ใช้เป็น return value</td><td>เขียนผิด: <code>uint8_t v = AT24Cxx_ReadByte(...)</code></td><td>ใช้ out-param: <code>uint8_t v; AT24Cxx_ReadByte(&amp;eeprom, addr, &amp;v)</code> แล้วเช็ค status — function คืน status ไม่ใช่ byte</td></tr>
 </table>
-</section>
-
-<section><h2>🛠️ สร้าง Product: Config Store</h2>
-<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
-#include "SimpleHAL.h"
-#include "AT24Cxx.h"
-
-int main(void)
-{
-    SystemCoreClockUpdate();
-    I2C_Init(I2C1, I2C_SPEED_STANDARD);
-    USART_Init(USART1, BAUD_115200);
-
-    AT24Cxx_Instance eeprom;
-    AT24Cxx_Init(&eeprom, AT24C32, 0x50);
-
-    // Load saved config
-    uint8_t brightness = AT24Cxx_ReadByte(&eeprom, 0);
-    if(brightness == 0xFF) brightness = 128;
-
-    USART_Print("Brightness: ");
-    USART_PrintInt(brightness);
-    USART_Println("");
-
-    // Save new config
-    AT24Cxx_WriteByte(&eeprom, 0, 100);
-    Delay_Ms(5);
-
-    while(1);
-}</code></pre>
 </section>
 
 <section><h2>✏️ ลองทำดู</h2>
 <ol>
-    <li>ทำ settings manager — เก็บ config ใน EEPROM → อ่านตอน boot</li>
-    <li>ทำ event counter — นับจำนวนครั้งที่กดปุ่ม → เก็บใน EEPROM</li>
-    <li>ต่อ AT24Cxx 2 ตัวบนบัส I2C เดียวกัน — address 0x50 และ 0x51</li>
+    <li>ทำ settings manager — เก็บ config (brightness, mode, threshold) เป็น struct ลง EEPROM → อ่านตอน boot → ถ้า magic ไม่ตรงใช้ default</li>
+    <li>ทำ event counter — นับจำนวนครั้งที่กดปุ่มแล้วเก็บ <code>uint32_t</code> ด้วย <code>AT24Cxx_WriteUint32(&amp;eeprom, addr, value)</code> + wear leveling หมุน address แต่ละครั้ง</li>
+    <li>ต่อ AT24Cxx 2 ตัวบนบัสเดียวกัน — init 2 instance แยกใช้ address 0x50 และ 0x51 (A0 = VCC) — อ่าน capacity ทั้งคู่แล้วเปรียบเทียบ</li>
 </ol>
 </section>
 

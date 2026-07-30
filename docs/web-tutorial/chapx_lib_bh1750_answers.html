@@ -8,8 +8,6 @@ float last_lux = 0;
 BH1750_Instance bh;
 
 void bh1750_logger(void) {
-    if(!BH1750_IsReady(&bh)) return;
-
     float lux = BH1750_ReadLux(&bh);
     if(lux < 0) {
         USART_Println("BH1750 read error");
@@ -44,7 +42,6 @@ void bh1750_night_light(void) {
 
     while(1) {
         Delay_Ms(150);
-        if(!BH1750_IsReady(&bh)) continue;
 
         float lux = BH1750_ReadLux(&bh);
         if(lux < 0) continue;
@@ -78,7 +75,6 @@ void bh1750_night_light(void) {
 
     while(1) {
         Delay_Ms(200);
-        if(!BH1750_IsReady(&bh)) continue;
 
         float lux = BH1750_ReadLux(&bh);
         if(lux < 0) continue;

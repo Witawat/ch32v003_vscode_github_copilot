@@ -53,7 +53,7 @@ int main(void) {
             case 3: val = (idx < 64) ? 4095 : 0; break;
         }
 
-        MCP4725_SetVoltage(&dac, val);
+        MCP4725_SetRaw(&dac, val);
         idx = (idx + 1) % 128;
         Delay_Us(delay_us);
     }
@@ -76,16 +76,17 @@ int main(void) {
     MCP4725_Instance dac;
     MCP4725_Init(&dac, 0x60);
 
-    uint16_t saved = MCP4725_ReadEEPROM(&dac);
+    uint16_t saved;
+    MCP4725_GetRaw(&dac, &saved);
     USART_Print("EEPROM saved value: ");
     USART_PrintDec(saved);
     USART_Print("\r\n");
 
     if(saved > 0 && saved <= 4095) {
-        MCP4725_SetVoltage(&dac, saved);
+        MCP4725_SetRaw(&dac, saved);
         USART_Print("Restored setpoint from EEPROM\r\n");
     } else {
-        MCP4725_SetVoltage(&dac, 2048);
+        MCP4725_SetRaw(&dac, 2048);
         USART_Print("No valid EEPROM value, default: 2048\r\n");
     }
 
@@ -104,7 +105,7 @@ int main(void) {
         if(GPIO_Read(PC0) == 0) {
             Delay_Ms(100);
             if(setpoint < 4095) setpoint += 40;
-            MCP4725_SetVoltage(&dac, setpoint);
+            MCP4725_SetRaw(&dac, setpoint);
             float v = setpoint * (3.3f / 4096.0f);
             USART_Print("UP → "); USART_PrintDec(setpoint);
             USART_Print(" ("); USART_PrintFloat(v, 3);
@@ -115,7 +116,7 @@ int main(void) {
         if(GPIO_Read(PC1) == 0) {
             Delay_Ms(100);
             if(setpoint >= 40) setpoint -= 40;
-            MCP4725_SetVoltage(&dac, setpoint);
+            MCP4725_SetRaw(&dac, setpoint);
             float v = setpoint * (3.3f / 4096.0f);
             USART_Print("DOWN → "); USART_PrintDec(setpoint);
             USART_Print(" ("); USART_PrintFloat(v, 3);
@@ -125,11 +126,12 @@ int main(void) {
 
         if(GPIO_Read(PC0) == 0 && GPIO_Read(PC1) == 0) {
             Delay_Ms(100);
-            MCP4725_WriteEEPROM(&dac, setpoint);
+            MCP4725_SetRawEEPROM(&dac, setpoint);
             USART_Print("SAVED to EEPROM!\r\n");
         }
 
-        uint16_t verify = MCP4725_ReadEEPROM(&dac);
+        uint16_t verify;
+        MCP4725_GetRaw(&dac, &verify);
         if(verify != setpoint) {
             USART_Print("EEPROM mismatch! ");
             USART_PrintDec(verify);
@@ -139,7 +141,7 @@ int main(void) {
         Delay_Ms(50);
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> ตอนบูท อ่าน EEPROM ด้วย <code>MCP4725_ReadEEPROM()</code> — ถ้ามีค่าเก่า → restore กลับ — ปุ่ม UP/DOWN (PC0/PC1) ปรับ setpoint ทีละ ~32mV (40 steps) — กดทั้งสองปุ่มพร้อมกัน → บันทึกด้วย <code>WriteEEPROM()</code> (ใช้เวลา ~25ms) — หลังจาก reboot ค่าจะยังคงอยู่เพราะเก็บใน EEPROM ของ MCP4725 — ห้ามเขียน EEPROM ถี่เกิน (limit ~1M cycles)</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ตอนบูท อ่าน EEPROM ด้วย <code>MCP4725_GetRaw()</code> — ถ้ามีค่าเก่า → restore กลับ — ปุ่ม UP/DOWN (PC0/PC1) ปรับ setpoint ทีละ ~32mV (40 steps) — กดทั้งสองปุ่มพร้อมกัน → บันทึกด้วย <code>SetRawEEPROM()</code> (ใช้เวลา ~25ms) — หลังจาก reboot ค่าจะยังคงอยู่เพราะเก็บใน EEPROM ของ MCP4725 — ห้ามเขียน EEPROM ถี่เกิน (limit ~1M cycles)</div>
 </div>
 
 <div class="answer">
@@ -180,7 +182,7 @@ int main(void) {
             while(GPIO_Read(PC0) == 0);
         }
 
-        MCP4725_SetVoltage(&dac, (uint16_t)value);
+        MCP4725_SetRaw(&dac, (uint16_t)value);
 
         switch(mode) {
             case RAMP_UP:

@@ -12,7 +12,7 @@ flowchart TD
     C -->|"Yes"| E["Overwrite or Drop"]
     D --> F["Main Loop: CircularBuffer_Available(&amp;cb)"]
     F --> G{"Available > 0?"}
-    G -->|"Yes"| H["CircularBuffer_Pop(&amp;cb) → tail++"]
+    G -->|"Yes"| H["CircularBuffer_Pop(&amp;cb, &amp;data) → tail++"]
     H --> G
     G -->|"No"| I["Wait / IWDG_Feed()"]
     I --> F
@@ -76,7 +76,8 @@ int main(void) {
 <div class="step"><h3>ขั้นที่ 3: Main Loop — อ่านจาก Buffer + Process</h3>
 <pre><code class="language-c">    while(1) {
         while(CircularBuffer_Available(&cb)) {
-            char c = CircularBuffer_Pop(&cb);
+            uint8_t c;
+            CircularBuffer_Pop(&cb, &c);
 
             if(c == '\n' || c == '\r') {
                 if(line_idx > 0) {
@@ -92,18 +93,18 @@ int main(void) {
         IWDG_Feed();
     }
 }</code></pre>
-<p class="explain">🔍 <code>CircularBuffer_Available()</code> — เช็คว่ามีข้อมูลรออ่านหรือไม่ — <code>CircularBuffer_Pop()</code> — อ่าน 1 byte จาก tail — main loop อ่านเฉพาะ tail (ISR ไม่แตะ tail) — สร้าง line buffer แยกเพื่อ parse command แบบ line-by-line</p></div>
+<p class="explain">🔍 <code>CircularBuffer_Available()</code> — เช็คว่ามีข้อมูลรออ่านหรือไม่ — <code>CircularBuffer_Pop(&cb, &data)</code> — อ่าน 1 byte จาก tail (ผ่าน out-param) คืน CIRCULAR_BUFFER_OK หรือ EMPTY — main loop อ่านเฉพาะ tail (ISR ไม่แตะ tail) — สร้าง line buffer แยกเพื่อ parse command แบบ line-by-line</p></div>
 </section>
 
 <section><h2>📋 API Reference</h2><table><tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
 <tr><td><code>CircularBuffer_Init(&cb, buf, size)</code></td><td>เริ่มต้น buffer — buf ต้องเป็น array คงที่</td><td><code>CircularBuffer_Init(&cb, rx_buf, 128)</code></td></tr>
-<tr><td><code>CircularBuffer_Push(&cb, data)</code></td><td>เขียน 1 byte — คืน 1=สำเร็จ, 0=buffer เต็ม</td><td><code>if(!CircularBuffer_Push(&cb, c)){/*overflow*/}</code></td></tr>
-<tr><td><code>CircularBuffer_Pop(&cb)</code></td><td>อ่าน 1 byte — ต้องเช็ค Available ก่อน</td><td><code>char c = CircularBuffer_Pop(&cb)</code></td></tr>
+<tr><td><code>CircularBuffer_Push(&cb, data)</code></td><td>เขียน 1 byte — คืน CIRCULAR_BUFFER_OK หรือ FULL</td><td><code>if(CircularBuffer_Push(&cb, c) != CIRCULAR_BUFFER_OK){/*overflow*/}</code></td></tr>
+<tr><td><code>CircularBuffer_Pop(&cb, &data)</code></td><td>อ่าน 1 byte (out-param) — คืน status</td><td><code>uint8_t c; CircularBuffer_Pop(&cb, &c)</code></td></tr>
 <tr><td><code>CircularBuffer_Available(&cb)</code></td><td>จำนวน byte ที่รออ่าน</td><td><code>while(CircularBuffer_Available(&cb)){...}</code></td></tr>
 <tr><td><code>CircularBuffer_IsFull(&cb)</code></td><td>เช็คว่า buffer เต็มหรือไม่</td><td><code>if(CircularBuffer_IsFull(&cb)){...}</code></td></tr>
 <tr><td><code>CircularBuffer_IsEmpty(&cb)</code></td><td>เช็คว่า buffer ว่างหรือไม่</td><td><code>if(!CircularBuffer_IsEmpty(&cb)){...}</code></td></tr>
 <tr><td><code>CircularBuffer_Flush(&cb)</code></td><td>ล้าง buffer — รีเซ็ต head=tail=0</td><td><code>CircularBuffer_Flush(&cb)</code></td></tr>
-<tr><td><code>CircularBuffer_GetFree(&cb)</code></td><td>จำนวน byte ที่ยังเขียนได้</td><td><code>uint16_t free = CircularBuffer_GetFree(&cb)</code></td></tr>
+<tr><td><code>CircularBuffer_Remaining(&cb)</code></td><td>จำนวน byte ที่ยังเขียนได้</td><td><code>uint16_t free = CircularBuffer_Remaining(&cb)</code></td></tr>
 </table></section>
 
 <section><h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2><table><tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
@@ -111,7 +112,7 @@ int main(void) {
 <tr><td>ข้อมูลเพี้ยน — อ่านออกมาแปลกๆ</td><td>Buffer ใช้ stack variable — ถูก overwrite</td><td>ประกาศ buffer เป็น global หรือ static — ห้ามใช้ local array</td></tr>
 <tr><td>ISR ค้าง — ไม่ตอบสนอง</td><td>เรียก <code>CircularBuffer_Pop()</code> ใน ISR (เขียน+อ่านพร้อมกัน)</td><td>ISR ควร Write เท่านั้น — Main loop Read เท่านั้น — ห้ามสลับหน้าที่</td></tr>
 <tr><td>ข้อมูลเก่าค้างใน buffer</td><td>ไม่ได้ Flush buffer ตอนเปลี่ยนโหมด</td><td>เรียก <code>CircularBuffer_Flush(&cb)</code> ก่อนเริ่มรับข้อมูลชุดใหม่</td></tr>
-<tr><td><code>Available()</code> คืนค่าไม่ถูกต้อง</td><td>Interrupt เกิดขณะกำลัง Read ใน main — race condition</td><td>ใช้ขนาด buffer เป็น power of 2 — หรือใช้ <code>__disable_irq()</code> / <code>__enable_irq()</code> ครอบ critical section</td></tr>
+<tr><td><code>Available()</code> คืนค่าไม่ถูกต้อง</td><td>Interrupt เกิดขณะกำลัง Read ใน main — race condition</td><td>ไม่จำเป็นต้องห่อ <code>__disable_irq()</code> เอง — library ปิด IRQ ให้อัตโนมัติรอบ Push/Pop แล้ว — ใช้ขนาด buffer เป็น power of 2 ช่วยให้ wrap เร็วขึ้น</td></tr>
 <tr><td>เขียนสำเร็จแต่ Read ไม่ได้อะไร</td><td>ใช้คนละ handle หรือ buffer array คนละตัว</td><td>เช็คว่า ISR กับ main loop ใช้ <code>&cb</code> ตัวเดียวกัน — และ buf array ตัวเดียวกัน</td></tr>
 </table></section>
 
@@ -147,7 +148,8 @@ int main(void) {
     USART_Println("Shell Ready. Type HELP");
     while(1) {
         while(CircularBuffer_Available(&cb)) {
-            char c = CircularBuffer_Pop(&cb);
+            uint8_t c;
+            CircularBuffer_Pop(&cb, &c);
             if(c == '\n' || c == '\r') {
                 if(idx > 0) { line[idx] = '\0'; process(line); idx = 0; }
             } else if(idx < sizeof(line)-1) { line[idx++] = c; }

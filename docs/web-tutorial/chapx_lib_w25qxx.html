@@ -92,7 +92,7 @@ int main(void) {
 
     W25Qxx_Init(&flash, PC4);  // CS=PC4
 
-    uint32_t jedec = W25Qxx_ReadJEDEC(&flash);
+    uint32_t jedec = W25Qxx_ReadJedecID(&flash);
     USART_Print("JEDEC ID: 0x");
     USART_PrintHex24(jedec);
     USART_Println("");
@@ -128,7 +128,7 @@ int main(void) {
 <table>
     <tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
     <tr><td><code>W25Qxx_Init(&flash, CS)</code></td><td>เริ่มต้น SPI Flash</td><td><code>W25Qxx_Init(&flash, PC4)</code></td></tr>
-    <tr><td><code>W25Qxx_ReadJEDEC(&flash)</code></td><td>อ่าน JEDEC ID 3-byte</td><td><code>uint32_t id = W25Qxx_ReadJEDEC(&flash)</code></td></tr>
+    <tr><td><code>W25Qxx_ReadJedecID(&flash)</code></td><td>อ่าน JEDEC ID 3-byte</td><td><code>uint32_t id = W25Qxx_ReadJedecID(&flash)</code></td></tr>
     <tr><td><code>W25Qxx_EraseSector(&flash, addr)</code></td><td>ลบ 1 sector (4KB)</td><td><code>W25Qxx_EraseSector(&flash, 0)</code></td></tr>
     <tr><td><code>W25Qxx_EraseChip(&flash)</code></td><td>ลบทั้งชิป</td><td><code>W25Qxx_EraseChip(&flash)</code></td></tr>
     <tr><td><code>W25Qxx_Write(&flash, addr, buf, len)</code></td><td>เขียนข้อมูล</td><td><code>W25Qxx_Write(&flash, 0, data, 32)</code></td></tr>
@@ -159,13 +159,13 @@ int main(void)
     W25Qxx_Init(&flash, PC4);
 
     W25Qxx_EraseSector(&flash, 0);
-    while(W25Qxx_IsBusy(&flash));
+    W25Qxx_WaitBusy(&flash, 1000);
 
     uint8_t data[256];
     for(int i=0; i<256; i++) data[i] = i;
 
     W25Qxx_Write(&flash, 0, data, 256);
-    while(W25Qxx_IsBusy(&flash));
+    W25Qxx_WaitBusy(&flash, 1000);
 
     uint8_t rbuf[256];
     W25Qxx_Read(&flash, 0, rbuf, 256);

@@ -66,7 +66,7 @@ void gps_position_logger(void) {
         Delay_Ms(200);
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> ใช้ GPS_IsUpdated เช็คข้อมูลใหม่ — GPS_GetLat/Lon ดึงค่าพิกัด — คำนวณ Haversine distance เทียบจุดก่อนหน้า ถ้าเดินเกิน 10m จึงบันทึก — บันทึกลง Flash เป็น struct (12 ไบต์) — คำนวณ log_addr เลื่อนขึ้น ถ้าเต็มก็วนกลับแต่ต้อง erase page ก่อน — Flash เขียนเป็น half-word (16-bit) ต้องคำนวณจำนวน half-word ให้ถูก</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> ใช้ gps.data_ready เช็คข้อมูลใหม่ — GPS_GetLat/Lon ดึงค่าพิกัด — คำนวณ Haversine distance เทียบจุดก่อนหน้า ถ้าเดินเกิน 10m จึงบันทึก — บันทึกลง Flash เป็น struct (12 ไบต์) — คำนวณ log_addr เลื่อนขึ้น ถ้าเต็มก็วนกลับแต่ต้อง erase page ก่อน — Flash เขียนเป็น half-word (16-bit) ต้องคำนวณจำนวน half-word ให้ถูก</div>
 </div>
 
 <div class="answer">
@@ -86,7 +86,7 @@ void gps_speed_alert(void) {
     while(1) {
         if(!GPS_Update(&gps)) { Delay_Ms(200); continue; }
 
-        speed_kph = GPS_GetSpeedKph(&gps);
+        speed_kph = GPS_GetSpeed(&gps);
         uint8_t sats = GPS_GetSatellites(&gps);
 
         USART_Print("Speed: ");
@@ -122,7 +122,7 @@ void gps_speed_alert(void) {
         Delay_Ms(500);
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> GPS_GetSpeedKph อ่านความเร็วภาคพื้นดิน (SOG) จาก NMEA — ใช้ hysteresis 5 kph ป้องกัน buzzer เปิดปิดถี่เมื่ออยู่ตรงขีดจำกัด — เช็คจำนวนดาวเทียมก่อน (≥4 ถึงจะแม่น) — PWM buzzer เป็นสัญญาณเตือน — LED dimmer แสดงระดับความเร็วเทียบ 120 km/h — ใช้ขาต่าง PWM channel แยก buzzer กับ LED</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> GPS_GetSpeed อ่านความเร็วภาคพื้นดิน (SOG) จาก NMEA — ใช้ hysteresis 5 kph ป้องกัน buzzer เปิดปิดถี่เมื่ออยู่ตรงขีดจำกัด — เช็คจำนวนดาวเทียมก่อน (≥4 ถึงจะแม่น) — PWM buzzer เป็นสัญญาณเตือน — LED dimmer แสดงระดับความเร็วเทียบ 120 km/h — ใช้ขาต่าง PWM channel แยก buzzer กับ LED</div>
 </div>
 
 <div class="answer">
@@ -138,10 +138,12 @@ void gps_sync_ds3231(void) {
     while(1) {
         if(!GPS_Update(&gps)) { Delay_Ms(200); continue; }
 
-        if(GPS_GetFix(&gps) && !synced) {
-            // อ่านวันเวลาจาก GPS
-            uint16_t y; uint8_t m, d, h, min, s;
-            GPS_GetDateTime(&gps, &y, &m, &d, &h, &min, &s);
+        if(GPS_IsFixValid(&gps) && !synced) {
+            // อ่านวันเวลาจาก GPS (เป็น GPS_DateTime struct)
+            GPS_DateTime dt;
+            GPS_GetDateTime(&gps, &dt);
+            uint16_t y = 2000 + dt.year;  // GPS ให้ปีแบบ 2-digit (เช่น 26 = 2026)
+            uint8_t m = dt.month, d = dt.day, h = dt.hour, min = dt.minute, s = dt.second;
 
             // GPS ให้เวลา UTC ต้องปรับ timezone (+7 สำหรับไทย)
             h += 7;
@@ -180,7 +182,7 @@ void gps_sync_ds3231(void) {
         Delay_Ms(100);
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> GPS ให้เวลาแบบ UTC แม่นยำระดับอะตอม — GPS_GetFix เช็คว่ามี 3D fix หรือยัง — GPS_GetDateTime ดึงปี-เดือน-วัน-ชั่วโมง-นาที-วินาที — ปรับ timezone +7 (ไทย) ก่อนเขียนลง DS3231 — sync แค่ครั้งเดียวตอนแรก (synced flag) — DS3231 มี RTC แบตเตอรี่ในตัว เก็บเวลาได้แม้ไฟดับ — GPS ใช้ sync ตอนเริ่มต้นเท่านั้น RTC เดินเองต่อ</div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> GPS ให้เวลาแบบ UTC แม่นยำระดับอะตอม — GPS_IsFixValid เช็คว่ามี fix หรือยัง — GPS_GetDateTime ดึง GPS_DateTime struct (ปี-เดือน-วัน-ชั่วโมง-นาที-วินาที) — ปรับ timezone +7 (ไทย) ก่อนเขียนลง DS3231 — sync แค่ครั้งเดียวตอนแรก (synced flag) — DS3231 มี RTC แบตเตอรี่ในตัว เก็บเวลาได้แม้ไฟดับ — GPS ใช้ sync ตอนเริ่มต้นเท่านั้น RTC เดินเองต่อ</div>
 </div>
 
 <nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_gps_neo6m.html">กลับบท</a><a href="chapx_lib_ir_answers.html">เฉลยถัดไป →</a></nav>

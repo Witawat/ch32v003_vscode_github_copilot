@@ -15,7 +15,7 @@
 <h1>📝 เฉลย — บทที่ 12: Watchdog</h1>
 
 <div class="answer">
-<h2>ข้อ 1: IWDG 1.6 วิ + LED blink</h2>
+<h2>ข้อ 1: ตรวจจับ reset จาก IWDG (IWDG reset detect)</h2>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 
@@ -24,8 +24,8 @@ volatile uint32_t g_wdg_count = 0;
 int main(void) {
     SystemCoreClockUpdate();
 
-    // ตรวจจับ reset จาก IWDG
-    if (IWDG_CheckReset()) {
+    // ——— ตรวจจับ reset จาก IWDG — ใช้ API จริง IWDG_WasResetCause() ———
+    if (IWDG_WasResetCause()) {
         // หน่วงเล็กน้อย — ป้องกัน infinite reset loop
         for (volatile uint32_t i = 0; i < 50000; i++);
 
@@ -34,27 +34,29 @@ int main(void) {
         pinMode(PC0, PIN_MODE_OUTPUT);
         g_wdg_count++;
 
-        USART_Print("!!! WATCHDOG RESET !!!\r\n");
+        USART_Print("!!! IWDG WATCHDOG RESET !!!\r\n");
         // LED กระพริบเร็ว 5 ครั้ง — แสดงว่าเกิด reset
         for (int i = 0; i < 5; i++) {
             digitalWrite(PC0, HIGH); Delay_Ms(50);
             digitalWrite(PC0, LOW);  Delay_Ms(50);
         }
+
+        // ⚠ IWDG_ClearResetFlag() เคลียร์ reset flag "ทุกตัวพร้อมกัน"
+        //   (POR/PIN/IWDG/WWDG/SW/LP) — ถ้าจะอ่าน flag อื่นต้องทำ "ก่อน" เรียกนี่
+        USART_Print("Clearing all reset flags now\r\n");
+        IWDG_ClearResetFlag();
     }
 
     Timer_Init();
     USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
     pinMode(PC0, PIN_MODE_OUTPUT);
 
-    // IWDG timeout 1.6 วิ (1600ms)
+    // IWDG timeout 1.6 วิ (1600ms) — auto-pick prescaler
     IWDG_SimpleInit(1600);
 
     USART_Print("IWDG Active — 1.6s timeout\r\n");
-    USART_Print("LED blink 0.5s ON + 0.5s OFF = 1s/cycle\r\n");
-    USART_Print("Must feed watchdog within 1.6s\r\n");
 
     uint32_t counter = 0;
-
     while (1) {
         // LED ON 500ms
         digitalWrite(PC0, HIGH);
@@ -67,20 +69,25 @@ int main(void) {
         digitalWrite(PC0, LOW);
         USART_Print("OFF [feed]\r\n");
 
-        // Feed watchdog — รีเซ็ต timer
-        // Must be called within 1.6s of last feed
+        // Feed watchdog — no-arg
         IWDG_Feed();
-
         // รวม 1 cycle = 500ms + feed = ปลอดภัย (< 1.6s)
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> <code>IWDG_SimpleInit(1600)</code> ตั้ง timeout 1.6 วิ — หลังจากเปิดแล้วปิดไม่ได้ — ทุกรอบ loop ใช้เวลา ~500ms → feed ทันเวลาเสมอ — LED blink: ON 500ms + OFF 500ms = 1s/cycle < 1.6s timeout — <strong>กฎเหล็ก IWDG:</strong> feed ใน main loop เท่านั้น — ห้าม feed ใน ISR เพราะ ISR อาจทำงานแม้ main loop ค้าง — <strong>IWDG timeout ที่ใช้ได้:</strong> 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 26208 ms — เลือกให้พอดีกับ worst-case loop time + margin 50% — debugger หยุด IWDG อัตโนมัติ — ต้องรันจริงถึงจะเห็นผล</ul></div>
-</ul></div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> <code>IWDG_WasResetCause()</code> คืน 1 ถ้า reset ล่าสุดเกิดจาก IWDG เป็น API จริงของ SimpleHAL — เช็คตั้งแต่ต้น main() ก่อนเริ่ม IWDG ใหม่ — <code>IWDG_SimpleInit(1600)</code> auto-pick prescaler ให้พอดี 1.6s — หลังจากเปิดแล้วปิดไม่ได้ — ทุกรอบ loop ใช้เวลา ~1s → feed ทันเวลาเสมอ — <strong>กฎเหล็ก IWDG:</strong> feed ใน main loop เท่านั้น ห้าม feed ใน ISR เพราะ ISR อาจทำงานแม้ main loop ค้าง — <strong>IWDG timeout ที่ใช้ได้:</strong> 0.1ms - 32.7s (แล้วแต่ prescaler) — เลือกให้พอดีกับ worst-case loop time + margin 50% — debugger หยุด IWDG อัตโนมัติ — ต้องรันจริงถึงจะเห็นผล — <strong>⚠ IWDG_ClearResetFlag():</strong> เคลียร์ reset flag <strong>ทุกตัวพร้อมกัน</strong> (POR/PIN/IWDG/WWDG/SW/LP) ตาม hardware CH32V003 — ถ้าต้องการอ่านสาเหตุ reset อื่นด้วย ให้เรียก <code>RCC_GetFlagStatus()</code> ของ flag อื่น<strong>ก่อน</strong>เรียกฟังก์ชันนี้</div>
+</div>
 
 <div class="answer">
-<h2>ข้อ 2: WWDG window mode</h2>
+<h2>ข้อ 2: WWDG window test — เร็วเกิน / ใน window / ช้าเกิน</h2>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include "SimpleHAL.h"
+
+// ——— PCLK1 = 24MHz, prescaler = 8 ———
+//   timeout  (counter 0x7F) = WWDG_TIMEOUT_MS(8, 0x7F) ≈ 87.4 ms
+//   window opens (counter 0x50) = WWDG_TIMEOUT_MS(8, 0x50) ≈ 23.2 ms
+//   → ต้อง WWDG_Refresh(counter) ตอน counter อยู่ระหว่าง 0x50 - 0x40 (≈ 23..87 ms)
+uint32_t window_us = WWDG_TIMEOUT_US(8, 0x50);  // ≈ 23211 µs
+uint32_t timeout_us = WWDG_TIMEOUT_US(8, 0x7F); // ≈ 87381 µs
 
 int main(void) {
     SystemCoreClockUpdate();
@@ -90,56 +97,55 @@ int main(void) {
     pinMode(PC1, PIN_MODE_OUTPUT);
 
     USART_Print("=== WWDG Window Mode Demo ===\r\n");
+    USART_Print("timeout ≈ 87 ms, window opens ≈ 23 ms\r\n");
+    USART_Print("Valid feed: between 23ms and 87ms\r\n");
 
-    // WWDG: timeout ~28ms, window 50% (14ms-28ms)
-    // ต้อง refresh ระหว่าง 14ms ถึง 28ms
-    // เร็วเกิน 14ms → reset (loop เร็วผิดปกติ)
-    // ช้าเกิน 28ms → reset (loop ค้าง)
-    WWDG_SimpleInit(WWDG_TIMEOUT_28MS, 50);
-
-    USART_Print("WWDG 28ms timeout, 50% window\r\n");
-    USART_Print("Valid feed window: 14-28ms\r\n");
-    USART_Print("PC0=fast LED, PC1=feed indicator\r\n");
+    // WWDG_SimpleInit รับ raw register values (counter, window) — ไม่ใช่ (timeout_constant, percentage)
+    // ⚠ ถ้าส่ง window > counter (เช่น (0x60, 0x70)) window จะถูก clamp ลงเท่า counter แบบ silent
+    WWDG_SimpleInit(0x7F, 0x50);  // counter=127, window=80, prescaler default 8
 
     uint32_t counter = 0;
 
     while (1) {
         counter++;
-
-        // LED toggle ทุกรอบ (เร็ว)
         digitalWrite(PC0, !digitalRead(PC0));
 
-        // หน่วง 20ms — เกิน 14ms (window start) แต่น้อยกว่า 28ms (timeout)
-        Delay_Ms(20);
-
-        // Feed WWDG — ใน window!
+#if defined(TEST_TOO_FAST)
+        // เคส 1: feed เร็วเกิน — ตอน counter ยัง > 0x50 → RESET!
+        WWDG_Refresh(0x7F);
+#elif defined(TEST_IN_WINDOW)
+        // เคส 2: ใน window — Delay 30ms (อยู่ระหว่าง 23..87) แล้ว refresh → OK
+        Delay_Ms(30);
         digitalWrite(PC1, HIGH);
-        WWDG_Refresh();
+        WWDG_Refresh(0x7F);   // ต้องส่ง counter เสมอ
         digitalWrite(PC1, LOW);
+#elif defined(TEST_TOO_SLOW)
+        // เคส 3: ช้าเกิน — Delay 100ms เลย 87ms → RESET!
+        Delay_Ms(100);
+        WWDG_Refresh(0x7F);   // ตอนนี้ counter ตกไปที่ 0x3F แล้ว — reset ก่อน refresh
+#else
+        // default: ใน window
+        Delay_Ms(30);
+        WWDG_Refresh(0x7F);
+#endif
 
         if (counter % 50 == 0) {
             USART_Print("WWDG Feed #");
             USART_PrintNum((int32_t)counter);
-            USART_Print(" OK (20ms in window)\r\n");
+            USART_Print(" OK\r\n");
         }
-
-        // สิ่งที่ไม่ควรทำ:
-        // WWDG_Refresh(); ← refresh ทันที = เร็วเกิน (0ms < 14ms) → RESET!
-
-        // สิ่งที่ไม่ควรทำ:
-        // Delay_Ms(30); ← เลย 28ms → RESET!
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> WWDG window mode ต่างจาก IWDG ตรงที่ต้อง refresh ใน "หน้าต่างเวลา" — เร็วเกินก็ reset, ช้าเกินก็ reset — <code>WWDG_SimpleInit(WWDG_TIMEOUT_28MS, 50)</code> — window 50%: valid feed ระหว่าง 14-28ms — ลองทดสอบ: (1) feed ทันที → RESET (เร็วเกิน), (2) Delay_Ms(20) → feed → OK (ใน window), (3) Delay_Ms(30) → feed → RESET (ช้าเกิน) — WWDG ใช้ PCLK1 → แม่นยำกว่า IWDG (LSI) — timeout สั้น (μs-ms) → ตรวจจับ loop anomaly ได้ไวกว่า — EWI (Early Wakeup Interrupt): เตือนก่อน timeout → บันทึก debug info — <strong>ข้อควรระวัง:</strong> Debugger อาจรบกวน timing WWDG — ทดสอบแบบรันจริง</ul></div>
-</ul></div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> WWDG window mode ต่างจาก IWDG ตรงที่ต้อง refresh ใน "หน้าต่างเวลา" — เร็วเกินก็ reset, ช้าเกินก็ reset — <code>WWDG_SimpleInit(0x7F, 0x50)</code> ตั้ง raw register values (counter=127, window=80) <strong>ไม่ใช่</strong> (timeout constant, percentage) — valid feed คือตอน <code>window &lt; counter &lt; 0x40</code> ≈ ระหว่าง 23ms ถึง 87ms — <code>WWDG_Refresh(0x7F)</code> <strong>ต้องส่ง counter</strong> ทุกครั้ง (ไม่ใช่ no-arg) — ทดสอบ 3 เคส: (1) <code>TEST_TOO_FAST</code> → refresh ทันที = counter ยัง > 0x50 → RESET (loop เร็วผิดปกติ), (2) <code>TEST_IN_WINDOW</code> → <code>Delay_Ms(30)</code> แล้ว refresh → OK, (3) <code>TEST_TOO_SLOW</code> → <code>Delay_Ms(100)</code> → counter ไปถึง 0x3F ก่อน → RESET (loop ค้าง) — WWDG ใช้ PCLK1 → แม่นยำกว่า IWDG (LSI) — timeout สั้น (µs-ms) → ตรวจจับ loop anomaly ได้ไวกว่า — <strong>⚠ window-clamp silent:</strong> ถ้าตั้ง <code>window &gt; counter</code> (เช่น <code>(0x60, 0x70)</code>) window จะถูกลดลงเท่า counter โดยไม่แจ้งเตือน — ป้องกัน reset loop ไม่รู้จบ — <strong>ข้อควรระวัง:</strong> Debugger อาจรบกวน timing WWDG — ทดสอบแบบรันจริง — SimpleWWDG ไม่มี timeout constant แบบเสร็จสรรค์ใน header ต้องคำนวณจาก <code>WWDG_TIMEOUT_MS(prescaler, counter)</code> เอง</div>
+</div>
 
 <div class="answer">
-<h2>ข้อ 3: ตรวจจับ reset จาก IWDG</h2>
+<h2>ข้อ 3: Safe-mode diagnostic — บันทึก reset log + safe mode</h2>
 <pre><code class="language-c">#define CH32V003_PACKAGE  PACKAGE_TSSOP20
 #include "SimpleHAL.h"
 
-#define CFG_ADDR  0x08003C00
-#define CFG_MAGIC 0x5AFE
+#define CFG_ADDR   0x08003C00
+#define CFG_MAGIC  0x5AFE
 
 typedef struct {
     uint16_t magic;
@@ -178,8 +184,8 @@ int main(void) {
 
     log_init();
 
-    // ——— ตรวจจับ reset source ———
-    if (IWDG_CheckReset()) {
+    // ——— ตรวจจับ reset source — ใช้ IWDG_WasResetCause() ตาม API จริง ———
+    if (IWDG_WasResetCause()) {
         // Reset จาก IWDG — main loop ค้าง!
         g_log.reset_reason = 1;
         g_log.wdg_reset_count++;
@@ -196,10 +202,13 @@ int main(void) {
         if (g_log.wdg_reset_count >= 3) {
             USART_Print("WARNING: Multiple WDG resets!\r\n");
             USART_Print("Safe mode: LED blink SOS\r\n");
-
             log_save();
 
-            // SOS: ... --- ... (short-short-short, long-long-long, short-short-short)
+            // เคลียร์ flag "หลัง" อ่าน reset cause ครบแล้ว
+            // ⚠ IWDG_ClearResetFlag() เคลียร์ flag "ทุกตัว" พร้อมกัน (ไม่แยกเฉพาะ IWDGRST)
+            IWDG_ClearResetFlag();
+
+            // SOS: ... --- ...
             while (1) {
                 for (int s = 0; s < 3; s++) {
                     digitalWrite(PC0, HIGH); Delay_Ms(150);
@@ -215,7 +224,8 @@ int main(void) {
                     digitalWrite(PC0, HIGH); Delay_Ms(150);
                     digitalWrite(PC0, LOW);  Delay_Ms(150);
                 }
-                Delay_Ms(1000);  // IWDG feed โดยไม่ใช้ IWDG → system stays in safe mode
+                Delay_Ms(1000);
+                // (ไม่ได้เปิด IWDG ใน safe mode → ไม่ต้อง feed)
             }
         }
     } else {
@@ -246,6 +256,9 @@ int main(void) {
 
     log_save();
 
+    // เคลียร์ flag หลังอ่าน reset cause ครบแล้ว — เพื่อ boot ครั้งถัดไปอ่านได้สะอาด
+    IWDG_ClearResetFlag();
+
     // เริ่ม IWDG — 4 วิ timeout
     IWDG_SimpleInit(4000);
     USART_Print("IWDG 4s active — running normally\r\n");
@@ -268,8 +281,8 @@ int main(void) {
         }
     }
 }</code></pre>
-<div class="approach"><strong>🧠 แนวคิด:</strong> การตรวจจับ reset source เป็นสิ่งจำเป็นสำหรับระบบ production-grade — <code>IWDG_CheckReset()</code> อ่าน flag ใน RCC/WDG register — check ตั้งแต่ต้น main() ก่อน init อะไร — <strong>ข้อมูล reset log</strong> เก็บใน Flash (BKP อาจหายถ้าไฟดับนาน) — บันทึก: จำนวนครั้ง, เวลาล่าสุด, สาเหตุ — วิเคราะห์แนวโน้ม: ถ้า WDG reset ถี่ → safe mode — <strong>Safe Mode:</strong> ทำงานน้อยที่สุด — กระพริบ LED SOS — ไม่ใช้ peripheral ที่อาจเป็นสาเหตุของ crash — ต้องการ manual reset เพื่อออก — <strong>ข้อควรระวัง:</strong> ถ้าไม่ดีเลย์หลังเช็ค IWDG_CheckReset() → IWDG flag อาจยังไม่ clear → เข้า reset loop ไม่รู้จบ — ดีเลย์ ~50ms ก่อนเริ่ม init ปกติ</ul></div>
-</ul></div>
+<div class="approach"><strong>🧠 แนวคิด:</strong> การตรวจจับ reset source เป็นสิ่งจำเป็นสำหรับระบบ production-grade — <code>IWDG_WasResetCause()</code> เป็น API จริงของ SimpleHAL — อ่าน flag ใน RCC → check ตั้งแต่ต้น main() ก่อน init อะไร — <strong>ข้อมูล reset log</strong> เก็บใน Flash (BKP อาจหายถ้าไฟดับนาน) — บันทึก: จำนวนครั้ง, เวลาล่าสุด, สาเหตุ — วิเคราะห์แนวโน้ม: ถ้า WDG reset ถี่ → safe mode — <strong>Safe Mode:</strong> ทำงานน้อยที่สุด — กระพริบ LED SOS — ไม่ใช้ peripheral ที่อาจเป็นสาเหตุของ crash — ต้องการ manual reset เพื่อออก — <strong>⚠ IWDG_ClearResetFlag():</strong> ฟังก์ชันนี้เคลียร์ reset flag <strong>ทุกตัวพร้อมกัน</strong> (POR, PIN, Software, IWDG, WWDG, LowPower) ตาม hardware CH32V003 — ถ้าจะอ่านสาเหตุ reset อื่นด้วย ให้อ่านด้วย <code>RCC_GetFlagStatus()</code> <strong>ก่อน</strong> เรียกฟังก์ชันนี้ — <strong>ข้อควรระวัง:</strong> ถ้าไม่ดีเลย์หลังเช็ค <code>IWDG_WasResetCause()</code> → IWDG flag อาจยังไม่ stable → เข้า reset loop ไม่รู้จบ — ดีเลย์ ~50ms ก่อนเริ่ม init ปกติ</div>
+</div>
 
 <nav class="bottom-nav">
     <a href="index.html">← สารบัญ</a>

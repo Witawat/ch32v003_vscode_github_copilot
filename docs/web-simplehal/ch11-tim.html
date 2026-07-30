@@ -85,7 +85,7 @@ flowchart TD
     <table>
         <thead><tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr></thead>
         <tbody>
-            <tr><td><code>TIM_SimpleInit(timer)</code></td><td>เริ่มต้น timer สำหรับ periodic interrupt</td><td><code>TIM_SimpleInit(TIM_2);</code></td></tr>
+            <tr><td><code>TIM_SimpleInit(timer, freq_hz)</code></td><td>เริ่มต้น timer สำหรับ periodic interrupt ที่ความถี่ที่กำหนด</td><td><code>TIM_SimpleInit(TIM_2, 1000);  // 1kHz</code></td></tr>
             <tr><td><code>TIM_Start(timer)</code></td><td>เริ่มนับ timer</td><td><code>TIM_Start(TIM_2);</code></td></tr>
             <tr><td><code>TIM_Stop(timer)</code></td><td>หยุดนับ timer</td><td><code>TIM_Stop(TIM_2);</code></td></tr>
             <tr><td><code>TIM_SetFrequency(timer, freq)</code></td><td>ตั้งความถี่ interrupt (Hz)</td><td><code>TIM_SetFrequency(TIM_2, 1000); // 1kHz</code></td></tr>
@@ -95,7 +95,7 @@ flowchart TD
             <tr><td><code>Simple_TIM_SetCounter(timer, val)</code></td><td>ตั้งค่า counter ใหม่</td><td><code>Simple_TIM_SetCounter(TIM_2, 0);</code></td></tr>
             <tr><td><code>TIM_GetPeriod(timer)</code></td><td>อ่านค่า period (auto-reload)</td><td><code>uint32_t per = TIM_GetPeriod(TIM_2);</code></td></tr>
             <tr><td><code>TIM_SetMode(timer, mode)</code></td><td>เปลี่ยนโหมด timer</td><td><code>TIM_SetMode(TIM_2, TIM_MODE_UP);</code></td></tr>
-            <tr><td><code>TIM_AdvancedInit(timer, config)</code></td><td>ตั้งค่า timer แบบละเอียด</td><td><code>TIM_AdvancedInit(TIM_1, &cfg);</code></td></tr>
+            <tr><td><code>TIM_AdvancedInit(timer, prescaler, period, mode)</code></td><td>ตั้งค่า timer แบบละเอียด (prescaler/period ดิบ ไม่มี config struct)</td><td><code>TIM_AdvancedInit(TIM_1, 47, 999, TIM_MODE_UP);  // 1kHz @ 48MHz</code></td></tr>
             <tr><td><code>TIM_SetPrescaler(timer, psc)</code></td><td>ตั้งค่า prescaler</td><td><code>TIM_SetPrescaler(TIM_2, 4800);</code></td></tr>
             <tr><td><code>TIM_GenerateUpdate(timer)</code></td><td>สร้าง update event ด้วย software</td><td><code>TIM_GenerateUpdate(TIM_2);</code></td></tr>
         </tbody>
@@ -113,7 +113,7 @@ flowchart TD
 
     <div class="step">
         <h3>ขั้นที่ 1: Include + ประกาศ Callback</h3>
-        <pre><code class="language-c">#include "simplehal.h"
+        <pre><code class="language-c">#include "SimpleHAL.h"
 
 volatile uint32_t tick_count = 0;
 
@@ -129,7 +129,7 @@ int main(void) {
 
     <div class="step">
         <h3>ขั้นที่ 2: ตั้งค่า Timer + ผูก Callback</h3>
-        <pre><code class="language-c">    TIM_SimpleInit(TIM_2);
+        <pre><code class="language-c">    TIM_SimpleInit(TIM_2, 1000);           // 1kHz = 1000 interrupts/วินาที
     TIM_SetFrequency(TIM_2, 1000);        // 1kHz = 1000 interrupts/วินาที
     TIM_AttachInterrupt(TIM_2, onTimerTick);
     TIM_Start(TIM_2);</code></pre>
@@ -155,7 +155,7 @@ int main(void) {
 <section>
     <h2>🟢 ตัวอย่างขั้นต้น</h2>
     <p>LED กระพริบด้วย Timer Interrupt — ตั้ง Timer 2Hz → toggle ทุก interrupt = LED กระพริบ 1Hz</p>
-    <pre><code class="language-c">#include "simplehal.h"
+    <pre><code class="language-c">#include "SimpleHAL.h"
 
 void onTimerTick(void) {
     digitalToggle(PA1);  // toggle โดยตรงใน ISR — ทำงานเร็วมาก
@@ -167,7 +167,7 @@ int main(void) {
 
     pinMode(PA1, PIN_MODE_OUTPUT);
 
-    TIM_SimpleInit(TIM_2);
+    TIM_SimpleInit(TIM_2, 2);    // 2Hz = toggle LED 1Hz
     TIM_SetFrequency(TIM_2, 2);  // 2Hz = toggle LED 1Hz
     TIM_AttachInterrupt(TIM_2, onTimerTick);
     TIM_Start(TIM_2);
@@ -183,7 +183,7 @@ int main(void) {
     <div class="approach">
         <strong>แนวคิด:</strong> Simple Scheduler — 1kHz tick → ทุก 100ms อ่าน ADC, ทุก 1s heartbeat LED
     </div>
-    <pre><code class="language-c">#include "simplehal.h"
+    <pre><code class="language-c">#include "SimpleHAL.h"
 
 volatile uint32_t ticks = 0;
 
@@ -194,12 +194,12 @@ void tick_isr(void) {
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    USART_SimpleInit(USART_115200);
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
     ADC_SimpleInit();
 
     pinMode(PA1, PIN_MODE_OUTPUT);
 
-    TIM_SimpleInit(TIM_2);
+    TIM_SimpleInit(TIM_2, 1000);    // 1kHz base tick
     TIM_SetFrequency(TIM_2, 1000);  // 1kHz base tick
     TIM_AttachInterrupt(TIM_2, tick_isr);
     TIM_Start(TIM_2);
@@ -212,7 +212,7 @@ int main(void) {
         // Task 1: อ่าน ADC ทุก 100ms
         if (now - last_adc >= 100) {
             last_adc = now;
-            uint16_t val = ADC_Read(PA2);
+            uint16_t val = ADC_Read(ADC_CH_PA2);
             printf("ADC: %u\r\n", val);
         }
 
@@ -230,7 +230,7 @@ int main(void) {
     <div class="approach">
         <strong>แนวคิด:</strong> Input Capture — วัด pulse width ด้วย TIM2 free-running @1MHz + GPIO interrupt
     </div>
-    <pre><code class="language-c">#include "simplehal.h"
+    <pre><code class="language-c">#include "SimpleHAL.h"
 
 volatile uint32_t pulse_start = 0;
 volatile uint32_t pulse_width = 0;
@@ -247,10 +247,10 @@ void onFallingEdge(void) {
 int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
-    USART_SimpleInit(USART_115200);
+    USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
 
     // TIM2 free-running @ 1MHz (1 tick = 1μs)
-    TIM_SimpleInit(TIM_2);
+    TIM_SimpleInit(TIM_2, 1000000);
     TIM_SetFrequency(TIM_2, 1000000);
     TIM_Start(TIM_2);
 

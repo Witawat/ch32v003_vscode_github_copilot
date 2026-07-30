@@ -12,7 +12,7 @@ int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
     USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
-    TJC_Init(&USART2);
+    TJC_Init(BAUD_115200, USART_PINS_DEFAULT);
     pinMode(BTN_PAGE, PIN_MODE_INPUT_PULLUP);
 
     uint8_t page = 0;
@@ -61,7 +61,7 @@ int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
     USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
-    TJC_Init(&USART2);
+    TJC_Init(BAUD_115200, USART_PINS_DEFAULT);
     ADC_SimpleInit(ADC_CH0);
 
     TJC_SendCommand("page 2");  // หน้า graph
@@ -134,7 +134,7 @@ int main(void) {
     SystemCoreClockUpdate();
     Timer_Init();
     USART_SimpleInit(BAUD_115200, USART_PINS_DEFAULT);
-    TJC_Init(&USART2);
+    TJC_Init(BAUD_115200, USART_PINS_DEFAULT);
     pinMode(LED_PIN, PIN_MODE_OUTPUT);
 
     TJC_SendCommand("page 0");

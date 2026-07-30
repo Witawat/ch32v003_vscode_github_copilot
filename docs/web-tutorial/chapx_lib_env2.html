@@ -99,8 +99,6 @@ TCS34725_GetRawData(&r, &g, &b, &c);
 float lux = TCS34725_CalcLux(r, g, b);          // แสงโดยรอบ
 uint16_t ct = TCS34725_CalcColorTemp(r, g, b);  // อุณหภูมิสี (K)
 
-// เปิด LED built-in (ตาไม่กระพริบ):
-TCS34725_SetLED(1);  // 1=ON, 0=OFF
 // ปรับ gain: TCS34725_GAIN_1X / 4X / 16X / 60X
 // ปรับ integration: TCS34725_INTEG_24MS / 50MS / 101MS / 154MS / 700MS</code></pre>
 <p class="explain">⚠️ I2C addr 0x29 (fix), gain 1x/4x/16x/60x — gain สูง = ไวแสงขึ้นแต่ noise เพิ่ม, integration time 2.4ms-700ms — นานขึ้น = ความแม่นยำสูงขึ้นแต่ช้าลง, dark reading → ลบค่า baseline หากอ่านในที่มืด, ค่า c = clear channel (ไม่มี IR filter), การ classify สี → ใช้ HSV จาก RGB หรือ threshold แต่ละ channel</p>
@@ -109,7 +107,7 @@ TCS34725_SetLED(1);  // 1=ON, 0=OFF
 <table>
 <tr><td><code>TCS34725_Init(addr, gain, integ)</code></td><td>Init + set gain & integration</td><td><code>TCS34725_GetRawData(&r,&g,&b,&c)</code></td><td>อ่าน raw 4 channel</td></tr>
 <tr><td><code>TCS34725_CalcLux(r,g,b)</code></td><td>คำนวณแสงโดยรอบ</td><td><code>TCS34725_CalcColorTemp(r,g,b)</code></td><td>คำนวณอุณหภูมิสี (K)</td></tr>
-<tr><td><code>TCS34725_SetLED(state)</code></td><td>เปิด/ปิด LED ในตัว</td><td><code>TCS34725_SetGain(g)</code></td><td>เปลี่ยน gain</td></tr>
+<tr><td><code>TCS34725_SetGain(g)</code></td><td>เปลี่ยน gain</td><td><code>TCS34725_SetIntegTime(t)</code></td><td>เปลี่ยน integration time</td></tr>
 </table>
 
 <h2>MQGas — MQ-2/3/5/7/135 Gas Sensor (ADC)</h2>
