@@ -10,9 +10,10 @@
 
 <div class="hero">
     <h1>Peripheral API Reference</h1>
-    <p>เอกสารอ้างอิง Standard Peripheral Library (SPL) ระดับ register/struct สำหรับ CH32V003<br>ครบ 16 โมดูล อิงจากซอร์สโค้ดจริงใน <code>Peripheral/inc</code> และ <code>Peripheral/src</code></p>
+    <p>เอกสารอ้างอิง Standard Peripheral Library (SPL) ระดับ register/struct สำหรับ CH32V003<br>ครบ 19 หน้า อิงจากซอร์สโค้ดจริงใน <code>Peripheral/inc</code> และ <code>Peripheral/src</code></p>
     <div class="stats">
-        <div class="stat"><div class="stat-num">16</div><div class="stat-label">โมดูล</div></div>
+        <div class="stat"><div class="stat-num">16</div><div class="stat-label">โมดูล SPL</div></div>
+        <div class="stat"><div class="stat-num">3</div><div class="stat-label">ตารางอ้างอิง</div></div>
         <div class="stat"><div class="stat-num">250+</div><div class="stat-label">ฟังก์ชัน</div></div>
         <div class="stat"><div class="stat-num">ไทย</div><div class="stat-label">ภาษาไทย</div></div>
     </div>
@@ -38,6 +39,10 @@
 <li><a href="exti.html">
     <span class="ch-num">3 — EXTI</span><span class="ch-level level-beginner">พื้นฐาน</span>
     <span class="ch-desc">External Interrupt Lines — EXTI_Init, Trigger Rising/Falling, ใช้คู่กับ GPIO Interrupt</span>
+</a></li>
+<li><a href="afio.html">
+    <span class="ch-num">3.5 — AFIO</span><span class="ch-level level-intermediate">กลาง</span>
+    <span class="ch-desc">Alternate Function I/O — Pin Remap, EXTI Line Config, JTAG/SWD Configuration</span>
 </a></li>
 <li><a href="misc.html">
     <span class="ch-num">4 — MISC (NVIC)</span><span class="ch-level level-beginner">พื้นฐาน</span>
@@ -96,6 +101,16 @@
 <li><a href="wwdg.html">
     <span class="ch-num">16 — WWDG</span><span class="ch-level level-expert">ผู้เชี่ยวชาญ</span>
     <span class="ch-desc">Window Watchdog — WWDG_SetWindowValue, WWDG_SetCounter, WWDG_EnableIT</span>
+</a></li>
+
+<li style="border-top:2px solid var(--border);margin-top:1rem;padding-top:1rem"><span style="color:#6b21a8;font-weight:700">Reference Tables</span></li>
+<li><a href="register-map.html">
+    <span class="ch-num">R1 — Register Map</span><span class="ch-level level-advanced">สูง</span>
+    <span class="ch-desc">แผนที่ base address ของทุก peripheral — AHB/APB1/APB2, ผัง bus architecture</span>
+</a></li>
+<li><a href="interrupt-vector.html">
+    <span class="ch-num">R2 — Interrupt Vector Table</span><span class="ch-level level-advanced">สูง</span>
+    <span class="ch-desc">ตาราง IRQ Number, Handler Name, RISC-V Exceptions, nested priority</span>
 </a></li>
 
 </ul>

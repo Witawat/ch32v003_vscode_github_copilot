@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Register Map — Peripheral API Reference</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="rcc.html">← RCC</a>
+    <a href="interrupt-vector.html">IRQ Table →</a>
+</nav>
+
+<h1>Register Map — แผนที่หน่วยความจำ Peripheral</h1>
+<span class="level level-advanced">ระดับ Register</span>
+
+<div class="callout callout-note">
+    <strong>ไฟล์อ้างอิง:</strong> <code>Peripheral/inc/ch32v00x.h</code> — ข้อมูล base address ของทุก peripheral ใน CH32V003 ใช้สำหรับ debug register, วางแผน memory layout, หรือเข้าถึง register โดยตรง
+</div>
+
+<section class="flowchart">
+<h2>ผัง Bus Architecture</h2>
+<pre class="mermaid">
+flowchart TB
+    CPU["RISC-V Core"] --> AHB["AHB Bus"]
+    CPU --> APB2["APB2 Bus"]
+    CPU --> APB1["APB1 Bus"]
+    
+    AHB --> DMA1["DMA1"]
+    AHB --> RCC["RCC"]
+    AHB --> FLASH["FLASH"]
+    
+    APB2 --> AFIO["AFIO"]
+    APB2 --> EXTI["EXTI"]
+    APB2 --> GPIO["GPIOA/C/D"]
+    APB2 --> ADC1["ADC1"]
+    APB2 --> TIM1["TIM1"]
+    APB2 --> SPI1["SPI1"]
+    APB2 --> USART1["USART1"]
+    
+    APB1 --> TIM2["TIM2"]
+    APB1 --> WWDG["WWDG"]
+    APB1 --> IWDG["IWDG"]
+    APB1 --> I2C1["I2C1"]
+    APB1 --> PWR["PWR"]
+</pre>
+</section>
+
+<section>
+<h2>หน่วยความจำหลัก</h2>
+<table>
+<thead><tr><th>ภูมิภาค</th><th>Base Address</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>FLASH_BASE</code></td><td><code>0x08000000</code></td><td>Flash memory (16KB) — เก็บโปรแกรม</td></tr>
+<tr><td><code>SRAM_BASE</code></td><td><code>0x20000000</code></td><td>SRAM (2KB) — เก็บตัวแปรและ stack</td></tr>
+<tr><td><code>PERIPH_BASE</code></td><td><code>0x40000000</code></td><td>Peripheral base address</td></tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>AHB Peripheral</h2>
+<p>Clock เปิดผ่าน <code>RCC_AHBPeriphClockCmd()</code></p>
+<table>
+<thead><tr><th>Peripheral</th><th>Base Address</th><th>Struct</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>DMA1</code></td><td><code>0x40020000</code></td><td><code>DMA_TypeDef</code></td><td>DMA Controller — interrupt flags</td></tr>
+<tr><td><code>DMA1_Channel1</code></td><td><code>0x40020008</code></td><td><code>DMA_Channel_TypeDef</code></td><td>DMA Channel 1</td></tr>
+<tr><td><code>DMA1_Channel2</code></td><td><code>0x4002001C</code></td><td><code>DMA_Channel_TypeDef</code></td><td>DMA Channel 2</td></tr>
+<tr><td><code>DMA1_Channel3</code></td><td><code>0x40020030</code></td><td><code>DMA_Channel_TypeDef</code></td><td>DMA Channel 3</td></tr>
+<tr><td><code>DMA1_Channel4</code></td><td><code>0x40020044</code></td><td><code>DMA_Channel_TypeDef</code></td><td>DMA Channel 4</td></tr>
+<tr><td><code>DMA1_Channel5</code></td><td><code>0x40020058</code></td><td><code>DMA_Channel_TypeDef</code></td><td>DMA Channel 5</td></tr>
+<tr><td><code>DMA1_Channel6</code></td><td><code>0x4002006C</code></td><td><code>DMA_Channel_TypeDef</code></td><td>DMA Channel 6</td></tr>
+<tr><td><code>DMA1_Channel7</code></td><td><code>0x40020080</code></td><td><code>DMA_Channel_TypeDef</code></td><td>DMA Channel 7</td></tr>
+<tr><td><code>RCC</code></td><td><code>0x40021000</code></td><td><code>RCC_TypeDef</code></td><td>Reset and Clock Control</td></tr>
+<tr><td><code>FLASH</code></td><td><code>0x40022000</code></td><td><code>FLASH_TypeDef</code></td><td>Flash registers</td></tr>
+<tr><td><code>OB</code></td><td><code>0x1FFFF800</code></td><td><code>OB_TypeDef</code></td><td>Option Bytes</td></tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>APB2 Peripheral</h2>
+<p>Clock เปิดผ่าน <code>RCC_APB2PeriphClockCmd()</code></p>
+<table>
+<thead><tr><th>Peripheral</th><th>Base Address</th><th>Struct</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>AFIO</code></td><td><code>0x40010000</code></td><td><code>AFIO_TypeDef</code></td><td>Alternate Function I/O</td></tr>
+<tr><td><code>EXTI</code></td><td><code>0x40010400</code></td><td><code>EXTI_TypeDef</code></td><td>External Interrupt Controller</td></tr>
+<tr><td><code>GPIOA</code></td><td><code>0x40010800</code></td><td><code>GPIO_TypeDef</code></td><td>Port A</td></tr>
+<tr><td><code>GPIOC</code></td><td><code>0x40011000</code></td><td><code>GPIO_TypeDef</code></td><td>Port C</td></tr>
+<tr><td><code>GPIOD</code></td><td><code>0x40011400</code></td><td><code>GPIO_TypeDef</code></td><td>Port D</td></tr>
+<tr><td><code>ADC1</code></td><td><code>0x40012400</code></td><td><code>ADC_TypeDef</code></td><td>Analog-to-Digital Converter</td></tr>
+<tr><td><code>TIM1</code></td><td><code>0x40012C00</code></td><td><code>TIM_TypeDef</code></td><td>Timer 1 (Advanced)</td></tr>
+<tr><td><code>SPI1</code></td><td><code>0x40013000</code></td><td><code>SPI_TypeDef</code></td><td>SPI Interface</td></tr>
+<tr><td><code>USART1</code></td><td><code>0x40013800</code></td><td><code>USART_TypeDef</code></td><td>USART Interface</td></tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>APB1 Peripheral</h2>
+<p>Clock เปิดผ่าน <code>RCC_APB1PeriphClockCmd()</code></p>
+<table>
+<thead><tr><th>Peripheral</th><th>Base Address</th><th>Struct</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>TIM2</code></td><td><code>0x40000000</code></td><td><code>TIM_TypeDef</code></td><td>Timer 2 (General Purpose)</td></tr>
+<tr><td><code>WWDG</code></td><td><code>0x40002C00</code></td><td><code>WWDG_TypeDef</code></td><td>Window Watchdog</td></tr>
+<tr><td><code>IWDG</code></td><td><code>0x40003000</code></td><td><code>IWDG_TypeDef</code></td><td>Independent Watchdog</td></tr>
+<tr><td><code>I2C1</code></td><td><code>0x40005400</code></td><td><code>I2C_TypeDef</code></td><td>I2C Interface</td></tr>
+<tr><td><code>PWR</code></td><td><code>0x40007000</code></td><td><code>PWR_TypeDef</code></td><td>Power Control</td></tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>Peripheral พิเศษ</h2>
+<table>
+<thead><tr><th>Peripheral</th><th>Base Address</th><th>Struct</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>EXTEN</code></td><td><code>0x40023800</code></td><td><code>EXTEN_TypeDef</code></td><td>Enhanced Registers (CH32V003 extension)</td></tr>
+<tr><td><code>VENDOR_CFG0</code></td><td><code>0x1FFFF7D4</code></td><td>—</td><td>PLL Trim (Factory calibration)</td></tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>ตัวอย่างการใช้งาน</h2>
+
+<h3>1. เข้าถึง register โดยตรง (Bare-metal)</h3>
+<pre><code class="language-c">// อ่านค่า GPIOC input register โดยตรง
+uint8_t pin_state = GPIOC->INDR & GPIO_Pin_1;
+
+// เขียนค่า GPIOA output register โดยตรง
+GPIOA->OUTDR |= GPIO_Pin_0;   // set PA0 high
+GPIOA->OUTDR &= ~GPIO_Pin_0;  // set PA0 low
+
+// ใช้ bit set/reset register (เขียน atomic)
+GPIOA->BSHR = GPIO_Pin_0;     // set PA0 high
+GPIOA->BCR = GPIO_Pin_0;      // set PA0 low</code></pre>
+
+<h3>2. ตรวจสอบ clock ของ peripheral</h3>
+<pre><code class="language-c">// ตรวจสอบว่า USART1 clock เปิดอยู่หรือไม่
+if (RCC->APB2PCENR & RCC_APB2Periph_USART1) {
+    // USART1 clock เปิดอยู่
+}</code></pre>
+
+<h3>3. Debug register (ดูค่าใน register ขณะทำงาน)</h3>
+<pre><code class="language-c">// ใน debug mode สามารถดูค่า register ได้โดยตรง
+volatile uint32_t cr = RCC->CTLR;      // RCC Control Register
+volatile uint32_t cfg = RCC->CFGR0;    // RCC Configuration Register
+volatile uint32_t en = RCC->APB2PCENR; // APB2 Peripheral Clock Enable</code></pre>
+</section>
+
+<section>
+<h2>ปัญหาที่พบบ่อย</h2>
+<table>
+<thead><tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr></thead>
+<tbody>
+<tr>
+    <td>อ่าน register ได้ค่า 0 ทั้งที่ตั้งค่าไว้แล้ว</td>
+    <td>ยังไม่ได้เปิด clock ของ peripheral นั้น — register จะไม่ตอบสนองถ้า clock ยังปิดอยู่</td>
+    <td>เรียก <code>RCC_APB2PeriphClockCmd()</code> หรือ <code>RCC_APB1PeriphClockCmd()</code> ตาม bus ที่ peripheral สังกัด</td>
+</tr>
+<tr>
+    <td>เขียน register แล้วค่าไม่เปลี่ยน</td>
+    <td>register นั้นเป็น read-only หรือต้องเขียน sequence เฉพาะ (เช่น Flash key unlock)</td>
+    <td>ตรวจสอบ datasheet ว่า register นั้นเขียนได้หรือไม่ และต้องปลดล็อกก่อนหรือไม่</td>
+</tr>
+</tbody>
+</table>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="rcc.html">← RCC</a>
+    <a href="interrupt-vector.html">IRQ Table →</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

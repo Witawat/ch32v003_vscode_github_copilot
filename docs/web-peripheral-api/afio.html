@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AFIO — Alternate Function I/O — Peripheral API Reference</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="gpio.html">← GPIO</a>
+    <a href="exti.html">EXTI →</a>
+</nav>
+
+<h1>AFIO — Alternate Function I/O</h1>
+<span class="level level-intermediate">ระดับ Peripheral (SPL ดิบ)</span>
+
+<div class="callout callout-note">
+    <strong>ไฟล์:</strong> <code>#include "ch32v00x_gpio.h"</code> — AFIO ไม่มีไฟล์ header แยก ฟังก์ชัน AFIO อยู่ใน <code>ch32v00x_gpio.h</code> ร่วมกับ GPIO AFIO ควบคุม 2 เรื่องหลัก: <strong>Pin Remap</strong> (เปลี่ยนขาของ peripheral) และ <strong>EXTI Line Config</strong> (เลือกว่า EXTI line ผูกกับพอร์ตไหน)<br>
+    ถ้าต้องการ API ที่ใช้ง่ายกว่านี้ ดูที่ <a href="../web-simplehal-api/gpio.html">SimpleGPIO (SimpleHAL wrapper)</a>
+</div>
+
+<section class="flowchart">
+<h2>ผังการใช้งาน AFIO</h2>
+<pre class="mermaid">
+flowchart LR
+    A["เปิด clock AFIO"] --> B["Pin Remap?"]
+    B -->|ใช่| C["GPIO_PinRemapConfig()"]
+    B -->|ไม่| D["EXTI Config?"]
+    C --> D
+    D -->|ใช่| E["GPIO_EXTILineConfig()"]
+    D -->|ไม่| F["ใช้งาน peripheral ปกติ"]
+    E --> F
+</pre>
+</section>
+
+<section>
+<h2>AFIO_TypeDef — โครงสร้าง register</h2>
+<table>
+<thead><tr><th>สมาชิก</th><th>ชนิด</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>PCFR1</code></td><td><code>uint32_t</code></td><td>Pin Configuration Register 1 — ควบคุม pin remap ของ SPI1, I2C1, USART1, TIM1, TIM2 และ JTAG/SWD config</td></tr>
+<tr><td><code>EXTICR</code></td><td><code>uint32_t</code></td><td>External Interrupt Configuration Register — เลือกว่า EXTI Line 0-7 ผูกกับพอร์ต PA, PC หรือ PD</td></tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>GPIO_Remap_define — ตาราง Pin Remap สำหรับ GPIO_PinRemapConfig()</h2>
+
+<p>ค่าคงที่เหล่านี้ใช้เป็นพารามิเตอร์ <code>GPIO_Remap</code> ในฟังก์ชัน <code>GPIO_PinRemapConfig()</code> — แต่ละค่าเป็น bitmask 32 บิต ที่ encode ข้อมูล: bit ที่จะแก้ไขใน <code>AFIO->PCFR1</code>, จำนวนบิต, และตำแหน่ง</p>
+
+<h3>SPI1</h3>
+<table>
+<thead><tr><th>Macro</th><th>ค่า</th><th>ขา Default</th><th>ขา Remap</th></tr></thead>
+<tbody>
+<tr><td><code>GPIO_Remap_SPI1</code></td><td><code>0x00000001</code></td><td>NSS/PA4, SCK/PA5, MISO/PA6, MOSI/PA7</td><td>NSS/PC0, SCK/PC5, MISO/PC7, MOSI/PC6</td></tr>
+</tbody>
+</table>
+
+<h3>I2C1</h3>
+<table>
+<thead><tr><th>Macro</th><th>ค่า</th><th>ขา Default</th><th>ขา Remap</th></tr></thead>
+<tbody>
+<tr><td><code>GPIO_PartialRemap_I2C1</code></td><td><code>0x10000002</code></td><td>SCL/PC2, SDA/PC1</td><td>SCL/PC2, SDA/PC1 (ไม่เปลี่ยน — partial remap)</td></tr>
+<tr><td><code>GPIO_FullRemap_I2C1</code></td><td><code>0x10400002</code></td><td>SCL/PC2, SDA/PC1</td><td>SCL/PC0, SDA/PC1 (full remap)</td></tr>
+</tbody>
+</table>
+
+<h3>USART1</h3>
+<table>
+<thead><tr><th>Macro</th><th>ค่า</th><th>ขา Default</th><th>ขา Remap</th></tr></thead>
+<tbody>
+<tr><td><code>GPIO_PartialRemap1_USART1</code></td><td><code>0x80000004</code></td><td>TX/PD5, RX/PD6</td><td>TX/PD0, RX/PD1 (partial remap 1)</td></tr>
+<tr><td><code>GPIO_PartialRemap2_USART1</code></td><td><code>0x80200000</code></td><td>TX/PD5, RX/PD6</td><td>TX/PD0, RX/PD1 (partial remap 2 — ใช้ bit 21)</td></tr>
+<tr><td><code>GPIO_FullRemap_USART1</code></td><td><code>0x80200004</code></td><td>TX/PD5, RX/PD6</td><td>TX/PD0, RX/PD1 (full remap — ทั้ง bit 2 และ bit 21)</td></tr>
+</tbody>
+</table>
+
+<h3>TIM1</h3>
+<table>
+<thead><tr><th>Macro</th><th>ค่า</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>GPIO_PartialRemap1_TIM1</code></td><td><code>0x00160040</code></td><td>Partial remap 1 — ETR/PA12, CH1/PA8, CH2/PA9, CH3/PA10, CH4/PA11, BKIN/PA6, CH1N/PA7, CH2N/PB0, CH3N/PB1</td></tr>
+<tr><td><code>GPIO_PartialRemap2_TIM1</code></td><td><code>0x00160080</code></td><td>Partial remap 2 — ใช้ bit 7</td></tr>
+<tr><td><code>GPIO_FullRemap_TIM1</code></td><td><code>0x001600C0</code></td><td>Full remap — ใช้ทั้ง bit 6 และ bit 7</td></tr>
+</tbody>
+</table>
+
+<h3>TIM2</h3>
+<table>
+<thead><tr><th>Macro</th><th>ค่า</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>GPIO_PartialRemap1_TIM2</code></td><td><code>0x00180100</code></td><td>Partial remap 1 — CH1/ETR/PA15, CH2/PB3, CH3/PA2, CH4/PA3</td></tr>
+<tr><td><code>GPIO_PartialRemap2_TIM2</code></td><td><code>0x00180200</code></td><td>Partial remap 2 — CH1/ETR/PA0, CH2/PA1, CH3/PB10, CH4/PB11</td></tr>
+<tr><td><code>GPIO_FullRemap_TIM2</code></td><td><code>0x00180300</code></td><td>Full remap — CH1/ETR/PA15, CH2/PB3, CH3/PB10, CH4/PB11</td></tr>
+</tbody>
+</table>
+
+<h3>PA1/PA2</h3>
+<table>
+<thead><tr><th>Macro</th><th>ค่า</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>GPIO_Remap_PA1PA2</code></td><td><code>0x00008000</code></td><td>เปลี่ยนฟังก์ชันของ PA1 และ PA2</td></tr>
+<tr><td><code>GPIO_Remap_PA1_2</code></td><td><code>0x00008000</code></td><td>ชื่อเดิมของ <code>GPIO_Remap_PA1PA2</code></td></tr>
+</tbody>
+</table>
+
+<h3>ADC1 External Trigger</h3>
+<table>
+<thead><tr><th>Macro</th><th>ค่า</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>GPIO_Remap_ADC1_ETRGINJ</code></td><td><code>0x00200002</code></td><td>เปลี่ยนขา ADC1 External Trigger สำหรับ Injected Conversion</td></tr>
+<tr><td><code>GPIO_Remap_ADC1_ETRGREG</code></td><td><code>0x00200004</code></td><td>เปลี่ยนขา ADC1 External Trigger สำหรับ Regular Conversion</td></tr>
+</tbody>
+</table>
+
+<h3>LSI Calibration</h3>
+<table>
+<thead><tr><th>Macro</th><th>ค่า</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>GPIO_Remap_LSI_CAL</code></td><td><code>0x00200080</code></td><td>เปิดขา LSI calibration output — ใช้สำหรับวัดความถี่ LSI</td></tr>
+</tbody>
+</table>
+
+<h3>SDI (Serial Debug Interface)</h3>
+<table>
+<thead><tr><th>Macro</th><th>ค่า</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>GPIO_Remap_SDI_Disable</code></td><td><code>0x00300400</code></td><td>ปิด SDI — ขา SDI (PD1) ใช้เป็น GPIO ได้ (⚠️ ปิด serial debug)</td></tr>
+</tbody>
+</table>
+
+<div class="callout callout-note">
+    <strong>หมายเหตุ Bit Structure:</strong> ค่า <code>GPIO_Remap</code> เป็น bitmask 32 บิต ที่ encode:<br>
+    • <strong>bit [15:0]</strong>: bitmask ของบิตที่จะแก้ไขใน <code>AFIO->PCFR1</code><br>
+    • <strong>bit [20:16]</strong>: ตำแหน่งบิต (shift amount)<br>
+    • <strong>bit [21]</strong>: flag สำหรับ 2-bit remap (บาง peripheral)<br>
+    • <strong>bit [27]</strong>: flag สำหรับ SDI disable<br>
+    • <strong>bit [31]</strong>: flag สำหรับ USART1 partial remap<br>
+    ไม่จำเป็นต้องเข้าใจ bit structure นี้เพื่อใช้งาน — แค่ใช้ macro ที่กำหนดให้
+</div>
+</section>
+
+<section>
+<h2>ตาราง EXTI Line Config (EXTICR)</h2>
+
+<p>ใช้ <code>GPIO_EXTILineConfig()</code> เพื่อเลือกว่า EXTI Line 0-7 ผูกกับพอร์ตไหน</p>
+
+<table>
+<thead><tr><th>EXTI Line</th><th>PA (ค่า default)</th><th>PC</th><th>PD</th></tr></thead>
+<tbody>
+<tr><td>Line 0</td><td><code>GPIO_PortSourceGPIOA</code></td><td><code>GPIO_PortSourceGPIOC</code></td><td><code>GPIO_PortSourceGPIOD</code></td></tr>
+<tr><td>Line 1</td><td><code>GPIO_PortSourceGPIOA</code></td><td><code>GPIO_PortSourceGPIOC</code></td><td><code>GPIO_PortSourceGPIOD</code></td></tr>
+<tr><td>Line 2</td><td><code>GPIO_PortSourceGPIOA</code></td><td><code>GPIO_PortSourceGPIOC</code></td><td><code>GPIO_PortSourceGPIOD</code></td></tr>
+<tr><td>Line 3</td><td><code>GPIO_PortSourceGPIOA</code></td><td><code>GPIO_PortSourceGPIOC</code></td><td><code>GPIO_PortSourceGPIOD</code></td></tr>
+<tr><td>Line 4</td><td><code>GPIO_PortSourceGPIOA</code></td><td><code>GPIO_PortSourceGPIOC</code></td><td><code>GPIO_PortSourceGPIOD</code></td></tr>
+<tr><td>Line 5</td><td><code>GPIO_PortSourceGPIOA</code></td><td><code>GPIO_PortSourceGPIOC</code></td><td><code>GPIO_PortSourceGPIOD</code></td></tr>
+<tr><td>Line 6</td><td><code>GPIO_PortSourceGPIOA</code></td><td><code>GPIO_PortSourceGPIOC</code></td><td><code>GPIO_PortSourceGPIOD</code></td></tr>
+<tr><td>Line 7</td><td><code>GPIO_PortSourceGPIOA</code></td><td><code>GPIO_PortSourceGPIOC</code></td><td><code>GPIO_PortSourceGPIOD</code></td></tr>
+</tbody>
+</table>
+
+<div class="callout callout-warn">
+    <strong>ข้อควรระวัง:</strong> EXTI Line ผูกกับ<strong>เลขขา ไม่ใช่ port</strong> — ถ้าเรียก <code>GPIO_EXTILineConfig()</code> ซ้ำกับเลขขาเดียวกัน (เช่น PC1 กับ PD1) การเรียกครั้งหลังจะ<strong>ทับ</strong>การตั้งค่าครั้งแรกโดยไม่มี error
+</div>
+</section>
+
+<section>
+<h2>ตารางอ้างอิงฟังก์ชัน</h2>
+<table>
+<thead>
+<tr><th>ฟังก์ชัน</th><th>พารามิเตอร์</th><th>คืนค่า</th><th>คำอธิบาย</th><th>หมายเหตุ</th></tr>
+</thead>
+<tbody>
+<tr>
+    <td><code>void GPIO_PinRemapConfig(uint32_t GPIO_Remap, FunctionalState NewState)</code></td>
+    <td><code>GPIO_Remap</code>: bitmask ของ remap ที่ต้องการ (เช่น <code>AFIO_PCFR1_SPI1_REMAP</code>)<br><code>NewState</code>: <code>ENABLE</code> เปิด remap / <code>DISABLE</code> ปิด remap</td>
+    <td><code>void</code></td>
+    <td>เปิดหรือปิด pin remap ของ peripheral ตาม bitmask — ใช้ OR รวมหลาย remap ได้</td>
+    <td>ต้องเปิด clock AFIO ก่อน (<code>RCC_APB2Periph_AFIO</code>)</td>
+</tr>
+<tr>
+    <td><code>void GPIO_EXTILineConfig(uint8_t GPIO_PortSource, uint8_t GPIO_PinSource)</code></td>
+    <td><code>GPIO_PortSource</code>: พอร์ต GPIO (<code>GPIO_PortSourceGPIOA</code>/<code>C</code>/<code>D</code>)<br><code>GPIO_PinSource</code>: เลขขา (<code>GPIO_PinSource0</code> .. <code>GPIO_PinSource7</code>)</td>
+    <td><code>void</code></td>
+    <td>เลือกว่า EXTI Line ตาม <code>PinSource</code> จะผูกกับขาของพอร์ตไหน</td>
+    <td>ต้องเรียกก่อน <code>EXTI_Init()</code> เสมอ — เขียนลง <code>AFIO->EXTICR</code></td>
+</tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>ตัวอย่างการใช้งาน</h2>
+
+<h3>1. Remap SPI1 ไปใช้ขา PC</h3>
+<pre><code class="language-c">#include "ch32v00x_gpio.h"
+
+// เปิด clock AFIO และ GPIOC
+RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO | RCC_APB2Periph_GPIOC, ENABLE);
+
+// Remap SPI1 ไปใช้ขา PC0/PC5/PC6/PC7
+GPIO_PinRemapConfig(GPIO_Remap_SPI1, ENABLE);</code></pre>
+
+<h3>2. ปิด JTAG 保留 SWD (释放 PA15, PB4 เป็น GPIO)</h3>
+<pre><code class="language-c">#include "ch32v00x_gpio.h"
+
+RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);
+
+// ปิด JTAG 保留 SWD — ขา PA13/PA14 ยังใช้ debug ได้
+// 释放 PA15, PB3, PB4 ใช้เป็น GPIO
+GPIO_PinRemapConfig(AFIO_PCFR1_SWJ_CFG_JTAGDISABLE, ENABLE);</code></pre>
+
+<h3>3. ผูก EXTI Line2 กับขา PD2</h3>
+<pre><code class="language-c">#include "ch32v00x_gpio.h"
+#include "ch32v00x_exti.h"
+
+RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOD | RCC_APB2Periph_AFIO, ENABLE);
+
+// ตั้งขา PD2 เป็น input
+GPIO_InitTypeDef GPIO_InitStructure = {0};
+GPIO_InitStructure.GPIO_Pin = GPIO_Pin_2;
+GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPU;
+GPIO_Init(GPIOD, &GPIO_InitStructure);
+
+// ผูก EXTI Line2 กับ PD2
+GPIO_EXTILineConfig(GPIO_PortSourceGPIOD, GPIO_PinSource2);</code></pre>
+
+<h3>4. ใช้ TIM1 Partial Remap</h3>
+<pre><code class="language-c">#include "ch32v00x_gpio.h"
+
+RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO | RCC_APB2Periph_GPIOA, ENABLE);
+
+// TIM1 Partial Remap 1 — BKIN ย้ายไป PA6
+GPIO_PinRemapConfig(GPIO_PartialRemap1_TIM1, ENABLE);</code></pre>
+</section>
+
+<section>
+<h2>ปัญหาที่พบบ่อย</h2>
+<table>
+<thead><tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr></thead>
+<tbody>
+<tr>
+    <td>เรียก <code>GPIO_PinRemapConfig()</code> แล้วไม่ผล</td>
+    <td>ลืมเปิด clock AFIO (<code>RCC_APB2Periph_AFIO</code>) — register <code>PCFR1</code> จะไม่รับค่าเขียน</td>
+    <td>เพิ่ม <code>RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE)</code> ก่อนเรียก remap</td>
+</tr>
+<tr>
+    <td>ตั้ง EXTI แล้ว interrupt ไม่เข้า ทั้งที่ขายังมีสัญญาณ</td>
+    <td>ลืมเรียก <code>GPIO_EXTILineConfig()</code> — EXTI line ยังผูกกับพอร์ต default (GPIOA) ไม่ใช่พอร์ตที่ใช้จริง</td>
+    <td>เรียก <code>GPIO_EXTILineConfig()</code> ก่อน <code>EXTI_Init()</code> เสมอ</td>
+</tr>
+<tr>
+    <td>ปิด JTAG แล้ว debug ไม่ได้</td>
+    <td>ใช้ <code>AFIO_PCFR1_SWJ_CFG_DISABLE</code> ปิดทั้ง JTAG และ SWD</td>
+    <td>ใช้ <code>AFIO_PCFR1_SWJ_CFG_JTAGDISABLE</code> แทน — ปิดเฉพาะ JTAG 保留 SWD</td>
+</tr>
+</tbody>
+</table>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="gpio.html">← GPIO</a>
+    <a href="exti.html">EXTI →</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

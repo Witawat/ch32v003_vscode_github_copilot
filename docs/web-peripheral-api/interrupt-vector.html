@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Interrupt Vector Table — Peripheral API Reference</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="register-map.html">← Register Map</a>
+    <a href="misc.html">NVIC →</a>
+</nav>
+
+<h1>Interrupt Vector Table — ตาราง Interrupt</h1>
+<span class="level level-advanced">ระดับ Register</span>
+
+<div class="callout callout-note">
+    <strong>ไฟล์อ้างอิง:</strong> <code>Peripheral/inc/ch32v00x.h</code> — ข้อมูล IRQ number จาก <code>IRQn_Type</code> enum ใช้สำหรับตั้งค่า NVIC priority, เขียน ISR, และ debug interrupt
+</div>
+
+<section class="flowchart">
+<h2>ผัง Interrupt Flow</h2>
+<pre class="mermaid">
+flowchart LR
+    A["Peripheral 产生 interrupt"] --> B["PLIC จัดลำดับ"]
+    B --> C["RISC-V Core ตอบรับ"]
+    C --> D["Jump ไป ISR"]
+    D --> E["ทำงานตาม handler"]
+    E --> F["ล้าง flag + return"]
+</pre>
+</section>
+
+<section>
+<h2>RISC-V Processor Exceptions</h2>
+<p>Exception ของ RISC-V core (ไม่ใช่ peripheral interrupt)</p>
+<table>
+<thead><tr><th>IRQ Number</th><th>Macro</th><th>คำอธิบาย</th><th>หมายเหตุ</th></tr></thead>
+<tbody>
+<tr><td>2</td><td><code>NonMaskableInt_IRQn</code></td><td>Non-Maskable Interrupt</td><td>ไม่สามารถปิดได้ — เกิดจากเหตุการณ์ร้ายแรง เช่น watchdog reset</td></tr>
+<tr><td>3</td><td><code>EXC_IRQn</code></td><td>Exception Interrupt</td><td>เช่น HardFault, illegal instruction</td></tr>
+<tr><td>12</td><td><code>SysTick_IRQn</code></td><td>System Timer Interrupt</td><td>ใช้กับ RTOS หรือ delay</td></tr>
+<tr><td>14</td><td><code>Software_IRQn</code></td><td>Software Interrupt</td><td>กระตุ้นด้วยซอฟต์แวร์</td></tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>Peripheral Interrupts</h2>
+<p>Interrupt จาก peripheral — จัดการผ่าน PLIC (Platform-Level Interrupt Controller)</p>
+<table>
+<thead><tr><th>IRQ Number</th><th>Macro</th><th>Handler Name</th><th>Peripheral</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td>16</td><td><code>WWDG_IRQn</code></td><td><code>WWDG_IRQHandler</code></td><td>WWDG</td><td>Window Watchdog interrupt</td></tr>
+<tr><td>17</td><td><code>PVD_IRQn</code></td><td><code>PVD_IRQHandler</code></td><td>PWR</td><td>PVD through EXTI Line detection</td></tr>
+<tr><td>18</td><td><code>FLASH_IRQn</code></td><td><code>FLASH_IRQHandler</code></td><td>FLASH</td><td>Flash operation complete</td></tr>
+<tr><td>19</td><td><code>RCC_IRQn</code></td><td><code>RCC_IRQHandler</code></td><td>RCC</td><td>Clock ready interrupt (HSE/HSI/PLL)</td></tr>
+<tr><td>20</td><td><code>EXTI7_0_IRQn</code></td><td><code>EXTI7_0_IRQHandler</code></td><td>EXTI</td><td>External Interrupt Line 0-7 (รวมเป็น IRQ เดียว)</td></tr>
+<tr><td>21</td><td><code>AWU_IRQn</code></td><td><code>AWU_IRQHandler</code></td><td>PWR</td><td>Auto Wake-Up interrupt</td></tr>
+<tr><td>22</td><td><code>DMA1_Channel1_IRQn</code></td><td><code>DMA1_Channel1_IRQHandler</code></td><td>DMA</td><td>DMA Channel 1 transfer complete</td></tr>
+<tr><td>23</td><td><code>DMA1_Channel2_IRQn</code></td><td><code>DMA1_Channel2_IRQHandler</code></td><td>DMA</td><td>DMA Channel 2 transfer complete</td></tr>
+<tr><td>24</td><td><code>DMA1_Channel3_IRQn</code></td><td><code>DMA1_Channel3_IRQHandler</code></td><td>DMA</td><td>DMA Channel 3 transfer complete</td></tr>
+<tr><td>25</td><td><code>DMA1_Channel4_IRQn</code></td><td><code>DMA1_Channel4_IRQHandler</code></td><td>DMA</td><td>DMA Channel 4 transfer complete</td></tr>
+<tr><td>26</td><td><code>DMA1_Channel5_IRQn</code></td><td><code>DMA1_Channel5_IRQHandler</code></td><td>DMA</td><td>DMA Channel 5 transfer complete</td></tr>
+<tr><td>27</td><td><code>DMA1_Channel6_IRQn</code></td><td><code>DMA1_Channel6_IRQHandler</code></td><td>DMA</td><td>DMA Channel 6 transfer complete</td></tr>
+<tr><td>28</td><td><code>DMA1_Channel7_IRQn</code></td><td><code>DMA1_Channel7_IRQHandler</code></td><td>DMA</td><td>DMA Channel 7 transfer complete</td></tr>
+<tr><td>29</td><td><code>ADC_IRQn</code></td><td><code>ADC_IRQHandler</code></td><td>ADC</td><td>ADC conversion complete / analog watchdog</td></tr>
+<tr><td>30</td><td><code>I2C1_EV_IRQn</code></td><td><code>I2C1_EV_IRQHandler</code></td><td>I2C</td><td>I2C1 Event interrupt (start/stop/data)</td></tr>
+<tr><td>31</td><td><code>I2C1_ER_IRQn</code></td><td><code>I2C1_ER_IRQHandler</code></td><td>I2C</td><td>I2C1 Error interrupt (bus error/arb lost)</td></tr>
+<tr><td>32</td><td><code>USART1_IRQn</code></td><td><code>USART1_IRQHandler</code></td><td>USART</td><td>USART1 global interrupt (TX/RX/error)</td></tr>
+<tr><td>33</td><td><code>SPI1_IRQn</code></td><td><code>SPI1_IRQHandler</code></td><td>SPI</td><td>SPI1 global interrupt</td></tr>
+<tr><td>34</td><td><code>TIM1_BRK_IRQn</code></td><td><code>TIM1_BRK_IRQHandler</code></td><td>TIM1</td><td>TIM1 Break interrupt (emergency stop)</td></tr>
+<tr><td>35</td><td><code>TIM1_UP_IRQn</code></td><td><code>TIM1_UP_IRQHandler</code></td><td>TIM1</td><td>TIM1 Update interrupt (overflow)</td></tr>
+<tr><td>36</td><td><code>TIM1_TRG_COM_IRQn</code></td><td><code>TIM1_TRG_COM_IRQHandler</code></td><td>TIM1</td><td>TIM1 Trigger and Commutation</td></tr>
+<tr><td>37</td><td><code>TIM1_CC_IRQn</code></td><td><code>TIM1_CC_IRQHandler</code></td><td>TIM1</td><td>TIM1 Capture Compare interrupt</td></tr>
+<tr><td>38</td><td><code>TIM2_IRQn</code></td><td><code>TIM2_IRQHandler</code></td><td>TIM2</td><td>TIM2 global interrupt</td></tr>
+</tbody>
+</table>
+
+<div class="callout callout-warn">
+    <strong>ข้อควรระวัง:</strong> CH32V003 รวม EXTI Line 0-7 เข้า IRQ เดียว (<code>EXTI7_0_IRQn</code>) — handler ตัวเดียวต้องรับผิดชอบทุก line ที่เปิดไว้ ต้องเช็คทีละ line ด้วย <code>EXTI_GetITStatus()</code>
+</div>
+</section>
+
+<section>
+<h2>Handler Attribute</h2>
+<p>CH32V003 ใช้ RISC-V ต้องประกาศ handler ด้วย attribute เฉพาะ:</p>
+<pre><code class="language-c">// ประกาศ ISR สำหรับ CH32V003 (WCH RISC-V)
+void EXTI7_0_IRQHandler(void) __attribute__((interrupt("WCH-Interrupt-fast")));
+void EXTI7_0_IRQHandler(void)
+{
+    if (EXTI_GetITStatus(EXTI_Line1) != RESET) {
+        // ทำงานตาม logic
+        EXTI_ClearITPendingBit(EXTI_Line1);
+    }
+}</code></pre>
+
+<h3>หมายเหตุเรื่อง Attribute</h3>
+<table>
+<thead><tr><th>Attribute</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>__attribute__((interrupt))</code></td><td>บังคับให้ compiler สร้าง prologue/epilogue สำหรับ interrupt (save/restore context)</td></tr>
+<tr><td><code>"WCH-Interrupt-fast"</code></td><td>โหมด fast interrupt ของ WCH — ใช้ register bank ช่วยลด latency</td></tr>
+</tbody>
+</table>
+</section>
+
+<section>
+<h2>ตัวอย่างการใช้งาน</h2>
+
+<h3>1. เปิด Interrupt หลายตัว</h3>
+<pre><code class="language-c">#include "ch32v00x_misc.h"
+
+// เปิด TIM1 Update interrupt
+NVIC_InitTypeDef NVIC_InitStructure = {0};
+NVIC_InitStructure.NVIC_IRQChannel = TIM1_UP_IRQn;
+NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 1;
+NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
+NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+NVIC_Init(&NVIC_InitStructure);
+
+// เปิด USART1 interrupt
+NVIC_InitStructure.NVIC_IRQChannel = USART1_IRQn;
+NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 2;
+NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
+NVIC_Init(&NVIC_InitStructure);</code></pre>
+
+<h3>2. หลาย ISR แยกตาม peripheral</h3>
+<pre><code class="language-c">// TIM1 Update ISR
+void TIM1_UP_IRQHandler(void) __attribute__((interrupt("WCH-Interrupt-fast")));
+void TIM1_UP_IRQHandler(void)
+{
+    if (TIM_GetITStatus(TIM1, TIM_IT_Update) != RESET) {
+        TIM_ClearITPendingBit(TIM1, TIM_IT_Update);
+        // ทำงานทุกครั้งที่ TIM1 overflow
+    }
+}
+
+// USART1 ISR
+void USART1_IRQHandler(void) __attribute__((interrupt("WCH-Interrupt-fast")));
+void USART1_IRQHandler(void)
+{
+    if (USART_GetITStatus(USART1, USART_IT_RXNE) != RESET) {
+        uint8_t data = USART_ReceiveData(USART1);
+        // ประมวลผลข้อมูลที่รับมา
+    }
+}</code></pre>
+
+<h3>3. Nested Interrupt (Interrupt ซ้อน)</h3>
+<pre><code class="language-c">// ตั้งค่า priority group
+NVIC_PriorityGroupConfig(NVIC_PriorityGroup_2);  // 2 bit preemption + 2 bit sub
+
+// TIM1 priority สูง (preemption=0) — ขัดจังหวะตัวอื่นได้
+NVIC_InitStructure.NVIC_IRQChannel = TIM1_UP_IRQn;
+NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0;
+NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+NVIC_Init(&NVIC_InitStructure);
+
+// USART1 priority ต่ำ (preemption=3) — ถูกขัดจังหวะได้
+NVIC_InitStructure.NVIC_IRQChannel = USART1_IRQn;
+NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 3;
+NVIC_Init(&NVIC_InitStructure);</code></pre>
+</section>
+
+<section>
+<h2>ปัญหาที่พบบ่อย</h2>
+<table>
+<thead><tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr></thead>
+<tbody>
+<tr>
+    <td>ประกาศ ISR แล้ว linker ไม่เจอ</td>
+    <td>ลืม <code>__attribute__((interrupt("WCH-Interrupt-fast")))</code> — compiler จะสร้าง function ธรรมดาที่ไม่ save context</td>
+    <td>เพิ่ม attribute ทุกครั้งที่ประกาศ ISR สำหรับ CH32V003</td>
+</tr>
+<tr>
+    <td>ISR ทำงานแล้วค้าง ไม่ return</td>
+    <td>ลืมเรียก <code>ClearITPendingBit()</code> — interrupt flag ยังค้างอยู่ ทำให้เข้า ISR ซ้ำทันที</td>
+    <td>เรียก <code>ClearITPendingBit()</code> เป็นบรรทัดสุดท้ายของ ISR เสมอ</td>
+</tr>
+<tr>
+    <td>ตั้ง priority แล้วไม่สามารถ nested ได้</td>
+    <td>ลืมเรียก <code>NVIC_PriorityGroupConfig()</code> — ค่า default อาจไม่รองรับ preemption</td>
+    <td>เรียก <code>NVIC_PriorityGroupConfig()</code> ตอนเริ่มต้นโปรแกรม</td>
+</tr>
+<tr>
+    <td>EXTI หลาย line ทำงานไม่ครบ</td>
+    <td>CH32V003 รวม EXTI0-7 เป็น IRQ เดียว — ต้องเช็คทีละ line ใน handler</td>
+    <td>ใช้ <code>if (EXTI_GetITStatus(EXTI_Line_x) != RESET)</code> เช็คทีละ line</td>
+</tr>
+</tbody>
+</table>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="register-map.html">← Register Map</a>
+    <a href="misc.html">NVIC →</a>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

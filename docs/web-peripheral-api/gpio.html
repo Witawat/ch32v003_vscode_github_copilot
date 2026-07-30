@@ -100,18 +100,65 @@ flowchart LR
 
 <section>
 <h2>GPIO_Remap_define (สำหรับ GPIO_PinRemapConfig)</h2>
+
+<p>ค่าคงที่เหล่านี้ใช้เป็นพารามิเตอร์ <code>GPIO_Remap</code> ในฟังก์ชัน <code>GPIO_PinRemapConfig()</code> — แต่ละค่าเป็น bitmask 32 บิต ที่ encode ข้อมูลบิตที่จะแก้ไขใน <code>AFIO->PCFR1</code> ดูรายละเอียดเพิ่มเติมที่หน้า <a href="afio.html">AFIO</a></p>
+
+<h3>SPI1</h3>
 <table>
-<thead><tr><th>Macro</th><th>ใช้ทำอะไร</th></tr></thead>
+<thead><tr><th>Macro</th><th>ค่า</th><th>ขา Default</th><th>ขา Remap</th></tr></thead>
 <tbody>
-<tr><td><code>GPIO_Remap_SPI1</code></td><td>ย้ายขา SPI1 ไปตำแหน่งสำรอง</td></tr>
-<tr><td><code>GPIO_PartialRemap_I2C1</code> / <code>GPIO_FullRemap_I2C1</code></td><td>ย้ายขา I2C1 บางส่วน/ทั้งหมด</td></tr>
-<tr><td><code>GPIO_PartialRemap1_USART1</code> / <code>GPIO_PartialRemap2_USART1</code> / <code>GPIO_FullRemap_USART1</code></td><td>ย้ายขา USART1 แบบต่าง ๆ</td></tr>
-<tr><td><code>GPIO_PartialRemap1_TIM1</code> / <code>GPIO_PartialRemap2_TIM1</code> / <code>GPIO_FullRemap_TIM1</code></td><td>ย้ายขา TIM1 (PWM)</td></tr>
-<tr><td><code>GPIO_PartialRemap1_TIM2</code> / <code>GPIO_PartialRemap2_TIM2</code> / <code>GPIO_FullRemap_TIM2</code></td><td>ย้ายขา TIM2 (PWM)</td></tr>
-<tr><td><code>GPIO_Remap_PA1PA2</code> (alias <code>GPIO_Remap_PA1_2</code>)</td><td>เปิดใช้งาน PA1/PA2 เป็น GPIO ทั่วไป</td></tr>
-<tr><td><code>GPIO_Remap_ADC1_ETRGINJ</code> / <code>GPIO_Remap_ADC1_ETRGREG</code></td><td>ย้าย external trigger ของ ADC1</td></tr>
-<tr><td><code>GPIO_Remap_LSI_CAL</code></td><td>เปิดฟังก์ชันสอบเทียบ LSI ออกทางขา</td></tr>
-<tr><td><code>GPIO_Remap_SDI_Disable</code></td><td>ปิดใช้งาน SDI (Single-wire Debug Interface)</td></tr>
+<tr><td><code>GPIO_Remap_SPI1</code></td><td><code>0x00000001</code></td><td>NSS/PA4, SCK/PA5, MISO/PA6, MOSI/PA7</td><td>NSS/PC0, SCK/PC5, MISO/PC7, MOSI/PC6</td></tr>
+</tbody>
+</table>
+
+<h3>I2C1</h3>
+<table>
+<thead><tr><th>Macro</th><th>ค่า</th><th>ขา Default</th><th>ขา Remap</th></tr></thead>
+<tbody>
+<tr><td><code>GPIO_PartialRemap_I2C1</code></td><td><code>0x10000002</code></td><td>SCL/PC2, SDA/PC1</td><td>SCL/PC2, SDA/PC1 (ไม่เปลี่ยน — partial remap)</td></tr>
+<tr><td><code>GPIO_FullRemap_I2C1</code></td><td><code>0x10400002</code></td><td>SCL/PC2, SDA/PC1</td><td>SCL/PC0, SDA/PC1 (full remap)</td></tr>
+</tbody>
+</table>
+
+<h3>USART1</h3>
+<table>
+<thead><tr><th>Macro</th><th>ค่า</th><th>ขา Default</th><th>ขา Remap</th></tr></thead>
+<tbody>
+<tr><td><code>GPIO_PartialRemap1_USART1</code></td><td><code>0x80000004</code></td><td>TX/PD5, RX/PD6</td><td>TX/PD0, RX/PD1 (partial remap 1)</td></tr>
+<tr><td><code>GPIO_PartialRemap2_USART1</code></td><td><code>0x80200000</code></td><td>TX/PD5, RX/PD6</td><td>TX/PD0, RX/PD1 (partial remap 2 — ใช้ bit 21)</td></tr>
+<tr><td><code>GPIO_FullRemap_USART1</code></td><td><code>0x80200004</code></td><td>TX/PD5, RX/PD6</td><td>TX/PD0, RX/PD1 (full remap — ทั้ง bit 2 และ bit 21)</td></tr>
+</tbody>
+</table>
+
+<h3>TIM1</h3>
+<table>
+<thead><tr><th>Macro</th><th>ค่า</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>GPIO_PartialRemap1_TIM1</code></td><td><code>0x00160040</code></td><td>Partial remap 1 — BKIN/PA6, CH1N/PA7, CH2N/PB0, CH3N/PB1</td></tr>
+<tr><td><code>GPIO_PartialRemap2_TIM1</code></td><td><code>0x00160080</code></td><td>Partial remap 2 — ใช้ bit 7</td></tr>
+<tr><td><code>GPIO_FullRemap_TIM1</code></td><td><code>0x001600C0</code></td><td>Full remap — ใช้ทั้ง bit 6 และ bit 7</td></tr>
+</tbody>
+</table>
+
+<h3>TIM2</h3>
+<table>
+<thead><tr><th>Macro</th><th>ค่า</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>GPIO_PartialRemap1_TIM2</code></td><td><code>0x00180100</code></td><td>Partial remap 1 — CH1/ETR/PA15, CH2/PB3, CH3/PA2, CH4/PA3</td></tr>
+<tr><td><code>GPIO_PartialRemap2_TIM2</code></td><td><code>0x00180200</code></td><td>Partial remap 2 — CH1/ETR/PA0, CH2/PA1, CH3/PB10, CH4/PB11</td></tr>
+<tr><td><code>GPIO_FullRemap_TIM2</code></td><td><code>0x00180300</code></td><td>Full remap — CH1/ETR/PA15, CH2/PB3, CH3/PB10, CH4/PB11</td></tr>
+</tbody>
+</table>
+
+<h3>PA1/PA2 / ADC / LSI / SDI</h3>
+<table>
+<thead><tr><th>Macro</th><th>ค่า</th><th>คำอธิบาย</th></tr></thead>
+<tbody>
+<tr><td><code>GPIO_Remap_PA1PA2</code> (alias <code>GPIO_Remap_PA1_2</code>)</td><td><code>0x00008000</code></td><td>เปลี่ยนฟังก์ชันของ PA1 และ PA2</td></tr>
+<tr><td><code>GPIO_Remap_ADC1_ETRGINJ</code></td><td><code>0x00200002</code></td><td>เปลี่ยนขา ADC1 External Trigger สำหรับ Injected Conversion</td></tr>
+<tr><td><code>GPIO_Remap_ADC1_ETRGREG</code></td><td><code>0x00200004</code></td><td>เปลี่ยนขา ADC1 External Trigger สำหรับ Regular Conversion</td></tr>
+<tr><td><code>GPIO_Remap_LSI_CAL</code></td><td><code>0x00200080</code></td><td>เปิดขา LSI calibration output — ใช้สำหรับวัดความถี่ LSI</td></tr>
+<tr><td><code>GPIO_Remap_SDI_Disable</code></td><td><code>0x00300400</code></td><td>ปิด SDI — ขา SDI (PD1) ใช้เป็น GPIO ได้ (⚠️ ปิด serial debug)</td></tr>
 </tbody>
 </table>
 
