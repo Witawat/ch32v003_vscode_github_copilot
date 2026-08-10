@@ -31,7 +31,7 @@
 <section class="flowchart">
     <h2>ผังการทำงาน TIM (SPL)</h2>
     <pre class="mermaid">
-flowchart LR
+flowchart TB
     RCC["RCC_APB2/APB1PeriphClockCmd\n(TIM1/TIM2)"] --> TB["TIM_TimeBaseInit\n(prescaler, period, counter mode)"]
     TB --> BASIC["โหมด Update Interrupt\nTIM_ITConfig(TIM_IT_Update)"]
     TB --> PWM["โหมด PWM Output\nTIM_OCxInit(OCMode_PWM1) + TIM_Cmd"]

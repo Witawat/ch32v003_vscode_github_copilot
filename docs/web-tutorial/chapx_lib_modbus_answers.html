@@ -1,0 +1,151 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย Modbus RTU — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_modbus.html">กลับบท</a><a href="chapx_lib_at24cxx_answers.html">เฉลยถัดไป →</a></nav>
+<h1>📝 เฉลย — Modbus RTU Master</h1>
+
+<div class="answer">
+<h2>ข้อ 1: Multi-Slave — อ่าน slave 2 ตัวบน RS-485</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "Modbus.h"
+
+Modbus mb1, mb2;   /* instance แยกตาม slave address */
+uint16_t regs[4];
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    MODBUS_Init(&mb1, 1, MODBUS_TRANSPORT_USART, USART_PINS_DEFAULT);
+    MODBUS_Init(&mb2, 2, MODBUS_TRANSPORT_USART, USART_PINS_DEFAULT);
+
+    Timer_t tmr;
+    Start_Timer(&tmr, 500, 1);
+    uint8_t turn = 0;
+
+    while(1) {
+        if(Is_Timer_Expired(&tmr)) {
+            Modbus* cur = turn ? &mb2 : &mb1;
+
+            if(MODBUS_ReadHoldingRegisters(cur, 0x0000, 4, regs) == MODBUS_OK) {
+                USART_Print(turn ? "S2:" : "S1:");
+                USART_PrintNum(regs[0]);
+                USART_Println("");
+            } else {
+                USART_Println("FAIL");
+            }
+            turn = !turn;   /* สลับ slave ทุก 500ms */
+        }
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> instance แยกต่อ slave (mb1=addr1, mb2=addr2) แต่ใช้ USART1 + pin ชุดเดียวกัน — อ่านทีละตัวสลับกัน (half-duplex ต้องไม่ส่งพร้อมกัน) — สลับด้วย flag turn — ขยายเป็น N slave ได้โดยเก็บ instance ใน array</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 2: อ่าน PZEM-004T v3 ด้วยไลบรารี Modbus ทั่วไป</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "Modbus.h"
+
+Modbus mb;
+uint16_t regs[10];
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    MODBUS_Init(&mb, 1, MODBUS_TRANSPORT_USART, USART_PINS_DEFAULT);
+
+    Timer_t tmr;
+    Start_Timer(&tmr, 1000, 1);
+
+    while(1) {
+        if(Is_Timer_Expired(&tmr)) {
+            /* PZEM-004T v3 register map (Input Registers FC 0x04):
+             * 0x0000 Voltage x0.1V | 0x0001-2 Current x0.001A
+             * 0x0003-4 Power x0.1W  | 0x0005-6 Energy x1Wh
+             * 0x0007 Freq x0.1Hz    | 0x0008 PF x0.01
+             * 0x0009 Alarm (0/1) */
+            if(MODBUS_ReadInputRegisters(&mb, 0x0000, 10, regs) == MODBUS_OK) {
+                uint16_t v_raw = regs[0];
+                uint32_t cur_raw = ((uint32_t)regs[1] << 16) | regs[2];
+                uint32_t pwr_raw = ((uint32_t)regs[3] << 16) | regs[4];
+                uint32_t e_raw  = ((uint32_t)regs[5] << 16) | regs[6];
+
+                USART_Print("V:");
+                USART_PrintNum(v_raw / 10);
+                USART_Print(".");
+                USART_PrintNum(v_raw % 10);
+
+                USART_Print(" A:");
+                USART_PrintNum((cur_raw / 1000) % 1000);
+                USART_Print(".");
+                USART_PrintNum((cur_raw / 10) % 100);
+
+                USART_Print(" W:");
+                USART_PrintNum(pwr_raw / 10);
+                USART_Print(".");
+                USART_PrintNum(pwr_raw % 10);
+                USART_Println("");
+            } else {
+                USART_Println("Comm FAIL");
+            }
+        }
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> PZEM-004T v3 เป็น slave Modbus ธรรมดา — อ่าน Input Registers 10 ตัวในคำขอเดียว แล้วแปลสเกลเอง: V=raw/10, A=raw/1000, W=raw/10 — ค่า 32-bit อยู่ 2 registers ติดกัน (hi<<16|lo) — วิธีนี้ทำให้เข้าใจว่า PZEM004Tv3 lib ข้างในทำงานยังไง และใช้ได้กับอุปกรณ์ Modbus ตัวอื่นด้วย</div>
+</div>
+
+<div class="answer">
+<h2>ข้อ 3: ควบคุม DE/RE ของ MAX485 อัตโนมัติ</h2>
+<pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "Modbus.h"
+
+#define DE_PIN PC0
+#define DE_DELAY_US 100   /* เวลาหน่วงหลังสลับโหมด (ปลอดภัยๆ ที่ 9600) */
+
+Modbus mb;
+uint16_t regs[4];
+
+/* ตั้ง DE=1 (ส่ง) ก่อนทุกคำขอ แล้วกลับ DE=0 (รับ) หลังเสร็จ */
+static void rs485_tx_begin(void) {
+    digitalWrite(DE_PIN, HIGH);
+    Delay_Us(DE_DELAY_US);
+}
+
+static void rs485_tx_end(void) {
+    /* รอส่งข้อมูลสุดท้ายออกจาก shift register แล้วปิดโหมดส่ง */
+    Delay_Us(DE_DELAY_US);
+    digitalWrite(DE_PIN, LOW);
+}
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    pinMode(DE_PIN, PIN_MODE_OUTPUT);
+    digitalWrite(DE_PIN, LOW);
+
+    MODBUS_Init(&mb, 1, MODBUS_TRANSPORT_USART, USART_PINS_DEFAULT);
+
+    Timer_t tmr;
+    Start_Timer(&tmr, 1000, 1);
+
+    while(1) {
+        if(Is_Timer_Expired(&tmr)) {
+            rs485_tx_begin();
+            Modbus_Status st = MODBUS_ReadHoldingRegisters(&mb, 0x0000, 4, regs);
+            rs485_tx_end();
+
+            if(st == MODBUS_OK) {
+                USART_PrintNum(regs[0]);
+                USART_Println("");
+            }
+        }
+    }
+}</code></pre>
+<div class="approach"><strong>🧠 แนวคิด:</strong> RS-485 half-duplex — DE=HIGH ก่อนออกคำขอ (MCU ต้องมั่นใจว่า DE ตั้งค่าสำเร็จก่อนส่งจริง), DE=LOW หลัง response — delay เล็กน้อยกัน "โหมดส่ง/รับ" สลับไม่ทันที่ 9600 baud — วิธีนี้ใช้ได้กับทุกฟังก์ชันของไลบรารี (อ่าน/เขียน)</div>
+</div>
+
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_modbus.html">กลับบท</a><a href="chapx_lib_at24cxx_answers.html">เฉลยถัดไป →</a></nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

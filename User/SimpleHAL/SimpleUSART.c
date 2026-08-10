@@ -27,6 +27,13 @@ __attribute__((weak)) void USART_RxByteHook(uint8_t data) {
     (void)data;
 }
 
+/**
+ * @brief Weak default — override to detect end-of-frame via USART IDLE line
+ *        (ใช้กับ DMA RX circular buffer — เรียกจาก ISR เมื่อพบ IDLE line)
+ */
+__attribute__((weak)) void USART_IdleHook(void) {
+}
+
 /* ========== Private Helper Functions ========== */
 
 /**
@@ -303,5 +310,13 @@ void USART1_IRQHandler(void) {
 
         // ให้โมดูลอื่น (เช่น TJC) แอบดู byte นี้ได้โดยไม่ต้องแย่งชิง ISR vector
         USART_RxByteHook(data);
+    }
+
+    // IDLE line — จุดจบเฟรมของโปรโตคอลแบบ frame-based (เช่น Modbus RTU)
+    // เฉพาะ library ที่ enable USART_IT_IDLE เองเท่านั้นที่จะถูกเรียก (เช่น
+    // โหมด DMA ของ Modbus) — โหมดปกติไม่มีใคร enable → ไม่มีผลใดๆ
+    if (USART_GetITStatus(USART1, USART_IT_IDLE) != RESET) {
+        USART_ClearITPendingBit(USART1, USART_IT_IDLE);
+        USART_IdleHook();
     }
 }

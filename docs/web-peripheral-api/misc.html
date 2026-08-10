@@ -23,7 +23,7 @@
 <section class="flowchart">
 <h2>ผังการทำงาน NVIC</h2>
 <pre class="mermaid">
-flowchart LR
+flowchart TB
     A["NVIC_PriorityGroupConfig() เรียกครั้งเดียวตอนต้นโปรแกรม"] --> B["กำหนดว่าใช้บิตกี่บิตเป็น Preemption / Sub priority"]
     B --> C["กรอก NVIC_InitTypeDef (channel, priority, cmd)"]
     C --> D["NVIC_Init() ต่อ IRQ แต่ละตัว"]

@@ -26,7 +26,7 @@
 <section class="flowchart">
     <h2>ผังการทำงาน USART (SPL)</h2>
     <pre class="mermaid">
-flowchart LR
+flowchart TB
     RCC["RCC_APB2PeriphClockCmd\n(USART1 + GPIO)"] --> GPIOCFG["GPIO_Init\n(TX=AF_PP, RX=IN_FLOATING)"]
     GPIOCFG --> INIT["USART_Init\n(baud/word/stop/parity)"]
     INIT --> CMD["USART_Cmd(ENABLE)"]

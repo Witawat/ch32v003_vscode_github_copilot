@@ -26,7 +26,7 @@
 <section class="flowchart">
 <h2>ผังการทำงานของ SPI Master (Polling Model)</h2>
 <pre class="mermaid">
-flowchart LR
+flowchart TB
     INIT["SPI_Init()"] --> EN["SPI_Cmd(ENABLE)"]
     EN --> NSS["ลด NSS/CS ลง (software GPIO)"]
     NSS --> TXE["รอ SPI_I2S_FLAG_TXE"]

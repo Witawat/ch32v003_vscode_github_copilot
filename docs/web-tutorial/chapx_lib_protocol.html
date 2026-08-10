@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🏭 โปรโตคอลอุตสาหกรรม 1 ชนิด — SimpleHAL Tutorial</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
+<body>
+<nav class="top-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_elec.html">บทก่อน</a>
+    <a href="chapx_lib_field.html">บทถัดไป →</a>
+</nav>
+<h1>🏭 โปรโตคอลอุตสาหกรรม 1 ชนิด — Modbus RTU (USART + DMA)</h1>
+<span class="level advanced">ระดับสูง</span>
+<p style="margin-top:0.5rem;color:#64748b">⏱️ ดูดัชนีทั้งหมดที่ <a href="chapx_lib_index.html">📦 คลังอุปกรณ์</a> — บทเรียนเต็ม: <a href="chapx_lib_modbus.html">Modbus RTU Master</a></p>
+
+<section>
+<h2>Modbus RTU Master — โปรโตคอลอุตสาหกรรม (USART + DMA)</h2>
+<pre class="ascii-circuit">
+PD5─TX ── RX (Slave)   PD6─RX ── TX (Slave)   GND──GND
+RS-485: PD5─DI, PD6─RO ของ MAX485 ── A/B สาย 2 เส้น ── 120Ω จบสาย</pre>
+<h3>รู้จักขา</h3>
+<ul>
+  <li><strong>TX (PD5):</strong> ส่งคำขอ Modbus [Addr][FC][Data][CRC] ไป slave</li>
+  <li><strong>RX (PD6):</strong> รับ response จาก slave</li>
+  <li><strong>DE/RE (PC0):</strong> ควบคุม MAX485 — 1=ส่ง 0=รับ (เฉพาะ RS-485)</li>
+  <li><strong>GND:</strong> กราวด์ร่วม — จำเป็นเสมอ</li>
+</ul>
+<h3>วิธีต่อทีละขั้น</h3>
+<ol>
+  <li>ต่อ <strong>PD5</strong> ไป <strong>RX</strong> ของ slave และ <strong>PD6</strong> ไป <strong>TX</strong> — ไขว้กัน</li>
+  <li>ต่อ <strong>GND ร่วม</strong> — เช็ค slave address + baud (9600 8N1)</li>
+  <li>ระยะไกล: ต่อผ่าน <strong>MAX485</strong> (A/B + 120Ω) — ควบคุม DE/RE ด้วย GPIO</li>
+</ol>
+<table class="wiring-table">
+  <thead>
+    <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>PD5</td><td>→</td><td>Slave</td><td>RX</td><td>USART1 TX → device RX</td></tr>
+    <tr><td>PD6</td><td>←</td><td>Slave</td><td>TX</td><td>USART1 RX ← device TX</td></tr>
+    <tr><td>GND</td><td>→</td><td>Slave</td><td>GND</td><td>Ground ร่วม</td></tr>
+    <tr><td>PC0</td><td>→</td><td>MAX485</td><td>DE+RE</td><td>1=TX, 0=RX (ทางเลือก)</td></tr>
+  </tbody>
+</table>
+<pre><code class="language-c">#include "Modbus.h"
+Modbus mb;
+uint16_t regs[10];
+
+MODBUS_Init(&mb, 1, MODBUS_TRANSPORT_USART, USART_PINS_DEFAULT);
+// โหมด DMA: เปลี่ยน MODBUS_TRANSPORT_USART → MODBUS_TRANSPORT_DMA
+
+if (MODBUS_ReadHoldingRegisters(&mb, 0x0000, 10, regs) == MODBUS_OK) {
+    // regs[0..9] — ค่าจาก slave (FC 0x03)
+}
+MODBUS_WriteSingleRegister(&mb, 0x0000, 1000);  // FC 0x06</code></pre>
+<p class="explain">⚠️ Master อย่างเดียว (9600 8N1) — 8 function codes (01/02/03/04/05/06/0F/10) — CRC-16 + timeout + exception — โหมด DMA: DMA_CH2 TX + DMA_CH3 RX circular + USART IDLE จับจบเฟรม — RAM ~1.3KB — ดูบทเรียนเต็ม <a href="chapx_lib_modbus.html">ที่นี่</a></p>
+<h3>API หลัก</h3>
+<pre><code class="language-c">Modbus_Status MODBUS_Init(Modbus* mb, uint8_t slave_addr, Modbus_Transport transport, uint8_t pin_config);
+Modbus_Status MODBUS_ReadHoldingRegisters(Modbus* mb, uint16_t reg, uint16_t count, uint16_t* data);
+Modbus_Status MODBUS_ReadInputRegisters(Modbus* mb, uint16_t reg, uint16_t count, uint16_t* data);
+Modbus_Status MODBUS_ReadCoils(Modbus* mb, uint16_t coil, uint16_t count, uint8_t* data);
+Modbus_Status MODBUS_WriteSingleRegister(Modbus* mb, uint16_t reg, uint16_t value);
+Modbus_Status MODBUS_WriteSingleCoil(Modbus* mb, uint16_t coil, uint8_t value);
+Modbus_Status MODBUS_WriteMultipleRegisters(Modbus* mb, uint16_t reg, uint16_t count, const uint16_t* data);
+Modbus_Status MODBUS_WriteMultipleCoils(Modbus* mb, uint16_t coil, uint16_t count, const uint8_t* data);
+Modbus_Status MODBUS_GetLastError(Modbus* mb);
+const char*   MODBUS_StatusStr(Modbus_Status status);</code></pre>
+<p class="explain">💡 <code>MODBUS_Init</code> เป็น step แรกเสมอ — ฟังก์ชันอ่าน/เขียนทุกตัว return <code>Modbus_Status</code> ตรวจ <code>== MODBUS_OK</code> — exception จาก slave อ่านได้ด้วย <code>MODBUS_GetLastException</code></p>
+</section>
+
+<nav class="bottom-nav">
+    <a href="index.html">← สารบัญ</a>
+    <a href="chapx_lib_elec.html">บทก่อน</a>
+    <a href="chapx_lib_field.html">บทถัดไป →</a>
+</nav>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
+</html>

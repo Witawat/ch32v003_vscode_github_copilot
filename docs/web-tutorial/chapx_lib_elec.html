@@ -9,7 +9,7 @@
 <nav class="top-nav">
     <a href="index.html">← สารบัญ</a>
     <a href="chapx_lib_range.html">บทก่อน</a>
-    <a href="chapx_lib_field.html">บทถัดไป →</a>
+    <a href="chapx_lib_protocol.html">บทถัดไป →</a>
 </nav>
 <h1>📦 วัดทางไฟฟ้า 6 ชนิด — INA219, ADS1115, MCP4725, PZEM004T, PZEM004Tv3, OH49E</h1>
 <span class="level advanced">ระดับสูง</span>
@@ -318,6 +318,7 @@ float voltage = ADC_ToVoltage(raw, 3.3f);
 <tr><td>OH49E</td><td>ADC</td><td>Magnetic flux</td><td>10-bit (MCU ADC)</td><td>~15฿</td><td>Proximity detect, RPM, door sensor, position</td></tr>
 </table>
 <p style="margin-top:1rem;color:#64748b"><strong>เลือกยังไง?</strong> วัด DC power → INA219, ต้องการ ADC แม่นสูง 4 channels → ADS1115, สร้าง analog waveform → MCP4725, วัดไฟบ้าน 220V → PZEM004Tv3 (เร็วกว่า), ตรวจจับแม่เหล็กถูกๆ → OH49E, อ่านค่าแบบไม่ต้อง calibrate → PZEM004Tv3</p>
+<p style="margin-top:1rem;color:#64748b">🔗 <strong>ดูเพิ่มเติม:</strong> PZEM004T/PZEM004Tv3 สื่อสารด้วยโปรโตคอล Modbus RTU — ถ้าต้องการอ่านอุปกรณ์ Modbus ตัวอื่น (VFD, PLC, เซนเซอร์) ใช้ไลบรารี <a href="chapx_lib_modbus.html">Modbus RTU Master</a> (หมวด <a href="chapx_lib_protocol.html">🏭 โปรโตคอลอุตสาหกรรม</a>)</p>
 </section>
 
 <section>
@@ -334,7 +335,7 @@ float voltage = ADC_ToVoltage(raw, 3.3f);
 <nav class="bottom-nav">
     <a href="index.html">← สารบัญ</a>
     <a href="chapx_lib_range.html">บทก่อน</a>
-    <a href="chapx_lib_field.html">บทถัดไป →</a>
+    <a href="chapx_lib_protocol.html">บทถัดไป →</a>
 </nav>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body>
 </html>

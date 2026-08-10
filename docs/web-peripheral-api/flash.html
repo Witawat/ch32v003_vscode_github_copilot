@@ -30,7 +30,7 @@
 <section class="flowchart">
 <h2>ผังการทำงานพื้นฐาน (Erase → Program → Lock)</h2>
 <pre class="mermaid">
-flowchart LR
+flowchart TB
     UL["FLASH_Unlock()"] --> ER["FLASH_ErasePage()"]
     ER --> ST1{"status ==<br/>FLASH_COMPLETE?"}
     ST1 -- ใช่ --> PG["FLASH_ProgramWord()<br/>/ProgramHalfWord()"]

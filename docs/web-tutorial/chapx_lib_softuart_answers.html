@@ -1,5 +1,5 @@
 <!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>เฉลย SoftUART — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"><style>.answer{margin:1.5rem 0;padding:1.3rem;background:#fff;border:1px solid var(--border);border-radius:var(--radius)}.answer h2{border:none;margin-top:0;font-size:1.15em}.approach{background:var(--note-bg);padding:1.2rem 1.4rem;border-radius:var(--radius);margin:1rem 0;border-left:5px solid var(--accent);font-size:.95em;color:#334155}.approach strong{color:var(--accent);font-size:1.05em}.approach code{background:#dbeafe;color:#1e40af;font-size:.9em}</style></head><body>
-<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_softuart.html">กลับบท</a><a href="chapx_lib_at24cxx_answers.html">เฉลยถัดไป →</a></nav>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_softuart.html">กลับบท</a>    <a href="chapx_lib_modbus_answers.html">เฉลยถัดไป →</a></nav>
 <h1>📝 เฉลย — SoftUART</h1>
 
 <div class="answer">
@@ -170,5 +170,5 @@ int8_t pkt_recv(soft_pkt_t *pkt, uint32_t timeout_ms) {
 <div class="approach"><strong>🧠 แนวคิด:</strong> โปรโตคอล packet แบบ start byte (0xAA) + len + cmd + payload + CRC-8-CCITT + end byte (0x55) — ใช้ state machine เก็บทีละ byte ด้วย <code>SoftUART_ReadByte(&amp;suart, &amp;b, 50)</code> แบบ blocking-with-timeout 50ms/byte (เพราะ <code>Available()</code> เป็น known issue) — มี deadline รวมทั้ง packet เพื่อกันค้าง — คืนค่า 1 = OK, -1 = CRC/end ผิด, 0 = timeout — เหมาะกับ SoftUART ที่อาจมี noise มากกว่า HW UART — ส่ง payload ทีเดียวด้วย <code>SoftUART_Write(&amp;suart, data, len)</code> เพื่อลด overhead</div>
 </div>
 
-<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_softuart.html">กลับบท</a><a href="chapx_lib_at24cxx_answers.html">เฉลยถัดไป →</a></nav>
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_softuart.html">กลับบท</a>    <a href="chapx_lib_modbus_answers.html">เฉลยถัดไป →</a></nav>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

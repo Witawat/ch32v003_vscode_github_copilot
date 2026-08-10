@@ -45,11 +45,11 @@ powershell -File scripts\validate-tutorial-api.ps1 -Strict
 CH32V003/
 ├── User/
 │   ├── SimpleHAL/          # 19 modules — hardware abstraction layer
-│   ├── Lib/                # 71 modules — device drivers
+│   ├── Lib/                # 72 modules — device drivers
 │   └── Examples/           # 16 workshop folders (102 example .c files)
 ├── Peripheral/             # WCH standard peripheral library
 ├── docs/
-│   ├── web-tutorial/       # 123+71 HTML tutorial pages
+│   ├── web-tutorial/       # 123+72 HTML tutorial pages
 │   ├── web-simplehal/      # SimpleHAL overview site
 │   └── web-simplehal-api/  # SimpleHAL API reference
 ├── scripts/

@@ -2,7 +2,7 @@
 <html lang="th">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>📦 คลังอุปกรณ์ — 71 ไลบรารี — SimpleHAL Tutorial</title>
+<title>📦 คลังอุปกรณ์ — 72 ไลบรารี — SimpleHAL Tutorial</title>
 <link rel="stylesheet" href="css/style.css">
 <style>.lib-table{font-size:.82em}.lib-table td{vertical-align:top;padding:.35rem .5rem}.lib-table a{color:var(--accent);text-decoration:none;font-weight:600}.lib-table a:hover{text-decoration:underline}.cat-header{background:var(--accent-light)!important;color:var(--accent);font-weight:700;font-size:.92em}.ans-link:hover{color:var(--accent)!important;text-decoration:underline!important}</style>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head>
@@ -14,7 +14,7 @@
     <a href="chapx_lib_oled.html">บทถัดไป →</a>
 </nav>
 
-<h1>📦 คลังอุปกรณ์ — 71 ไลบรารี</h1>
+<h1>📦 คลังอุปกรณ์ — 72 ไลบรารี</h1>
 <span class="level beginner">ระดับเริ่มต้น</span>
 
 <section>
@@ -48,7 +48,7 @@ while(1) { Lib_Read(&dev, &data); Delay_Ms(interval); }</code></pre>
 </section>
 
 <section>
-    <h2>📊 แคตตาล็อก — 71 บทเรียนเดี่ยว</h2>
+    <h2>📊 แคตตาล็อก — 72 บทเรียนเดี่ยว</h2>
     <p style="color:#64748b">คลิกที่ชื่ออุปกรณ์ → เปิดบทเรียนละเอียด (Flowchart + วงจร + Code 3 ขั้น + API + ข้อผิดพลาด + Product + แบบฝึกหัด)</p>
 
     <table class="lib-table">
@@ -124,6 +124,9 @@ while(1) { Lib_Read(&dev, &data); Delay_Ms(interval); }</code></pre>
         <tr><td><a href="chapx_lib_gps_neo6m.html">GPS</a> <a href="chapx_lib_gps_neo6m_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>USART</td><td>NEO-6M — NMEA parse, lat/lon, speed, time, fix quality</td></tr>
         <tr><td><a href="chapx_lib_ir.html">IR Remote</a> <a href="chapx_lib_ir_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>GPIO</td><td>NEC protocol — VS1838B, 38kHz carrier, code decode</td></tr>
         <tr><td><a href="chapx_lib_softuart.html">SoftUART</a> <a href="chapx_lib_softuart_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>GPIO</td><td>Software Serial — bit-bang, extra UART, baud ≤19200</td></tr>
+
+        <tr class="cat-header"><td colspan="3">🏭 โปรโตคอลอุตสาหกรรม (1)</td></tr>
+        <tr><td><a href="chapx_lib_modbus.html">Modbus RTU</a> <a href="chapx_lib_modbus_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>USART/DMA</td><td>Master protocol — FC 01-10, CRC-16, USART + DMA RX+IDLE mode</td></tr>
 
         <tr class="cat-header"><td colspan="3">💾 จัดเก็บ/IO/นาฬิกา (7)</td></tr>
         <tr><td><a href="chapx_lib_at24cxx.html">AT24Cxx</a> <a href="chapx_lib_at24cxx_answers.html" class="ans-link" style="font-size:.75em;color:#64748b;text-decoration:none">[เฉลย]</a></td><td>I2C</td><td>EEPROM — page boundary, endurance 1M, wear leveling</td></tr>

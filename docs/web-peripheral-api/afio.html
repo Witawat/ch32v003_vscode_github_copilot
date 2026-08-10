@@ -23,7 +23,7 @@
 <section class="flowchart">
 <h2>ผังการใช้งาน AFIO</h2>
 <pre class="mermaid">
-flowchart LR
+flowchart TB
     A["เปิด clock AFIO"] --> B["Pin Remap?"]
     B -->|ใช่| C["GPIO_PinRemapConfig()"]
     B -->|ไม่| D["EXTI Config?"]

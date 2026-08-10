@@ -23,7 +23,7 @@
 <section class="flowchart">
 <h2>ผังการทำงาน EXTI</h2>
 <pre class="mermaid">
-flowchart LR
+flowchart TB
     A["GPIO_Init() โหมด input"] --> B["GPIO_EXTILineConfig(port, pin)"]
     B --> C["EXTI_Init() ตั้ง line/mode/trigger"]
     C --> D["NVIC_Init() เปิด EXTI7_0_IRQn"]

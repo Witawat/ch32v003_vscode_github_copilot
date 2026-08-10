@@ -26,7 +26,7 @@
 <section class="flowchart">
 <h2>ผังการใช้งานทั่วไป</h2>
 <pre class="mermaid">
-flowchart LR
+flowchart TB
     ID["DBGMCU_GetCHIPID()"] --> CHK{"เทียบกับค่าที่รู้จัก<br/>เช่น 0x003005x0"}
     CHK --> LOG["พิมพ์ผ่าน UART<br/>เพื่อ debug"]
     CFG["DBGMCU_Config()"] --> CR["__set_DEBUG_CR() ภายใน"]

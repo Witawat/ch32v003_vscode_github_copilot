@@ -26,7 +26,7 @@
 <section class="flowchart">
 <h2>ผังการทำงานของ I2C Master (Event Polling Model)</h2>
 <pre class="mermaid">
-flowchart LR
+flowchart TB
     INIT["I2C_Init()"] --> EN["I2C_Cmd(ENABLE)"]
     EN --> START["I2C_GenerateSTART()"]
     START --> EVT5["รอ EVT5:<br>I2C_EVENT_MASTER_MODE_SELECT"]

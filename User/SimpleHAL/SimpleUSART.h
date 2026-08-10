@@ -1,7 +1,7 @@
 /**
  * @file SimpleUSART.h
  * @brief Simple USART Library สำหรับ CH32V003 แบบ Arduino-style
- * @version 1.0
+ * @version 1.1
  * @date 2025-12-12
  * 
  * @details
@@ -13,6 +13,7 @@
  * - รองรับ 3 pin configurations
  * - ฟังก์ชัน print แบบ Arduino
  * - รองรับการอ่านแบบ blocking และ non-blocking
+ * - weak hooks: USART_RxByteHook (ทุก byte) + USART_IdleHook (จบเฟรม) — v1.1
  * 
  * @example
  * // ตัวอย่างการใช้งาน
@@ -204,6 +205,34 @@ void USART_Flush(void);
  * }
  */
 void USART_RxByteHook(uint8_t data);
+
+/**
+ * @brief Hook เรียกจาก USART1_IRQHandler() เมื่อตรวจพบ IDLE line (v2.2)
+ *
+ * @details
+ * Default implementation ไม่ทำอะไร (`__attribute__((weak))`) — override ได้แบบเดียวกับ
+ * `USART_RxByteHook` โดยไม่ต้องแย่งชิง `USART1_IRQHandler()`
+ *
+ * ใช้สำหรับโปรโตคอลแบบ frame-based (เช่น Modbus RTU) ที่รับข้อมูลผ่าน **DMA RX circular
+ * buffer** — IDLE หมายถึงเส้นข้อมูลเงียบเกิน 1 character time (จบเฟรม) — หลังจากนี้
+ * อ่านจำนวน bytes ที่ DMA รับได้ (เช่น `DMA_USART_GetReceivedCount`) แล้วประมวลผลเฟรม
+ *
+ * @note Hook นี้ถูกเรียก **เฉพาะเมื่อมีใคร enable `USART_IT_IDLE` เองเท่านั้น** —
+ * `USART_SimpleInit()` ไม่ได้ enable IDLE interrupt → ฟังก์ชันนี้ไม่มีผลต่อการใช้งานปกติ
+ * ตัวอย่าง: `User/Lib/Modbus/Modbus_transport.c` (โหมด DMA) เป็นผู้ enable เอง
+ *
+ * @warning ฟังก์ชันนี้ทำงานใน ISR — ห้ามทำ blocking ภายใน
+ *
+ * @example
+ * // เปิดใช้ IDLE interrupt + override hook (ทำในโหมด DMA ของไลบรารี)
+ * USART_ITConfig(USART1, USART_IT_IDLE, ENABLE);
+ *
+ * void USART_IdleHook(void) {
+ *     frame_len = DMA_USART_GetReceivedCount(DMA_CH3, RX_BUF_SIZE);
+ *     frame_ready = 1;
+ * }
+ */
+void USART_IdleHook(void);
 
 #ifdef __cplusplus
 }

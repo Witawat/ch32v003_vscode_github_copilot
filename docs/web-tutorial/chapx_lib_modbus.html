@@ -1,0 +1,203 @@
+<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Modbus RTU Master — SimpleHAL Tutorial</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css"></head><body>
+<nav class="top-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_softuart.html">บทก่อน</a><a href="chapx_lib_at24cxx.html">บทถัดไป →</a></nav>
+<h1>Modbus RTU Master — DMA + USART สองโหมดขนส่ง</h1><span class="level advanced">ระดับสูง</span>
+<section class="flowchart"><h2>🧭 แผนภาพการทำงาน</h2><pre class="mermaid">
+flowchart TD
+    A["MODBUS_Init(&mb, 1, MODBUS_TRANSPORT_USART, USART_PINS_DEFAULT)"] --> B["MODBUS_ReadHoldingRegisters(&mb, 0x0000, 10, regs)"]
+    B --> C{"== MODBUS_OK?"}
+    C -->|"✅ OK"| D["ใช้ค่า regs[0..9]"]
+    C -->|"❌ Error"| E["MODBUS_GetLastError / MODBUS_GetLastException"]
+    D --> F["Delay_Ms(1000)"]
+    E --> F
+    F --> B
+    G["สลับโหมด DMA แค่เปลี่ยน MODBUS_TRANSPORT_USART → MODBUS_TRANSPORT_DMA"]
+</pre></section>
+<section><h2>🔌 การต่อวงจร</h2><pre class="ascii-circuit">
+   ┌────────────────────────────────────────────┐
+   │  MCU (Master)        Slave (Modbus RTU)    │
+   │  PD5─TX ───────────── RX                   │
+   │  PD6─RX ───────────── TX                   │
+   │  GND ──────────────── GND                  │
+   │                                            │
+   │  RS-485 (ระยะไกล):                        │
+   │  PD5─DI  MAX485 ── A ───── A (485+)       │
+   │  PD6─RO  MAX485 ── B ───── B (485-)       │
+   │  PC0─DE  (DE+RE รวมกัน)                   │
+   └────────────────────────────────────────────┘
+</pre>
+    <table class="wiring-table">
+      <thead>
+        <tr><th>MCU Pin</th><th>→</th><th>อุปกรณ์</th><th>ขา</th><th>หมายเหตุ</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>PD5 (TX)</td><td>→</td><td>Slave</td><td>RX</td><td>USART1 ส่งคำขอ Modbus (9600 8N1)</td></tr>
+        <tr><td>PD6 (RX)</td><td>←</td><td>Slave</td><td>TX</td><td>USART1 รับ response</td></tr>
+        <tr><td>GND</td><td>→</td><td>Slave</td><td>GND</td><td>Ground ร่วม (จำเป็นมาก)</td></tr>
+        <tr><td>PC0 (ทางเลือก)</td><td>→</td><td>MAX485</td><td>DE+RE</td><td>RS-485 — 1=ส่ง, 0=รับ</td></tr>
+      </tbody>
+    </table>
+    <p>⚠️ <strong>Modbus RTU</strong> — 9600 8N1 — ระยะห่างเฟรม ≥ 3.5 char time (~4ms) — ใช้ได้ทั้งต่อตรงและผ่าน MAX485</p>
+    <h3>รู้จักขา</h3>
+    <ul>
+      <li><strong>TX (PD5):</strong> ส่งคำขอ [SlaveAddr][FC][Data][CRC]</li>
+      <li><strong>RX (PD6):</strong> รับ response จาก slave</li>
+      <li><strong>DE/RE (PC0):</strong> ควบคุม MAX485 — ส่ง = HIGH, รับ = LOW (เฉพาะบัส RS-485)</li>
+      <li><strong>A/B:</strong> สาย 485+ / 485- — จบสายด้วย 120Ω ที่ปลายทั้งสอง</li>
+    </ul>
+    <h3>วิธีต่อทีละขั้น</h3>
+    <ol>
+      <li>ต่อ <strong>PD5 (TX)</strong> ไป <strong>RX</strong> ของ slave และ <strong>PD6 (RX)</strong> ไป <strong>TX</strong></li>
+      <li>ต่อ <strong>GND ร่วม</strong> — ขาดไม่ได้ ถ้าต่อสาย RS-485 ต้องใช้สาย twisted pair</li>
+      <li>เช็ค <strong>slave address</strong> และ <strong>baud rate</strong> ของ slave (default 9600 8N1)</li>
+      <li>ถ้าใช้ MAX485: ต่อ DE กับ RE รวมกันที่ GPIO แล้วควบคุมก่อน/หลังส่ง</li>
+    </ol>
+</section>
+<section><h2>📚 หลักการทำงาน</h2><p><strong>Modbus RTU</strong> เป็นโปรโตคอลอุตสาหกรรมแบบ request/response — Master ส่งคำขอ → Slave ตอบกลับ — แต่ละเฟรมมี <code>CRC-16</code> กันข้อมูลเสีย — รองรับ <code>8 function codes</code> ในไลบรารีนี้</p>
+<p><strong>เฟรม Request:</strong> <code>[SlaveAddr][FC][Data...][CRC_LO][CRC_HI]</code> — <strong>Response:</strong> เหมือนกัน + ถ้า error จะตอบ <code>FC|0x80 + รหัสเหตุผล</code> (exception)</p>
+<table><tr><th>FC</th><th>ความหมาย</th><th>ฟังก์ชันในไลบรารี</th></tr>
+<tr><td>0x01</td><td>Read Coils</td><td><code>MODBUS_ReadCoils(&mb, coil, count, buf)</code></td></tr>
+<tr><td>0x02</td><td>Read Discrete Inputs</td><td><code>MODBUS_ReadDiscreteInputs(&mb, input, count, buf)</code></td></tr>
+<tr><td>0x03</td><td>Read Holding Registers</td><td><code>MODBUS_ReadHoldingRegisters(&mb, reg, count, buf)</code></td></tr>
+<tr><td>0x04</td><td>Read Input Registers</td><td><code>MODBUS_ReadInputRegisters(&mb, reg, count, buf)</code></td></tr>
+<tr><td>0x05</td><td>Write Single Coil</td><td><code>MODBUS_WriteSingleCoil(&mb, coil, value)</code></td></tr>
+<tr><td>0x06</td><td>Write Single Register</td><td><code>MODBUS_WriteSingleRegister(&mb, reg, value)</code></td></tr>
+<tr><td>0x0F</td><td>Write Multiple Coils</td><td><code>MODBUS_WriteMultipleCoils(&mb, coil, count, buf)</code></td></tr>
+<tr><td>0x10</td><td>Write Multiple Registers</td><td><code>MODBUS_WriteMultipleRegisters(&mb, reg, count, buf)</code></td></tr>
+</table>
+<p><strong>2 โหมดขนส่ง:</strong> <code>MODBUS_TRANSPORT_USART</code> — รับข้อมูลผ่าน interrupt ring buffer ของ SimpleUSART (ง่ายสุด) — <code>MODBUS_TRANSPORT_DMA</code> — DMA RX circular (DMA_CH3) + จับจบเฟรมด้วย <code>USART IDLE interrupt</code> + ส่งด้วย <code>DMA TX (DMA_CH2)</code> — CPU ไม่ถูก interrupt ทุก byte</p></section>
+<section><h2>💻 เขียน Code ทีละขั้น</h2>
+<div class="step"><h3>ขั้นที่ 1: Init (โหมด USART)</h3><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "Modbus.h"
+
+Modbus mb;
+uint16_t regs[10];
+
+int main(void) {
+    SystemCoreClockUpdate();
+    Timer_Init();
+
+    MODBUS_Init(&mb, 1, MODBUS_TRANSPORT_USART, USART_PINS_DEFAULT);
+    // slave address = 1, transport = USART ring buffer
+    USART_Println("Modbus Ready!");</code></pre>
+<p class="explain">🔍 <code>MODBUS_Init(&mb, addr, transport, pins)</code> — เปิด USART 9600 8N1 + ตั้งค่าโปรโตคอล — โหมด USART ใช้ interrupt RXNE ของ SimpleUSART เดิม</p></div>
+<div class="step"><h3>ขั้นที่ 2: อ่าน Holding Registers + จัดการ Error</h3>
+<pre><code class="language-c">    Timer_t tmr;
+    Start_Timer(&tmr, 1000, 1);
+
+    while(1) {
+        if(Is_Timer_Expired(&tmr)) {
+            Modbus_Status st = MODBUS_ReadHoldingRegisters(&mb, 0x0000, 10, regs);
+
+            if(st == MODBUS_OK) {
+                USART_Print("reg0=");
+                USART_PrintNum(regs[0]);
+                USART_Print(" reg1=");
+                USART_PrintNum(regs[1]);
+                USART_Println("");
+            } else {
+                USART_Print("Error: ");
+                USART_Print(MODBUS_StatusStr(st));
+                if(st == MODBUS_ERROR_EXCEPT) {
+                    USART_Print(" ex=0x");
+                    USART_PrintHex(MODBUS_GetLastException(&mb), 1);
+                }
+                USART_Println("");
+            }
+        }
+    }
+}</code></pre>
+<p class="explain">🔍 อ่าน 10 registers (0x0000-0x0009) ทุก 1 วินาที — ค่า 16-bit ถูกแปลง Big-endian → host order ให้แล้ว — <code>MODBUS_StatusStr()</code> แปลง error เป็นข้อความ — exception บอกสาเหตุจาก slave (เช่น 0x02 = register เกินช่วง)</p></div>
+<div class="step"><h3>ขั้นที่ 3: เขียน Register / Coil</h3>
+<pre><code class="language-c">    // เขียนค่า 1000 ไป register 0x0000
+    MODBUS_WriteSingleRegister(&mb, 0x0000, 1000);
+
+    // เปิด coil 3 (สั่งงาน relay ฝั่ง slave)
+    MODBUS_WriteSingleCoil(&mb, 3, 1);
+
+    // เขียน 4 registers พร้อมกัน
+    uint16_t batch[4] = {10, 20, 30, 40};
+    MODBUS_WriteMultipleRegisters(&mb, 0x0010, 4, batch);</code></pre>
+<p class="explain">🔍 ทุกคำสั่งเขียน return <code>Modbus_Status</code> — ตรวจ <code>== MODBUS_OK</code> ก่อนเชื่อผล — <code>MODBUS_GetLastError(&mb)</code> อ่าน error ของคำขอล่าสุดได้เช่นกัน</p></div>
+<div class="step"><h3>ขั้นที่ 4: เปลี่ยนเป็นโหมด DMA — แค่บรรทัดเดียว</h3>
+<pre><code class="language-c">    // เดิม: MODBUS_TRANSPORT_USART → เปลี่ยนเป็น DMA
+    MODBUS_Init(&mb, 1, MODBUS_TRANSPORT_DMA, USART_PINS_DEFAULT);
+    // DMA CH3: RX circular buffer (256B) + IDLE interrupt จับจบเฟรม
+    // DMA CH2: TX — ส่งคำขอแบบ DMA
+    // CPU แทบไม่ถูก interrupt ระหว่างรอ response</code></pre>
+<p class="explain">🔍 โหมด DMA ใช้ <code>USART_IdleHook()</code> (weak hook ใน SimpleUSART) — เมื่อสายเงียบเกิน 1 char time จะคัดลอกเฟรมออกจาก DMA buffer ใน ISR — API ภายนอกเหมือนโหมด USART ทุกอย่าง — ⚠️ DMA_CH2/CH3 ถูกยึด ห้ามใช้กับ DMA อื่น</p></div>
+</section>
+<section><h2>📋 API Reference</h2><table><tr><th>ฟังก์ชัน</th><th>คำอธิบาย</th><th>ตัวอย่าง</th></tr>
+<tr><td><code>MODBUS_Init(&mb, addr, transport, pins)</code></td><td>เริ่มต้น master (USART/DMA)</td><td><code>MODBUS_Init(&mb, 1, MODBUS_TRANSPORT_USART, USART_PINS_DEFAULT)</code></td></tr>
+<tr><td><code>MODBUS_ReadHoldingRegisters(&mb, reg, n, buf)</code></td><td>อ่าน Holding Registers (FC 0x03)</td><td><code>MODBUS_ReadHoldingRegisters(&mb, 0, 10, regs)</code></td></tr>
+<tr><td><code>MODBUS_ReadInputRegisters(&mb, reg, n, buf)</code></td><td>อ่าน Input Registers (FC 0x04)</td><td><code>MODBUS_ReadInputRegisters(&mb, 0, 10, regs)</code></td></tr>
+<tr><td><code>MODBUS_ReadCoils(&mb, coil, n, buf)</code></td><td>อ่าน Coils (FC 0x01, bit-packed)</td><td><code>MODBUS_ReadCoils(&mb, 0, 20, coils)</code></td></tr>
+<tr><td><code>MODBUS_ReadDiscreteInputs(&mb, in, n, buf)</code></td><td>อ่าน Discrete Inputs (FC 0x02)</td><td><code>MODBUS_ReadDiscreteInputs(&mb, 0, 8, di)</code></td></tr>
+<tr><td><code>MODBUS_WriteSingleCoil(&mb, coil, v)</code></td><td>เขียน coil 1 ตัว (FC 0x05)</td><td><code>MODBUS_WriteSingleCoil(&mb, 3, 1)</code></td></tr>
+<tr><td><code>MODBUS_WriteSingleRegister(&mb, reg, v)</code></td><td>เขียน register 1 ตัว (FC 0x06)</td><td><code>MODBUS_WriteSingleRegister(&mb, 0, 1000)</code></td></tr>
+<tr><td><code>MODBUS_WriteMultipleRegisters(&mb, reg, n, buf)</code></td><td>เขียนหลาย registers (FC 0x10)</td><td><code>MODBUS_WriteMultipleRegisters(&mb, 0x10, 4, batch)</code></td></tr>
+<tr><td><code>MODBUS_WriteMultipleCoils(&mb, coil, n, buf)</code></td><td>เขียนหลาย coils (FC 0x0F)</td><td><code>MODBUS_WriteMultipleCoils(&mb, 0, 16, coils)</code></td></tr>
+<tr><td><code>MODBUS_GetLastError(&mb)</code></td><td>error ของคำขอล่าสุด</td><td><code>Modbus_Status st = MODBUS_GetLastError(&mb)</code></td></tr>
+<tr><td><code>MODBUS_GetLastException(&mb)</code></td><td>exception code จาก slave</td><td><code>uint8_t ex = MODBUS_GetLastException(&mb)</code></td></tr>
+<tr><td><code>MODBUS_StatusStr(status)</code></td><td>แปล error เป็นข้อความ</td><td><code>USART_Print(MODBUS_StatusStr(st))</code></td></tr>
+<tr><td><code>MODBUS_CRC16(buf, len)</code></td><td>คำนวณ CRC-16 Modbus</td><td><code>uint16_t crc = MODBUS_CRC16(frame, 6)</code></td></tr>
+</table></section>
+<section><h2>⚠️ ข้อผิดพลาดที่พบบ่อย</h2><table><tr><th>ปัญหา</th><th>สาเหตุ</th><th>วิธีแก้</th></tr>
+<tr><td>Timeout ตลอด</td><td>สาย TX/RX กลับด้าน หรือ baud ไม่ตรง</td><td>เช็ค TX→RX, RX→TX — 9600 8N1 — ต่อ GND ร่วม</td></tr>
+<tr><td>Timeout บางครั้ง / CRC Error</td><td>สัญญาณรบกวน สายยาว</td><td>ใช้ MAX485 + twisted pair + 120Ω จบสาย</td></tr>
+<tr><td>Exception 0x02</td><td>register เกินช่วงของ slave</td><td>เปิดคู่มือ slave ดู register map — อ่านครั้งละ ≤ 125 regs</td></tr>
+<tr><td>โหมด DMA ไม่งาน</td><td>DMA_CH2/3 ถูกใช้ หรือ RAM ไม่พอ</td><td>ปลด DMA อื่น — ใช้โหมด USART แทนได้ทันที</td></tr>
+<tr><td>IRQ ขัดแย้ง</td><td>มี lib อื่น override USART_IdleHook</td><td>override ได้ตัวเดียว — ปัจจุบันมีแค่ Modbus</td></tr>
+</table></section>
+<section><h2>🛠️ สร้าง Product: อ่าน VFD แสดงผล OLED</h2><p>Modbus Master อ่านความถี่ + กระแสจาก VFD (slave addr 1) แล้วแสดงบน OLED — โหมด DMA</p><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
+#include "SimpleHAL.h"
+#include "Modbus.h"
+#include "oled_i2c.h"
+
+Modbus mb;
+uint16_t regs[8];
+
+int main(void)
+{
+    SystemCoreClockUpdate();
+    Timer_Init();
+    I2C_Init(PC1, PC2, I2C_SPEED_STANDARD);
+
+    MODBUS_Init(&mb, 1, MODBUS_TRANSPORT_DMA, USART_PINS_DEFAULT);
+
+    OLED_Handle oled;
+    OLED_Init(&oled, OLED_128x64, 0x3C);
+    OLED_SetFont(&oled, FONT_8x16);
+
+    Timer_t tmr;
+    Start_Timer(&tmr, 500, 1);
+
+    while(1)
+    {
+        if(Is_Timer_Expired(&tmr))
+        {
+            char buf[32];
+            if(MODBUS_ReadHoldingRegisters(&mb, 0x2000, 4, regs) == MODBUS_OK) {
+                snprintf(buf, sizeof(buf), "Freq: %d Hz", regs[0] / 100);
+                OLED_Clear(&oled);
+                OLED_DrawStringAlign(&oled, 0, 0, buf, ALIGN_LEFT);
+
+                snprintf(buf, sizeof(buf), "Cur:  %d.%02d A", regs[2] / 100, regs[2] % 100);
+                OLED_DrawStringAlign(&oled, 0, 20, buf, ALIGN_LEFT);
+
+                OLED_Update(&oled);
+            } else {
+                OLED_Clear(&oled);
+                OLED_DrawStringAlign(&oled, 0, 0, "COMM ERROR", ALIGN_LEFT);
+                OLED_Update(&oled);
+            }
+        }
+    }
+}</code></pre></section>
+<section><h2>✏️ ลองทำดู</h2><ol>
+<li>ต่อ slave 2 ตัว (addr 1, 2) ผ่าน MAX485 — สลับอ่านทีละตัวทุก 500ms</li>
+<li>เขียนโปรแกรมอ่าน Input Registers จาก PZEM-004T v3 (addr 1) ด้วยไลบรารีนี้ แทน PZEM004Tv3 lib</li>
+<li>เพิ่ม DE/RE pin control อัตโนมัติ — ตั้ง DE=1 ก่อนส่งทุกคำขอ (ตัวอย่าง ex04)</li>
+</ol></section>
+<nav class="bottom-nav"><a href="index.html">← สารบัญ</a><a href="chapx_lib_softuart.html">บทก่อน</a><a href="chapx_lib_at24cxx.html">บทถัดไป →</a></nav>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script><script>mermaid.initialize({startOnLoad:true,theme:'base',themeVariables:{primaryColor:'#fff',primaryBorderColor:'#2563eb',primaryTextColor:'#1a1a2e',lineColor:'#64748b',fontSize:'22px'}});</script><script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script><script>hljs.highlightAll();</script></body></html>

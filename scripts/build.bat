@@ -83,9 +83,9 @@ for %%F in ("%PROJECT_ROOT%\User\SimpleHAL\*.c") do (
     call :CC "%%F" "%%~nF.o"
 )
 
-:: User/Lib (recursive)
+:: User/Lib (recursive) — ข้ามโฟลเดอร์ Examples ของแต่ละไลบรารี
 for /r "%PROJECT_ROOT%\User\Lib" %%F in (*.c) do (
-    call :CC "%%F" "lib_%%~nF.o"
+    echo "%%~dpF" | findstr /i /c:"Examples" >nul || call :CC "%%F" "lib_%%~nF.o"
 )
 
 :: Assembly

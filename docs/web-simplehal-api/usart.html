@@ -47,6 +47,7 @@
 <tr><td><code>USART_ReadBytes(buffer, length)</code></td><td>uint16_t</td><td>อ่านหลาย byte</td><td>ทางลัดแทนเรียก <code>USART_Read()</code> วนหลายครั้ง — คืนค่าจริงที่อ่านได้ซึ่งอาจน้อยกว่า <code>length</code> ถ้าข้อมูลใน buffer ไม่พอ</td></tr>
 <tr><td><code>USART_Flush()</code></td><td>void</td><td>ล้าง buffer</td><td>เรียกก่อนเริ่ม transaction ใหม่ที่ไม่ต้องการข้อมูลเก่าค้างจากรอบก่อนปนมา</td></tr>
 <tr><td><code>USART_RxByteHook(data)</code></td><td>void</td><td>weak — hook callback</td><td><strong>ทำงานคู่ขนานกับ ring buffer เสมอ ไม่ใช่ทางเลือกแทนกัน</strong> — ทุก byte ที่เข้ามาจะถูกเติมเข้า ring buffer (อ่านต่อด้วย <code>USART_Available()</code>/<code>USART_Read()</code> ได้ตามปกติ) แล้วจึงเรียก hook นี้เพิ่มด้วยเสมอ — override ฟังก์ชันนี้เพื่อ "แอบดู" ข้อมูลโดยไม่ต้องเปลี่ยนโค้ดที่ใช้ Available/Read อยู่เดิม</td></tr>
+<tr><td><code>USART_IdleHook()</code></td><td>void</td><td>weak — IDLE line callback (v1.1)</td><td>เรียกจาก ISR <strong>เฉพาะเมื่อมีใคร enable <code>USART_IT_IDLE</code> เอง</strong> (เช่นโหมด DMA ของไลบรารี Modbus) — ใช้กับโปรโตคอล frame-based ที่รับข้อมูลผ่าน DMA RX circular buffer — IDLE = เส้นเงียบเกิน 1 character time = จบเฟรม — ทำงานใน ISR ห้าม blocking — โหมดปกติไม่มีใคร enable IDLE → ไม่มีผลใดๆ</td></tr>
 </tbody>
 </table>
 </section>
@@ -92,6 +93,25 @@
 </code></pre>
 <div class="callout callout-note">
 <strong>จุดสำคัญ:</strong> hook นี้ทำงานภายใน ISR ควรประมวลผลให้สั้นที่สุด อย่าใช้ <code>Delay_Ms</code> หรือ loop นานภายใน hook
+</div>
+</section>
+
+<section>
+<h2>IDLE Line Hook</h2>
+<p><code>USART_IdleHook(void)</code> เป็นฟังก์ชัน <code>weak</code> ที่ถูกเรียกจากภายใน ISR เมื่อตรวจพบ <strong>IDLE line</strong> (เส้นข้อมูลเงียบเกิน 1 character time) — ใช้สำหรับโปรโตคอลแบบ frame-based ที่รับข้อมูลผ่าน <strong>DMA RX circular buffer</strong> เช่น Modbus RTU (โหมด DMA ของไลบรารี <code>User/Lib/Modbus</code>)</p>
+<p>วิธีใช้ — enable IDLE interrupt + override hook:</p>
+<pre><code class="language-c">// 1. เปิด IDLE interrupt (ปิด RXNE interrupt — ให้ DMA เป็นผู้รับข้อมูลแทน)
+USART_ITConfig(USART1, USART_IT_RXNE, DISABLE);
+USART_ITConfig(USART1, USART_IT_IDLE, ENABLE);
+
+// 2. override hook — อ่านจำนวน bytes ที่ DMA รับได้
+void USART_IdleHook(void) {
+    uint16_t len = DMA_USART_GetReceivedCount(DMA_CH3, RX_BUF_SIZE);
+    // ประมวลผลเฟรม (ทำงานสั้นๆ ใน ISR)
+}
+</code></pre>
+<div class="callout callout-note">
+<strong>จุดสำคัญ:</strong> hook นี้ถูกเรียก <strong>เฉพาะเมื่อมีใคร enable <code>USART_IT_IDLE</code> เองเท่านั้น</strong> — <code>USART_SimpleInit()</code> ไม่ได้เปิด IDLE interrupt → การใช้งานปกติ (Available/Read) ไม่มีผลใดๆ — override ได้ 1 ตัวต่อโปรเจกต์ (ห้ามชนกับไลบรารีอื่น) — ทำงานใน ISR ห้าม blocking
 </div>
 </section>
 

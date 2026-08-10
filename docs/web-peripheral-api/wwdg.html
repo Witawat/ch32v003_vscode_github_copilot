@@ -41,7 +41,7 @@
 <section class="flowchart">
 <h2>ผังการทำงาน WWDG</h2>
 <pre class="mermaid">
-flowchart LR
+flowchart TB
     SP["WWDG_SetPrescaler()"] --> SW["WWDG_SetWindowValue()"]
     SW --> EI["WWDG_EnableIT() (ถ้าต้องการ EWI)"]
     EI --> EN["WWDG_Enable(Counter)"]

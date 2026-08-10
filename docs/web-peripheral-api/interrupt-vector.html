@@ -22,7 +22,7 @@
 <section class="flowchart">
 <h2>ผัง Interrupt Flow</h2>
 <pre class="mermaid">
-flowchart LR
+flowchart TB
     A["Peripheral 产生 interrupt"] --> B["PLIC จัดลำดับ"]
     B --> C["RISC-V Core ตอบรับ"]
     C --> D["Jump ไป ISR"]

@@ -68,6 +68,11 @@
 | **HC05** | Flush timeout | 100ms timeout — ไม่ block ถาวรหากมี noise |
 | **GPS** | NMEA checksum | ไม่ตรวจสอบ — ใช้ cross-check จาก field validity แทน |
 | **PMS5003** | USART_Flush | รีเซ็ต frame buffer เมื่อเริ่มอ่านใหม่ — frame บางส่วนถูกทิ้ง |
+| **Modbus** | Master อย่างเดียว | ไม่รองรับโหมด Slave — ใช้ USART1 ตัวเดียว → มี instance ได้ตัวเดียว |
+| **Modbus** | RAM ~1.3KB (DMA) | DMA buffer 256B + capture 258B + protocol buffers (static) — ระวังชนกับ OLED (1KB) |
+| **Modbus** | DMA_CH2 + CH3 | โหมด DMA ยึด 2 channels — ห้ามใช้กับ `DMA_analogReadStart` หรือ DMA อื่น |
+| **Modbus** | IDLE hook ตัวเดียว | override `USART_IdleHook()` ได้ 1 ตัวต่อโปรเจกต์ — ห้ามชนกับไลบรารีอื่น |
+| **Modbus** | DE/RE ไม่อัตโนมัติ | RS-485 ต้องควบคุม DE/RE pin เอง (ตัวอย่าง ex04) |
 
 ### ⚙️ Motor / Servo / I/O
 
@@ -98,7 +103,9 @@
 | TIM1 | SimplePWM (PWM1_CH1-4), SimpleTIM, Servo, ESC, L298N, ServoCluster | **เลือกอย่างใดอย่างหนึ่ง** |
 | TIM2 | SimplePWM (PWM2_CH1-4), SimpleTIM, SimpleTIM_Ext, ServoCluster, P10 | **เลือกอย่างใดอย่างหนึ่ง** |
 | IWDG | SimpleIWDG | LSI clock อิสระ |
-| USART1 | SimpleUSART, ESP01, HC05, GPS, PZEM004T, PMS5003, TJC | **ใช้ร่วมกันไม่ได้** — หยุด USART debug print ก่อนใช้ device |
+| USART1 | SimpleUSART, ESP01, HC05, GPS, PZEM004T, PMS5003, TJC, **Modbus** | **ใช้ร่วมกันไม่ได้** — หยุด USART debug print ก่อนใช้ device |
+| DMA_CH2 | Modbus TX (โหมด DMA) | ใช้กับ DMA_USART TX — ห้ามใช้กับ DMA อื่นพร้อมกัน |
+| DMA_CH3 | Modbus RX (โหมด DMA) | circular buffer 256B — ห้ามใช้กับ DMA อื่นพร้อมกัน |
 
 ---
 

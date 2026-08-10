@@ -61,6 +61,7 @@
 					"${project}/User/Lib/NTC10K/Examples",
 					"${project}/User/Lib/DS18B20/Examples",
 					"${project}/User/Lib/Buzzer/Examples",
+					"${project}/User/Lib/Modbus/Examples",
 					"${project}/User/Examples"
 				],
 				"optimization": {

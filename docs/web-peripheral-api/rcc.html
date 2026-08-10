@@ -22,7 +22,7 @@
 <section class="flowchart">
 <h2>ผังการทำงาน RCC</h2>
 <pre class="mermaid">
-flowchart LR
+flowchart TB
     HSI["HSI 24MHz (ภายใน)"] --> SW["RCC_SYSCLKConfig()"]
     HSE["HSE (ภายนอก, ต้อง RCC_HSEConfig ON)"] --> SW
     PLL["PLL (RCC_PLLConfig + RCC_PLLCmd)"] --> SW

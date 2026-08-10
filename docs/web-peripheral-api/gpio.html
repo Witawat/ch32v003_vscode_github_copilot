@@ -23,7 +23,7 @@
 <section class="flowchart">
 <h2>ผังการทำงาน GPIO (SPL)</h2>
 <pre class="mermaid">
-flowchart LR
+flowchart TB
     RCC["RCC_APB2PeriphClockCmd(GPIOx)"] --> INIT["GPIO_Init()"]
     INIT --> MODE{"GPIO_Mode"}
     MODE --> OUT["Out_PP / Out_OD"]

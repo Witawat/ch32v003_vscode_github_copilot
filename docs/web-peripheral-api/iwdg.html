@@ -36,7 +36,7 @@
 <section class="flowchart">
 <h2>ผังการทำงาน IWDG</h2>
 <pre class="mermaid">
-flowchart LR
+flowchart TB
     WA["IWDG_WriteAccessCmd(Enable)"] --> SP["IWDG_SetPrescaler()"]
     SP --> SR["IWDG_SetReload()"]
     SR --> RC["IWDG_ReloadCounter()"]
