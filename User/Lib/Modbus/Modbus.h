@@ -144,7 +144,7 @@ typedef struct {
     /* ---- internal (transport) ---- */
     volatile uint16_t dma_frame_len;   /**< จำนวน bytes ของเฟรมล่าสุด (DMA mode) */
     volatile uint8_t  dma_frame_ready; /**< 1 = มีเฟรมครบรอประมวลผล (DMA mode) */
-    uint16_t          dma_last_pos;    /**< ตำแหน่ง DMA เขียนล่าสุดที่ประมวลผลแล้ว */
+    volatile uint16_t dma_last_pos;    /**< ตำแหน่ง DMA เขียนล่าสุดที่ประมวลผลแล้ว (ISR อ่าน, main เขียน) */
 } Modbus;
 
 /* ========== Function Prototypes ========== */

@@ -45,6 +45,7 @@ static Modbus_Status _modbus_request(Modbus* mb, const uint8_t* pdu, uint16_t pd
                                      uint8_t* resp_data, uint16_t resp_max,
                                      uint16_t* resp_len) {
     if (mb == NULL || !mb->initialized || pdu == NULL || pdu_len < 1) {
+        if (mb != NULL) mb->last_error = MODBUS_ERROR_PARAM;
         return MODBUS_ERROR_PARAM;
     }
 
@@ -61,13 +62,16 @@ static Modbus_Status _modbus_request(Modbus* mb, const uint8_t* pdu, uint16_t pd
     MBT_FlushRx(mb);
     MBT_SendBytes(mb, req, req_len);
 
+    /* timeout วัดรวมทั้งคำขอ — เริ่มนับก่อนรับ response byte แรก */
+    uint32_t deadline = Get_CurrentMs() + MODBUS_TIMEOUT_MS;
+
     /* รับ response — header 3 bytes: [ADDR][FC][BYTE_COUNT] */
     uint8_t header[3];
-    Modbus_Status st = MBT_ReadByte(mb, &header[0]);
+    Modbus_Status st = MBT_ReadByte(mb, &header[0], deadline);
     if (st != MODBUS_OK) return st;
-    st = MBT_ReadByte(mb, &header[1]);
+    st = MBT_ReadByte(mb, &header[1], deadline);
     if (st != MODBUS_OK) return st;
-    st = MBT_ReadByte(mb, &header[2]);
+    st = MBT_ReadByte(mb, &header[2], deadline);
     if (st != MODBUS_OK) return st;
 
     /* ตรวจ address */
@@ -84,18 +88,21 @@ static Modbus_Status _modbus_request(Modbus* mb, const uint8_t* pdu, uint16_t pd
 
     if (pdu[0] <= 0x04) {
         /* Read (01/02/03/04): ตามด้วย [DATA byte_count][CRC 2 bytes] */
-        if (resp_data == NULL || resp_len == NULL) return MODBUS_ERROR_PARAM;
+        if (resp_data == NULL || resp_len == NULL) {
+            mb->last_error = MODBUS_ERROR_PARAM;
+            return MODBUS_ERROR_PARAM;
+        }
         uint8_t byte_count = header[2];
         if (byte_count == 0 || byte_count > resp_max) return MODBUS_ERROR_RESP;
 
         uint8_t crc_b[2];
         for (uint16_t i = 0; i < byte_count; i++) {
-            st = MBT_ReadByte(mb, &resp_data[i]);
+            st = MBT_ReadByte(mb, &resp_data[i], deadline);
             if (st != MODBUS_OK) return st;
         }
-        st = MBT_ReadByte(mb, &crc_b[0]);
+        st = MBT_ReadByte(mb, &crc_b[0], deadline);
         if (st != MODBUS_OK) return st;
-        st = MBT_ReadByte(mb, &crc_b[1]);
+        st = MBT_ReadByte(mb, &crc_b[1], deadline);
         if (st != MODBUS_OK) return st;
 
         /* CRC ครอบทั้ง ADU: [ADDR][FC][BYTE_COUNT][DATA...] */
@@ -117,13 +124,13 @@ static Modbus_Status _modbus_request(Modbus* mb, const uint8_t* pdu, uint16_t pd
         echo[1] = header[1];
         echo[2] = header[2];
         for (uint8_t i = 3; i < 6; i++) {
-            st = MBT_ReadByte(mb, &echo[i]);
+            st = MBT_ReadByte(mb, &echo[i], deadline);
             if (st != MODBUS_OK) return st;
         }
         uint8_t crc_b[2];
-        st = MBT_ReadByte(mb, &crc_b[0]);
+        st = MBT_ReadByte(mb, &crc_b[0], deadline);
         if (st != MODBUS_OK) return st;
-        st = MBT_ReadByte(mb, &crc_b[1]);
+        st = MBT_ReadByte(mb, &crc_b[1], deadline);
         if (st != MODBUS_OK) return st;
 
         if (MODBUS_CRC16(echo, 6) != ((uint16_t)crc_b[0] | ((uint16_t)crc_b[1] << 8))) {
@@ -140,7 +147,10 @@ static Modbus_Status _modbus_request(Modbus* mb, const uint8_t* pdu, uint16_t pd
 Modbus_Status MODBUS_Init(Modbus* mb, uint8_t slave_addr,
                           Modbus_Transport transport, uint8_t pin_config) {
     if (mb == NULL) return MODBUS_ERROR_PARAM;
-    if (slave_addr == 0x00 || slave_addr > 0xF7) return MODBUS_ERROR_PARAM;
+    if (slave_addr == 0x00 || slave_addr > 0xF7) {
+        mb->last_error = MODBUS_ERROR_PARAM;
+        return MODBUS_ERROR_PARAM;
+    }
 
     mb->slave_addr      = slave_addr;
     mb->transport       = transport;
@@ -158,7 +168,10 @@ Modbus_Status MODBUS_Init(Modbus* mb, uint8_t slave_addr,
 }
 
 Modbus_Status MODBUS_ReadHoldingRegisters(Modbus* mb, uint16_t reg, uint16_t count, uint16_t* data) {
-    if (mb == NULL || data == NULL || count < 1 || count > 125) return MODBUS_ERROR_PARAM;
+    if (mb == NULL || data == NULL || count < 1 || count > 125) {
+        if (mb != NULL) mb->last_error = MODBUS_ERROR_PARAM;
+        return MODBUS_ERROR_PARAM;
+    }
 
     uint8_t pdu[5];
     pdu[0] = MODBUS_FC_READ_HOLDING_REG;
@@ -180,7 +193,10 @@ Modbus_Status MODBUS_ReadHoldingRegisters(Modbus* mb, uint16_t reg, uint16_t cou
 }
 
 Modbus_Status MODBUS_ReadInputRegisters(Modbus* mb, uint16_t reg, uint16_t count, uint16_t* data) {
-    if (mb == NULL || data == NULL || count < 1 || count > 125) return MODBUS_ERROR_PARAM;
+    if (mb == NULL || data == NULL || count < 1 || count > 125) {
+        if (mb != NULL) mb->last_error = MODBUS_ERROR_PARAM;
+        return MODBUS_ERROR_PARAM;
+    }
 
     uint8_t pdu[5];
     pdu[0] = MODBUS_FC_READ_INPUT_REG;
@@ -202,7 +218,10 @@ Modbus_Status MODBUS_ReadInputRegisters(Modbus* mb, uint16_t reg, uint16_t count
 }
 
 Modbus_Status MODBUS_ReadCoils(Modbus* mb, uint16_t coil, uint16_t count, uint8_t* data) {
-    if (mb == NULL || data == NULL || count < 1 || count > 2000) return MODBUS_ERROR_PARAM;
+    if (mb == NULL || data == NULL || count < 1 || count > 2000) {
+        if (mb != NULL) mb->last_error = MODBUS_ERROR_PARAM;
+        return MODBUS_ERROR_PARAM;
+    }
 
     uint8_t pdu[5];
     pdu[0] = MODBUS_FC_READ_COILS;
@@ -223,7 +242,10 @@ Modbus_Status MODBUS_ReadCoils(Modbus* mb, uint16_t coil, uint16_t count, uint8_
 }
 
 Modbus_Status MODBUS_ReadDiscreteInputs(Modbus* mb, uint16_t input, uint16_t count, uint8_t* data) {
-    if (mb == NULL || data == NULL || count < 1 || count > 2000) return MODBUS_ERROR_PARAM;
+    if (mb == NULL || data == NULL || count < 1 || count > 2000) {
+        if (mb != NULL) mb->last_error = MODBUS_ERROR_PARAM;
+        return MODBUS_ERROR_PARAM;
+    }
 
     uint8_t pdu[5];
     pdu[0] = MODBUS_FC_READ_DISCRETE_INPUTS;
@@ -272,7 +294,10 @@ Modbus_Status MODBUS_WriteSingleRegister(Modbus* mb, uint16_t reg, uint16_t valu
 }
 
 Modbus_Status MODBUS_WriteMultipleRegisters(Modbus* mb, uint16_t reg, uint16_t count, const uint16_t* data) {
-    if (mb == NULL || data == NULL || count < 1 || count > 123) return MODBUS_ERROR_PARAM;
+    if (mb == NULL || data == NULL || count < 1 || count > 123) {
+        if (mb != NULL) mb->last_error = MODBUS_ERROR_PARAM;
+        return MODBUS_ERROR_PARAM;
+    }
 
     uint8_t* pdu = s_pdu;
     pdu[0] = MODBUS_FC_WRITE_MULTI_REGS;
@@ -291,7 +316,10 @@ Modbus_Status MODBUS_WriteMultipleRegisters(Modbus* mb, uint16_t reg, uint16_t c
 }
 
 Modbus_Status MODBUS_WriteMultipleCoils(Modbus* mb, uint16_t coil, uint16_t count, const uint8_t* data) {
-    if (mb == NULL || data == NULL || count < 1 || count > 1968) return MODBUS_ERROR_PARAM;
+    if (mb == NULL || data == NULL || count < 1 || count > 1968) {
+        if (mb != NULL) mb->last_error = MODBUS_ERROR_PARAM;
+        return MODBUS_ERROR_PARAM;
+    }
 
     uint8_t byte_count = (uint8_t)((count + 7) / 8);
     uint8_t* pdu = s_pdu;

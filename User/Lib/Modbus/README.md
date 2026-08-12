@@ -163,6 +163,10 @@ MODBUS_Init(&mb, 1, MODBUS_TRANSPORT_DMA, USART_PINS_DEFAULT);
 - DMA_CH2/CH3 ถูก Modbus ยึด — ห้ามใช้กับ `DMA_analogReadStart` หรือ DMA อื่น
 - RAM เพิ่มเติม ~1.3KB (DMA buffer 256B + capture buffer 258B + protocol buffers)
 - CH32V003 stack มีแค่ 256 bytes — ไลบรารีใช้ static buffer ทั้งหมดแล้ว
+- ⚠️ **ห้ามใช้ `USART_Print`/`USART_Println` ระหว่างที่กำลังรอ response** — ระหว่าง
+  DMA TX กำลังส่งเฟรมคำขอ การพิมพ์จะแทรก byte เข้าเฟรม Modbus (ข้อมูลเสียหาย) —
+  ให้พิมพ์หลังคำขอเสร็จ หรือใช้ USART2/SoftUART สำหรับ debug
+- ไลบรารีรอ `USART_FLAG_TC` หลังส่งเสร็จแล้ว (กัน DE/RE ของ RS-485 สลับเร็วเกิน)
 
 ### ตัวอย่างโหมด DMA
 
@@ -211,6 +215,11 @@ if (st == MODBUS_ERROR_EXCEPT) {
 | baud ไม่ตรง | slave ต้องเป็น 9600 8N1 (บางรุ่น 4800/19200) |
 | slave address ผิด | เช็ค DIP switch / config ของ slave |
 | ไม่ต่อ GND ร่วม | ต่อ GND ให้ครบ |
+| slave ตอบช้าเกิน 500ms | เพิ่ม `#define MODBUS_TIMEOUT_MS 1000` ก่อน include |
+
+> 💡 timeout วัดรวมทั้งคำขอ (ตั้งแต่ส่งคำขอจนรับ response ครบ) — อ่าน 125 registers
+> ที่ 9600 baud ใช้เวลา ~265ms ยังพอดีในค่า default 500ms — ถ้า baud ต่ำกว่าหรือ
+> slave ตอบช้า ให้เพิ่ม MODBUS_TIMEOUT_MS
 
 ### CRC Error
 
@@ -289,3 +298,4 @@ if (st == MODBUS_ERROR_EXCEPT) {
 - โหมด DMA ยึด DMA_CH2 + DMA_CH3
 - RAM: โหมด USART ~1.0KB / โหมด DMA ~1.3KB (จาก RAM ทั้งหมด 2KB)
 - ไม่ควบคุม DE/RE ของ MAX485 อัตโนมัติ — ตัวอย่างใน ex04
+- ห้าม `USART_Print` ขณะคำขอ DMA กำลังทำงาน (byte แทรกเฟรม — ดู ข้อควรระวัง DMA)

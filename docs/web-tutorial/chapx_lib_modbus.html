@@ -147,7 +147,9 @@ int main(void) {
 <tr><td>Timeout บางครั้ง / CRC Error</td><td>สัญญาณรบกวน สายยาว</td><td>ใช้ MAX485 + twisted pair + 120Ω จบสาย</td></tr>
 <tr><td>Exception 0x02</td><td>register เกินช่วงของ slave</td><td>เปิดคู่มือ slave ดู register map — อ่านครั้งละ ≤ 125 regs</td></tr>
 <tr><td>โหมด DMA ไม่งาน</td><td>DMA_CH2/3 ถูกใช้ หรือ RAM ไม่พอ</td><td>ปลด DMA อื่น — ใช้โหมด USART แทนได้ทันที</td></tr>
-<tr><td>IRQ ขัดแย้ง</td><td>มี lib อื่น override USART_IdleHook</td><td>override ได้ตัวเดียว — ปัจจุบันมีแค่ Modbus</td></tr>
+ <tr><td>IRQ ขัดแย้ง</td><td>มี lib อื่น override USART_IdleHook</td><td>override ได้ตัวเดียว — ปัจจุบันมีแค่ Modbus</td></tr>
+ <tr><td>เฟรมเสียหาย / CRC Error ขณะโหมด DMA</td><td>พิมพ์ debug (USART_Print) ระหว่างรอ response</td><td>ห้าม Print ระหว่างคำขอ — พิมพ์หลังคำขอเสร็จ หรือใช้ SoftUART</td></tr>
+ <tr><td>Timeout เมื่อ slave ตอบช้า</td><td>timeout วัดรวมทั้งคำขอ (500ms default)</td><td>เพิ่ม <code>#define MODBUS_TIMEOUT_MS 1000</code> ก่อน include</td></tr>
 </table></section>
 <section><h2>🛠️ สร้าง Product: อ่าน VFD แสดงผล OLED</h2><p>Modbus Master อ่านความถี่ + กระแสจาก VFD (slave addr 1) แล้วแสดงบน OLED — โหมด DMA</p><pre><code class="language-c">#define CH32V003_PACKAGE PACKAGE_TSSOP20
 #include "SimpleHAL.h"

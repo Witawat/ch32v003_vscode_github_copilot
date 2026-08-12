@@ -73,6 +73,8 @@
 | **Modbus** | DMA_CH2 + CH3 | โหมด DMA ยึด 2 channels — ห้ามใช้กับ `DMA_analogReadStart` หรือ DMA อื่น |
 | **Modbus** | IDLE hook ตัวเดียว | override `USART_IdleHook()` ได้ 1 ตัวต่อโปรเจกต์ — ห้ามชนกับไลบรารีอื่น |
 | **Modbus** | DE/RE ไม่อัตโนมัติ | RS-485 ต้องควบคุม DE/RE pin เอง (ตัวอย่าง ex04) |
+| **Modbus** | ห้าม Print ระหว่างคำขอ | `USART_Print` ระหว่าง DMA TX จะแทรก byte เข้าเฟรม Modbus — พิมพ์หลังคำขอเสร็จเท่านั้น |
+| **Modbus** | Timeout ต่อคำขอ | วัดรวมทั้งคำขอ (default 500ms) — อ่าน 125 regs @9600 ≈ 265ms พอดี — slave ตอบช้าให้เพิ่ม `MODBUS_TIMEOUT_MS` |
 
 ### ⚙️ Motor / Servo / I/O
 

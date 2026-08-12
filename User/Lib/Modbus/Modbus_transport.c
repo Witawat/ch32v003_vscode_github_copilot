@@ -17,8 +17,8 @@
 static uint8_t  s_dma_rx[MODBUS_DMA_RX_SIZE];       /* DMA RX circular buffer */
 static volatile uint16_t s_dma_pos;                 /* ตำแหน่ง DMA เขียนล่าสุด (0..SIZE-1) */
 static uint8_t  s_capture[MODBUS_MAX_RESP_DATA + 8];/* สำเนาเฟรมที่รับได้ (กันข้อมูลถูกเขียนทับ) */
-static uint16_t s_capture_len;
-static uint16_t s_capture_pos;
+static volatile uint16_t s_capture_len;             /* ISR เขียน, main อ่าน */
+static volatile uint16_t s_capture_pos;             /* ISR รีเซ็ต, main ใช้ */
 
 /** @brief instance ที่ใช้งานโหมด DMA (มีได้ตัวเดียว — USART1 มีตัวเดียว) */
 static Modbus* s_dma_owner;
@@ -52,10 +52,9 @@ void USART_IdleHook(void) {
 
 /* ========== โหมด USART — ฟังก์ชันช่วย ========== */
 
-static Modbus_Status _usart_read_byte(uint8_t* byte) {
-    uint32_t start = Get_CurrentMs();
+static Modbus_Status _usart_read_byte(uint8_t* byte, uint32_t deadline) {
     while (!USART_Available()) {
-        if ((Get_CurrentMs() - start) >= MODBUS_TIMEOUT_MS) {
+        if ((int32_t)(Get_CurrentMs() - deadline) >= 0) {
             return MODBUS_ERROR_TIMEOUT;
         }
     }
@@ -105,19 +104,22 @@ void MBT_FlushRx(Modbus* mb) {
 void MBT_SendBytes(Modbus* mb, const uint8_t* data, uint16_t len) {
     if (mb->transport == MODBUS_TRANSPORT_DMA) {
         DMA_USART_Send(DMA_CH2, data, len);
+        /* รอ byte สุดท้ายเลื่อนออกจาก shift register ครบ (DMA TC ≠ USART TC) */
+        while (USART_GetFlagStatus(USART1, USART_FLAG_TC) == RESET);
     } else {
         for (uint16_t i = 0; i < len; i++) USART_WriteByte(data[i]);
+        /* รอ TX ครบจริงก่อนล้าง RX — กัน DE/RE สลับเร็วกว่า byte สุดท้ายออก */
+        while (USART_GetFlagStatus(USART1, USART_FLAG_TC) == RESET);
         USART_Flush();
     }
 }
 
-Modbus_Status MBT_ReadByte(Modbus* mb, uint8_t* byte) {
+Modbus_Status MBT_ReadByte(Modbus* mb, uint8_t* byte, uint32_t deadline) {
     if (mb->transport == MODBUS_TRANSPORT_DMA) {
         /* รอ IDLE interrupt คัดลอกเฟรมเข้า s_capture ก่อน */
         if (s_capture_pos >= s_capture_len) {
-            uint32_t start = Get_CurrentMs();
             while (!mb->dma_frame_ready) {
-                if ((Get_CurrentMs() - start) >= MODBUS_TIMEOUT_MS) {
+                if ((int32_t)(Get_CurrentMs() - deadline) >= 0) {
                     mb->dma_frame_ready = 0;
                     return MODBUS_ERROR_TIMEOUT;
                 }
@@ -129,15 +131,16 @@ Modbus_Status MBT_ReadByte(Modbus* mb, uint8_t* byte) {
         }
         *byte = s_capture[s_capture_pos++];
 
-        /* อ่านครบแล้ว — เคลียร์สถานะ เตรียมรับเฟรมถัดไป */
+        /* อ่านครบแล้ว — advance ตำแหน่งก่อน clear flag (กัน race: ถ้า IDLE
+         * มาคั่นระหว่าง advance กับ clear — ISR เห็น ready==1 → ไม่ capture) */
         if (s_capture_pos >= s_capture_len) {
-            mb->dma_frame_ready = 0;
             mb->dma_last_pos = (uint16_t)(
                 (mb->dma_last_pos + s_capture_len) % MODBUS_DMA_RX_SIZE);
+            mb->dma_frame_ready = 0;
         }
         return MODBUS_OK;
     }
 
     /* โหมด USART — poll ring buffer */
-    return _usart_read_byte(byte);
+    return _usart_read_byte(byte, deadline);
 }

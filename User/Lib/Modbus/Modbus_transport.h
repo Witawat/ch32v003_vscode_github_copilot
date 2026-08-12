@@ -37,12 +37,13 @@ void MBT_FlushRx(Modbus* mb);
 void MBT_SendBytes(Modbus* mb, const uint8_t* data, uint16_t len);
 
 /**
- * @brief อ่าน 1 byte จาก frame ที่กำลังรับ (blocking พร้อม timeout)
- * @param mb   instance
- * @param byte [out] byte ที่อ่านได้
+ * @brief อ่าน 1 byte จาก frame ที่กำลังรับ (blocking)
+ * @param mb       instance
+ * @param byte     [out] byte ที่อ่านได้
+ * @param deadline absolute timeout (ms จาก Get_CurrentMs()) — ร่วมทั้งคำขอ
  * @return MODBUS_OK หรือ MODBUS_ERROR_TIMEOUT
  */
-Modbus_Status MBT_ReadByte(Modbus* mb, uint8_t* byte);
+Modbus_Status MBT_ReadByte(Modbus* mb, uint8_t* byte, uint32_t deadline);
 
 #ifdef __cplusplus
 }
